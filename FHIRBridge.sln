@@ -53,8 +53,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Messaging", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Contracts", "src\BuildingBlocks\FHIRBridge.Contracts\FHIRBridge.Contracts.csproj", "{1CAE1C32-C621-3AE9-7957-65E82BAD59CF}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "portal", "portal", "{0F6DCA72-3D1D-4948-9E20-BAED2A9091D7}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
