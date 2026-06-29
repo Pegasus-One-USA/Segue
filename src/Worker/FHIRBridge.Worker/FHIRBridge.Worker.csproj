@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-FHIRBridge.Worker-6f91fba1-eb4e-48af-85ee-5f25d0690c6d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.8" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Consumers\" />
+    <Folder Include="BackgroundServices\" />
+    <Folder Include="Processors\" />
+    <Folder Include="Schedulers\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FHIRBridge.Application\FHIRBridge.Application.csproj" />
+    <ProjectReference Include="..\..\FHIRBridge.Infrastructure\FHIRBridge.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Runtime\FHIRBridge.Runtime.Application\FHIRBridge.Runtime.Application.csproj" />
+    <ProjectReference Include="..\..\Runtime\FHIRBridge.Runtime.Infrastructure\FHIRBridge.Runtime.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.EventBus\FHIRBridge.EventBus.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Messaging\FHIRBridge.Messaging.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />
+  </ItemGroup>
+</Project>

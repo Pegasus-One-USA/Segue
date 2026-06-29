@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>044077df-af7f-484b-a9fc-ef5a02828198</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="4.9.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FHIRBridge.Application\FHIRBridge.Application.csproj" />
+    <ProjectReference Include="..\..\FHIRBridge.Infrastructure\FHIRBridge.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\FHIRBridge.Domain\FHIRBridge.Domain.csproj" />
+    <ProjectReference Include="..\..\Runtime\FHIRBridge.Runtime.Application\FHIRBridge.Runtime.Application.csproj" />
+    <ProjectReference Include="..\..\Runtime\FHIRBridge.Runtime.Infrastructure\FHIRBridge.Runtime.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />
+  </ItemGroup>
+
+</Project>
