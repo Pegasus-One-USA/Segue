@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.11.0" />
+    <PackageReference Include="Hl7.Fhir.R4" Version="6.2.0" />
+    <PackageReference Include="Hl7.Fhir.Serialization" Version="4.3.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FHIRBridge.Application\FHIRBridge.Application.csproj" />
+    <ProjectReference Include="..\..\FHIRBridge.Domain\FHIRBridge.Domain.csproj" />
+    <ProjectReference Include="..\FHIRBridge.Runtime.Application\FHIRBridge.Runtime.Application.csproj" />
+    <ProjectReference Include="..\FHIRBridge.Runtime.Domain\FHIRBridge.Runtime.Domain.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Integration\FHIRBridge.Integration.csproj" />
+  </ItemGroup>
+
+</Project>

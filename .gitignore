@@ -1,0 +1,26 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+
+# Build output
+bin/
+obj/
+
+# Test results
+TestResults/
+
+# Logs
+*.log
+
+# Environment files
+.env
+
+# Local CLI/runtime artifacts
+.azure-cli/
+artifacts/
+src/Api/FHIRBridge.Api/artifacts/
+
+# Generated Marketplace packages
+infra/marketplace/package/
+infra/marketplace/*.zip

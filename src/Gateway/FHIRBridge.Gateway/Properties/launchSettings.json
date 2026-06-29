@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "FHIRBridge.Gateway": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:62339;http://localhost:62341"
+    }
+  }
+}
