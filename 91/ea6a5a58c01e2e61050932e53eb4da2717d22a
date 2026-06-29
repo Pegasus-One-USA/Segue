@@ -1,0 +1,483 @@
+portal/.browserslistrc
+  s_c8649c9e9a8f4d::t_ade6312eed8b47 1-17
+portal/.editorconfig
+  s_c8649c9e9a8f4d::t_16878d452fad6c 1-16
+portal/.gitignore
+  s_c8649c9e9a8f4d::t_61faae8731c58f 1-52
+portal/.npmrc
+  s_c8649c9e9a8f4d::t_6ebf726805937f 1-2
+portal/README.md
+  s_c8649c9e9a8f4d::t_cac8fb414195e5 1-27
+portal/angular.json
+  s_c8649c9e9a8f4d::t_bc2766ae27905f 1-102
+portal/e2e/protractor.conf.js
+  s_c8649c9e9a8f4d::t_8d0d6dbe659cac 1-37
+portal/e2e/src/app.e2e-spec.ts
+  s_c8649c9e9a8f4d::t_ed3dcb7a0e1ed3 1-23
+portal/e2e/src/app.po.ts
+  s_c8649c9e9a8f4d::t_48d86c4cb892ae 1-11
+portal/e2e/tsconfig.json
+  s_c8649c9e9a8f4d::t_3f1dc895489793 1-13
+portal/karma.conf.js
+  s_c8649c9e9a8f4d::t_f6c7426ed8ba00 1-44
+portal/package-lock.json
+  s_c8649c9e9a8f4d::t_45c3bb5da5426e 1-14555
+portal/package.json
+  s_c8649c9e9a8f4d::t_116b57cbb10ec3 1-38
+portal/src/app/app-routing.module.ts
+  s_c8649c9e9a8f4d::t_e28861cfed12af 1-3
+portal/src/app/app.component.html
+  s_c8649c9e9a8f4d::t_7e04a3f31f41c2 1
+portal/src/app/app.component.spec.ts
+  s_c8649c9e9a8f4d::t_43d45b0ff2e3cc 1-35
+portal/src/app/app.component.ts
+  s_c8649c9e9a8f4d::t_394a29bd9c7424 1-10
+portal/src/app/app.config.ts
+  s_c8649c9e9a8f4d::t_1ad73e52e52ab9 1-15
+portal/src/app/app.module.ts
+  s_c8649c9e9a8f4d::t_0405f37a4d0697 1-3
+portal/src/app/app.routes.ts
+  s_c8649c9e9a8f4d::t_3a822a43772541 1-66
+portal/src/app/auth/_auth-forms.scss
+  s_c8649c9e9a8f4d::t_a1f58127b69b20 1-132
+portal/src/app/auth/auth.routes.ts
+  s_c8649c9e9a8f4d::t_845d3a10ad423c 1-20
+portal/src/app/auth/components/auth-card/auth-card.component.html
+  s_c8649c9e9a8f4d::t_dbd8cd9c20bac9 1-9
+portal/src/app/auth/components/auth-card/auth-card.component.scss
+  s_c8649c9e9a8f4d::t_c6a4519ec78877 1-36
+portal/src/app/auth/components/auth-card/auth-card.component.ts
+  s_c8649c9e9a8f4d::t_7a4d9e9931a8d5 1-10
+portal/src/app/auth/components/password-strength/password-strength.component.html
+  s_c8649c9e9a8f4d::t_7b265d59f05958 1-10
+portal/src/app/auth/components/password-strength/password-strength.component.scss
+  s_c8649c9e9a8f4d::t_c18ffa427f2677 1-39
+portal/src/app/auth/components/password-strength/password-strength.component.ts
+  s_c8649c9e9a8f4d::t_85fdf4b4631e86 1-37
+portal/src/app/auth/guards/auth.guard.ts
+  s_c8649c9e9a8f4d::t_708d8c0fc62a52 1-9
+portal/src/app/auth/guards/role.guard.ts
+  s_c8649c9e9a8f4d::t_172daf90ad5287 1-15
+portal/src/app/auth/interceptors/auth.interceptor.ts
+  s_c8649c9e9a8f4d::t_901430b07b2b10 1-9
+portal/src/app/auth/models/auth-request.model.ts
+  s_c8649c9e9a8f4d::t_b7d8570ce2e633 1-14
+portal/src/app/auth/models/auth-state.model.ts
+  s_c8649c9e9a8f4d::t_6440f1c3389983 1-9
+portal/src/app/auth/models/user.model.ts
+  s_c8649c9e9a8f4d::t_bed36b8a611e3f 1-9
+portal/src/app/auth/pages/forgot-password/forgot-password.component.html
+  s_c8649c9e9a8f4d::t_f4c0078bc4e137 1-48
+portal/src/app/auth/pages/forgot-password/forgot-password.component.scss
+  s_c8649c9e9a8f4d::t_7d8bf2e6131860 1-7
+portal/src/app/auth/pages/forgot-password/forgot-password.component.ts
+  s_c8649c9e9a8f4d::t_6a3062b8044d4a 1-34
+portal/src/app/auth/pages/login/login.component.html
+  s_c8649c9e9a8f4d::t_edce56f2cdee02 1-51
+portal/src/app/auth/pages/login/login.component.scss
+  s_c8649c9e9a8f4d::t_93f6ab73befe71 1
+portal/src/app/auth/pages/login/login.component.ts
+  s_c8649c9e9a8f4d::t_842af91164f51f 1-29
+portal/src/app/auth/pages/reset-password/reset-password.component.html
+  s_c8649c9e9a8f4d::t_c103f316c53e43 1-61
+portal/src/app/auth/pages/reset-password/reset-password.component.scss
+  s_c8649c9e9a8f4d::t_d21d8fd2a6adc8 1
+portal/src/app/auth/pages/reset-password/reset-password.component.ts
+  s_c8649c9e9a8f4d::t_a84ee33f67622f 1-52
+portal/src/app/auth/services/auth.service.ts
+  s_c8649c9e9a8f4d::t_feffc43ed0f016 1-68
+portal/src/app/auth/services/token.service.ts
+  s_c8649c9e9a8f4d::t_c4f853c5b4e121 1-27
+portal/src/app/components/canvas/canvas-connectors/canvas-connectors.component.html
+  s_c8649c9e9a8f4d::t_e2cee302949b0e 1-9
+portal/src/app/components/canvas/canvas-connectors/canvas-connectors.component.scss
+  s_c8649c9e9a8f4d::t_1a817e9deaa523 1-28
+portal/src/app/components/canvas/canvas-connectors/canvas-connectors.component.ts
+  s_c8649c9e9a8f4d::t_4ac9d0d24bed76 1-48
+portal/src/app/components/canvas/canvas.component.html
+  s_c8649c9e9a8f4d::t_5330a80efb05d1 1-71
+portal/src/app/components/canvas/canvas.component.scss
+  s_c8649c9e9a8f4d::t_8f2086daab71c1 1-29
+portal/src/app/components/canvas/canvas.component.ts
+  s_c8649c9e9a8f4d::t_22deb86f3e086c 1-168
+portal/src/app/components/canvas/hint-card/hint-card.component.html
+  s_c8649c9e9a8f4d::t_0b90f841954b6b 1-13
+portal/src/app/components/canvas/hint-card/hint-card.component.scss
+  s_c8649c9e9a8f4d::t_c1c61937f5104d 1-25
+portal/src/app/components/canvas/hint-card/hint-card.component.ts
+  s_c8649c9e9a8f4d::t_8b232c0fd3bb44 1-12
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.html
+  s_c8649c9e9a8f4d::t_5023de364cd306 1-6
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.scss
+  s_c8649c9e9a8f4d::t_2dc46cedeca29a 1-25
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.ts
+  s_c8649c9e9a8f4d::t_bf3566c3998f7f 1-15
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.html
+  s_c8649c9e9a8f4d::t_97dec69045ba83 1-123
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.scss
+  s_c8649c9e9a8f4d::t_ddfdd8a2f1cfe5 1-307
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.ts
+  s_c8649c9e9a8f4d::t_2e03856896f1a3 1-109
+portal/src/app/components/epic-source-wizard/models/epic-config.model.ts
+  s_c8649c9e9a8f4d::t_030a4029cd0b9c 1-75
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.html
+  s_c8649c9e9a8f4d::t_481c878c78fcc8 1-176
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.scss
+  s_c8649c9e9a8f4d::t_7eb8dc1a54a0d4 1-26
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.ts
+  s_c8649c9e9a8f4d::t_1e51361a417589 1-75
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.html
+  s_c8649c9e9a8f4d::t_8172af55442c62 1-200
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.scss
+  s_c8649c9e9a8f4d::t_e06cf63335e05f 1-35
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.ts
+  s_c8649c9e9a8f4d::t_f148eede317f54 1-188
+portal/src/app/components/epic-source-wizard/steps/epic-step-data/epic-step-data.component.html
+  s_c8649c9e9a8f4d::t_523c1f83bb8811 1-185
+portal/src/app/components/epic-source-wizard/steps/epic-step-data/epic-step-data.component.scss
+  s_c8649c9e9a8f4d::t_3f5031a8645d57 1-25
+portal/src/app/components/epic-source-wizard/steps/epic-step-data/epic-step-data.component.ts
+  s_c8649c9e9a8f4d::t_97a82f86de8ea8 1-57
+portal/src/app/components/epic-source-wizard/steps/epic-step-test/epic-step-test.component.html
+  s_c8649c9e9a8f4d::t_7efb49a273915c 1-72
+portal/src/app/components/epic-source-wizard/steps/epic-step-test/epic-step-test.component.scss
+  s_c8649c9e9a8f4d::t_5c0e4938258ffe 1-25
+portal/src/app/components/epic-source-wizard/steps/epic-step-test/epic-step-test.component.ts
+  s_c8649c9e9a8f4d::t_9bd0da0397dc39 1-66
+portal/src/app/components/modals/payload-preview/payload-preview.component.html
+  s_c8649c9e9a8f4d::t_3151d944124118 1-13
+portal/src/app/components/modals/payload-preview/payload-preview.component.scss
+  s_c8649c9e9a8f4d::t_fda57e8c323d88 1-14
+portal/src/app/components/modals/payload-preview/payload-preview.component.ts
+  s_c8649c9e9a8f4d::t_587a402926bb76 1-33
+portal/src/app/components/modals/source-picker/source-picker.component.html
+  s_c8649c9e9a8f4d::t_ebd19c78ceadf1 1-25
+portal/src/app/components/modals/source-picker/source-picker.component.scss
+  s_c8649c9e9a8f4d::t_bd48d89da9b5ff 1-31
+portal/src/app/components/modals/source-picker/source-picker.component.ts
+  s_c8649c9e9a8f4d::t_78d32d7d57c29b 1-23
+portal/src/app/components/modals/transform-picker/transform-picker.component.html
+  s_c8649c9e9a8f4d::t_94073647f2523f 1-90
+portal/src/app/components/modals/transform-picker/transform-picker.component.scss
+  s_c8649c9e9a8f4d::t_e324fb2c7cc0d4 1-27
+portal/src/app/components/modals/transform-picker/transform-picker.component.ts
+  s_c8649c9e9a8f4d::t_bbda1a2e788f8c 1-104
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_c8649c9e9a8f4d::t_b74d8aaba87e39 1-331
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_c8649c9e9a8f4d::t_1764cd68747c5a 1-673
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_c8649c9e9a8f4d::t_1f12757e9e17b1 1-313
+portal/src/app/components/nodes/merge-node/merge-node.component.html
+  s_c8649c9e9a8f4d::t_ed35a5b0dda54b 1-26
+portal/src/app/components/nodes/merge-node/merge-node.component.scss
+  s_c8649c9e9a8f4d::t_b20cf0ef2e16f4 1-7
+portal/src/app/components/nodes/merge-node/merge-node.component.ts
+  s_c8649c9e9a8f4d::t_b5b25aa4184b21 1-73
+portal/src/app/components/nodes/node-tools/node-tools.component.html
+  s_c8649c9e9a8f4d::t_2935d3415bb645 1-21
+portal/src/app/components/nodes/node-tools/node-tools.component.scss
+  s_c8649c9e9a8f4d::t_3a9205bff859c3 1-35
+portal/src/app/components/nodes/node-tools/node-tools.component.ts
+  s_c8649c9e9a8f4d::t_0b8e33782d90a4 1-17
+portal/src/app/components/nodes/source-node/source-node.component.html
+  s_c8649c9e9a8f4d::t_1f2eeb54309c39 1-30
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_c8649c9e9a8f4d::t_052d8efda21900 1-75
+portal/src/app/components/nodes/source-node/source-node.component.ts
+  s_c8649c9e9a8f4d::t_cb30bd3ec3dbb6 1-109
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_c8649c9e9a8f4d::t_257cf16ed4551c 1-29
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_c8649c9e9a8f4d::t_a8dfbbbfce6112 1-23
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_c8649c9e9a8f4d::t_dcb51b5a793130 1-71
+portal/src/app/components/shared/callout/callout.component.html
+  s_c8649c9e9a8f4d::t_5f01cea8b437aa 1-4
+portal/src/app/components/shared/callout/callout.component.scss
+  s_c8649c9e9a8f4d::t_9605e45a805577 1-14
+portal/src/app/components/shared/callout/callout.component.ts
+  s_c8649c9e9a8f4d::t_de60a3e8133ff8 1-15
+portal/src/app/components/shared/env-toggle/env-toggle.component.html
+  s_c8649c9e9a8f4d::t_3b98cd0d6ec6dc 1-29
+portal/src/app/components/shared/env-toggle/env-toggle.component.scss
+  s_c8649c9e9a8f4d::t_28f3dbcf5476ac 1-34
+portal/src/app/components/shared/env-toggle/env-toggle.component.ts
+  s_c8649c9e9a8f4d::t_8cd6231f5e14ae 1-18
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.html
+  s_c8649c9e9a8f4d::t_e0d96dc6fde72f 1-7
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.scss
+  s_c8649c9e9a8f4d::t_6969403c201bae 1-14
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.ts
+  s_c8649c9e9a8f4d::t_22ea4ee20e865f 1-25
+portal/src/app/components/shared/mode-config/mode-config.component.html
+  s_c8649c9e9a8f4d::t_c98d616c8128c1 1-66
+portal/src/app/components/shared/mode-config/mode-config.component.scss
+  s_c8649c9e9a8f4d::t_ff10aef78ff502 1-92
+portal/src/app/components/shared/mode-config/mode-config.component.ts
+  s_c8649c9e9a8f4d::t_9d2088a270deef 1-78
+portal/src/app/components/shared/resource-scope-grid/resource-scope-grid.component.html
+  s_c8649c9e9a8f4d::t_800d04af3684a6 1-12
+portal/src/app/components/shared/resource-scope-grid/resource-scope-grid.component.scss
+  s_c8649c9e9a8f4d::t_ededf138ef4d0e 1-24
+portal/src/app/components/shared/resource-scope-grid/resource-scope-grid.component.ts
+  s_c8649c9e9a8f4d::t_4851bafea49f86 1-25
+portal/src/app/components/shared/toast/toast.component.html
+  s_c8649c9e9a8f4d::t_318c8fd35d730c 1-6
+portal/src/app/components/shared/toast/toast.component.scss
+  s_c8649c9e9a8f4d::t_09fe19b5c1bff1 1-21
+portal/src/app/components/shared/toast/toast.component.ts
+  s_c8649c9e9a8f4d::t_63b3e60bb25040 1-13
+portal/src/app/components/shared/wizard-rail/wizard-rail.component.html
+  s_c8649c9e9a8f4d::t_3f56c7511ec31e 1-12
+portal/src/app/components/shared/wizard-rail/wizard-rail.component.scss
+  s_c8649c9e9a8f4d::t_bf129d9a840d93 1-66
+portal/src/app/components/shared/wizard-rail/wizard-rail.component.ts
+  s_c8649c9e9a8f4d::t_c5c311858b2061 1-29
+portal/src/app/components/topbar/topbar.component.html
+  s_c8649c9e9a8f4d::t_c900cce1c6a3da 1-16
+portal/src/app/components/topbar/topbar.component.scss
+  s_c8649c9e9a8f4d::t_aa505a424c3b47 1-28
+portal/src/app/components/topbar/topbar.component.ts
+  s_c8649c9e9a8f4d::t_80bca4234d576b 1-16
+portal/src/app/components/wizard/connection-wizard/connection-wizard.component.html
+  s_c8649c9e9a8f4d::t_aa54b35ee6bd26 1-37
+portal/src/app/components/wizard/connection-wizard/connection-wizard.component.scss
+  s_c8649c9e9a8f4d::t_643bc6af44fd42 1-50
+portal/src/app/components/wizard/connection-wizard/connection-wizard.component.ts
+  s_c8649c9e9a8f4d::t_f0cf8aa99a2e80 1-95
+portal/src/app/components/wizard/steps/wizard-step1/wizard-step1.component.html
+  s_c8649c9e9a8f4d::t_1ca92918bf25a3 1-102
+portal/src/app/components/wizard/steps/wizard-step1/wizard-step1.component.scss
+  s_c8649c9e9a8f4d::t_31125c30cdb098 1-45
+portal/src/app/components/wizard/steps/wizard-step1/wizard-step1.component.ts
+  s_c8649c9e9a8f4d::t_65045cb62cb820 1-75
+portal/src/app/components/wizard/steps/wizard-step2/wizard-step2.component.html
+  s_c8649c9e9a8f4d::t_9fea68dc511b8f 1-118
+portal/src/app/components/wizard/steps/wizard-step2/wizard-step2.component.scss
+  s_c8649c9e9a8f4d::t_84f6e13d38ad53 1-29
+portal/src/app/components/wizard/steps/wizard-step2/wizard-step2.component.ts
+  s_c8649c9e9a8f4d::t_b037c2bf879e01 1-87
+portal/src/app/components/wizard/steps/wizard-step3/wizard-step3.component.html
+  s_c8649c9e9a8f4d::t_51c892afff21e5 1-58
+portal/src/app/components/wizard/steps/wizard-step3/wizard-step3.component.scss
+  s_c8649c9e9a8f4d::t_6a789e47fd2d5c 1-18
+portal/src/app/components/wizard/steps/wizard-step3/wizard-step3.component.ts
+  s_c8649c9e9a8f4d::t_29357b714dfd47 1-58
+portal/src/app/dashboard/_panel.scss
+  s_c8649c9e9a8f4d::t_74bcd3f6df5e78 1-36
+portal/src/app/dashboard/components/activity-feed/activity-feed.component.html
+  s_c8649c9e9a8f4d::t_cd424985d1e4ba 1-23
+portal/src/app/dashboard/components/activity-feed/activity-feed.component.scss
+  s_c8649c9e9a8f4d::t_d0d41f2ba76e59 1-61
+portal/src/app/dashboard/components/activity-feed/activity-feed.component.ts
+  s_c8649c9e9a8f4d::t_2e579cf07d76f2 1-25
+portal/src/app/dashboard/components/execution-status/execution-status.component.html
+  s_c8649c9e9a8f4d::t_00c0bf3df94682 1-43
+portal/src/app/dashboard/components/execution-status/execution-status.component.scss
+  s_c8649c9e9a8f4d::t_caaa274a617684 1-75
+portal/src/app/dashboard/components/execution-status/execution-status.component.ts
+  s_c8649c9e9a8f4d::t_0dab704c7a9093 1-53
+portal/src/app/dashboard/components/kpi-card/kpi-card.component.html
+  s_c8649c9e9a8f4d::t_06ef7ec212cc7e 1-14
+portal/src/app/dashboard/components/kpi-card/kpi-card.component.scss
+  s_c8649c9e9a8f4d::t_90875b0a4ced24 1-61
+portal/src/app/dashboard/components/kpi-card/kpi-card.component.ts
+  s_c8649c9e9a8f4d::t_4a0a038839abd6 1-23
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.html
+  s_c8649c9e9a8f4d::t_b4e8429e518e9b 1-48
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.scss
+  s_c8649c9e9a8f4d::t_89524c9848ae07 1-91
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.ts
+  s_c8649c9e9a8f4d::t_c6cb5d3d8903ea 1-36
+portal/src/app/dashboard/components/quick-actions/quick-actions.component.html
+  s_c8649c9e9a8f4d::t_4a0e0fd6583f2d 1-31
+portal/src/app/dashboard/components/quick-actions/quick-actions.component.scss
+  s_c8649c9e9a8f4d::t_fec2a409892752 1-47
+portal/src/app/dashboard/components/quick-actions/quick-actions.component.ts
+  s_c8649c9e9a8f4d::t_b9973f5cb4f47b 1-31
+portal/src/app/dashboard/components/system-health/system-health.component.html
+  s_c8649c9e9a8f4d::t_07666df31cdb5f 1-23
+portal/src/app/dashboard/components/system-health/system-health.component.scss
+  s_c8649c9e9a8f4d::t_149ace3f495cc1 1-53
+portal/src/app/dashboard/components/system-health/system-health.component.ts
+  s_c8649c9e9a8f4d::t_2a54d489b65f37 1-26
+portal/src/app/dashboard/dashboard.routes.ts
+  s_c8649c9e9a8f4d::t_dcb3aa9552cd27 1-9
+portal/src/app/dashboard/layout/sidebar/sidebar.component.html
+  s_c8649c9e9a8f4d::t_bb327464756fce 1-24
+portal/src/app/dashboard/layout/sidebar/sidebar.component.scss
+  s_c8649c9e9a8f4d::t_7d5559c2085fa5 1-76
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_c8649c9e9a8f4d::t_fadc343c70022a 1-30
+portal/src/app/dashboard/models/activity-event.model.ts
+  s_c8649c9e9a8f4d::t_53ea06be22397e 1-9
+portal/src/app/dashboard/models/health-check.model.ts
+  s_c8649c9e9a8f4d::t_667e95d0641a8d 1-9
+portal/src/app/dashboard/models/kpi-metric.model.ts
+  s_c8649c9e9a8f4d::t_5d856005d30547 1-16
+portal/src/app/dashboard/models/pipeline-run.model.ts
+  s_c8649c9e9a8f4d::t_cfd7ca052929e0 1-12
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_c8649c9e9a8f4d::t_e314574cf7e0b0 1-71
+portal/src/app/dashboard/pages/dashboard/dashboard.component.scss
+  s_c8649c9e9a8f4d::t_9b4dcfbcdbf91a 1-162
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  s_c8649c9e9a8f4d::t_09cbb7726cc18c 1-55
+portal/src/app/dashboard/services/dashboard.service.ts
+  s_c8649c9e9a8f4d::t_ce372d9325d0bc 1-72
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  s_c8649c9e9a8f4d::t_5eb468c2238ace 1-60
+portal/src/app/data/epic-apps.data.ts
+  s_c8649c9e9a8f4d::t_c886f7c0667b35 1-44
+portal/src/app/data/epic-environments.data.ts
+  s_c8649c9e9a8f4d::t_677596654a9470 1-18
+portal/src/app/data/ingestion-modes.data.ts
+  s_c8649c9e9a8f4d::t_922828fdbe90b4 1-15
+portal/src/app/data/mode-configs.data.ts
+  s_c8649c9e9a8f4d::t_bffc74aa978cc7 1-59
+portal/src/app/data/scope-constants.data.ts
+  s_c8649c9e9a8f4d::t_0546babc503e29 1-33
+portal/src/app/data/sources.data.ts
+  s_c8649c9e9a8f4d::t_5b66a331804e91 1-13
+portal/src/app/data/transforms.data.ts
+  s_c8649c9e9a8f4d::t_9aa04857eabd8c 1-39
+portal/src/app/models/edge.model.ts
+  s_c8649c9e9a8f4d::t_fb7face31a6f97 1-5
+portal/src/app/models/epic-app.model.ts
+  s_c8649c9e9a8f4d::t_1cf99a74f1a7e8 1-16
+portal/src/app/models/epic-env.model.ts
+  s_c8649c9e9a8f4d::t_c2cd28f3c47028 1-9
+portal/src/app/models/ingestion-mode.model.ts
+  s_c8649c9e9a8f4d::t_7a0107e3c45690 1-11
+portal/src/app/models/mode-config.model.ts
+  s_c8649c9e9a8f4d::t_d2033de9879cb8 1-31
+portal/src/app/models/node.model.ts
+  s_c8649c9e9a8f4d::t_1d2140738be7c4 1-44
+portal/src/app/models/pipeline-payload.model.ts
+  s_c8649c9e9a8f4d::t_481907571c59fb 1-34
+portal/src/app/models/source.model.ts
+  s_c8649c9e9a8f4d::t_0e3088823c05e3 1-8
+portal/src/app/models/transform-applicability.model.ts
+  s_c8649c9e9a8f4d::t_8d908ad3c3c17f 1-23
+portal/src/app/models/transform.model.ts
+  s_c8649c9e9a8f4d::t_d4f5316a8646ac 1-21
+portal/src/app/models/wizard-state.model.ts
+  s_c8649c9e9a8f4d::t_500383cdca1067 1-39
+portal/src/app/pages/user-management/user-management.component.html
+  s_c8649c9e9a8f4d::t_e91efe96cf39d3 1-238
+portal/src/app/pages/user-management/user-management.component.scss
+  s_c8649c9e9a8f4d::t_153f160569157b 1-235
+portal/src/app/pages/user-management/user-management.component.ts
+  s_c8649c9e9a8f4d::t_49857afaaf3b0c 1-198
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_c8649c9e9a8f4d::t_f3ccd93b64d8d8 1-71
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_c8649c9e9a8f4d::t_d65fc72901e696 1-136
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_c8649c9e9a8f4d::t_d184261144b44a 1-177
+portal/src/app/services/applicability.service.ts
+  s_c8649c9e9a8f4d::t_6ca61b9ab8d637 1-304
+portal/src/app/services/canvas.service.ts
+  s_c8649c9e9a8f4d::t_cd8a695e56437f 1-68
+portal/src/app/services/epic-discovery.service.ts
+  s_c8649c9e9a8f4d::t_c8fe98c2b67e71 1-40
+portal/src/app/services/payload.service.ts
+  s_c8649c9e9a8f4d::t_fe84d73ec98747 1-63
+portal/src/app/services/phase-config.service.ts
+  s_c8649c9e9a8f4d::t_3d19be6afbe6b7 1-92
+portal/src/app/services/pipeline.store.ts
+  s_c8649c9e9a8f4d::t_1f92cbda9c9086 1-200
+portal/src/app/services/scope-builder.service.ts
+  s_c8649c9e9a8f4d::t_eeb47b4174afea 1-17
+portal/src/app/services/toast.service.ts
+  s_c8649c9e9a8f4d::t_76aa0725a47d48 1-24
+portal/src/app/services/wizard.service.ts
+  s_c8649c9e9a8f4d::t_790a5ac2ee053f 1-256
+portal/src/app/user/components/user-menu/user-menu.component.html
+  s_c8649c9e9a8f4d::t_ef4a8ca225ef2d 1-159
+portal/src/app/user/components/user-menu/user-menu.component.scss
+  s_c8649c9e9a8f4d::t_da160f86bec081 1-184
+portal/src/app/user/components/user-menu/user-menu.component.ts
+  s_c8649c9e9a8f4d::t_30a188fb093920 1-67
+portal/src/app/user/components/user-settings-nav/user-settings-nav.component.html
+  s_c8649c9e9a8f4d::t_7c6ada4a0a2314 1-18
+portal/src/app/user/components/user-settings-nav/user-settings-nav.component.scss
+  s_c8649c9e9a8f4d::t_0e833bce9eae0c 1-45
+portal/src/app/user/components/user-settings-nav/user-settings-nav.component.ts
+  s_c8649c9e9a8f4d::t_d60d14002d863d 1-32
+portal/src/app/user/models/user-profile.model.ts
+  s_c8649c9e9a8f4d::t_ef9d642e396c90 1-125
+portal/src/app/user/pages/account-settings/account-settings.component.html
+  s_c8649c9e9a8f4d::t_a80c83b584cc0b 1-125
+portal/src/app/user/pages/account-settings/account-settings.component.scss
+  s_c8649c9e9a8f4d::t_a6a42e4eee0c56 1-90
+portal/src/app/user/pages/account-settings/account-settings.component.ts
+  s_c8649c9e9a8f4d::t_e007066856b54f 1-49
+portal/src/app/user/pages/help/help.component.html
+  s_c8649c9e9a8f4d::t_87055b691c9c06 1-78
+portal/src/app/user/pages/help/help.component.scss
+  s_c8649c9e9a8f4d::t_94b6ecc3b278f9 1-79
+portal/src/app/user/pages/help/help.component.ts
+  s_c8649c9e9a8f4d::t_4e5678fbb48189 1-45
+portal/src/app/user/pages/preferences/preferences.component.html
+  s_c8649c9e9a8f4d::t_f5f0595b69d8b7 1-125
+portal/src/app/user/pages/preferences/preferences.component.scss
+  s_c8649c9e9a8f4d::t_177c161fd6333c 1-121
+portal/src/app/user/pages/preferences/preferences.component.ts
+  s_c8649c9e9a8f4d::t_a8b4b9d165f4c9 1-60
+portal/src/app/user/pages/profile/profile.component.html
+  s_c8649c9e9a8f4d::t_999d63477e4d19 1-143
+portal/src/app/user/pages/profile/profile.component.scss
+  s_c8649c9e9a8f4d::t_ca77da584ca9b9 1-103
+portal/src/app/user/pages/profile/profile.component.ts
+  s_c8649c9e9a8f4d::t_9013a919bd8f12 1-35
+portal/src/app/user/pages/security/security.component.html
+  s_c8649c9e9a8f4d::t_03e8820bef2eea 1-141
+portal/src/app/user/pages/security/security.component.scss
+  s_c8649c9e9a8f4d::t_40178c74d8fc9e 1-116
+portal/src/app/user/pages/security/security.component.ts
+  s_c8649c9e9a8f4d::t_839a5becc74d97 1-35
+portal/src/app/user/services/user-profile.service.ts
+  s_c8649c9e9a8f4d::t_39caf75827be52 1-130
+portal/src/app/user/user.routes.ts
+  s_c8649c9e9a8f4d::t_bf6bedbee7e01e 1-31
+portal/src/environments/environment.prod.ts
+  s_c8649c9e9a8f4d::t_bb855d2a73008b 1-3
+portal/src/environments/environment.ts
+  s_c8649c9e9a8f4d::t_387b1cb8f73bd9 1-16
+portal/src/index.html
+  s_c8649c9e9a8f4d::t_c4b2b0222105de 1-17
+portal/src/main.ts
+  s_c8649c9e9a8f4d::t_45fb7f00a7ec38 1-6
+portal/src/polyfills.ts
+  s_c8649c9e9a8f4d::t_4348e76a1009ff 1-3
+portal/src/styles.scss
+  s_c8649c9e9a8f4d::t_6e870f8a0ca707 1-61
+portal/src/test.ts
+  s_c8649c9e9a8f4d::t_0dea7287ef7afb 1-25
+portal/tsconfig.app.json
+  s_c8649c9e9a8f4d::t_0fd96259027322 1-9
+portal/tsconfig.json
+  s_c8649c9e9a8f4d::t_8b283867ae8011 1-29
+portal/tsconfig.spec.json
+  s_c8649c9e9a8f4d::t_980083689da7c5 1-18
+portal/tslint.json
+  s_c8649c9e9a8f4d::t_f370d3947f4237 1-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "91ea6a5a58c01e2e61050932e53eb4da2717d22a",
+  "prompts": {},
+  "sessions": {
+    "s_c8649c9e9a8f4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6410a6b7-bcd1-4768-ad82-af7853ea4ed5",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
