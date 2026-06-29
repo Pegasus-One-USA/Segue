@@ -1,0 +1,24 @@
+.res-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.res-chk {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: #41506a;
+  cursor: pointer;
+  background: #fff;
+
+  &:hover { background: #f6f8fb; }
+  &.on    { border-color: var(--purple); background: #f7f1ff; color: var(--purple); }
+
+  input { margin: 0; }
+}

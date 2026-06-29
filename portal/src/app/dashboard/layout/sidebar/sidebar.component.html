@@ -1,0 +1,24 @@
+<aside class="sidebar" [class.collapsed]="collapsed()">
+  <div class="sidebar-logo">
+    <span class="logo-hex">&#11041;</span>
+    @if (!collapsed()) {
+      <span class="logo-text">FHIRBridge</span>
+    }
+  </div>
+
+  <nav class="sidebar-nav">
+    @for (item of navItems; track item.route) {
+      <a
+        class="nav-item"
+        [routerLink]="item.route"
+        routerLinkActive="active"
+        [title]="collapsed() ? item.label : ''"
+      >
+        <span class="nav-icon">{{ item.icon }}</span>
+        @if (!collapsed()) {
+          <span class="nav-label">{{ item.label }}</span>
+        }
+      </a>
+    }
+  </nav>
+</aside>

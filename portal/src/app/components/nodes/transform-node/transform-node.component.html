@@ -1,0 +1,29 @@
+<app-node-tools
+  [showConfigure]="false"
+  [plusEnabled]="plusEnabled()"
+  (addNext)="addNext.emit(node().id)"
+  (delete)="delete.emit(node().id)"
+/>
+
+<span class="port port-in"></span>
+<span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
+
+<span
+  class="node-circle"
+  style="--node-color:var(--purple);background:var(--purple)"
+  (pointerdown)="onCirclePointerDown($event)"
+  (pointermove)="onCirclePointerMove($event)"
+  (pointerup)="onCirclePointerUp($event)"
+  (pointercancel)="onCirclePointerUp($event)"
+>
+  <b>⇒</b>
+  <span class="node-badge" style="background:var(--purple)">Transform</span>
+</span>
+
+<span class="node-label">
+  <strong>{{ transformName() }}</strong>
+  <span>from {{ sourceName() }}</span>
+  @if (isCaveat()) {
+    <span class="node-mode-tag caveat">⚠ caveat</span>
+  }
+</span>

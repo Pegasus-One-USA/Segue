@@ -1,0 +1,51 @@
+<app-auth-card>
+  <h1 class="auth-title">Sign in</h1>
+  <p class="auth-sub">Welcome back to FHIRBridge</p>
+
+  @if (error()) {
+    <div class="auth-error">{{ error() }}</div>
+  }
+
+  <form class="auth-form" (ngSubmit)="submit()">
+
+    <div class="auth-field">
+      <label for="login-email">Email</label>
+      <input
+        id="login-email"
+        type="email"
+        autocomplete="email"
+        placeholder="you@org.com"
+        [(ngModel)]="email"
+        name="email"
+        required
+      />
+    </div>
+
+    <div class="auth-field">
+      <label for="login-password">Password</label>
+      <div class="pw-wrap">
+        <input
+          id="login-password"
+          [type]="showPw() ? 'text' : 'password'"
+          autocomplete="current-password"
+          placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
+          [(ngModel)]="password"
+          name="password"
+          required
+        />
+        <button type="button" class="pw-toggle" (click)="showPw.set(!showPw())">
+          {{ showPw() ? 'Hide' : 'Show' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="auth-links">
+      <a routerLink="/auth/forgot-password">Forgot password?</a>
+    </div>
+
+    <button class="auth-btn" type="submit" [disabled]="isLoading()">
+      @if (isLoading()) { Signing in… } @else { Sign in }
+    </button>
+
+  </form>
+</app-auth-card>

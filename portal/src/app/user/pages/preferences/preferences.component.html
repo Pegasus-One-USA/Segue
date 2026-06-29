@@ -1,0 +1,125 @@
+<div class="dash-shell">
+  <app-sidebar [collapsed]="sidebarCollapsed()" />
+
+  <div class="dash-main">
+    <header class="dash-topbar">
+      <button class="collapse-btn" type="button" (click)="toggleSidebar()">&#9776;</button>
+      <div class="dash-breadcrumb">
+        <span class="breadcrumb-root" (click)="navigate('/dashboard')">Dashboard</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-page">Preferences</span>
+      </div>
+    </header>
+
+    <div class="dash-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Preferences</h1>
+          <p class="page-sub">Customize your FHIRBridge experience</p>
+        </div>
+        @if (saved()) {
+          <div class="save-toast">✓ Preferences saved</div>
+        }
+      </div>
+
+      <div class="user-settings-layout">
+        <app-user-settings-nav activePage="preferences" />
+
+        <div class="settings-body">
+
+          <!-- Appearance / Theme -->
+          <section class="settings-card">
+            <h2 class="card-title">Appearance</h2>
+            <p class="card-sub">Choose how FHIRBridge looks to you</p>
+            <div class="theme-cards">
+              @for (opt of themeOptions; track opt.id) {
+                <button
+                  class="theme-card"
+                  [class.active]="theme() === opt.id"
+                  type="button" (click)="setTheme(opt.id)"
+                >
+                  <div class="theme-preview" [class]="'preview-' + opt.id">
+                    <div class="preview-bar"></div>
+                    <div class="preview-content">
+                      <div class="preview-line w60"></div>
+                      <div class="preview-line w40"></div>
+                    </div>
+                  </div>
+                  <span class="theme-card-label">{{ opt.label }}</span>
+                  <span class="theme-card-desc">{{ opt.desc }}</span>
+                </button>
+              }
+            </div>
+          </section>
+
+          <!-- Language & Region -->
+          <section class="settings-card">
+            <h2 class="card-title">Language &amp; Region</h2>
+            <div class="pref-grid">
+              <div class="form-field">
+                <label>Language</label>
+                <select [(ngModel)]="selectedLanguage" name="lang">
+                  @for (lang of languages; track lang) {
+                    <option [value]="lang">{{ lang }}</option>
+                  }
+                </select>
+              </div>
+              <div class="form-field">
+                <label>Date Format</label>
+                <select [(ngModel)]="selectedDateFmt" name="datefmt">
+                  @for (fmt of dateFormats; track fmt) {
+                    <option [value]="fmt">{{ fmt }}</option>
+                  }
+                </select>
+              </div>
+              <div class="form-field">
+                <label>Time Format</label>
+                <select [(ngModel)]="selectedTimeFmt" name="timefmt">
+                  @for (fmt of timeFormats; track fmt) {
+                    <option [value]="fmt">{{ fmt }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <!-- Notifications -->
+          <section class="settings-card">
+            <h2 class="card-title">Notifications</h2>
+            <div class="toggle-list">
+              <div class="toggle-row">
+                <div class="toggle-info">
+                  <span class="toggle-label">Email Notifications</span>
+                  <span class="toggle-sub">Receive pipeline alerts and reports via email</span>
+                </div>
+                <button
+                  class="toggle-btn" [class.on]="emailNotif" type="button"
+                  (click)="emailNotif = !emailNotif"
+                >
+                  <span class="toggle-knob"></span>
+                </button>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info">
+                  <span class="toggle-label">In-App Notifications</span>
+                  <span class="toggle-sub">Show notification banners within the application</span>
+                </div>
+                <button
+                  class="toggle-btn" [class.on]="inAppNotif" type="button"
+                  (click)="inAppNotif = !inAppNotif"
+                >
+                  <span class="toggle-knob"></span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div class="save-row">
+            <button class="btn-primary" type="button" (click)="savePreferences()">Save Preferences</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

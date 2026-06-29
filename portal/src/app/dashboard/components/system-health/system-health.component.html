@@ -1,0 +1,23 @@
+<div class="panel">
+  <div class="panel-header">
+    <h2 class="panel-title">System Health</h2>
+    <span class="overall-badge" [class]="'badge-' + overallStatus()">
+      {{ overallLabel() }}
+    </span>
+  </div>
+
+  <div class="health-list">
+    @for (check of checks(); track check.id) {
+      <div class="health-row">
+        <span class="health-dot" [class]="'dot-' + check.status"></span>
+        <span class="health-label">{{ check.label }}</span>
+        <span class="health-detail muted">{{ check.detail ?? '' }}</span>
+        @if (check.latencyMs !== undefined) {
+          <span class="latency-pill" [class]="check.latencyMs > 200 ? 'pill-amber' : 'pill-green'">
+            {{ check.latencyMs }}ms
+          </span>
+        }
+      </div>
+    }
+  </div>
+</div>

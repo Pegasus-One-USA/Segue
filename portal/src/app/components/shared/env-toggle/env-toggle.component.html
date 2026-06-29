@@ -1,0 +1,29 @@
+<div class="env-toggle">
+  <div
+    class="env-opt"
+    [class.on]="value() === 'sandbox'"
+    (click)="select('sandbox')"
+  >
+    <b>Sandbox (non-production)</b>
+    <span>Epic public sandbox at fhir.epic.com. Uses your non-production client ID.</span>
+  </div>
+  <div
+    class="env-opt"
+    [class.on]="value() === 'production'"
+    (click)="select('production')"
+  >
+    <b>Production</b>
+    <span>The customer's own Epic Interconnect endpoint. Uses your production client ID (activates after org download).</span>
+  </div>
+</div>
+
+@if (value() === 'production') {
+  <div class="callout warn" style="margin-top:10px">
+    <span class="ci">⚠</span>
+    <div>
+      <b>Production client IDs are organization-specific.</b>
+      Epic issues a separate production client ID per app, which only becomes active after the customer organization downloads your app.
+      The base URL must point at that customer's Interconnect instance, not Epic's shared sandbox.
+    </div>
+  </div>
+}

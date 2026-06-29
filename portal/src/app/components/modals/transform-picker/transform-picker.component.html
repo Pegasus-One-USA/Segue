@@ -1,0 +1,90 @@
+<app-modal-overlay [open]="open()" (closed)="closed.emit()">
+  <section class="tp-box">
+    <header class="tp-head">
+      <div>
+        <h2>Add transform</h2>
+        <p>{{ model()?.ruleLabel }}</p>
+      </div>
+      <button class="close-x" type="button" (click)="closed.emit()">×</button>
+    </header>
+
+    @if (model(); as m) {
+      <div class="tp-context">
+        <span class="tp-ctx-chip">Rule: {{ m.rule }}</span>
+        <span class="tp-ctx-chip">Context: {{ m.cfg.context }}</span>
+        <span class="tp-ctx-chip">Mode: {{ m.cfg.ingestionMode }}</span>
+      </div>
+    }
+
+    <div class="tp-legend">
+      <span><i class="lg lg-show"></i> Applicable</span>
+      <span><i class="lg lg-caveat"></i> Works — with a caveat</span>
+      <span><i class="lg lg-hide"></i> Not applicable</span>
+      <label class="tp-toggle">
+        <input type="checkbox" [checked]="showHidden()" (change)="showHidden.set($any($event.target).checked)" />
+        Show hidden
+      </label>
+    </div>
+
+    <div class="tp-list">
+      @for (group of groupedItems(); track group.rank) {
+        <div class="tp-rank-head">
+          <span class="tp-rank-pill">rank {{ group.rank }}</span>
+          {{ group.label }}
+          @if (groupLabelOf(group.items); as gl) {
+            · <span style="color:var(--purple)">{{ gl }} group</span>
+          }
+        </div>
+
+        @for (cat of categoriesOf(group.items); track cat.cat) {
+          @if (cat.cat) {
+            <div class="tp-cat-head">{{ cat.cat }}</div>
+          }
+          @for (item of cat.items; track item.id) {
+            <button
+              class="tp-item"
+              [class.caveat]="item.status === 'caveat'"
+              [class.hide]="item.status === 'hide'"
+              type="button"
+              [disabled]="item.status === 'hide'"
+              (click)="select(item)"
+            >
+              <span class="tp-dot" [class.show]="item.status === 'show'" [class.caveat]="item.status === 'caveat'" [class.hide]="item.status === 'hide'"></span>
+              <span class="tp-item-body">
+                <span class="tp-item-title">
+                  {{ item.name }}
+                  @if (item.group) { <span class="tp-status-tag" style="background:var(--purple-soft);color:var(--purple)">group</span> }
+                  @if (item.status !== 'show') { <span class="tp-status-tag" [class.caveat]="item.status === 'caveat'" [class.hide]="item.status === 'hide'">{{ item.status === 'caveat' ? 'caveat' : 'not applicable' }}</span> }
+                </span>
+                <span class="tp-item-sub">{{ item.sub }}</span>
+                @if (item.reason) {
+                  <div class="tp-reason" [class.caveat]="item.status === 'caveat'" [class.hide]="item.status === 'hide'">{{ item.reason }}</div>
+                }
+              </span>
+            </button>
+          }
+        }
+      }
+
+      @if (model()?.mergeOpt; as opt) {
+        <div class="tp-rank-head" style="margin-top:14px">
+          <span class="tp-rank-pill" style="background:var(--green)">merge</span>
+          {{ opt.source ? 'Merge sources' : 'Combine the group' }}
+        </div>
+        <button class="tp-item" type="button" style="border-color:#b8e6cd;background:#f4fbf7" (click)="selectMerge()">
+          <span class="tp-dot show" style="background:var(--green)"></span>
+          <span class="tp-item-body">
+            <span class="tp-item-title">⊕ {{ opt.source ? 'Merge sources' : 'Merge Node' }}</span>
+            <span class="tp-item-sub">
+              Fan all {{ opt.count }} {{ opt.source ? 'source connectors' : 'group members' }} into one merge node.
+            </span>
+          </span>
+        </button>
+      }
+
+      @if (!model() || (groupedItems().length === 0 && !model()?.mergeOpt)) {
+        <p class="wiz-hint" style="padding:12px">No further steps available from here.</p>
+      }
+    </div>
+  </section>
+</app-modal-overlay>

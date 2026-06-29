@@ -1,0 +1,184 @@
+:host { position: relative; display: flex; }
+
+/* ── Trigger ──────────────────────────────────────────────────────── */
+.um-wrap { position: relative; }
+
+.um-trigger {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px 6px 6px;
+  background: none; border: 1px solid transparent;
+  border-radius: 10px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+
+  &:hover { background: rgba(0,168,157,.07); border-color: rgba(0,168,157,.2); }
+  .um-wrap.open & { background: rgba(0,168,157,.1); border-color: rgba(0,168,157,.3); }
+}
+
+.um-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+  flex-shrink: 0; letter-spacing: .03em;
+}
+
+.um-trigger-info {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+}
+.um-trigger-name {
+  font-size: 13px; font-weight: 600; color: #1E293B; line-height: 1.2;
+}
+.um-trigger-role {
+  font-size: 11px; color: #64748B; line-height: 1.2;
+}
+
+.um-chevron {
+  width: 14px; height: 14px; color: #94A3B8; margin-left: 2px;
+  transition: transform .2s;
+  &.rotated { transform: rotate(180deg); }
+}
+
+/* ── Panel ────────────────────────────────────────────────────────── */
+.um-panel {
+  position: absolute; top: calc(100% + 10px); right: 0;
+  width: 308px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(15,23,42,.14), 0 4px 12px rgba(15,23,42,.06);
+  z-index: 9999;
+  overflow: hidden;
+  animation: um-slide-in .18s cubic-bezier(.22,.68,0,1.2) both;
+}
+
+@keyframes um-slide-in {
+  from { opacity: 0; transform: translateY(-6px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);   }
+}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+.um-header {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(135deg, rgba(0,168,157,.06) 0%, rgba(0,168,157,.02) 100%);
+}
+
+.um-header-avatar {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0,168,157,.3);
+}
+
+.um-header-info {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.um-header-name {
+  font-size: 15px; font-weight: 700; color: #0F172A;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.um-header-email {
+  font-size: 12px; color: #64748B;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.um-header-role {
+  display: inline-block; margin-top: 4px;
+  font-size: 11px; font-weight: 600;
+  background: rgba(0,168,157,.1); border-radius: 99px;
+  padding: 2px 8px;
+}
+.um-header-org {
+  font-size: 11px; color: #94A3B8; margin-top: 2px;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────── */
+.um-divider {
+  height: 1px; background: #F1F5F9; margin: 0;
+}
+
+/* ── Sections & Items ─────────────────────────────────────────────── */
+.um-section { padding: 6px 6px; }
+
+.um-item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 9px 12px;
+  background: none; border: none; border-radius: 10px;
+  cursor: pointer; text-align: left;
+  transition: background .12s;
+
+  &:hover { background: #F8FAFC; }
+}
+
+.um-item-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: #F1F5F9; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+
+  svg { width: 16px; height: 16px; color: #64748B; }
+}
+
+.um-item-body {
+  flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;
+}
+.um-item-label  { font-size: 13.5px; font-weight: 600; color: #1E293B; }
+.um-item-sub    { font-size: 11.5px; color: #94A3B8; }
+.um-item-arrow  { width: 14px; height: 14px; color: #CBD5E1; flex-shrink: 0; }
+
+/* ── Appearance section ───────────────────────────────────────────── */
+.um-section--appearance { padding: 10px 14px 12px; }
+
+.um-appear-label {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; color: #1E293B; margin-bottom: 8px;
+
+  .um-item-icon { width: 28px; height: 28px; }
+  svg { width: 15px; height: 15px; }
+}
+
+.um-theme-row {
+  display: flex; gap: 6px; padding-left: 38px;
+}
+
+.um-theme-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 6px 8px; border-radius: 8px; font-size: 12px; font-weight: 500;
+  border: 1px solid #E2E8F0; background: #F8FAFC; color: #64748B;
+  cursor: pointer; transition: all .12s;
+
+  svg { width: 13px; height: 13px; }
+  &:hover { border-color: #00A89D; color: #00A89D; background: #F0FDFC; }
+  &.active {
+    border-color: #00A89D; background: #E6F9F7;
+    color: #00A89D; font-weight: 600;
+  }
+}
+
+/* ── Logout section ──────────────────────────────────────────────── */
+.um-item--logout {
+  .um-item-icon { background: #FFF1F2; svg { color: #E11D48; } }
+  .um-item-label { color: #E11D48; }
+  &:hover { background: #FFF1F2; }
+}
+
+.um-logout-confirm {
+  padding: 8px 12px 10px;
+}
+.um-logout-q {
+  font-size: 13px; font-weight: 600; color: #1E293B; margin: 0 0 10px;
+}
+.um-logout-btns {
+  display: flex; gap: 8px;
+}
+.um-logout-cancel,
+.um-logout-ok {
+  flex: 1; padding: 7px 12px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all .12s;
+}
+.um-logout-cancel {
+  background: #F1F5F9; border: 1px solid #E2E8F0; color: #475569;
+  &:hover { background: #E2E8F0; }
+}
+.um-logout-ok {
+  background: #E11D48; border: 1px solid #E11D48; color: #fff;
+  &:hover { background: #BE123C; }
+}

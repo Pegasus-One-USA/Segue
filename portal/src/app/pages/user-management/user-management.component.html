@@ -1,0 +1,238 @@
+<div class="dash-shell">
+
+  <app-sidebar [collapsed]="sidebarCollapsed()" />
+
+  <div class="dash-main">
+
+    <!-- Topbar -->
+    <header class="dash-topbar">
+      <button class="collapse-btn" type="button" (click)="toggleSidebar()" title="Toggle sidebar">&#9776;</button>
+      <div class="dash-breadcrumb">
+        <span class="breadcrumb-page">User Management</span>
+      </div>
+      <div class="topbar-right">
+        <div class="notif-btn" title="Notifications">
+          <span>&#128276;</span>
+          <span class="notif-badge">3</span>
+        </div>
+        <app-user-menu />
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <div class="dash-content">
+
+      <!-- Page header -->
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">User Management</h1>
+          <p class="page-sub">Manage users, roles, and access within Pegasus One Health</p>
+        </div>
+        <button class="invite-btn" type="button" (click)="inviteOpen.set(true)">+ Invite User</button>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row">
+        <div class="stat-tile">
+          <span class="stat-val">{{ stats().total }}</span>
+          <span class="stat-label">Total Users</span>
+        </div>
+        <div class="stat-tile stat-active">
+          <span class="stat-val">{{ stats().active }}</span>
+          <span class="stat-label">Active</span>
+        </div>
+        <div class="stat-tile stat-inactive">
+          <span class="stat-val">{{ stats().inactive }}</span>
+          <span class="stat-label">Inactive</span>
+        </div>
+        <div class="stat-tile stat-suspended">
+          <span class="stat-val">{{ stats().suspended }}</span>
+          <span class="stat-label">Suspended</span>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar-card">
+        <div class="toolbar-left">
+          <div class="search-wrap">
+            <span class="search-icon">&#128269;</span>
+            <input
+              class="search-input"
+              type="text"
+              placeholder="Search by name, email or department…"
+              [ngModel]="searchQuery()"
+              (ngModelChange)="searchQuery.set($event)"
+            />
+          </div>
+
+          <select class="filter-select" [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event)">
+            <option value="">All Roles</option>
+            @for (r of roles; track r.id) {
+              <option [value]="r.id">{{ r.label }}</option>
+            }
+          </select>
+
+          <select class="filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
+
+          @if (hasFilters) {
+            <button class="clear-btn" type="button" (click)="clearFilters()">✕ Clear</button>
+          }
+        </div>
+
+        <span class="user-count">
+          Showing <strong>{{ filteredUsers().length }}</strong> of <strong>{{ stats().total }}</strong> users
+        </span>
+      </div>
+
+      <!-- Users table -->
+      <div class="table-card">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Department</th>
+              <th>Status</th>
+              <th>Last Login</th>
+              <th class="center">2FA</th>
+              <th class="center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of filteredUsers(); track user.id) {
+              <tr [class.current-user]="user.isCurrent">
+                <!-- User -->
+                <td class="user-cell">
+                  <span class="avatar" [style.background]="user.avatarColor">{{ user.avatarInitials }}</span>
+                  <div class="user-info">
+                    <span class="user-name">{{ user.firstName }} {{ user.lastName }}
+                      @if (user.isCurrent) { <span class="you-badge">You</span> }
+                    </span>
+                    <span class="user-email">{{ user.email }}</span>
+                  </div>
+                </td>
+
+                <!-- Role -->
+                <td>
+                  @if (editingUserId() === user.id) {
+                    <div class="role-edit-row">
+                      <select class="role-select" [ngModel]="editingRole()" (ngModelChange)="editingRole.set($event)">
+                        @for (r of roles; track r.id) {
+                          <option [value]="r.id">{{ r.label }}</option>
+                        }
+                      </select>
+                      <button class="action-btn save" type="button" (click)="saveRole(user.id)">Save</button>
+                      <button class="action-btn cancel" type="button" (click)="cancelEdit()">✕</button>
+                    </div>
+                  } @else {
+                    <span class="role-badge" [style.background]="roleColor(user.role) + '18'" [style.color]="roleColor(user.role)">
+                      {{ user.roleLabel }}
+                    </span>
+                  }
+                </td>
+
+                <!-- Department -->
+                <td class="dept-cell">{{ user.department }}</td>
+
+                <!-- Status -->
+                <td>
+                  <span class="status-badge" [class]="'status-' + user.status">
+                    <span class="status-dot"></span>{{ statusLabel(user.status) }}
+                  </span>
+                </td>
+
+                <!-- Last Login -->
+                <td class="login-cell">{{ user.lastLogin | date:'MMM d, y, h:mm a' }}</td>
+
+                <!-- 2FA -->
+                <td class="center">
+                  @if (user.twoFactorEnabled) {
+                    <span class="badge-2fa on">&#10003;</span>
+                  } @else {
+                    <span class="badge-2fa off">&#8722;</span>
+                  }
+                </td>
+
+                <!-- Actions -->
+                <td class="center actions-cell">
+                  @if (!user.isCurrent) {
+                    <button class="action-btn edit" type="button" title="Edit role" (click)="startEditRole(user)">Edit Role</button>
+                    @if (user.status === 'active') {
+                      <button class="action-btn suspend" type="button" (click)="toggleStatus(user)">Suspend</button>
+                    } @else {
+                      <button class="action-btn activate" type="button" (click)="toggleStatus(user)">Activate</button>
+                    }
+                  } @else {
+                    <span class="no-action">—</span>
+                  }
+                </td>
+              </tr>
+            }
+
+            @empty {
+              <tr>
+                <td colspan="7" class="empty-row">
+                  <span>No users match your filters.</span>
+                  <button class="clear-btn" type="button" (click)="clearFilters()">Clear filters</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Invite User Modal -->
+@if (inviteOpen()) {
+  <div class="modal-backdrop" (click)="$event.target === $event.currentTarget && inviteOpen.set(false)">
+    <div class="invite-modal">
+      <div class="invite-header">
+        <h3>Invite a New User</h3>
+        <button class="close-btn" type="button" (click)="inviteOpen.set(false)">&#10005;</button>
+      </div>
+      <div class="invite-body">
+        @if (inviteSent()) {
+          <div class="invite-success">
+            <span class="invite-check">&#10003;</span>
+            <p>Invitation sent to <strong>{{ inviteEmail() }}</strong></p>
+          </div>
+        } @else {
+          <div class="form-field">
+            <label>Email Address <span class="req">*</span></label>
+            <input
+              type="email"
+              placeholder="user@pegasusone.com"
+              [ngModel]="inviteEmail()"
+              (ngModelChange)="inviteEmail.set($event)"
+            />
+          </div>
+          <div class="form-field">
+            <label>Role <span class="req">*</span></label>
+            <select [ngModel]="inviteRole()" (ngModelChange)="inviteRole.set($event)">
+              @for (r of roles; track r.id) {
+                <option [value]="r.id">{{ r.label }}</option>
+              }
+            </select>
+          </div>
+          @for (r of roles; track r.id) {
+            @if (r.id === inviteRole()) {
+              <p class="role-desc">{{ r.description }}</p>
+            }
+          }
+          <div class="invite-footer">
+            <button class="btn-cancel" type="button" (click)="inviteOpen.set(false)">Cancel</button>
+            <button class="btn-invite" type="button" (click)="sendInvite()">Send Invitation</button>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,71 @@
+<div
+  class="canvas-shell"
+  #shellRef
+  (pointerdown)="onShellPointerDown($event)"
+  (pointermove)="onShellPointerMove($event)"
+  (pointerup)="onShellPointerUp($event)"
+  (pointercancel)="onShellPointerUp($event)"
+  (wheel)="onWheel($event)"
+  [class.panning]="false"
+>
+  <div class="flow" [style.transform]="transformStyle()">
+    <app-canvas-connectors
+      [nodes]="nodes()"
+      [edges]="edges()"
+      [tempPath]="tempPath()"
+    />
+
+    @for (node of nodes(); track node.id) {
+      @if (isSourceNode(node)) {
+        <app-source-node
+          [attr.data-node-id]="node.id"
+          [node]="node"
+          [plusEnabled]="plusEnabled(node)"
+          (configure)="onNodeConfigure($event)"
+          (addNext)="onAddNext($event)"
+          (delete)="onNodeDelete($event)"
+          (dragMove)="onNodeDragMove($event)"
+          (portStart)="onPortStart($event)"
+          (portMove)="onPortMove($event)"
+          (portEnd)="onPortEnd($event)"
+        />
+      } @else if (isTransformNode(node)) {
+        <app-transform-node
+          [attr.data-node-id]="node.id"
+          [node]="node"
+          [plusEnabled]="plusEnabled(node)"
+          (addNext)="onAddNext($event)"
+          (delete)="onNodeDelete($event)"
+          (dragMove)="onNodeDragMove($event)"
+          (portStart)="onPortStart($event)"
+          (portMove)="onPortMove($event)"
+          (portEnd)="onPortEnd($event)"
+        />
+      } @else if (isMergeNode(node)) {
+        <app-merge-node
+          [attr.data-node-id]="node.id"
+          [node]="node"
+          [plusEnabled]="plusEnabled(node)"
+          (addNext)="onAddNext($event)"
+          (delete)="onNodeDelete($event)"
+          (dragMove)="onNodeDragMove($event)"
+          (portStart)="onPortStart($event)"
+          (portMove)="onPortMove($event)"
+          (portEnd)="onPortEnd($event)"
+        />
+      }
+    }
+
+  </div>
+
+  <button class="add-module-fab" type="button" (click)="openSourcePicker.emit()">&#xFF0B; Add module</button>
+
+  <app-zoom-dock
+    [zoomPercent]="zoomPercent()"
+    (zoomIn)="canvas.setZoom(canvas.zoom() + 0.1)"
+    (zoomOut)="canvas.setZoom(canvas.zoom() - 0.1)"
+    (reset)="canvas.reset()"
+  />
+
+  <app-hint-card />
+</div>

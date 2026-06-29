@@ -1,0 +1,102 @@
+<!-- Step name -->
+<div class="wiz-section-label">Step name</div>
+<div class="wiz-field">
+  <label class="wiz-label" for="w_stepname">Step name <span class="req">*</span></label>
+  <input
+    class="wiz-input"
+    id="w_stepname"
+    [class.error]="stepNameError"
+    [ngModel]="wiz.stepName()"
+    (ngModelChange)="wiz.stepName.set($event); stepNameError = false"
+    placeholder="e.g. Epic Production — Patient pull"
+    autocomplete="off"
+  />
+  @if (stepNameError) {
+    <span class="wiz-err show">Step name is required.</span>
+  }
+</div>
+
+<!-- Environment -->
+<div class="wiz-section-label">Environment</div>
+<app-env-toggle [value]="wiz.env()" (changed)="onEnvChange($event)" />
+
+<!-- Registered app -->
+<div class="wiz-section-label">Registered Epic app</div>
+<div class="wiz-field">
+  <label class="wiz-label" for="w_app">
+    Registered app <span class="req">*</span>
+    <span class="badge-drives">drives context →</span>
+  </label>
+  <select
+    class="wiz-input wiz-select"
+    id="w_app"
+    [ngModel]="wiz.appKey()"
+    (ngModelChange)="onAppChange($event)"
+  >
+    @for (app of apps; track app.key) {
+      <option [value]="app.key">{{ app.label }}</option>
+    }
+  </select>
+  <p class="wiz-hint">The app's registration determines the launch context, auth method and scopes Epic will honor.</p>
+</div>
+<div class="wiz-field">
+  <label class="wiz-label">Active client ID <span class="badge-auto">auto · per environment</span></label>
+  <input class="wiz-input" [value]="wiz.activeClientId()" readonly tabindex="-1" />
+</div>
+
+<!-- FHIR endpoint -->
+<div class="wiz-section-label">FHIR endpoint &amp; discovery</div>
+<div class="wiz-field">
+  <label class="wiz-label" for="w_baseurl">FHIR base URL <span class="req">*</span></label>
+  <input
+    class="wiz-input"
+    id="w_baseurl"
+    [class.error]="baseUrlError"
+    [ngModel]="wiz.baseUrl()"
+    (ngModelChange)="wiz.baseUrl.set($event); baseUrlError = false"
+    placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4"
+    autocomplete="off"
+  />
+  @if (baseUrlError) {
+    <span class="wiz-err show">FHIR base URL is required.</span>
+  }
+</div>
+
+<div class="disc-row">
+  <div class="wiz-field" style="flex:1">
+    <label class="wiz-label">SMART configuration</label>
+    <div class="disc-status" [class.ok]="wiz.discovered()" [class.pending]="discovering()">
+      @if (discovering()) {
+        <span>⏳ Fetching .well-known/smart-configuration…</span>
+      } @else if (wiz.discovered()) {
+        <span>✓ Endpoints discovered</span>
+      } @else {
+        <span>Not discovered yet</span>
+      }
+    </div>
+  </div>
+  <button class="disc-btn" type="button" [disabled]="discovering()" (click)="discover()">
+    ⚡ Discover endpoints
+  </button>
+</div>
+
+<div class="callout info">
+  <span class="ci">ℹ</span>
+  <div>Token &amp; authorize endpoints are <b>discovered</b> from <code>&#123;base&#125;/.well-known/smart-configuration</code> — not typed by hand.</div>
+</div>
+
+<div class="wiz-field">
+  <label class="wiz-label">
+    Token endpoint
+    @if (wiz.discovered()) { <span class="badge-disc">discovered</span> }
+  </label>
+  <input class="wiz-input" [value]="wiz.token()" readonly tabindex="-1" placeholder="Run discovery to populate" />
+</div>
+
+<div class="wiz-field">
+  <label class="wiz-label">
+    Authorize endpoint
+    @if (wiz.discovered()) { <span class="badge-disc">discovered</span> }
+  </label>
+  <input class="wiz-input" [value]="wiz.authorize()" readonly tabindex="-1" placeholder="Run discovery to populate" />
+</div>

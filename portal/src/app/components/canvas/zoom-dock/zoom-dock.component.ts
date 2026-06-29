@@ -1,0 +1,15 @@
+import { Component, input, output } from '@angular/core';
+
+@Component({
+  selector: 'app-zoom-dock',
+  standalone: true,
+  imports: [],
+  templateUrl: './zoom-dock.component.html',
+  styleUrl: './zoom-dock.component.scss',
+})
+export class ZoomDockComponent {
+  readonly zoomPercent = input('100%');
+  readonly zoomIn      = output<void>();
+  readonly zoomOut     = output<void>();
+  readonly reset       = output<void>();
+}

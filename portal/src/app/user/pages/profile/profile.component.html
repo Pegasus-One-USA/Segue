@@ -1,0 +1,143 @@
+<div class="dash-shell">
+  <app-sidebar [collapsed]="sidebarCollapsed()" />
+
+  <div class="dash-main">
+
+    <!-- Topbar -->
+    <header class="dash-topbar">
+      <button class="collapse-btn" type="button" (click)="toggleSidebar()" title="Toggle sidebar">
+        &#9776;
+      </button>
+      <div class="dash-breadcrumb">
+        <span class="breadcrumb-root" (click)="navigate('/dashboard')">Dashboard</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-page">My Profile</span>
+      </div>
+    </header>
+
+    <div class="dash-content">
+      <!-- Profile header card -->
+      <div class="profile-hero">
+        <div class="profile-hero-avatar" [style.background]="profile().avatarColor">
+          {{ initials() }}
+        </div>
+        <div class="profile-hero-info">
+          <h1 class="profile-hero-name">{{ fullName() }}</h1>
+          <p class="profile-hero-designation">{{ profile().designation }}</p>
+          <div class="profile-hero-meta">
+            <span class="role-badge" [style.background]="currentRole?.color + '1A'" [style.color]="currentRole?.color">
+              {{ profile().roleLabel }}
+            </span>
+            <span class="status-badge active">● Active</span>
+            <span class="org-tag">{{ profile().organization }}</span>
+          </div>
+        </div>
+        <button class="edit-profile-btn" type="button" (click)="navigate('/account-settings')">
+          Edit Profile
+        </button>
+      </div>
+
+      <!-- Content layout -->
+      <div class="user-settings-layout">
+        <app-user-settings-nav activePage="profile" />
+
+        <div class="settings-body">
+
+          <!-- Personal Information -->
+          <section class="settings-card">
+            <h2 class="card-title">Personal Information</h2>
+            <div class="info-grid">
+              <div class="info-field">
+                <label>First Name</label>
+                <span>{{ profile().firstName }}</span>
+              </div>
+              <div class="info-field">
+                <label>Last Name</label>
+                <span>{{ profile().lastName }}</span>
+              </div>
+              <div class="info-field">
+                <label>Email Address</label>
+                <span>{{ profile().email }}</span>
+              </div>
+              <div class="info-field">
+                <label>Phone</label>
+                <span>{{ profile().phone }}</span>
+              </div>
+              <div class="info-field">
+                <label>Designation</label>
+                <span>{{ profile().designation }}</span>
+              </div>
+              <div class="info-field">
+                <label>Department</label>
+                <span>{{ profile().department }}</span>
+              </div>
+              <div class="info-field">
+                <label>Employee ID</label>
+                <span class="mono">{{ profile().employeeId }}</span>
+              </div>
+              <div class="info-field">
+                <label>Location</label>
+                <span>{{ profile().location }}</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Organization -->
+          <section class="settings-card">
+            <h2 class="card-title">Organization</h2>
+            <div class="info-grid">
+              <div class="info-field">
+                <label>Organization</label>
+                <span>{{ profile().organization }}</span>
+              </div>
+              <div class="info-field">
+                <label>Tenant ID</label>
+                <span class="mono">{{ profile().tenant }}</span>
+              </div>
+              <div class="info-field">
+                <label>Timezone</label>
+                <span>{{ profile().timezone }}</span>
+              </div>
+              <div class="info-field">
+                <label>Member Since</label>
+                <span>{{ profile().memberSince | date:'MMMM d, y' }}</span>
+              </div>
+              <div class="info-field">
+                <label>Last Login</label>
+                <span>{{ profile().lastLogin | date:'MMM d, y, h:mm a' }}</span>
+              </div>
+              <div class="info-field">
+                <label>Status</label>
+                <span class="status-badge active">● Active</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Role & Permissions -->
+          <section class="settings-card">
+            <h2 class="card-title">Role &amp; Permissions</h2>
+            @if (currentRole) {
+              <div class="role-block">
+                <div class="role-block-header">
+                  <span class="role-chip" [style.background]="currentRole.color + '1A'" [style.color]="currentRole.color">
+                    {{ currentRole.label }}
+                  </span>
+                  <p class="role-desc">{{ currentRole.description }}</p>
+                </div>
+                <div class="perm-list">
+                  @for (perm of currentRole.permissions; track perm) {
+                    <span class="perm-tag">✓ {{ perm }}</span>
+                  }
+                </div>
+              </div>
+            }
+            <p class="role-note">
+              Role changes require a <strong>Tenant Admin</strong> or <strong>System Admin</strong>.
+            </p>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

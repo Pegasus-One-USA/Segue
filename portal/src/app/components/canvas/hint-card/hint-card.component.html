@@ -1,0 +1,13 @@
+@if (visible()) {
+  <aside class="hint-card">
+    <button class="hint-close" type="button" (click)="visible.set(false)" title="Dismiss">×</button>
+    <h3>Modules, groups &amp; the ⊕ rules</h3>
+    <p>
+      Sources come from <b style="color:var(--teal)">Add module</b>.
+      A node's <b>⊕</b> stays open only while an
+      <b style="color:var(--purple)">array/group</b> (Normalize, De-identification) is still being assembled —
+      then you <b style="color:var(--green)">Merge</b>; a single next step locks it.
+      2+ sources can be merged for cross-EHR consent.
+    </p>
+  </aside>
+}

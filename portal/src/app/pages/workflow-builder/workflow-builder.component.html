@@ -1,0 +1,71 @@
+<div class="dash-shell">
+
+  <!-- Sidebar — shared with Dashboard -->
+  <app-sidebar [collapsed]="sidebarCollapsed()" />
+
+  <!-- Main column -->
+  <div class="dash-main">
+
+    <!-- Topbar — same structure as Dashboard -->
+    <header class="dash-topbar">
+      <button class="collapse-btn" type="button" (click)="toggleSidebar()" title="Toggle sidebar">
+        &#9776;
+      </button>
+
+      <div class="dash-breadcrumb">
+        <span class="breadcrumb-section">Pipeline Builder</span>
+        <span class="breadcrumb-sep">&#47;</span>
+        <input
+          class="scenario-name-input"
+          [ngModel]="scenarioName()"
+          (ngModelChange)="scenarioName.set($event)"
+          aria-label="Scenario name"
+          spellcheck="false"
+        />
+      </div>
+
+      <div class="topbar-right">
+        <button class="builder-btn" type="button" (click)="onPreview()">Preview payload</button>
+        <button class="builder-btn" type="button" (click)="onReset()">Reset</button>
+        <div class="notif-btn" title="Notifications">
+          <span>&#128276;</span>
+          <span class="notif-badge">3</span>
+        </div>
+        <app-user-menu />
+      </div>
+    </header>
+
+    <!-- Canvas fills the remaining space -->
+    <div class="builder-canvas-area">
+      <app-canvas
+        (openWizard)="onOpenWizard($event ?? undefined)"
+        (openTransformPicker)="onOpenTransformPicker($event)"
+        (openSourcePicker)="onOpenSourcePicker()"
+      />
+    </div>
+
+  </div>
+</div>
+
+<!-- Epic Source Wizard — new richer wizard replacing connection-wizard -->
+<app-epic-source-wizard />
+
+<!-- Unified Node Library Dialog -->
+<app-node-library-dialog
+  [open]="libraryOpen()"
+  [mode]="libraryMode()"
+  [originNodeId]="libraryOriginId()"
+  (closed)="libraryOpen.set(false)"
+  (sourceSelected)="onSourceSelected($event)"
+  (transformSelected)="onTransformSelected($event)"
+  (mergeSelected)="onMergeSelected($event)"
+/>
+
+<!-- Payload preview -->
+<app-payload-preview
+  [open]="payloadOpen()"
+  [scenarioName]="scenarioName()"
+  (closed)="payloadOpen.set(false)"
+/>
+
+<app-toast />

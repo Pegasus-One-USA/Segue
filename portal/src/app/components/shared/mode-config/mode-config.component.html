@@ -1,0 +1,66 @@
+@if (schema()) {
+  <div class="mode-config">
+    <div class="mode-config-title">
+      {{ schemaTitle() }}
+      <span class="mc-pill">mode-specific</span>
+    </div>
+
+    @if (schemaNote()) {
+      <div class="callout tip">
+        <span class="ci">💡</span>
+        <div>{{ schemaNote() }}</div>
+      </div>
+    }
+
+    @for (callout of schemaCallouts(); track $index) {
+      <div class="callout" [class]="callout.type">
+        <span class="ci">{{ callout.icon }}</span>
+        <div [innerHTML]="callout.html"></div>
+      </div>
+    }
+
+    @for (field of visibleFields(); track field.key) {
+      @if (!isHidden(field)) {
+        <div class="mc-field">
+          <label class="mc-label">
+            {{ field.label }}
+            @if (field.required) { <span class="req">*</span> }
+          </label>
+
+          @switch (field.type) {
+            @case ('select') {
+              <select
+                class="mc-select"
+                [value]="fieldValue(field.key)"
+                (change)="updateField(field.key, $any($event.target).value)"
+              >
+                @for (opt of field.options; track opt) {
+                  <option [value]="opt" [selected]="fieldValue(field.key) === opt">{{ opt }}</option>
+                }
+              </select>
+            }
+            @case ('textarea') {
+              <textarea
+                class="mc-textarea"
+                [value]="fieldValue(field.key)"
+                (input)="updateField(field.key, $any($event.target).value)"
+              ></textarea>
+            }
+            @default {
+              <input
+                class="mc-input"
+                [type]="field.type === 'number' ? 'number' : 'text'"
+                [value]="fieldValue(field.key)"
+                (input)="updateField(field.key, $any($event.target).value)"
+              />
+            }
+          }
+
+          @if (field.hint) {
+            <p class="mc-hint">{{ field.hint }}</p>
+          }
+        </div>
+      }
+    }
+  </div>
+}

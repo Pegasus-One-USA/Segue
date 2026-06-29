@@ -1,0 +1,14 @@
+<div class="kpi-card" [class]="'accent-' + metric().accent">
+  <div class="kpi-top">
+    <span class="kpi-icon">{{ metric().icon }}</span>
+    @if (metric().trend) {
+      <span class="kpi-trend" [class]="trendClass()">
+        {{ trendArrow() }} {{ metric().trend!.value }}
+      </span>
+    }
+  </div>
+  <div class="kpi-value">
+    {{ metric().value }}{{ metric().unit ? metric().unit : '' }}
+  </div>
+  <div class="kpi-label">{{ metric().label }}</div>
+</div>

@@ -1,0 +1,78 @@
+<div class="dash-shell">
+  <app-sidebar [collapsed]="sidebarCollapsed()" />
+
+  <div class="dash-main">
+    <header class="dash-topbar">
+      <button class="collapse-btn" type="button" (click)="toggleSidebar()">&#9776;</button>
+      <div class="dash-breadcrumb">
+        <span class="breadcrumb-root" (click)="navigate('/dashboard')">Dashboard</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-page">Help &amp; Support</span>
+      </div>
+    </header>
+
+    <div class="dash-content">
+      <div class="page-header">
+        <h1 class="page-title">Help &amp; Support</h1>
+        <p class="page-sub">Documentation, keyboard shortcuts, and support resources</p>
+      </div>
+
+      <div class="user-settings-layout">
+        <app-user-settings-nav activePage="help" />
+
+        <div class="settings-body">
+
+          <!-- Resources -->
+          <section class="settings-card">
+            <h2 class="card-title">Resources</h2>
+            <div class="docs-grid">
+              @for (doc of docs; track doc.label) {
+                <button class="doc-card" type="button">
+                  <span class="doc-icon">{{ doc.icon }}</span>
+                  <div class="doc-info">
+                    <span class="doc-label">{{ doc.label }}</span>
+                    <span class="doc-desc">{{ doc.desc }}</span>
+                  </div>
+                  <svg class="doc-arrow" viewBox="0 0 16 16" fill="none">
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              }
+            </div>
+          </section>
+
+          <!-- Keyboard Shortcuts -->
+          <section class="settings-card">
+            <h2 class="card-title">Keyboard Shortcuts</h2>
+            <div class="shortcuts-list">
+              @for (s of shortcuts; track s.action) {
+                <div class="shortcut-row">
+                  <span class="shortcut-action">{{ s.action }}</span>
+                  <div class="shortcut-keys">
+                    @for (key of s.keys; track key; let last = $last) {
+                      <kbd>{{ key }}</kbd>
+                      @if (!last) { <span class="key-plus">+</span> }
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- Contact Support -->
+          <section class="settings-card support-card">
+            <div class="support-icon">🛟</div>
+            <h2 class="card-title">Need more help?</h2>
+            <p class="card-sub">Our support team is available Monday–Friday, 8am–6pm PT</p>
+            <div class="support-actions">
+              <button class="btn-primary" type="button">Open Support Ticket</button>
+              <button class="btn-outline" type="button">Chat with Us</button>
+            </div>
+            <p class="support-email">Or email us at <strong>support&#64;pegasusone.com</strong></p>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,26 @@
+<app-node-tools
+  [showConfigure]="false"
+  [plusEnabled]="plusEnabled()"
+  (addNext)="addNext.emit(node().id)"
+  (delete)="delete.emit(node().id)"
+/>
+
+<span class="port port-in"></span>
+<span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
+
+<span
+  class="node-circle"
+  style="--node-color:var(--green);background:var(--green)"
+  (pointerdown)="onCirclePointerDown($event)"
+  (pointermove)="onCirclePointerMove($event)"
+  (pointerup)="onCirclePointerUp($event)"
+  (pointercancel)="onCirclePointerUp($event)"
+>
+  <b>⊕</b>
+  <span class="node-badge" style="background:var(--green)">Merge</span>
+</span>
+
+<span class="node-label">
+  <strong>{{ name() }}</strong>
+  <span>{{ inCount() }} {{ mergeLabel() }} inputs</span>
+</span>
