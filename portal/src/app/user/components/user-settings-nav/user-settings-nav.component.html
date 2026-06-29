@@ -1,0 +1,18 @@
+<nav class="usn">
+  <p class="usn-heading">Account</p>
+  @for (item of navItems; track item.id) {
+    <a
+      class="usn-item"
+      [class.active]="activePage() === item.id"
+      [routerLink]="item.path"
+    >
+      <div class="usn-item-body">
+        <span class="usn-item-label">{{ item.label }}</span>
+        <span class="usn-item-sub">{{ item.sub }}</span>
+      </div>
+      <svg class="usn-item-arrow" viewBox="0 0 16 16" fill="none">
+        <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </a>
+  }
+</nav>

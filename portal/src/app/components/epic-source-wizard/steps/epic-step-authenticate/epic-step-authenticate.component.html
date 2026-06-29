@@ -1,0 +1,176 @@
+<!-- ═══════════════════════ CARD: Authentication ════════════════════════════ -->
+<div class="wiz-card">
+  <div class="wiz-card-head">
+    <h3>Authentication</h3>
+    <span class="wiz-tag">OAuth 2.0 / SMART</span>
+  </div>
+  <div class="wiz-card-body" [formGroup]="form">
+    <div class="form-grid">
+
+      <!-- Advanced: OAuth Flow, aud, PKCE -->
+      @if (showAdvanced()) {
+        <div class="form-field">
+          <label>OAuth Flow <span class="tag-fixed">fixed</span></label>
+          <input type="text" readonly value="authorization_code" />
+        </div>
+        <div class="form-field">
+          <label>PKCE <span class="tag-fixed">fixed</span></label>
+          <input type="text" readonly value="Enabled — S256" />
+        </div>
+        <div class="form-field full">
+          <label>aud parameter <span class="tag-auto">auto-filled from discovery</span></label>
+          <input type="text" readonly value="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4" />
+        </div>
+      }
+
+      <!-- Client Authentication (always) -->
+      <div class="form-field full">
+        <label>Client Authentication <span class="req">*</span></label>
+        <select formControlName="clientAuth">
+          <option value="public">Public Client + PKCE</option>
+          <option value="secret-basic">Confidential — client_secret_basic</option>
+          <option value="secret-post">Confidential — client_secret_post</option>
+          <option value="jwt">Confidential — private_key_jwt</option>
+        </select>
+      </div>
+
+      <!-- Secret fields -->
+      @if (isSecret) {
+        <div class="form-field">
+          <label>Client Secret Reference <span class="req">*</span></label>
+          <input type="text" formControlName="secretRef" placeholder="vault-ref or ARN" />
+        </div>
+        <div class="form-field">
+          <label>Secret Store</label>
+          <select formControlName="secretStore">
+            <option value="azure-kv">Azure Key Vault</option>
+            <option value="aws-sm">AWS Secrets Manager</option>
+            <option value="hashi-vault">HashiCorp Vault</option>
+          </select>
+        </div>
+      }
+
+      <!-- JWT fields -->
+      @if (isJwt) {
+        <div class="form-field">
+          <label>Key Source <span class="req">*</span></label>
+          <select formControlName="keySource">
+            <option value="gen">FHIRBridge-generated</option>
+            <option value="customer-kv">Customer Key Vault</option>
+            <option value="customer-kms">Customer AWS KMS</option>
+            <option value="customer-hsm">Customer HSM</option>
+            <option value="external">External JWKS URL</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Signing Algorithm</label>
+          <select formControlName="signingAlgorithm">
+            <option value="RS384">RS384</option>
+            <option value="ES384">ES384</option>
+          </select>
+        </div>
+
+        @if (isGenKey) {
+          <div class="form-field full">
+            <div class="btn-toolbar">
+              <button class="btn btn-primary" type="button" (click)="generateKeyPair()">
+                Generate Key Pair
+              </button>
+              @if (keyGenStatus() === 'generated') {
+                <span class="pill-success">&#10003; Key pair ready</span>
+              }
+            </div>
+          </div>
+          <div class="form-field full">
+            <label>Generated JWKS URL <span class="tag-auto">auto</span></label>
+            <input type="text" readonly formControlName="jwksUrl"
+                   placeholder="Click Generate Key Pair" />
+          </div>
+          <div class="form-field">
+            <label>Key ID <span class="tag-auto">auto</span></label>
+            <input type="text" readonly formControlName="keyId"
+                   placeholder="Click Generate Key Pair" />
+          </div>
+          @if (keyGenStatus() === 'generated') {
+            <div class="form-field full">
+              <div class="note-box">
+                <strong>Register this JWKS URL in Epic</strong> — paste the URL above into your
+                Epic app registration as the JWKS endpoint before running test launch.
+              </div>
+            </div>
+          }
+        } @else {
+          <div class="form-field full">
+            <label>JWKS URL <span class="req">*</span></label>
+            <input type="url" formControlName="jwksUrl"
+                   placeholder="https://your-host/.well-known/jwks.json" />
+          </div>
+          <div class="form-field">
+            <label>Key ID (kid)</label>
+            <input type="text" formControlName="keyId" placeholder="my-key-id" />
+          </div>
+          <div class="form-field">
+            <label>Key Vault Reference</label>
+            <input type="text" formControlName="keyVaultRef"
+                   placeholder="vault-ref, ARN, or resource ID" />
+          </div>
+        }
+      }
+
+      <!-- Advanced: state/nonce, refresh token, token storage, clock skew -->
+      @if (showAdvanced()) {
+        <div class="form-field">
+          <label>state / nonce</label>
+          <select formControlName="stateNonce">
+            <option value="enabled">Enabled</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Refresh Token</label>
+          <select formControlName="refreshToken">
+            <option value="online_access">online_access</option>
+            <option value="none">None</option>
+            <option value="offline_access">offline_access</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Token Storage</label>
+          <select formControlName="tokenStorage">
+            <option value="memory">Memory only</option>
+            <option value="distributed">Distributed cache</option>
+            <option value="encrypted-db">Encrypted database</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Clock Skew Tolerance</label>
+          <select formControlName="clockSkew">
+            <option value="60">60 s</option>
+            <option value="120">120 s</option>
+            <option value="300">300 s</option>
+          </select>
+        </div>
+      }
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ CARD: Callback Configuration (advanced) ════════ -->
+@if (showAdvanced()) {
+  <div class="wiz-card">
+    <div class="wiz-card-head">
+      <h3>Callback Configuration</h3>
+      <span class="wiz-tag">EHR-initiated</span>
+    </div>
+    <div class="wiz-card-body">
+      <p class="help-text" style="margin-bottom: 10px;">
+        Epic initiates the launch by calling the Launch URL below, then redirects to the Redirect URI
+        after the user authorizes.
+      </p>
+      <div class="code-box">Epic &rarr; GET https://fhirbridge.com/launch?iss=&#123;issuer&#125;&amp;launch=&#123;token&#125;
+FHIRBridge &rarr; GET &#123;authorize&#125;?response_type=code&amp;client_id=&#123;clientId&#125;&amp;redirect_uri=https://fhirbridge.com/oauth/callback&amp;scope=&#123;scopes&#125;&amp;state=&#123;state&#125;&amp;aud=&#123;issuer&#125;&amp;launch=&#123;token&#125;&amp;code_challenge=&#123;S256&#125;
+Epic &rarr; GET https://fhirbridge.com/oauth/callback?code=&#123;code&#125;&amp;state=&#123;state&#125;
+FHIRBridge &rarr; POST &#123;token&#125; code=&#123;code&#125; &amp; code_verifier=&#123;verifier&#125;</div>
+    </div>
+  </div>
+}

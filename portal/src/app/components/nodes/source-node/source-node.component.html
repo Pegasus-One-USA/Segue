@@ -1,0 +1,30 @@
+<app-node-tools
+  [showConfigure]="true"
+  [plusEnabled]="plusEnabled()"
+  (configure)="configure.emit(node().id)"
+  (addNext)="addNext.emit(node().id)"
+  (delete)="delete.emit(node().id)"
+/>
+
+<span class="port port-in"></span>
+<span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
+
+<span
+  class="node-circle"
+  [style.--node-color]="nodeColor()"
+  [style.background]="nodeColor()"
+  (pointerdown)="onCirclePointerDown($event)"
+  (pointermove)="onCirclePointerMove($event)"
+  (pointerup)="onCirclePointerUp($event)"
+  (pointercancel)="onCirclePointerUp($event)"
+>
+  <b>{{ abbr() }}</b>
+  <span class="node-badge" style="background:#ef233c">Source</span>
+  <span class="node-env" [style.background]="envColor()">{{ envLabel() }}</span>
+</span>
+
+<span class="node-label">
+  <strong>{{ name() }}</strong>
+  <span>{{ context() }}</span>
+  <span class="node-mode-tag">{{ modeName() }}</span>
+</span>

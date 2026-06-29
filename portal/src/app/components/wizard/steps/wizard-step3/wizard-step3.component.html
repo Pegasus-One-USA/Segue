@@ -1,0 +1,58 @@
+<div class="wiz-section-label">Ingestion mode</div>
+
+<div class="ingestion-head">
+  Ingestion mode — set by app context (<em>{{ wiz.currentApp().context }}</em>)
+</div>
+
+@for (mode of modes; track mode.id; let i = $index) {
+  @if (isModeAllowed(mode.id)) {
+    <label class="action-opt" [class.on]="wiz.mode() === mode.id">
+      <input
+        type="radio"
+        name="ingMode"
+        [value]="mode.id"
+        [checked]="wiz.mode() === mode.id"
+        (change)="onModeChange(mode.id)"
+        style="display:none"
+      />
+      <span class="action-rank">{{ i + 1 }}</span>
+      <span class="action-opt-text">
+        <b>{{ mode.name }}{{ mode.acid ? ' ⚡' : '' }}</b>
+        <span>{{ mode.sub }}</span>
+      </span>
+    </label>
+  } @else {
+    <div class="action-opt ns">
+      <span class="action-rank" style="background:#eef1f6;color:#9aa6b6">{{ i + 1 }}</span>
+      <span class="action-opt-text">
+        <b style="color:#9aa6b6">{{ mode.name }} · Not supported</b>
+        <span>{{ mode.sub }}</span>
+      </span>
+    </div>
+  }
+}
+
+<app-mode-config
+  [mode]="wiz.mode()"
+  [context]="wiz.currentApp().context"
+  [saved]="{}"
+  (valuesChange)="onModeConfigChange($event)"
+/>
+
+<div class="wiz-section-label">Connection</div>
+<div style="display:grid;gap:10px">
+  @if (!wiz.connected()) {
+    <button class="connect-btn" type="button" (click)="connect()">
+      Create &amp; verify connection
+    </button>
+  }
+  @if (wiz.connected()) {
+    <div class="connected-pill">✓ Connected — Epic connection verified</div>
+  }
+  <p class="wiz-hint">{{ connHelpText() }}</p>
+</div>
+
+<div class="callout tip">
+  <span class="ci">💡</span>
+  <div>Subscription/Webhook delivery also requires the FHIRBridge ingress to be publicly reachable, TLS-terminated, and registered on Epic's side — that provisioning lives outside this form.</div>
+</div>

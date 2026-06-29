@@ -1,0 +1,37 @@
+<app-modal-overlay [open]="wiz.isOpen()" (closed)="close()">
+  <div class="wiz-panel" role="dialog" aria-modal="true" aria-label="Connect Epic">
+
+    <!-- Rail -->
+    <app-wizard-rail [currentStep]="wiz.step()" [steps]="steps" />
+
+    <!-- Header -->
+    <div class="wiz-header">
+      <span class="app-icon" style="background:var(--epic)">EP</span>
+      <h2>Connect Epic</h2>
+      <span class="verified">Verified · FHIR R4</span>
+      <button class="close-x" type="button" aria-label="Close" (click)="close()">×</button>
+    </div>
+
+    <!-- Body -->
+    <div class="wiz-body">
+      @if (wiz.step() === 1) {
+        <app-wizard-step1 />
+      }
+      @if (wiz.step() === 2) {
+        <app-wizard-step2 />
+      }
+      @if (wiz.step() === 3) {
+        <app-wizard-step3 />
+      }
+    </div>
+
+    <!-- Footer -->
+    <div class="wiz-footer">
+      <span class="wiz-progress-text">{{ progressText() }}</span>
+      @if (wiz.step() > 1) {
+        <button class="wiz-back" type="button" (click)="back()">← Back</button>
+      }
+      <button class="wiz-next" type="button" (click)="next()">{{ nextLabel() }}</button>
+    </div>
+  </div>
+</app-modal-overlay>

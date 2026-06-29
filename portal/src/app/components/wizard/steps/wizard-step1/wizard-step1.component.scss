@@ -1,0 +1,45 @@
+.wiz-section-label {
+  margin: 8px 2px 2px; font-size: 11px; font-weight: 800;
+  letter-spacing: .04em; text-transform: uppercase; color: #94a0b3;
+}
+.wiz-field { display: grid; gap: 5px; }
+.wiz-label {
+  font-size: 12px; font-weight: 800; color: #40495a;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  .req { color: var(--red); }
+}
+.wiz-input, .wiz-select {
+  width: 100%; min-height: 38px; padding: 8px 10px;
+  color: #1f2937; background: #fff;
+  border: 1px solid var(--line-2); border-radius: 8px;
+  outline: 0; font: inherit; font-size: 13px; font-weight: 600;
+  transition: border-color .15s, box-shadow .15s;
+  &:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(0,168,157,.12); }
+  &[readonly] { background: #f8fafc; color: #64748b; cursor: default; border-color: #e2e8f0; }
+  &.error { border-color: var(--red); }
+}
+.wiz-err { font-size: 12px; color: var(--red); font-weight: 700; &.show { display: block; } display: none; }
+.wiz-hint { font-size: 12px; color: #64748b; line-height: 1.5; margin: 0; }
+.disc-row { display: flex; gap: 8px; align-items: flex-end; }
+.disc-status {
+  font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px;
+  color: var(--muted);
+  &.ok { color: var(--green); }
+  &.pending { color: var(--amber); }
+}
+.disc-btn {
+  min-height: 38px; padding: 8px 14px;
+  border: 1px solid var(--purple); background: var(--purple-soft); color: var(--purple);
+  border-radius: 8px; font-weight: 800; font-size: 12.5px; white-space: nowrap;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  &:hover { background: #B2EAE6; }
+  &:disabled { opacity: .5; cursor: not-allowed; }
+}
+.callout {
+  padding: 10px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5; display: flex; gap: 8px;
+  &.info { background: #e6f3ff; border: 1px solid #b9dcff; color: #0f4c81; }
+  .ci { flex-shrink: 0; font-size: 14px; }
+}
+.badge-auto  { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: var(--purple-soft); color: var(--purple); }
+.badge-disc  { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #e6f3ff; color: #1366c2; }
+.badge-drives{ font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: var(--amber-soft); color: var(--amber); }

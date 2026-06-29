@@ -1,0 +1,16 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">FB</span>
+    <input
+      class="scenario-name"
+      [ngModel]="scenarioName()"
+      (ngModelChange)="nameChange.emit($event)"
+      aria-label="Scenario name"
+    />
+  </div>
+  <div class="top-actions">
+    <span class="top-pill">Tenant: Acme Health</span>
+    <button class="btn secondary" type="button" (click)="preview.emit()">Preview payload</button>
+    <button class="btn secondary" type="button" (click)="reset.emit()">Reset</button>
+  </div>
+</header>

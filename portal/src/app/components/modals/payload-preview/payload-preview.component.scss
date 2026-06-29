@@ -1,0 +1,14 @@
+.payload-box {
+  width: min(680px, calc(100vw - 34px));
+  max-height: min(80vh, 720px);
+  display: grid; grid-template-rows: auto 1fr auto;
+  background: #fff; border-radius: 14px;
+  box-shadow: 0 22px 55px rgba(18,20,27,.18); overflow: hidden;
+
+  header { padding: 16px 22px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e9edf4; h2 { margin: 0; font-size: 18px; } }
+  pre    { margin: 0; padding: 18px 22px; overflow: auto; font-family: ui-monospace,'SF Mono',Consolas,monospace; font-size: 12.5px; line-height: 1.5; color: #1f2937; background: #fbfcfe; }
+  footer { padding: 14px 22px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e9edf4; }
+}
+.close-x { all: unset; cursor: pointer; font-size: 23px; color: #31343b; }
+.cancel { min-height: 42px; padding: 8px 20px; color: #222; background: #fff; border: 1px solid #d6dce7; border-radius: 8px; font-size: 15px; font-weight: 650; cursor: pointer; }
+.save   { min-height: 42px; padding: 8px 26px; color: #fff; background: var(--purple); border: 0; border-radius: 8px; font-size: 15px; font-weight: 800; cursor: pointer; }

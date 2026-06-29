@@ -1,0 +1,92 @@
+.mode-config {
+  margin-top: 4px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fbfcfe;
+  display: grid;
+  gap: 12px;
+}
+
+.mode-config-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mc-pill {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--epic-soft);
+  color: var(--epic);
+}
+
+.mc-field {
+  display: grid;
+  gap: 5px;
+}
+
+.mc-label {
+  font-size: 12px;
+  font-weight: 750;
+  color: #40495a;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  .req { color: var(--red); }
+}
+
+.mc-input,
+.mc-select,
+.mc-textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  color: #1f2937;
+  background: #fff;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  outline: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:focus {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12);
+  }
+}
+
+.mc-textarea {
+  min-height: 50px;
+  resize: vertical;
+  line-height: 1.4;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+}
+
+.mc-hint {
+  font-size: 11.5px;
+  color: #8390a3;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.callout {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: flex;
+  gap: 8px;
+  &.info { background: #e6f3ff; border: 1px solid #b9dcff; color: #0f4c81; }
+  &.warn { background: var(--amber-soft); border: 1px solid #f5d99a; color: var(--amber); }
+  &.tip  { background: #f8fafc; border: 1px solid #e2e8f0; color: #5f6b7c; }
+  .ci    { flex-shrink: 0; font-size: 14px; line-height: 1.3; }
+}

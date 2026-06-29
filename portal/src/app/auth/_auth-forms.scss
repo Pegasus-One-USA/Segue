@@ -1,0 +1,132 @@
+.auth-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1A202C;
+  margin: 0 0 8px;
+  letter-spacing: -0.4px;
+}
+
+.auth-sub {
+  font-size: 14px;
+  color: #64748B;
+  margin: 0 0 28px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  input {
+    background: #FFFFFF;
+    border: 1.5px solid #D1D5DB;
+    border-radius: 8px;
+    color: #1A202C;
+    font-size: 14px;
+    padding: 10px 14px;
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+
+    &::placeholder { color: #9CA3AF; }
+    &:focus {
+      border-color: #00A89D;
+      box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12);
+    }
+    &.error {
+      border-color: #EF4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.10);
+    }
+  }
+}
+
+.auth-btn {
+  background: #00A89D;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 11px;
+  width: 100%;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  letter-spacing: 0.1px;
+
+  &:hover:not(:disabled) {
+    background: #007A72;
+    box-shadow: 0 4px 14px rgba(0, 168, 157, 0.35);
+  }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.auth-links {
+  display: flex;
+  justify-content: flex-end;
+
+  &.center { justify-content: center; margin-top: 8px; }
+
+  a {
+    color: #00A89D;
+    font-size: 13px;
+    text-decoration: none;
+    font-weight: 500;
+    &:hover { text-decoration: underline; }
+  }
+}
+
+.auth-error {
+  background: #FEF2F2;
+  border: 1.5px solid #FECACA;
+  color: #DC2626;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.auth-success {
+  p   { color: #374151; font-size: 14px; margin: 0 0 16px; line-height: 1.5; }
+  a   { color: #00A89D; text-decoration: none; font-size: 14px; font-weight: 500;
+        &:hover { text-decoration: underline; } }
+}
+
+.pw-wrap {
+  position: relative;
+
+  input { padding-right: 60px; }
+
+  .pw-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+    &:hover { color: #374151; }
+  }
+}
+
+.field-err {
+  color: #DC2626;
+  font-size: 12px;
+}

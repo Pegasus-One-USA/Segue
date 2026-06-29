@@ -1,0 +1,25 @@
+.zoom-dock {
+  position: absolute;
+  left: 18px; bottom: 18px;
+  z-index: 20;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(18,20,27,.11);
+
+  button {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border: 0; border-radius: 8px;
+    background: #f4f6f9; color: #475569;
+    font-size: 17px; font-weight: 800; cursor: pointer;
+    &:hover { background: var(--purple-soft); color: var(--purple); }
+  }
+
+  span {
+    min-width: 48px; text-align: center;
+    font-size: 13px; font-weight: 750; color: #475569;
+  }
+}

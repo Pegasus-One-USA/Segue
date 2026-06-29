@@ -1,0 +1,61 @@
+/* ─── CSS custom properties ─────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* brand — Pegasus One Health */
+  --teal:        #00A89D;
+  --teal-dark:   #007A72;
+  --teal-soft:   #E6F9F7;
+  --teal-mid:    #B2EAE6;
+  --gold:        #F5A820;
+  --gold-soft:   #FEF3DC;
+
+  /* integrations */
+  --epic:        #ff5a4f;
+  --epic-soft:   #fff0ee;
+  --green:       #10b981;
+  --green-soft:  #e8f8ef;
+  --amber:       #f59e0b;
+  --amber-soft:  #fff4e5;
+  --red:         #ef4444;
+  --red-soft:    #fdecec;
+  --blue:        #3b7fff;
+
+  /* neutrals */
+  --ink:         #1A202C;
+  --ink-2:       #374151;
+  --muted:       #64748B;
+  --muted-2:     #94A3B8;
+  --line:        #E2E8F0;
+  --line-2:      #F1F5F9;
+  --canvas:      #F5F7FA;
+  --surface:     #FFFFFF;
+  --side:        #F8FAFC;
+
+  /* legacy aliases — workflow builder uses these; mapped to teal */
+  --purple:      #00A89D;
+  --purple-soft: #E6F9F7;
+  --purple-line: #B2EAE6;
+
+  /* shadows */
+  --shadow:      0 8px 32px rgba(0, 0, 0, 0.10);
+  --shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.06);
+
+  font-family: Inter, 'Segoe UI', system-ui, Arial, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  color: var(--ink);
+  background: var(--canvas);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+a { color: var(--teal); }

@@ -1,0 +1,118 @@
+<!-- Context card -->
+<div class="ctx-card">
+  <div class="ctx-card-head"><span class="ctx-icon">✦</span> App context — derived from the registered app</div>
+  <div class="ctx-rows">
+    @for (row of ctxRows(); track row.key) {
+      <div class="ctx-row">
+        <span class="ctx-key">{{ row.key }}</span>
+        <span class="ctx-val" [class.mono]="row.mono">{{ row.val }}</span>
+      </div>
+    }
+  </div>
+</div>
+
+<!-- Auth (auto-derived) -->
+<div class="wiz-section-label">Authentication (auto-derived)</div>
+<div class="wiz-field">
+  <label class="wiz-label">Auth flow <span class="badge-auto">auto</span> <span class="badge-locked">read-only</span></label>
+  <input class="wiz-input" [value]="wiz.currentApp().authFlow" readonly tabindex="-1" />
+</div>
+<div class="wiz-field">
+  <label class="wiz-label">FHIR version <span class="badge-locked">locked</span></label>
+  <input class="wiz-input" value="R4 (4.0.1) · US Core" readonly tabindex="-1" />
+</div>
+
+<!-- Backend key material -->
+@if (!isInteractive()) {
+  <div class="wiz-section-label">Backend key material (SMART Backend Services)</div>
+  <div class="callout info">
+    <span class="ci">🔐</span>
+    <div>Epic backend apps authenticate with a <b>signed JWT client assertion</b>. Choose how Epic obtains your public key.</div>
+  </div>
+  <div class="wiz-field">
+    <label class="wiz-label">JWT signing algorithm <span class="badge-locked">Epic requires</span></label>
+    <select class="wiz-input wiz-select" [ngModel]="algorithm()" (ngModelChange)="algorithm.set($event)">
+      <option>RS384</option><option>RS256</option>
+    </select>
+  </div>
+  <div class="wiz-field">
+    <label class="wiz-label">Key hosting method <span class="req">*</span></label>
+    <select class="wiz-input wiz-select" [ngModel]="jwksMethod()" (ngModelChange)="jwksMethod.set($event)">
+      <option value="hosted">Hosted JWKS URL (Epic fetches your public keys)</option>
+      <option value="uploaded">Public key uploaded to Epic at registration</option>
+    </select>
+  </div>
+  @if (isHosted()) {
+    <div class="wiz-field">
+      <label class="wiz-label" for="w_jwks">JWKS URL <span class="req">*</span></label>
+      <input class="wiz-input" id="w_jwks" [class.error]="jwksUrlError"
+        [ngModel]="jwksUrl()" (ngModelChange)="jwksUrl.set($event); jwksUrlError = false"
+        placeholder="https://keys.fhirbridge.io/.well-known/jwks.json" />
+      @if (jwksUrlError) { <span class="wiz-err show">JWKS URL is required.</span> }
+    </div>
+  }
+  <div class="wiz-field">
+    <label class="wiz-label" for="w_kid">JWT key id (<code>kid</code>) <span class="req">*</span></label>
+    <input class="wiz-input" id="w_kid" [class.error]="kidError"
+      [ngModel]="kid()" (ngModelChange)="kid.set($event); kidError = false"
+      placeholder="e.g. fhirbridge-2026-rs384-01" />
+    @if (kidError) { <span class="wiz-err show"><code>kid</code> is required.</span> }
+    <p class="wiz-hint">Must match a key in the JWKS Epic resolves. Private key stays in your vault.</p>
+  </div>
+  <div class="wiz-field">
+    <label class="wiz-label" for="w_kv">Private key vault reference</label>
+    <input class="wiz-input" id="w_kv" [ngModel]="kvRef()" (ngModelChange)="kvRef.set($event)" />
+    <p class="wiz-hint">Pointer to the private signing key in Key Vault — value never leaves the vault.</p>
+  </div>
+}
+
+<!-- Interactive launch material -->
+@if (isInteractive()) {
+  <div class="wiz-section-label">Interactive launch (authorization-code + PKCE)</div>
+  <div class="callout info">
+    <span class="ci">🔐</span>
+    <div>Interactive apps redirect a user's browser to Epic to sign in. Epic returns the patient/launch context in the token response.</div>
+  </div>
+  <div class="wiz-field">
+    <label class="wiz-label" for="w_redirect">Redirect URI <span class="req">*</span></label>
+    <input class="wiz-input" id="w_redirect" [class.error]="redirectError"
+      [ngModel]="redirectUri()" (ngModelChange)="redirectUri.set($event); redirectError = false"
+      placeholder="https://app.fhirbridge.io/epic/callback" />
+    @if (redirectError) { <span class="wiz-err show">Redirect URI is required.</span> }
+    <p class="wiz-hint">Must match the redirect URI registered with Epic character-for-character.</p>
+  </div>
+  @if (isEhrLaunch()) {
+    <div class="wiz-field">
+      <label class="wiz-label" for="w_launch">Launch URL (EHR launch)</label>
+      <input class="wiz-input" id="w_launch" [ngModel]="launchUrl()" (ngModelChange)="launchUrl.set($event)" placeholder="https://app.fhirbridge.io/epic/launch" />
+      <p class="wiz-hint">Entry point Epic calls with a <code>launch</code> token when opened from within the EHR.</p>
+    </div>
+  }
+  <div class="wiz-field">
+    <label class="wiz-label">PKCE <span class="badge-locked">required</span></label>
+    <input class="wiz-input" value="S256 (enforced)" readonly tabindex="-1" />
+  </div>
+}
+
+<!-- Scopes -->
+<div class="wiz-section-label">Scopes — explicit per resource</div>
+<div class="callout warn">
+  <span class="ci">⚠</span>
+  <div><b>Epic does not honor wildcard scopes</b> in production. Request explicit per-resource scopes that exactly match your app registration.</div>
+</div>
+<div class="wiz-field">
+  <label class="wiz-label">Resources to request</label>
+  <app-resource-scope-grid [selected]="resources()" (toggled)="onResourceToggle($event)" />
+</div>
+<div class="wiz-field">
+  <label class="wiz-label">Resolved scope string <span class="badge-auto">auto</span> <span class="badge-locked">read-only</span></label>
+  <textarea class="wiz-textarea" [value]="scopeString()" readonly tabindex="-1"></textarea>
+</div>
+<div class="wiz-field">
+  <label class="wiz-label">Transform techniques available for this context</label>
+  <div class="chip-row">
+    @for (t of transforms(); track t) {
+      <span class="chip">{{ t }}</span>
+    }
+  </div>
+</div>

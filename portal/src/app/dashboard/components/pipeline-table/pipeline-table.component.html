@@ -1,0 +1,48 @@
+<div class="panel">
+  <div class="panel-header">
+    <h2 class="panel-title">Recent Pipelines</h2>
+    <a class="panel-link">View all →</a>
+  </div>
+
+  <div class="table-wrap">
+    <table class="ptable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Source</th>
+          <th>Status</th>
+          <th>Last Run</th>
+          <th>Duration</th>
+          <th>Triggered</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (run of runs(); track run.id) {
+          <tr class="ptable-row">
+            <td class="name-cell">{{ run.name }}</td>
+            <td class="muted">{{ run.sourceType }}</td>
+            <td>
+              <span class="status-badge" [class]="'status-' + run.status">
+                {{ statusLabel(run.status) }}
+              </span>
+            </td>
+            <td class="muted">{{ run.startedAt | date:'MMM d, h:mm a' }}</td>
+            <td class="muted mono">{{ formatDuration(run.duration) }}</td>
+            <td class="muted capitalize">{{ run.triggeredBy }}</td>
+            <td class="action-cell">
+              <button class="icon-btn" title="Run again"  (click)="runClicked.emit(run.id)">▶</button>
+              <button class="icon-btn" title="Edit"       (click)="editClicked.emit(run.id)">✎</button>
+              <button class="icon-btn" title="View logs"  (click)="logsClicked.emit(run.id)">≡</button>
+            </td>
+          </tr>
+        }
+        @empty {
+          <tr>
+            <td colspan="7" class="empty-cell muted">No pipeline runs found.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

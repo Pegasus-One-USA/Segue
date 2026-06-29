@@ -1,0 +1,141 @@
+<div class="dash-shell">
+  <app-sidebar [collapsed]="sidebarCollapsed()" />
+
+  <div class="dash-main">
+    <header class="dash-topbar">
+      <button class="collapse-btn" type="button" (click)="toggleSidebar()">&#9776;</button>
+      <div class="dash-breadcrumb">
+        <span class="breadcrumb-root" (click)="navigate('/dashboard')">Dashboard</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-page">Security</span>
+      </div>
+    </header>
+
+    <div class="dash-content">
+      <div class="page-header">
+        <h1 class="page-title">Security</h1>
+        <p class="page-sub">Manage your password, two-factor authentication, and active sessions</p>
+      </div>
+
+      <div class="user-settings-layout">
+        <app-user-settings-nav activePage="security" />
+
+        <div class="settings-body">
+
+          <!-- Password -->
+          <section class="settings-card">
+            <div class="card-row">
+              <div>
+                <h2 class="card-title">Password</h2>
+                <p class="card-sub">Last changed 90+ days ago. Keep your account secure with a strong password.</p>
+              </div>
+              <button class="btn-outline" type="button" (click)="togglePwChange()">
+                Change Password
+              </button>
+            </div>
+            @if (pwChangeOpen()) {
+              <div class="inline-form">
+                <div class="form-field">
+                  <label>Current Password</label>
+                  <input type="password" placeholder="••••••••" />
+                </div>
+                <div class="form-field">
+                  <label>New Password</label>
+                  <input type="password" placeholder="Min. 12 characters" />
+                </div>
+                <div class="form-field">
+                  <label>Confirm New Password</label>
+                  <input type="password" placeholder="Repeat new password" />
+                </div>
+                <div class="form-actions">
+                  <button class="btn-primary" type="button">Update Password</button>
+                  <button class="btn-ghost" type="button" (click)="pwChangeOpen.set(false)">Cancel</button>
+                </div>
+              </div>
+            }
+          </section>
+
+          <!-- 2FA -->
+          <section class="settings-card">
+            <div class="card-row">
+              <div>
+                <h2 class="card-title">Two-Factor Authentication</h2>
+                <p class="card-sub">
+                  @if (profile().twoFactorEnabled) {
+                    2FA is <strong class="text-green">enabled</strong>. Your account has an extra layer of security.
+                  } @else {
+                    2FA is <strong class="text-red">disabled</strong>. Enable it to protect your account.
+                  }
+                </p>
+              </div>
+              <button
+                [class]="profile().twoFactorEnabled ? 'btn-danger-outline' : 'btn-primary'"
+                type="button" (click)="toggleTwoFactor()"
+              >
+                {{ profile().twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA' }}
+              </button>
+            </div>
+          </section>
+
+          <!-- Active Sessions -->
+          <section class="settings-card">
+            <h2 class="card-title">Active Sessions</h2>
+            <div class="sessions-list">
+              @for (s of sessions(); track s.id) {
+                <div class="session-item" [class.current]="s.isCurrent">
+                  <div class="session-icon">
+                    @if (s.device.includes('Mac') || s.device.includes('PC')) {
+                      <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M6 17h8M10 13v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    } @else {
+                      <svg viewBox="0 0 20 20" fill="none"><rect x="6" y="2" width="8" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="15.5" r=".75" fill="currentColor"/></svg>
+                    }
+                  </div>
+                  <div class="session-info">
+                    <div class="session-device">
+                      {{ s.device }}
+                      @if (s.isCurrent) { <span class="current-badge">Current</span> }
+                    </div>
+                    <div class="session-meta">{{ s.browser }} · {{ s.location }} · {{ s.lastActive | date:'MMM d, h:mm a' }}</div>
+                  </div>
+                  @if (!s.isCurrent) {
+                    <button class="revoke-btn" type="button" (click)="revokeSession(s.id)">Revoke</button>
+                  }
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- API Keys -->
+          <section class="settings-card">
+            <div class="card-row">
+              <h2 class="card-title">API Keys</h2>
+              <button class="btn-outline" type="button">+ New Key</button>
+            </div>
+            <div class="api-keys-list">
+              @for (k of apiKeys(); track k.id) {
+                <div class="api-key-item">
+                  <div class="api-key-info">
+                    <span class="api-key-name">{{ k.name }}</span>
+                    <span class="api-key-prefix mono">{{ k.prefix }}...</span>
+                    <div class="api-key-scopes">
+                      @for (scope of k.scopes; track scope) {
+                        <span class="scope-tag">{{ scope }}</span>
+                      }
+                    </div>
+                    <span class="api-key-meta">
+                      Created {{ k.createdAt }} &middot; Last used {{ k.lastUsed }}
+                      @if (k.expiresAt) { &middot; Expires {{ k.expiresAt }} }
+                      @else { &middot; No expiry }
+                    </span>
+                  </div>
+                  <button class="revoke-btn" type="button" (click)="revokeApiKey(k.id)">Revoke</button>
+                </div>
+              }
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

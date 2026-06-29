@@ -1,0 +1,125 @@
+<div class="dash-shell">
+  <app-sidebar [collapsed]="sidebarCollapsed()" />
+
+  <div class="dash-main">
+    <header class="dash-topbar">
+      <button class="collapse-btn" type="button" (click)="toggleSidebar()">&#9776;</button>
+      <div class="dash-breadcrumb">
+        <span class="breadcrumb-root" (click)="navigate('/dashboard')">Dashboard</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-page">Account Settings</span>
+      </div>
+    </header>
+
+    <div class="dash-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Account Settings</h1>
+          <p class="page-sub">Manage your personal information and account details</p>
+        </div>
+        @if (saved()) {
+          <div class="save-toast">✓ Changes saved successfully</div>
+        }
+      </div>
+
+      <div class="user-settings-layout">
+        <app-user-settings-nav activePage="account-settings" />
+
+        <div class="settings-body">
+
+          <!-- Personal Info -->
+          <section class="settings-card">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Personal Information</h2>
+                <p class="card-sub">Update your name, phone and location details</p>
+              </div>
+            </div>
+
+            <div class="avatar-row">
+              <div class="form-avatar" [style.background]="profile().avatarColor">{{ initials() }}</div>
+              <div>
+                <p class="avatar-label">Profile Picture</p>
+                <p class="avatar-hint">Avatar generated from your initials</p>
+              </div>
+            </div>
+
+            <form class="settings-form" (ngSubmit)="saveChanges()">
+              <div class="form-row">
+                <div class="form-field">
+                  <label>First Name</label>
+                  <input type="text" [(ngModel)]="firstName" name="firstName" />
+                </div>
+                <div class="form-field">
+                  <label>Last Name</label>
+                  <input type="text" [(ngModel)]="lastName" name="lastName" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>Email Address</label>
+                  <input type="email" [value]="profile().email" name="email" disabled class="disabled" />
+                  <span class="field-hint">Email is managed by your organization</span>
+                </div>
+                <div class="form-field">
+                  <label>Phone</label>
+                  <input type="tel" [(ngModel)]="phone" name="phone" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>Designation</label>
+                  <input type="text" [(ngModel)]="designation" name="designation" />
+                </div>
+                <div class="form-field">
+                  <label>Department</label>
+                  <input type="text" [(ngModel)]="department" name="department" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>Location</label>
+                  <input type="text" [(ngModel)]="location" name="location" />
+                </div>
+                <div class="form-field">
+                  <label>Employee ID</label>
+                  <input type="text" [value]="profile().employeeId" disabled class="disabled" />
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn-primary">Save Changes</button>
+                <button type="button" class="btn-ghost" (click)="navigate('/profile')">Cancel</button>
+              </div>
+            </form>
+          </section>
+
+          <!-- Organization (read-only) -->
+          <section class="settings-card">
+            <h2 class="card-title">Organization</h2>
+            <div class="info-grid">
+              <div class="info-field">
+                <label>Organization</label>
+                <span>{{ profile().organization }}</span>
+              </div>
+              <div class="info-field">
+                <label>Tenant ID</label>
+                <span class="mono">{{ profile().tenant }}</span>
+              </div>
+              <div class="info-field">
+                <label>Role</label>
+                <span>{{ profile().roleLabel }}</span>
+              </div>
+              <div class="info-field">
+                <label>Member Since</label>
+                <span>{{ profile().memberSince }}</span>
+              </div>
+            </div>
+            <p class="org-note">Organization details are managed by your Tenant Admin.</p>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

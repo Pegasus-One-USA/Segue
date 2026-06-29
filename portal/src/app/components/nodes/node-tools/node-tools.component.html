@@ -1,0 +1,21 @@
+<div class="node-tools">
+  @if (showConfigure()) {
+    <button
+      type="button"
+      title="Configure"
+      (click)="configure.emit()"
+    >⚙</button>
+  }
+  <button
+    type="button"
+    [disabled]="!plusEnabled()"
+    [title]="plusEnabled() ? 'Add next step' : 'Locked — continue from the next node'"
+    (click)="addNext.emit()"
+  >⊕</button>
+  <button
+    type="button"
+    class="danger"
+    title="Delete"
+    (click)="delete.emit()"
+  >🗑</button>
+</div>

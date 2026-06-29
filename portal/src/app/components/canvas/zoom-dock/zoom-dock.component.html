@@ -1,0 +1,6 @@
+<div class="zoom-dock">
+  <button type="button" (click)="zoomOut.emit()">−</button>
+  <span>{{ zoomPercent() }}</span>
+  <button type="button" (click)="zoomIn.emit()">+</button>
+  <button type="button" title="Reset" (click)="reset.emit()">⤢</button>
+</div>

@@ -1,0 +1,29 @@
+:host { display: contents; }
+
+.canvas-shell {
+  position: relative; min-height: 0; overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, rgba(0,168,157,.15) 1px, transparent 0);
+  background-size: 26px 26px;
+  background-color: #F5F7FA;
+  cursor: grab;
+  &.panning { cursor: grabbing; }
+}
+
+.flow {
+  position: absolute; left: 0; top: 0;
+  width: 4000px; height: 2600px;
+  transform-origin: 0 0;
+}
+
+.add-module-fab {
+  position: absolute; left: 50%; bottom: 22px;
+  transform: translateX(-50%); z-index: 20;
+  min-height: 44px; padding: 11px 22px;
+  display: inline-flex; align-items: center; gap: 8px;
+  color: #fff; background: var(--purple);
+  border: 0; border-radius: 999px;
+  font-size: 15px; font-weight: 800;
+  box-shadow: 0 14px 30px rgba(0,168,157,.34);
+  cursor: pointer;
+  &:hover { filter: brightness(1.06); }
+}

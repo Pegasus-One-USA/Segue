@@ -1,0 +1,36 @@
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #E6F9F7 0%, #F5F7FA 60%, #EEF2FF 100%);
+}
+
+.auth-card {
+  width: 440px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 44px 40px 40px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.10);
+}
+
+.auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 36px;
+
+  .logo-mark {
+    font-size: 26px;
+    color: #00A89D;
+    line-height: 1;
+  }
+
+  .logo-text {
+    font-size: 19px;
+    font-weight: 700;
+    color: #1A202C;
+    letter-spacing: -0.4px;
+  }
+}

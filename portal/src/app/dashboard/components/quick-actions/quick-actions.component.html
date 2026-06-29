@@ -1,0 +1,31 @@
+<div class="panel">
+  <div class="panel-header">
+    <h2 class="panel-title">Quick Actions</h2>
+  </div>
+
+  <div class="actions-grid">
+    @for (action of actions; track action.id) {
+      @if (action.route) {
+        <a
+          class="action-tile"
+          [class]="'tile-' + action.accent"
+          [routerLink]="action.route"
+          (click)="actionClick.emit(action.id)"
+        >
+          <span class="action-icon">{{ action.icon }}</span>
+          <span class="action-label">{{ action.label }}</span>
+        </a>
+      } @else {
+        <button
+          class="action-tile"
+          [class]="'tile-' + action.accent"
+          type="button"
+          (click)="actionClick.emit(action.id)"
+        >
+          <span class="action-icon">{{ action.icon }}</span>
+          <span class="action-label">{{ action.label }}</span>
+        </button>
+      }
+    }
+  </div>
+</div>

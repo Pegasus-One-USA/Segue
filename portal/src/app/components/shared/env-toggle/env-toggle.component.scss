@@ -1,0 +1,34 @@
+.env-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.env-opt {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  background: #fff;
+  transition: all 0.15s;
+
+  &:hover { border-color: var(--purple-line); }
+  &.on    { border-color: var(--purple); background: var(--purple-soft); }
+  &.on b  { color: var(--purple); }
+
+  b    { font-size: 13px; color: var(--ink); }
+  span { font-size: 11.5px; color: var(--muted); font-weight: 600; line-height: 1.35; }
+}
+
+.callout {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: flex;
+  gap: 8px;
+  &.warn { background: var(--amber-soft); border: 1px solid #f5d99a; color: var(--amber); }
+  .ci { flex-shrink: 0; font-size: 14px; line-height: 1.3; }
+}
