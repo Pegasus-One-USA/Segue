@@ -1,0 +1,121 @@
+STRUCTURE.md
+  s_de8a90b089e3e9::t_f58177bae279e0 1-84
+src/Api/FHIRBridge.Api/Program.cs
+  s_de8a90b089e3e9::t_d6e635ecd783fd 1-6
+src/Api/FHIRBridge.Api/README.md
+  s_c0a32224280c3c::t_42684b79c6cc65 1-80
+src/BuildingBlocks/FHIRBridge.Contracts/README.md
+  s_176d20b1c9b7c6::t_7c51f4a205f5c4 1-35
+src/BuildingBlocks/FHIRBridge.EventBus/README.md
+  s_44138dae9c2945::t_3347924b288c84 1-38
+src/BuildingBlocks/FHIRBridge.Integration/README.md
+  s_07306a8e5572e9::t_901e062c7f5419 1-44
+src/BuildingBlocks/FHIRBridge.Messaging/README.md
+  s_44138dae9c2945::t_d3e7a58eb5684a 1-37
+src/BuildingBlocks/FHIRBridge.Observability/README.md
+  s_c0a32224280c3c::t_643a3994f7cf04 1-41
+src/BuildingBlocks/FHIRBridge.SharedKernel/README.md
+  s_2b6c14e74bdb16::t_ea73d70b3a9727 1-52
+src/ControlPlane/FHIRBridge.ControlPlane.Application/README.md
+  s_2b6c14e74bdb16::t_58d357ac6a778f 1-43
+src/ControlPlane/FHIRBridge.ControlPlane.Domain/README.md
+  s_0ae4e710eb5e49::t_6dcc11d519735c 1-48
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.json
+  s_de8a90b089e3e9::t_72c83802477a06 1
+src/FHIRBridge.Application/README.md
+  s_2b6c14e74bdb16::t_30a9793ee8732e 1-75
+src/FHIRBridge.Domain/README.md
+  s_2b6c14e74bdb16::t_7f8a7413917c4d 1-66
+src/FHIRBridge.Infrastructure/README.md
+  s_07306a8e5572e9::t_cb31032c2883ec 1-125
+src/Gateway/FHIRBridge.Gateway/Program.cs
+  s_de8a90b089e3e9::t_46ff08c27cbb3a 1-6
+src/Gateway/FHIRBridge.Gateway/README.md
+  s_c0a32224280c3c::t_796eaf92ce8c4e 1-37
+src/Runtime/FHIRBridge.Runtime.Application/Exceptions/ValidationException.cs
+  s_de8a90b089e3e9::t_51b56a2b138333 1-12
+src/Runtime/FHIRBridge.Runtime.Application/README.md
+  s_c0a32224280c3c::t_c81f1c29bd791d 1-78
+src/Runtime/FHIRBridge.Runtime.Domain/README.md
+  s_176d20b1c9b7c6::t_db991e626b8b51 1-61
+src/Runtime/FHIRBridge.Runtime.Infrastructure/README.md
+  s_176d20b1c9b7c6::t_4b725ce694c199 1-73
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_de8a90b089e3e9::t_277b4c9d057808 1-5
+src/Worker/FHIRBridge.Worker/README.md
+  s_176d20b1c9b7c6::t_010fd1b303f0a3 1-54
+tests/FHIRBridge.ArchitectureTests/README.md
+  s_0ae4e710eb5e49::t_e159830d42882b 1-46
+tests/FHIRBridge.LoadTests/Program.cs
+  s_de8a90b089e3e9::t_bbf8a1d410a5aa 1-3
+tests/FHIRBridge.LoadTests/README.md
+  s_c0a32224280c3c::t_c77867ab2d6302 1-42
+tests/FHIRBridge.Runtime.UnitTests/README.md
+  s_0ae4e710eb5e49::t_e02326820a3790 1-42
+tests/FHIRBridge.UnitTests/README.md
+  s_2b6c14e74bdb16::t_6ab6e3a1bb2790 1-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "d836292b6d090dafe42b3d82452c771cbdcfc626",
+  "prompts": {},
+  "sessions": {
+    "s_07306a8e5572e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8c5a4c6314a78db5",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_0ae4e710eb5e49": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a610cd84cac54ca5e",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_176d20b1c9b7c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aec33e583c29d816a",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_2b6c14e74bdb16": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a7880e75f54250384",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_44138dae9c2945": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4f8d3c3fbe828f9f",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_c0a32224280c3c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a2aad94201fa2938e",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_de8a90b089e3e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6e9e70be-3cf4-476d-9836-b161ce2a17e3",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
