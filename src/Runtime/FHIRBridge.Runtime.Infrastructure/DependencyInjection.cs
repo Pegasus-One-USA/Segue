@@ -39,6 +39,8 @@ public static class DependencyInjection
         services.AddSingleton<MutualTlsCertificateProvider>();
 
         services.AddSingleton<IFhirAuthorizationCodeTokenStore, InMemoryFhirAuthorizationCodeTokenStore>();
+        // Short-lived state of in-flight interactive OAuth sign-ins, between the authorize redirect and the callback.
+        services.AddSingleton<IOAuthAuthorizationStateStore, InMemoryOAuthAuthorizationStateStore>();
 
         services.AddHttpClient<EpicAccessTokenProvider>().AddMutualTls();
         services.AddHttpClient<OAuth2ClientCredentialsTokenProvider>().AddMutualTls();
@@ -65,6 +67,11 @@ public static class DependencyInjection
         services.AddScoped<CompositeFhirAccessTokenProvider>();
         services.AddScoped<IFhirAccessTokenProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<CompositeFhirAccessTokenProvider>());
+
+        // The interactive authorization-code round-trip (authorize + callback exchange) is served by the
+        // vendor-neutral SMART provider.
+        services.AddScoped<IInteractiveAuthorizationFlow>(serviceProvider =>
+            serviceProvider.GetRequiredService<SmartAuthorizationCodeTokenProvider>());
 
         services.AddScoped<SampleFhirSourceClient>();
         foreach (var registration in FhirSourceClientFactory.DefaultRegistrations)

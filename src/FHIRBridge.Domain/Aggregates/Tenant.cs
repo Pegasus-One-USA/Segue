@@ -3,6 +3,7 @@ using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Abstractions;
+using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Domain.Aggregates;
 
@@ -107,9 +108,12 @@ public sealed class Tenant : AuditableEntity<Guid>
         string name,
         SourceSystemType sourceSystemType,
         string baseUrl,
-        SourceAuthenticationConfiguration authentication)
+        SourceAuthenticationConfiguration authentication,
+        ApplicationType? applicationType = null,
+        SourceInteractiveConfiguration? interactive = null)
     {
-        var sourceConnection = new SourceConnection(Id, name, sourceSystemType, baseUrl, authentication);
+        var sourceConnection = new SourceConnection(
+            Id, name, sourceSystemType, baseUrl, authentication, applicationType, interactive);
         _sourceConnections.Add(sourceConnection);
 
         return sourceConnection;
@@ -120,7 +124,9 @@ public sealed class Tenant : AuditableEntity<Guid>
         string name,
         SourceSystemType sourceSystemType,
         string baseUrl,
-        SourceAuthenticationConfiguration authentication)
+        SourceAuthenticationConfiguration authentication,
+        ApplicationType? applicationType = null,
+        SourceInteractiveConfiguration? interactive = null)
     {
         var sourceConnection = _sourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId);
         if (sourceConnection is null)
@@ -128,7 +134,7 @@ public sealed class Tenant : AuditableEntity<Guid>
             throw new InvalidOperationException("Source connection does not belong to this tenant.");
         }
 
-        sourceConnection.Update(name, sourceSystemType, baseUrl, authentication);
+        sourceConnection.Update(name, sourceSystemType, baseUrl, authentication, applicationType, interactive);
 
         return sourceConnection;
     }

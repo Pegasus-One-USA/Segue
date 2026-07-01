@@ -9,4 +9,5 @@ public sealed record StoredOAuthToken(
     string AccessToken,
     string? RefreshToken,
     DateTimeOffset ExpiresOnUtc,
-    string? Scope = null);
+    string? Scope = null,
+    string? Patient = null);

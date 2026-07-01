@@ -77,7 +77,9 @@ public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurat
             request.Name,
             request.SourceSystemType,
             request.BaseUrl,
-            TenantConfigurationMapper.ToDomain(request.Authentication));
+            TenantConfigurationMapper.ToDomain(request.Authentication),
+            request.ApplicationType,
+            TenantConfigurationMapper.ToDomain(request.Interactive));
 
         await _repository.UpdateAsync(tenant, cancellationToken);
         await RecordConfigurationAuditAsync(
@@ -103,7 +105,9 @@ public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurat
             request.Name,
             request.SourceSystemType,
             request.BaseUrl,
-            TenantConfigurationMapper.ToDomain(request.Authentication));
+            TenantConfigurationMapper.ToDomain(request.Authentication),
+            request.ApplicationType,
+            TenantConfigurationMapper.ToDomain(request.Interactive));
 
         await _repository.UpdateAsync(tenant, cancellationToken);
         await RecordConfigurationAuditAsync(

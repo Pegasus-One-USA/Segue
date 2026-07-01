@@ -1,4 +1,5 @@
 using FHIRBridge.Runtime.Domain.Enums;
+using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Runtime.Application.DTOs;
 

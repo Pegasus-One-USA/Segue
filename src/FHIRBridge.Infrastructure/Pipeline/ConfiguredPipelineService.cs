@@ -1033,7 +1033,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             sourceConnection.TenantId,
             sourceConnection.Id,
             searchParameters,
-            clientSecret);
+            clientSecret,
+            ApplicationType: sourceConnection.ApplicationType);
     }
 
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(

@@ -1,5 +1,5 @@
 using FHIRBridge.Runtime.Application.Abstractions.Applications;
-using FHIRBridge.Runtime.Domain.Enums;
+using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Runtime.Infrastructure.Applications;
 

@@ -4,6 +4,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Infrastructure.Applications;
+using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.Runtime.Infrastructure.Auth;
 using FluentAssertions;
 

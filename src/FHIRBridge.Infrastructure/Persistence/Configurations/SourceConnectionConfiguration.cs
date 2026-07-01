@@ -7,6 +7,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Configurations;
 
 public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<SourceConnection>
 {
+    // Compares the space-joined string[] columns by value so EF change-tracking treats reordered/rebuilt arrays correctly.
+    private static readonly ValueComparer<string[]> StringArrayComparer = new(
+        (left, right) => ReferenceEquals(left, right) || (left != null && right != null && left.SequenceEqual(right)),
+        value => value.Aggregate(0, (hash, item) => HashCode.Combine(hash, StringComparer.Ordinal.GetHashCode(item))),
+        value => value.ToArray());
+
     public void Configure(EntityTypeBuilder<SourceConnection> builder)
     {
         builder.ToTable("SourceConnections");
@@ -17,6 +23,38 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
         builder.Property(x => x.SourceSystemType).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.BaseUrl).HasMaxLength(500).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
+
+        builder.Property(x => x.ApplicationType)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.OwnsOne(x => x.Interactive, interactive =>
+        {
+            var redirectUris = interactive.Property(x => x.RedirectUris)
+                .HasConversion(
+                    value => string.Join(' ', value),
+                    value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .HasMaxLength(2000)
+                .HasColumnName("RedirectUris");
+            redirectUris.Metadata.SetValueComparer(StringArrayComparer);
+
+            interactive.Property(x => x.LaunchUrl)
+                .HasMaxLength(500)
+                .HasColumnName("LaunchUrl");
+
+            interactive.Property(x => x.PatientSelectionMethod)
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .HasColumnName("PatientSelectionMethod");
+
+            var trustedIssuers = interactive.Property(x => x.TrustedIssuers)
+                .HasConversion(
+                    value => string.Join(' ', value),
+                    value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .HasMaxLength(2000)
+                .HasColumnName("TrustedIssuers");
+            trustedIssuers.Metadata.SetValueComparer(StringArrayComparer);
+        });
 
         builder.OwnsOne(x => x.Authentication, authentication =>
         {

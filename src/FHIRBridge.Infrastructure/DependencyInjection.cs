@@ -268,6 +268,7 @@ public static class DependencyInjection
         services.AddScoped<IPatientAggregationService, PatientAggregationService>();
         services.AddScoped<IFhirSubscriptionManagementService, FhirSubscriptionManagementService>();
         services.AddScoped<ISourceConnectionTestService, SourceConnectionTestService>();
+        services.AddScoped<IInteractiveSourceAuthorizationService, InteractiveSourceAuthorizationService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
         services.AddScoped<ILineageTracker, OperationalAuditLineageTracker>();
         services.AddHealthChecks()

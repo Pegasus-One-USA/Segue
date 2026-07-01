@@ -197,7 +197,8 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
             1,
             1,
             tenantId,
-            sourceConnection.Id);
+            sourceConnection.Id,
+            ApplicationType: sourceConnection.ApplicationType);
     }
 
     private Task RecordAuditAsync(

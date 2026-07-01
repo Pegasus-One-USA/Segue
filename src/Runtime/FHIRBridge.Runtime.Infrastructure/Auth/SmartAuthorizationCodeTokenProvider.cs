@@ -16,22 +16,25 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// back, silently refreshing it with the refresh token when it nears expiry. Vendor subclasses (Epic, Healow, …)
 /// need only override <see cref="ProviderName"/>.
 /// </summary>
-public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider
+public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IInteractiveAuthorizationFlow
 {
     private const int DefaultExpiresInSeconds = 300;
 
     private readonly HttpClient _httpClient;
     private readonly IFhirAuthorizationCodeTokenStore _tokenStore;
     private readonly IFhirAccessTokenAuditSink _auditSink;
+    private readonly IBackendServicesJwtFactory? _jwtFactory;
 
     public SmartAuthorizationCodeTokenProvider(
         HttpClient httpClient,
         IFhirAuthorizationCodeTokenStore tokenStore,
-        IFhirAccessTokenAuditSink? auditSink = null)
+        IFhirAccessTokenAuditSink? auditSink = null,
+        IBackendServicesJwtFactory? jwtFactory = null)
     {
         _httpClient = httpClient;
         _tokenStore = tokenStore;
         _auditSink = auditSink ?? new NoOpFhirAccessTokenAuditSink();
+        _jwtFactory = jwtFactory;
     }
 
     /// <summary>Human-readable provider name used in messages, audit actions, and the token-store key prefix.</summary>
@@ -73,7 +76,8 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider
     public SmartAuthorizationRequest BuildAuthorizationRequest(
         FhirSourceConfiguration source,
         string redirectUri,
-        string state)
+        string state,
+        string? launch = null)
     {
         if (string.IsNullOrWhiteSpace(source.AuthorizationEndpoint) || string.IsNullOrWhiteSpace(source.ClientId))
         {
@@ -85,10 +89,23 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider
         query["response_type"] = "code";
         query["client_id"] = source.ClientId!;
         query["redirect_uri"] = redirectUri;
-        query["scope"] = ResolveScopes(source);
+        query["scope"] = ResolveScopes(source, isEhrLaunch: launch is not null);
         query["state"] = state;
         query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
         query["code_challenge_method"] = "S256";
+
+        // Epic (and SMART generally) require the authorize request's audience to equal the FHIR base URL — omitting it
+        // is the most common cause of a rejected launch.
+        if (!string.IsNullOrWhiteSpace(source.BaseUrl))
+        {
+            query["aud"] = source.BaseUrl;
+        }
+
+        // EHR launch: forward the opaque launch token so the EHR restores the patient/encounter context.
+        if (!string.IsNullOrWhiteSpace(launch))
+        {
+            query["launch"] = launch;
+        }
 
         var separator = source.AuthorizationEndpoint!.Contains('?') ? "&" : "?";
         var authorizationUrl = $"{source.AuthorizationEndpoint}{separator}{query}";
@@ -147,6 +164,8 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider
         CancellationToken cancellationToken,
         string? fallbackRefreshToken = null)
     {
+        ApplyClientAuthentication(source, form);
+
         using var request = new HttpRequestMessage(HttpMethod.Post, source.TokenEndpoint);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Content = new FormUrlEncodedContent(form);
@@ -185,7 +204,8 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider
                 token.AccessToken!,
                 string.IsNullOrWhiteSpace(token.RefreshToken) ? fallbackRefreshToken : token.RefreshToken,
                 DateTimeOffset.UtcNow.AddSeconds(expiresIn),
-                token.Scope);
+                token.Scope,
+                token.Patient);
 
             await _tokenStore.SaveAsync(BuildStoreKey(source), stored, cancellationToken);
             await _auditSink.RecordAsync(source, $"{action}Succeeded", "Completed", $"{ProviderName} access token acquired.", cancellationToken);
@@ -193,8 +213,49 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider
         }
     }
 
-    private static string ResolveScopes(FhirSourceConfiguration source) =>
-        source.Scopes.Count == 0 ? "launch/patient patient/*.read offline_access" : string.Join(' ', source.Scopes);
+    // Note: SmartAuthorizationRequest was moved to FHIRBridge.Runtime.Application.DTOs so the
+    // IInteractiveAuthorizationFlow abstraction (Application layer) can reference it.
+
+    // Adds client authentication to the token request for confidential clients. Public clients authenticate with PKCE
+    // alone (no secret). Asymmetric (private_key_jwt) takes precedence over a symmetric client secret.
+    private void ApplyClientAuthentication(FhirSourceConfiguration source, Dictionary<string, string> form)
+    {
+        if (!string.IsNullOrWhiteSpace(source.PrivateKeyPem))
+        {
+            if (_jwtFactory is null)
+            {
+                throw new InvalidOperationException(
+                    $"{ProviderName} private_key_jwt client authentication requires a JWT factory to be configured.");
+            }
+
+            form["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+            form["client_assertion"] = _jwtFactory.CreateClientAssertion(new BackendServicesJwtRequest(
+                source.ClientId!,
+                source.TokenEndpoint!,
+                source.PrivateKeyPem!,
+                source.KeyId,
+                TimeSpan.FromMinutes(5)));
+        }
+        else if (!string.IsNullOrWhiteSpace(source.ClientSecret))
+        {
+            form["client_secret"] = source.ClientSecret!;
+        }
+    }
+
+    private static string ResolveScopes(FhirSourceConfiguration source, bool isEhrLaunch = false)
+    {
+        var scopes = source.Scopes.Count == 0
+            ? ["launch/patient", "patient/*.read", "offline_access"]
+            : source.Scopes.ToList();
+
+        // EHR launch requires the plain "launch" scope alongside the opaque launch token.
+        if (isEhrLaunch && !scopes.Contains("launch"))
+        {
+            scopes.Insert(0, "launch");
+        }
+
+        return string.Join(' ', scopes);
+    }
 
     // Token store key: prefer the durable source-connection id; fall back to the token endpoint + client identity.
     private string BuildStoreKey(FhirSourceConfiguration source) =>
@@ -215,8 +276,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider
 
         [JsonPropertyName("scope")]
         public string? Scope { get; set; }
+
+        // SMART returns the launch/selected patient id in the token response when a patient context is established.
+        [JsonPropertyName("patient")]
+        public string? Patient { get; set; }
     }
 }
-
-/// <summary>The redirect URL plus the PKCE verifier and state that must be retained to complete the sign-in.</summary>
-public sealed record SmartAuthorizationRequest(string AuthorizationUrl, string CodeVerifier, string State);

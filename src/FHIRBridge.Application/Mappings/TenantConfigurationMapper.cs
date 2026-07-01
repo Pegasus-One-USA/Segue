@@ -68,8 +68,28 @@ public static class TenantConfigurationMapper
                 sourceConnection.Authentication.PrivateKey?.KeyVaultName,
                 sourceConnection.Authentication.PrivateKey?.SecretName,
                 sourceConnection.Authentication.KeyId),
-            sourceConnection.IsEnabled);
+            sourceConnection.IsEnabled,
+            sourceConnection.ApplicationType,
+            ToDto(sourceConnection.Interactive));
     }
+
+    private static SourceInteractiveConfigurationDto? ToDto(SourceInteractiveConfiguration? interactive) =>
+        interactive is null
+            ? null
+            : new SourceInteractiveConfigurationDto(
+                interactive.RedirectUris,
+                interactive.LaunchUrl,
+                interactive.TrustedIssuers,
+                interactive.PatientSelectionMethod);
+
+    public static SourceInteractiveConfiguration? ToDomain(SourceInteractiveConfigurationDto? dto) =>
+        dto is null
+            ? null
+            : new SourceInteractiveConfiguration(
+                dto.RedirectUris ?? [],
+                dto.LaunchUrl,
+                dto.TrustedIssuers ?? [],
+                dto.PatientSelectionMethod);
 
     public static WebhookConfigurationDto ToDto(WebhookConfiguration webhookConfiguration)
     {
