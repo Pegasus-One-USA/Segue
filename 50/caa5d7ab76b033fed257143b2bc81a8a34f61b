@@ -1,0 +1,147 @@
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_c6334a9b5a646f::t_b4cb61dc45b258 17-28
+  s_c6334a9b5a646f::t_4df2b711f58ce8 1-16,29-34
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/InMemoryOAuthAuthorizationStateStore.cs
+  s_c6334a9b5a646f::t_736b3814d6f466 1-25
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategyRegistry.cs
+  s_c6334a9b5a646f::t_af05b6a3385235 1
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_c6334a9b5a646f::t_0ee144309dfaa6 1036-1037
+tests/FHIRBridge.Runtime.UnitTests/Auth/SmartAuthorizationRequestTests.cs
+  s_c6334a9b5a646f::t_2b6dcbbdaa8bc1 1-50
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_c6334a9b5a646f::t_8ed5725aa620f7 42-43
+  s_c6334a9b5a646f::t_961019fcd5b00f 71-75
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_c6334a9b5a646f::t_e549fcc8941fd3 39-66
+  s_c6334a9b5a646f::t_7f0b15e3175142 1-38,67-106
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IInteractiveAuthorizationFlow.cs
+  s_c6334a9b5a646f::t_98e02c86bb214e 14-22
+  s_c6334a9b5a646f::t_04eec5ef992537 1-13,23-31
+src/FHIRBridge.Application/DTOs/CreateSourceConnectionRequest.cs
+  s_c6334a9b5a646f::t_6379a809312bc0 2,10-12
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_c6334a9b5a646f::t_91eb1c5c7037e3 167-168
+  s_c6334a9b5a646f::t_3945dd8eef9874 216-218
+  s_c6334a9b5a646f::t_65d96d7e1388ed 19
+  s_c6334a9b5a646f::t_ef4b50af6bc333 79-80,92,97-108
+  s_c6334a9b5a646f::t_f044afefe57eb4 26,31-32,37
+  s_c6334a9b5a646f::t_1bd3710943c4e4 207-208
+  s_c6334a9b5a646f::t_1a0b3b3d422594 219-244
+  s_c6334a9b5a646f::t_aaea4347ee3933 245-258
+  s_c6334a9b5a646f::t_407fd6a19ac075 279-282
+  s_c6334a9b5a646f::t_47942ddd350dd0 109
+src/FHIRBridge.Application/DTOs/SourceConnectionDto.cs
+  s_c6334a9b5a646f::t_25f7bcfca6139d 2,12-14
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/SmartAuthorizationRequest.cs
+  s_c6334a9b5a646f::t_d1ca1c2796c5fc 1-5
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/StoredOAuthToken.cs
+  s_c6334a9b5a646f::t_7a8e2096ac9e83 12-13
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/HealowAuthorizationCodeTokenProvider.cs
+  s_c6334a9b5a646f::t_a0fe8c752d9b97 15-17
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_c6334a9b5a646f::t_360fdbaaad1b09 3
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_c6334a9b5a646f::t_0e8d4c08a4f8ba 3
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_c6334a9b5a646f::t_a4a820c71875dd 27-44,50-58
+  s_c6334a9b5a646f::t_c61ed566065e42 45-49
+  s_c6334a9b5a646f::t_9a62200d98e9f4 10-15
+src/FHIRBridge.Application/DTOs/SourceInteractiveConfigurationDto.cs
+  s_c6334a9b5a646f::t_855c8480c335f5 3-6,9-12
+  s_c6334a9b5a646f::t_76256636d9f80d 1-2,7-8,13-14
+src/FHIRBridge.Domain/Aggregates/Tenant.cs
+  s_c6334a9b5a646f::t_7c9e8f1bde40c6 6
+  s_c6334a9b5a646f::t_43c0008c52858e 111-113,115-116,127-129,137
+src/FHIRBridge.Application/Mappings/TenantConfigurationMapper.cs
+  s_c6334a9b5a646f::t_47c9071fdbbc16 79-83,88-92
+  s_c6334a9b5a646f::t_8c3d017a993c75 71-73,76-78,84-87
+  s_c6334a9b5a646f::t_edafb18bd9e579 93
+src/FHIRBridge.Domain/Enums/PatientSelectionMethod.cs
+  s_c6334a9b5a646f::t_1809ab037d5247 1-17
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_c6334a9b5a646f::t_732f806514d40b 84-86,95-97,103,113,124-206
+  s_c6334a9b5a646f::t_64cd5a87b0797d 225-229,236-237,240-241
+  s_c6334a9b5a646f::t_3e62c9a9cef98c 1-5,7-8,10-29,31-39,41-48,50-83,87-94,98-102,104-112,114-123,207-224,230-235,238-239,242-288,332-378
+  s_c6334a9b5a646f::t_4e1bd16b66081a 30,40,49
+  s_c6334a9b5a646f::t_53357593173845 289-309
+  s_c6334a9b5a646f::t_0c49352372bd0b 310-331
+  s_c6334a9b5a646f::t_c5302f411de185 6
+  s_c6334a9b5a646f::t_5a37d8d608e5dd 9
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_c6334a9b5a646f::t_c1480881bb783a 2
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionTestService.cs
+  s_c6334a9b5a646f::t_e5c31894f490d8 200-201
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_c6334a9b5a646f::t_1dc6c5777215b1 3
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyRegistry.cs
+  s_c6334a9b5a646f::t_34bf3f90fd56cf 2
+tests/FHIRBridge.Runtime.UnitTests/Applications/SourceApplicationStrategyTests.cs
+  s_c6334a9b5a646f::t_efb4532b5e03bb 7
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategy.cs
+  s_c6334a9b5a646f::t_a29bab18e290e6 2
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IOAuthAuthorizationStateStore.cs
+  s_c6334a9b5a646f::t_2f12e9ee1ad235 1-31
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_c6334a9b5a646f::t_767e74e6cb7185 3
+tests/FHIRBridge.UnitTests/Sources/SourceConnectionApplicationTypeMappingTests.cs
+  s_c6334a9b5a646f::t_b5e379cc8e4ecd 1-60
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicInteractiveTokenProvider.cs
+  s_c6334a9b5a646f::t_8c3facb0ebe6f2 16-18
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/BackendServicesApplicationStrategy.cs
+  s_c6334a9b5a646f::t_1b1091a8e610c3 3
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/SourceApplicationDescriptor.cs
+  s_c6334a9b5a646f::t_313f0bfd2ab2ba 1
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_c6334a9b5a646f::t_1da4958a19aed5 5
+src/FHIRBridge.Domain/ValueObjects/SourceInteractiveConfiguration.cs
+  s_c6334a9b5a646f::t_4a18cdd8a0668e 1-2,7-9,20-21,26,32-34
+  s_c6334a9b5a646f::t_294b0ef8f29bf8 3-6,10-19,22-25,27-31,35
+tests/FHIRBridge.Runtime.UnitTests/Auth/SmartConfidentialClientExchangeTests.cs
+  s_c6334a9b5a646f::t_af002639a32761 1-77
+tests/FHIRBridge.Runtime.UnitTests/Auth/InMemoryOAuthAuthorizationStateStoreTests.cs
+  s_c6334a9b5a646f::t_bebfb0aeeed8df 1-49
+src/FHIRBridge.Domain/Entities/SourceConnection.cs
+  s_c6334a9b5a646f::t_722a89d3899bb1 4,19-21,29-30,39-48,55-57,63-64
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_c6334a9b5a646f::t_7582ec1f4fb628 56-57
+  s_c6334a9b5a646f::t_3f03ade2126817 1-25,27-42,44-47,52-54,58-73,77-117,119,121-122,124-152,225
+  s_c6334a9b5a646f::t_e60054ddf4dbc0 153-154,180-224
+  s_c6334a9b5a646f::t_93811a942345d2 118,120,123
+  s_c6334a9b5a646f::t_7e3d90e98c4fa1 155-179
+  s_c6334a9b5a646f::t_814fae55efc0f8 43,48-51,55
+  s_c6334a9b5a646f::t_2721b7848c5611 26
+  s_c6334a9b5a646f::t_cd1250ca03d5d0 74-76
+src/BuildingBlocks/FHIRBridge.SharedKernel/Enums/ApplicationType.cs
+  s_c6334a9b5a646f::t_35a2e9498ad6d8 1-27
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260701112851_AddSourceApplicationType.Designer.cs
+  s_c6334a9b5a646f::t_0cc3bf1a20851e 1-1732
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260701112851_AddSourceApplicationType.cs
+  s_c6334a9b5a646f::t_9c9f8288fe4616 1-62
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260701114617_AddPatientSelectionMethod.Designer.cs
+  s_c6334a9b5a646f::t_2a4a3b7d078f3f 1-1737
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260701114617_AddPatientSelectionMethod.cs
+  s_c6334a9b5a646f::t_11b99883accd29 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_c6334a9b5a646f::t_cf1f0a4d3042cd 938-941,1633-1667,1670-1671
+src/FHIRBridge.Application/Services/UnifiedTenantConfigurationService.cs
+  s_c6334a9b5a646f::t_00e900f8c3e110 80-82,108-110
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_c6334a9b5a646f::t_b670b8a610483e 271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "50caa5d7ab76b033fed257143b2bc81a8a34f61b",
+  "prompts": {},
+  "sessions": {
+    "s_c6334a9b5a646f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f46fcae-4d19-4461-b4b5-61fa608674fc",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
