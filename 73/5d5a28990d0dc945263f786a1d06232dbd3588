@@ -1,0 +1,48 @@
+tests/FHIRBridge.ArchitectureTests/ApplicationTypeDispatchTests.cs
+  s_c6334a9b5a646f::t_84bb991ceb88e4 1-56
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_c6334a9b5a646f::t_1b3c121a52be9e 1-48
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/SourceApplicationValidationResult.cs
+  s_c6334a9b5a646f::t_599528818c374f 1-14
+tests/FHIRBridge.Runtime.UnitTests/Applications/SourceApplicationStrategyTests.cs
+  s_c6334a9b5a646f::t_d89d59ebb5d479 1-176
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategy.cs
+  s_c6334a9b5a646f::t_3b6ea782d0322b 1-30
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_c6334a9b5a646f::t_9e2925703ca29d 1-45
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_c6334a9b5a646f::t_2a6c801dc237ec 1-61
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/SmartApplicationConstants.cs
+  s_c6334a9b5a646f::t_36043f00cf5a65 1-16
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/SourceApplicationDescriptor.cs
+  s_c6334a9b5a646f::t_a4412c1887af32 1-20
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategyRegistry.cs
+  s_c6334a9b5a646f::t_78f88b23d07e32 1-16
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyRegistry.cs
+  s_c6334a9b5a646f::t_de7f07c8e7eca8 1-47
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_c6334a9b5a646f::t_207ebe96d43dd9 1-46
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/BackendServicesApplicationStrategy.cs
+  s_c6334a9b5a646f::t_b4146eaa24360f 1-48
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_c6334a9b5a646f::t_906688e78d6da8 1,11-14,24,31,37,46-47,49
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_c6334a9b5a646f::t_a7f73da73ae593 1,6
+  s_c6334a9b5a646f::t_2a676b69aed7c9 52-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "735d5a28990d0dc945263f786a1d06232dbd3588",
+  "prompts": {},
+  "sessions": {
+    "s_c6334a9b5a646f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f46fcae-4d19-4461-b4b5-61fa608674fc",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
