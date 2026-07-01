@@ -1,0 +1,30 @@
+docs/backend/01-domain-and-data.md
+  s_4f80f0204fe512::t_dd22324a794a5e 1-56
+docs/backend/03-runtime-pipeline.md
+  s_4f80f0204fe512::t_8fe12d4dfe9aff 1-68
+docs/backend/README.md
+  s_4f80f0204fe512::t_b67061a7df8aea 1-57
+docs/backend/04-app-services-and-building-blocks.md
+  s_4f80f0204fe512::t_42f4c171ebc046 1-59
+docs/backend/02-api-surface.md
+  s_4f80f0204fe512::t_69d76082f37205 1-52
+README.md
+  s_4f80f0204fe512::t_d00648a6e15eed 3-4
+  s_4f80f0204fe512::t_0a5e17318fa0c8 5-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "3df89556fb1d0b2948666bb894a7dd1848c0fce0",
+  "prompts": {},
+  "sessions": {
+    "s_4f80f0204fe512": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99bf279d-9dc9-473d-82d9-717c3cc67f7f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
