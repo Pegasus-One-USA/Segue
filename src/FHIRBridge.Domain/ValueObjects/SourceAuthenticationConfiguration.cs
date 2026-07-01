@@ -1,0 +1,36 @@
+using FHIRBridge.Domain.Enums;
+
+namespace FHIRBridge.Domain.ValueObjects;
+
+public sealed class SourceAuthenticationConfiguration
+{
+    private SourceAuthenticationConfiguration()
+    {
+    }
+
+    public SourceAuthenticationConfiguration(
+        AuthenticationType authenticationType,
+        string? clientId,
+        string? tokenEndpoint,
+        string[] scopes,
+        SecretReference? clientSecret,
+        SecretReference? privateKey,
+        string? keyId)
+    {
+        AuthenticationType = authenticationType;
+        ClientId = clientId;
+        TokenEndpoint = tokenEndpoint;
+        Scopes = scopes;
+        ClientSecret = clientSecret;
+        PrivateKey = privateKey;
+        KeyId = keyId;
+    }
+
+    public AuthenticationType AuthenticationType { get; private set; }
+    public string? ClientId { get; private set; }
+    public string? TokenEndpoint { get; private set; }
+    public string[] Scopes { get; private set; } = [];
+    public SecretReference? ClientSecret { get; private set; }
+    public SecretReference? PrivateKey { get; private set; }
+    public string? KeyId { get; private set; }
+}

@@ -1,0 +1,33 @@
+using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Mapping;
+using FHIRBridge.Application.Abstractions.Normalization;
+using FHIRBridge.Application.Services;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace FHIRBridge.Application;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddFHIRBridgeApplication(this IServiceCollection services)
+    {
+        services.AddScoped<IJsonMappingEngine, JsonMappingEngine>();
+        services.AddSingleton<IFhirElementCatalog, EmbeddedFhirElementCatalog>();
+        services.AddScoped<IMappingMaterializer, DefaultMappingMaterializer>();
+        services.AddScoped<IResourceNormalizationService, PassThroughResourceNormalizationService>();
+        services.AddScoped<IMappedRecordNormalizationService, PassThroughMappedRecordNormalizationService>();
+        services.AddScoped<IGovernancePolicyService, DefaultGovernancePolicyService>();
+        services.AddScoped<IDeIdentificationService, PassThroughDeIdentificationService>();
+        services.AddScoped<IRetentionPolicyService, DefaultRetentionPolicyService>();
+        services.AddScoped<IUnifiedTenantConfigurationService, UnifiedTenantConfigurationService>();
+        services.AddScoped<IYamlManifestImportService, YamlManifestImportService>();
+        services.AddScoped<IUserAccessService, UserAccessService>();
+        services.AddScoped<ILocalAuthService, LocalAuthService>();
+        services.AddScoped<IUserManagementService, UserManagementService>();
+        services.AddScoped<IRoleManagementService, RoleManagementService>();
+        services.AddScoped<IHedisMeasureReportService, HedisMeasureReportService>();
+        services.AddScoped<IAnomalyDetectionService, RunAnomalyDetectionService>();
+        services.AddScoped<IPipelineRunMetricsService, PipelineRunMetricsService>();
+
+        return services;
+    }
+}

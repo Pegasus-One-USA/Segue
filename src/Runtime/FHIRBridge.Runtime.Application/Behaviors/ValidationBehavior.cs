@@ -1,6 +1,5 @@
 using FluentValidation;
 using MediatR;
-using FHIRBridge.Runtime.Application.Exceptions;
 
 namespace FHIRBridge.Runtime.Application.Behaviors;
 

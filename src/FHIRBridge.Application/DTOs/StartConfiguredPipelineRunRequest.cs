@@ -1,0 +1,24 @@
+namespace FHIRBridge.Application.DTOs;
+
+public sealed record StartConfiguredPipelineRunRequest(
+    IReadOnlyCollection<string>? ResourceTypes,
+    string? TriggeredBy,
+    string? CorrelationId)
+{
+    public bool RunDueSchedulesOnly { get; init; }
+    public DateTime? ScheduledAtUtc { get; init; }
+
+    /// <summary>
+    /// When set, only these specific routes run and the cron schedule re-check is bypassed — the scheduler has
+    /// already decided which routes are due (catch-up aware), so the run executes exactly those, even if the
+    /// current minute no longer matches the cron. Null = the legacy resource-type + RunDueSchedulesOnly behavior.
+    /// </summary>
+    public IReadOnlyCollection<Guid>? RouteIds { get; init; }
+
+    /// <summary>
+    /// When true, source resources are pulled via a FHIR Bulk Data <c>$export</c> job (kick off → poll → NDJSON)
+    /// instead of a paged <c>$search</c>. The rest of the pipeline (govern → map → write) is unchanged, so the run
+    /// still appears in Runs. Requires a source whose server supports bulk export.
+    /// </summary>
+    public bool UseBulkExport { get; init; }
+}
