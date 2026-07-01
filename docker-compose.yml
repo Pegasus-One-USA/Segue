@@ -1,0 +1,215 @@
+name: fhirbridge
+
+services:
+  controlplane-sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fhirbridge-controlplane-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${FHIRBRIDGE_SQL_PASSWORD:-Your_password123}"
+    ports:
+      - "${FHIRBRIDGE_SQL_PORT:-1433}:1433"
+    volumes:
+      - controlplane-sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${FHIRBRIDGE_SQL_PASSWORD:-Your_password123} -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hapi-postgres:
+    image: postgres:16-alpine
+    container_name: fhirbridge-hapi-postgres
+    environment:
+      POSTGRES_DB: "${HAPI_POSTGRES_DB:-hapi}"
+      POSTGRES_USER: "${HAPI_POSTGRES_USER:-hapi}"
+      POSTGRES_PASSWORD: "${HAPI_POSTGRES_PASSWORD:-hapi_password}"
+    ports:
+      - "${HAPI_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - hapi-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${HAPI_POSTGRES_USER:-hapi} -d ${HAPI_POSTGRES_DB:-hapi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    container_name: fhirbridge-hapi-fhir
+    depends_on:
+      hapi-postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://hapi-postgres:5432/${HAPI_POSTGRES_DB:-hapi}"
+      SPRING_DATASOURCE_USERNAME: "${HAPI_POSTGRES_USER:-hapi}"
+      SPRING_DATASOURCE_PASSWORD: "${HAPI_POSTGRES_PASSWORD:-hapi_password}"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: "org.postgresql.Driver"
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: "ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect"
+      HAPI_FHIR_VERSION: "R4"
+      # Enable FHIR Bulk Data $export (off by default in the image) so the bulk-export pipeline path is testable.
+      HAPI_FHIR_BULK_EXPORT_ENABLED: "true"
+      # Allow system-level ($export) and group/patient-level bulk export.
+      HAPI_FHIR_ENABLE_INDEX_MISSING_FIELDS: "false"
+      # Enable rest-hook Subscriptions so the source can fire notifications to FHIRBridge's webhook callback.
+      HAPI_FHIR_SUBSCRIPTION_RESTHOOK_ENABLED: "true"
+    ports:
+      - "${HAPI_FHIR_PORT:-8080}:8080"
+    healthcheck:
+      # The HAPI image is distroless: it has Java but no /bin/sh, curl, or wget.
+      # Use a direct JVM probe for Docker health and verify FHIR readiness from
+      # the host/API with GET http://localhost:8080/fhir/metadata.
+      test: ["CMD", "java", "-version"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: fhirbridge-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_DEFAULT_USER:-fhirbridge}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_DEFAULT_PASS:-fhirbridge}"
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: fhirbridge-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: fhirbridge-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-fhirbridge}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-fhirbridge123}"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  seq:
+    image: datalust/seq:latest
+    container_name: fhirbridge-seq
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_ADMINPASSWORD: FhirBridge@123
+    ports:
+      - "${SEQ_PORT:-5341}:80"
+    volumes:
+      - seq-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/api || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: fhirbridge-otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OTEL_PROMETHEUS_PORT:-9464}:9464"
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+
+  # Output MySQL destination — exercises the MySQL relational destination path in local E2E.
+  output-mysql:
+    image: mysql:8
+    container_name: fhirbridge-output-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "${OUTPUT_MYSQL_ROOT_PASSWORD:-ChangeMe!12345}"
+      MYSQL_DATABASE: "${OUTPUT_MYSQL_DB:-fhirbridge_output}"
+      MYSQL_USER: "${OUTPUT_MYSQL_USER:-fhirbridge}"
+      MYSQL_PASSWORD: "${OUTPUT_MYSQL_PASSWORD:-fhirbridge}"
+    ports:
+      - "${OUTPUT_MYSQL_PORT:-3306}:3306"
+    volumes:
+      - output-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${OUTPUT_MYSQL_ROOT_PASSWORD:-ChangeMe!12345} --silent || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Output Postgres destination — exercises the Postgres relational/analytics destination path,
+  # kept separate from the HAPI Postgres so destination writes never touch the source FHIR store.
+  output-postgres:
+    image: postgres:16-alpine
+    container_name: fhirbridge-output-postgres
+    environment:
+      POSTGRES_DB: "${OUTPUT_POSTGRES_DB:-fhirbridge_output}"
+      POSTGRES_USER: "${OUTPUT_POSTGRES_USER:-fhirbridge}"
+      POSTGRES_PASSWORD: "${OUTPUT_POSTGRES_PASSWORD:-fhirbridge}"
+    ports:
+      - "${OUTPUT_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - output-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OUTPUT_POSTGRES_USER:-fhirbridge} -d ${OUTPUT_POSTGRES_DB:-fhirbridge_output}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # SFTP destination — exercises the file/SFTP delivery path in local E2E.
+  # NOTE: do NOT mount a named volume over /home/<user>/upload — atmoz/sftp only chowns the user-writable
+  # "upload" directory it creates from the ":::upload" directive; a mounted volume stays root-owned and the
+  # SFTP user gets "Permission denied" on write. The drop zone is ephemeral, which is fine for a destination test.
+  sftp:
+    image: atmoz/sftp:alpine
+    container_name: fhirbridge-sftp
+    command: "${SFTP_USER:-fhirbridge}:${SFTP_PASSWORD:-fhirbridge}:::upload"
+    ports:
+      - "${SFTP_PORT:-2222}:22"
+
+  adminer:
+    image: adminer:latest
+    container_name: fhirbridge-adminer
+    depends_on:
+      controlplane-sql:
+        condition: service_healthy
+      hapi-postgres:
+        condition: service_healthy
+      output-mysql:
+        condition: service_healthy
+      output-postgres:
+        condition: service_healthy
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+
+volumes:
+  controlplane-sql-data:
+  hapi-postgres-data:
+  rabbitmq-data:
+  redis-data:
+  minio-data:
+  seq-data:
+  output-mysql-data:
+  output-postgres-data:
+  sftp-data:

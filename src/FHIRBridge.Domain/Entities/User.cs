@@ -1,0 +1,200 @@
+using FHIRBridge.Domain.Enums;
+using FHIRBridge.SharedKernel.Abstractions;
+
+namespace FHIRBridge.Domain.Entities;
+
+public sealed class User : AuditableChildEntity<Guid>
+{
+    private User()
+    {
+    }
+
+    public User(
+        string externalUserId,
+        string? email,
+        string? displayName)
+    {
+        Id = Guid.NewGuid();
+        ExternalUserId = externalUserId;
+        Email = email;
+        DisplayName = displayName;
+        Status = UserStatus.Active;
+        IsEnabled = true;
+        IsLocalLoginEnabled = false;
+        MustChangePassword = false;
+    }
+
+    public string ExternalUserId { get; private set; } = default!;
+    public string? Email { get; private set; }
+    public string? DisplayName { get; private set; }
+
+    public string? FirstName { get; private set; }
+    public string? LastName { get; private set; }
+
+    /// <summary>
+    /// Optional "home"/primary tenant. Null for platform users such as GlobalAdmin.
+    /// </summary>
+    public Guid? TenantId { get; private set; }
+
+    public string? PasswordHash { get; private set; }
+    public bool IsLocalLoginEnabled { get; private set; }
+    public bool MustChangePassword { get; private set; }
+    public string? PasswordResetTokenHash { get; private set; }
+    public DateTime? PasswordResetTokenExpiresOnUtc { get; private set; }
+
+    /// <summary>Account status: Active, Inactive, or Invited.</summary>
+    public UserStatus Status { get; private set; }
+
+    /// <summary>Account enable/disable. When false the user cannot authenticate.</summary>
+    public bool IsEnabled { get; private set; }
+    public DateTime? LastLoginOnUtc { get; private set; }
+
+    // Security hardening columns.
+    public int FailedLoginCount { get; private set; }
+    public DateTime? LockoutEndUtc { get; private set; }
+    public DateTime? LastPasswordChangedOnUtc { get; private set; }
+    public DateTime? PasswordExpiresOnUtc { get; private set; }
+    public bool MfaEnabled { get; private set; }
+
+    // Invitation flow fields.
+    public string? InvitationTokenHash { get; private set; }
+    public DateTime? InvitationTokenExpiresOnUtc { get; private set; }
+
+    // Refresh token fields.
+    public string? RefreshTokenHash { get; private set; }
+    public DateTime? RefreshTokenExpiresOnUtc { get; private set; }
+
+    /// <summary>True when the account is currently locked out (failed-login threshold reached).</summary>
+    public bool IsLockedOut(DateTime utcNow) => LockoutEndUtc is { } end && end > utcNow;
+
+    public void UpdateProfile(string? email, string? displayName)
+    {
+        Email = email;
+        DisplayName = displayName;
+    }
+
+    public void UpdateName(string? firstName, string? lastName)
+    {
+        FirstName = firstName;
+        LastName = lastName;
+    }
+
+    public void SetHomeTenant(Guid? tenantId)
+    {
+        TenantId = tenantId;
+    }
+
+    public void UpdateExternalUserId(string externalUserId)
+    {
+        ExternalUserId = externalUserId;
+    }
+
+    public void SetEnabled(bool isEnabled)
+    {
+        IsEnabled = isEnabled;
+        Status = isEnabled ? UserStatus.Active : UserStatus.Inactive;
+    }
+
+    public void SetMfaEnabled(bool mfaEnabled)
+    {
+        MfaEnabled = mfaEnabled;
+    }
+
+    public void EnableLocalLogin(string passwordHash, bool mustChangePassword)
+    {
+        PasswordHash = passwordHash;
+        IsLocalLoginEnabled = true;
+        MustChangePassword = mustChangePassword;
+        LastPasswordChangedOnUtc = DateTime.UtcNow;
+        Status = UserStatus.Active;
+        IsEnabled = true;
+    }
+
+    public void SetPassword(string passwordHash, bool mustChangePassword)
+    {
+        PasswordHash = passwordHash;
+        IsLocalLoginEnabled = true;
+        MustChangePassword = mustChangePassword;
+        PasswordResetTokenHash = null;
+        PasswordResetTokenExpiresOnUtc = null;
+        LastPasswordChangedOnUtc = DateTime.UtcNow;
+        FailedLoginCount = 0;
+        LockoutEndUtc = null;
+    }
+
+    public void SetPasswordResetToken(string resetTokenHash, DateTime expiresOnUtc)
+    {
+        PasswordResetTokenHash = resetTokenHash;
+        PasswordResetTokenExpiresOnUtc = expiresOnUtc;
+    }
+
+    public void ClearPasswordResetToken()
+    {
+        PasswordResetTokenHash = null;
+        PasswordResetTokenExpiresOnUtc = null;
+    }
+
+    /// <summary>Marks the user as invited, storing the hashed invitation token.</summary>
+    public void SetInvited(string invitationTokenHash, DateTime expiresOnUtc)
+    {
+        Status = UserStatus.Invited;
+        IsEnabled = false;
+        IsLocalLoginEnabled = false;
+        InvitationTokenHash = invitationTokenHash;
+        InvitationTokenExpiresOnUtc = expiresOnUtc;
+    }
+
+    /// <summary>Accepts an invitation: sets the password, activates the account, and clears the invitation token.</summary>
+    public void AcceptInvitation(string passwordHash, string? firstName, string? lastName)
+    {
+        Status = UserStatus.Active;
+        IsEnabled = true;
+        IsLocalLoginEnabled = true;
+        MustChangePassword = false;
+        PasswordHash = passwordHash;
+        LastPasswordChangedOnUtc = DateTime.UtcNow;
+        FailedLoginCount = 0;
+        LockoutEndUtc = null;
+        InvitationTokenHash = null;
+        InvitationTokenExpiresOnUtc = null;
+        if (firstName is not null) FirstName = firstName;
+        if (lastName is not null) LastName = lastName;
+    }
+
+    /// <summary>Stores a hashed refresh token for the 30-day refresh flow.</summary>
+    public void SetRefreshToken(string refreshTokenHash, DateTime expiresOnUtc)
+    {
+        RefreshTokenHash = refreshTokenHash;
+        RefreshTokenExpiresOnUtc = expiresOnUtc;
+    }
+
+    /// <summary>Clears the refresh token, effectively logging the user out of the refresh flow.</summary>
+    public void ClearRefreshToken()
+    {
+        RefreshTokenHash = null;
+        RefreshTokenExpiresOnUtc = null;
+    }
+
+    /// <summary>Records a failed login attempt, locking the account once the threshold is reached.</summary>
+    public void RegisterFailedLogin(int maxAttempts, TimeSpan lockoutDuration)
+    {
+        FailedLoginCount++;
+        if (FailedLoginCount >= maxAttempts)
+        {
+            LockoutEndUtc = DateTime.UtcNow.Add(lockoutDuration);
+        }
+    }
+
+    public void ResetFailedLogins()
+    {
+        FailedLoginCount = 0;
+        LockoutEndUtc = null;
+    }
+
+    public void RecordLogin()
+    {
+        LastLoginOnUtc = DateTime.UtcNow;
+        FailedLoginCount = 0;
+        LockoutEndUtc = null;
+    }
+}

@@ -1,0 +1,254 @@
+using System.Data.Common;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
+
+namespace FHIRBridge.Infrastructure.Destinations;
+
+/// <summary>
+/// Provider-agnostic relational destination writer built on ADO.NET (<see cref="DbConnection"/>). Auto-creates the
+/// target schema/table and writes mapped records in Insert or Upsert mode. Upsert is implemented as a portable
+/// delete-by-key + insert within a transaction (last-write-wins) so it works on any dialect without requiring a
+/// pre-existing unique index. Concrete subclasses supply the dialect (connection, identifier quoting, type mapping,
+/// DDL). Mirrors <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
+/// </summary>
+public abstract partial class RelationalDestinationWriterBase : IConfiguredDestinationWriter
+{
+    private static readonly string[] StandardColumns =
+        ["TenantId", "PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc"];
+
+    // A mapping field targeting one of the system-managed columns above is ignored (the system value wins) so the
+    // generated DDL/INSERT never declares a column twice.
+    private static readonly HashSet<string> ReservedColumns = new(StandardColumns, StringComparer.OrdinalIgnoreCase);
+
+    private readonly ISecretProvider _secretProvider;
+
+    protected RelationalDestinationWriterBase(ISecretProvider secretProvider)
+    {
+        _secretProvider = secretProvider;
+    }
+
+    // --- Dialect hooks ---
+    protected abstract DbConnection CreateConnection(string connectionString);
+    protected abstract string DefaultSchema { get; }
+    protected abstract string Quote(string identifier);
+    protected abstract string ColumnType(MappingValueType valueType);
+    protected abstract string? BuildCreateSchemaSql(string schema);
+    protected abstract string BuildCreateTableSql(string schema, string table, IReadOnlyList<string> columnDefinitions);
+
+    /// <summary>Qualified <c>schema.table</c> (or just the quoted table when the dialect has no schemas).</summary>
+    protected virtual string QualifiedName(string schema, string table)
+        => string.IsNullOrEmpty(schema) ? Quote(table) : $"{Quote(schema)}.{Quote(table)}";
+
+    public async Task<int> WriteAsync(
+        DestinationConfiguration destination,
+        MappingProfile mappingProfile,
+        IReadOnlyCollection<MappedDestinationRecord> records,
+        CancellationToken cancellationToken)
+    {
+        if (records.Count == 0)
+        {
+            return 0;
+        }
+
+        var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+        var target = ParseTarget(destination.Target ?? mappingProfile.DestinationObject);
+
+        await using var connection = CreateConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await EnsureTableAsync(connection, target, mappingProfile, cancellationToken);
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        foreach (var record in records)
+        {
+            if (target.Upsert && TryGetKeyValue(record, target.KeyColumn, out var keyValue))
+            {
+                await DeleteByKeyAsync(connection, transaction, target, record.ResourceType, keyValue, cancellationToken);
+            }
+
+            await InsertRecordAsync(connection, transaction, target, record, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return records.Count;
+    }
+
+    private async Task EnsureTableAsync(
+        DbConnection connection,
+        RelationalTarget target,
+        MappingProfile mappingProfile,
+        CancellationToken cancellationToken)
+    {
+        var createSchemaSql = string.IsNullOrEmpty(target.Schema) ? null : BuildCreateSchemaSql(target.Schema);
+        if (!string.IsNullOrWhiteSpace(createSchemaSql))
+        {
+            await ExecuteAsync(connection, transaction: null, createSchemaSql, cancellationToken);
+        }
+
+        var columnDefinitions = new List<string>
+        {
+            $"{Quote("TenantId")} {ColumnType(MappingValueType.String)}",
+            $"{Quote("PipelineRunId")} {ColumnType(MappingValueType.String)}",
+            $"{Quote("ResourceType")} {ColumnType(MappingValueType.String)}",
+            $"{Quote("SourceResourceId")} {ColumnType(MappingValueType.String)}",
+            $"{Quote("WrittenOnUtc")} {ColumnType(MappingValueType.DateTime)}"
+        };
+
+        columnDefinitions.AddRange(mappingProfile.Fields
+            .Where(field =>
+                string.IsNullOrWhiteSpace(field.ResourceType) ||
+                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
+            .Where(field =>
+                string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
+            .Where(field => !ReservedColumns.Contains(field.TargetField))
+            .GroupBy(field => field.TargetField, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Select(field => $"{Quote(ValidateIdentifier(field.TargetField))} {ColumnType(field.ValueType)}"));
+
+        await ExecuteAsync(connection, transaction: null, BuildCreateTableSql(target.Schema, target.Table, columnDefinitions), cancellationToken);
+    }
+
+    private async Task InsertRecordAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        RelationalTarget target,
+        MappedDestinationRecord record,
+        CancellationToken cancellationToken)
+    {
+        var fieldNames = record.Values.Keys
+            .Where(key => !ReservedColumns.Contains(key))
+            .Select(ValidateIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var columns = StandardColumns.Concat(fieldNames).ToList();
+
+        var sql = $"INSERT INTO {QualifiedName(target.Schema, target.Table)} " +
+                  $"({string.Join(", ", columns.Select(Quote))}) VALUES " +
+                  $"({string.Join(", ", columns.Select(c => "@" + c))})";
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        AddParameter(command, "TenantId", record.TenantId.ToString());
+        AddParameter(command, "PipelineRunId", record.PipelineRunId.ToString());
+        AddParameter(command, "ResourceType", record.ResourceType);
+        AddParameter(command, "SourceResourceId", Stringify(record.SourceResourceId));
+        AddParameter(command, "WrittenOnUtc", DateTime.UtcNow.ToString("o"));
+        foreach (var field in fieldNames)
+        {
+            AddParameter(command, field, Stringify(record.Values[field]));
+        }
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task DeleteByKeyAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        RelationalTarget target,
+        string resourceType,
+        object? keyValue,
+        CancellationToken cancellationToken)
+    {
+        var sql = $"DELETE FROM {QualifiedName(target.Schema, target.Table)} " +
+                  $"WHERE {Quote("ResourceType")} = @ResourceType AND {Quote(target.KeyColumn)} = @KeyValue";
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        AddParameter(command, "ResourceType", resourceType);
+        AddParameter(command, "KeyValue", Stringify(keyValue));
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task ExecuteAsync(DbConnection connection, DbTransaction? transaction, string sql, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static void AddParameter(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "@" + name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    // The portable relational writer stores every value as text so inserts never fail on cross-dialect type coercion.
+    private static object Stringify(object? value)
+        => value is null ? DBNull.Value : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static bool TryGetKeyValue(MappedDestinationRecord record, string keyColumn, out object? keyValue)
+    {
+        if (string.Equals(keyColumn, "SourceResourceId", StringComparison.OrdinalIgnoreCase))
+        {
+            keyValue = record.SourceResourceId;
+            return !string.IsNullOrWhiteSpace(record.SourceResourceId);
+        }
+
+        return record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
+    }
+
+    private RelationalTarget ParseTarget(string destinationObject)
+    {
+        var name = destinationObject.Trim();
+        var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var queryIndex = name.IndexOf('?', StringComparison.Ordinal);
+        if (queryIndex >= 0)
+        {
+            foreach (var option in name[(queryIndex + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var equalsIndex = option.IndexOf('=', StringComparison.Ordinal);
+                if (equalsIndex > 0)
+                {
+                    options[option[..equalsIndex].Trim()] = option[(equalsIndex + 1)..].Trim();
+                }
+            }
+
+            name = name[..queryIndex];
+        }
+
+        var parts = name.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var (schema, table) = parts.Length switch
+        {
+            1 => (DefaultSchema, ValidateIdentifier(parts[0])),
+            2 => (ValidateIdentifier(parts[0]), ValidateIdentifier(parts[1])),
+            _ => throw new InvalidOperationException("Destination object must be 'Table' or 'Schema.Table'.")
+        };
+
+        var upsert = options.TryGetValue("mode", out var mode) && string.Equals(mode, "upsert", StringComparison.OrdinalIgnoreCase);
+        var keyColumn = options.TryGetValue("key", out var key) ? ValidateIdentifier(key) : "SourceResourceId";
+
+        return new RelationalTarget(schema, table, upsert, keyColumn);
+    }
+
+    protected static string ValidateIdentifier(string identifier)
+    {
+        if (!SqlIdentifierRegex().IsMatch(identifier))
+        {
+            throw new InvalidOperationException($"'{identifier}' is not a valid SQL identifier.");
+        }
+
+        return identifier;
+    }
+
+    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
+    private static partial Regex SqlIdentifierRegex();
+
+    private sealed record RelationalTarget(
+        string Schema,
+        string Table,
+        bool Upsert,
+        string KeyColumn);
+}
