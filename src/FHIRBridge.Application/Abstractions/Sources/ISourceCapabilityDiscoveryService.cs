@@ -19,4 +19,14 @@ public interface ISourceCapabilityDiscoveryService
         Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Fetches the source's public SMART discovery document (<c>{baseUrl}/.well-known/smart-configuration</c>) and
+    /// returns its advertised OAuth endpoints + capabilities. Unlike <see cref="DiscoverAsync"/> this is not
+    /// persisted — it is read on demand to configure an interactive authorization-code connection.
+    /// </summary>
+    Task<SmartConfigurationDto> DiscoverSmartConfigurationAsync(
+        Guid tenantId,
+        Guid sourceConnectionId,
+        CancellationToken cancellationToken);
 }

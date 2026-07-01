@@ -45,7 +45,7 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         new(DestinationType.BlobStorage, typeof(MappedBlobStorageDestinationWriter)),
         new(DestinationType.RestApi, typeof(MappedRestApiDestinationWriter)),
         new(DestinationType.FhirRepository, typeof(MappedFhirRepositoryDestinationWriter)),
-        new(DestinationType.Csv, typeof(MappedExcelDestinationWriter)),
+        new(DestinationType.Csv, typeof(MappedCsvDestinationWriter)),
         new(DestinationType.Excel, typeof(MappedExcelDestinationWriter)),
         new(DestinationType.Snowflake, typeof(MappedSnowflakeDestinationWriter)),
         new(DestinationType.PowerBi, typeof(MappedPowerBiDestinationWriter)),

@@ -40,7 +40,11 @@ public static class DependencyInjection
 
         services.AddHttpClient<EpicAccessTokenProvider>().AddMutualTls();
         services.AddHttpClient<OAuth2ClientCredentialsTokenProvider>().AddMutualTls();
+        // Interactive SMART (authorization-code + PKCE): the vendor-neutral provider backs the application-type axis
+        // (EHR launch / standalone / patient); Healow + Epic interactive pin the provider name for their audit trails.
+        services.AddHttpClient<SmartAuthorizationCodeTokenProvider>().AddMutualTls();
         services.AddHttpClient<HealowAuthorizationCodeTokenProvider>().AddMutualTls();
+        services.AddHttpClient<EpicInteractiveTokenProvider>().AddMutualTls();
         services.AddHttpClient<MeditechGreenfieldTokenProvider>().AddMutualTls();
         services.AddHttpClient<EpicFhirSourceClient>().AddMutualTls();
         // Composite picks the grant per source: Healow (auth-code + PKCE), MEDITECH Greenfield (confidential JSON),

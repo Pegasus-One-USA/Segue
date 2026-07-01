@@ -60,9 +60,11 @@ public sealed class RankedWorkflowOrchestratorTests
     [Fact]
     public async Task ExecuteAsync_passes_fan_out_and_fan_in_outputs_to_downstream_nodes()
     {
+        // Uses two enabled sources (Epic + Sample) and two enabled destinations (SqlServer + CSV) for the fan-out /
+        // fan-in check; the specific vendors are incidental — the gated catalog only exposes these in the SQL/CSV phase.
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "fan-in-out", 1);
         var epic = AddNode(workflow, WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, 0);
-        var cerner = AddNode(workflow, WorkflowNodeTypes.CernerSource, WorkflowNodeCategory.Source, 0);
+        var sample = AddNode(workflow, WorkflowNodeTypes.SampleSource, WorkflowNodeCategory.Source, 0);
         var consent = AddNode(workflow, WorkflowNodeTypes.Consent, WorkflowNodeCategory.Compliance, 10);
         var usCore = AddNode(workflow, WorkflowNodeTypes.UsCoreValidation, WorkflowNodeCategory.Compliance, 20);
         var normalization = AddNode(workflow, WorkflowNodeTypes.Normalization, WorkflowNodeCategory.Transform, 30);
@@ -70,22 +72,22 @@ public sealed class RankedWorkflowOrchestratorTests
         var deIdentification = AddNode(workflow, WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance, 50);
         var mapping = AddNode(workflow, WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, 60);
         var sql = AddNode(workflow, WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination, 70);
-        var blob = AddNode(workflow, WorkflowNodeTypes.BlobDestination, WorkflowNodeCategory.Destination, 70);
+        var csv = AddNode(workflow, WorkflowNodeTypes.CsvDestination, WorkflowNodeCategory.Destination, 70);
         workflow.AddEdge(epic.Id, consent.Id);
-        workflow.AddEdge(cerner.Id, consent.Id);
+        workflow.AddEdge(sample.Id, consent.Id);
         workflow.AddEdge(consent.Id, usCore.Id);
         workflow.AddEdge(usCore.Id, normalization.Id);
         workflow.AddEdge(normalization.Id, terminology.Id);
         workflow.AddEdge(terminology.Id, deIdentification.Id);
         workflow.AddEdge(deIdentification.Id, mapping.Id);
         workflow.AddEdge(mapping.Id, sql.Id);
-        workflow.AddEdge(mapping.Id, blob.Id);
+        workflow.AddEdge(mapping.Id, csv.Id);
 
         var destinationInputs = Array.Empty<WorkflowNodeOutput>();
-        var blobInputs = Array.Empty<WorkflowNodeOutput>();
+        var csvInputs = Array.Empty<WorkflowNodeOutput>();
         var orchestrator = CreateOrchestrator(
             new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "epic"),
-            new PayloadExecutor(WorkflowNodeTypes.CernerSource, WorkflowDataContract.ResourceBatch, _ => "cerner"),
+            new PayloadExecutor(WorkflowNodeTypes.SampleSource, WorkflowDataContract.ResourceBatch, _ => "sample"),
             new PayloadExecutor(WorkflowNodeTypes.Consent, WorkflowDataContract.ResourceBatch, inputs => $"consent:{string.Join("+", inputs.Select(input => input.Payload))}"),
             new PayloadExecutor(WorkflowNodeTypes.UsCoreValidation, WorkflowDataContract.NormalizedResourceBatch, inputs => $"uscore:{inputs.Single().Payload}"),
             new PayloadExecutor(WorkflowNodeTypes.Normalization, WorkflowDataContract.NormalizedResourceBatch, inputs => $"norm:{inputs.Single().Payload}"),
@@ -97,17 +99,17 @@ public sealed class RankedWorkflowOrchestratorTests
                 destinationInputs = inputs.ToArray();
                 return string.Join(",", inputs.Select(input => input.Payload));
             }),
-            new PayloadExecutor(WorkflowNodeTypes.BlobDestination, WorkflowDataContract.DestinationWriteResult, inputs =>
+            new PayloadExecutor(WorkflowNodeTypes.CsvDestination, WorkflowDataContract.DestinationWriteResult, inputs =>
             {
-                blobInputs = inputs.ToArray();
+                csvInputs = inputs.ToArray();
                 return string.Join(",", inputs.Select(input => input.Payload));
             }));
 
         var result = await orchestrator.ExecuteAsync(workflow, CreateContext());
 
-        destinationInputs.Select(input => input.Payload).Should().Equal("mapping:deid:term:norm:uscore:consent:epic+cerner");
-        blobInputs.Select(input => input.Payload).Should().Equal("mapping:deid:term:norm:uscore:consent:epic+cerner");
-        result.OutputsByNodeId[sql.Id].Payload.Should().Be("mapping:deid:term:norm:uscore:consent:epic+cerner");
+        destinationInputs.Select(input => input.Payload).Should().Equal("mapping:deid:term:norm:uscore:consent:epic+sample");
+        csvInputs.Select(input => input.Payload).Should().Equal("mapping:deid:term:norm:uscore:consent:epic+sample");
+        result.OutputsByNodeId[sql.Id].Payload.Should().Be("mapping:deid:term:norm:uscore:consent:epic+sample");
     }
 
     [Fact]

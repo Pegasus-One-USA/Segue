@@ -113,6 +113,82 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
         return profile is null ? null : ToDto(profile);
     }
 
+    public async Task<SmartConfigurationDto> DiscoverSmartConfigurationAsync(
+        Guid tenantId,
+        Guid sourceConnectionId,
+        CancellationToken cancellationToken)
+    {
+        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
+            ?? throw new NotFoundException("Tenant", tenantId);
+        var sourceConnection = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
+            ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
+
+        // The SMART discovery document is public (no bearer token) per the SMART App Launch spec.
+        var smartConfigUrl = $"{sourceConnection.BaseUrl.TrimEnd('/')}/.well-known/smart-configuration";
+        var httpClient = _httpClientFactory.CreateClient(nameof(SourceCapabilityDiscoveryService));
+        using var request = new HttpRequestMessage(HttpMethod.Get, smartConfigUrl);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"SMART configuration endpoint returned {(int)response.StatusCode} for source {sourceConnectionId}.");
+        }
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        var configuration = ParseSmartConfiguration(json);
+
+        _logger.LogInformation(
+            "Discovered SMART configuration for source {SourceConnectionId} (tenant {TenantId}); authorization endpoint {HasAuthorize}, token endpoint {HasToken}.",
+            sourceConnectionId,
+            tenantId,
+            configuration.AuthorizationEndpoint is not null,
+            configuration.TokenEndpoint is not null);
+
+        return configuration;
+    }
+
+    /// <summary>
+    /// Parses the standard SMART discovery fields from the <c>.well-known/smart-configuration</c> document. Uses raw
+    /// JSON to stay consistent with the rest of the runtime (no Firely SDK dependency).
+    /// </summary>
+    private static SmartConfigurationDto ParseSmartConfiguration(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        string? GetString(string name) =>
+            root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String
+                ? element.GetString()
+                : null;
+
+        IReadOnlyList<string> GetStringArray(string name)
+        {
+            if (!root.TryGetProperty(name, out var element) || element.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return element.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString()!)
+                .ToList();
+        }
+
+        return new SmartConfigurationDto(
+            GetString("authorization_endpoint"),
+            GetString("token_endpoint"),
+            GetString("introspection_endpoint"),
+            GetString("revocation_endpoint"),
+            GetString("registration_endpoint"),
+            GetStringArray("scopes_supported"),
+            GetStringArray("grant_types_supported"),
+            GetStringArray("response_types_supported"),
+            GetStringArray("code_challenge_methods_supported"),
+            GetStringArray("capabilities"));
+    }
+
     private async Task<FhirSourceConfiguration> BuildEpicSourceConfigurationAsync(
         Guid tenantId,
         SourceConnection sourceConnection,

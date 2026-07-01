@@ -135,6 +135,7 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
         services.AddHttpClient(nameof(MappedFhirRepositoryDestinationWriter));
         services.AddHttpClient(nameof(MappedExcelDestinationWriter));
+        services.AddHttpClient(nameof(MappedCsvDestinationWriter));
         services.AddHttpClient(nameof(MappedSnowflakeDestinationWriter));
         services.AddHttpClient(nameof(MappedPowerBiDestinationWriter));
         services.AddHttpClient(nameof(FhirTerminologyLookupService));
@@ -147,6 +148,7 @@ public static class DependencyInjection
         services.AddScoped<MappedRestApiDestinationWriter>();
         services.AddScoped<MappedFhirRepositoryDestinationWriter>();
         services.AddScoped<MappedExcelDestinationWriter>();
+        services.AddScoped<MappedCsvDestinationWriter>();
         services.AddScoped<MappedSnowflakeDestinationWriter>();
         services.AddScoped<MappedPowerBiDestinationWriter>();
         services.AddScoped<MappedPostgreSqlDestinationWriter>();

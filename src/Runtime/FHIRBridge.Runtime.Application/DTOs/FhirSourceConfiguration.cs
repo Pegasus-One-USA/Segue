@@ -17,4 +17,8 @@ public sealed record FhirSourceConfiguration(
     Guid? SourceConnectionId = null,
     string? SearchParameters = null,
     string? ClientSecret = null,
-    string? AuthorizationEndpoint = null);
+    string? AuthorizationEndpoint = null,
+    // Application-type (composition) axis: when set it selects the SMART grant/launch flow independently of the
+    // vendor. Left null for backward compatibility — the composite token provider then infers the grant from the
+    // vendor and the credentials present.
+    ApplicationType? ApplicationType = null);

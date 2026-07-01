@@ -39,6 +39,25 @@ public sealed class SourceCapabilitiesController : ControllerBase
         return Ok(capability);
     }
 
+    /// <summary>
+    /// Fetches the source's public SMART discovery document (<c>.well-known/smart-configuration</c>) and returns its
+    /// advertised OAuth endpoints + capabilities. Used to configure an interactive authorization-code connection.
+    /// </summary>
+    [HttpGet("smart-configuration")]
+    [ProducesResponseType(typeof(SmartConfigurationDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DiscoverSmartConfiguration(
+        Guid tenantId,
+        Guid sourceConnectionId,
+        CancellationToken cancellationToken)
+    {
+        var configuration = await _discoveryService.DiscoverSmartConfigurationAsync(
+            tenantId,
+            sourceConnectionId,
+            cancellationToken);
+
+        return Ok(configuration);
+    }
+
     /// <summary>Returns the latest persisted capability snapshot, or 404 if discovery has never run.</summary>
     [HttpGet("capabilities")]
     [ProducesResponseType(typeof(SourceCapabilityProfileDto), StatusCodes.Status200OK)]
