@@ -32,7 +32,7 @@
 | `EpicInteractiveTokenProvider` | Auth code + PKCE (Epic interactive) |
 | `MeditechGreenfieldTokenProvider` | Confidential JSON exchange |
 
-`CompositeFhirAccessTokenProvider` selects at runtime: if `ApplicationType` set → strategy; else legacy inference (Healow → PKCE, MEDITECH → confidential, private key → backend JWT, secret → client_credentials). `BackendServicesJwtFactory` signs RS256/RS384. Token cache = `DistributedFhirAccessTokenCache` (Redis) / InMemory; `IOAuthAuthorizationStateStore` holds PKCE state.
+`CompositeFhirAccessTokenProvider` selects at runtime: if `ApplicationType` set → strategy; else legacy inference (Healow → PKCE, MEDITECH → confidential, private key → backend JWT, secret → client_credentials). `BackendServicesJwtFactory` signs RS256/RS384. Token cache = `DistributedFhirAccessTokenCache` (Redis) / InMemory. **Interactive tokens + in-flight OAuth state are stored in the distributed cache** (`DistributedFhirAuthorizationCodeTokenStore` + `DistributedOAuthAuthorizationStateStore` over `IDistributedCache`; Redis in prod, memory in dev) so the `authorize`/`launch` → `callback` round-trip can land on any node and a later pipeline run (API or Worker) reads the token back — the interactive app types survive restart and multi-instance, not just a single synchronous run.
 
 ## ApplicationType strategies
 

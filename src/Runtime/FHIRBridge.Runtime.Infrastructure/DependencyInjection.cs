@@ -38,9 +38,13 @@ public static class DependencyInjection
         services.Configure<FhirConnectionPoolOptions>(configuration.GetSection("Connectivity:ConnectionPool"));
         services.AddSingleton<MutualTlsCertificateProvider>();
 
-        services.AddSingleton<IFhirAuthorizationCodeTokenStore, InMemoryFhirAuthorizationCodeTokenStore>();
+        // Interactive OAuth tokens + in-flight sign-in state live in the shared distributed cache (Redis when configured,
+        // in-process distributed-memory otherwise) so the callback can land on any node, a later pipeline run (API or
+        // Worker) reads the token back, and both survive a restart. This is what makes the interactive application types
+        // (standalone / EHR launch / patient) work beyond a single synchronous, single-instance run.
+        services.AddSingleton<IFhirAuthorizationCodeTokenStore, DistributedFhirAuthorizationCodeTokenStore>();
         // Short-lived state of in-flight interactive OAuth sign-ins, between the authorize redirect and the callback.
-        services.AddSingleton<IOAuthAuthorizationStateStore, InMemoryOAuthAuthorizationStateStore>();
+        services.AddSingleton<IOAuthAuthorizationStateStore, DistributedOAuthAuthorizationStateStore>();
 
         services.AddHttpClient<EpicAccessTokenProvider>().AddMutualTls();
         services.AddHttpClient<OAuth2ClientCredentialsTokenProvider>().AddMutualTls();
