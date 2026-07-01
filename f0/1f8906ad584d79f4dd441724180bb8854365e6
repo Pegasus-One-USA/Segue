@@ -1,0 +1,25 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/DistributedOAuthAuthorizationStateStore.cs
+  s_4f80f0204fe512::t_5e8e964ad9d09b 1-51
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/DistributedFhirAuthorizationCodeTokenStore.cs
+  s_4f80f0204fe512::t_338dc861b34f9f 1-55
+docs/backend/03-runtime-pipeline.md
+  s_4f80f0204fe512::t_a3441f46aa0b5e 35
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_4f80f0204fe512::t_13bd89a56dcfb2 41-45,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "f01f8906ad584d79f4dd441724180bb8854365e6",
+  "prompts": {},
+  "sessions": {
+    "s_4f80f0204fe512": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99bf279d-9dc9-473d-82d9-717c3cc67f7f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
