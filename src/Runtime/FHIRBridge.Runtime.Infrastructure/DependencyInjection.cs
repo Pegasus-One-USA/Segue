@@ -1,7 +1,9 @@
+using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Destinations;
 using FHIRBridge.Runtime.Application.Abstractions.Persistence;
+using FHIRBridge.Runtime.Infrastructure.Applications;
 using FHIRBridge.Runtime.Infrastructure.Auth;
 using FHIRBridge.Runtime.Infrastructure.Connectors;
 using FHIRBridge.Runtime.Infrastructure.Destinations;
@@ -47,8 +49,19 @@ public static class DependencyInjection
         services.AddHttpClient<EpicInteractiveTokenProvider>().AddMutualTls();
         services.AddHttpClient<MeditechGreenfieldTokenProvider>().AddMutualTls();
         services.AddHttpClient<EpicFhirSourceClient>().AddMutualTls();
-        // Composite picks the grant per source: Healow (auth-code + PKCE), MEDITECH Greenfield (confidential JSON),
-        // SMART JWT (Epic), or OAuth2 client-credentials (Cerner/Allscripts/generic FHIR).
+
+        // Application-type axis: each ApplicationType maps to a strategy that owns its grant/launch flow, validation
+        // and descriptor. Resolved from the registry (never a switch — enforced by ApplicationTypeDispatchTests).
+        // Scoped, because the strategies depend on the HttpClient-backed token providers.
+        services.AddScoped<ISourceApplicationStrategy, BackendServicesApplicationStrategy>();
+        services.AddScoped<ISourceApplicationStrategy, EhrLaunchApplicationStrategy>();
+        services.AddScoped<ISourceApplicationStrategy, StandaloneApplicationStrategy>();
+        services.AddScoped<ISourceApplicationStrategy, PatientApplicationStrategy>();
+        services.AddScoped<ISourceApplicationStrategyRegistry, SourceApplicationStrategyRegistry>();
+
+        // Composite picks the grant per source: the application-type strategy (registry) when set, else legacy
+        // inference — Healow (auth-code + PKCE), MEDITECH Greenfield (confidential JSON), SMART JWT (Epic), or OAuth2
+        // client-credentials (Cerner/Allscripts/generic FHIR).
         services.AddScoped<CompositeFhirAccessTokenProvider>();
         services.AddScoped<IFhirAccessTokenProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<CompositeFhirAccessTokenProvider>());
