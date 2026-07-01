@@ -26,4 +26,8 @@
     <ProjectReference Include="..\BuildingBlocks\FHIRBridge.SharedKernel\FHIRBridge.SharedKernel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Mappings\" />
+  </ItemGroup>
+
 </Project>
