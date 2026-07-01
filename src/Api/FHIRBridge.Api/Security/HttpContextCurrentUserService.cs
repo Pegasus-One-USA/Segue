@@ -22,12 +22,22 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
                 return new CurrentUserInfo(null, null, null, [], false);
             }
 
+            var tenantIdClaim = principal.FindFirst("tenant_id")?.Value;
+            Guid? tenantId = Guid.TryParse(tenantIdClaim, out var tid) ? tid : null;
+
+            var permissions = principal.Claims
+                .Where(c => string.Equals(c.Type, "permissions", StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Value)
+                .ToArray();
+
             return new CurrentUserInfo(
                 CurrentUserClaimReader.GetExternalUserId(principal),
                 CurrentUserClaimReader.GetEmail(principal),
                 CurrentUserClaimReader.GetDisplayName(principal),
                 CurrentUserClaimReader.GetRoles(principal),
-                true);
+                true,
+                tenantId,
+                permissions);
         }
     }
 }

@@ -8,7 +8,13 @@ public sealed class Role : AuditableChildEntity<Guid>
     {
     }
 
-    public Role(Guid id, string name, string description, bool isSystem = false, Guid? tenantId = null)
+    public Role(
+        Guid id,
+        string name,
+        string description,
+        bool isSystem = false,
+        Guid? tenantId = null,
+        bool isDefault = false)
     {
         Id = id;
         Name = name;
@@ -16,6 +22,7 @@ public sealed class Role : AuditableChildEntity<Guid>
         IsSystem = isSystem;
         TenantId = tenantId;
         IsEnabled = true;
+        IsDefault = isDefault;
     }
 
     public string Name { get; private set; } = default!;
@@ -26,6 +33,9 @@ public sealed class Role : AuditableChildEntity<Guid>
 
     /// <summary>True for the seeded built-in roles; blocks edit/delete of platform roles.</summary>
     public bool IsSystem { get; private set; }
+
+    /// <summary>True for the four auto-generated default roles created when a tenant is provisioned.</summary>
+    public bool IsDefault { get; private set; }
 
     /// <summary>Whether the role is active and grants its permissions.</summary>
     public bool IsEnabled { get; private set; }

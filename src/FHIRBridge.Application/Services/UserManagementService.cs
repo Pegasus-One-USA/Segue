@@ -1,13 +1,17 @@
+using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services;
 
 public sealed class UserManagementService : IUserManagementService
 {
+    private const int InvitationTokenLifetimeHours = 48;
+
     private readonly IUserAccessRepository _repository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
@@ -32,10 +36,18 @@ public sealed class UserManagementService : IUserManagementService
 
         foreach (var user in users)
         {
-            dtos.Add(await ToDtoAsync(user, cancellationToken));
+            dtos.Add(await ToManagementDtoAsync(user, cancellationToken));
         }
 
         return dtos;
+    }
+
+    public async Task<UserDetailDto> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }
 
     public async Task<UserManagementDto> CreateLocalUserAsync(
@@ -57,7 +69,7 @@ public sealed class UserManagementService : IUserManagementService
         await SetUserRolesAsync(user.Id, request.RoleNames, cancellationToken);
         await AuditAsync("LocalUserCreated", $"Local user created: {email}.", cancellationToken);
 
-        return await ToDtoAsync(user, cancellationToken);
+        return await ToManagementDtoAsync(user, cancellationToken);
     }
 
     public async Task<UserManagementDto> UpdateLocalUserAsync(
@@ -97,7 +109,180 @@ public sealed class UserManagementService : IUserManagementService
         await SetUserRolesAsync(user.Id, request.RoleNames, cancellationToken);
         await AuditAsync("LocalUserUpdated", $"Local user updated: {user.Email ?? user.ExternalUserId}.", cancellationToken);
 
-        return await ToDtoAsync(user, cancellationToken);
+        return await ToManagementDtoAsync(user, cancellationToken);
+    }
+
+    public async Task<UserDetailDto> InviteUserAsync(
+        InviteUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        var email = NormalizeEmail(request.Email);
+
+        var currentTenantId = _currentUserService.CurrentUser.TenantId
+            ?? throw new InvalidOperationException("Tenant context is required to invite users.");
+
+        var role = await _repository.GetRoleByIdAsync(request.RoleId, cancellationToken)
+            ?? throw new InvalidOperationException("The specified role does not exist.");
+
+        if (role.TenantId.HasValue && role.TenantId != currentTenantId)
+        {
+            throw new InvalidOperationException("The specified role does not belong to this tenant.");
+        }
+
+        var existingUser = await _repository.GetUserByEmailAsync(email, cancellationToken);
+        if (existingUser is not null)
+        {
+            throw new InvalidOperationException("A user with this email already exists.");
+        }
+
+        var rawToken = GenerateToken();
+        var tokenHash = _passwordHasher.Hash(rawToken);
+        var expiresOnUtc = DateTime.UtcNow.AddHours(InvitationTokenLifetimeHours);
+
+        var user = new User(LocalExternalId(email), email, null);
+        user.UpdateName(request.FirstName, request.LastName);
+        user.SetHomeTenant(currentTenantId);
+        user.SetInvited(tokenHash, expiresOnUtc);
+
+        await _repository.AddUserAsync(user, cancellationToken);
+        await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);
+
+        var tenantUser = new TenantUser(currentTenantId, user.Id, role.Id);
+        await _repository.AddTenantUserAsync(tenantUser, cancellationToken);
+
+        await AuditAsync("UserInvited", $"User invited: {email}.", cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken);
+    }
+
+    public async Task<UserDetailDto> AcceptInviteAsync(
+        AcceptInviteRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidatePassword(request.Password);
+
+        var email = NormalizeEmail(request.Email);
+        var user = await _repository.GetUserByEmailAsync(email, cancellationToken)
+            ?? throw new InvalidOperationException("Invitation is invalid or expired.");
+
+        if (user.Status != UserStatus.Invited ||
+            string.IsNullOrWhiteSpace(user.InvitationTokenHash) ||
+            user.InvitationTokenExpiresOnUtc is null ||
+            user.InvitationTokenExpiresOnUtc < DateTime.UtcNow ||
+            !_passwordHasher.Verify(request.InvitationToken, user.InvitationTokenHash))
+        {
+            throw new InvalidOperationException("Invitation is invalid or expired.");
+        }
+
+        user.AcceptInvitation(
+            _passwordHasher.Hash(request.Password),
+            request.FirstName,
+            request.LastName);
+
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        await AuditAsync("InviteAccepted", $"User accepted invitation: {email}.", cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
+    public async Task<UserDetailDto> UpdateUserStatusAsync(
+        Guid userId,
+        UpdateUserStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        user.SetEnabled(request.IsEnabled);
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        await AuditAsync(
+            request.IsEnabled ? "UserActivated" : "UserDeactivated",
+            $"User {(request.IsEnabled ? "activated" : "deactivated")}: {user.Email ?? user.ExternalUserId}.",
+            cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
+    public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        await _repository.DeleteUserAsync(user, cancellationToken);
+        await AuditAsync("UserDeleted", $"User permanently deleted: {user.Email ?? user.ExternalUserId}.", cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<RoleDto>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var roles = await _repository.GetUserRolesAsync(userId, cancellationToken);
+        var dtos = new List<RoleDto>();
+
+        foreach (var role in roles)
+        {
+            var permissions = await _repository.GetRolePermissionsAsync(role.Id, cancellationToken);
+            dtos.Add(new RoleDto(
+                role.Id,
+                role.Name,
+                role.Description,
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description)).ToArray(),
+                role.IsSystem));
+        }
+
+        return dtos;
+    }
+
+    public async Task<UserDetailDto> AssignUserRoleAsync(
+        Guid userId,
+        AssignUserRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        var role = await _repository.GetRoleByIdAsync(request.RoleId, cancellationToken)
+            ?? throw new InvalidOperationException("Role was not found.");
+
+        var currentRoles = await _repository.GetUserRolesAsync(userId, cancellationToken);
+        if (currentRoles.Any(r => r.Id == request.RoleId))
+        {
+            throw new InvalidOperationException("This role is already assigned to the user.");
+        }
+
+        if (role.Name == "SuperAdmin" && user.TenantId.HasValue)
+        {
+            var alreadyHasSuperAdmin = await _repository.TenantHasSuperAdminAsync(
+                user.TenantId.Value, role.Id, cancellationToken);
+            if (alreadyHasSuperAdmin)
+            {
+                throw new InvalidOperationException(
+                    "The Super Admin role is already assigned to another user in this tenant.");
+            }
+        }
+
+        await _repository.AddUserRoleAsync(userId, role.Id, cancellationToken);
+        await AuditAsync("UserRoleAssigned", $"Role '{role.Name}' assigned to user {user.Email ?? user.ExternalUserId}.", cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
+    public async Task RemoveUserRoleAsync(Guid userId, Guid roleId, CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
+            ?? throw new InvalidOperationException("Role was not found.");
+
+        var currentUserId = _currentUserService.CurrentUser.ExternalUserId;
+        if (role.Name == "SuperAdmin" &&
+            !string.IsNullOrWhiteSpace(currentUserId) &&
+            string.Equals(user.ExternalUserId, currentUserId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("You cannot remove your own Super Admin role.");
+        }
+
+        await _repository.RemoveUserRoleAsync(userId, roleId, cancellationToken);
+        await AuditAsync("UserRoleRemoved", $"Role '{role.Name}' removed from user {user.Email ?? user.ExternalUserId}.", cancellationToken);
     }
 
     private async Task SetUserRolesAsync(
@@ -117,7 +302,39 @@ public sealed class UserManagementService : IUserManagementService
         await _repository.SetUserRolesAsync(userId, roleIds, cancellationToken);
     }
 
-    private async Task<UserManagementDto> ToDtoAsync(User user, CancellationToken cancellationToken)
+    private async Task<UserDetailDto> ToDetailDtoAsync(
+        User user,
+        string? invitationToken,
+        CancellationToken cancellationToken)
+    {
+        var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
+        var roleDtos = new List<RoleDto>();
+        foreach (var role in roles)
+        {
+            var permissions = await _repository.GetRolePermissionsAsync(role.Id, cancellationToken);
+            roleDtos.Add(new RoleDto(
+                role.Id,
+                role.Name,
+                role.Description,
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description)).ToArray(),
+                role.IsSystem));
+        }
+
+        return new UserDetailDto(
+            user.Id,
+            user.Email,
+            user.FirstName,
+            user.LastName,
+            user.DisplayName,
+            user.Status,
+            user.IsEnabled,
+            roleDtos,
+            user.CreatedOnUtc,
+            user.LastLoginOnUtc,
+            invitationToken);
+    }
+
+    private async Task<UserManagementDto> ToManagementDtoAsync(User user, CancellationToken cancellationToken)
     {
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
 
@@ -164,9 +381,14 @@ public sealed class UserManagementService : IUserManagementService
         return email.Trim().ToLowerInvariant();
     }
 
-    private static string LocalExternalId(string email)
+    private static string LocalExternalId(string email) => $"local:{email}";
+
+    private static string GenerateToken()
     {
-        return $"local:{email}";
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
     }
 
     private static void ValidatePassword(string password)

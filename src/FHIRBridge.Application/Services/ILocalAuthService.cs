@@ -11,4 +11,8 @@ public interface ILocalAuthService
     Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken);
 
     Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken);
+
+    Task<LocalLoginResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken);
+
+    Task LogoutAsync(CancellationToken cancellationToken);
 }

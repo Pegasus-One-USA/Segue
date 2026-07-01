@@ -12,22 +12,15 @@ public sealed class OperationalAuditLogConfiguration : IEntityTypeConfiguration<
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.TenantId).IsRequired();
-        builder.Property(x => x.PipelineRunId);
-        builder.Property(x => x.ResourcePipelineRouteId);
-        builder.Property(x => x.SourceConnectionId);
-        builder.Property(x => x.DestinationId);
-        builder.Property(x => x.MappingProfileId);
-        builder.Property(x => x.ResourceType).HasMaxLength(100);
         builder.Property(x => x.Action).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
-        builder.Property(x => x.Message).HasMaxLength(1000).IsRequired();
-        builder.Property(x => x.ResourceCount);
-        builder.Property(x => x.TriggeredBy).HasMaxLength(200);
-        builder.Property(x => x.CorrelationId).HasMaxLength(200);
+        builder.Property(x => x.Message).HasMaxLength(2000).IsRequired();
+        builder.Property(x => x.ResourceType).HasMaxLength(100);
+        builder.Property(x => x.TriggeredBy).HasMaxLength(320);
+        builder.Property(x => x.CorrelationId).HasMaxLength(100);
         builder.Property(x => x.OccurredOnUtc).IsRequired();
 
-        builder.HasIndex(x => new { x.TenantId, x.OccurredOnUtc });
-        builder.HasIndex(x => new { x.TenantId, x.PipelineRunId });
-        builder.HasIndex(x => new { x.TenantId, x.ResourcePipelineRouteId });
+        builder.HasIndex(x => x.TenantId);
+        builder.HasIndex(x => x.OccurredOnUtc);
     }
 }

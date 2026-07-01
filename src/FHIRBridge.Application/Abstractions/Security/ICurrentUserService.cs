@@ -10,8 +10,12 @@ public sealed record CurrentUserInfo(
     string? Email,
     string? DisplayName,
     string[] Roles,
-    bool IsAuthenticated)
+    bool IsAuthenticated,
+    Guid? TenantId = null,
+    string[] Permissions = null!)
 {
+    public string[] Permissions { get; init; } = Permissions ?? [];
+
     public string AuditName =>
         string.IsNullOrWhiteSpace(Email)
             ? ExternalUserId ?? "anonymous"

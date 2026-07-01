@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -17,7 +18,10 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
         _configuration = configuration;
     }
 
-    public AccessTokenDto Issue(User user, IReadOnlyCollection<string> roleNames)
+    public AccessTokenDto Issue(
+        User user,
+        IReadOnlyCollection<string> roleNames,
+        IReadOnlyCollection<string>? permissionCodes = null)
     {
         var signingKey = _configuration["Authentication:SigningKey"];
         if (string.IsNullOrWhiteSpace(signingKey))
@@ -38,6 +42,11 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
             new("scope", "fhirbridge.full_access")
         };
 
+        if (user.TenantId.HasValue)
+        {
+            claims.Add(new Claim("tenant_id", user.TenantId.Value.ToString()));
+        }
+
         if (!string.IsNullOrWhiteSpace(user.Email))
         {
             claims.Add(new Claim(ClaimTypes.Email, user.Email));
@@ -56,6 +65,14 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
             claims.Add(new Claim("roles", roleName));
         }
 
+        if (permissionCodes is not null)
+        {
+            foreach (var code in permissionCodes.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                claims.Add(new Claim("permissions", code));
+            }
+        }
+
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(
@@ -67,5 +84,24 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
             new JwtSecurityTokenHandler().WriteToken(token),
             "Bearer",
             expiresOnUtc);
+    }
+
+    public (string TokenHash, DateTime ExpiresOnUtc) IssueRefreshToken()
+    {
+        var tokenBytes = RandomNumberGenerator.GetBytes(64);
+        var token = Convert.ToBase64String(tokenBytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+
+        var hash = Convert.ToBase64String(
+            SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+        var refreshLifetimeDays = int.TryParse(
+            _configuration["Authentication:RefreshTokenLifetimeDays"], out var days)
+            ? days
+            : 30;
+
+        return (hash, DateTime.UtcNow.AddDays(refreshLifetimeDays));
     }
 }

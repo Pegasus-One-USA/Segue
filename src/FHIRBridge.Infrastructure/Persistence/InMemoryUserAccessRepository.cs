@@ -12,22 +12,53 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     private readonly ConcurrentDictionary<Guid, Role> _roles = new(
         new[]
         {
-            new Role(SeededSecurityIds.GlobalAdminRoleId, UnifiedRoles.GlobalAdmin, "Full platform administrator across all tenants."),
-            new Role(SeededSecurityIds.TenantAdminRoleId, UnifiedRoles.TenantAdmin, "Administers configuration and users within a tenant."),
-            new Role(SeededSecurityIds.PipelineEngineerRoleId, UnifiedRoles.PipelineEngineer, "Builds and runs pipeline configurations within a tenant."),
-            new Role(SeededSecurityIds.AnalystRoleId, UnifiedRoles.Analyst, "Runs pipelines and reviews data and audit output."),
-            new Role(SeededSecurityIds.AuditorRoleId, UnifiedRoles.Auditor, "Read-only access to configuration and audit logs.")
+            new Role(SeededSecurityIds.GlobalAdminRoleId, UnifiedRoles.GlobalAdmin, "Full platform administrator across all tenants.", isSystem: true),
+            new Role(SeededSecurityIds.TenantAdminRoleId, UnifiedRoles.TenantAdmin, "Administers configuration and users within a tenant.", isSystem: true),
+            new Role(SeededSecurityIds.PipelineEngineerRoleId, UnifiedRoles.PipelineEngineer, "Builds and runs pipeline configurations within a tenant.", isSystem: true),
+            new Role(SeededSecurityIds.AnalystRoleId, UnifiedRoles.Analyst, "Runs pipelines and reviews data and audit output.", isSystem: true),
+            new Role(SeededSecurityIds.AuditorRoleId, UnifiedRoles.Auditor, "Read-only access to configuration and audit logs.", isSystem: true)
         }.ToDictionary(role => role.Id));
+
     private readonly ConcurrentDictionary<Guid, Permission> _permissions = new(
         new[]
         {
-            new Permission(SeededSecurityIds.TenantsReadPermissionId, UnifiedPermissions.TenantsRead, "Read tenant configuration."),
-            new Permission(SeededSecurityIds.TenantsWritePermissionId, UnifiedPermissions.TenantsWrite, "Create and update tenants."),
-            new Permission(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration."),
-            new Permission(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes."),
-            new Permission(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs."),
-            new Permission(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.")
+            // Original platform permissions.
+            new Permission(SeededSecurityIds.TenantsReadPermissionId, UnifiedPermissions.TenantsRead, "Read tenant configuration.", "Tenancy"),
+            new Permission(SeededSecurityIds.TenantsWritePermissionId, UnifiedPermissions.TenantsWrite, "Create and update tenants.", "Tenancy"),
+            new Permission(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration.", "Configuration"),
+            new Permission(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes.", "Pipeline"),
+            new Permission(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs.", "Audit"),
+            new Permission(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.", "Configuration"),
+
+            // User-module permissions.
+            new Permission(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the tenant.", "User"),
+            new Permission(SeededSecurityIds.UserViewPermissionId, UnifiedPermissions.UserView, "View the list of users.", "User"),
+            new Permission(SeededSecurityIds.UserEditPermissionId, UnifiedPermissions.UserEdit, "Update a user's profile information.", "User"),
+            new Permission(SeededSecurityIds.UserDeactivatePermissionId, UnifiedPermissions.UserDeactivate, "Deactivate a user account.", "User"),
+
+            // Role permissions.
+            new Permission(SeededSecurityIds.RoleCreatePermissionId, UnifiedPermissions.RoleCreate, "Create a new custom role.", "Role"),
+            new Permission(SeededSecurityIds.RoleEditPermissionId, UnifiedPermissions.RoleEdit, "Edit an existing role.", "Role"),
+            new Permission(SeededSecurityIds.RoleDeletePermissionId, UnifiedPermissions.RoleDelete, "Delete a custom role.", "Role"),
+            new Permission(SeededSecurityIds.RoleAssignPermissionId, UnifiedPermissions.RoleAssign, "Assign or remove roles from users.", "Role"),
+            new Permission(SeededSecurityIds.RoleViewPermissionId, UnifiedPermissions.RoleView, "View roles and their permissions.", "Role"),
+
+            // Workflow permissions.
+            new Permission(SeededSecurityIds.WorkflowCreatePermissionId, UnifiedPermissions.WorkflowCreate, "Create a new workflow.", "Workflow"),
+            new Permission(SeededSecurityIds.WorkflowEditPermissionId, UnifiedPermissions.WorkflowEdit, "Edit an existing workflow.", "Workflow"),
+            new Permission(SeededSecurityIds.WorkflowDeletePermissionId, UnifiedPermissions.WorkflowDelete, "Delete a workflow.", "Workflow"),
+            new Permission(SeededSecurityIds.WorkflowRunPermissionId, UnifiedPermissions.WorkflowRun, "Execute a workflow.", "Workflow"),
+            new Permission(SeededSecurityIds.WorkflowViewPermissionId, UnifiedPermissions.WorkflowView, "View workflow details.", "Workflow"),
+
+            // Tenant permissions.
+            new Permission(SeededSecurityIds.TenantSettingsEditPermissionId, UnifiedPermissions.TenantSettingsEdit, "Update organization settings.", "Tenant"),
+            new Permission(SeededSecurityIds.TenantBillingViewPermissionId, UnifiedPermissions.TenantBillingView, "View billing and subscription information.", "Tenant"),
+
+            // Report / payload permissions.
+            new Permission(SeededSecurityIds.ReportViewPermissionId, UnifiedPermissions.ReportView, "View reports and analytics.", "Report"),
+            new Permission(SeededSecurityIds.PayloadViewPermissionId, UnifiedPermissions.PayloadView, "View data payloads from workflow runs.", "Payload")
         }.ToDictionary(permission => permission.Id));
+
     private readonly ConcurrentDictionary<string, RolePermission> _rolePermissions = new();
     private readonly ConcurrentDictionary<string, UserRole> _userRoles = new();
 
@@ -42,11 +73,24 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         }
     }
 
+    // ── Users ────────────────────────────────────────────────────────────────
+
     public Task<IReadOnlyList<User>> GetUsersAsync(CancellationToken cancellationToken)
     {
         var users = _users.Values
+            .Where(x => !x.IsDeleted)
             .OrderBy(x => x.Email)
             .ThenBy(x => x.DisplayName)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<User>>(users);
+    }
+
+    public Task<IReadOnlyList<User>> GetUsersByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        var users = _users.Values
+            .Where(x => !x.IsDeleted && x.TenantId == tenantId)
+            .OrderBy(x => x.Email)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<User>>(users);
@@ -55,6 +99,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     public Task<User?> GetUserByExternalIdAsync(string externalUserId, CancellationToken cancellationToken)
     {
         var user = _users.Values.FirstOrDefault(x =>
+            !x.IsDeleted &&
             string.Equals(x.ExternalUserId, externalUserId, StringComparison.Ordinal));
 
         return Task.FromResult(user);
@@ -63,6 +108,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     public Task<User?> GetUserByEmailAsync(string email, CancellationToken cancellationToken)
     {
         var user = _users.Values.FirstOrDefault(x =>
+            !x.IsDeleted &&
             string.Equals(x.Email, email, StringComparison.OrdinalIgnoreCase));
 
         return Task.FromResult(user);
@@ -71,6 +117,15 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     public Task<User?> GetUserByIdAsync(Guid userId, CancellationToken cancellationToken)
     {
         _users.TryGetValue(userId, out var user);
+
+        return Task.FromResult(user is not null && !user.IsDeleted ? user : null);
+    }
+
+    public Task<User?> GetUserByRefreshTokenHashAsync(string refreshTokenHash, CancellationToken cancellationToken)
+    {
+        var user = _users.Values.FirstOrDefault(x =>
+            !x.IsDeleted &&
+            string.Equals(x.RefreshTokenHash, refreshTokenHash, StringComparison.Ordinal));
 
         return Task.FromResult(user);
     }
@@ -89,27 +144,58 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         return Task.CompletedTask;
     }
 
-    public Task<Role?> GetRoleByNameAsync(string roleName, CancellationToken cancellationToken)
+    public Task DeleteUserAsync(User user, CancellationToken cancellationToken)
     {
-        var role = _roles.Values.FirstOrDefault(x => string.Equals(x.Name, roleName, StringComparison.OrdinalIgnoreCase));
+        user.ApplyDeleted("system", DateTime.UtcNow);
+        _users[user.Id] = user;
 
-        return Task.FromResult(role);
+        // Remove all role assignments for this user.
+        foreach (var key in _userRoles.Keys
+            .Where(k => k.StartsWith($"{user.Id:N}:", StringComparison.Ordinal))
+            .ToArray())
+        {
+            _userRoles.TryRemove(key, out _);
+        }
+
+        return Task.CompletedTask;
     }
+
+    // ── Roles ────────────────────────────────────────────────────────────────
 
     public Task<IReadOnlyList<Role>> GetRolesAsync(CancellationToken cancellationToken)
     {
         var roles = _roles.Values
+            .Where(x => !x.IsDeleted)
             .OrderBy(x => x.Name)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<Role>>(roles);
     }
 
+    public Task<IReadOnlyList<Role>> GetRolesByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        var roles = _roles.Values
+            .Where(x => !x.IsDeleted && x.TenantId == tenantId)
+            .OrderBy(x => x.Name)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<Role>>(roles);
+    }
+
+    public Task<Role?> GetRoleByNameAsync(string roleName, CancellationToken cancellationToken)
+    {
+        var role = _roles.Values.FirstOrDefault(x =>
+            !x.IsDeleted &&
+            string.Equals(x.Name, roleName, StringComparison.OrdinalIgnoreCase));
+
+        return Task.FromResult(role);
+    }
+
     public Task<Role?> GetRoleByIdAsync(Guid roleId, CancellationToken cancellationToken)
     {
         _roles.TryGetValue(roleId, out var role);
 
-        return Task.FromResult(role);
+        return Task.FromResult(role is not null && !role.IsDeleted ? role : null);
     }
 
     public Task AddRoleAsync(Role role, CancellationToken cancellationToken)
@@ -130,18 +216,31 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     {
         _roles.TryRemove(role.Id, out _);
 
-        foreach (var key in _rolePermissions.Keys.Where(key => key.StartsWith($"{role.Id:N}:", StringComparison.Ordinal)).ToArray())
+        foreach (var key in _rolePermissions.Keys
+            .Where(k => k.StartsWith($"{role.Id:N}:", StringComparison.Ordinal))
+            .ToArray())
         {
             _rolePermissions.TryRemove(key, out _);
         }
 
-        foreach (var key in _userRoles.Keys.Where(key => key.EndsWith($":{role.Id:N}", StringComparison.Ordinal)).ToArray())
+        foreach (var key in _userRoles.Keys
+            .Where(k => k.EndsWith($":{role.Id:N}", StringComparison.Ordinal))
+            .ToArray())
         {
             _userRoles.TryRemove(key, out _);
         }
 
         return Task.CompletedTask;
     }
+
+    public Task<int> GetRoleUserCountAsync(Guid roleId, CancellationToken cancellationToken)
+    {
+        var count = _userRoles.Values.Count(x => x.RoleId == roleId);
+
+        return Task.FromResult(count);
+    }
+
+    // ── Permissions ──────────────────────────────────────────────────────────
 
     public Task<IReadOnlyList<Permission>> GetPermissionsAsync(CancellationToken cancellationToken)
     {
@@ -152,11 +251,19 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         return Task.FromResult<IReadOnlyList<Permission>>(permissions);
     }
 
+    public Task<Permission?> GetPermissionByIdAsync(Guid permissionId, CancellationToken cancellationToken)
+    {
+        _permissions.TryGetValue(permissionId, out var permission);
+
+        return Task.FromResult(permission);
+    }
+
     public Task<IReadOnlyList<Permission>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
         var permissions = _rolePermissions.Values
             .Where(x => x.RoleId == roleId)
-            .Select(x => _permissions[x.PermissionId])
+            .Select(x => _permissions.TryGetValue(x.PermissionId, out var p) ? p : null)
+            .OfType<Permission>()
             .OrderBy(x => x.Name)
             .ToList();
 
@@ -168,7 +275,9 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         IReadOnlyCollection<Guid> permissionIds,
         CancellationToken cancellationToken)
     {
-        foreach (var key in _rolePermissions.Keys.Where(key => key.StartsWith($"{roleId:N}:", StringComparison.Ordinal)).ToArray())
+        foreach (var key in _rolePermissions.Keys
+            .Where(k => k.StartsWith($"{roleId:N}:", StringComparison.Ordinal))
+            .ToArray())
         {
             _rolePermissions.TryRemove(key, out _);
         }
@@ -181,11 +290,28 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         return Task.CompletedTask;
     }
 
+    public Task AddRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken)
+    {
+        _rolePermissions[LinkKey(roleId, permissionId)] = new RolePermission(roleId, permissionId);
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken)
+    {
+        _rolePermissions.TryRemove(LinkKey(roleId, permissionId), out _);
+
+        return Task.CompletedTask;
+    }
+
+    // ── User ↔ Role ───────────────────────────────────────────────────────────
+
     public Task<IReadOnlyList<Role>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)
     {
         var roles = _userRoles.Values
             .Where(x => x.UserId == userId)
-            .Select(x => _roles[x.RoleId])
+            .Select(x => _roles.TryGetValue(x.RoleId, out var r) ? r : null)
+            .OfType<Role>()
             .OrderBy(x => x.Name)
             .ToList();
 
@@ -194,7 +320,9 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 
     public Task SetUserRolesAsync(Guid userId, IReadOnlyCollection<Guid> roleIds, CancellationToken cancellationToken)
     {
-        foreach (var key in _userRoles.Keys.Where(key => key.StartsWith($"{userId:N}:", StringComparison.Ordinal)).ToArray())
+        foreach (var key in _userRoles.Keys
+            .Where(k => k.StartsWith($"{userId:N}:", StringComparison.Ordinal))
+            .ToArray())
         {
             _userRoles.TryRemove(key, out _);
         }
@@ -206,6 +334,22 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 
         return Task.CompletedTask;
     }
+
+    public Task AddUserRoleAsync(Guid userId, Guid roleId, CancellationToken cancellationToken)
+    {
+        _userRoles[LinkKey(userId, roleId)] = new UserRole(userId, roleId);
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveUserRoleAsync(Guid userId, Guid roleId, CancellationToken cancellationToken)
+    {
+        _userRoles.TryRemove(LinkKey(userId, roleId), out _);
+
+        return Task.CompletedTask;
+    }
+
+    // ── Tenant Users ─────────────────────────────────────────────────────────
 
     public Task<IReadOnlyList<TenantUser>> GetTenantUsersAsync(Guid tenantId, CancellationToken cancellationToken)
     {
@@ -232,7 +376,8 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         Guid userId,
         CancellationToken cancellationToken)
     {
-        var tenantUser = _tenantUsers.Values.FirstOrDefault(x => x.TenantId == tenantId && x.UserId == userId);
+        var tenantUser = _tenantUsers.Values
+            .FirstOrDefault(x => x.TenantId == tenantId && x.UserId == userId);
 
         return Task.FromResult(tenantUser);
     }
@@ -258,6 +403,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         CancellationToken cancellationToken)
     {
         var user = _users.Values.FirstOrDefault(x =>
+            !x.IsDeleted &&
             string.Equals(x.ExternalUserId, externalUserId, StringComparison.Ordinal));
 
         if (user is null)
@@ -266,7 +412,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         }
 
         var roleIds = _roles.Values
-            .Where(x => roleNames.Contains(x.Name, StringComparer.OrdinalIgnoreCase))
+            .Where(x => !x.IsDeleted && roleNames.Contains(x.Name, StringComparer.OrdinalIgnoreCase))
             .Select(x => x.Id)
             .ToHashSet();
 
@@ -277,6 +423,16 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
             roleIds.Contains(x.RoleId));
 
         return Task.FromResult(hasRole);
+    }
+
+    public Task<bool> TenantHasSuperAdminAsync(Guid tenantId, Guid superAdminRoleId, CancellationToken cancellationToken)
+    {
+        var hasSuperAdmin = _tenantUsers.Values.Any(x =>
+            x.TenantId == tenantId &&
+            x.IsEnabled &&
+            x.RoleId == superAdminRoleId);
+
+        return Task.FromResult(hasSuperAdmin);
     }
 
     private static string LinkKey(Guid leftId, Guid rightId)

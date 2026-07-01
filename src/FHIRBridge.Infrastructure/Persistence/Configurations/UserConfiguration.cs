@@ -51,11 +51,25 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.CreatedOnUtc)
             .IsRequired();
 
+        // UserStatus enum stored as int column.
+        builder.Property(x => x.Status)
+            .IsRequired();
+
+        // Invitation flow.
+        builder.Property(x => x.InvitationTokenHash)
+            .HasMaxLength(500);
+
+        // Refresh token.
+        builder.Property(x => x.RefreshTokenHash)
+            .HasMaxLength(500);
+
         builder.HasIndex(x => x.ExternalUserId)
             .IsUnique();
 
         builder.HasIndex(x => x.Email);
 
         builder.HasIndex(x => x.TenantId);
+
+        builder.HasIndex(x => x.RefreshTokenHash);
     }
 }

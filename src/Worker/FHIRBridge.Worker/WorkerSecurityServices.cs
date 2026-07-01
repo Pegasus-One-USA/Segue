@@ -24,6 +24,12 @@ public sealed class SystemCurrentUserService : ICurrentUserService
 /// </summary>
 public sealed class WorkerAccessTokenIssuer : IAccessTokenIssuer
 {
-    public AccessTokenDto Issue(User user, IReadOnlyCollection<string> roleNames)
+    public AccessTokenDto Issue(
+        User user,
+        IReadOnlyCollection<string> roleNames,
+        IReadOnlyCollection<string>? permissionCodes = null)
         => throw new NotSupportedException("Access tokens are not issued by the background worker.");
+
+    public (string TokenHash, DateTime ExpiresOnUtc) IssueRefreshToken()
+        => throw new NotSupportedException("Refresh tokens are not issued by the background worker.");
 }

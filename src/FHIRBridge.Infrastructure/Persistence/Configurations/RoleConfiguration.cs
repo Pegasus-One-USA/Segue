@@ -22,6 +22,7 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
 
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.IsSystem).IsRequired();
+        builder.Property(x => x.IsDefault).IsRequired();
 
         builder.HasIndex(x => x.Name)
             .IsUnique();
@@ -42,6 +43,7 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
             Name = name,
             Description = description,
             IsSystem = true,
+            IsDefault = false,
             IsEnabled = true,
             IsDeleted = false,
             CreatedOnUtc = SeedConstants.SeedTimestamp

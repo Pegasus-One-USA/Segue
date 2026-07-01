@@ -1,5 +1,4 @@
 using FHIRBridge.Application.DTOs;
-using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+[Authorize]
 [Route("api/v1/roles")]
 public sealed class RolesController : ControllerBase
 {
@@ -19,6 +18,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "HasPermission:role.view")]
     [ProducesResponseType(typeof(IReadOnlyList<RoleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
@@ -27,16 +27,19 @@ public sealed class RolesController : ControllerBase
         return Ok(roles);
     }
 
-    [HttpGet("permissions")]
-    [ProducesResponseType(typeof(IReadOnlyList<PermissionDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPermissions(CancellationToken cancellationToken)
+    [HttpGet("{roleId:guid}")]
+    [Authorize(Policy = "HasPermission:role.view")]
+    [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(Guid roleId, CancellationToken cancellationToken)
     {
-        var permissions = await _roleManagementService.GetPermissionsAsync(cancellationToken);
+        var role = await _roleManagementService.GetRoleByIdAsync(roleId, cancellationToken);
 
-        return Ok(permissions);
+        return Ok(role);
     }
 
     [HttpPost]
+    [Authorize(Policy = "HasPermission:role.create")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(
         [FromBody] CreateRoleRequest request,
@@ -48,7 +51,9 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpPut("{roleId:guid}")]
+    [Authorize(Policy = "HasPermission:role.edit")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
         Guid roleId,
         [FromBody] UpdateRoleRequest request,
@@ -60,10 +65,48 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpDelete("{roleId:guid}")]
+    [Authorize(Policy = "HasPermission:role.delete")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(Guid roleId, CancellationToken cancellationToken)
     {
         await _roleManagementService.DeleteRoleAsync(roleId, cancellationToken);
+
+        return NoContent();
+    }
+
+    [HttpGet("{roleId:guid}/permissions")]
+    [Authorize(Policy = "HasPermission:role.view")]
+    [ProducesResponseType(typeof(IReadOnlyList<PermissionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPermissions(Guid roleId, CancellationToken cancellationToken)
+    {
+        var permissions = await _roleManagementService.GetRolePermissionsAsync(roleId, cancellationToken);
+
+        return Ok(permissions);
+    }
+
+    [HttpPost("{roleId:guid}/permissions")]
+    [Authorize(Policy = "HasPermission:role.edit")]
+    [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> AddPermissions(
+        Guid roleId,
+        [FromBody] AddRolePermissionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var role = await _roleManagementService.AddRolePermissionsAsync(roleId, request, cancellationToken);
+
+        return Ok(role);
+    }
+
+    [HttpDelete("{roleId:guid}/permissions/{permissionId:guid}")]
+    [Authorize(Policy = "HasPermission:role.edit")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RemovePermission(
+        Guid roleId,
+        Guid permissionId,
+        CancellationToken cancellationToken)
+    {
+        await _roleManagementService.RemoveRolePermissionAsync(roleId, permissionId, cancellationToken);
 
         return NoContent();
     }

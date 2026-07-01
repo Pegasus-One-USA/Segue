@@ -1,3 +1,4 @@
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
@@ -17,6 +18,7 @@ public sealed class User : AuditableChildEntity<Guid>
         ExternalUserId = externalUserId;
         Email = email;
         DisplayName = displayName;
+        Status = UserStatus.Active;
         IsEnabled = true;
         IsLocalLoginEnabled = false;
         MustChangePassword = false;
@@ -26,15 +28,11 @@ public sealed class User : AuditableChildEntity<Guid>
     public string? Email { get; private set; }
     public string? DisplayName { get; private set; }
 
-    /// <summary>Optional structured given name (complements the single <see cref="DisplayName"/>).</summary>
     public string? FirstName { get; private set; }
-
-    /// <summary>Optional structured family name.</summary>
     public string? LastName { get; private set; }
 
     /// <summary>
-    /// Optional "home"/primary tenant. Does not replace <c>TenantUsers</c> membership (which still carries
-    /// cross-tenant membership + per-tenant roles); null for platform users such as GlobalAdmin.
+    /// Optional "home"/primary tenant. Null for platform users such as GlobalAdmin.
     /// </summary>
     public Guid? TenantId { get; private set; }
 
@@ -44,7 +42,10 @@ public sealed class User : AuditableChildEntity<Guid>
     public string? PasswordResetTokenHash { get; private set; }
     public DateTime? PasswordResetTokenExpiresOnUtc { get; private set; }
 
-    /// <summary>Account enable/disable. When false the user cannot authenticate (renamed from IsActive).</summary>
+    /// <summary>Account status: Active, Inactive, or Invited.</summary>
+    public UserStatus Status { get; private set; }
+
+    /// <summary>Account enable/disable. When false the user cannot authenticate.</summary>
     public bool IsEnabled { get; private set; }
     public DateTime? LastLoginOnUtc { get; private set; }
 
@@ -54,6 +55,14 @@ public sealed class User : AuditableChildEntity<Guid>
     public DateTime? LastPasswordChangedOnUtc { get; private set; }
     public DateTime? PasswordExpiresOnUtc { get; private set; }
     public bool MfaEnabled { get; private set; }
+
+    // Invitation flow fields.
+    public string? InvitationTokenHash { get; private set; }
+    public DateTime? InvitationTokenExpiresOnUtc { get; private set; }
+
+    // Refresh token fields.
+    public string? RefreshTokenHash { get; private set; }
+    public DateTime? RefreshTokenExpiresOnUtc { get; private set; }
 
     /// <summary>True when the account is currently locked out (failed-login threshold reached).</summary>
     public bool IsLockedOut(DateTime utcNow) => LockoutEndUtc is { } end && end > utcNow;
@@ -83,6 +92,7 @@ public sealed class User : AuditableChildEntity<Guid>
     public void SetEnabled(bool isEnabled)
     {
         IsEnabled = isEnabled;
+        Status = isEnabled ? UserStatus.Active : UserStatus.Inactive;
     }
 
     public void SetMfaEnabled(bool mfaEnabled)
@@ -96,6 +106,8 @@ public sealed class User : AuditableChildEntity<Guid>
         IsLocalLoginEnabled = true;
         MustChangePassword = mustChangePassword;
         LastPasswordChangedOnUtc = DateTime.UtcNow;
+        Status = UserStatus.Active;
+        IsEnabled = true;
     }
 
     public void SetPassword(string passwordHash, bool mustChangePassword)
@@ -120,6 +132,47 @@ public sealed class User : AuditableChildEntity<Guid>
     {
         PasswordResetTokenHash = null;
         PasswordResetTokenExpiresOnUtc = null;
+    }
+
+    /// <summary>Marks the user as invited, storing the hashed invitation token.</summary>
+    public void SetInvited(string invitationTokenHash, DateTime expiresOnUtc)
+    {
+        Status = UserStatus.Invited;
+        IsEnabled = false;
+        IsLocalLoginEnabled = false;
+        InvitationTokenHash = invitationTokenHash;
+        InvitationTokenExpiresOnUtc = expiresOnUtc;
+    }
+
+    /// <summary>Accepts an invitation: sets the password, activates the account, and clears the invitation token.</summary>
+    public void AcceptInvitation(string passwordHash, string? firstName, string? lastName)
+    {
+        Status = UserStatus.Active;
+        IsEnabled = true;
+        IsLocalLoginEnabled = true;
+        MustChangePassword = false;
+        PasswordHash = passwordHash;
+        LastPasswordChangedOnUtc = DateTime.UtcNow;
+        FailedLoginCount = 0;
+        LockoutEndUtc = null;
+        InvitationTokenHash = null;
+        InvitationTokenExpiresOnUtc = null;
+        if (firstName is not null) FirstName = firstName;
+        if (lastName is not null) LastName = lastName;
+    }
+
+    /// <summary>Stores a hashed refresh token for the 30-day refresh flow.</summary>
+    public void SetRefreshToken(string refreshTokenHash, DateTime expiresOnUtc)
+    {
+        RefreshTokenHash = refreshTokenHash;
+        RefreshTokenExpiresOnUtc = expiresOnUtc;
+    }
+
+    /// <summary>Clears the refresh token, effectively logging the user out of the refresh flow.</summary>
+    public void ClearRefreshToken()
+    {
+        RefreshTokenHash = null;
+        RefreshTokenExpiresOnUtc = null;
     }
 
     /// <summary>Records a failed login attempt, locking the account once the threshold is reached.</summary>

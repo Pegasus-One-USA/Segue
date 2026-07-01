@@ -3,44 +3,67 @@ using FHIRBridge.Application.Abstractions.Security;
 
 namespace FHIRBridge.Infrastructure.Security;
 
+/// <summary>
+/// PBKDF2-SHA256 password hasher. Produces a self-contained string that embeds the salt and
+/// iteration count so the format is upgradeable without breaking existing hashes.
+/// Format: "v1:{iterations}:{base64-salt}:{base64-hash}"
+/// </summary>
 public sealed class Pbkdf2PasswordHasher : IPasswordHasher
 {
-    private const int SaltSize = 16;
-    private const int HashSize = 32;
-    private const int Iterations = 100_000;
+    private const int Iterations = 350_000;
+    private const int SaltBytes = 32;
+    private const int HashBytes = 32;
+    private const string Prefix = "v1:";
 
     public string Hash(string value)
     {
-        var salt = RandomNumberGenerator.GetBytes(SaltSize);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(
-            value,
-            salt,
-            Iterations,
-            HashAlgorithmName.SHA256,
-            HashSize);
+        var salt = RandomNumberGenerator.GetBytes(SaltBytes);
+        var hash = Pbkdf2(value, salt, Iterations);
 
-        return $"PBKDF2-SHA256${Iterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
+        return $"{Prefix}{Iterations}:{Convert.ToBase64String(salt)}:{Convert.ToBase64String(hash)}";
     }
 
-    public bool Verify(string value, string hash)
+    public bool Verify(string value, string storedHash)
     {
-        var parts = hash.Split('$');
-        if (parts.Length != 4 ||
-            !string.Equals(parts[0], "PBKDF2-SHA256", StringComparison.Ordinal) ||
-            !int.TryParse(parts[1], out var iterations))
+        if (string.IsNullOrWhiteSpace(storedHash))
         {
             return false;
         }
 
-        var salt = Convert.FromBase64String(parts[2]);
-        var expectedHash = Convert.FromBase64String(parts[3]);
-        var actualHash = Rfc2898DeriveBytes.Pbkdf2(
-            value,
+        if (!storedHash.StartsWith(Prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var parts = storedHash[Prefix.Length..].Split(':');
+        if (parts.Length != 3 ||
+            !int.TryParse(parts[0], out var iterations) ||
+            iterations < 1)
+        {
+            return false;
+        }
+
+        try
+        {
+            var salt = Convert.FromBase64String(parts[1]);
+            var expectedHash = Convert.FromBase64String(parts[2]);
+            var actualHash = Pbkdf2(value, salt, iterations);
+
+            return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static byte[] Pbkdf2(string password, byte[] salt, int iterations)
+    {
+        return Rfc2898DeriveBytes.Pbkdf2(
+            password,
             salt,
             iterations,
             HashAlgorithmName.SHA256,
-            expectedHash.Length);
-
-        return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+            HashBytes);
     }
 }

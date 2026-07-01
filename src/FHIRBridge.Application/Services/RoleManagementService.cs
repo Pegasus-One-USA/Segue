@@ -44,9 +44,26 @@ public sealed class RoleManagementService : IRoleManagementService
         return dtos;
     }
 
+    public async Task<RoleDto> GetRoleByIdAsync(Guid roleId, CancellationToken cancellationToken)
+    {
+        var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
+            ?? throw new InvalidOperationException("Role was not found.");
+
+        return await ToDtoAsync(role, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<PermissionDto>> GetPermissionsAsync(CancellationToken cancellationToken)
     {
         var permissions = await _repository.GetPermissionsAsync(cancellationToken);
+
+        return permissions.Select(ToDto).ToArray();
+    }
+
+    public async Task<IReadOnlyList<PermissionDto>> GetRolePermissionsAsync(
+        Guid roleId,
+        CancellationToken cancellationToken)
+    {
+        var permissions = await _repository.GetRolePermissionsAsync(roleId, cancellationToken);
 
         return permissions.Select(ToDto).ToArray();
     }
@@ -80,6 +97,11 @@ public sealed class RoleManagementService : IRoleManagementService
         var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
             ?? throw new InvalidOperationException("Role was not found.");
 
+        if (role.IsSystem)
+        {
+            throw new InvalidOperationException("System roles cannot be modified.");
+        }
+
         var duplicate = await _repository.GetRoleByNameAsync(request.Name.Trim(), cancellationToken);
         if (duplicate is not null && duplicate.Id != role.Id)
         {
@@ -104,8 +126,57 @@ public sealed class RoleManagementService : IRoleManagementService
         var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
             ?? throw new InvalidOperationException("Role was not found.");
 
+        if (role.IsSystem)
+        {
+            throw new InvalidOperationException("System roles cannot be deleted.");
+        }
+
+        var userCount = await _repository.GetRoleUserCountAsync(roleId, cancellationToken);
+        if (userCount > 0)
+        {
+            throw new InvalidOperationException(
+                $"This role is assigned to {userCount} user(s) and cannot be deleted. Remove the role from all users first.");
+        }
+
         await _repository.DeleteRoleAsync(role, cancellationToken);
         await AuditAsync("RoleDeleted", $"Role deleted: {role.Name}.", cancellationToken);
+    }
+
+    public async Task<RoleDto> AddRolePermissionsAsync(
+        Guid roleId,
+        AddRolePermissionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
+            ?? throw new InvalidOperationException("Role was not found.");
+
+        await ValidatePermissionsAsync(request.PermissionIds, cancellationToken);
+
+        foreach (var permissionId in request.PermissionIds.Distinct())
+        {
+            await _repository.AddRolePermissionAsync(roleId, permissionId, cancellationToken);
+        }
+
+        await AuditAsync("RolePermissionsAdded", $"Permissions added to role: {role.Name}.", cancellationToken);
+
+        return await ToDtoAsync(role, cancellationToken);
+    }
+
+    public async Task RemoveRolePermissionAsync(
+        Guid roleId,
+        Guid permissionId,
+        CancellationToken cancellationToken)
+    {
+        var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
+            ?? throw new InvalidOperationException("Role was not found.");
+
+        if (role.IsSystem && SystemRoleIds.Contains(roleId))
+        {
+            throw new InvalidOperationException("Permissions cannot be removed from system roles.");
+        }
+
+        await _repository.RemoveRolePermissionAsync(roleId, permissionId, cancellationToken);
+        await AuditAsync("RolePermissionRemoved", $"Permission removed from role: {role.Name}.", cancellationToken);
     }
 
     private async Task<RoleDto> ToDtoAsync(Role role, CancellationToken cancellationToken)
@@ -117,7 +188,7 @@ public sealed class RoleManagementService : IRoleManagementService
             role.Name,
             role.Description,
             permissions.Select(ToDto).ToArray(),
-            SystemRoleIds.Contains(role.Id));
+            SystemRoleIds.Contains(role.Id) || role.IsSystem);
     }
 
     private static PermissionDto ToDto(Permission permission)

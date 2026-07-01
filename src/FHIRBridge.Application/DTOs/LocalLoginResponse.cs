@@ -5,4 +5,6 @@ public sealed record LocalLoginResponse(
     string TokenType,
     DateTime ExpiresOnUtc,
     bool RequiresPasswordChange,
-    UserProfileDto Profile);
+    UserProfileDto Profile,
+    string? RefreshToken = null,
+    DateTime? RefreshTokenExpiresOnUtc = null);

@@ -1,0 +1,52 @@
+# QA local test stack — extra destination targets for exercising the output-adapter layer.
+# Auto-merged by `docker compose up` alongside docker-compose.yml.
+# Brings up PostgreSQL, MySQL, and SFTP destinations that the QA test plan (qa/README.md) writes to.
+name: fhirbridge
+
+services:
+  # PostgreSQL destination (DestinationType.PostgreSql)
+  pg-dest:
+    image: postgres:16-alpine
+    container_name: fhirbridge-pg-dest
+    environment:
+      POSTGRES_DB: "fhirbridge"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "Pass123!"
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-dest-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fhirbridge"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # MySQL destination (DestinationType.MySql)
+  mysql-dest:
+    image: mysql:8
+    container_name: fhirbridge-mysql-dest
+    environment:
+      MYSQL_ROOT_PASSWORD: "Pass123!"
+      MYSQL_DATABASE: "fhir"
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-dest-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pPass123!"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # SFTP destination (DestinationType.Sftp). User foo / pass, upload dir /upload.
+  sftp-dest:
+    image: atmoz/sftp:latest
+    container_name: fhirbridge-sftp-dest
+    ports:
+      - "2222:22"
+    command: foo:pass:::upload
+
+volumes:
+  pg-dest-data:
+  mysql-dest-data:

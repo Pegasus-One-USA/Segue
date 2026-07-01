@@ -5,5 +5,10 @@ namespace FHIRBridge.Application.Abstractions.Security;
 
 public interface IAccessTokenIssuer
 {
-    AccessTokenDto Issue(User user, IReadOnlyCollection<string> roleNames);
+    AccessTokenDto Issue(
+        User user,
+        IReadOnlyCollection<string> roleNames,
+        IReadOnlyCollection<string>? permissionCodes = null);
+
+    (string TokenHash, DateTime ExpiresOnUtc) IssueRefreshToken();
 }

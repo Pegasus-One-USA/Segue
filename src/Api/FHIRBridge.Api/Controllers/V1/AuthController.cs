@@ -42,7 +42,7 @@ public sealed class AuthController : ControllerBase
         return Ok(profile);
     }
 
-    [HttpPost("local/login")]
+    [HttpPost("internal/login")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> LocalLogin(
@@ -54,7 +54,7 @@ public sealed class AuthController : ControllerBase
         return Ok(response);
     }
 
-    [HttpPost("local/change-password")]
+    [HttpPost("internal/change-password")]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangePassword(
         [FromBody] ChangePasswordRequest request,
@@ -65,7 +65,7 @@ public sealed class AuthController : ControllerBase
         return Ok(response);
     }
 
-    [HttpPost("local/forgot-password")]
+    [HttpPost("internal/forgot-password")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ForgotPasswordResponse), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> ForgotPassword(
@@ -81,7 +81,7 @@ public sealed class AuthController : ControllerBase
         return Accepted(response);
     }
 
-    [HttpPost("local/reset-password")]
+    [HttpPost("internal/reset-password")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> ResetPassword(
@@ -89,6 +89,27 @@ public sealed class AuthController : ControllerBase
         CancellationToken cancellationToken)
     {
         await _localAuthService.ResetPasswordAsync(request, cancellationToken);
+
+        return NoContent();
+    }
+
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Refresh(
+        [FromBody] RefreshTokenRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _localAuthService.RefreshTokenAsync(request, cancellationToken);
+
+        return Ok(response);
+    }
+
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        await _localAuthService.LogoutAsync(cancellationToken);
 
         return NoContent();
     }

@@ -103,7 +103,7 @@ public sealed class LocalAuthService : ILocalAuthService
             return new ForgotPasswordResponse(true, null, null);
         }
 
-        var token = GenerateResetToken();
+        var token = GenerateToken();
         var expiresOnUtc = DateTime.UtcNow.AddMinutes(30);
         user.SetPasswordResetToken(_passwordHasher.Hash(token), expiresOnUtc);
         await _repository.UpdateUserAsync(user, cancellationToken);
@@ -137,6 +137,52 @@ public sealed class LocalAuthService : ILocalAuthService
             UserActivitySeverities.Warning, null, cancellationToken);
     }
 
+    public async Task<LocalLoginResponse> RefreshTokenAsync(
+        RefreshTokenRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        {
+            throw new InvalidOperationException("Refresh token is required.");
+        }
+
+        var tokenHash = ComputeTokenHash(request.RefreshToken);
+        var user = await _repository.GetUserByRefreshTokenHashAsync(tokenHash, cancellationToken)
+            ?? throw new InvalidOperationException("Refresh token is invalid or expired.");
+
+        if (!user.IsEnabled ||
+            user.RefreshTokenExpiresOnUtc is null ||
+            user.RefreshTokenExpiresOnUtc < DateTime.UtcNow)
+        {
+            user.ClearRefreshToken();
+            await _repository.UpdateUserAsync(user, cancellationToken);
+            throw new InvalidOperationException("Refresh token is invalid or expired.");
+        }
+
+        await AuditAsync("TokenRefreshed", "Completed", $"Token refreshed for {user.Email}.", user.Email, cancellationToken);
+
+        return await CreateLoginResponseAsync(user, cancellationToken);
+    }
+
+    public async Task LogoutAsync(CancellationToken cancellationToken)
+    {
+        var externalUserId = _currentUserService.CurrentUser.ExternalUserId;
+        if (string.IsNullOrWhiteSpace(externalUserId))
+        {
+            return;
+        }
+
+        var user = await _repository.GetUserByExternalIdAsync(externalUserId, cancellationToken);
+        if (user is null)
+        {
+            return;
+        }
+
+        user.ClearRefreshToken();
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        await AuditAsync("Logout", "Completed", $"User logged out: {user.Email}.", user.Email, cancellationToken);
+    }
+
     private Task RecordActivityAsync(
         string activity,
         string status,
@@ -167,7 +213,15 @@ public sealed class LocalAuthService : ILocalAuthService
     {
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
         var roleNames = roles.Select(x => x.Name).ToArray();
-        var token = _accessTokenIssuer.Issue(user, roleNames);
+
+        var permissionCodes = await GetPermissionCodesAsync(roles.Select(r => r.Id).ToArray(), cancellationToken);
+
+        var token = _accessTokenIssuer.Issue(user, roleNames, permissionCodes);
+
+        var (refreshHash, refreshExpiry) = _accessTokenIssuer.IssueRefreshToken();
+        user.SetRefreshToken(refreshHash, refreshExpiry);
+        await _repository.UpdateUserAsync(user, cancellationToken);
+
         var memberships = await ToTenantMembershipsAsync(user.Id, cancellationToken);
 
         return new LocalLoginResponse(
@@ -181,7 +235,23 @@ public sealed class LocalAuthService : ILocalAuthService
                 user.Email,
                 user.DisplayName,
                 roleNames,
-                memberships));
+                memberships),
+            BuildRawRefreshToken(refreshHash),
+            refreshExpiry);
+    }
+
+    private async Task<string[]> GetPermissionCodesAsync(
+        IReadOnlyCollection<Guid> roleIds,
+        CancellationToken cancellationToken)
+    {
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var roleId in roleIds)
+        {
+            var perms = await _repository.GetRolePermissionsAsync(roleId, cancellationToken);
+            foreach (var p in perms) codes.Add(p.Name);
+        }
+
+        return [..codes];
     }
 
     private async Task<IReadOnlyList<TenantUserDto>> ToTenantMembershipsAsync(
@@ -252,13 +322,20 @@ public sealed class LocalAuthService : ILocalAuthService
         return email.Trim().ToLowerInvariant();
     }
 
-    private static string GenerateResetToken()
+    private static string GenerateToken()
     {
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .Replace('+', '-')
             .Replace('/', '_')
             .TrimEnd('=');
     }
+
+    // IssueRefreshToken() already returns the SHA-256 hash of the random bytes and stores
+    // that same hash in the DB; the client is also given the hash directly.  Re-hashing on
+    // the inbound side would produce SHA-256(SHA-256(token)) which never matches.
+    private static string ComputeTokenHash(string rawToken) => rawToken;
+
+    private static string BuildRawRefreshToken(string tokenHash) => tokenHash;
 
     private static void ValidatePassword(string password)
     {
