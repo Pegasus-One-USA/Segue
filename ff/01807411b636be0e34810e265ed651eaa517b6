@@ -1,0 +1,52 @@
+src/FHIRBridge.Infrastructure/Destinations/PassthroughExportWriter.cs
+  s_5c7aaf194e196a::t_7d40026bc833b5 1-6,8-201
+  s_5c7aaf194e196a::t_52931ffce08874 7
+src/FHIRBridge.Application/DTOs/CallerTokenReadContext.cs
+  s_5c7aaf194e196a::t_f74d0091ea553d 1-13
+docs/backend/05-provider-standalone-passthrough.md
+  s_5c7aaf194e196a::t_d621d3da06298d 3
+  s_5c7aaf194e196a::t_0c11e5a5d48729 1-2,4-44,47,76-87,90,115-137,139-233,249-324,329-330
+  s_5c7aaf194e196a::t_5523ecc1db261d 88-89,91-114
+  s_5c7aaf194e196a::t_7b87d2559b098a 234-248
+  s_5c7aaf194e196a::t_82092adabbdf4a 138
+  s_5c7aaf194e196a::t_c319010dbeefab 325-328
+  s_5c7aaf194e196a::t_f283e8aa639d0f 45-46,48-75
+src/FHIRBridge.Application/DTOs/PassthroughExportResult.cs
+  s_5c7aaf194e196a::t_1f067ccbc09167 1-18
+src/FHIRBridge.Application/DTOs/PassthroughExportRequest.cs
+  s_5c7aaf194e196a::t_66e0eb1839c77a 1-20
+src/Api/FHIRBridge.Api/Controllers/V1/FhirBridgePassthroughController.cs
+  s_5c7aaf194e196a::t_2daeea5ab95da4 5
+  s_5c7aaf194e196a::t_2baae611892603 33,40,46
+  s_5c7aaf194e196a::t_63cc60271fbcbe 176
+  s_5c7aaf194e196a::t_4bc23cb7e7e1fd 1-4,6-32,34-39,41-45,47-132,169-175,177-241
+  s_5c7aaf194e196a::t_c4fd6f324635a2 133-168
+src/FHIRBridge.Application/Abstractions/Aggregation/IPassthroughPatientReadService.cs
+  s_5c7aaf194e196a::t_9b4f014eb1aaad 1-23
+src/FHIRBridge.Infrastructure/Aggregation/PassthroughPatientReadService.cs
+  s_5c7aaf194e196a::t_82edfabaa40c7b 1-147
+src/FHIRBridge.Application/Abstractions/Destinations/IPassthroughExportWriter.cs
+  s_5c7aaf194e196a::t_6940d355aed609 1-24
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_5c7aaf194e196a::t_0afc3e9f16f5be 274-278
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_5c7aaf194e196a::t_c109df65cb44c6 25-29
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_5c7aaf194e196a::t_7d3763e80ec298 47-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "ff01807411b636be0e34810e265ed651eaa517b6",
+  "prompts": {},
+  "sessions": {
+    "s_5c7aaf194e196a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "daa75dc8-5d4d-445b-8f2d-278fe60b2f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}
