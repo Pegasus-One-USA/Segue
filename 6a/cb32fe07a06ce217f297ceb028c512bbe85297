@@ -1,0 +1,496 @@
+portal/src/app/auth/store/auth.store.ts
+  s_c8649c9e9a8f4d::t_8737dc6896aef5 1-57
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.html
+  s_c8649c9e9a8f4d::t_763ded55b1c420 1-71
+portal/src/app/auth/services/mock-auth.service.ts
+  s_c8649c9e9a8f4d::t_2ad5657a0a19e0 1-192
+portal/src/app/auth/services/mock-user.service.ts
+  s_c8649c9e9a8f4d::t_97085655aa5a64 1-34,37-278
+  s_c8649c9e9a8f4d::t_af7cb83d108b4a 35-36
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.ts
+  s_c8649c9e9a8f4d::t_57b1188ff83a30 17,50-57,64-68
+  s_c8649c9e9a8f4d::t_12772ab93f003a 1-16,19-38,44-48,58-59,69-84,86,94-120
+  s_c8649c9e9a8f4d::t_ad3db15ffef233 18,39-43,49,60-63,85,87-93
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.html
+  s_c8649c9e9a8f4d::t_91e96757ff2266 32
+  s_c8649c9e9a8f4d::t_77557450f47c51 4
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.scss
+  s_c8649c9e9a8f4d::t_716ca46efbc6fc 1-25,27-31,33-40,42-47,49-54,57-96,98-99,118-121,140-144,146-149,151-153,156-173,177-180,183-188,190,192-201,204
+  s_c8649c9e9a8f4d::t_117b45ff35b866 100-117
+  s_c8649c9e9a8f4d::t_4852012fc1ff05 26,32,41,48,55-56,97,145,150,154-155,174-176,181-182,189,191,202-203
+  s_c8649c9e9a8f4d::t_664a64e713a3bf 122-139
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  s_c8649c9e9a8f4d::t_d7e9ef35db3032 1
+portal/src/app/user-management/pages/user-list/tabs/role-tab.component.ts
+  s_c8649c9e9a8f4d::t_9a4e0658e27658 1-92
+portal/src/app/auth/services/i-auth.service.ts
+  s_c8649c9e9a8f4d::t_863deaeb6bddd9 1-18
+portal/src/app/auth/pages/signup/signup.component.html
+  s_c8649c9e9a8f4d::t_9fe1a12c1a517f 42,52,64,76,109,137
+  s_c8649c9e9a8f4d::t_81cef145bc6393 44,54,67
+  s_c8649c9e9a8f4d::t_3bcf2f0b669045 1,14-18,22,24,26-28,30,33-36,39,41,43,45-51,53,55-63,65,68-75,77,79-83,85-89,91-98,100-108,110,112-116,118-122,124-136,138,140-166,168-172,174-178,180-186
+  s_c8649c9e9a8f4d::t_9078a16f69a770 2-13,19-21,23,25,29,31-32,37-38,40,66,78,84,90,99,111,117,123,139,167,173,179
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_c8649c9e9a8f4d::t_87fbaf27165c93 10
+  s_c8649c9e9a8f4d::t_09f6fbcfbb21ee 1,3-6,8-9,11-12
+  s_c8649c9e9a8f4d::t_56826d34120c6f 7
+  s_c8649c9e9a8f4d::t_7f7708cc1855e7 16-25
+  s_c8649c9e9a8f4d::t_a6a64ce08de100 15
+  s_c8649c9e9a8f4d::t_fe1be14b904fe6 26
+portal/src/app/user/pages/help/help.component.html
+  s_c8649c9e9a8f4d::t_742d23871e8aea 1
+portal/src/app/user-management/user-management.routes.ts
+  s_c8649c9e9a8f4d::t_fb32eb5df96133 1-9,22-29
+  s_c8649c9e9a8f4d::t_be8da2f6beee2e 10-21
+portal/src/app/pages/execution-logs/execution-logs.component.html
+  s_c8649c9e9a8f4d::t_988d67575203a4 1-15
+portal/src/app/user-management/dialogs/confirm-dialog/confirm-dialog.component.ts
+  s_c8649c9e9a8f4d::t_b7655cfbc263ad 1-23
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.ts
+  s_c8649c9e9a8f4d::t_15c50e623b8777 3
+  s_c8649c9e9a8f4d::t_14ec17192bcde2 17
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.scss
+  s_c8649c9e9a8f4d::t_b4756fd1bf1bd6 24,30,39,46,53-54,94,97,112-114,116,119,129,150-152,156,161,163,173-174
+  s_c8649c9e9a8f4d::t_740ffecbd83e5d 1-23,25-29,31-38,40-45,47-52,55-93,95-96,98-111,115,117-118,120-128,130-149,153-155,157-160,162,164-172,175
+portal/src/app/auth/pages/reset-password/reset-password.component.ts
+  s_c8649c9e9a8f4d::t_342b6e3b152ce0 1-10,12-16,20-51,55-64,69-71,75-80,82-89,92-109,112-114,117-122
+portal/src/app/user-management/pages/user-list/user-list.component.scss
+  s_c8649c9e9a8f4d::t_3e66c1a0b3633a 46,66-67
+  s_c8649c9e9a8f4d::t_799e8251be79c1 171
+  s_c8649c9e9a8f4d::t_4b4194a7467daf 145-146,149,151-157,159-170,173-186,188-195,198-199
+  s_c8649c9e9a8f4d::t_c8f35c65d07034 18
+  s_c8649c9e9a8f4d::t_1e5eb788a3e852 12,33,35,42,82-84,89,96,104-107,119,125,132-134,205-207,229,240-241,246-247,249,256,262-265,271,275-279,295,315,318,323,337,349,351,355-369,371-387,395,401,405-406,411,420-436,468-470,486,492,498,506-507,511-513
+  s_c8649c9e9a8f4d::t_13a72705adc6dc 47-51,54-56,58-63
+  s_c8649c9e9a8f4d::t_81faccdffa70f1 52-53,57
+  s_c8649c9e9a8f4d::t_d9a46f08af9675 440,442,444-445,448-451
+  s_c8649c9e9a8f4d::t_fda623509071af 1-11,13-17,19-32,34,36-41,43-45,64-65,68-81,85-88,90-95,97-103,108-118,120-124,126-131,135-144,147-148,150,158,172,187,196-197,200-204,208-228,230-239,242-245,248,250-255,257-261,266-270,272-274,280-294,296-314,316-317,319-322,324-326,333-336,338-340,343-348,350,352-354,370,388-394,396-400,402-404,407-410,412-419,437-439,441,443,446-447,452-453,460,467,471-485,487-491,493-497,499-505,508-510,514-515
+  s_c8649c9e9a8f4d::t_d1b85edfa7163c 327-332,341-342
+  s_c8649c9e9a8f4d::t_437be1f72895d5 454-459,461-466
+portal/src/app/auth/pages/unauthorized/unauthorized.component.scss
+  s_c8649c9e9a8f4d::t_748a0ec7581786 1-4,9,11,14-17,22-27,29-37,39-46,48-53,55-60,62-78,80-84,86,88-100,102,105-109,111-113
+  s_c8649c9e9a8f4d::t_8c79f72ec8b24a 5-8,10,13,18-20
+  s_c8649c9e9a8f4d::t_eca34ca16f2731 12,21,28,38,47,54,61,79,85,87,101,103-104,110
+portal/src/app/pipelines/pages/pipeline-list/pipeline-list.component.scss
+  s_c8649c9e9a8f4d::t_a0cadbdbe92f2f 1-217
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_c8649c9e9a8f4d::t_02812bf2104b4e 1-21,24-25,27-90,92-155,157-170,172-189,191,193-198,200-262
+  s_c8649c9e9a8f4d::t_0171276f5ec10b 22-23,26
+  s_c8649c9e9a8f4d::t_825c6ee0e332e4 91,156,171,192
+  s_c8649c9e9a8f4d::t_4bed593355cb11 190,199
+portal/angular.json
+  s_c8649c9e9a8f4d::t_6fdb4ab0cedc58 35-38
+portal/src/app/user/pages/help/help.component.scss
+  s_c8649c9e9a8f4d::t_f4141b0f1d6c43 1-6
+portal/src/app/auth/pages/login/login.component.scss
+  s_c8649c9e9a8f4d::t_a580032f5a1e6a 2-5,9,25-32,34,52,83,109,157-159,163,189,191-192,196-198,200-201,205-207,210-224,227-234,237-243,246-256,259-260,262,264,267-274,277-281,283-286,288,294,298-303,318,320-323,325-326,329,339-341,362-364,366,370,379-381,383-386,389-390,451,496,502,506-507
+  s_c8649c9e9a8f4d::t_8cef72d59e5169 7-8,10-21,23-24,33,35-37,39-41,43-48,53-79,81-82,84-108,111-116,120-121,124-129,131-133,135,138-142,146,148-153,160-162,164-175,177,180-182,184-185,209,225-226,235-236,257-258,261,263,275-276,282,287,289,295-297,304-305,319,324,327-328,331-338,342,346,348-352,354-357,359,365,371-373,375,387-388,391,393-396,399,420,427,433-435,441-450,452-453,462,464-468,471-472,474-495,497-499,501,503-505
+  s_c8649c9e9a8f4d::t_85a475268f4f8c 290-293
+  s_c8649c9e9a8f4d::t_bf702662f75d95 457-458
+  s_c8649c9e9a8f4d::t_24949408f57eb5 306-308,316-317
+  s_c8649c9e9a8f4d::t_c827376784bb19 1,6,22,38,42,49-51,80,110,117-119,122-123,130,134,136-137,143-145,147,154-156,176,178-179,183,186-188,190,194-195,199,202-204,208,244-245,265-266,330,343-345,347,358,360-361,367-369,374,376-378,382,392,397-398,400,454-456,459-461,463,469-470,473,500,508
+  s_c8649c9e9a8f4d::t_c3072fa5bd2ea2 407,411
+  s_c8649c9e9a8f4d::t_41a0fb83150776 193
+  s_c8649c9e9a8f4d::t_7ed48f9608db89 309-315
+  s_c8649c9e9a8f4d::t_40f075af1678c5 353
+  s_c8649c9e9a8f4d::t_4a2df1fe69931b 401-406,408-410,412-419,421-426,428-432,436-440
+portal/src/app/pages/reports/reports.component.ts
+  s_c8649c9e9a8f4d::t_00c74edac08450 1-11
+portal/src/app/auth/services/i-user.service.ts
+  s_c8649c9e9a8f4d::t_d368eb1f002a24 1-26
+portal/src/app/auth/pages/change-password/change-password.component.html
+  s_c8649c9e9a8f4d::t_5357e01314a247 1-136
+portal/src/app/pages/reports/reports.component.html
+  s_c8649c9e9a8f4d::t_fe6165fdc602d8 1-15
+portal/src/app/user-management/pages/user-detail/user-detail.component.scss
+  s_c8649c9e9a8f4d::t_211cd7edb9a7f3 12,22-23,38-40,57,66,69,73,84-85,120,127,143,156,159,163,167-168,170,175-177,184-185,189-191,198,207,209,213-233,235-245,252,258,266,277,288,297-298,300,308-310,323,328,332,336-337,339,362-363,371-375,388,395,403,410,413,419-420,428-429,437-438,443-444,464,477,486-487,490,492,510,512,518-519,530,554,556-558,571,576,589,609,612-613
+  s_c8649c9e9a8f4d::t_93a888144ee7d0 1-11,13-21,24-37,41-56,58-65,67-68,70-72,74-83,86-119,121-126,128-142,144-155,157-158,160-162,164-166,169,171-174,178-183,186-188,192-197,199-206,208,210-212,234,246-251,253-257,259-265,267-276,278-287,289-296,299,301-307,311-322,324-327,329-331,333-335,338,340-361,364-370,376-387,389-394,396-402,404-409,411-412,414-418,421-427,430-436,439-442,445-463,465-476,478-485,488-489,491,493-509,511,513-517,520-529,531-553,555,559-570,572-575,577-588,590-608,610-611,614
+portal/src/app/pages/schedules/schedules.component.scss
+  s_c8649c9e9a8f4d::t_bb7f64a2839be2 1-43
+portal/src/app/user-management/services/tenant-role.service.ts
+  s_c8649c9e9a8f4d::t_98e072b74ae4a0 1-88
+portal/src/app/app.routes.ts
+  s_c8649c9e9a8f4d::t_65c2806124179a 108-143
+  s_c8649c9e9a8f4d::t_546fe34a08b434 88-107
+  s_c8649c9e9a8f4d::t_4634d0f8357ebf 6-7,13,15,17-18,22,24,27-28,30-87,144-145
+  s_c8649c9e9a8f4d::t_b618fd9cfe05cb 3,12,21,29,147
+portal/src/app/user/components/user-menu/user-menu.component.scss
+  s_c8649c9e9a8f4d::t_64e3e816e0dbe8 51-58,60,62
+  s_c8649c9e9a8f4d::t_1ec7f28552d6c5 61
+  s_c8649c9e9a8f4d::t_f93e9ff9e5fbd5 3-6,8-11
+  s_c8649c9e9a8f4d::t_acab0b736843eb 7
+portal/src/app/user/pages/account-settings/account-settings.component.scss
+  s_c8649c9e9a8f4d::t_d6f4c781aea802 1-6
+  s_c8649c9e9a8f4d::t_118be5ef03d4e3 8,11,14,16-20,22,27-28,30-32,41,43-44,47,53-54,62-63,66-68,70-72,74,80,82-83,87,89-90,99-100,102-103
+portal/src/app/auth/services/token.service.ts
+  s_c8649c9e9a8f4d::t_22a83280ebcdac 2,4-6,10-20,23-33,36-42,45-46,48-49,54-64
+portal/src/app/user/pages/preferences/preferences.component.scss
+  s_c8649c9e9a8f4d::t_646687577775e6 1-6
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_c8649c9e9a8f4d::t_9b8a2e02c284d8 45
+portal/src/app/auth/pages/forgot-password/forgot-password.component.ts
+  s_c8649c9e9a8f4d::t_5ea1b3cd2bd046 1,3,5-9,15-23,28-29,31-34,36-53,56-62,65
+portal/src/app/user/components/user-menu/user-menu.component.html
+  s_c8649c9e9a8f4d::t_60de9fa5784f80 41
+  s_c8649c9e9a8f4d::t_5a59d23a1e19e5 17-21
+  s_c8649c9e9a8f4d::t_89dc230619d779 57
+portal/src/app/components/nodes/merge-node/merge-node.component.scss
+  s_c8649c9e9a8f4d::t_83faa56571c48e 1-129
+portal/src/app/dashboard/components/activity-feed/activity-feed.component.ts
+  s_c8649c9e9a8f4d::t_a0f13c1a27c3ad 16
+  s_c8649c9e9a8f4d::t_bebe7785840028 3
+portal/src/app/auth/services/auth-api.service.ts
+  s_c8649c9e9a8f4d::t_944b4df5b37f7a 1-54
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.html
+  s_c8649c9e9a8f4d::t_92d8f89cc112f5 1-157
+portal/src/app/auth/auth.routes.ts
+  s_c8649c9e9a8f4d::t_e6f14470afb6ec 2,8,12-17,20,26,30-31,33-34
+  s_c8649c9e9a8f4d::t_5c8aa5afd68498 3,32,35-40
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.ts
+  s_c8649c9e9a8f4d::t_8deeaf56d3d522 1-65
+portal/src/app/user/dialogs/edit-profile-dialog/edit-profile-dialog.component.html
+  s_c8649c9e9a8f4d::t_a86c002230bef1 1-74
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_c8649c9e9a8f4d::t_3e7529379d626c 1-3,5-7,10-18,20-22,26-54,57-61,65-67,69-78,80-94,97-105,108-119,122-130,133-150,153-156
+portal/src/app/auth/models/auth-request.model.ts
+  s_c8649c9e9a8f4d::t_9b7c10d5af20de 1-2,4-28,40-75
+portal/src/app/pages/configuration/configuration.component.scss
+  s_c8649c9e9a8f4d::t_3f91c340309bde 1-43
+portal/src/app/auth/services/auth.service.ts
+  s_c8649c9e9a8f4d::t_9e2913fc12240a 1,3-6,8-15,19-33,35-38,40-53,56,58-87,90-92,95-97,100-104,107-112,114-119,121-127
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.scss
+  s_c8649c9e9a8f4d::t_77f04cf7ef8d63 118,122-126,132-134,136-140,142-143
+  s_c8649c9e9a8f4d::t_341bb59eb5b590 1-117,119-121,127-131,135,141,144-349
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_c8649c9e9a8f4d::t_387e2c9b43ac9c 5-6,9,12-19,36-45
+  s_c8649c9e9a8f4d::t_f565fcf9bb4c58 22-23
+  s_c8649c9e9a8f4d::t_7aae00c2c5289d 21,24-25
+  s_c8649c9e9a8f4d::t_b9ba0ced20db40 20
+portal/src/app/user/pages/preferences/preferences.component.html
+  s_c8649c9e9a8f4d::t_7f1fbd20359738 1
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.ts
+  s_c8649c9e9a8f4d::t_f701ce05a39a6d 1-128
+portal/src/app/auth/services/session.service.ts
+  s_c8649c9e9a8f4d::t_82e20b50eb7608 1-71
+portal/src/app/auth/pages/forgot-password/forgot-password.component.html
+  s_c8649c9e9a8f4d::t_5bc75989e5cbc6 1-3,5-17,20-38,40,42-44,46-51,53,55-70,72-85,87,89-98
+portal/src/app/components/shared/toast/toast.component.html
+  s_c8649c9e9a8f4d::t_ed147613fec908 2-15
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_c8649c9e9a8f4d::t_423c5d954ed71a 179,181,193,195
+  s_c8649c9e9a8f4d::t_a51667e83cfebb 282-288
+  s_c8649c9e9a8f4d::t_583159c7ff46be 25
+  s_c8649c9e9a8f4d::t_bb282fc2989c6f 145,220,251,264
+  s_c8649c9e9a8f4d::t_8028f55095eb5c 1-21,24,27-70,72-74,80-88,93,95-100,102-144,146-151,154-176,178,182-186,188-192,196-200,202-219,221-250,252-263,265-270,272-280,289-292,297-316,318-320
+  s_c8649c9e9a8f4d::t_dca50ae2f24be6 101
+  s_c8649c9e9a8f4d::t_c2ddeed9185d6b 22-23,26
+  s_c8649c9e9a8f4d::t_9ca1c09856323d 271
+  s_c8649c9e9a8f4d::t_82fa51deee365e 71,75-79,152-153,177,180,187,194,201,317
+  s_c8649c9e9a8f4d::t_0e4a1a7b11e1d7 89,92,94
+  s_c8649c9e9a8f4d::t_3ba978ea6d0565 281,293-296
+  s_c8649c9e9a8f4d::t_a5ef0ce68de888 90-91
+portal/src/app/auth/pages/unauthorized/unauthorized.component.html
+  s_c8649c9e9a8f4d::t_b9f8125b75546d 1-31
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.html
+  s_c8649c9e9a8f4d::t_1d6dd23eb12f70 1-107
+portal/src/app/user/pages/security/security.component.ts
+  s_c8649c9e9a8f4d::t_6f429c8568dcde 15
+  s_c8649c9e9a8f4d::t_a4a9e384c3fe9c 8
+portal/src/app/user/pages/profile/profile.component.scss
+  s_c8649c9e9a8f4d::t_0b3276d662f382 1-6
+  s_c8649c9e9a8f4d::t_ef723d88225627 8,11,15,21-23,26,31,38,41-42,46,50,53,58,60-61,68,72,83-84,86,89,92,95,98-99,102-103
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.ts
+  s_c8649c9e9a8f4d::t_2f20d8187cc4c2 1-141
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.scss
+  s_c8649c9e9a8f4d::t_cc501adcdf7ef0 24,30,39,46,53-54,80,82-83,92,98,109,112,125,127,131,133,161,168,178,187,191,203-204,206,222,227,241-242,250-251,254,260,276-277,301,306,308,318
+  s_c8649c9e9a8f4d::t_e33ec75ea62817 1-23,25-29,31-38,40-45,47-52,55-79,81,84-91,93-97,99-108,110-111,113-124,126,128-130,132,134-160,162-167,169-177,179-186,188-190,192-202,205,207-221,223-226,228-240,243-249,252-253,255-259,261-275,278-300,302-305,307,309-317,319
+portal/src/app/components/shared/toast/toast.component.scss
+  s_c8649c9e9a8f4d::t_6c6ce148d4bcce 1-2,5-15,17,20-102,104,107,109-116
+portal/src/app/pipelines/pages/pipeline-list/pipeline-list.component.html
+  s_c8649c9e9a8f4d::t_a11a034b32423e 1-181
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.scss
+  s_c8649c9e9a8f4d::t_82ed2b0e7d88a1 1-23,25-29,31-38,40-47,49-52,55-93,95-96,98-111,115-117,119-126,128-134,136-139,141-163,167-169,171-174,176,178-186,189
+  s_c8649c9e9a8f4d::t_96dc05a86e0d78 24,30,39,48,53-54,94,97,112-114,118,127,135,140,164-166,170,175,177,187-188
+portal/src/app/dashboard/_panel.scss
+  s_c8649c9e9a8f4d::t_dcc3c1e67b7805 2-4,8,22,29,36
+portal/src/app/dashboard/pages/dashboard/dashboard.component.scss
+  s_c8649c9e9a8f4d::t_8962c12b1c7ba9 1-4,6,9-15,18-23,26-29,32-33,35-36,41,45-50,52-53,55-58,63-64,66-77,80,82,84,87,89,91-92,96-107
+portal/src/app/components/canvas/canvas.component.scss
+  s_c8649c9e9a8f4d::t_0763058b138ab4 4-8,10,12,17-21,25-61,63-79,81-82
+portal/src/app/dashboard/components/kpi-card/kpi-card.component.html
+  s_c8649c9e9a8f4d::t_d6ec278e7900fa 14
+portal/src/app/dashboard/components/activity-feed/activity-feed.component.html
+  s_c8649c9e9a8f4d::t_9a724ddddade7c 4
+portal/src/app/app.config.ts
+  s_c8649c9e9a8f4d::t_da35e3d7af3021 11
+  s_c8649c9e9a8f4d::t_46e2fe64415e5d 1-2,7-10,12-16,21,24-27,30-37
+  s_c8649c9e9a8f4d::t_7eed5434cedfbd 28-29
+portal/src/app/user-management/dialogs/confirm-dialog/confirm-dialog.component.scss
+  s_c8649c9e9a8f4d::t_e9ca9b8fcf76e8 1-89
+portal/src/app/auth/pages/signup/signup.component.scss
+  s_c8649c9e9a8f4d::t_50b498b22112db 285-290
+  s_c8649c9e9a8f4d::t_85b7d39a2d594e 3-18,20,22-26,28-33,36-38,40-72,76,78-106,108-113,117-124,128-130,132,135-139,143,145-150,154-172,174,177-179,181-182,186,188,190-191,194,196,198-199,203-205,207-208,212,214,240-241,255,260,262,264,272-274,278-279,292,297-298,301-306,309-314,317,322,324-332,337-342,345,366,372,379-381,387,389-396,398-400,408,410-414,417-418,420-433,435-458
+  s_c8649c9e9a8f4d::t_a5f62372482ff9 2
+  s_c8649c9e9a8f4d::t_a571812195f353 267-270
+  s_c8649c9e9a8f4d::t_00ae32ad729e7c 403-404
+  s_c8649c9e9a8f4d::t_3b7eb41bfc7ef9 215-229,232-239,242-248,251-254,256-259,261,263,265-266,271,275-277,291,293-296,299,307
+  s_c8649c9e9a8f4d::t_ccb7fd0124e183 200
+  s_c8649c9e9a8f4d::t_4d40f546dd7032 27
+  s_c8649c9e9a8f4d::t_e6365c4a7b0624 280-284
+  s_c8649c9e9a8f4d::t_6cfed9d414ddf2 347-352,355-365,367-371,373-378,382-386,397
+  s_c8649c9e9a8f4d::t_eb933f993e8aa2 353-354
+  s_c8649c9e9a8f4d::t_54e28b2f1f42c8 1,19,21,34-35,39,73-75,77,107,114-116,125-127,131,133-134,140-142,144,151-153,173,175-176,180,183-185,187,189,192-193,195,197,201-202,206,209-211,213,230-231,249-250,300,308,315-316,318-321,323,333-336,343-344,346,388,401-402,405-407,409,415-416,419,434,459
+portal/src/app/dashboard/layout/sidebar/sidebar.component.scss
+  s_c8649c9e9a8f4d::t_1febf635dc15d6 83-99
+  s_c8649c9e9a8f4d::t_a4504730726558 4-5,9,24,29,36,53-55,59,63-69
+portal/src/app/user/pages/security/security.component.html
+  s_c8649c9e9a8f4d::t_41df3a7f45b295 7
+  s_c8649c9e9a8f4d::t_d016d8338ee3fe 57
+  s_c8649c9e9a8f4d::t_9351a03d656402 1
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_c8649c9e9a8f4d::t_ced24233321dd8 1-18,20-28,31
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_c8649c9e9a8f4d::t_e3ecd96c95195d 415-416
+  s_c8649c9e9a8f4d::t_d29a49e0f3f204 138-226
+portal/src/app/user/pages/account-settings/account-settings.component.ts
+  s_c8649c9e9a8f4d::t_e20a1c8408ecd3 10
+  s_c8649c9e9a8f4d::t_4cb343f013e21a 18
+portal/src/app/auth/pages/change-password/change-password.component.ts
+  s_c8649c9e9a8f4d::t_1bdb1ee9d8f285 1-155
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_c8649c9e9a8f4d::t_6b5e9d1feca904 681-702,705-720,723-728,730-735,737,739-752,754-762,764-765,767-768,770-776,779-782,784-792,794-796,798-800,802-803,806-809,811-819,821-822,824-826,828-841,843-854,857-860,862-870,873-879,881-885,887-889,893-894,896-898,900-902,904
+  s_c8649c9e9a8f4d::t_0397e971365420 5-6,13-20,28,30,41,49,56,76-79,87,90,94,111,114,121,125,130,140,143,151,155,157,167-169,181-183,203,208,211,228-229,244,247,256,261-262,270,280-281,297,300-301,316,319,335,344,352,357,371,373,377,391,418,426,433,439,447-448,458,465,471,497,502,508,524,526-528,535,538-540,555,565,568-570,577-580,582,587-588,597,599-600,608,616,621,627,645-646,648,654,658-659,664-665,671-674,680,703-704,721-722,729,736,738,753,763,766,769,777-778,783,793,797,801,804-805,810,820,823,827,842,855-856,861,871-872,880,886,890-892,895,899,903
+portal/src/app/auth/pages/login/login.component.ts
+  s_c8649c9e9a8f4d::t_ae23db752b277b 1-3,5-10,16-25,30-31,36-38,40-65
+portal/src/app/user/pages/account-settings/account-settings.component.html
+  s_c8649c9e9a8f4d::t_70b3f9bff700b5 1
+portal/src/app/user/pages/preferences/preferences.component.ts
+  s_c8649c9e9a8f4d::t_b6b8e353bd58f3 11
+  s_c8649c9e9a8f4d::t_72166ddb7bb007 19
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.scss
+  s_c8649c9e9a8f4d::t_798da7295e598e 1-165
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_c8649c9e9a8f4d::t_3bf415da4a6a55 1-185
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.scss
+  s_c8649c9e9a8f4d::t_1c4d2aa5bf1d28 16,18,20,22-23,28-29,32,41-42,49,54-58,65,71-74,82,84-88,95
+portal/src/app/user/dialogs/edit-profile-dialog/edit-profile-dialog.component.scss
+  s_c8649c9e9a8f4d::t_144cdd183cac31 1-145
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_c8649c9e9a8f4d::t_d28f4714ab0174 1-138
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.ts
+  s_c8649c9e9a8f4d::t_ad6c41bab89234 1-177
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_c8649c9e9a8f4d::t_6d1e78fc8bdec1 1-3,5-29,31-34,36-185
+portal/src/app/user/dialogs/edit-profile-dialog/edit-profile-dialog.component.ts
+  s_c8649c9e9a8f4d::t_94d8c2076b6c49 1-53
+portal/src/app/auth/mock/mock-db.ts
+  s_c8649c9e9a8f4d::t_24d7c0c72c625d 1-338
+portal/src/app/services/wizard.service.ts
+  s_c8649c9e9a8f4d::t_8f2f5aee79baad 115
+  s_c8649c9e9a8f4d::t_3f481ccfc1b84c 38-39
+portal/src/app/auth/pages/reset-password/reset-password.component.html
+  s_c8649c9e9a8f4d::t_ec8ca1750df1e4 1-3,5-17,20-34,36-50,52-55,57-62,64-91,93-96,98-123,125-149,151-152
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.scss
+  s_c8649c9e9a8f4d::t_0df5688ea1b8b2 1-139
+portal/src/app/auth/guards/auth.guard.ts
+  s_c8649c9e9a8f4d::t_5fa02c4c2bbd9c 3,6,8
+portal/src/app/user-management/pages/user-detail/user-detail.component.html
+  s_c8649c9e9a8f4d::t_eebbf9c0d14462 1-435
+portal/src/app/pages/schedules/schedules.component.ts
+  s_c8649c9e9a8f4d::t_0f78b9016fa542 1-11
+portal/src/app/auth/pages/forgot-password/forgot-password.component.scss
+  s_c8649c9e9a8f4d::t_ffb84855e7caed 1,3-4,9,11,14-23,25-30,34-38,40-55,57-62,64-71,73-78,80-88,93,95-103,105-114,116-126,128-130,132,154-157,173,179-180,182-183,186-197,199-221,223-230,232-241,243-248,251-255
+  s_c8649c9e9a8f4d::t_58e1b479b1e6f0 133-138
+  s_c8649c9e9a8f4d::t_70a9dde49b23df 12,33,39,56,63,72,79,89-92,94,104,115,127,131,198,222,231,242,250
+  s_c8649c9e9a8f4d::t_47332a7ef005c2 159-164,166-172,175-178
+  s_c8649c9e9a8f4d::t_b95703d4f763cd 5-8,10,13,24,31-32
+  s_c8649c9e9a8f4d::t_409eda9f45776c 256-287
+  s_c8649c9e9a8f4d::t_36842aff315669 139-153
+  s_c8649c9e9a8f4d::t_6ed460f423bdf9 158,165,174,181,184-185
+portal/src/app/user-management/dialogs/confirm-dialog/confirm-dialog.component.html
+  s_c8649c9e9a8f4d::t_8aa2e5dfa9e667 1-20
+portal/src/app/auth/guards/guest.guard.ts
+  s_c8649c9e9a8f4d::t_b1392b001b273a 1-10
+portal/src/app/auth/pages/login/login.component.html
+  s_c8649c9e9a8f4d::t_853adf0c4576f8 2-13,19-21,23,25,28,30-31,36-37,42,49,61,68,74,87,89-90,95-96,110,116
+  s_c8649c9e9a8f4d::t_60f1c7f10ceacb 1,14-18,22,24,26-27,29,32-35,39,41,44-48,50-58,60,62-65,67,70-73,75-78,80-86,88,91-94,97-100,103-109,111-115,117-118,120,122-123
+  s_c8649c9e9a8f4d::t_2f1b761dda37c9 40
+  s_c8649c9e9a8f4d::t_ccfd2b872760ad 59
+  s_c8649c9e9a8f4d::t_df9a4f471a0e1d 38
+portal/src/app/user/pages/profile/profile.component.html
+  s_c8649c9e9a8f4d::t_4b9b8a412bc9b6 1
+  s_c8649c9e9a8f4d::t_b4191a9f907f63 3-15,17-21,23-29,31-44,46-75,77-91,94-99
+portal/src/app/dashboard/layout/sidebar/sidebar.component.html
+  s_c8649c9e9a8f4d::t_52167ddba558da 10-11,13-15,17-30
+portal/src/app/auth/models/auth-state.model.ts
+  s_c8649c9e9a8f4d::t_93aa3f21ce9ebf 3-11,13-14,19-29
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.html
+  s_c8649c9e9a8f4d::t_13812446a3f6ed 1
+portal/src/app/auth/components/password-strength/password-strength.component.ts
+  s_c8649c9e9a8f4d::t_de2cc09a182fea 1,3,5-8,13,18,20,22-47,50-52,54-59
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.html
+  s_c8649c9e9a8f4d::t_e701d92fe5fba8 1-126
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_c8649c9e9a8f4d::t_d374b9dda9fe2a 1-3,5-7,10-19,22-23,25-27,29-32,36-42,44,46-52,55-56,58-59,63-68,70-71,73-76,80,82-86
+portal/src/app/user/pages/help/help.component.ts
+  s_c8649c9e9a8f4d::t_492338ef403cbb 1
+  s_c8649c9e9a8f4d::t_e70a1dcea6972f 11
+portal/src/app/pages/schedules/schedules.component.html
+  s_c8649c9e9a8f4d::t_e1f09685a9eb95 1-15
+portal/src/app/layout/app-shell/app-shell.component.scss
+  s_c8649c9e9a8f4d::t_870ca0880b298b 1-18,22-121
+  s_c8649c9e9a8f4d::t_187069ca98a7ad 19-21
+portal/src/app/pages/configuration/configuration.component.html
+  s_c8649c9e9a8f4d::t_0a9a0963feeb55 1-15
+portal/src/app/activity/pages/activity-list/activity-list.component.html
+  s_c8649c9e9a8f4d::t_93186a1c85a25b 1-140
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.html
+  s_c8649c9e9a8f4d::t_5bab1a957085d9 24-26,52,55-71,74-88
+  s_c8649c9e9a8f4d::t_d1b9e9166bd260 53
+  s_c8649c9e9a8f4d::t_765ddaebba2ad5 1-23,27-51,54,72-73,89-120
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_c8649c9e9a8f4d::t_7883e2a0556393 115,266,301
+  s_c8649c9e9a8f4d::t_a959dea0cdb27c 87,112
+  s_c8649c9e9a8f4d::t_4d550433e8b794 4,6-9
+  s_c8649c9e9a8f4d::t_dfcaf091cf0a41 1-3,5,16-17,57,227-228,302
+  s_c8649c9e9a8f4d::t_c3f6d75e63b745 10-15,18-56,58-86,88-111,113-114,116-226,229-265,267-300
+portal/src/app/auth/pages/reset-password/reset-password.component.scss
+  s_c8649c9e9a8f4d::t_db2734105e5846 12,33,39,54,61,70,77,87-90,92,102,113,131,135,146,151,154,171,195,204,221,230
+  s_c8649c9e9a8f4d::t_e53bc6fd6823cc 1-4,9,11,14-23,25-30,34-38,40-53,55-60,62-69,71-76,78-86,91,93-101,103-112,114-130,132-134,136-145,147-150,152-153,155-170,172-194,196-203,205-220,222-229,231-235
+  s_c8649c9e9a8f4d::t_8eddf5cda967fe 5-8,10,13,24,31-32
+portal/src/app/user/pages/security/security.component.scss
+  s_c8649c9e9a8f4d::t_dcc90dd4edc402 8,11,14,16-20,22,26-27,33,35-36,38-39,48-49,52-57,62,64-65,69,71-72,77,79-80,84,86-87,94-96,101,105,108-109,111,114-116,123,126-127,130-131,133
+  s_c8649c9e9a8f4d::t_9abb411e1148b8 1-6
+portal/src/app/user-management/pages/role-list/role-list.component.scss
+  s_c8649c9e9a8f4d::t_f4aafdce8db43b 1-393
+portal/src/app/user/pages/profile/profile.component.ts
+  s_c8649c9e9a8f4d::t_78564a5b932091 1-7,12,17-18,21-24,30-48
+portal/src/app/auth/models/user.model.ts
+  s_c8649c9e9a8f4d::t_7c352b84822b7d 91-118
+  s_c8649c9e9a8f4d::t_f34c396ed93a95 1-9,11-35,37-90
+portal/src/app/pages/configuration/configuration.component.ts
+  s_c8649c9e9a8f4d::t_68ddeb49a26a6d 1-11
+portal/src/app/auth/guards/permission.guard.ts
+  s_c8649c9e9a8f4d::t_6455e781420795 1-19
+portal/src/app/user-management/pages/user-list/tabs/role-tab.component.scss
+  s_c8649c9e9a8f4d::t_687cd35b133de6 144,148-152,158-160,162-166,168-169,172-175
+  s_c8649c9e9a8f4d::t_340d1bacfd87ff 1-143,145-147,153-157,161,167,170-171,176-389
+portal/src/app/dashboard/components/execution-status/execution-status.component.scss
+  s_c8649c9e9a8f4d::t_fe7cc34ecaa363 76-82,84,86
+  s_c8649c9e9a8f4d::t_073cf07e9363d2 28,35,61,66,74,83,85
+  s_c8649c9e9a8f4d::t_a7ac489402fe28 75
+portal/src/app/activity/pages/activity-list/activity-list.component.ts
+  s_c8649c9e9a8f4d::t_cc2333edfcaf8e 1-78
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.ts
+  s_c8649c9e9a8f4d::t_709e8fa31dbd3b 30
+  s_c8649c9e9a8f4d::t_e012a3a2eacdac 156
+portal/src/app/auth/_auth-forms.scss
+  s_c8649c9e9a8f4d::t_e87f8a678cd82d 4,11,29,33-36,45,47,51,58,61,72,85,94-97,103-104,120,125,130
+portal/src/app/dashboard/components/kpi-card/kpi-card.component.scss
+  s_c8649c9e9a8f4d::t_78f7c407d1e308 2-3,5,10-11,19-28,47,52,58,65,75,77
+  s_c8649c9e9a8f4d::t_d64b9e994c2dc3 68-74,76,78-80
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.html
+  s_c8649c9e9a8f4d::t_23a4ee28445049 10-20
+portal/src/app/auth/guards/role.guard.ts
+  s_c8649c9e9a8f4d::t_bc80f57b0260b2 3,7,10-13
+portal/src/styles.scss
+  s_c8649c9e9a8f4d::t_24ef358f90206f 129
+  s_c8649c9e9a8f4d::t_ba6feb60ee825b 1-7,9-24,28-39,41-87,91-120,122-126,128,130-134,137-140,142,144-785,834-974,1051-1073
+  s_c8649c9e9a8f4d::t_ac72f7fbb96264 975,986,991-992,1042-1043,1048-1050
+  s_c8649c9e9a8f4d::t_9d2c74e03b9c44 8
+  s_c8649c9e9a8f4d::t_20b020d877c81f 978-981,983-985
+  s_c8649c9e9a8f4d::t_24240148eaf97e 800-815,820-833
+  s_c8649c9e9a8f4d::t_6c11e7a6f540a6 976-977,982,987-990,993-1041,1044-1047
+  s_c8649c9e9a8f4d::t_c988480efccf5c 786-799
+  s_c8649c9e9a8f4d::t_cee24fe70ac1da 816-819
+portal/src/app/auth/pages/signup/signup.component.ts
+  s_c8649c9e9a8f4d::t_c91645c3e5bddd 1-142
+portal/src/environments/environment.ts
+  s_c8649c9e9a8f4d::t_d4c8fec6839a9c 2-3
+portal/src/app/auth/components/password-strength/password-strength.component.html
+  s_c8649c9e9a8f4d::t_d683279d8e79a3 1,3-4,7,10-24
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_c8649c9e9a8f4d::t_f158c4bc9170c8 8-17,20-23
+  s_c8649c9e9a8f4d::t_70fba4c7465429 1-7,24-46,53-59
+  s_c8649c9e9a8f4d::t_82fe29169c1eec 47-52
+  s_c8649c9e9a8f4d::t_0966fc0c99f9c0 18-19
+portal/src/app/auth/services/api-user.service.ts
+  s_c8649c9e9a8f4d::t_549a4ef4d44025 1-151
+portal/src/app/pages/execution-logs/execution-logs.component.scss
+  s_c8649c9e9a8f4d::t_526d83d28c5d8f 1-43
+portal/src/app/pages/reports/reports.component.scss
+  s_c8649c9e9a8f4d::t_d4983c9af17b40 1-43
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.ts
+  s_c8649c9e9a8f4d::t_e493160814d66d 1-88
+portal/src/app/user-management/pages/user-list/tabs/role-tab.component.html
+  s_c8649c9e9a8f4d::t_77f2c93207c9fc 1-195
+portal/src/app/user/services/user-profile.service.ts
+  s_c8649c9e9a8f4d::t_1e6883f45fcd91 1,7-8,10,12-49,59-60,63-64,105-106,109-111,119-121,123-158,181,184-185
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.ts
+  s_c8649c9e9a8f4d::t_1d004ae18adb8d 1-69
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.html
+  s_c8649c9e9a8f4d::t_d6a7fc28397088 1-93
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.html
+  s_c8649c9e9a8f4d::t_55208270e7511e 1-145
+portal/src/app/auth/components/password-strength/password-strength.component.scss
+  s_c8649c9e9a8f4d::t_d0f6726ae8bfae 17,21-24,42-45,63,67
+  s_c8649c9e9a8f4d::t_845f36bf77bea4 1-3,6,10,18,28-34,36-41,46-61,64-66,68-80
+portal/src/app/dashboard/components/execution-status/execution-status.component.html
+  s_c8649c9e9a8f4d::t_9bf5b42a003c0e 4
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.html
+  s_c8649c9e9a8f4d::t_9eb9107b7075ff 1-140
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_c8649c9e9a8f4d::t_79cb633c1ddb85 122,139-156
+  s_c8649c9e9a8f4d::t_49f174a579328a 108-114
+  s_c8649c9e9a8f4d::t_5abe413f4c574e 1,6,12-16
+  s_c8649c9e9a8f4d::t_411410d1fd9424 317-381,388-391
+  s_c8649c9e9a8f4d::t_1173851b44bc39 201-202
+  s_c8649c9e9a8f4d::t_d045b6fd0fb1e8 157
+portal/src/app/layout/app-shell/app-shell.component.html
+  s_c8649c9e9a8f4d::t_98b99e3f5786d9 1-48
+portal/src/app/user/components/user-menu/user-menu.component.ts
+  s_c8649c9e9a8f4d::t_9422a4d9915320 59
+portal/src/app/auth/interceptors/auth.interceptor.ts
+  s_c8649c9e9a8f4d::t_9f311c471f694c 1,3-4,8-24
+portal/src/app/services/toast.service.ts
+  s_c8649c9e9a8f4d::t_5de211029e1bc4 3-4,8,11-17,24,26-27,30-33
+  s_c8649c9e9a8f4d::t_1a441a7b6e07ce 34
+portal/src/app/auth/pages/change-password/change-password.component.scss
+  s_c8649c9e9a8f4d::t_f942c365795f28 15,21,38,47,53,60,67,76-79,81,91,102,120,124,148-150,159,164,166
+  s_c8649c9e9a8f4d::t_106dfb4503e87a 1-14,16-20,22-37,39-46,48-52,54-59,61-66,68-75,80,82-90,92-101,103-119,121-123,125-147,151-158,160-163,165,167-172
+portal/src/app/auth/pages/unauthorized/unauthorized.component.ts
+  s_c8649c9e9a8f4d::t_a178f7aff575cf 1-14
+portal/src/app/auth/services/user-api.service.ts
+  s_c8649c9e9a8f4d::t_7cdd1d970b8b38 1-93
+portal/src/app/pages/execution-logs/execution-logs.component.ts
+  s_c8649c9e9a8f4d::t_d11ce342bf208e 1-11
+portal/src/app/components/epic-source-wizard/models/epic-config.model.ts
+  s_c8649c9e9a8f4d::t_5a66ba33377226 19
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.scss
+  s_c8649c9e9a8f4d::t_87337ed2434820 1-346
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.ts
+  s_c8649c9e9a8f4d::t_a4c0abc10f0121 1-123
+portal/src/app/pipelines/pages/pipeline-list/pipeline-list.component.ts
+  s_c8649c9e9a8f4d::t_476a3d91eb1f5b 1-85
+portal/src/app/activity/pages/activity-list/activity-list.component.scss
+  s_c8649c9e9a8f4d::t_e68374dfbdf380 1-157
+portal/package-lock.json
+  s_c8649c9e9a8f4d::t_f1bebf1c8bd948 12,17,447-485,890-906
+portal/package.json
+  s_c8649c9e9a8f4d::t_d1066f9dec17ec 14,19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "6acb32fe07a06ce217f297ceb028c512bbe85297",
+  "prompts": {},
+  "sessions": {
+    "s_c8649c9e9a8f4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6410a6b7-bcd1-4768-ad82-af7853ea4ed5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
