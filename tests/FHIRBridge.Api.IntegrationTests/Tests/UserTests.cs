@@ -62,7 +62,7 @@ public sealed class UserTests(ApiFixture f)
             Email                 = $"newuser-{Guid.NewGuid():N}@testhospital.test",
             DisplayName           = "New User",
             Password              = "NewUser@Test123!",
-            RoleNames             = new[] { "Analyst" },
+            RoleNames             = new[] { "Operations" },
             RequirePasswordChange = false
         });
         Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
@@ -77,7 +77,7 @@ public sealed class UserTests(ApiFixture f)
         {
             Email    = "anon@test.local",
             Password = "Test@123456!",
-            RoleNames = new[] { "Analyst" },
+            RoleNames = new[] { "Operations" },
             RequirePasswordChange = false
         });
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
@@ -93,7 +93,7 @@ public sealed class UserTests(ApiFixture f)
             Email                 = "invited@testhospital.test",
             DisplayName           = "Updated Display Name",
             IsEnabled             = true,
-            RoleNames             = new[] { "Analyst" },
+            RoleNames             = new[] { "Operations" },
             NewPassword           = (string?)null,
             RequirePasswordChange = false
         });

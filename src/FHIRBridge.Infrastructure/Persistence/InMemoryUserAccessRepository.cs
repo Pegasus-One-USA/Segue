@@ -12,11 +12,10 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     private readonly ConcurrentDictionary<Guid, Role> _roles = new(
         new[]
         {
-            new Role(SeededSecurityIds.GlobalAdminRoleId, UnifiedRoles.GlobalAdmin, "Full platform administrator across all tenants.", isSystem: true),
-            new Role(SeededSecurityIds.TenantAdminRoleId, UnifiedRoles.TenantAdmin, "Administers configuration and users within a tenant.", isSystem: true),
-            new Role(SeededSecurityIds.PipelineEngineerRoleId, UnifiedRoles.PipelineEngineer, "Builds and runs pipeline configurations within a tenant.", isSystem: true),
-            new Role(SeededSecurityIds.AnalystRoleId, UnifiedRoles.Analyst, "Runs pipelines and reviews data and audit output.", isSystem: true),
-            new Role(SeededSecurityIds.AuditorRoleId, UnifiedRoles.Auditor, "Read-only access to configuration and audit logs.", isSystem: true)
+            new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator across all tenants.", isSystem: true),
+            new Role(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users within a tenant.", isSystem: true),
+            new Role(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output, within a tenant.", isSystem: true),
+            new Role(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs.", isSystem: true)
         }.ToDictionary(role => role.Id));
 
     private readonly ConcurrentDictionary<Guid, Permission> _permissions = new(
@@ -256,6 +255,13 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         _permissions.TryGetValue(permissionId, out var permission);
 
         return Task.FromResult(permission);
+    }
+
+    public Task AddPermissionAsync(Permission permission, CancellationToken cancellationToken)
+    {
+        _permissions[permission.Id] = permission;
+
+        return Task.CompletedTask;
     }
 
     public Task<IReadOnlyList<Permission>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken)

@@ -32,7 +32,7 @@ public sealed class User : AuditableChildEntity<Guid>
     public string? LastName { get; private set; }
 
     /// <summary>
-    /// Optional "home"/primary tenant. Null for platform users such as GlobalAdmin.
+    /// Optional "home"/primary tenant. Null for platform users such as SuperAdmin.
     /// </summary>
     public Guid? TenantId { get; private set; }
 

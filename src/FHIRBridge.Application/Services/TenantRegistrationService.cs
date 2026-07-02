@@ -1,7 +1,9 @@
 using FHIRBridge.Application.Abstractions.Audit;
+using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 
@@ -18,19 +20,22 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAccessTokenIssuer _accessTokenIssuer;
     private readonly IOperationalAuditService _auditService;
+    private readonly IEmailSender _emailSender;
 
     public TenantRegistrationService(
         ITenantConfigurationRepository tenantRepository,
         IUserAccessRepository userRepository,
         IPasswordHasher passwordHasher,
         IAccessTokenIssuer accessTokenIssuer,
-        IOperationalAuditService auditService)
+        IOperationalAuditService auditService,
+        IEmailSender emailSender)
     {
         _tenantRepository = tenantRepository;
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _accessTokenIssuer = accessTokenIssuer;
         _auditService = auditService;
+        _emailSender = emailSender;
     }
 
     public async Task<RegisterTenantResponse> RegisterAsync(
@@ -51,7 +56,7 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
         await _tenantRepository.AddAsync(tenant, cancellationToken);
 
         // 2. Seed the four default tenant roles.
-        var (superAdminRole, workflowDesignerRole, operatorRole, viewerRole) =
+        var (superAdminRole, adminRole, operationsRole, auditRole) =
             await SeedDefaultRolesAsync(tenant.Id, cancellationToken);
 
         // 3. Create the Super Admin user.
@@ -85,6 +90,12 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
                 null),
             cancellationToken);
 
+        await _emailSender.SendAsync(
+            email,
+            "Welcome to FHIRBridge",
+            BuildWelcomeEmailBody(request.OrgName, user.DisplayName),
+            cancellationToken);
+
         return new RegisterTenantResponse(
             tenant.Id,
             user.Id,
@@ -95,72 +106,43 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
             refreshExpiry);
     }
 
-    private async Task<(Role SuperAdmin, Role WorkflowDesigner, Role Operator, Role Viewer)>
+    private async Task<(Role SuperAdmin, Role Admin, Role Operations, Role Audit)>
         SeedDefaultRolesAsync(Guid tenantId, CancellationToken cancellationToken)
     {
-        var allPermissions = await _userRepository.GetPermissionsAsync(cancellationToken);
-        var permById = allPermissions.ToDictionary(p => p.Name, p => p.Id);
-
-        var superAdmin = new Role(Guid.NewGuid(), "SuperAdmin",
+        var superAdmin = new Role(Guid.NewGuid(), UnifiedRoles.SuperAdmin,
             "Full access to user management, role management, workflows, settings, and billing.",
             isSystem: false, tenantId: tenantId, isDefault: true);
 
-        var workflowDesigner = new Role(Guid.NewGuid(), "WorkflowDesigner",
-            "Creates and edits workflows.",
+        var admin = new Role(Guid.NewGuid(), UnifiedRoles.Admin,
+            "Administers configuration and users within the tenant.",
             isSystem: false, tenantId: tenantId, isDefault: true);
 
-        var @operator = new Role(Guid.NewGuid(), "Operator",
-            "Runs workflows and views results.",
+        var operations = new Role(Guid.NewGuid(), UnifiedRoles.Operations,
+            "Builds and runs pipeline configurations, and reviews data and audit output.",
             isSystem: false, tenantId: tenantId, isDefault: true);
 
-        var viewer = new Role(Guid.NewGuid(), "Viewer",
-            "Read-only access — cannot edit anything.",
+        var audit = new Role(Guid.NewGuid(), UnifiedRoles.Audit,
+            "Read-only access to configuration and audit logs.",
             isSystem: false, tenantId: tenantId, isDefault: true);
 
         await _userRepository.AddRoleAsync(superAdmin, cancellationToken);
-        await _userRepository.AddRoleAsync(workflowDesigner, cancellationToken);
-        await _userRepository.AddRoleAsync(@operator, cancellationToken);
-        await _userRepository.AddRoleAsync(viewer, cancellationToken);
+        await _userRepository.AddRoleAsync(admin, cancellationToken);
+        await _userRepository.AddRoleAsync(operations, cancellationToken);
+        await _userRepository.AddRoleAsync(audit, cancellationToken);
 
-        // Super Admin: all user-module permissions.
-        await AssignPermissionsAsync(superAdmin.Id, permById, [
-            "user.invite", "user.view", "user.edit", "user.deactivate",
-            "role.create", "role.edit", "role.delete", "role.assign", "role.view",
-            "workflow.create", "workflow.edit", "workflow.delete", "workflow.run", "workflow.view",
-            "tenant.settings.edit", "tenant.billing.view",
-            "report.view", "payload.view"
-        ], cancellationToken);
+        // Permission grants come from the single source of truth shared with the platform's
+        // own SuperAdmin/Admin/Operations/Audit roles, so SuperAdmin always gets every
+        // permission and new permissions never need a second hardcoded list here.
+        await _userRepository.SetRolePermissionsAsync(
+            superAdmin.Id, UnifiedRolePermissionSeed.Grants[SeededSecurityIds.SuperAdminRoleId].ToArray(), cancellationToken);
+        await _userRepository.SetRolePermissionsAsync(
+            admin.Id, UnifiedRolePermissionSeed.Grants[SeededSecurityIds.AdminRoleId].ToArray(), cancellationToken);
+        await _userRepository.SetRolePermissionsAsync(
+            operations.Id, UnifiedRolePermissionSeed.Grants[SeededSecurityIds.OperationsRoleId].ToArray(), cancellationToken);
+        await _userRepository.SetRolePermissionsAsync(
+            audit.Id, UnifiedRolePermissionSeed.Grants[SeededSecurityIds.AuditRoleId].ToArray(), cancellationToken);
 
-        // Workflow Designer.
-        await AssignPermissionsAsync(workflowDesigner.Id, permById, [
-            "workflow.create", "workflow.edit", "workflow.delete", "workflow.run", "payload.view"
-        ], cancellationToken);
-
-        // Operator.
-        await AssignPermissionsAsync(@operator.Id, permById, [
-            "workflow.run", "workflow.view", "payload.view"
-        ], cancellationToken);
-
-        // Viewer.
-        await AssignPermissionsAsync(viewer.Id, permById, [
-            "workflow.view", "report.view"
-        ], cancellationToken);
-
-        return (superAdmin, workflowDesigner, @operator, viewer);
-    }
-
-    private async Task AssignPermissionsAsync(
-        Guid roleId,
-        Dictionary<string, Guid> permById,
-        string[] codes,
-        CancellationToken cancellationToken)
-    {
-        var ids = codes
-            .Where(c => permById.ContainsKey(c))
-            .Select(c => permById[c])
-            .ToArray();
-
-        await _userRepository.SetRolePermissionsAsync(roleId, ids, cancellationToken);
+        return (superAdmin, admin, operations, audit);
     }
 
     private async Task<string[]> GetRolePermissionCodesAsync(Guid roleId, CancellationToken cancellationToken)
@@ -191,6 +173,15 @@ public sealed class TenantRegistrationService : ITenantRegistrationService
         return string.IsNullOrWhiteSpace(clean)
             ? Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()
             : clean;
+    }
+
+    private static string BuildWelcomeEmailBody(string orgName, string? displayName)
+    {
+        return $"""
+            <p>Hi {displayName},</p>
+            <p>Your FHIRBridge workspace for <strong>{orgName}</strong> is ready. You're signed in as the Super Admin
+            and can start inviting teammates, configuring pipelines, and managing roles right away.</p>
+            """;
     }
 
     private static string BuildDisplayName(string? firstName, string? lastName, string email)

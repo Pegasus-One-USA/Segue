@@ -55,11 +55,11 @@ public sealed class LocalIdentitySeedService : IIdentitySeedService
             await _repository.UpdateUserAsync(user, cancellationToken);
         }
 
-        var globalAdminRole = await _repository.GetRoleByNameAsync(UnifiedRoles.GlobalAdmin, cancellationToken)
-            ?? throw new InvalidOperationException("GlobalAdmin role seed is missing.");
+        var superAdminRole = await _repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, cancellationToken)
+            ?? throw new InvalidOperationException("SuperAdmin role seed is missing.");
 
         var currentRoles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
-        var roleIds = currentRoles.Select(x => x.Id).Append(globalAdminRole.Id).Distinct().ToArray();
+        var roleIds = currentRoles.Select(x => x.Id).Append(superAdminRole.Id).Distinct().ToArray();
         await _repository.SetUserRolesAsync(user.Id, roleIds, cancellationToken);
     }
 

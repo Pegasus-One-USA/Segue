@@ -1,9 +1,12 @@
 using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Audit;
+using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
+using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Application.Services;
 
@@ -15,6 +18,8 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly ICurrentUserService _currentUserService;
     private readonly IOperationalAuditService _auditService;
     private readonly IUserActivityAuditService _activityAuditService;
+    private readonly IEmailSender _emailSender;
+    private readonly LocalAuthOptions _localAuthOptions;
 
     public LocalAuthService(
         IUserAccessRepository repository,
@@ -22,7 +27,9 @@ public sealed class LocalAuthService : ILocalAuthService
         IAccessTokenIssuer accessTokenIssuer,
         ICurrentUserService currentUserService,
         IOperationalAuditService auditService,
-        IUserActivityAuditService activityAuditService)
+        IUserActivityAuditService activityAuditService,
+        IEmailSender emailSender,
+        IOptions<LocalAuthOptions> localAuthOptions)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
@@ -30,6 +37,8 @@ public sealed class LocalAuthService : ILocalAuthService
         _currentUserService = currentUserService;
         _auditService = auditService;
         _activityAuditService = activityAuditService;
+        _emailSender = emailSender;
+        _localAuthOptions = localAuthOptions.Value;
     }
 
     public async Task<LocalLoginResponse> LoginAsync(
@@ -108,6 +117,12 @@ public sealed class LocalAuthService : ILocalAuthService
         user.SetPasswordResetToken(_passwordHasher.Hash(token), expiresOnUtc);
         await _repository.UpdateUserAsync(user, cancellationToken);
         await AuditAsync("ForgotPassword", "Accepted", $"Password reset token generated for {email}.", email, cancellationToken);
+
+        await _emailSender.SendAsync(
+            email,
+            "Reset your FHIRBridge password",
+            BuildPasswordResetEmailBody(user.DisplayName, BuildResetLink(email, token), expiresOnUtc),
+            cancellationToken);
 
         return new ForgotPasswordResponse(true, token, expiresOnUtc);
     }
@@ -320,6 +335,29 @@ public sealed class LocalAuthService : ILocalAuthService
         }
 
         return email.Trim().ToLowerInvariant();
+    }
+
+    private string BuildResetLink(string email, string token)
+    {
+        var template = _localAuthOptions.PasswordResetUrlTemplate;
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return token;
+        }
+
+        return template
+            .Replace("{token}", Uri.EscapeDataString(token))
+            .Replace("{email}", Uri.EscapeDataString(email));
+    }
+
+    private static string BuildPasswordResetEmailBody(string? displayName, string resetLinkOrToken, DateTime expiresOnUtc)
+    {
+        return $"""
+            <p>Hi {displayName},</p>
+            <p>We received a request to reset your FHIRBridge password. Use the link/token below to continue:</p>
+            <p><a href="{resetLinkOrToken}">{resetLinkOrToken}</a></p>
+            <p>This reset request expires at {expiresOnUtc:u}. If you did not request a password reset, you can ignore this email.</p>
+            """;
     }
 
     private static string GenerateToken()

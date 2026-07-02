@@ -51,11 +51,13 @@ public static class UnifiedRolePermissionSeed
     public static IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> Grants { get; } =
         new Dictionary<Guid, IReadOnlyList<Guid>>
         {
-            // GlobalAdmin and TenantAdmin receive every permission.
-            [SeededSecurityIds.GlobalAdminRoleId] = AllPermissions,
-            [SeededSecurityIds.TenantAdminRoleId] = AllPermissions,
+            // SuperAdmin and Admin receive every permission.
+            [SeededSecurityIds.SuperAdminRoleId] = AllPermissions,
+            [SeededSecurityIds.AdminRoleId] = AllPermissions,
 
-            [SeededSecurityIds.PipelineEngineerRoleId] =
+            // Operations covers the former PipelineEngineer + Analyst duties (build/run
+            // pipelines and workflows, plus review audit logs and reports).
+            [SeededSecurityIds.OperationsRoleId] =
             [
                 SeededSecurityIds.TenantsReadPermissionId,
                 SeededSecurityIds.ConfigurationWritePermissionId,
@@ -66,21 +68,12 @@ public static class UnifiedRolePermissionSeed
                 SeededSecurityIds.WorkflowDeletePermissionId,
                 SeededSecurityIds.WorkflowRunPermissionId,
                 SeededSecurityIds.WorkflowViewPermissionId,
-                SeededSecurityIds.PayloadViewPermissionId
-            ],
-
-            [SeededSecurityIds.AnalystRoleId] =
-            [
-                SeededSecurityIds.TenantsReadPermissionId,
-                SeededSecurityIds.PipelineExecutePermissionId,
+                SeededSecurityIds.PayloadViewPermissionId,
                 SeededSecurityIds.AuditLogsReadPermissionId,
-                SeededSecurityIds.WorkflowRunPermissionId,
-                SeededSecurityIds.WorkflowViewPermissionId,
-                SeededSecurityIds.ReportViewPermissionId,
-                SeededSecurityIds.PayloadViewPermissionId
+                SeededSecurityIds.ReportViewPermissionId
             ],
 
-            [SeededSecurityIds.AuditorRoleId] =
+            [SeededSecurityIds.AuditRoleId] =
             [
                 SeededSecurityIds.TenantsReadPermissionId,
                 SeededSecurityIds.AuditLogsReadPermissionId,

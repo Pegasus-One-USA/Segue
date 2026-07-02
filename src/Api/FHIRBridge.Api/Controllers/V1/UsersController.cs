@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -29,7 +30,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("{userId:guid}")]
-    [Authorize(Policy = "HasPermission:user.view")]
+    [StandardPermission(UnifiedPermissions.UserView)]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid userId, CancellationToken cancellationToken)
@@ -65,7 +66,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("invite")]
-    [Authorize(Policy = "HasPermission:user.invite")]
+    [StandardPermission(UnifiedPermissions.UserInvite)]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> InviteUser(
         [FromBody] InviteUserRequest request,
@@ -89,7 +90,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPatch("{userId:guid}/status")]
-    [Authorize(Policy = "HasPermission:user.deactivate")]
+    [StandardPermission(UnifiedPermissions.UserDeactivate)]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateUserStatus(
         Guid userId,
@@ -112,7 +113,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("{userId:guid}/roles")]
-    [Authorize(Policy = "HasPermission:user.view")]
+    [StandardPermission(UnifiedPermissions.UserView)]
     [ProducesResponseType(typeof(IReadOnlyList<RoleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserRoles(Guid userId, CancellationToken cancellationToken)
     {
@@ -122,7 +123,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("{userId:guid}/roles")]
-    [Authorize(Policy = "HasPermission:role.assign")]
+    [StandardPermission(UnifiedPermissions.RoleAssign)]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> AssignUserRole(
         Guid userId,
@@ -135,7 +136,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpDelete("{userId:guid}/roles/{roleId:guid}")]
-    [Authorize(Policy = "HasPermission:role.assign")]
+    [StandardPermission(UnifiedPermissions.RoleAssign)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemoveUserRole(
         Guid userId,

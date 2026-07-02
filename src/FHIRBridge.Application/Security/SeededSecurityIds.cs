@@ -3,11 +3,10 @@ namespace FHIRBridge.Application.Security;
 public static class SeededSecurityIds
 {
     // ── Platform roles (preserved from original seed) ────────────────────────
-    public static readonly Guid GlobalAdminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000001");
-    public static readonly Guid TenantAdminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000002");
-    public static readonly Guid PipelineEngineerRoleId = Guid.Parse("10000000-0000-0000-0000-000000000003");
-    public static readonly Guid AnalystRoleId = Guid.Parse("10000000-0000-0000-0000-000000000004");
-    public static readonly Guid AuditorRoleId = Guid.Parse("10000000-0000-0000-0000-000000000005");
+    public static readonly Guid SuperAdminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000001");
+    public static readonly Guid AdminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000002");
+    public static readonly Guid OperationsRoleId = Guid.Parse("10000000-0000-0000-0000-000000000003");
+    public static readonly Guid AuditRoleId = Guid.Parse("10000000-0000-0000-0000-000000000005");
 
     // ── Original platform permissions ────────────────────────────────────────
     public static readonly Guid TenantsReadPermissionId = Guid.Parse("20000000-0000-0000-0000-000000000001");

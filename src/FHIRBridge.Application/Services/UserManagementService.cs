@@ -1,10 +1,13 @@
 using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Audit;
+using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Application.Services;
 
@@ -16,17 +19,23 @@ public sealed class UserManagementService : IUserManagementService
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
     private readonly IOperationalAuditService _auditService;
+    private readonly IEmailSender _emailSender;
+    private readonly LocalAuthOptions _localAuthOptions;
 
     public UserManagementService(
         IUserAccessRepository repository,
         IPasswordHasher passwordHasher,
         ICurrentUserService currentUserService,
-        IOperationalAuditService auditService)
+        IOperationalAuditService auditService,
+        IEmailSender emailSender,
+        IOptions<LocalAuthOptions> localAuthOptions)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
         _currentUserService = currentUserService;
         _auditService = auditService;
+        _emailSender = emailSender;
+        _localAuthOptions = localAuthOptions.Value;
     }
 
     public async Task<IReadOnlyList<UserManagementDto>> GetUsersAsync(CancellationToken cancellationToken)
@@ -151,6 +160,12 @@ public sealed class UserManagementService : IUserManagementService
         await _repository.AddTenantUserAsync(tenantUser, cancellationToken);
 
         await AuditAsync("UserInvited", $"User invited: {email}.", cancellationToken);
+
+        await _emailSender.SendAsync(
+            email,
+            "You've been invited to FHIRBridge",
+            BuildInviteEmailBody(request.FirstName, role.Name, BuildInviteLink(email, rawToken), expiresOnUtc),
+            cancellationToken);
 
         return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken);
     }
@@ -343,6 +358,7 @@ public sealed class UserManagementService : IUserManagementService
             user.ExternalUserId,
             user.Email,
             user.DisplayName,
+            user.Status,
             user.IsEnabled,
             user.IsLocalLoginEnabled,
             user.MustChangePassword,
@@ -382,6 +398,32 @@ public sealed class UserManagementService : IUserManagementService
     }
 
     private static string LocalExternalId(string email) => $"local:{email}";
+
+    private string BuildInviteLink(string email, string token)
+    {
+        var template = _localAuthOptions.AcceptInviteUrlTemplate;
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return token;
+        }
+
+        return template
+            .Replace("{token}", Uri.EscapeDataString(token))
+            .Replace("{email}", Uri.EscapeDataString(email));
+    }
+
+    private static string BuildInviteEmailBody(string? firstName, string roleName, string inviteLinkOrToken, DateTime expiresOnUtc)
+    {
+        var greetingName = string.IsNullOrWhiteSpace(firstName) ? "there" : firstName;
+
+        return $"""
+            <p>Hi {greetingName},</p>
+            <p>You've been invited to join FHIRBridge as a <strong>{roleName}</strong>. Use the link/token below to
+            accept your invitation and set your password:</p>
+            <p><a href="{inviteLinkOrToken}">{inviteLinkOrToken}</a></p>
+            <p>This invitation expires at {expiresOnUtc:u}.</p>
+            """;
+    }
 
     private static string GenerateToken()
     {
