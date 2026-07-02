@@ -1,120 +1,133 @@
-<!-- user-management/dialogs/create-user-dialog/create-user-dialog.component.html -->
 <div class="dialog-container">
 
   <!-- Header -->
   <div class="dialog-header">
-    <div class="dialog-header__icon">
-      <mat-icon>person_add</mat-icon>
+    <div class="dialog-header__icon" [class.dialog-header__icon--success]="inviteSent()">
+      <mat-icon>{{ inviteSent() ? 'mark_email_read' : 'person_add' }}</mat-icon>
     </div>
     <div class="dialog-header__text">
-      <h2 mat-dialog-title>Create New User</h2>
-      <p>Fill in the details to provision a new platform user</p>
+      <h2 mat-dialog-title>{{ inviteSent() ? 'Invitation Sent' : 'Invite New User' }}</h2>
+      <p>{{ inviteSent()
+        ? 'The user has been invited to activate their account.'
+        : 'Send an invitation email to onboard a new platform user.' }}</p>
     </div>
-    <button mat-icon-button class="dialog-close" (click)="cancel()">
+    <button mat-icon-button class="dialog-close" (click)="close()">
       <mat-icon>close</mat-icon>
     </button>
   </div>
 
-  <mat-divider></mat-divider>
+  <!-- ── SUCCESS STATE ──────────────────────────────────────────────────────── -->
+  @if (inviteSent() && sentInvitation()) {
+    <mat-dialog-content>
+      <div class="success-body">
 
-  <!-- Content -->
-  <mat-dialog-content>
-    <form [formGroup]="form" (ngSubmit)="submit()" class="user-form">
+        <div class="success-summary">
+          <div class="success-avatar">
+            {{ sentInvitation()!.firstName[0] }}{{ sentInvitation()!.lastName[0] }}
+          </div>
+          <div>
+            <p class="success-name">{{ sentInvitation()!.firstName }} {{ sentInvitation()!.lastName }}</p>
+            <p class="success-email">{{ sentInvitation()!.email }}</p>
+            <span class="success-role-badge">{{ sentInvitation()!.role }}</span>
+          </div>
+        </div>
 
-      <!-- Section: Identity -->
-      <p class="form-section-label">Identity</p>
+        <div class="success-notice">
+          <mat-icon>info_outline</mat-icon>
+          <span>
+            <strong>Mock mode:</strong> No real email was sent. Share the activation link below
+            so the user can set their password.
+          </span>
+        </div>
 
-      <!-- Row 1: First + Last name -->
-      <div class="form-row form-row--2col">
-        <mat-form-field appearance="outline" class="form-field">
-          <mat-label>First Name</mat-label>
-          <input matInput formControlName="firstName" placeholder="John" autocomplete="off" />
-          <mat-error *ngIf="hasError('firstName', 'required')">First name is required</mat-error>
-          <mat-error *ngIf="hasError('firstName', 'maxlength')">Too long</mat-error>
-        </mat-form-field>
+        <div class="activation-link-wrap">
+          <label class="activation-label">Activation Link</label>
+          <div class="activation-row">
+            <input class="activation-input" [value]="activationUrl" readonly />
+            <button class="btn-copy" type="button" (click)="copyLink()">
+              <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
+              {{ copied() ? 'Copied!' : 'Copy' }}
+            </button>
+          </div>
+          <p class="activation-expiry">
+            <mat-icon>schedule</mat-icon>
+            Expires {{ sentInvitation()!.expiresAt | date:'MMM d, y, h:mm a' }}
+          </p>
+        </div>
 
-        <mat-form-field appearance="outline" class="form-field">
-          <mat-label>Last Name</mat-label>
-          <input matInput formControlName="lastName" placeholder="Doe" autocomplete="off" />
-          <mat-error *ngIf="hasError('lastName', 'required')">Last name is required</mat-error>
-          <mat-error *ngIf="hasError('lastName', 'maxlength')">Too long</mat-error>
-        </mat-form-field>
       </div>
+    </mat-dialog-content>
 
-      <!-- Row 2: Email -->
-      <mat-form-field appearance="outline" class="form-field form-field--full">
-        <mat-label>Email Address</mat-label>
-        <mat-icon matPrefix>email</mat-icon>
-        <input matInput formControlName="email" type="email" placeholder="john.doe@example.com" autocomplete="off" />
-        <mat-error *ngIf="hasError('email', 'required')">Email is required</mat-error>
-        <mat-error *ngIf="hasError('email', 'email')">Enter a valid email address</mat-error>
-      </mat-form-field>
+    <mat-dialog-actions>
+      <div class="dialog-actions">
+        <button mat-flat-button class="btn-submit" (click)="close()">
+          Done
+        </button>
+      </div>
+    </mat-dialog-actions>
+  }
 
-      <!-- Row 3: Tenant + Role -->
-      <div class="form-row form-row--2col">
-        <mat-form-field appearance="outline" class="form-field">
-          <mat-label>Tenant</mat-label>
-          <mat-icon matPrefix>domain</mat-icon>
-          <mat-select formControlName="tenantId">
-            @if (tenants.length === 0) {
-              <mat-option disabled value="">No tenants available</mat-option>
-            }
-            @for (t of tenants; track t.id) {
-              <mat-option [value]="t.id">{{ t.name }}</mat-option>
-            }
-          </mat-select>
-          <mat-error *ngIf="hasError('tenantId', 'required')">Tenant is required</mat-error>
-          @if (tenants.length === 0) {
-            <mat-hint class="hint-warn">Create a tenant first in the Tenant tab</mat-hint>
-          }
+  <!-- ── INVITATION FORM ────────────────────────────────────────────────────── -->
+  @if (!inviteSent()) {
+    <mat-dialog-content>
+      <form [formGroup]="form" (ngSubmit)="submit()" class="user-form">
+
+        <p class="form-section-label">Identity</p>
+
+        <div class="form-row form-row--2col">
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>First Name</mat-label>
+            <input matInput formControlName="firstName" placeholder="John" autocomplete="off" />
+            <mat-error *ngIf="hasError('firstName', 'required')">First name is required</mat-error>
+            <mat-error *ngIf="hasError('firstName', 'maxlength')">Too long</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Last Name</mat-label>
+            <input matInput formControlName="lastName" placeholder="Doe" autocomplete="off" />
+            <mat-error *ngIf="hasError('lastName', 'required')">Last name is required</mat-error>
+            <mat-error *ngIf="hasError('lastName', 'maxlength')">Too long</mat-error>
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" class="form-field form-field--full">
+          <mat-label>Email Address</mat-label>
+          <mat-icon matPrefix>email</mat-icon>
+          <input matInput formControlName="email" type="email" placeholder="john.doe@example.com" autocomplete="off" />
+          <mat-error *ngIf="hasError('email', 'required')">Email is required</mat-error>
+          <mat-error *ngIf="hasError('email', 'email')">Enter a valid email address</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" class="form-field form-field--full">
           <mat-label>Role</mat-label>
           <mat-icon matPrefix>shield</mat-icon>
-          <mat-select formControlName="customRoleId" [disabled]="!form.get('tenantId')?.value">
-            @if (rolesForSelectedTenant().length === 0) {
-              <mat-option disabled value="">
-                {{ form.get('tenantId')?.value ? 'No roles for this tenant' : 'Select a tenant first' }}
-              </mat-option>
-            }
-            @for (r of rolesForSelectedTenant(); track r.id) {
-              <mat-option [value]="r.id">{{ r.name }}</mat-option>
+          <mat-select formControlName="role">
+            @for (r of availableRoles; track r.value) {
+              <mat-option [value]="r.value">{{ r.label }}</mat-option>
             }
           </mat-select>
-          <mat-error *ngIf="hasError('customRoleId', 'required')">Role is required</mat-error>
-          @if (form.get('tenantId')?.value && rolesForSelectedTenant().length === 0) {
-            <mat-hint class="hint-warn">Create a role for this tenant first</mat-hint>
-          }
+          <mat-error *ngIf="hasError('role', 'required')">Role is required</mat-error>
         </mat-form-field>
+
+      </form>
+    </mat-dialog-content>
+
+    <mat-dialog-actions>
+      <div class="dialog-actions">
+        <button mat-stroked-button class="btn-cancel" (click)="cancel()" [disabled]="loading()">
+          Cancel
+        </button>
+        <button mat-flat-button class="btn-submit" (click)="submit()" [disabled]="loading()">
+          @if (loading()) {
+            <mat-spinner diameter="18" color="accent"></mat-spinner>
+            Sending…
+          } @else {
+            <mat-icon>send</mat-icon>
+            Send Invitation
+          }
+        </button>
       </div>
-
-    </form>
-  </mat-dialog-content>
-
-  <mat-divider></mat-divider>
-
-  <!-- Actions -->
-  <mat-dialog-actions>
-    <div class="dialog-actions">
-      <button mat-stroked-button class="btn-cancel" (click)="cancel()" [disabled]="loading()">
-        Cancel
-      </button>
-      <button
-        mat-flat-button
-        class="btn-submit"
-        (click)="submit()"
-        [disabled]="loading()"
-      >
-        @if (loading()) {
-          <mat-spinner diameter="18" color="accent"></mat-spinner>
-          Creating...
-        } @else {
-          <mat-icon>person_add</mat-icon>
-          Create User
-        }
-      </button>
-    </div>
-  </mat-dialog-actions>
+    </mat-dialog-actions>
+  }
 
 </div>

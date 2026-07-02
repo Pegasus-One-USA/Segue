@@ -1,4 +1,3 @@
-// user-management/dialogs/create-user-dialog/create-user-dialog.component.ts
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
@@ -10,12 +9,23 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDividerModule } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
-import { IUserService } from '../../../auth/services/i-user.service';
-import { TenantRoleService, CustomRole } from '../../services/tenant-role.service';
-import { CreateUserRequest } from '../../../auth/models/auth-request.model';
+import { InvitationService } from '../../../auth/services/invitation.service';
+import { TenantRoleService } from '../../services/tenant-role.service';
+import { UserRole } from '../../../auth/models/user.model';
+import { Invitation } from '../../../auth/models/invitation.model';
+
+const ROLES: { value: UserRole; label: string }[] = [
+  { value: 'system-admin',    label: 'System Admin' },
+  { value: 'tenant-admin',    label: 'Tenant Admin' },
+  { value: 'developer',       label: 'Developer' },
+  { value: 'pipeline-editor', label: 'Pipeline Editor' },
+  { value: 'reviewer',        label: 'Reviewer' },
+  { value: 'auditor',         label: 'Auditor' },
+  { value: 'analyst',         label: 'Analyst' },
+  { value: 'viewer',          label: 'Viewer' },
+];
 
 @Component({
   selector: 'app-create-user-dialog',
@@ -30,42 +40,39 @@ import { CreateUserRequest } from '../../../auth/models/auth-request.model';
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatDividerModule,
   ],
   templateUrl: './create-user-dialog.component.html',
   styleUrls: ['./create-user-dialog.component.scss'],
 })
 export class CreateUserDialogComponent implements OnInit {
-  private readonly userService = inject(IUserService);
-  private readonly dialogRef   = inject(MatDialogRef<CreateUserDialogComponent>);
-  private readonly snackBar    = inject(MatSnackBar);
-  private readonly fb          = inject(FormBuilder);
-  readonly tenantRoleSvc       = inject(TenantRoleService);
+  private readonly invitationSvc = inject(InvitationService);
+  private readonly dialogRef     = inject(MatDialogRef<CreateUserDialogComponent>);
+  private readonly snackBar      = inject(MatSnackBar);
+  private readonly fb            = inject(FormBuilder);
 
-  loading   = signal(false);
-  submitted = signal(false);
+  readonly tenantRoleSvc = inject(TenantRoleService);
+
+  loading       = signal(false);
+  submitted     = signal(false);
+  inviteSent    = signal(false);
+  sentInvitation = signal<Invitation | null>(null);
+  copied        = signal(false);
   form!: FormGroup;
 
-  get tenants() { return this.tenantRoleSvc.tenants(); }
+  readonly availableRoles = ROLES;
 
-  rolesForSelectedTenant(): CustomRole[] {
-    const tenantId = this.form?.get('tenantId')?.value as string;
-    return tenantId
-      ? this.tenantRoleSvc.roles().filter(r => r.tenantId === tenantId)
-      : this.tenantRoleSvc.roles();
+  get activationUrl(): string {
+    const inv = this.sentInvitation();
+    if (!inv) return '';
+    return this.invitationSvc.getActivationUrl(inv.token);
   }
 
   ngOnInit(): void {
     this.form = this.fb.group({
-      firstName:    ['', [Validators.required, Validators.maxLength(80)]],
-      lastName:     ['', [Validators.required, Validators.maxLength(80)]],
-      email:        ['', [Validators.required, Validators.email]],
-      tenantId:     ['', Validators.required],
-      customRoleId: ['', Validators.required],
-    });
-
-    this.form.get('tenantId')?.valueChanges.subscribe(() => {
-      this.form.get('customRoleId')?.reset('');
+      firstName: ['', [Validators.required, Validators.maxLength(80)]],
+      lastName:  ['', [Validators.required, Validators.maxLength(80)]],
+      email:     ['', [Validators.required, Validators.email]],
+      role:      ['viewer', Validators.required],
     });
   }
 
@@ -83,35 +90,39 @@ export class CreateUserDialogComponent implements OnInit {
 
     this.loading.set(true);
     const v = this.form.value;
-    const req: CreateUserRequest = {
-      firstName:  v.firstName.trim(),
-      lastName:   v.lastName.trim(),
-      email:      v.email.trim().toLowerCase(),
-      role:       'viewer',
-      loginType:  'local',
-      status:     'active',
-      sendInvite: false,
-    };
 
-    this.userService.createUser(req).subscribe({
-      next: user => {
+    this.invitationSvc.sendInvitation({
+      email:     v.email.trim().toLowerCase(),
+      firstName: v.firstName.trim(),
+      lastName:  v.lastName.trim(),
+      role:      v.role,
+      invitedBy: 'Admin',
+    }).subscribe({
+      next: invitation => {
         this.loading.set(false);
-        this.snackBar.open(
-          `User "${user.fullName}" created successfully.`,
-          'Dismiss',
-          { duration: 4000, panelClass: 'snack-success' },
-        );
-        this.dialogRef.close(user);
+        this.sentInvitation.set(invitation);
+        this.inviteSent.set(true);
       },
       error: err => {
         this.loading.set(false);
         this.snackBar.open(
-          err?.message ?? 'Failed to create user. Please try again.',
+          err?.message ?? 'Failed to send invitation. Please try again.',
           'Dismiss',
-          { duration: 5000, panelClass: 'snack-error' },
+          { duration: 5000 },
         );
       },
     });
+  }
+
+  copyLink(): void {
+    navigator.clipboard.writeText(this.activationUrl).then(() => {
+      this.copied.set(true);
+      setTimeout(() => this.copied.set(false), 2500);
+    });
+  }
+
+  close(): void {
+    this.dialogRef.close(this.inviteSent() ? this.sentInvitation() : null);
   }
 
   cancel(): void {

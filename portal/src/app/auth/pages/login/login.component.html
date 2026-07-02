@@ -25,6 +25,14 @@
     <!-- ── Heading ───────────────────────────────────────────────── -->
     <p class="auth-sub">Sign in to your account to continue</p>
 
+    <!-- ── Account activated banner ─────────────────────────────── -->
+    @if (activated()) {
+      <div class="auth-alert auth-alert--success" role="status" aria-live="polite">
+        <mat-icon class="alert-icon" aria-hidden="true">check_circle</mat-icon>
+        <span>Your account has been activated successfully. Please sign in.</span>
+      </div>
+    }
+
     <!-- ── Global error ─────────────────────────────────────────── -->
     @if (error()) {
       <div class="auth-alert" role="alert" aria-live="assertive">
