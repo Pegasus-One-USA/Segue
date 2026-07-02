@@ -271,6 +271,11 @@ public static class DependencyInjection
             configuration.GetSection(PatientAggregationOptions.SectionName).Get<PatientAggregationOptions>()
             ?? new PatientAggregationOptions());
         services.AddScoped<IPatientAggregationService, PatientAggregationService>();
+        // Stateless caller-token read (provider-standalone / pass-through). Reuses PatientAggregationOptions above.
+        services.AddScoped<IPassthroughPatientReadService, PassthroughPatientReadService>();
+        // Formats the pass-through read into the tenant's admin-configured destination format (reuses the pipeline's
+        // mapping engine + destination writers); returns null to fall back to the FHIR Bundle when none is configured.
+        services.AddScoped<IPassthroughExportWriter, PassthroughExportWriter>();
         services.AddScoped<IFhirSubscriptionManagementService, FhirSubscriptionManagementService>();
         services.AddScoped<ISourceConnectionTestService, SourceConnectionTestService>();
         services.AddSingleton<ILaunchTokenProtector, DataProtectionLaunchTokenProtector>();

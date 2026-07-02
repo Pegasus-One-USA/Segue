@@ -22,4 +22,8 @@ public sealed record FhirSourceConfiguration(
     // Application-type (composition) axis: when set it selects the SMART grant/launch flow independently of the
     // vendor. Left null for backward compatibility — the composite token provider then infers the grant from the
     // vendor and the credentials present.
-    ApplicationType? ApplicationType = null);
+    ApplicationType? ApplicationType = null,
+    // Pass-through (provider-standalone) axis: a token the CALLER already acquired from its own SMART login. When
+    // set, the composite token provider returns it verbatim and performs NO OAuth. Null for every existing flow, so
+    // their token acquisition is completely unchanged.
+    string? AccessToken = null);

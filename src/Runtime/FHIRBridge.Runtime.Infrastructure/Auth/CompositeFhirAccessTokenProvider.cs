@@ -44,6 +44,13 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider
 
     public Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
+        // Pass-through axis: the caller already holds a valid token (their app ran the SMART login). Use it verbatim
+        // and acquire nothing. Guarded on the new opt-in field, so every existing flow falls straight through below.
+        if (!string.IsNullOrWhiteSpace(source.AccessToken))
+        {
+            return Task.FromResult(source.AccessToken!);
+        }
+
         // Application-type axis (composition): resolve the strategy from the registry — no switch on ApplicationType.
         if (source.ApplicationType is { } applicationType)
         {
