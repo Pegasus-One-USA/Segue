@@ -7,6 +7,17 @@
   <div class="wiz-card-body" [formGroup]="form">
     <div class="form-grid">
 
+      <!-- Epic Audience (always) -->
+      <div class="form-field">
+        <label>Epic Audience <span class="req">*</span></label>
+        <select formControlName="epicAudience">
+          <option value="provider-ehr-launch">Provider EHR Launch</option>
+          <option value="provider-standalone">Provider Standalone</option>
+          <option value="backend-system">Backend Systems</option>
+          <option value="patient">Patient</option>
+        </select>
+      </div>
+
       <!-- App Name (advanced) -->
       @if (showAdvanced()) {
         <div class="form-field">

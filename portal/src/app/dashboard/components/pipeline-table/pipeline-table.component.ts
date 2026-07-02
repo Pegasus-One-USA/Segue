@@ -1,5 +1,6 @@
 import { Component, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { PipelineRun, PipelineRunStatus } from '../../models/pipeline-run.model';
 
 const STATUS_LABELS: Record<PipelineRunStatus, string> = {
@@ -13,7 +14,7 @@ const STATUS_LABELS: Record<PipelineRunStatus, string> = {
 @Component({
   selector: 'app-pipeline-table',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, RouterLink],
   templateUrl: './pipeline-table.component.html',
   styleUrl: './pipeline-table.component.scss',
 })

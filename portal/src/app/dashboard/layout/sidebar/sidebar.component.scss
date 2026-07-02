@@ -1,12 +1,12 @@
 .sidebar {
   width: 220px;
   min-height: 100vh;
-  background: #FFFFFF;
-  border-right: 1px solid #E2E8F0;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
   padding: 0 12px 24px;
   display: flex;
   flex-direction: column;
-  transition: width 0.2s ease;
+  transition: width var(--transition-slow);
   flex-shrink: 0;
 
   &.collapsed {
@@ -21,19 +21,19 @@
   gap: 10px;
   padding: 20px 12px 24px;
   overflow: hidden;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--color-side);
   margin-bottom: 12px;
 
   .logo-hex {
     font-size: 22px;
-    color: #00A89D;
+    color: var(--color-primary);
     flex-shrink: 0;
   }
 
   .logo-text {
     font-size: 15px;
     font-weight: 700;
-    color: #1A202C;
+    color: var(--color-ink);
     white-space: nowrap;
     letter-spacing: -0.3px;
   }
@@ -50,17 +50,23 @@
   align-items: center;
   gap: 11px;
   padding: 10px 12px;
-  border-radius: 8px;
-  color: #64748B;
+  border-radius: var(--radius-base);
+  border-left: 3px solid transparent;
+  color: var(--color-muted);
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--transition-base), color var(--transition-base);
   white-space: nowrap;
   overflow: hidden;
 
-  &:hover  { background: #F8FAFC; color: #1A202C; }
-  &.active { background: #E6F9F7; color: #00A89D; font-weight: 600; }
+  &:hover  { background: var(--color-side); color: var(--color-ink); }
+  &.active {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-weight: 600;
+    border-left-color: var(--color-primary);
+  }
 }
 
 .nav-icon {
@@ -73,4 +79,21 @@
 .nav-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nav-section {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-border);
+  padding: 16px 12px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.nav-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 8px 4px;
 }

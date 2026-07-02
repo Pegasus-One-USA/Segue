@@ -1,4 +1,4 @@
-@if (wiz.isOpen()) {
+@if (wiz.isOpen() && !wiz.openedInline()) {
   <div class="ew-backdrop" (click)="onBackdropClick($event)">
     <section class="ew-panel" role="dialog" aria-label="Epic Source Wizard">
 

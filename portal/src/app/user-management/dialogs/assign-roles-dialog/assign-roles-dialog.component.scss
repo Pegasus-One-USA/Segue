@@ -1,0 +1,319 @@
+// user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.scss
+
+:host { display: block; }
+
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+  width: 100%;
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--color-primary-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    mat-icon { color: var(--color-primary); font-size: 22px; height: 22px; width: 22px; }
+  }
+
+  &__text {
+    flex: 1;
+
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-ink);
+      margin: 0 0 2px;
+      padding: 0;
+    }
+
+    p {
+      font-size: 13px;
+      color: var(--color-muted);
+      margin: 0;
+    }
+  }
+}
+
+.dialog-close {
+  color: var(--color-muted) !important;
+  &:hover { background: var(--color-bg) !important; }
+}
+
+// ─── Content ──────────────────────────────────────────────────────────────────
+mat-dialog-content {
+  padding: 0 !important;
+  overflow-y: auto;
+  flex: 1;
+  max-height: calc(90vh - 160px);
+}
+
+.assign-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 400px;
+
+  @media (max-width: 640px) { grid-template-columns: 1fr; }
+}
+
+// ─── Panel shared styles ──────────────────────────────────────────────────────
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  padding: 14px 20px;
+  background: var(--color-side);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+
+  mat-icon {
+    font-size: 16px;
+    height: 16px;
+    width: 16px;
+    color: var(--color-primary);
+  }
+}
+
+// ─── Left: Roles panel ────────────────────────────────────────────────────────
+.roles-panel {
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+}
+
+.panel-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--color-muted);
+  font-size: 13px;
+
+  ::ng-deep .mat-mdc-progress-spinner circle { stroke: var(--color-primary); }
+}
+
+.roles-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.role-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background var(--transition-base);
+
+  &:last-child { border-bottom: none; }
+
+  &:hover { background: var(--color-bg); }
+
+  &--assigned { background: var(--color-primary-soft); }
+
+  &--loading { cursor: not-allowed; opacity: 0.8; }
+
+  &__check {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    margin-top: 4px;
+
+    ::ng-deep .mat-mdc-checkbox { pointer-events: none; }
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+
+  &__desc {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin: 0 0 2px;
+    line-height: 1.4;
+  }
+
+  &__perms {
+    font-size: 11px;
+    color: var(--color-primary);
+    font-weight: 500;
+    margin: 0;
+  }
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.system-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: #F1F5F9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+}
+
+// ─── Right: Permissions panel ─────────────────────────────────────────────────
+.perms-panel {
+  overflow-y: auto;
+}
+
+.perm-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.perms-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  gap: 10px;
+  text-align: center;
+
+  mat-icon {
+    font-size: 36px;
+    height: 36px;
+    width: 36px;
+    color: var(--color-border);
+  }
+
+  span {
+    font-size: 13px;
+    color: var(--color-muted);
+    max-width: 200px;
+    line-height: 1.5;
+  }
+}
+
+.perms-groups {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.perm-group {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  overflow: hidden;
+
+  &__resource {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-ink-2);
+
+    mat-icon {
+      font-size: 14px;
+      height: 14px;
+      width: 14px;
+      color: var(--color-primary);
+    }
+  }
+
+  &__actions {
+    padding: 8px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+.perm-action-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+mat-dialog-actions {
+  padding: 16px 24px !important;
+  margin: 0 !important;
+}
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.assigned-summary {
+  font-size: 13px;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.btn-done {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+
+  &:hover { background: var(--color-primary-dark) !important; }
+}

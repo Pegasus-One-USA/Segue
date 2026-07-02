@@ -1,0 +1,181 @@
+<div class="list-page">
+
+  <!-- Filter Bar -->
+  <div class="filter-card">
+    <div class="filter-row">
+
+      <div class="search-wrap">
+        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search by name or source..."
+          [value]="searchQuery()"
+          (input)="onSearch($any($event.target).value)"
+        />
+      </div>
+
+      <!-- Status filter -->
+      <div class="select-wrap">
+        <div class="select-box">
+          <select [value]="statusFilter()" (change)="onStatus($any($event.target).value)">
+            <option value="">All Statuses</option>
+            <option value="running">Running</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="queued">Queued</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Triggered By filter -->
+      <div class="select-wrap">
+        <div class="select-box">
+          <select [value]="triggerFilter()" (change)="onTrigger($any($event.target).value)">
+            <option value="">All Triggers</option>
+            <option value="manual">Manual</option>
+            <option value="schedule">Schedule</option>
+            <option value="api">API</option>
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-reset" type="button" (click)="reset()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 .49-3.5"></path>
+          </svg>
+          Reset
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Table Card -->
+  <div class="table-card">
+
+    <div class="table-meta">
+      <span class="entries-info">
+        @if (filtered().length > 0) {
+          Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
+          {{ filtered().length === 1 ? 'entry' : 'entries' }}
+        } @else {
+          No entries found
+        }
+      </span>
+    </div>
+
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="paginated()" class="data-table">
+
+        <ng-container matColumnDef="index">
+          <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
+          <td mat-cell *matCellDef="let r; let i = index" class="col-index">
+            {{ pageIndex() * pageSize() + i + 1 }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Pipeline</th>
+          <td mat-cell *matCellDef="let r">
+            <div class="cell-name">
+              <div class="pipe-avatar">
+                <mat-icon>bolt</mat-icon>
+              </div>
+              <span class="cell-primary">{{ r.name }}</span>
+            </div>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="source">
+          <th mat-header-cell *matHeaderCellDef>Source</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ r.sourceType }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class]="'status-' + r.status">
+              {{ statusLabel(r.status) }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="duration">
+          <th mat-header-cell *matHeaderCellDef>Duration</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ formatDuration(r.duration) }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="lastRun">
+          <th mat-header-cell *matHeaderCellDef>Last Run</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ r.startedAt | date:'MMM d, h:mm a' }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="triggeredBy">
+          <th mat-header-cell *matHeaderCellDef>Triggered By</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="trigger-badge" [class]="'trigger-' + r.triggeredBy">{{ r.triggeredBy }}</span>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
+      </table>
+    </div>
+
+    @if (filtered().length === 0) {
+      <div class="empty-state">
+        <div class="empty-state__icon-wrap">
+          <mat-icon>bolt</mat-icon>
+        </div>
+        <h3 class="empty-state__title">
+          @if (searchQuery() || statusFilter() || triggerFilter()) {
+            No pipelines matched your filters
+          } @else {
+            No pipeline runs yet
+          }
+        </h3>
+        <p class="empty-state__sub">
+          @if (searchQuery() || statusFilter() || triggerFilter()) {
+            Try adjusting your search or filters.
+          } @else {
+            Pipeline runs will appear here once executed.
+          }
+        </p>
+      </div>
+    }
+
+    @if (filtered().length > pageSize()) {
+      <mat-paginator
+        [length]="filtered().length"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[5, 10, 25, 50]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+        class="table-paginator"
+      ></mat-paginator>
+    }
+
+  </div>
+
+</div>

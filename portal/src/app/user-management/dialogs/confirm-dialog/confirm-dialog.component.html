@@ -1,0 +1,20 @@
+<div class="confirm-container">
+  <div class="confirm-body">
+    <div class="confirm-icon-wrap" [class.confirm-icon-wrap--danger]="data.danger">
+      <mat-icon>{{ data.danger ? 'warning' : 'help_outline' }}</mat-icon>
+    </div>
+    <h3 class="confirm-title">{{ data.title }}</h3>
+    <p class="confirm-message">{{ data.message }}</p>
+  </div>
+  <div class="confirm-footer">
+    <button mat-stroked-button class="btn-cancel" (click)="dialogRef.close(false)">Cancel</button>
+    <button
+      mat-flat-button
+      class="btn-action"
+      [class.btn-action--danger]="data.danger"
+      (click)="dialogRef.close(true)"
+    >
+      {{ data.confirmLabel ?? 'Confirm' }}
+    </button>
+  </div>
+</div>

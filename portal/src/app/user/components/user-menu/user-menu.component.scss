@@ -1,5 +1,14 @@
 :host { position: relative; display: flex; }
 
+/* ── Backdrop ─────────────────────────────────────────────────────── */
+.um-backdrop {
+  position:   fixed;
+  inset:      0;
+  z-index:    9000;
+  background: transparent;
+  cursor:     default;
+}
+
 /* ── Trigger ──────────────────────────────────────────────────────── */
 .um-wrap { position: relative; }
 
@@ -39,15 +48,18 @@
 
 /* ── Panel ────────────────────────────────────────────────────────── */
 .um-panel {
-  position: absolute; top: calc(100% + 10px); right: 0;
-  width: 308px;
-  background: #fff;
-  border: 1px solid #E2E8F0;
+  position:      fixed;
+  top:           72px;
+  right:         16px;
+  width:         308px;
+  max-height:    calc(100vh - 88px);
+  overflow-y:    auto;
+  background:    #fff;
+  border:        1px solid #E2E8F0;
   border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(15,23,42,.14), 0 4px 12px rgba(15,23,42,.06);
-  z-index: 9999;
-  overflow: hidden;
-  animation: um-slide-in .18s cubic-bezier(.22,.68,0,1.2) both;
+  box-shadow:    0 24px 60px rgba(15,23,42,.18), 0 4px 16px rgba(15,23,42,.08);
+  z-index:       9001;
+  animation:     um-slide-in .18s cubic-bezier(.22,.68,0,1.2) both;
 }
 
 @keyframes um-slide-in {

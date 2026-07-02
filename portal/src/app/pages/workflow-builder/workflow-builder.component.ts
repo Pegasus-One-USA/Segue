@@ -10,8 +10,6 @@ import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode } from '../../models/node.model';
 import { MergeNodeOption } from '../../models/wizard-state.model';
 
-import { SidebarComponent } from '../../dashboard/layout/sidebar/sidebar.component';
-import { UserMenuComponent } from '../../user/components/user-menu/user-menu.component';
 import { CanvasComponent } from '../../components/canvas/canvas.component';
 import { EpicSourceWizardComponent } from '../../components/epic-source-wizard/epic-source-wizard.component';
 import { PayloadPreviewComponent } from '../../components/modals/payload-preview/payload-preview.component';
@@ -28,8 +26,6 @@ import {
   standalone: true,
   imports: [
     FormsModule,
-    SidebarComponent,
-    UserMenuComponent,
     CanvasComponent,
     EpicSourceWizardComponent,
     PayloadPreviewComponent,
@@ -46,10 +42,7 @@ export class WorkflowBuilderComponent {
   private readonly appSvc = inject(ApplicabilityService);
 
   // ── page state ─────────────────────────────────────────────────────────────
-  protected readonly scenarioName     = signal('Grouped-node pipeline (Normalize group + merge)');
-  protected readonly sidebarCollapsed = signal(false);
-
-  toggleSidebar(): void { this.sidebarCollapsed.update(v => !v); }
+  protected readonly scenarioName = signal('Grouped-node pipeline (Normalize group + merge)');
 
   // ── node library dialog (unified — replaces source + transform pickers) ────
   protected readonly libraryOpen      = signal(false);

@@ -1,0 +1,140 @@
+<!-- user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.html -->
+<div class="dialog-container">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>manage_accounts</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2 mat-dialog-title>Assign Roles</h2>
+      <p>{{ data.user.fullName }} &mdash; {{ data.user.email }}</p>
+    </div>
+    <button mat-icon-button class="dialog-close" (click)="close()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <!-- Content -->
+  <mat-dialog-content>
+    <div class="assign-layout">
+
+      <!-- Left panel: Role list -->
+      <div class="roles-panel">
+        <div class="panel-title">
+          <mat-icon>badge</mat-icon>
+          Available Roles
+        </div>
+
+        @if (loading()) {
+          <div class="panel-loading">
+            <mat-spinner diameter="32" color="primary"></mat-spinner>
+            <span>Loading roles...</span>
+          </div>
+        }
+
+        @if (!loading()) {
+          <div class="roles-list">
+            @for (role of allRoles(); track role.id) {
+              <div
+                class="role-item"
+                [class.role-item--assigned]="isAssigned(role.id)"
+                [class.role-item--loading]="actionLoading() === role.id"
+                (click)="toggleRole(role)"
+              >
+                <div class="role-item__check">
+                  @if (actionLoading() === role.id) {
+                    <mat-spinner diameter="18" color="primary"></mat-spinner>
+                  } @else {
+                    <mat-checkbox
+                      [checked]="isAssigned(role.id)"
+                      color="primary"
+                      (click)="$event.stopPropagation()"
+                      (change)="toggleRole(role)"
+                    ></mat-checkbox>
+                  }
+                </div>
+                <div class="role-item__body">
+                  <div class="role-item__name-row">
+                    <span
+                      class="role-chip"
+                      [style.color]="getRoleConfig(role.name).color"
+                      [style.background-color]="getRoleConfig(role.name).bg"
+                    >
+                      {{ getRoleConfig(role.name).label }}
+                    </span>
+                    @if (role.isSystemRole) {
+                      <span class="system-badge" matTooltip="Built-in system role">System</span>
+                    }
+                  </div>
+                  <p class="role-item__desc">{{ role.description }}</p>
+                  <p class="role-item__perms">
+                    {{ role.permissions?.length ?? 0 }} permission{{ (role.permissions?.length ?? 0) === 1 ? '' : 's' }}
+                  </p>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Right panel: Permission preview -->
+      <div class="perms-panel">
+        <div class="panel-title">
+          <mat-icon>security</mat-icon>
+          Effective Permissions
+          <span class="perm-count">{{ effectivePermissions().length }}</span>
+        </div>
+
+        @if (permissionGroups().length === 0) {
+          <div class="perms-empty">
+            <mat-icon>lock_open</mat-icon>
+            <span>No permissions yet — assign a role to see permissions here.</span>
+          </div>
+        }
+
+        @if (permissionGroups().length > 0) {
+          <div class="perms-groups">
+            @for (group of permissionGroups(); track group.resource) {
+              <div class="perm-group">
+                <div class="perm-group__resource">
+                  <mat-icon>folder_open</mat-icon>
+                  {{ group.resource | titlecase }}
+                </div>
+                <div class="perm-group__actions">
+                  @for (perm of group.permissions; track perm.id) {
+                    <span
+                      class="perm-action-chip"
+                      [matTooltip]="perm.description"
+                    >
+                      {{ perm.action }}
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+    </div>
+  </mat-dialog-content>
+
+  <mat-divider></mat-divider>
+
+  <!-- Actions -->
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <span class="assigned-summary">
+        {{ localUser().roles.length }} role{{ localUser().roles.length === 1 ? '' : 's' }} assigned
+      </span>
+      <button mat-flat-button class="btn-done" (click)="close()">
+        <mat-icon>check</mat-icon>
+        Done
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

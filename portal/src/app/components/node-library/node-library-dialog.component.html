@@ -76,7 +76,6 @@
                 (click)="toggleCat(cat.rank)"
               >
                 <span class="nld-cat-icon" [style.color]="cat.catColor">{{ cat.icon }}</span>
-                <span class="nld-rank-badge" [style.background]="cat.catColor">{{ cat.rank }}</span>
                 <span class="nld-cat-label">{{ cat.label }}</span>
                 <span class="nld-cat-count">{{ cat.items.length }}</span>
                 <span class="nld-chevron" [class.open]="isCatExpanded(cat.rank)">›</span>
@@ -136,7 +135,95 @@
       </nav>
 
       <!-- RIGHT: Detail / config panel -->
-      <section class="nld-detail">
+      <section class="nld-detail" [class.nld-detail--wiz]="showInlineWizard()">
+
+        <!-- ── Inline Epic Wizard ────────────────────────────────────────── -->
+        @if (showInlineWizard()) {
+          <div class="nld-wiz">
+
+            <!-- Header -->
+            <div class="nld-wiz-head">
+              <div class="nld-wiz-head-left">
+                <div class="nld-wiz-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="11" fill="#00A89D" opacity=".15"/>
+                    <path d="M7 12h10M12 7v10" stroke="#00A89D" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <span class="nld-wiz-title">Epic Source Wizard</span>
+                @if (wiz.connected()) {
+                  <span class="nld-wiz-verified">&#10003; Connected</span>
+                }
+              </div>
+              <div class="nld-wiz-head-right">
+                <label class="nld-wiz-adv">
+                  <input type="checkbox" [checked]="wizShowAdvanced()" (change)="wizToggleAdvanced()" />
+                  <span>Advanced</span>
+                </label>
+                <button class="nld-wiz-close" type="button" (click)="wizClose()" title="Close wizard">&#10005;</button>
+              </div>
+            </div>
+
+            <!-- Stepper -->
+            <nav class="nld-wiz-stepper">
+              @for (s of WIZARD_STEPS; track s.n) {
+                <button
+                  class="nld-wiz-step"
+                  type="button"
+                  [class.active]="wizStep() === s.n"
+                  [class.done]="wizStep() > s.n"
+                  (click)="wizGoToStep(s.n)">
+                  <span class="nld-wiz-step-num">{{ wizStep() > s.n ? '✓' : s.n }}</span>
+                  <span class="nld-wiz-step-lbl">{{ s.label }}</span>
+                </button>
+              }
+            </nav>
+
+            <!-- Body -->
+            <div class="nld-wiz-body">
+              <app-epic-step-connect
+                [style.display]="wizStep() === 1 ? '' : 'none'"
+                [showAdvanced]="wizShowAdvanced()"
+              />
+              <app-epic-step-authenticate
+                [style.display]="wizStep() === 2 ? '' : 'none'"
+                [showAdvanced]="wizShowAdvanced()"
+              />
+              <app-epic-step-data
+                [style.display]="wizStep() === 3 ? '' : 'none'"
+                [showAdvanced]="wizShowAdvanced()"
+              />
+              <app-epic-step-test
+                [style.display]="wizStep() === 4 ? '' : 'none'"
+              />
+              @if (wizStep() === 5) {
+                <div class="nld-wiz-placeholder">
+                  <div class="nld-wiz-ph-icon">&#8680;</div>
+                  <h3>Transform</h3>
+                  <p>Data transformation rules will be configured here in a future release. Click <strong>Next</strong> to continue.</p>
+                </div>
+              }
+              @if (wizStep() === 6) {
+                <div class="nld-wiz-placeholder">
+                  <div class="nld-wiz-ph-icon">&#9679;</div>
+                  <h3>Destination</h3>
+                  <p>Configure your data destination. Click <strong>Finish</strong> to save this Epic source to the pipeline canvas.</p>
+                </div>
+              }
+            </div>
+
+            <!-- Footer -->
+            <div class="nld-wiz-footer">
+              <button class="nld-wiz-btn" type="button" [disabled]="wizStep() === 1" (click)="wizGoBack()">&#8592; Back</button>
+              <span class="nld-wiz-step-info">Step {{ wizStep() }} of {{ WIZARD_STEPS.length }}</span>
+              <button class="nld-wiz-btn nld-wiz-btn--primary" type="button" (click)="wizGoNext()">
+                {{ wizStep() === 6 ? '✓ Finish' : 'Next →' }}
+              </button>
+            </div>
+
+          </div>
+
+        } @else {
 
         @if (!selectedItem()) {
           <!-- Empty state -->
@@ -324,6 +411,8 @@
 
           </div><!-- /nld-config -->
         }
+
+        }<!-- /else showInlineWizard -->
 
       </section>
     </div><!-- /nld-body -->

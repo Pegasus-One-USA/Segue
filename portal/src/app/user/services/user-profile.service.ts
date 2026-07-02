@@ -1,30 +1,52 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import {
   UserProfile,
   AppTheme,
   ActiveSession,
   ApiKey,
+  ROLE_DEFINITIONS,
+  ExtendedUserRole,
 } from '../models/user-profile.model';
+import { AuthService } from '../../auth/services/auth.service';
 
-const MOCK_PROFILE: UserProfile = {
-  id:              'dev-001',
-  firstName:       'Hasnain',
-  lastName:        'Machiwala',
-  email:           'hasnain.machiwala@pegasusone.com',
-  phone:           '+1 (415) 555-0182',
-  avatarInitials:  'HM',
-  avatarColor:     '#00A89D',
-  role:            'pipeline-editor',
-  roleLabel:       'Pipeline Editor',
-  organization:    'Pegasus One Health',
-  tenant:          'pegasusone',
-  department:      'Healthcare Integration',
-  designation:     'Senior Integration Engineer',
-  employeeId:      'PO-20241',
-  location:        'San Francisco, CA',
-  timezone:        'America/Los_Angeles',
-  memberSince:     '2024-01-15',
-  lastLogin:       '2025-06-25T09:30:00Z',
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  '#00A89D', '#5B21B6', '#1D4ED8', '#0369A1',
+  '#0891B2', '#059669', '#D97706', '#DC2626',
+];
+
+function deriveAvatarColor(email: string): string {
+  let hash = 0;
+  for (const ch of email) hash = (hash * 31 + ch.charCodeAt(0)) & 0xffffffff;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function deriveInitials(first: string, last: string): string {
+  return ((first[0] ?? '') + (last[0] ?? '')).toUpperCase() || '?';
+}
+
+// ─── Default profile (shown while no user is loaded) ──────────────────────────
+
+const DEFAULT_PROFILE: UserProfile = {
+  id:              '',
+  firstName:       '',
+  lastName:        '',
+  email:           '',
+  phone:           '',
+  avatarInitials:  '?',
+  avatarColor:     '#94A3B8',
+  role:            'viewer',
+  roleLabel:       'Viewer',
+  organization:    'FHIRBridge Platform',
+  tenant:          '',
+  department:      '',
+  designation:     '',
+  employeeId:      '',
+  location:        '',
+  timezone:        'UTC',
+  memberSince:     '',
+  lastLogin:       '',
   status:          'active',
   theme:           'light',
   language:        'English (US)',
@@ -34,9 +56,11 @@ const MOCK_PROFILE: UserProfile = {
   notificationsEnabled: true,
   emailNotifications:   true,
   inAppNotifications:   true,
-  apiKey:          'pk_live_••••••••••••••••••••••••4f3a',
-  sessionCount:    2,
+  apiKey:          '',
+  sessionCount:    0,
 };
+
+// ─── Mock sessions & API keys (for settings pages) ────────────────────────────
 
 const MOCK_SESSIONS: ActiveSession[] = [
   {
@@ -78,9 +102,13 @@ const MOCK_API_KEYS: ApiKey[] = [
   },
 ];
 
+// ─── Service ──────────────────────────────────────────────────────────────────
+
 @Injectable({ providedIn: 'root' })
 export class UserProfileService {
-  private readonly _profile  = signal<UserProfile>({ ...MOCK_PROFILE });
+  private readonly auth = inject(AuthService);
+
+  private readonly _profile  = signal<UserProfile>({ ...DEFAULT_PROFILE });
   private readonly _sessions = signal<ActiveSession[]>(MOCK_SESSIONS);
   private readonly _apiKeys  = signal<ApiKey[]>(MOCK_API_KEYS);
 
@@ -88,12 +116,46 @@ export class UserProfileService {
   readonly sessions = this._sessions.asReadonly();
   readonly apiKeys  = this._apiKeys.asReadonly();
 
-  readonly theme       = computed(() => this._profile().theme);
-  readonly fullName    = computed(() =>
-    `${this._profile().firstName} ${this._profile().lastName}`
+  readonly theme     = computed(() => this._profile().theme);
+  readonly fullName  = computed(() =>
+    [this._profile().firstName, this._profile().lastName].filter(Boolean).join(' ')
   );
-  readonly initials    = computed(() => this._profile().avatarInitials);
-  readonly roleLabel   = computed(() => this._profile().roleLabel);
+  readonly initials  = computed(() => this._profile().avatarInitials);
+  readonly roleLabel = computed(() => this._profile().roleLabel);
+
+  constructor() {
+    // Sync identity fields from the auth store whenever the logged-in user changes.
+    // Preference fields (theme, language, dateFormat, etc.) are preserved across syncs.
+    effect(() => {
+      const user = this.auth.currentUser();
+      if (!user) return;
+
+      const roleDef = ROLE_DEFINITIONS.find(r => r.id === user.role);
+
+      this._profile.update(p => ({
+        ...p,
+        id:              user.id,
+        firstName:       user.firstName,
+        lastName:        user.lastName,
+        email:           user.email,
+        phone:           user.phone           ?? p.phone,
+        avatarInitials:  deriveInitials(user.firstName, user.lastName),
+        avatarColor:     deriveAvatarColor(user.email),
+        role:            user.role            as ExtendedUserRole,
+        roleLabel:       roleDef?.label       ?? user.role,
+        department:      user.department      ?? p.department,
+        designation:     user.jobTitle        ?? p.designation,
+        memberSince:     user.createdAt,
+        lastLogin:       user.lastLoginAt     ?? p.lastLogin,
+        status:          user.status          as 'active' | 'inactive' | 'suspended',
+        twoFactorEnabled: user.twoFactorEnabled,
+        tenant:          user.orgId           ?? p.tenant,
+        sessionCount:    this._sessions().length,
+      }));
+    });
+  }
+
+  // ─── Preference & settings mutations ────────────────────────────────────────
 
   setTheme(theme: AppTheme): void {
     this._profile.update(p => ({ ...p, theme }));
@@ -116,14 +178,11 @@ export class UserProfileService {
     this._profile.update(p => ({ ...p, twoFactorEnabled: !p.twoFactorEnabled }));
   }
 
-  updateNotifications(
-    email: boolean,
-    inApp: boolean,
-  ): void {
+  updateNotifications(email: boolean, inApp: boolean): void {
     this._profile.update(p => ({
       ...p,
-      emailNotifications: email,
-      inAppNotifications: inApp,
+      emailNotifications:   email,
+      inAppNotifications:   inApp,
       notificationsEnabled: email || inApp,
     }));
   }

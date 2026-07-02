@@ -16,6 +16,7 @@ export interface FullDiscoveredValues {
 
 export interface ConnectValues {
   appName: string;
+  epicAudience: string;
   environment: string;
   sandboxClientId: string;
   nonProdClientId: string;

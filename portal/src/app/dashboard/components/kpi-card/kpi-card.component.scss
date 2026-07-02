@@ -1,14 +1,14 @@
 .kpi-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-top: 3px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   padding: 20px 22px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.15s, transform 0.15s;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
   cursor: default;
 
   &:hover {
@@ -16,10 +16,16 @@
     transform: translateY(-2px);
   }
 
-  &.accent-blue   { border-top-color: #00A89D; }
-  &.accent-green  { border-top-color: #10B981; }
-  &.accent-amber  { border-top-color: #F59E0B; }
-  &.accent-red    { border-top-color: #EF4444; }
+  /* Total Pipelines — brand teal */
+  &.accent-teal  { border-top-color: var(--color-primary); }
+  /* Active Executions — info blue */
+  &.accent-blue  { border-top-color: var(--color-info); }
+  /* Success Rate — success green */
+  &.accent-green { border-top-color: var(--color-success); }
+  /* Records Processed — amber/warning */
+  &.accent-amber { border-top-color: var(--color-warning); }
+  /* Error / red accent */
+  &.accent-red   { border-top-color: var(--color-error); }
 }
 
 .kpi-top {
@@ -38,24 +44,37 @@
   font-size: 11px;
   font-weight: 600;
   padding: 3px 8px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
 
   &.trend-up   { color: #059669; background: #D1FAE5; }
   &.trend-down { color: #DC2626; background: #FEE2E2; }
-  &.trend-flat { color: #6B7280; background: #F3F4F6; }
+  &.trend-flat { color: var(--color-muted); background: var(--color-side); }
 }
 
 .kpi-value {
   font-size: 30px;
   font-weight: 800;
-  color: #1A202C;
+  color: var(--color-ink);
   line-height: 1;
   letter-spacing: -1px;
 }
 
 .kpi-label {
   font-size: 12.5px;
-  color: #94A3B8;
+  color: var(--color-muted-2);
   font-weight: 500;
+}
+
+.phase-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-primary), #0076A8);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  align-self: flex-start;
 }

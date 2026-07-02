@@ -1,0 +1,113 @@
+// auth/pages/unauthorized/unauthorized.component.scss
+
+// ── Page shell ─────────────────────────────────────────────────────────────────
+.unauth-page {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(135deg, var(--color-error-soft) 0%, var(--color-bg) 60%, #EEF2FF 100%);
+  padding: 32px 24px;
+}
+
+// ── Card ───────────────────────────────────────────────────────────────────────
+.unauth-card {
+  position: relative;
+  z-index: 1;
+  margin: auto 0;
+  background: var(--color-surface);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 56px 40px 48px;
+  width: 100%;
+  max-width: 460px;
+  text-align: center;
+  border: 1px solid var(--color-border);
+}
+
+// ── Icon ───────────────────────────────────────────────────────────────────────
+.icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  background: linear-gradient(135deg, #FEE2E2, #FECACA); // no exact tokens — error gradient shades
+  border-radius: 50%;
+  margin: 0 auto 28px;
+}
+
+.lock-icon {
+  font-size: 44px;
+  width: 44px;
+  height: 44px;
+  color: var(--color-error);
+}
+
+// ── Text ───────────────────────────────────────────────────────────────────────
+.unauth-heading {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--color-ink);
+  margin: 0 0 12px;
+  letter-spacing: -0.5px;
+}
+
+.unauth-sub {
+  font-size: 15px;
+  color: var(--color-muted);
+  line-height: 1.6;
+  margin: 0 0 36px;
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────────
+.unauth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.primary-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: var(--radius-md) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  background-color: var(--color-primary) !important;
+
+  &:hover { background-color: var(--color-primary-dark) !important; }
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.secondary-btn {
+  width: 100%;
+  height: 44px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--radius-md) !important;
+  text-decoration: none;
+  color: var(--color-muted) !important;
+  border-color: var(--color-border-input) !important;
+}
+
+// ── Error code ─────────────────────────────────────────────────────────────────
+.error-code {
+  font-size: 12px;
+  color: #CBD5E1; // no exact token — very light slate (lighter than --color-muted-2)
+  margin: 32px 0 0;
+  letter-spacing: 0.5px;
+}

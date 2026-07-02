@@ -1,0 +1,186 @@
+<!-- auth/pages/signup/signup.component.html -->
+<div class="auth-page" role="main">
+
+  <!-- Decorative background orbs -->
+  <div class="auth-orb auth-orb--primary" aria-hidden="true"></div>
+  <div class="auth-orb auth-orb--indigo"  aria-hidden="true"></div>
+
+  <div class="auth-card" role="region" aria-label="Create your account">
+
+    <!-- ── Brand / Logo ──────────────────────────────────────────── -->
+    <header class="auth-logo">
+      <div class="logo-icon" aria-hidden="true">
+        <svg width="40" height="40" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="10" fill="#00A89D"/>
+          <path d="M10 18h16M18 10v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="18" cy="18" r="5" stroke="#fff" stroke-width="2"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <span class="brand">FHIRBridge</span>
+        <span class="brand-tag">Healthcare Integration Platform</span>
+      </div>
+    </header>
+
+    <!-- ── Heading ───────────────────────────────────────────────── -->
+    <h1 class="auth-heading">Create your account</h1>
+    <p class="auth-sub">Get started with FHIRBridge today</p>
+
+    <!-- ── Global error ─────────────────────────────────────────── -->
+    @if (error()) {
+      <div class="auth-alert" role="alert" aria-live="assertive">
+        <mat-icon class="alert-icon" aria-hidden="true">error_outline</mat-icon>
+        <span>{{ error() }}</span>
+      </div>
+    }
+
+    <!-- ── Form ──────────────────────────────────────────────────── -->
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate autocomplete="on">
+
+      <!-- First / Last name -->
+      <div class="name-row">
+        <mat-form-field appearance="outline" class="half-width">
+          <mat-label>First name</mat-label>
+          <input matInput formControlName="firstName" autocomplete="given-name" aria-required="true" />
+          @if (fieldError('firstName', 'required')) {
+            <mat-error>Required</mat-error>
+          } @else if (fieldError('firstName', 'minlength')) {
+            <mat-error>At least 2 characters</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="half-width">
+          <mat-label>Last name</mat-label>
+          <input matInput formControlName="lastName" autocomplete="family-name" aria-required="true" />
+          @if (fieldError('lastName', 'required')) {
+            <mat-error>Required</mat-error>
+          } @else if (fieldError('lastName', 'minlength')) {
+            <mat-error>At least 2 characters</mat-error>
+          }
+        </mat-form-field>
+      </div>
+
+      <!-- Email -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Email address</mat-label>
+        <mat-icon matPrefix class="field-icon" aria-hidden="true">email</mat-icon>
+        <input matInput type="email" formControlName="email" autocomplete="email" aria-required="true" />
+        @if (fieldError('email', 'required')) {
+          <mat-error>Email is required</mat-error>
+        } @else if (fieldError('email', 'email')) {
+          <mat-error>Enter a valid email address</mat-error>
+        }
+      </mat-form-field>
+
+      <!-- Password -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Password</mat-label>
+        <mat-icon matPrefix class="field-icon" aria-hidden="true">lock</mat-icon>
+        <input
+          matInput
+          [type]="showPassword() ? 'text' : 'password'"
+          formControlName="password"
+          autocomplete="new-password"
+          aria-required="true"
+        />
+        <button
+          type="button"
+          mat-icon-button
+          matSuffix
+          class="pw-toggle"
+          (click)="togglePassword()"
+          [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+        >
+          <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
+        @if (fieldError('password', 'required')) {
+          <mat-error>Password is required</mat-error>
+        } @else if (fieldError('password', 'passwordStrength')) {
+          <mat-error>Must include uppercase, number and special character</mat-error>
+        }
+      </mat-form-field>
+
+      <!-- Password strength meter -->
+      <div class="strength-wrapper">
+        <app-password-strength [password]="passwordValue" />
+      </div>
+
+      <!-- Confirm password -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Confirm password</mat-label>
+        <mat-icon matPrefix class="field-icon" aria-hidden="true">lock_outline</mat-icon>
+        <input
+          matInput
+          [type]="showConfirm() ? 'text' : 'password'"
+          formControlName="confirmPassword"
+          autocomplete="new-password"
+          aria-required="true"
+        />
+        <button
+          type="button"
+          mat-icon-button
+          matSuffix
+          class="pw-toggle"
+          (click)="toggleConfirm()"
+          [attr.aria-label]="showConfirm() ? 'Hide password' : 'Show password'"
+        >
+          <mat-icon>{{ showConfirm() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
+        @if (fieldError('confirmPassword', 'required')) {
+          <mat-error>Please confirm your password</mat-error>
+        } @else if (fieldError('confirmPassword', 'passwordMismatch')) {
+          <mat-error>Passwords do not match</mat-error>
+        }
+      </mat-form-field>
+
+      <!-- Role -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Role</mat-label>
+        <mat-icon matPrefix class="field-icon" aria-hidden="true">badge</mat-icon>
+        <mat-select formControlName="role">
+          @for (r of roles; track r.value) {
+            <mat-option [value]="r.value">{{ r.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Accept Terms -->
+      <div class="terms-row">
+        <mat-checkbox formControlName="acceptTerms" color="primary">
+          I agree to the
+          <a href="#" class="terms-link" (click)="$event.stopPropagation()">Terms of Service</a>
+          and
+          <a href="#" class="terms-link" (click)="$event.stopPropagation()">Privacy Policy</a>
+        </mat-checkbox>
+        @if (fieldError('acceptTerms', 'mustBeTrue')) {
+          <div class="terms-error">You must accept the terms to continue</div>
+        }
+      </div>
+
+      <!-- Submit -->
+      <button
+        mat-flat-button
+        color="primary"
+        type="submit"
+        class="submit-btn"
+        [disabled]="isLoading()"
+        aria-label="Create account"
+      >
+        @if (isLoading()) {
+          <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
+          <span>Creating account…</span>
+        } @else {
+          <span>Create Account</span>
+        }
+      </button>
+
+    </form>
+
+    <!-- ── Footer ────────────────────────────────────────────────── -->
+    <p class="auth-footer">
+      Already have an account?
+      <a routerLink="/auth/login" class="footer-link">Sign in</a>
+    </p>
+
+  </div>
+</div>

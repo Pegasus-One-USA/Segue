@@ -1,74 +1,75 @@
+:host {
+  display: block;
+  min-height: 100%;
+  background: var(--color-bg);
+}
+
 /* ── Shared shell (same as dashboard) ────────────────────────────── */
-.dash-shell  { display: flex; height: 100vh; background: #F5F7FA; overflow: hidden; }
+.dash-shell  { display: flex; height: 100vh; background: var(--color-bg); overflow: hidden; }
 .dash-main   { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .dash-topbar {
-  height: 56px; background: #fff; border-bottom: 1px solid #E2E8F0;
+  height: 56px; background: var(--color-surface); border-bottom: 1px solid var(--color-border);
   display: flex; align-items: center; gap: 12px; padding: 0 20px; flex-shrink: 0;
 }
 .collapse-btn {
-  background: none; border: none; cursor: pointer; font-size: 18px; color: #64748B; padding: 4px;
+  background: none; border: none; cursor: pointer; font-size: 18px; color: var(--color-muted); padding: 4px;
 }
 .dash-breadcrumb {
   display: flex; align-items: center; gap: 6px; font-size: 13px;
 }
 .breadcrumb-root {
-  color: #64748B; cursor: pointer; &:hover { color: #00A89D; }
+  color: var(--color-muted); cursor: pointer;
+  &:hover { color: var(--color-primary); }
+  transition: color var(--transition-base);
 }
 .breadcrumb-sep  { color: #CBD5E1; }
-.breadcrumb-page { color: #1E293B; font-weight: 600; }
+.breadcrumb-page { color: var(--color-ink); font-weight: 600; }
 .dash-content { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
 
 /* ── Profile hero ─────────────────────────────────────────────────── */
 .profile-hero {
-  background: #fff; border: 1px solid #E2E8F0; border-radius: 16px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px;
   padding: 24px 28px; display: flex; align-items: center; gap: 20px;
 }
 .profile-hero-avatar {
   width: 72px; height: 72px; border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
   font-size: 24px; font-weight: 700; color: #fff; flex-shrink: 0;
-  box-shadow: 0 6px 18px rgba(0,168,157,.28);
+  box-shadow: 0 6px 18px rgba(0, 168, 157, 0.28);
 }
 .profile-hero-info { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-.profile-hero-name { margin: 0; font-size: 22px; font-weight: 700; color: #0F172A; }
-.profile-hero-designation { margin: 0; font-size: 14px; color: #64748B; }
+.profile-hero-name { margin: 0; font-size: 22px; font-weight: 700; color: var(--color-ink); }
+.profile-hero-designation { margin: 0; font-size: 14px; color: var(--color-muted); }
 .profile-hero-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .role-badge {
-  padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600;
+  padding: 3px 10px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600;
 }
 .status-badge {
   font-size: 12px; font-weight: 600;
-  &.active { color: #059669; }
+  &.active { color: var(--color-success); }
 }
 .org-tag {
-  font-size: 12px; color: #94A3B8;
+  font-size: 12px; color: var(--color-muted-2);
 }
 
 .edit-profile-btn {
   padding: 9px 18px; border-radius: 10px;
-  background: #00A89D; border: none; color: #fff;
+  background: var(--color-primary); border: none; color: #fff;
   font-size: 13.5px; font-weight: 600; cursor: pointer;
-  transition: background .15s;
-  &:hover { background: #007A72; }
+  transition: background var(--transition-base);
+  &:hover { background: var(--color-primary-dark); }
   flex-shrink: 0;
 }
 
-/* ── Layout ───────────────────────────────────────────────────────── */
-.user-settings-layout {
-  display: flex; gap: 20px; align-items: flex-start;
-}
-.settings-body {
-  flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0;
-}
 
 /* ── Cards ────────────────────────────────────────────────────────── */
 .settings-card {
-  background: #fff; border: 1px solid #E2E8F0; border-radius: 14px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-modal);
   padding: 22px 24px;
 }
 .card-title {
-  font-size: 15px; font-weight: 700; color: #0F172A; margin: 0 0 18px;
+  font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0 0 18px;
   padding-bottom: 12px; border-bottom: 1px solid #F1F5F9;
 }
 
@@ -79,25 +80,25 @@
 .info-field {
   display: flex; flex-direction: column; gap: 3px;
 
-  label { font-size: 11.5px; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: .05em; }
-  span  { font-size: 13.5px; color: #1E293B; font-weight: 500; }
+  label { font-size: 11.5px; font-weight: 600; color: var(--color-muted-2); text-transform: uppercase; letter-spacing: 0.05em; }
+  span  { font-size: 13.5px; color: var(--color-ink); font-weight: 500; }
 }
-.mono { font-family: monospace; font-size: 13px !important; background: #F8FAFC; padding: 2px 6px; border-radius: 5px; display: inline-block; }
+.mono { font-family: monospace; font-size: 13px !important; background: var(--color-side); padding: 2px 6px; border-radius: 5px; display: inline-block; }
 
 /* ── Role block ───────────────────────────────────────────────────── */
-.role-block { padding: 14px; background: #F8FAFC; border-radius: 10px; margin-bottom: 14px; }
+.role-block { padding: 14px; background: var(--color-side); border-radius: 10px; margin-bottom: 14px; }
 .role-block-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .role-chip {
-  padding: 4px 12px; border-radius: 99px; font-size: 13px; font-weight: 700;
+  padding: 4px 12px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 700;
   flex-shrink: 0; white-space: nowrap;
 }
-.role-desc { font-size: 13px; color: #475569; margin: 0; }
+.role-desc { font-size: 13px; color: var(--color-ink-2); margin: 0; }
 .perm-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .perm-tag {
-  font-size: 12px; font-weight: 500; color: #059669;
-  background: rgba(5,150,105,.08); border-radius: 6px; padding: 3px 10px;
+  font-size: 12px; font-weight: 500; color: var(--color-success);
+  background: var(--color-success-soft); border-radius: 6px; padding: 3px 10px;
 }
 .role-note {
-  font-size: 12px; color: #94A3B8; margin: 0;
-  strong { color: #475569; }
+  font-size: 12px; color: var(--color-muted-2); margin: 0;
+  strong { color: var(--color-ink-2); }
 }

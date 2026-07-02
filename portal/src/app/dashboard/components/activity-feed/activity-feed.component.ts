@@ -1,5 +1,6 @@
 import { Component, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { ActivityEvent, ActivitySeverity } from '../../models/activity-event.model';
 
 const SEVERITY_ICON: Record<ActivitySeverity, string> = {
@@ -12,7 +13,7 @@ const SEVERITY_ICON: Record<ActivitySeverity, string> = {
 @Component({
   selector: 'app-activity-feed',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, RouterLink],
   templateUrl: './activity-feed.component.html',
   styleUrl: './activity-feed.component.scss',
 })

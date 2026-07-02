@@ -27,6 +27,7 @@ export class EpicStepConnectComponent implements OnInit {
 
   readonly form = this.fb.nonNullable.group({
     appName:          ['FHIRBridge Provider Launch', Validators.required],
+    epicAudience:     ['provider-ehr-launch', Validators.required],
     environment:      ['sandbox', Validators.required],
     sandboxClientId:  [''],
     nonProdClientId:  [''],
@@ -152,6 +153,7 @@ export class EpicStepConnectComponent implements OnInit {
     const dv = this.discoveredValues();
     return {
       appName:           v.appName ?? 'FHIRBridge Provider Launch',
+      epicAudience:      v.epicAudience ?? 'provider-ehr-launch',
       environment:       v.environment ?? 'sandbox',
       sandboxClientId:   v.sandboxClientId ?? '',
       nonProdClientId:   v.nonProdClientId ?? '',

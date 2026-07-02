@@ -1,0 +1,31 @@
+<!-- auth/pages/unauthorized/unauthorized.component.html -->
+<div class="unauth-page">
+  <div class="unauth-card">
+
+    <!-- Lock icon -->
+    <div class="icon-wrap">
+      <mat-icon class="lock-icon">lock</mat-icon>
+    </div>
+
+    <h1 class="unauth-heading">Access Denied</h1>
+    <p class="unauth-sub">
+      You don't have permission to view this page.<br />
+      Please contact your administrator if you believe this is a mistake.
+    </p>
+
+    <!-- Actions -->
+    <div class="unauth-actions">
+      <a routerLink="/dashboard" mat-flat-button color="primary" class="primary-btn">
+        <mat-icon>dashboard</mat-icon>
+        Go to Dashboard
+      </a>
+      <a routerLink="/auth/login" mat-stroked-button class="secondary-btn">
+        Sign in with another account
+      </a>
+    </div>
+
+    <!-- Error code -->
+    <p class="error-code">Error 403 &mdash; Forbidden</p>
+
+  </div>
+</div>

@@ -1,7 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { Router }               from '@angular/router';
 import { FormsModule }          from '@angular/forms';
-import { SidebarComponent }     from '../../../dashboard/layout/sidebar/sidebar.component';
 import { UserSettingsNavComponent } from '../../components/user-settings-nav/user-settings-nav.component';
 import { UserProfileService }   from '../../services/user-profile.service';
 import { AppTheme }             from '../../models/user-profile.model';
@@ -9,7 +8,7 @@ import { AppTheme }             from '../../models/user-profile.model';
 @Component({
   selector:    'app-preferences',
   standalone:  true,
-  imports:     [FormsModule, SidebarComponent, UserSettingsNavComponent],
+  imports:     [FormsModule, UserSettingsNavComponent],
   templateUrl: './preferences.component.html',
   styleUrl:    './preferences.component.scss',
 })
@@ -17,8 +16,7 @@ export class PreferencesComponent {
   private readonly router  = inject(Router);
   protected readonly profSvc = inject(UserProfileService);
 
-  protected readonly sidebarCollapsed = signal(false);
-  protected readonly saved            = signal(false);
+  protected readonly saved = signal(false);
 
   protected readonly profile = this.profSvc.profile;
   protected readonly theme   = this.profSvc.theme;
@@ -42,7 +40,6 @@ export class PreferencesComponent {
   protected emailNotif        = this.profile().emailNotifications;
   protected inAppNotif        = this.profile().inAppNotifications;
 
-  toggleSidebar(): void { this.sidebarCollapsed.update(v => !v); }
   navigate(path: string): void { this.router.navigate([path]); }
 
   setTheme(t: AppTheme): void { this.profSvc.setTheme(t); }

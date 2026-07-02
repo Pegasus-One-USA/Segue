@@ -35,7 +35,8 @@ export class WizardService {
   private readonly toast        = inject(ToastService);
 
   // ── open/close ────────────────────────────────────────────────────────────
-  readonly isOpen = signal(false);
+  readonly isOpen       = signal(false);
+  readonly openedInline = signal(false);
 
   // ── step ──────────────────────────────────────────────────────────────────
   readonly step = signal<WizardStep>(1);
@@ -111,6 +112,7 @@ export class WizardService {
 
   close(): void {
     this.isOpen.set(false);
+    this.openedInline.set(false);
     this.store.editingNodeId.set(null);
   }
 
