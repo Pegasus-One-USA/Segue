@@ -1,0 +1,30 @@
+src/FHIRBridge.Application/Abstractions/Sources/ISourceJwksService.cs
+  s_6fe72b0759281b::t_98c87ede34d6db 1-21
+tests/FHIRBridge.UnitTests/Sources/SourceJwksServiceTests.cs
+  s_6fe72b0759281b::t_2ecf7516c7537c 1-104
+src/FHIRBridge.Application/DTOs/JsonWebKeySetDto.cs
+  s_6fe72b0759281b::t_c69daa8570bade 1-22,26-27
+  s_6fe72b0759281b::t_299502815b3de5 23-25
+src/FHIRBridge.Infrastructure/Sources/SourceJwksService.cs
+  s_6fe72b0759281b::t_a95398603ddcc1 1-85
+src/Api/FHIRBridge.Api/Controllers/V1/SourceJwksController.cs
+  s_6fe72b0759281b::t_697ca1c1b31195 1-42
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_6fe72b0759281b::t_f44b693434ba14 274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "752af48395fc240ee1f87a7318bea7b6cf7aa6dd",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
