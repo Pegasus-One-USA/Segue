@@ -271,6 +271,7 @@ public static class DependencyInjection
         services.AddSingleton<ILaunchTokenProtector, DataProtectionLaunchTokenProtector>();
         services.AddScoped<IInteractiveSourceAuthorizationService, InteractiveSourceAuthorizationService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
+        services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ILineageTracker, OperationalAuditLineageTracker>();
         services.AddHealthChecks()
             .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
