@@ -28,4 +28,5 @@ public sealed record PendingAuthorization(
     string CodeVerifier,
     string RedirectUri,
     string TokenEndpoint,
-    string ClientId);
+    string ClientId,
+    Guid? RouteId = null);
