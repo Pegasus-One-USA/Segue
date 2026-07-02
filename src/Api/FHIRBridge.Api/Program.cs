@@ -1,11 +1,12 @@
-using System.Reflection;
 using System.Text.Json.Serialization;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Application;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
@@ -88,8 +89,9 @@ builder.Services.AddAuthorization(options =>
         policy.AddRequirements(new UnifiedAdminRequirement());
     });
 
-    // Permission-based policies — one per permission code.
-    foreach (var code in AllPermissionCodes())
+    // Permission-based policies — one per permission code declared on UnifiedPermissions
+    // or referenced via [StandardPermission] on a controller (see PermissionCatalog).
+    foreach (var code in PermissionCatalog.AllPermissionCodes(typeof(Program).Assembly))
     {
         options.AddPolicy(
             AuthorizationPolicies.HasPermission(code),
@@ -118,6 +120,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// A [StandardPermission("some.code")] whose code doesn't match a UnifiedPermissions
+// constant still gets a policy (see PermissionCatalog.AllPermissionCodes above), but
+// it's almost always a typo — surface it at startup instead of a silent 403 later.
+foreach (var undeclaredCode in PermissionCatalog.FindUndeclaredCodes(typeof(Program).Assembly))
+{
+    app.Logger.LogWarning(
+        "Permission code '{PermissionCode}' is used via [StandardPermission] but is not declared on UnifiedPermissions.",
+        undeclaredCode);
+}
+
 // ── Global exception handler ─────────────────────────────────────────────────
 // Maps domain InvalidOperationException to appropriate HTTP status codes so the
 // API never leaks raw 500s for expected business-rule / validation failures.
@@ -142,6 +154,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+SyncDiscoveredPermissions(app);
 SeedLocalIdentity(app);
 
 app.UseCors("Portal");
@@ -187,6 +200,59 @@ static void SeedLocalIdentity(WebApplication app)
     seedService.SeedAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
+// Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only
+// registering an in-memory authorization policy for it isn't enough to let anyone through — the
+// code also has to exist as a Permission row before any role can be granted it. This closes that
+// gap automatically at startup instead of requiring a manual PermissionConfiguration + migration
+// edit for every new permission-gated feature.
+static void SyncDiscoveredPermissions(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var repository = scope.ServiceProvider.GetService<IUserAccessRepository>();
+    if (repository is null)
+    {
+        return;
+    }
+
+    SyncDiscoveredPermissionsAsync(repository, app.Logger).GetAwaiter().GetResult();
+}
+
+static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repository, ILogger logger)
+{
+    var discoveredCodes = PermissionCatalog.DiscoveredCodes(typeof(Program).Assembly);
+    var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);
+    var existingCodes = new HashSet<string>(existingPermissions.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+
+    var superAdminRole = await repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, CancellationToken.None);
+
+    foreach (var code in discoveredCodes.Where(code => !existingCodes.Contains(code)))
+    {
+        var permission = new Permission(
+            Guid.NewGuid(),
+            code,
+            $"Auto-registered permission for '{code}'.",
+            CategoryFromPermissionCode(code),
+            isSystem: false);
+
+        await repository.AddPermissionAsync(permission, CancellationToken.None);
+        logger.LogWarning(
+            "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission]; review its category/description in the Permissions table.",
+            code);
+
+        if (superAdminRole is not null)
+        {
+            await repository.AddRolePermissionAsync(superAdminRole.Id, permission.Id, CancellationToken.None);
+        }
+    }
+}
+
+static string CategoryFromPermissionCode(string code)
+{
+    var prefix = code.Split('.', 2)[0];
+
+    return prefix.Length == 0 ? prefix : char.ToUpperInvariant(prefix[0]) + prefix[1..];
+}
+
 static (int status, string message) MapException(Exception ex)
 {
     if (ex is not InvalidOperationException and not UnauthorizedAccessException
@@ -216,12 +282,3 @@ static (int status, string message) MapException(Exception ex)
     // 400 – all other domain / validation errors
     return (StatusCodes.Status400BadRequest, msg);
 }
-
-// Enumerates every permission code declared on UnifiedPermissions so each gets a
-// "HasPermission:<code>" authorization policy — reflection keeps this in lock-step
-// with the constants, so a newly added permission can never be missed here.
-static IEnumerable<string> AllPermissionCodes() =>
-    typeof(UnifiedPermissions)
-        .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
-        .Where(f => f.IsLiteral && !f.IsInitOnly && f.FieldType == typeof(string))
-        .Select(f => (string)f.GetRawConstantValue()!);

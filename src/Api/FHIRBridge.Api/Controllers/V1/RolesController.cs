@@ -1,4 +1,6 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,7 +20,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Policy = "HasPermission:role.view")]
+    [StandardPermission(UnifiedPermissions.RoleView)]
     [ProducesResponseType(typeof(IReadOnlyList<RoleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
@@ -28,7 +30,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpGet("{roleId:guid}")]
-    [Authorize(Policy = "HasPermission:role.view")]
+    [StandardPermission(UnifiedPermissions.RoleView)]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid roleId, CancellationToken cancellationToken)
@@ -39,7 +41,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "HasPermission:role.create")]
+    [StandardPermission(UnifiedPermissions.RoleCreate)]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(
         [FromBody] CreateRoleRequest request,
@@ -51,7 +53,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpPut("{roleId:guid}")]
-    [Authorize(Policy = "HasPermission:role.edit")]
+    [StandardPermission(UnifiedPermissions.RoleEdit)]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
@@ -65,7 +67,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpDelete("{roleId:guid}")]
-    [Authorize(Policy = "HasPermission:role.delete")]
+    [StandardPermission(UnifiedPermissions.RoleDelete)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(Guid roleId, CancellationToken cancellationToken)
@@ -76,7 +78,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpGet("{roleId:guid}/permissions")]
-    [Authorize(Policy = "HasPermission:role.view")]
+    [StandardPermission(UnifiedPermissions.RoleView)]
     [ProducesResponseType(typeof(IReadOnlyList<PermissionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPermissions(Guid roleId, CancellationToken cancellationToken)
     {
@@ -86,7 +88,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpPost("{roleId:guid}/permissions")]
-    [Authorize(Policy = "HasPermission:role.edit")]
+    [StandardPermission(UnifiedPermissions.RoleEdit)]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> AddPermissions(
         Guid roleId,
@@ -99,7 +101,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpDelete("{roleId:guid}/permissions/{permissionId:guid}")]
-    [Authorize(Policy = "HasPermission:role.edit")]
+    [StandardPermission(UnifiedPermissions.RoleEdit)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemovePermission(
         Guid roleId,

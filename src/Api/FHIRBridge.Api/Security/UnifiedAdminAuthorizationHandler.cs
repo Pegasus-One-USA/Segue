@@ -48,7 +48,7 @@ public sealed class UnifiedAdminAuthorizationHandler : AuthorizationHandler<Unif
         var hasTenantAdminRole = await _userAccessRepository.HasTenantRoleAsync(
             tenantId.Value,
             externalUserId,
-            [UnifiedRoles.GlobalAdmin, UnifiedRoles.TenantAdmin],
+            [UnifiedRoles.SuperAdmin, UnifiedRoles.Admin],
             CancellationToken.None);
 
         if (hasTenantAdminRole)

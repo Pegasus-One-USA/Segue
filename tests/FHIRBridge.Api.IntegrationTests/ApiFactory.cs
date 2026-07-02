@@ -20,7 +20,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"]     = "",
+                ["ConnectionStrings:FHIRBridgeDb"]           = "",
                 ["Authentication:SigningKey"]               = "IntegrationTest-HS256-SigningKey-MustBeAtLeast32Chars!",
                 ["Authentication:TokenLifetimeMinutes"]     = "60",
                 ["Authentication:RefreshTokenLifetimeDays"] = "7",

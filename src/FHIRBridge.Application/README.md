@@ -47,7 +47,7 @@
 - **`PipelineRunMetricsService`**, and option types (`IncrementalSyncOptions`, `ExpertDeterminationOptions`, `PatientAggregationOptions`).
 
 ### Security/
-- **`UnifiedRoles`** (GlobalAdmin, TenantAdmin, PipelineEngineer, Analyst, Auditor), **`UnifiedPermissions`** (tenants.read/write, configuration.write, pipeline.execute, auditlogs.read, sourceconnections.test), **`AuthorizationPolicies`**, **`UnifiedRolePermissionSeed`** + **`SeededSecurityIds`**, **`CurrentUserClaimReader`**, **`EntraAuthenticationOptions`** + **`EntraGroupRoleMapper`** (projects Entra group claims onto built-in roles).
+- **`UnifiedRoles`** (SuperAdmin, Admin, Operations, Audit), **`UnifiedPermissions`** (tenants.read/write, configuration.write, pipeline.execute, auditlogs.read, sourceconnections.test), **`AuthorizationPolicies`**, **`UnifiedRolePermissionSeed`** + **`SeededSecurityIds`**, **`CurrentUserClaimReader`**, **`EntraAuthenticationOptions`** + **`EntraGroupRoleMapper`** (projects Entra group claims onto built-in roles).
 
 ### DTOs/ (~52)
 Request/response contracts for the API: tenant/source/webhook/destination/mapping/route create+read DTOs, `MappingFieldDto`/`MappingTestResultDto`/`MappingChildTableDto`, `ConfiguredPipelineRunDto`, `OperationalAuditLogDto`, `SourceCapabilityProfileDto`, terminology result models, auth/identity DTOs (login, password change/reset, role/permission/user management), `HedisMeasureReportDto`, `RunAnomalyDto`, `ManifestImportResultDto`, `MappedDestinationRecord`, and more.

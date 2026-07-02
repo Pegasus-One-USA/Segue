@@ -131,7 +131,7 @@ public sealed class ApiFixture : IAsyncLifetime
             Email                 = "tobedeleted@testhospital.test",
             DisplayName           = "To Be Deleted",
             Password              = "Delete@Test123!",
-            RoleNames             = new[] { "Analyst" },
+            RoleNames             = new[] { "Operations" },
             RequirePasswordChange = false
         });
         duResp.EnsureSuccessStatusCode();
@@ -144,7 +144,7 @@ public sealed class ApiFixture : IAsyncLifetime
             Email                 = PwChangeUserEmail,
             DisplayName           = "PwChange User",
             Password              = PwChangeUserPassword,
-            RoleNames             = new[] { "Analyst" },
+            RoleNames             = new[] { "Operations" },
             RequirePasswordChange = false
         });
         pwResp.EnsureSuccessStatusCode();

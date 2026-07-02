@@ -11,11 +11,10 @@ public sealed class RoleManagementService : IRoleManagementService
 {
     private static readonly Guid[] SystemRoleIds =
     [
-        SeededSecurityIds.GlobalAdminRoleId,
-        SeededSecurityIds.TenantAdminRoleId,
-        SeededSecurityIds.PipelineEngineerRoleId,
-        SeededSecurityIds.AnalystRoleId,
-        SeededSecurityIds.AuditorRoleId
+        SeededSecurityIds.SuperAdminRoleId,
+        SeededSecurityIds.AdminRoleId,
+        SeededSecurityIds.OperationsRoleId,
+        SeededSecurityIds.AuditRoleId
     ];
 
     private readonly IUserAccessRepository _repository;

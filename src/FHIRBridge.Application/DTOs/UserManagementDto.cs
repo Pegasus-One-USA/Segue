@@ -1,3 +1,5 @@
+using FHIRBridge.Domain.Enums;
+
 namespace FHIRBridge.Application.DTOs;
 
 public sealed record UserManagementDto(
@@ -5,6 +7,7 @@ public sealed record UserManagementDto(
     string ExternalUserId,
     string? Email,
     string? DisplayName,
+    UserStatus Status,
     bool IsEnabled,
     bool IsLocalLoginEnabled,
     bool MustChangePassword,

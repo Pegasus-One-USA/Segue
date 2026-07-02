@@ -2,7 +2,7 @@ namespace FHIRBridge.Application.Security;
 
 public static class AuthorizationPolicies
 {
-    /// <summary>Legacy role-based policy: requires GlobalAdmin or TenantAdmin role.</summary>
+    /// <summary>Legacy role-based policy: requires SuperAdmin or Admin role.</summary>
     public const string UnifiedAdmin = nameof(UnifiedAdmin);
 
     /// <summary>Prefix used to construct permission-based policy names.</summary>
