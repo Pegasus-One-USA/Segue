@@ -1,0 +1,515 @@
+<title>FHIRBridge — Data Model & ER Diagram</title>
+<style>
+  :root{
+    --ground:#f6f7fb; --panel:#ffffff; --ink:#191b26; --muted:#5c6478; --faint:#8b93a7;
+    --line:#e4e7f0; --line2:#d3d8e6;
+    --violet:#6d00d8; --violetSoft:#f3e9ff;
+    --amber:#b45309; --amberSoft:#fbf0e2;
+    --teal:#0f766e; --tealSoft:#e2f2ef;
+    --slate:#475569; --slateSoft:#eef1f6;
+    --pk:#a9791a; --fk:#2563eb; --uq:#7c3aed;
+    --mono:ui-monospace,"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.55;
+    -webkit-font-smoothing:antialiased;font-size:15px}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+
+  header.masthead{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:8px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);font-weight:700}
+  h1{font-size:clamp(30px,4.4vw,46px);line-height:1.04;margin:.28em 0 .18em;letter-spacing:-.02em;text-wrap:balance;font-weight:800}
+  .lede{color:var(--muted);max-width:70ch;margin:0;font-size:16px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+  .chip{font-family:var(--mono);font-size:12px;padding:5px 11px;border:1px solid var(--line2);border-radius:6px;background:var(--panel);color:var(--muted);font-variant-numeric:tabular-nums}
+  .chip b{color:var(--ink);font-weight:700}
+
+  h2.domain{display:flex;align-items:baseline;gap:12px;margin:52px 0 4px;font-size:22px;letter-spacing:-.01em}
+  h2.domain .dot{width:11px;height:11px;border-radius:3px;flex:none;translate:0 -1px}
+  h2.domain .count{font-family:var(--mono);font-size:12px;color:var(--faint);font-weight:600}
+  .domain-note{color:var(--muted);margin:2px 0 20px;max-width:78ch;font-size:14.5px}
+
+  .legend{display:flex;flex-wrap:wrap;gap:16px 22px;margin:22px 0 6px;padding:14px 16px;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px}
+  .legend .item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .keytag{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.03em}
+  .k-pk{background:#fbf3dd;color:var(--pk);border:1px solid #e8d39a}
+  .k-fk{background:#e7effe;color:var(--fk);border:1px solid #c2d6f7}
+  .k-uq{background:#f1e9fd;color:var(--uq);border:1px solid #d9c6f5}
+  .k-emb{background:#eef1f6;color:var(--slate);border:1px solid #d3d8e6}
+
+  /* relationship diagram */
+  .diagram{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;margin:26px 0 8px;overflow-x:auto}
+  .diagram svg{display:block;min-width:860px;width:100%;height:auto}
+  .cap{font-size:13px;color:var(--faint);margin:8px 2px 0}
+
+  /* entity boxes */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;margin-top:6px}
+  .entity{background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(20,22,35,.04);display:flex;flex-direction:column}
+  .entity .bar{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .entity .bar .tbl{font-family:var(--mono);font-weight:700;font-size:15px;color:#fff;letter-spacing:-.01em}
+  .entity .bar .role{font-size:11px;color:rgba(255,255,255,.85);font-weight:600;text-align:right;max-width:48%}
+  table.cols{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px}
+  table.cols td{padding:6px 14px;border-top:1px solid var(--line);vertical-align:top}
+  table.cols tr:first-child td{border-top:0}
+  .cname{color:var(--ink);font-weight:600;white-space:nowrap}
+  .ctype{color:var(--faint);text-align:right;white-space:nowrap;font-size:11.5px}
+  .ckey{width:1%;white-space:nowrap;padding-right:4px}
+  .audit-row td{color:var(--faint);font-style:normal;font-family:var(--sans);font-size:12px;background:#fcfcfe}
+  .example{padding:11px 14px;border-top:1px dashed var(--line2);background:#fbfbfe;margin-top:auto}
+  .example .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:5px}
+  .example code{font-family:var(--mono);font-size:11.8px;color:#2b2f3d;display:block;white-space:pre-wrap;line-height:1.5;word-break:break-word}
+  .example .fld{color:var(--fk)}
+
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line2);color:var(--faint);font-size:13px}
+  footer code{font-family:var(--mono);background:var(--panel);padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+  a{color:var(--violet)}
+  @media (max-width:520px){ .wrap{padding:28px 16px 60px} .grid{grid-template-columns:1fr} }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="kicker">FHIRBridge · SQL Server · EF Core 9</div>
+    <h1>Data Model &amp; Entity–Relationship Reference</h1>
+    <p class="lede">Every persisted table in the FHIRBridge backend, what it holds, how it relates, and a concrete example row for each. Grouped into four domains, all rooted at the multi&#8209;tenant <code style="font-family:var(--mono)">Tenants</code> aggregate.</p>
+    <div class="meta">
+      <span class="chip"><b>19</b> tables</span>
+      <span class="chip"><b>18</b> DbSets + 1 owned child</span>
+      <span class="chip"><b>4</b> domains</span>
+      <span class="chip">Tenant&#8209;scoped, soft&#8209;delete, <b>RowVersion</b> concurrency</span>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div class="item"><span class="keytag k-pk">PK</span> Primary key</div>
+    <div class="item"><span class="keytag k-fk">FK</span> Foreign key</div>
+    <div class="item"><span class="keytag k-uq">UQ</span> Unique index</div>
+    <div class="item"><span class="keytag k-emb">EMB</span> Embedded value object (columns live in the parent table, not a separate table)</div>
+    <div class="item" style="color:var(--faint)">Common audit columns (<code style="font-family:var(--mono);font-size:11px">CreatedOnUtc, ModifiedOnUtc, IsDeleted, IsEnabled, RowVersion…</code>) are collapsed into one row per table.</div>
+  </div>
+
+  <!-- ===================== RELATIONSHIP DIAGRAM ===================== -->
+  <div class="diagram" role="img" aria-label="Relationship diagram of the Tenant-owned configuration and pipeline chain">
+    <svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Consolas,monospace">
+      <defs>
+        <marker id="arrow" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#9aa2b6"/>
+        </marker>
+        <style>
+          .box{rx:9;stroke-width:1.5}
+          .lbl{font-size:12.5px;font-weight:700;fill:#fff}
+          .sub{font-size:9.5px;fill:rgba(255,255,255,.85)}
+          .edge{stroke:#9aa2b6;stroke-width:1.6;fill:none;marker-end:url(#arrow)}
+          .card{font-size:10px;fill:#6b7284;font-weight:700}
+        </style>
+      </defs>
+
+      <!-- edges (drawn first, behind boxes) -->
+      <!-- Tenant -> children -->
+      <path class="edge" d="M150,96 C150,150 150,150 260,150"/>
+      <path class="edge" d="M150,96 C150,232 150,232 260,232"/>
+      <path class="edge" d="M150,96 C150,314 150,314 260,314"/>
+      <path class="edge" d="M110,96 C110,392 110,392 260,392"/>
+      <!-- SourceConnection -> CapabilityProfile & Webhook -->
+      <path class="edge" d="M470,150 C520,150 520,150 560,150"/>
+      <path class="edge" d="M380,178 C380,205 380,205 560,220"/>
+      <!-- SourceConnection & Destination -> MappingProfile -->
+      <path class="edge" d="M470,150 C540,150 480,300 480,300 L560,300"/>
+      <path class="edge" d="M470,232 C520,232 520,270 520,270 L560,285"/>
+      <!-- MappingProfile -> Route -->
+      <path class="edge" d="M700,300 C740,300 740,300 740,340 L470,340 C300,340 300,392 300,392 L360,392" opacity="0"/>
+      <path class="edge" d="M630,326 C630,392 630,392 560,392"/>
+      <!-- Webhook -> Route (optional) -->
+      <path class="edge" d="M700,220 C760,220 760,392 760,392 L700,392" stroke-dasharray="4 4"/>
+      <!-- Route -> Runs -->
+      <path class="edge" d="M480,420 C480,446 480,446 300,446 L300,446" opacity="0"/>
+
+      <!-- Tenant -->
+      <rect x="30" y="60" width="120" height="40" rx="9" fill="#6d00d8" stroke="#5300a4"/>
+      <text class="lbl" x="90" y="78" text-anchor="middle">Tenants</text>
+      <text class="sub" x="90" y="91" text-anchor="middle">tenant aggregate root</text>
+
+      <!-- SourceConnections -->
+      <rect x="260" y="128" width="210" height="46" rx="9" fill="#6d00d8" stroke="#5300a4"/>
+      <text class="lbl" x="270" y="148">SourceConnections</text>
+      <text class="sub" x="270" y="162">EHR source + auth + interactive (EMB)</text>
+
+      <!-- DestinationConfigurations -->
+      <rect x="260" y="210" width="210" height="46" rx="9" fill="#6d00d8" stroke="#5300a4"/>
+      <text class="lbl" x="270" y="230">DestinationConfigurations</text>
+      <text class="sub" x="270" y="244">SQL / CSV target + secret (EMB)</text>
+
+      <!-- WebhookConfigurations -->
+      <rect x="260" y="292" width="210" height="46" rx="9" fill="#6d00d8" stroke="#5300a4"/>
+      <text class="lbl" x="270" y="312">WebhookConfigurations</text>
+      <text class="sub" x="270" y="326">inbound push endpoint</text>
+
+      <!-- ConfiguredPipelineRuns -->
+      <rect x="260" y="370" width="210" height="46" rx="9" fill="#b45309" stroke="#8f4207"/>
+      <text class="lbl" x="270" y="390">ConfiguredPipelineRuns</text>
+      <text class="sub" x="270" y="404">run history + counts</text>
+
+      <!-- SourceCapabilityProfiles -->
+      <rect x="560" y="128" width="210" height="46" rx="9" fill="#6d00d8" stroke="#5300a4"/>
+      <text class="lbl" x="570" y="148">SourceCapabilityProfiles</text>
+      <text class="sub" x="570" y="162">discovered scopes / resources</text>
+
+      <!-- MappingProfiles -->
+      <rect x="560" y="262" width="210" height="46" rx="9" fill="#6d00d8" stroke="#5300a4"/>
+      <text class="lbl" x="570" y="282">MappingProfiles</text>
+      <text class="sub" x="570" y="296">resource → destination + fields</text>
+
+      <!-- ResourcePipelineRoutes -->
+      <rect x="560" y="370" width="210" height="46" rx="9" fill="#6d00d8" stroke="#5300a4"/>
+      <text class="lbl" x="570" y="390">ResourcePipelineRoutes</text>
+      <text class="sub" x="570" y="404">the workflow (schedule/webhook)</text>
+
+      <!-- cardinality hints -->
+      <text class="card" x="196" y="144">1..*</text>
+      <text class="card" x="196" y="226">1..*</text>
+      <text class="card" x="196" y="308">1..*</text>
+      <text class="card" x="520" y="292">n→1</text>
+      <text class="card" x="636" y="356">1..*</text>
+    </svg>
+    <p class="cap">Solid arrows are required foreign keys; dashed is the optional <code style="font-family:var(--mono);font-size:11px">Webhook → Route</code> link. <code style="font-family:var(--mono);font-size:11px">MappingProfile</code> references both a source and a destination; a <code style="font-family:var(--mono);font-size:11px">Route</code> wraps one mapping and is what a run executes.</p>
+  </div>
+
+  <!-- ===================== DOMAIN 1: CONFIG / PIPELINE ===================== -->
+  <h2 class="domain"><span class="dot" style="background:var(--violet)"></span>Configuration &amp; Pipeline <span class="count">8 tables</span></h2>
+  <p class="domain-note">The tenant-owned configuration chain a customer builds in the workflow designer: a <b>source</b> and a <b>destination</b> are joined by a <b>mapping profile</b>, wrapped in a <b>route</b> (the workflow). Deleting a tenant cascades to all of these; mapping→source and route→mapping use <code style="font-family:var(--mono);font-size:12px">Restrict</code> so you can't orphan a run.</p>
+  <div class="grid">
+
+    <!-- Tenants -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">Tenants</span><span class="role">aggregate root · one per customer org</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-uq">UQ</span></td><td class="cname">Code</td><td class="ctype">nvarchar(50)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Name</td><td class="ctype">nvarchar(200)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Status</td><td class="ctype">nvarchar(50)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Region · TimeZone</td><td class="ctype">nvarchar(max)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ContactEmail</td><td class="ctype">nvarchar(max)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">RetentionDays</td><td class="ctype">int null</td></tr>
+        <tr class="audit-row"><td></td><td colspan="2">+ audit &amp; soft-delete columns</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Code</span>: "acme-health"
+<span class="fld">Name</span>: "Acme Health"
+<span class="fld">Status</span>: "Active"  ·  <span class="fld">RetentionDays</span>: 2555</code></div>
+    </div>
+
+    <!-- SourceConnections -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">SourceConnections</span><span class="role">EHR / FHIR source system</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">→ Tenants</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Name</td><td class="ctype">nvarchar(200)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">SourceSystemType</td><td class="ctype">nvarchar(50)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">BaseUrl</td><td class="ctype">nvarchar(500)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ApplicationType</td><td class="ctype">nvarchar(50) null</td></tr>
+        <tr><td class="ckey"><span class="keytag k-emb">EMB</span></td><td class="cname">Authentication</td><td class="ctype">type,clientId,scopes,keyId</td></tr>
+        <tr><td class="ckey"><span class="keytag k-emb">EMB</span></td><td class="cname">↳ ClientSecret · PrivateKey</td><td class="ctype">SecretReference</td></tr>
+        <tr><td class="ckey"><span class="keytag k-emb">EMB</span></td><td class="cname">Interactive</td><td class="ctype">redirectUris,issuers,launch</td></tr>
+        <tr class="audit-row"><td></td><td colspan="2">+ audit &amp; soft-delete columns</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">SourceSystemType</span>: "Epic"  ·  <span class="fld">ApplicationType</span>: "EhrLaunch"
+<span class="fld">BaseUrl</span>: "https://fhir.epic.com/…/api/FHIR/R4"
+<span class="fld">Auth.ClientId</span>: "epic-client-12345"
+<span class="fld">Auth.Scopes</span>: "system/Patient.read system/Observation.read"
+<span class="fld">Interactive.PatientSelectionMethod</span>: "LaunchPatient"</code></div>
+    </div>
+
+    <!-- DestinationConfigurations -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">DestinationConfigurations</span><span class="role">where mapped data is written</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">→ Tenants</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Name</td><td class="ctype">nvarchar(200)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">DestinationType</td><td class="ctype">nvarchar(50)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Target</td><td class="ctype">nvarchar(500) null</td></tr>
+        <tr><td class="ckey"><span class="keytag k-emb">EMB</span></td><td class="cname">SecretReference</td><td class="ctype">keyVaultName,secretName</td></tr>
+        <tr class="audit-row"><td></td><td colspan="2">+ audit &amp; soft-delete columns</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">DestinationType</span>: "SqlServer"
+<span class="fld">Name</span>: "SQL Production"  ·  <span class="fld">Target</span>: "dbo.PatientObservation"
+<span class="fld">Secret</span>: acme-kv / "sql-conn-string"</code></div>
+    </div>
+
+    <!-- MappingProfiles -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">MappingProfiles</span><span class="role">one FHIR resource → one destination</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">→ Tenants</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">SourceConnectionId</td><td class="ctype">→ SourceConnections</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">DestinationId</td><td class="ctype">→ DestinationConfigurations</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ResourceType</td><td class="ctype">nvarchar(100)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">DestinationObject</td><td class="ctype">nvarchar(300)</td></tr>
+        <tr class="audit-row"><td></td><td colspan="2">+ audit &amp; soft-delete columns</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Name</span>: "Observation → SQL"
+<span class="fld">ResourceType</span>: "Observation"
+<span class="fld">DestinationObject</span>: "dbo.PatientObservation"</code></div>
+    </div>
+
+    <!-- MappingFields -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">MappingFields</span><span class="role">owned child · per-field rules</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">MappingProfileId</td><td class="ctype">→ MappingProfiles</td></tr>
+        <tr><td class="ckey"></td><td class="cname">JsonPath</td><td class="ctype">nvarchar(500)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">TargetField</td><td class="ctype">nvarchar(200)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ValueType</td><td class="ctype">nvarchar(50)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ArrayPolicy · ArrayAncestors</td><td class="ctype">nvarchar</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Normalization/Terminology paths</td><td class="ctype">nvarchar(500) null</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">JsonPath</span>: "Observation.valueQuantity.value"
+<span class="fld">TargetField</span>: "Value"  ·  <span class="fld">ValueType</span>: "Decimal"
+<span class="fld">ArrayPolicy</span>: "Scalar"  ·  <span class="fld">IsRequired</span>: true</code></div>
+    </div>
+
+    <!-- ResourcePipelineRoutes -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">ResourcePipelineRoutes</span><span class="role">the workflow — what a run executes</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">→ Tenants</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">MappingProfileId</td><td class="ctype">→ MappingProfiles</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">WebhookConfigurationId</td><td class="ctype">→ Webhooks null</td></tr>
+        <tr><td class="ckey"></td><td class="cname">IngestionMode</td><td class="ctype">nvarchar(100)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ScheduleExpression</td><td class="ctype">nvarchar(1000) null</td></tr>
+        <tr><td class="ckey"></td><td class="cname">SearchParameters</td><td class="ctype">nvarchar(1000) null</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Priority · LastTriggeredOnUtc</td><td class="ctype">int · datetime2</td></tr>
+        <tr class="audit-row"><td></td><td colspan="2">+ audit &amp; soft-delete columns</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">IngestionMode</span>: "ScheduledPull"
+<span class="fld">ScheduleExpression</span>: "0 */15 * * * *"
+<span class="fld">SearchParameters</span>: "category=vital-signs"  ·  <span class="fld">Priority</span>: 1</code></div>
+    </div>
+
+    <!-- WebhookConfigurations -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">WebhookConfigurations</span><span class="role">inbound push endpoint</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">→ Tenants</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">SourceConnectionId</td><td class="ctype">→ SourceConnections</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Name</td><td class="ctype">nvarchar(200)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Path</td><td class="ctype">nvarchar(500)</td></tr>
+        <tr><td class="ckey"><span class="keytag k-uq">UQ</span></td><td class="cname">ResourceType</td><td class="ctype">(Tenant,Source,Resource)</td></tr>
+        <tr class="audit-row"><td></td><td colspan="2">+ audit &amp; soft-delete columns</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Path</span>: "/webhooks/acme/epic/observation"
+<span class="fld">ResourceType</span>: "Observation"</code></div>
+    </div>
+
+    <!-- SourceCapabilityProfiles -->
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">SourceCapabilityProfiles</span><span class="role">discovery snapshot · 1 per source</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">→ Tenants</td></tr>
+        <tr><td class="ckey"><span class="keytag k-uq">UQ</span></td><td class="cname">SourceConnectionId</td><td class="ctype">(Tenant,Source) unique</td></tr>
+        <tr><td class="ckey"></td><td class="cname">FhirVersion</td><td class="ctype">nvarchar(20)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ConfiguredScopes</td><td class="ctype">nvarchar(2000)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ResourcesJson</td><td class="ctype">nvarchar(max)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">RawCapabilityJson</td><td class="ctype">nvarchar(max)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">DiscoveredOnUtc</td><td class="ctype">datetime2</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">FhirVersion</span>: "4.0.1"
+<span class="fld">ResourcesJson</span>: ["Patient","Observation","Encounter"]
+<span class="fld">DiscoveredOnUtc</span>: 2026-07-02T14:03Z</code></div>
+    </div>
+
+  </div>
+
+  <!-- ===================== DOMAIN 2: RUNTIME / AUDIT ===================== -->
+  <h2 class="domain"><span class="dot" style="background:var(--amber)"></span>Runtime, Audit &amp; Lineage <span class="count">5 tables</span></h2>
+  <p class="domain-note">Written by the pipeline as it runs — not configured by users. Run history, an operational event log, per-resource lineage, a hash-chained user-activity trail, and a message-dedupe table for idempotent bulk exports.</p>
+  <div class="grid">
+
+    <!-- ConfiguredPipelineRuns -->
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">ConfiguredPipelineRuns</span><span class="role">one row per pipeline execution</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">indexed w/ Status, StartedOnUtc</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Status</td><td class="ctype">nvarchar(50)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ResourceTypes</td><td class="ctype">nvarchar(1000)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Extracted/Mapped/Written counts</td><td class="ctype">int</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Errors</td><td class="ctype">nvarchar(max)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Started/CompletedOnUtc</td><td class="ctype">datetime2</td></tr>
+        <tr><td class="ckey"></td><td class="cname">TriggerType · TriggeredBy</td><td class="ctype">nvarchar(max)</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Status</span>: "Completed"  ·  <span class="fld">ResourceTypes</span>: "Observation"
+<span class="fld">Extracted</span>: 1240 · <span class="fld">Mapped</span>: 1240 · <span class="fld">Written</span>: 1238
+<span class="fld">TriggeredBy</span>: "scheduler"  ·  <span class="fld">Errors</span>: "[]"</code></div>
+    </div>
+
+    <!-- OperationalAuditLogs -->
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">OperationalAuditLogs</span><span class="role">system-side pipeline/config events</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">indexed</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Action · Status</td><td class="ctype">nvarchar(100/50)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Message</td><td class="ctype">nvarchar(2000)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Source/Mapping/Dest/Run/RouteId</td><td class="ctype">uniqueidentifier null</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ResourceType · ResourceCount</td><td class="ctype">nvarchar · int</td></tr>
+        <tr><td class="ckey"></td><td class="cname">CorrelationId · TriggeredBy</td><td class="ctype">nvarchar</td></tr>
+        <tr><td class="ckey"></td><td class="cname">OccurredOnUtc</td><td class="ctype">datetime2 (indexed)</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Action</span>: "PipelineRunCompleted"  ·  <span class="fld">Status</span>: "Completed"
+<span class="fld">ResourceType</span>: "Observation"  ·  <span class="fld">ResourceCount</span>: 1238
+<span class="fld">CorrelationId</span>: "9b2c…"</code></div>
+    </div>
+
+    <!-- ResourceLineageEntries -->
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">ResourceLineageEntries</span><span class="role">per-resource provenance</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId · PipelineRunId</td><td class="ctype">indexed</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ResourceType</td><td class="ctype">nvarchar(100)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">SourceResourceId</td><td class="ctype">nvarchar(256)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Action · Status</td><td class="ctype">nvarchar</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Source/Mapping/Dest/RouteId</td><td class="ctype">uniqueidentifier null</td></tr>
+        <tr><td class="ckey"></td><td class="cname">OccurredOnUtc</td><td class="ctype">datetime2</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">ResourceType</span>: "Observation"
+<span class="fld">SourceResourceId</span>: "Observation/abc-123"
+<span class="fld">Action</span>: "Written"  ·  <span class="fld">Status</span>: "Success"</code></div>
+    </div>
+
+    <!-- UserActivityAuditLogs -->
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">UserActivityAuditLogs</span><span class="role">hash-chained user action trail</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"></td><td class="cname">UserId · UserEmail</td><td class="ctype">guid · nvarchar(320)</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">null (indexed)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Activity · Category · Severity</td><td class="ctype">nvarchar</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Status · FailureReason</td><td class="ctype">nvarchar</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Ip · UserAgent · Http · Path</td><td class="ctype">nvarchar</td></tr>
+        <tr><td class="ckey"></td><td class="cname">EntryHash · PreviousHash</td><td class="ctype">nvarchar(128)</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">UserEmail</span>: "admin@acme.org"
+<span class="fld">Activity</span>: "SourceConnectionTested"  ·  <span class="fld">Status</span>: "Success"
+<span class="fld">EntryHash</span> links to <span class="fld">PreviousHash</span> (tamper-evident)</code></div>
+    </div>
+
+    <!-- ProcessedMessages -->
+    <div class="entity">
+      <div class="bar" style="background:var(--slate)"><span class="tbl">ProcessedMessages</span><span class="role">infra · idempotency dedupe</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">MessageId</td><td class="ctype">nvarchar(256)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">ProcessedOnUtc</td><td class="ctype">datetime2</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">MessageId</span>: "bulkexport:7f3a…:9b2c…"
+<span class="fld">ProcessedOnUtc</span>: 2026-07-02T14:00Z
+<span style="color:var(--faint)">// second delivery of same id is skipped</span></code></div>
+    </div>
+
+  </div>
+
+  <!-- ===================== DOMAIN 3: RBAC ===================== -->
+  <h2 class="domain"><span class="dot" style="background:var(--teal)"></span>Identity &amp; RBAC <span class="count">6 tables</span></h2>
+  <p class="domain-note">Platform identity and access control. <code style="font-family:var(--mono);font-size:12px">Roles</code> and <code style="font-family:var(--mono);font-size:12px">Permissions</code> ship seeded (5 system roles, ~30 permissions). <code style="font-family:var(--mono);font-size:12px">UserRoles</code> is a global assignment; <code style="font-family:var(--mono);font-size:12px">TenantUsers</code> scopes a user + role to a single tenant.</p>
+  <div class="grid">
+
+    <!-- Users -->
+    <div class="entity">
+      <div class="bar" style="background:var(--teal)"><span class="tbl">Users</span><span class="role">identity + local-login credentials</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-uq">UQ</span></td><td class="cname">ExternalUserId</td><td class="ctype">nvarchar(200)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Email · First/LastName</td><td class="ctype">nvarchar</td></tr>
+        <tr><td class="ckey"></td><td class="cname">PasswordHash</td><td class="ctype">nvarchar(500) null</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Refresh/Reset/Invitation hashes</td><td class="ctype">nvarchar(500) null</td></tr>
+        <tr><td class="ckey"></td><td class="cname">MfaEnabled · Status · Lockout</td><td class="ctype">bit · int · datetime2</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">→ Tenants null</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Email</span>: "admin@acme.org"  ·  <span class="fld">Status</span>: Active
+<span class="fld">ExternalUserId</span>: "auth0|64f…"  ·  <span class="fld">MfaEnabled</span>: true
+<span style="color:var(--faint)">// only hashes stored, never raw secrets</span></code></div>
+    </div>
+
+    <!-- Roles -->
+    <div class="entity">
+      <div class="bar" style="background:var(--teal)"><span class="tbl">Roles</span><span class="role">seeded: 5 system roles</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-uq">UQ</span></td><td class="cname">Name</td><td class="ctype">nvarchar(100)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Description</td><td class="ctype">nvarchar(500)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">IsSystem · IsDefault</td><td class="ctype">bit</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">TenantId</td><td class="ctype">null (global if null)</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Seeded rows</div><code><span class="fld">Name</span>: GlobalAdmin · TenantAdmin · PipelineEngineer
+        · Analyst · Auditor
+<span class="fld">IsSystem</span>: true</code></div>
+    </div>
+
+    <!-- Permissions -->
+    <div class="entity">
+      <div class="bar" style="background:var(--teal)"><span class="tbl">Permissions</span><span class="role">seeded permission catalog</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-uq">UQ</span></td><td class="cname">Name</td><td class="ctype">nvarchar(150)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Category</td><td class="ctype">nvarchar(100)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">Description</td><td class="ctype">nvarchar(500)</td></tr>
+        <tr><td class="ckey"></td><td class="cname">IsSystem</td><td class="ctype">bit</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Seeded rows</div><code><span class="fld">Name</span>: "pipeline.execute" (Category "Pipeline")
+"configuration.write" · "auditlogs.read" · "user.invite"
+"workflow.create" · "role.assign" · …</code></div>
+    </div>
+
+    <!-- RolePermissions -->
+    <div class="entity">
+      <div class="bar" style="background:var(--teal)"><span class="tbl">RolePermissions</span><span class="role">join · role ⇄ permission</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span> <span class="keytag k-fk">FK</span></td><td class="cname">RoleId</td><td class="ctype">→ Roles</td></tr>
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span> <span class="keytag k-fk">FK</span></td><td class="cname">PermissionId</td><td class="ctype">→ Permissions</td></tr>
+        <tr><td class="ckey"></td><td class="cname">IsEnabled</td><td class="ctype">bit</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Role</span>: PipelineEngineer
+<span class="fld">Permission</span>: "pipeline.execute"  ·  <span class="fld">IsEnabled</span>: true
+<span style="color:var(--faint)">// composite PK (RoleId, PermissionId)</span></code></div>
+    </div>
+
+    <!-- UserRoles -->
+    <div class="entity">
+      <div class="bar" style="background:var(--teal)"><span class="tbl">UserRoles</span><span class="role">join · global role assignment</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span> <span class="keytag k-fk">FK</span></td><td class="cname">UserId</td><td class="ctype">→ Users</td></tr>
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span> <span class="keytag k-fk">FK</span></td><td class="cname">RoleId</td><td class="ctype">→ Roles</td></tr>
+        <tr><td class="ckey"></td><td class="cname">IsEnabled</td><td class="ctype">bit</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">User</span>: admin@acme.org
+<span class="fld">Role</span>: GlobalAdmin  ·  <span class="fld">IsEnabled</span>: true</code></div>
+    </div>
+
+    <!-- TenantUsers -->
+    <div class="entity">
+      <div class="bar" style="background:var(--teal)"><span class="tbl">TenantUsers</span><span class="role">user membership scoped to a tenant</span></div>
+      <table class="cols">
+        <tr><td class="ckey"><span class="keytag k-pk">PK</span></td><td class="cname">Id</td><td class="ctype">uniqueidentifier</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span> <span class="keytag k-uq">UQ</span></td><td class="cname">TenantId + UserId</td><td class="ctype">unique together</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">UserId</td><td class="ctype">→ Users</td></tr>
+        <tr><td class="ckey"><span class="keytag k-fk">FK</span></td><td class="cname">RoleId</td><td class="ctype">→ Roles</td></tr>
+        <tr class="audit-row"><td></td><td colspan="2">+ audit &amp; soft-delete columns</td></tr>
+      </table>
+      <div class="example"><div class="lbl">Example row</div><code><span class="fld">Tenant</span>: Acme Health  ·  <span class="fld">User</span>: nurse@acme.org
+<span class="fld">Role</span>: Analyst
+<span style="color:var(--faint)">// one membership row per (tenant, user)</span></code></div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>Generated from <code>FHIRBridgeDbContextModelSnapshot.cs</code> (EF Core 9.0.10, SQL Server) — 18 <code>DbSet</code>s plus the owned <code>MappingFields</code> child table. Embedded value objects (<code>SourceAuthenticationConfiguration</code>, <code>SourceInteractiveConfiguration</code>, <code>SecretReference</code>) are stored as extra columns on their parent table, not as separate tables. Every configuration table carries <code>CreatedOnUtc / ModifiedOnUtc / DeletedBy / IsDeleted / IsEnabled / RowVersion</code>; a global query filter hides soft-deleted rows.</p>
+  </footer>
+</div>

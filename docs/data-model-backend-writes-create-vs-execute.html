@@ -1,0 +1,219 @@
+<title>FHIRBridge — What the Backend Stores on Create vs. Execute</title>
+<style>
+  :root{
+    --ground:#f6f7fb; --panel:#ffffff; --ink:#191b26; --muted:#5c6478; --faint:#8b93a7;
+    --line:#e4e7f0; --line2:#d3d8e6;
+    --violet:#6d00d8; --violetSoft:#f3e9ff;
+    --amber:#b45309; --amberSoft:#fbf0e2;
+    --teal:#0f766e; --tealSoft:#e2f2ef;
+    --slate:#475569; --slateSoft:#eef1f6;
+    --ok:#0b7a47;
+    --mono:ui-monospace,"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.55;
+    -webkit-font-smoothing:antialiased;font-size:15px}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+  code,.m{font-family:var(--mono)}
+
+  header.masthead{border-bottom:2px solid var(--ink);padding-bottom:22px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);font-weight:700}
+  h1{font-size:clamp(27px,3.9vw,41px);line-height:1.05;margin:.3em 0 .18em;letter-spacing:-.02em;text-wrap:balance;font-weight:800}
+  .lede{color:var(--muted);max-width:74ch;margin:0;font-size:16px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line2);border:1px solid var(--line2);
+    border-radius:12px;overflow:hidden;margin:24px 0 8px}
+  .split .half{background:var(--panel);padding:15px 17px}
+  .split .half.dest{background:#fbfbfe}
+  .split .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-bottom:5px}
+  .split .this .tag{color:var(--violet)} .split .dest .tag{color:var(--teal)}
+  .split h3{margin:0 0 4px;font-size:15px} .split p{margin:0;color:var(--muted);font-size:13.5px}
+  @media (max-width:640px){ .split{grid-template-columns:1fr} }
+
+  h2.sec{display:flex;align-items:center;gap:11px;margin:50px 0 6px;font-size:22px;letter-spacing:-.01em}
+  h2.sec .b{width:13px;height:13px;border-radius:4px;flex:none}
+  .sec-note{color:var(--muted);margin:2px 0 18px;max-width:82ch;font-size:14.5px}
+
+  .tl{display:grid;gap:12px;counter-reset:ev}
+  .ev{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .ev-head{display:grid;grid-template-columns:30px 1fr;gap:12px;align-items:center;padding:12px 15px;border-bottom:1px solid var(--line)}
+  .ev-head .i{counter-increment:ev;font-family:var(--mono);font-weight:700;color:#fff;border-radius:7px;height:26px;display:grid;place-items:center;font-size:13px}
+  .ev-head .i::before{content:counter(ev)}
+  .ev.create .i{background:var(--violet)} .ev.exec .i{background:var(--amber)}
+  .ev-head h3{margin:0;font-size:15px}
+  .ev-head .act{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .ev-body{padding:6px 0}
+  .w{display:grid;grid-template-columns:210px 1fr;gap:0;border-top:1px solid var(--line);padding:9px 15px}
+  .ev-body .w:first-child{border-top:0}
+  .w .t{font-family:var(--mono);font-size:12.5px;font-weight:700}
+  .w .t .op{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px;vertical-align:1px}
+  .op.ins{background:#e2f2ea;color:var(--ok);border:1px solid #b8e6cd}
+  .op.upd{background:#e7effe;color:#2563eb;border:1px solid #c2d6f7}
+  .op.ups{background:#f1e9fd;color:#7c3aed;border:1px solid #d9c6f5}
+  .w .r{font-family:var(--mono);font-size:12px;color:#2b2f3d;white-space:pre-wrap;word-break:break-word;line-height:1.5}
+  .w .r .f{color:#2563eb}
+  .w .r .muted{color:var(--faint)}
+
+  .callout{padding:12px 15px;border-radius:10px;font-size:13.5px;line-height:1.5;margin:14px 0}
+  .callout.violet{background:var(--violetSoft);border:1px solid #ddc6f7;color:#4a1a86}
+  .callout.slate{background:var(--slateSoft);border:1px solid var(--line2);color:var(--muted)}
+  .callout b{color:var(--ink)}
+
+  .matrix{overflow-x:auto;border:1px solid var(--line);border-radius:11px;margin-top:8px}
+  table.mx{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}
+  table.mx th,table.mx td{padding:9px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  table.mx th{background:#f2f3f8;font-size:12px;color:#3a4152;white-space:nowrap}
+  table.mx td:first-child{font-family:var(--mono);font-weight:600;white-space:nowrap}
+  table.mx tr:last-child td{border-bottom:0}
+  .dot{font-family:var(--mono);font-weight:700}
+  .dot.y{color:var(--ok)} .dot.n{color:#c9cede}
+  .mini{font-size:11.5px;color:var(--faint)}
+
+  footer{margin-top:52px;padding-top:20px;border-top:1px solid var(--line2);color:var(--faint);font-size:13px}
+  footer code{background:var(--panel);padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+  a{color:var(--violet)}
+  @media (max-width:520px){ .wrap{padding:28px 16px 60px} .w{grid-template-columns:1fr;gap:4px} }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="kicker">FHIRBridge · control-plane persistence</div>
+    <h1>What the backend stores — on <span style="color:var(--violet)">create</span> vs. on <span style="color:var(--amber)">execute</span></h1>
+    <p class="lede">The customer's mapped clinical data lands in <em>their</em> destination (SQL/CSV). Separately, FHIRBridge writes to <em>its own</em> operational database at every step. This traces exactly which of the 19 tables get rows — and what's in them — when a workflow is built and when it runs. Values continue the Acme Health · Epic EHR-launch example.</p>
+    <div class="split">
+      <div class="half this"><div class="tag">This page — FHIRBridge control-plane DB</div><h3>Configuration, runs, audit &amp; lineage</h3><p>The 19 tables in <code>FHIRBridgeDbContext</code>. Metadata about the workflow and its executions — never patient clinical content.</p></div>
+      <div class="half dest"><div class="tag">Not this page — customer destination</div><h3>dbo.Patient · dbo.PatientObservation · …</h3><p>The mapped FHIR data. Written by the destination writer to the customer's own SQL/CSV target, outside this database.</p></div>
+    </div>
+  </header>
+
+  <!-- ============ CREATE ============ -->
+  <h2 class="sec"><span class="b" style="background:var(--violet)"></span>When a workflow is <span style="color:var(--violet)">created</span> (config-time)</h2>
+  <p class="sec-note">Each wizard step calls <code>UnifiedTenantConfigurationService</code>, which mutates the <code>Tenant</code> aggregate, saves, and writes <b>one <code>OperationalAuditLog</code> row per action</b>. On every save the <code>AuditingSaveChangesInterceptor</code> auto-stamps <code>CreatedBy · CreatedOnUtc · RowVersion</code> (or the Modified equivalents). No clinical data, no run rows yet.</p>
+  <div class="tl">
+
+    <div class="ev create"><div class="ev-head"><span class="i"></span><h3>Add Epic source</h3><span class="act">POST /source-connections</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>SourceConnections</div><div class="r"><span class="f">Id</span> 5e10…0002 · <span class="f">SourceSystemType</span> Epic · <span class="f">ApplicationType</span> EhrLaunch
+<span class="muted">+ embedded Auth (ClientId, Scopes, ClientSecret ref) &amp; Interactive (RedirectUris, TrustedIssuers, LaunchPatient) columns</span></div></div>
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>OperationalAuditLogs</div><div class="r"><span class="f">Action</span> "SourceConnectionCreated" · <span class="f">Status</span> Completed · <span class="f">SourceConnectionId</span> 5e10…0002</div></div>
+        <div class="w"><div class="t"><span class="op upd">STAMP</span>auto (interceptor)</div><div class="r"><span class="muted">CreatedBy "admin@acmehealth.org" · CreatedOnUtc · RowVersion — on the SourceConnections row</span></div></div>
+      </div>
+    </div>
+
+    <div class="ev create"><div class="ev-head"><span class="i"></span><h3>Discover capability</h3><span class="act">POST /capabilities/discover</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ups">UPSERT</span>SourceCapabilityProfiles</div><div class="r"><span class="f">FhirVersion</span> 4.0.1 · <span class="f">ResourcesJson</span> ["Patient","Observation","Condition",…] · <span class="f">RawCapabilityJson</span> {…} · <span class="f">DiscoveredOnUtc</span></div></div>
+        <div class="w"><div class="t muted">— (no audit row)</div><div class="r"><span class="muted">Discovery logs via ILogger; one profile row per source (unique on Tenant+Source), replaced on re-discovery.</span></div></div>
+      </div>
+    </div>
+
+    <div class="ev create"><div class="ev-head"><span class="i"></span><h3>Add SQL destination</h3><span class="act">POST /destinations</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>DestinationConfigurations</div><div class="r"><span class="f">Id</span> c3d4…0003 · <span class="f">DestinationType</span> SqlServer · <span class="f">Target</span> FHIRBridgeDW.dbo · <span class="f">SecretReference</span> acme-kv / sql-connstring</div></div>
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>OperationalAuditLogs</div><div class="r"><span class="f">Action</span> "DestinationConfigurationCreated" · <span class="f">DestinationId</span> c3d4…0003</div></div>
+      </div>
+    </div>
+
+    <div class="ev create"><div class="ev-head"><span class="i"></span><h3>Add mapping (×3: Patient, Observation, Condition)</h3><span class="act">POST /mapping-profiles</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>MappingProfiles</div><div class="r"><span class="f">…0102</span> ResourceType "Observation" → DestinationObject "dbo.PatientObservation" · <span class="f">SourceConnectionId</span> 5e10…0002 · <span class="f">DestinationId</span> c3d4…0003</div></div>
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>MappingFields</div><div class="r"><span class="muted">one row per field —</span> Observation.valueQuantity.value → Value (Decimal), …code.coding.code → Code, …effectiveDateTime → ObservedAt</div></div>
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>OperationalAuditLogs</div><div class="r"><span class="f">Action</span> "MappingProfileCreated" · <span class="f">MappingProfileId</span> …0102 <span class="muted">(one audit row per profile)</span></div></div>
+      </div>
+    </div>
+
+    <div class="ev create"><div class="ev-head"><span class="i"></span><h3>Add route (×3 — the workflow)</h3><span class="act">POST /resources/{type}/routes</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>ResourcePipelineRoutes</div><div class="r"><span class="f">…0202</span> → MappingProfileId …0102 · <span class="f">IngestionMode</span> ScheduledPull · <span class="f">SearchParameters</span> "category=vital-signs" · <span class="f">Priority</span> 2</div></div>
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>OperationalAuditLogs</div><div class="r"><span class="f">Action</span> "ResourcePipelineRouteCreated" · <span class="f">ResourcePipelineRouteId</span> …0202</div></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="callout violet"><b>Net of creating this workflow:</b> 1 <code>SourceConnections</code> + 1 <code>SourceCapabilityProfiles</code> + 1 <code>DestinationConfigurations</code> + 3 <code>MappingProfiles</code> (with their <code>MappingFields</code>) + 3 <code>ResourcePipelineRoutes</code> rows, and roughly <b>8 <code>OperationalAuditLogs</code></b> rows. Every row carries the auto-stamped audit + <code>RowVersion</code> columns. <b>Zero</b> clinical rows and <b>zero</b> run rows.</div>
+
+  <!-- ============ EXECUTE ============ -->
+  <h2 class="sec"><span class="b" style="background:var(--amber)"></span>When the workflow is <span style="color:var(--amber)">executed</span> (run-time)</h2>
+  <p class="sec-note">A run (scheduled, webhook, or the EHR-launch trigger) goes through <code>ConfiguredPipelineService</code>. It writes audit rows as it progresses, a lineage row per resource, and one run-summary row at the end. The mapped clinical data is written to the <em>customer's</em> destination — not here.</p>
+  <div class="tl">
+
+    <div class="ev exec"><div class="ev-head"><span class="i"></span><h3>Run starts / per-route progress</h3><span class="act">ConfiguredPipelineService.StartAsync</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>OperationalAuditLogs</div><div class="r"><span class="muted">several rows —</span> "PipelineRunStarted", then per route "RouteExtractionStarted / Completed" · <span class="f">CorrelationId</span> corr-7c4e… · <span class="f">TriggeredBy</span> epic-ehr-launch</div></div>
+        <div class="w"><div class="t muted">reads (no write here)</div><div class="r"><span class="muted">Source token acquired &amp; Patient/Observation/Condition fetched for launched patient eV3xTk92…; governance/normalization applied in memory.</span></div></div>
+      </div>
+    </div>
+
+    <div class="ev exec"><div class="ev-head"><span class="i"></span><h3>Per resource written</h3><span class="act">lineage tracker</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>ResourceLineageEntries</div><div class="r"><span class="muted">one row per resource instance (PHI-free) —</span>
+<span class="f">ResourceType</span> Observation · <span class="f">SourceResourceId</span> "Observation/eN4a-glucose" · <span class="f">Action</span> Written · <span class="f">Status</span> Success · <span class="f">PipelineRunId</span> 9b2c…0401</div></div>
+        <div class="w"><div class="t muted">↗ customer DB</div><div class="r"><span class="muted">the actual mapped row lands in dbo.PatientObservation — in the customer's database, not ours.</span></div></div>
+      </div>
+    </div>
+
+    <div class="ev exec"><div class="ev-head"><span class="i"></span><h3>Run completes</h3><span class="act">pipeline run repository</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>ConfiguredPipelineRuns</div><div class="r"><span class="f">Id</span> 9b2c…0401 · <span class="f">Status</span> Completed · <span class="f">ResourceTypes</span> "Patient,Observation,Condition" · <span class="f">Extracted/Mapped/Written</span> 37/37/37 · <span class="f">Errors</span> [] · <span class="f">Started/CompletedOnUtc</span></div></div>
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>OperationalAuditLogs</div><div class="r"><span class="f">Action</span> "PipelineRunCompleted" · <span class="f">ResourceCount</span> 37 · <span class="f">PipelineRunId</span> 9b2c…0401</div></div>
+      </div>
+    </div>
+
+    <div class="ev exec"><div class="ev-head"><span class="i"></span><h3>Only if dispatched async / bulk export</h3><span class="act">Worker · dispatcher</span></div>
+      <div class="ev-body">
+        <div class="w"><div class="t"><span class="op ins">INSERT</span>ProcessedMessages</div><div class="r"><span class="f">MessageId</span> "bulkexport:7f3a…:9b2c…" · <span class="f">ProcessedOnUtc</span> <span class="muted">— idempotency guard so a redelivered message is skipped. Synchronous runs skip this table.</span></div></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="callout violet"><b>Net of one execution:</b> 1 <code>ConfiguredPipelineRuns</code> summary + <b>N</b> <code>ResourceLineageEntries</code> (one per resource, 37 here) + several <code>OperationalAuditLogs</code> (start / per-route / complete) + optionally 1 <code>ProcessedMessages</code>. The 37 mapped clinical rows are written to the <b>customer's</b> destination, not stored here.</div>
+
+  <!-- ============ CROSS-CUTTING ============ -->
+  <h2 class="sec"><span class="b" style="background:var(--slate)"></span>Cross-cutting writes (not tied to a single step)</h2>
+  <p class="sec-note">Three mechanisms write regardless of which workflow action fired them.</p>
+  <div class="tl">
+    <div class="ev" style="border-left:3px solid var(--slate)"><div class="ev-head" style="grid-template-columns:1fr"><h3>AuditingSaveChangesInterceptor — every configuration table</h3></div>
+      <div class="ev-body"><div class="w"><div class="t"><span class="op upd">STAMP</span>all IAuditable rows</div><div class="r">On <em>every</em> SaveChanges: <span class="f">CreatedBy/CreatedOnUtc</span> on insert, <span class="f">ModifiedBy/ModifiedOnUtc</span> on update, <span class="f">RowVersion</span> bumped. A "delete" is flipped to a <span class="f">soft delete</span> (<span class="f">IsDeleted, DeletedBy, DeletedOnUtc</span>) — rows are never physically removed, so audit/lineage stays resolvable.</div></div></div>
+    </div>
+    <div class="ev" style="border-left:3px solid var(--slate)"><div class="ev-head" style="grid-template-columns:1fr"><h3>UserActivityAuditLogs — auth &amp; data-access only</h3></div>
+      <div class="ev-body"><div class="w"><div class="t"><span class="op ins">INSERT</span>UserActivityAuditLogs</div><div class="r"><span class="muted">Written on login/logout/failed-login and on patient data-access reads — NOT on config CRUD or pipeline runs.</span> Hash-chained: each row's <span class="f">EntryHash</span> includes the <span class="f">PreviousHash</span>, so tampering is detectable. Fields: UserEmail, Activity, Category, Severity, Status, IpAddress, UserAgent, RequestPath.</div></div></div>
+    </div>
+    <div class="ev" style="border-left:3px solid var(--slate)"><div class="ev-head" style="grid-template-columns:1fr"><h3>Users — updated on sign-in</h3></div>
+      <div class="ev-body"><div class="w"><div class="t"><span class="op upd">UPDATE</span>Users</div><div class="r"><span class="f">LastLoginOnUtc</span>, <span class="f">RefreshTokenHash</span> (+expiry), <span class="f">FailedLoginCount</span>/<span class="f">LockoutEndUtc</span> on bad attempts. Only hashes are ever stored — never a raw password, token, or client secret.</div></div></div>
+    </div>
+  </div>
+
+  <!-- ============ MATRIX ============ -->
+  <h2 class="sec"><span class="b" style="background:var(--ink)"></span>Table-by-table: written when?</h2>
+  <div class="matrix">
+    <table class="mx">
+      <thead><tr><th>Table</th><th>On create</th><th>On execute</th><th>On auth</th><th>Holds</th></tr></thead>
+      <tbody>
+        <tr><td>Tenants</td><td><span class="dot y">●</span> once (onboarding)</td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>customer org</td></tr>
+        <tr><td>SourceConnections</td><td><span class="dot y">●</span></td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>EHR source + auth (embedded)</td></tr>
+        <tr><td>SourceCapabilityProfiles</td><td><span class="dot y">●</span> upsert</td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>discovered scopes/resources</td></tr>
+        <tr><td>DestinationConfigurations</td><td><span class="dot y">●</span></td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>SQL/CSV target + secret ref</td></tr>
+        <tr><td>MappingProfiles</td><td><span class="dot y">●</span></td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>resource → destination</td></tr>
+        <tr><td>MappingFields</td><td><span class="dot y">●</span></td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>per-field rules</td></tr>
+        <tr><td>ResourcePipelineRoutes</td><td><span class="dot y">●</span></td><td><span class="dot y">◐</span> LastTriggeredOnUtc</td><td><span class="dot n">—</span></td><td>the workflow</td></tr>
+        <tr><td>WebhookConfigurations</td><td><span class="dot y">◐</span> webhook mode only</td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>inbound push endpoint</td></tr>
+        <tr><td>ConfiguredPipelineRuns</td><td><span class="dot n">—</span></td><td><span class="dot y">●</span> 1 / run</td><td><span class="dot n">—</span></td><td>run summary + counts</td></tr>
+        <tr><td>ResourceLineageEntries</td><td><span class="dot n">—</span></td><td><span class="dot y">●</span> 1 / resource</td><td><span class="dot n">—</span></td><td>per-resource provenance</td></tr>
+        <tr><td>OperationalAuditLogs</td><td><span class="dot y">●</span> 1 / action</td><td><span class="dot y">●</span> several / run</td><td><span class="dot n">—</span></td><td>system-side event log</td></tr>
+        <tr><td>ProcessedMessages</td><td><span class="dot n">—</span></td><td><span class="dot y">◐</span> async/bulk only</td><td><span class="dot n">—</span></td><td>idempotency dedupe</td></tr>
+        <tr><td>UserActivityAuditLogs</td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td><span class="dot y">●</span> hash-chained</td><td>user action trail</td></tr>
+        <tr><td>Users</td><td><span class="dot y">◐</span> invite</td><td><span class="dot n">—</span></td><td><span class="dot y">●</span> login state</td><td>identity + credential hashes</td></tr>
+        <tr><td>Roles · Permissions · RolePermissions</td><td><span class="dot y">◐</span> seeded</td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>RBAC catalog (seeded)</td></tr>
+        <tr><td>UserRoles · TenantUsers</td><td><span class="dot y">◐</span> user admin</td><td><span class="dot n">—</span></td><td><span class="dot n">—</span></td><td>role / tenant membership</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mini" style="margin-top:8px"><span class="dot y">●</span> written in this phase &nbsp;·&nbsp; <span class="dot y">◐</span> conditionally / partially &nbsp;·&nbsp; <span class="dot n">—</span> not written</p>
+
+  <div class="callout slate"><b>The one rule that explains the split:</b> the FHIRBridge database stores <b>metadata about</b> the data movement — configuration, run history, audit, lineage — and deliberately never stores the FHIR clinical payload. That always flows source → map → the customer's destination. Lineage links the two by <code>SourceResourceId</code> without copying content.</div>
+
+  <footer>
+    <p>Write paths traced from <code>UnifiedTenantConfigurationService</code>, <code>ConfiguredPipelineService</code>, <code>AuditingSaveChangesInterceptor</code>, and <code>EfUserActivityAuditService</code> (EF Core 9 / SQL Server). Ids continue the Epic EHR-launch worked example. Illustrative row values over the real schema.</p>
+  </footer>
+</div>

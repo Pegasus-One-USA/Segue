@@ -1,0 +1,339 @@
+<title>FHIRBridge — Worked Example: Epic EHR Launch → SQL Server</title>
+<style>
+  :root{
+    --ground:#f6f7fb; --panel:#ffffff; --ink:#191b26; --muted:#5c6478; --faint:#8b93a7;
+    --line:#e4e7f0; --line2:#d3d8e6;
+    --violet:#6d00d8; --violetSoft:#f3e9ff;
+    --amber:#b45309; --amberSoft:#fbf0e2;
+    --teal:#0f766e; --tealSoft:#e2f2ef;
+    --slate:#475569; --slateSoft:#eef1f6;
+    --sql:#0f766e;
+    --pk:#a9791a; --fk:#2563eb; --uq:#7c3aed; --ok:#0b7a47;
+    --mono:ui-monospace,"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.55;
+    -webkit-font-smoothing:antialiased;font-size:15px}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+  code,.m{font-family:var(--mono)}
+
+  header.masthead{border-bottom:2px solid var(--ink);padding-bottom:22px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);font-weight:700}
+  h1{font-size:clamp(28px,4vw,42px);line-height:1.05;margin:.3em 0 .18em;letter-spacing:-.02em;text-wrap:balance;font-weight:800}
+  .lede{color:var(--muted);max-width:72ch;margin:0;font-size:16px}
+
+  .glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line2);
+    border:1px solid var(--line2);border-radius:12px;overflow:hidden;margin:24px 0 6px}
+  .glance .cell{background:var(--panel);padding:13px 15px}
+  .glance .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .glance .v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:3px;color:var(--ink)}
+
+  h2.sec{display:flex;align-items:baseline;gap:11px;margin:52px 0 6px;font-size:22px;letter-spacing:-.01em}
+  h2.sec .n{font-family:var(--mono);font-size:14px;color:#fff;background:var(--violet);width:26px;height:26px;
+    border-radius:7px;display:inline-grid;place-items:center;font-weight:700;translate:0 -2px;flex:none}
+  .sec-note{color:var(--muted);margin:2px 0 18px;max-width:80ch;font-size:14.5px}
+
+  /* oauth flow steps */
+  .flow{display:grid;gap:10px;counter-reset:step}
+  .step{display:grid;grid-template-columns:34px 1fr;gap:14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:11px;padding:14px 16px}
+  .step .idx{counter-increment:step;font-family:var(--mono);font-weight:700;color:var(--violet);
+    background:var(--violetSoft);border-radius:8px;display:grid;place-items:center;height:30px}
+  .step .idx::before{content:counter(step)}
+  .step h3{margin:0 0 4px;font-size:14.5px}
+  .step p{margin:0 0 7px;color:var(--muted);font-size:13.5px}
+  .step .req{font-family:var(--mono);font-size:12px;background:#0f172a;color:#e6edf3;border-radius:8px;
+    padding:9px 11px;white-space:pre-wrap;word-break:break-word;line-height:1.5;overflow-x:auto}
+  .step .req .hl{color:#f6c177} .step .req .g{color:#7fd1b9} .step .req .p{color:#c4a7f5}
+
+  /* entity boxes */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px;margin-top:6px}
+  .grid.wide{grid-template-columns:1fr}
+  .entity{background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(20,22,35,.04)}
+  .entity .bar{padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .entity .bar .tbl{font-family:var(--mono);font-weight:700;font-size:14.5px;color:#fff}
+  .entity .bar .role{font-size:11px;color:rgba(255,255,255,.85);font-weight:600;text-align:right}
+  table.kv{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.3px}
+  table.kv td{padding:6px 14px;border-top:1px solid var(--line);vertical-align:top}
+  table.kv tr:first-child td{border-top:0}
+  table.kv .c{color:var(--fk);font-weight:600;white-space:nowrap;width:42%}
+  table.kv .v{color:var(--ink);word-break:break-word}
+  .pkrow td{background:#fdfaf1}
+  .note{font-size:12px;color:var(--faint);font-family:var(--sans);padding:8px 14px;border-top:1px dashed var(--line2);background:#fbfbfe}
+
+  /* sql result tables */
+  .sqlwrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+  table.sql{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.3px;min-width:520px}
+  table.sql caption{caption-side:top;text-align:left;font-family:var(--mono);font-weight:700;color:var(--sql);
+    padding:10px 14px;background:var(--tealSoft);border-bottom:1px solid var(--line)}
+  table.sql th{background:#f2f6f5;color:#3a4f4a;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);font-weight:700;white-space:nowrap}
+  table.sql td{padding:7px 12px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+  table.sql tr:last-child td{border-bottom:0}
+  .sqlstack{display:grid;gap:16px}
+
+  .pill{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .pill.ok{background:#e2f2ea;color:var(--ok);border:1px solid #b8e6cd}
+  .empty-note{background:var(--slateSoft);border:1px solid var(--line2);border-radius:10px;padding:12px 15px;
+    font-size:13.5px;color:var(--muted);margin-top:16px}
+  .empty-note b{color:var(--ink)}
+
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line2);color:var(--faint);font-size:13px}
+  footer code{background:var(--panel);padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+  a{color:var(--violet)}
+  @media (max-width:520px){ .wrap{padding:28px 16px 60px} .grid{grid-template-columns:1fr} }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="kicker">FHIRBridge · Worked Example · one concrete tenant</div>
+    <h1>Epic Provider EHR Launch → SQL Server</h1>
+    <p class="lede">The same data model, filled in for one real scenario: <b>Acme Health</b> connects <b>Epic</b> as a <b>Provider EHR Launch</b> source and writes <b>Patient, Observation, and Condition</b> into <b>SQL Server</b>. Every row below is wired by consistent ids, from the OAuth launch through to the rows that land in the database.</p>
+    <div class="glance">
+      <div class="cell"><div class="k">Source</div><div class="v">Epic</div></div>
+      <div class="cell"><div class="k">Application type</div><div class="v">EhrLaunch</div></div>
+      <div class="cell"><div class="k">Patient context</div><div class="v">LaunchPatient</div></div>
+      <div class="cell"><div class="k">Destination</div><div class="v">SqlServer</div></div>
+      <div class="cell"><div class="k">Resources</div><div class="v">Patient · Observation · Condition</div></div>
+      <div class="cell"><div class="k">Trigger</div><div class="v">epic-ehr-launch</div></div>
+    </div>
+  </header>
+
+  <!-- ========== 1. LAUNCH FLOW ========== -->
+  <h2 class="sec"><span class="n">1</span>The EHR-launch OAuth handshake</h2>
+  <p class="sec-note">A clinician opens the app from inside Epic with a patient already in context. This is a genuine sequence — each step feeds the next — ending in an access token scoped to the launched patient. The callback is anonymous, secured by the single-use <code>state</code> and the trusted-issuer check, not a FHIRBridge login.</p>
+  <div class="flow">
+    <div class="step"><div class="idx"></div><div>
+      <h3>Epic launches the registered URL</h3>
+      <p>Epic appends the issuer and an opaque launch token to the encrypted, route-scoped launch URL registered on the source.</p>
+      <div class="req">GET https://app.fhirbridge.io/api/v1/oauth/launch/<span class="p">{ctx}</span>
+        ?iss=<span class="hl">https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4</span>
+        &launch=<span class="g">xY9z-opaque-launch-token</span></div>
+    </div></div>
+    <div class="step"><div class="idx"></div><div>
+      <h3>Validate issuer, then redirect to Epic's authorize endpoint</h3>
+      <p><code>iss</code> must match the source's <code>TrustedIssuers</code> allow-list (anti-phishing). PKCE + <code>state</code> are generated; <code>aud</code> is the FHIR base; the <code>launch</code> token is forwarded.</p>
+      <div class="req">302 → https://fhir.epic.com/…/oauth2/authorize?response_type=code
+        &client_id=<span class="hl">epic-ehr-launch-client-9f2a</span>
+        &redirect_uri=https://app.fhirbridge.io/api/v1/oauth/callback
+        &scope=<span class="g">launch openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read</span>
+        &launch=<span class="g">xY9z-opaque-launch-token</span>&aud=https://fhir.epic.com/…/R4
+        &state=<span class="p">{enc-nonce}</span>&code_challenge=<span class="p">…</span>&code_challenge_method=S256</div>
+    </div></div>
+    <div class="step"><div class="idx"></div><div>
+      <h3>Epic redirects back to the callback with an auth code</h3>
+      <p>The user is already signed in to Epic, so no extra prompt. Epic returns the code against the same <code>state</code>.</p>
+      <div class="req">GET https://app.fhirbridge.io/api/v1/oauth/callback?code=<span class="hl">AUTH_CODE</span>&state=<span class="p">{enc-nonce}</span></div>
+    </div></div>
+    <div class="step"><div class="idx"></div><div>
+      <h3>Exchange the code (confidential client) for a patient-scoped token</h3>
+      <p>The single-use state resolves the pending PKCE verifier; the client secret is pulled from Key Vault at exchange time. Epic returns the token <em>and</em> the launched patient id.</p>
+      <div class="req">POST /oauth2/token  grant_type=authorization_code&code=AUTH_CODE
+        &code_verifier=…&client_id=epic-ehr-launch-client-9f2a&client_secret=<span class="p">••••</span>
+        ⇒ { "access_token":"…", "patient":"<span class="hl">eV3xTk92…</span>", "scope":"patient/…", "expires_in":3600 }</div>
+    </div></div>
+    <div class="step"><div class="idx"></div><div>
+      <h3>The callback triggers this tenant's route for the launched patient</h3>
+      <p>The route id was carried (encrypted) in the launch context. FHIRBridge extracts Patient + Observation + Condition <em>for that one patient</em>, maps, and writes to SQL — recorded as one <code>ConfiguredPipelineRun</code>.</p>
+      <div class="req">StartConfiguredPipelineRun { RouteIds:[<span class="g">…0201, …0202, …0203</span>], TriggeredBy:"<span class="hl">epic-ehr-launch</span>" }</div>
+    </div></div>
+  </div>
+
+  <!-- ========== 2. CONFIG ROWS ========== -->
+  <h2 class="sec"><span class="n">2</span>The configuration rows this workflow persists</h2>
+  <p class="sec-note">What the admin saved in the wizard, as actual table rows. Ids are shortened for readability but consistent across tables — follow <code>…0002</code> (source), <code>…0003</code> (destination), <code>…0101/2/3</code> (mappings).</p>
+  <div class="grid">
+
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">Tenants</span><span class="role">1 row</span></div>
+      <table class="kv">
+        <tr class="pkrow"><td class="c">Id (PK)</td><td class="v">7f3a…0001</td></tr>
+        <tr><td class="c">Code</td><td class="v">acme-health</td></tr>
+        <tr><td class="c">Name</td><td class="v">Acme Health</td></tr>
+        <tr><td class="c">Status</td><td class="v">Active</td></tr>
+        <tr><td class="c">RetentionDays</td><td class="v">2555</td></tr>
+      </table>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">SourceConnections</span><span class="role">1 row · Epic EHR Launch</span></div>
+      <table class="kv">
+        <tr class="pkrow"><td class="c">Id (PK)</td><td class="v">5e10…0002</td></tr>
+        <tr><td class="c">TenantId (FK)</td><td class="v">7f3a…0001</td></tr>
+        <tr><td class="c">Name</td><td class="v">Epic Provider EHR Launch — Production</td></tr>
+        <tr><td class="c">SourceSystemType</td><td class="v">Epic</td></tr>
+        <tr><td class="c">ApplicationType</td><td class="v">EhrLaunch</td></tr>
+        <tr><td class="c">BaseUrl</td><td class="v">https://fhir.epic.com/…/api/FHIR/R4</td></tr>
+        <tr><td class="c">Auth.Type</td><td class="v">OAuthClientCredentials *</td></tr>
+        <tr><td class="c">Auth.ClientId</td><td class="v">epic-ehr-launch-client-9f2a</td></tr>
+        <tr><td class="c">Auth.TokenEndpoint</td><td class="v">…/oauth2/token</td></tr>
+        <tr><td class="c">Auth.Scopes</td><td class="v">launch openid fhirUser patient/Patient.read patient/Observation.read patient/Condition.read</td></tr>
+        <tr><td class="c">Auth.ClientSecret</td><td class="v">acme-kv / epic-ehr-launch-secret</td></tr>
+        <tr><td class="c">Interactive.RedirectUris</td><td class="v">…/api/v1/oauth/callback</td></tr>
+        <tr><td class="c">Interactive.TrustedIssuers</td><td class="v">https://fhir.epic.com/…/R4</td></tr>
+        <tr><td class="c">Interactive.PatientSelectionMethod</td><td class="v">LaunchPatient</td></tr>
+      </table>
+      <div class="note">* The <code>AuthenticationType</code> enum (None/SmartBackendServices/OAuthClientCredentials/ApiKey) predates interactive flows. The <em>actual</em> grant — authorization_code + PKCE — is selected by <code>ApplicationType = EhrLaunch</code> through the strategy registry, not by this column.</div>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">DestinationConfigurations</span><span class="role">1 row · SQL Server</span></div>
+      <table class="kv">
+        <tr class="pkrow"><td class="c">Id (PK)</td><td class="v">c3d4…0003</td></tr>
+        <tr><td class="c">TenantId (FK)</td><td class="v">7f3a…0001</td></tr>
+        <tr><td class="c">Name</td><td class="v">SQL Production — FHIRBridgeDW</td></tr>
+        <tr><td class="c">DestinationType</td><td class="v">SqlServer</td></tr>
+        <tr><td class="c">Target</td><td class="v">FHIRBridgeDW.dbo</td></tr>
+        <tr><td class="c">SecretReference</td><td class="v">acme-kv / sql-fhirbridgedw-connstring</td></tr>
+      </table>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">SourceCapabilityProfiles</span><span class="role">1 row · from discovery</span></div>
+      <table class="kv">
+        <tr class="pkrow"><td class="c">Id (PK)</td><td class="v">a7c1…0301</td></tr>
+        <tr><td class="c">TenantId + SourceConnectionId (UQ)</td><td class="v">7f3a…0001 / 5e10…0002</td></tr>
+        <tr><td class="c">FhirVersion</td><td class="v">4.0.1</td></tr>
+        <tr><td class="c">ResourcesJson</td><td class="v">["Patient","Observation","Condition","Encounter",…]</td></tr>
+        <tr><td class="c">DiscoveredOnUtc</td><td class="v">2026-07-02T13:58Z</td></tr>
+      </table>
+      <div class="note">Discovered from <code>{BaseUrl}/metadata</code> + <code>.well-known/smart-configuration</code>. Gates the resource picker — Patient/Observation/Condition are all supported, so all three are selectable.</div>
+    </div>
+
+  </div>
+
+  <div class="grid" style="margin-top:16px">
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">MappingProfiles</span><span class="role">3 rows · one per resource</span></div>
+      <table class="kv">
+        <tr class="pkrow"><td class="c">…0101</td><td class="v">Patient → dbo.Patient</td></tr>
+        <tr class="pkrow"><td class="c">…0102</td><td class="v">Observation → dbo.PatientObservation</td></tr>
+        <tr class="pkrow"><td class="c">…0103</td><td class="v">Condition → dbo.Condition</td></tr>
+        <tr><td class="c">TenantId (FK)</td><td class="v">7f3a…0001 (all)</td></tr>
+        <tr><td class="c">SourceConnectionId (FK)</td><td class="v">5e10…0002 (all)</td></tr>
+        <tr><td class="c">DestinationId (FK)</td><td class="v">c3d4…0003 (all)</td></tr>
+      </table>
+      <div class="note">Each profile is one <code>ResourceType</code> → one destination object; all three share the single Epic source and single SQL destination.</div>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">MappingFields</span><span class="role">owned child · sample of profile …0102</span></div>
+      <table class="kv">
+        <tr><td class="c">Observation.id</td><td class="v">→ SourceObservationId · String · req</td></tr>
+        <tr><td class="c">Observation.code.coding.code</td><td class="v">→ Code · String</td></tr>
+        <tr><td class="c">Observation.valueQuantity.value</td><td class="v">→ Value · Decimal</td></tr>
+        <tr><td class="c">Observation.valueQuantity.unit</td><td class="v">→ Unit · String</td></tr>
+        <tr><td class="c">Observation.effectiveDateTime</td><td class="v">→ ObservedAt · DateTime</td></tr>
+      </table>
+      <div class="note"><code>JsonPath → TargetField</code>, one row per mapped field. <code>ArrayPolicy=Scalar</code> here; repeating elements (e.g. multiple codings) would use <code>FirstMatch</code> / <code>Explode</code>.</div>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--violet)"><span class="tbl">ResourcePipelineRoutes</span><span class="role">3 rows · the workflow(s)</span></div>
+      <table class="kv">
+        <tr class="pkrow"><td class="c">…0201</td><td class="v">→ mapping …0101 (Patient) · Priority 1</td></tr>
+        <tr class="pkrow"><td class="c">…0202</td><td class="v">→ mapping …0102 (Observation) · SearchParameters "category=vital-signs" · Priority 2</td></tr>
+        <tr class="pkrow"><td class="c">…0203</td><td class="v">→ mapping …0103 (Condition) · SearchParameters "clinical-status=active" · Priority 3</td></tr>
+        <tr><td class="c">IngestionMode</td><td class="v">ScheduledPull (all)</td></tr>
+        <tr><td class="c">WebhookConfigurationId</td><td class="v">null (all)</td></tr>
+      </table>
+      <div class="note">These three route ids are exactly what the launch context carries and what the callback runs on demand for the launched patient. A background schedule can run the same routes tenant-wide.</div>
+    </div>
+  </div>
+
+  <div class="empty-note"><b>Tables empty in this scenario:</b> <code class="m">WebhookConfigurations</code> (this is launch/scheduled, not inbound-push) and the <code class="m">PrivateKey</code> secret columns on the source (Epic here is a confidential <em>symmetric</em> client using a client secret, not <code>private_key_jwt</code>). The JWKS endpoint would only be relevant for a Backend-Services/private-key source.</div>
+
+  <!-- ========== 3. RUNTIME ROWS ========== -->
+  <h2 class="sec"><span class="n">3</span>What the run writes back (runtime, audit &amp; lineage)</h2>
+  <p class="sec-note">The launch-triggered execution produces one run record, an operational audit entry, and one lineage row per resource written — all stamped with the same <code>PipelineRunId …0401</code>.</p>
+  <div class="grid">
+
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">ConfiguredPipelineRuns</span><span class="role">1 row <span class="pill ok">Completed</span></span></div>
+      <table class="kv">
+        <tr class="pkrow"><td class="c">Id (PK)</td><td class="v">9b2c…0401</td></tr>
+        <tr><td class="c">TenantId (FK)</td><td class="v">7f3a…0001</td></tr>
+        <tr><td class="c">Status</td><td class="v">Completed</td></tr>
+        <tr><td class="c">ResourceTypes</td><td class="v">Patient,Observation,Condition</td></tr>
+        <tr><td class="c">Extracted / Mapped / Written</td><td class="v">37 / 37 / 37</td></tr>
+        <tr><td class="c">Errors</td><td class="v">[]</td></tr>
+        <tr><td class="c">TriggerType / TriggeredBy</td><td class="v">EhrLaunch / epic-ehr-launch</td></tr>
+        <tr><td class="c">Started / CompletedOnUtc</td><td class="v">14:02:11Z / 14:02:14Z</td></tr>
+      </table>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">OperationalAuditLogs</span><span class="role">2 rows</span></div>
+      <table class="kv">
+        <tr><td class="c">Action</td><td class="v">SourceAuthorizationCompleted → PipelineRunCompleted</td></tr>
+        <tr><td class="c">Status</td><td class="v">Completed</td></tr>
+        <tr><td class="c">PipelineRunId (FK)</td><td class="v">9b2c…0401</td></tr>
+        <tr><td class="c">ResourceCount</td><td class="v">37</td></tr>
+        <tr><td class="c">CorrelationId</td><td class="v">corr-7c4e…</td></tr>
+      </table>
+      <div class="note">PHI-free: records counts and ids, never patient content.</div>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">ResourceLineageEntries</span><span class="role">37 rows · sample</span></div>
+      <table class="kv">
+        <tr><td class="c">Patient/eV3xTk92…</td><td class="v">Written · Success</td></tr>
+        <tr><td class="c">Observation/eN4a-glucose</td><td class="v">Written · Success</td></tr>
+        <tr><td class="c">Condition/eC8b-e11-9</td><td class="v">Written · Success</td></tr>
+        <tr><td class="c">PipelineRunId (FK)</td><td class="v">9b2c…0401 (all)</td></tr>
+      </table>
+      <div class="note">One row per resource instance — the audit trail that maps a destination row back to its source resource id.</div>
+    </div>
+
+    <div class="entity">
+      <div class="bar" style="background:var(--amber)"><span class="tbl">UserActivityAuditLogs</span><span class="role">config-time only</span></div>
+      <table class="kv">
+        <tr><td class="c">UserEmail</td><td class="v">admin@acmehealth.org</td></tr>
+        <tr><td class="c">Activity</td><td class="v">SourceConnectionCreated · RouteCreated</td></tr>
+        <tr><td class="c">Category / Status</td><td class="v">Configuration / Success</td></tr>
+        <tr><td class="c">EntryHash ← PreviousHash</td><td class="v">hash-chained</td></tr>
+      </table>
+      <div class="note">The launch/callback itself is anonymous (no FHIRBridge user), so the <em>run</em> is attributed to <code>epic-ehr-launch</code> in the run record, not here.</div>
+    </div>
+
+  </div>
+
+  <!-- ========== 4. SQL OUTPUT ========== -->
+  <h2 class="sec"><span class="n">4</span>What actually lands in SQL Server</h2>
+  <p class="sec-note">The payoff — the mapped rows written to <code>FHIRBridgeDW.dbo</code> for the launched patient <code>eV3xTk92…</code>. Column names come straight from the <code>MappingFields.TargetField</code> values above.</p>
+  <div class="sqlstack">
+
+    <div class="sqlwrap"><table class="sql">
+      <caption>dbo.Patient  ·  from MappingProfile …0101</caption>
+      <thead><tr><th>SourcePatientId</th><th>FirstName</th><th>LastName</th><th>DateOfBirth</th><th>Gender</th></tr></thead>
+      <tbody>
+        <tr><td>eV3xTk92…</td><td>Maria</td><td>Alvarez</td><td>1974-03-09</td><td>female</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="sqlwrap"><table class="sql">
+      <caption>dbo.PatientObservation  ·  from MappingProfile …0102  ·  category=vital-signs</caption>
+      <thead><tr><th>SourceObservationId</th><th>Code</th><th>Value</th><th>Unit</th><th>ObservedAt</th></tr></thead>
+      <tbody>
+        <tr><td>eN4a-glucose</td><td>2339-0</td><td>104</td><td>mg/dL</td><td>2026-07-02 09:14</td></tr>
+        <tr><td>eN4b-bp-sys</td><td>8480-6</td><td>128</td><td>mm[Hg]</td><td>2026-07-02 09:15</td></tr>
+        <tr><td>eN4c-hr</td><td>8867-4</td><td>72</td><td>/min</td><td>2026-07-02 09:15</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="sqlwrap"><table class="sql">
+      <caption>dbo.Condition  ·  from MappingProfile …0103  ·  clinical-status=active</caption>
+      <thead><tr><th>SourceConditionId</th><th>Code</th><th>ClinicalStatus</th><th>OnsetDate</th></tr></thead>
+      <tbody>
+        <tr><td>eC8b-e11-9</td><td>E11.9</td><td>active</td><td>2019-11-02</td></tr>
+        <tr><td>eC8c-i10</td><td>I10</td><td>active</td><td>2021-05-20</td></tr>
+      </tbody>
+    </table></div>
+
+  </div>
+
+  <footer>
+    <p>Illustrative values over the real FHIRBridge schema (<code>FHIRBridgeDbContext</code>, EF Core 9 / SQL Server). Enum values are exact: <code>ApplicationType.EhrLaunch</code>, <code>PatientSelectionMethod.LaunchPatient</code>, <code>DestinationType.SqlServer</code>, <code>IngestionMode.ScheduledPull</code>. Companion to the full data-model ER diagram.</p>
+  </footer>
+</div>
