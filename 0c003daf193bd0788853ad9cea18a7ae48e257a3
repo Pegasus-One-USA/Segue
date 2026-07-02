@@ -1,0 +1,98 @@
+src/Api/FHIRBridge.Api/Program.cs
+  s_4f80f0204fe512::t_62037dcf26aafe 43-67,72,133-134,161,168
+  s_4f80f0204fe512::t_0523f0523a88be 41-42
+  s_4f80f0204fe512::t_c4f0adb0614564 87-98,118-122,124,147,158,165,188
+  s_4f80f0204fe512::t_92bb7d5fb2e4b7 13
+  s_4f80f0204fe512::t_762466afd3cc44 1
+  s_4f80f0204fe512::t_84288ec53a49a1 123
+  s_4f80f0204fe512::t_b300a7f589ec56 125-127,130-132
+  s_4f80f0204fe512::t_9c281c6bae8e19 135
+  s_4f80f0204fe512::t_d8980a389486d0 146
+  s_4f80f0204fe512::t_7982eafdf02387 148-150,155-157
+  s_4f80f0204fe512::t_10d3a931eafe51 159-160
+  s_4f80f0204fe512::t_3216890b61bfd7 162-164
+  s_4f80f0204fe512::t_fc3ba4e5589aec 166-167
+  s_4f80f0204fe512::t_fa8bc9488b9f50 186-187
+  s_4f80f0204fe512::t_46fc16b4ee985f 189-191
+  s_4f80f0204fe512::t_e26e11f9c36594 128-129,151-154,192-224
+FHIRBridge.sln
+  s_4f80f0204fe512::t_d0d2d9fd2cfe83 56-59,298-309,338
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  s_4f80f0204fe512::t_b2e04d66985330 45,57,68,84,95-115
+src/Api/FHIRBridge.Api/Controllers/V1/RolesController.cs
+  s_4f80f0204fe512::t_54d5ec03a3d805 9,21,30-34,36,38,42,54,56,68,70,77-112
+src/Api/FHIRBridge.Api/Controllers/V1/UsersController.cs
+  s_4f80f0204fe512::t_46a07549cb7ff6 22,31-41,43,55,66-148
+src/Api/FHIRBridge.Api/Security/HttpContextCurrentUserService.cs
+  s_4f80f0204fe512::t_aeee5c08950be4 25-32,38-40
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  s_4f80f0204fe512::t_9da11744ae06bd 3,21-24,45-49,68-75,88-106
+src/FHIRBridge.Application/Abstractions/Persistence/IUserAccessRepository.cs
+  s_4f80f0204fe512::t_c060d4992202a6 7-8,11-12,19-20,25-28,31-32,43-46,49-50,55-60,65-70,86-87
+src/FHIRBridge.Application/Abstractions/Security/IAccessTokenIssuer.cs
+  s_4f80f0204fe512::t_42afc552135456 8-13
+src/FHIRBridge.Application/Abstractions/Security/ICurrentUserService.cs
+  s_4f80f0204fe512::t_35ef922a61e742 13-15,17-18
+src/FHIRBridge.Application/DTOs/LocalLoginResponse.cs
+  s_4f80f0204fe512::t_9a58de1d9a01a1 8-10
+src/FHIRBridge.Application/Security/AuthorizationPolicies.cs
+  s_4f80f0204fe512::t_ace0a0c48a8ea7 5,7-13
+src/FHIRBridge.Application/Security/SeededSecurityIds.cs
+  s_4f80f0204fe512::t_e1a7d71e4dd3cd 5,12,19-46
+src/FHIRBridge.Application/Security/UnifiedPermissions.cs
+  s_4f80f0204fe512::t_cac2869c0f8430 5,12-39
+src/FHIRBridge.Application/Security/UnifiedRolePermissionSeed.cs
+  s_4f80f0204fe512::t_2e906eeeef272a 4,9-10,20-50,54,57,63-69,71,76-80,82,86-88
+src/FHIRBridge.Application/Services/ILocalAuthService.cs
+  s_4f80f0204fe512::t_a363bda4e9607e 14-17
+src/FHIRBridge.Application/Services/IRoleManagementService.cs
+  s_4f80f0204fe512::t_839a8d080abbe8 9-10,13-14,20-23
+src/FHIRBridge.Application/Services/IUserManagementService.cs
+  s_4f80f0204fe512::t_04478d31406a66 9-10,14-27
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_4f80f0204fe512::t_54845445fa63fb 106,140-185,216-224,238-254,325,333-339
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_4f80f0204fe512::t_e92d5f860fdf7e 47-54,62-70,100-104,129-140,145-181,191
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_4f80f0204fe512::t_b45176f275db61 1,7,13-14,39,45-52,72,112-285,305-337,384-386,388-391
+src/FHIRBridge.Domain/Entities/Role.cs
+  s_4f80f0204fe512::t_1daee7a3deca9a 11-17,25,37-39
+src/FHIRBridge.Domain/Entities/User.cs
+  s_4f80f0204fe512::t_ce289800c9e478 1,21,35,45-48,59-66,95,109-110,137-177
+src/FHIRBridge.Infrastructure/Persistence/Configurations/OperationalAuditLogConfiguration.cs
+  s_4f80f0204fe512::t_abd95ee1c86bc5 17-20,23-24
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PermissionConfiguration.cs
+  s_4f80f0204fe512::t_9470ef5d3d4f30 30,36-64
+src/FHIRBridge.Infrastructure/Persistence/Configurations/RoleConfiguration.cs
+  s_4f80f0204fe512::t_9a6783042f9e72 25,46
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserActivityAuditLogConfiguration.cs
+  s_4f80f0204fe512::t_b98ab02675f47f 15-16,18-29,32,34
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserConfiguration.cs
+  s_4f80f0204fe512::t_276861d112bf1e 54-65,72-73
+src/FHIRBridge.Infrastructure/Persistence/EfUserAccessRepository.cs
+  s_4f80f0204fe512::t_b0e0b33fcc2732 55-82,118-132,140-144,174-197,227-250,309-316
+src/FHIRBridge.Infrastructure/Persistence/InMemoryUserAccessRepository.cs
+  s_4f80f0204fe512::t_613c0eec1fe647 15-19,21,25-59,61,76-77,81,89-98,102,111,121-129,147,149-150,152-160,163-164,168,175-193,198,219-221,226-228,236-244,254-260,265-266,278-280,293-308,313-314,323-325,338-353,379-380,406,415,428-437
+src/FHIRBridge.Infrastructure/Security/Pbkdf2PasswordHasher.cs
+  s_4f80f0204fe512::t_473feaedb4c85a 6-10,13-16,20-21,23,26,28-41,46-63,67
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_4f80f0204fe512::t_db4eb2e0777be9 27
+src/Worker/FHIRBridge.Worker/WorkerSecurityServices.cs
+  s_4f80f0204fe512::t_a1fdde4a155b99 27-30,32-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "0c003daf193bd0788853ad9cea18a7ae48e257a3",
+  "prompts": {},
+  "sessions": {
+    "s_4f80f0204fe512": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99bf279d-9dc9-473d-82d9-717c3cc67f7f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
