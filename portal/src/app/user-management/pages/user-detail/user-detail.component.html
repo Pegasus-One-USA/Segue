@@ -1,0 +1,435 @@
+<!-- user-management/pages/user-detail/user-detail.component.html -->
+<div class="user-detail-page">
+
+  <!-- ─── Loading skeleton ─────────────────────────────────────────────── -->
+  @if (loading()) {
+    <div class="skeleton-wrapper">
+      <div class="skeleton-header">
+        <div class="skeleton skeleton--avatar"></div>
+        <div class="skeleton-header__text">
+          <div class="skeleton skeleton--title"></div>
+          <div class="skeleton skeleton--subtitle"></div>
+        </div>
+      </div>
+      <div class="skeleton skeleton--tabs"></div>
+      <div class="skeleton-card">
+        @for (i of [1,2,3,4,5]; track i) {
+          <div class="skeleton skeleton--row"></div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (!loading() && user()) {
+    <!-- ─── Breadcrumb + Header ───────────────────────────────────────── -->
+    <div class="page-header">
+      <div class="breadcrumb">
+        <button mat-button class="breadcrumb__link" (click)="goBack()">
+          <mat-icon>arrow_back</mat-icon>
+          User Management
+        </button>
+        <mat-icon class="breadcrumb__sep">chevron_right</mat-icon>
+        <span class="breadcrumb__current">{{ user()!.fullName }}</span>
+      </div>
+
+      <div class="header-content">
+        <!-- Avatar + identity -->
+        <div class="header-identity">
+          <div
+            class="hero-avatar"
+            [style.background-color]="getAvatarColor(user()!)"
+          >
+            {{ getInitials(user()!) }}
+          </div>
+          <div class="hero-info">
+            <h1 class="hero-name">{{ user()!.fullName }}</h1>
+            <p class="hero-email">{{ user()!.email }}</p>
+            <div class="hero-meta">
+              <span
+                class="role-chip"
+                [style.color]="getRoleConfig(user()!.role).color"
+                [style.background-color]="getRoleConfig(user()!.role).bg"
+              >
+                {{ getRoleConfig(user()!.role).label }}
+              </span>
+              <span class="status-badge" [ngClass]="getStatusClass(user()!.status)">
+                {{ user()!.status | titlecase }}
+              </span>
+              @if (user()!.department) {
+                <span class="hero-dept">
+                  <mat-icon>business</mat-icon>
+                  {{ user()!.department }}
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="header-actions">
+          <button mat-stroked-button class="btn-secondary" (click)="openEditDialog()">
+            <mat-icon>edit</mat-icon>
+            Edit
+          </button>
+
+          <button mat-stroked-button [matMenuTriggerFor]="statusMenu" class="btn-secondary">
+            <mat-icon>settings</mat-icon>
+            Status
+            <mat-icon>arrow_drop_down</mat-icon>
+          </button>
+          <mat-menu #statusMenu="matMenu">
+            @if (user()!.status !== 'active') {
+              <button mat-menu-item (click)="toggleStatus('enable')">
+                <mat-icon class="icon-enable">check_circle</mat-icon>
+                Enable User
+              </button>
+            }
+            @if (user()!.status === 'active') {
+              <button mat-menu-item (click)="toggleStatus('disable')">
+                <mat-icon class="icon-disable">remove_circle</mat-icon>
+                Disable User
+              </button>
+            }
+            @if (user()!.status !== 'suspended') {
+              <button mat-menu-item (click)="toggleStatus('suspend')">
+                <mat-icon class="icon-suspend">block</mat-icon>
+                Suspend User
+              </button>
+            }
+            <mat-divider></mat-divider>
+            <button mat-menu-item (click)="resetPassword()">
+              <mat-icon>lock_reset</mat-icon>
+              Reset Password
+            </button>
+            @if (user()!.status === 'pending') {
+              <button mat-menu-item (click)="resendInvitation()">
+                <mat-icon>send</mat-icon>
+                Resend Invitation
+              </button>
+            }
+          </mat-menu>
+
+          <button mat-icon-button class="btn-delete" (click)="deleteUser()" matTooltip="Delete user">
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Tab Group ────────────────────────────────────────────────── -->
+    <mat-tab-group
+      animationDuration="200ms"
+      class="detail-tabs"
+      [(selectedIndex)]="activeTab"
+    >
+
+      <!-- ── Tab 1: Profile ─────────────────────────────────────────── -->
+      <mat-tab label="Profile">
+        <div class="tab-content">
+          <div class="detail-grid">
+
+            <!-- Personal info card -->
+            <div class="info-card">
+              <div class="info-card__header">
+                <mat-icon>person</mat-icon>
+                <h3>Personal Information</h3>
+              </div>
+              <div class="info-card__body">
+                <div class="info-row">
+                  <span class="info-label">First Name</span>
+                  <span class="info-value">{{ user()!.firstName }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Last Name</span>
+                  <span class="info-value">{{ user()!.lastName }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Email</span>
+                  <span class="info-value">{{ user()!.email }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Phone</span>
+                  <span class="info-value">{{ user()!.phone || '—' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Job Title</span>
+                  <span class="info-value">{{ user()!.jobTitle || '—' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Department</span>
+                  <span class="info-value">{{ user()!.department || '—' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Account info card -->
+            <div class="info-card">
+              <div class="info-card__header">
+                <mat-icon>manage_accounts</mat-icon>
+                <h3>Account Details</h3>
+              </div>
+              <div class="info-card__body">
+                <div class="info-row">
+                  <span class="info-label">Organization ID</span>
+                  <span class="info-value info-value--mono">{{ user()!.orgId }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Login Type</span>
+                  <span class="info-value">
+                    <span class="login-chip" [ngClass]="'login-chip--' + user()!.loginType">
+                      {{ user()!.loginType | uppercase }}
+                    </span>
+                  </span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Status</span>
+                  <span class="info-value">
+                    <span class="status-badge" [ngClass]="getStatusClass(user()!.status)">
+                      {{ user()!.status | titlecase }}
+                    </span>
+                  </span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Two-Factor Auth</span>
+                  <span class="info-value">
+                    @if (user()!.twoFactorEnabled) {
+                      <span class="badge-yes"><mat-icon>verified_user</mat-icon>Enabled</span>
+                    } @else {
+                      <span class="badge-no"><mat-icon>shield</mat-icon>Disabled</span>
+                    }
+                  </span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Last Login</span>
+                  <span class="info-value">{{ formatDateTime(user()!.lastLoginAt) }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Member Since</span>
+                  <span class="info-value">{{ formatDate(user()!.createdAt) }}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </mat-tab>
+
+      <!-- ── Tab 2: Roles & Permissions ────────────────────────────── -->
+      <mat-tab label="Roles & Permissions">
+        <div class="tab-content">
+
+          <!-- Current roles -->
+          <div class="section-card">
+            <div class="section-card__header">
+              <div class="section-card__title">
+                <mat-icon>badge</mat-icon>
+                <h3>Assigned Roles</h3>
+              </div>
+              <button mat-stroked-button class="btn-secondary btn-sm" (click)="openAssignRolesDialog()">
+                <mat-icon>edit</mat-icon>
+                Manage Roles
+              </button>
+            </div>
+            <div class="roles-list">
+              @for (role of user()!.roles; track role.id) {
+                <div class="role-card">
+                  <span
+                    class="role-badge"
+                    [style.color]="getRoleConfig(role.name).color"
+                    [style.background-color]="getRoleConfig(role.name).bg"
+                  >
+                    {{ getRoleConfig(role.name).label }}
+                  </span>
+                  <p class="role-desc">{{ role.description }}</p>
+                </div>
+              }
+              @if (user()!.roles.length === 0) {
+                <p class="empty-text">No roles assigned.</p>
+              }
+            </div>
+          </div>
+
+          <!-- Permissions grouped by resource -->
+          <div class="section-card">
+            <div class="section-card__header">
+              <div class="section-card__title">
+                <mat-icon>security</mat-icon>
+                <h3>Effective Permissions</h3>
+              </div>
+              <span class="perm-count-badge">
+                {{ user()!.permissions.length }} permissions
+              </span>
+            </div>
+            <div class="permissions-grid">
+              @for (group of getPermissionsGrouped(user()!); track group.resource) {
+                <div class="perm-group">
+                  <div class="perm-group__header">
+                    <mat-icon>folder_open</mat-icon>
+                    <span>{{ group.resource | titlecase }}</span>
+                  </div>
+                  <div class="perm-group__items">
+                    @for (perm of group.permissions; track perm.id) {
+                      <div class="perm-item" [matTooltip]="perm.description">
+                        <span class="perm-action">{{ perm.action }}</span>
+                        <span class="perm-name">{{ perm.name }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+              @if (user()!.permissions.length === 0) {
+                <p class="empty-text">No permissions via assigned roles.</p>
+              }
+            </div>
+          </div>
+
+        </div>
+      </mat-tab>
+
+      <!-- ── Tab 3: Security ───────────────────────────────────────── -->
+      <mat-tab label="Security">
+        <div class="tab-content">
+          <div class="section-card">
+            <div class="section-card__header">
+              <div class="section-card__title">
+                <mat-icon>security</mat-icon>
+                <h3>Security Settings</h3>
+              </div>
+            </div>
+            <div class="security-list">
+
+              <!-- 2FA -->
+              <div class="security-row">
+                <div class="security-row__icon" [class.security-row__icon--on]="user()!.twoFactorEnabled">
+                  <mat-icon>verified_user</mat-icon>
+                </div>
+                <div class="security-row__body">
+                  <span class="security-row__title">Two-Factor Authentication</span>
+                  <span class="security-row__desc">Extra layer of security for login</span>
+                </div>
+                <div class="security-row__status">
+                  @if (user()!.twoFactorEnabled) {
+                    <span class="badge-yes"><mat-icon>check</mat-icon>Enabled</span>
+                  } @else {
+                    <span class="badge-no"><mat-icon>close</mat-icon>Disabled</span>
+                  }
+                </div>
+              </div>
+
+              <mat-divider></mat-divider>
+
+              <!-- Email verified -->
+              <div class="security-row">
+                <div class="security-row__icon" [class.security-row__icon--on]="user()!.emailVerified">
+                  <mat-icon>mark_email_read</mat-icon>
+                </div>
+                <div class="security-row__body">
+                  <span class="security-row__title">Email Verified</span>
+                  <span class="security-row__desc">{{ user()!.email }}</span>
+                </div>
+                <div class="security-row__status">
+                  @if (user()!.emailVerified) {
+                    <span class="badge-yes"><mat-icon>check</mat-icon>Verified</span>
+                  } @else {
+                    <span class="badge-no"><mat-icon>close</mat-icon>Unverified</span>
+                  }
+                </div>
+              </div>
+
+              <mat-divider></mat-divider>
+
+              <!-- Must change password -->
+              <div class="security-row">
+                <div class="security-row__icon" [class.security-row__icon--warn]="user()!.mustChangePassword">
+                  <mat-icon>lock_reset</mat-icon>
+                </div>
+                <div class="security-row__body">
+                  <span class="security-row__title">Password Change Required</span>
+                  <span class="security-row__desc">User must set a new password at next login</span>
+                </div>
+                <div class="security-row__status">
+                  @if (user()!.mustChangePassword) {
+                    <span class="badge-warn"><mat-icon>warning</mat-icon>Required</span>
+                  } @else {
+                    <span class="badge-yes"><mat-icon>check</mat-icon>Not Required</span>
+                  }
+                </div>
+              </div>
+
+              <mat-divider></mat-divider>
+
+              <!-- Last login -->
+              <div class="security-row">
+                <div class="security-row__icon security-row__icon--info">
+                  <mat-icon>login</mat-icon>
+                </div>
+                <div class="security-row__body">
+                  <span class="security-row__title">Last Login</span>
+                  <span class="security-row__desc">Most recent successful authentication</span>
+                </div>
+                <div class="security-row__status">
+                  <span class="info-value">{{ formatDateTime(user()!.lastLoginAt) }}</span>
+                </div>
+              </div>
+
+              <mat-divider></mat-divider>
+
+              <!-- Account created -->
+              <div class="security-row">
+                <div class="security-row__icon security-row__icon--info">
+                  <mat-icon>calendar_today</mat-icon>
+                </div>
+                <div class="security-row__body">
+                  <span class="security-row__title">Account Created</span>
+                  <span class="security-row__desc">Date the account was provisioned</span>
+                </div>
+                <div class="security-row__status">
+                  <span class="info-value">{{ formatDate(user()!.createdAt) }}</span>
+                </div>
+              </div>
+
+              <mat-divider></mat-divider>
+
+              <!-- Last updated -->
+              <div class="security-row">
+                <div class="security-row__icon security-row__icon--info">
+                  <mat-icon>update</mat-icon>
+                </div>
+                <div class="security-row__body">
+                  <span class="security-row__title">Last Updated</span>
+                  <span class="security-row__desc">Last profile modification date</span>
+                </div>
+                <div class="security-row__status">
+                  <span class="info-value">{{ formatDate(user()!.updatedAt) }}</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Reset password action -->
+            <div class="section-card__footer">
+              <button mat-stroked-button class="btn-secondary" (click)="resetPassword()">
+                <mat-icon>lock_reset</mat-icon>
+                Send Password Reset Email
+              </button>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+
+    </mat-tab-group>
+  }
+
+  <!-- ─── Error / not found state ─────────────────────────────────────── -->
+  @if (!loading() && !user()) {
+    <div class="not-found">
+      <mat-icon>person_off</mat-icon>
+      <h2>User not found</h2>
+      <p>The user you're looking for doesn't exist or you don't have permission to view it.</p>
+      <button mat-flat-button class="btn-primary" (click)="goBack()">
+        Back to Users
+      </button>
+    </div>
+  }
+
+</div>

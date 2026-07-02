@@ -1,35 +1,49 @@
-import { Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
-import { DatePipe }             from '@angular/common';
-import { SidebarComponent }     from '../../../dashboard/layout/sidebar/sidebar.component';
-import { UserSettingsNavComponent } from '../../components/user-settings-nav/user-settings-nav.component';
-import { UserProfileService }   from '../../services/user-profile.service';
-import { ROLE_DEFINITIONS }     from '../../models/user-profile.model';
+import { Component, inject } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { UserProfileService } from '../../services/user-profile.service';
+import { ROLE_DEFINITIONS } from '../../models/user-profile.model';
+import { EditProfileDialogComponent } from '../../dialogs/edit-profile-dialog/edit-profile-dialog.component';
 
 @Component({
   selector:    'app-profile',
   standalone:  true,
-  imports:     [DatePipe, SidebarComponent, UserSettingsNavComponent],
+  imports:     [DatePipe],
   templateUrl: './profile.component.html',
   styleUrl:    './profile.component.scss',
 })
 export class ProfileComponent {
-  private readonly router  = inject(Router);
+  private readonly dialog  = inject(MatDialog);
+  private readonly snack   = inject(MatSnackBar);
   protected readonly profSvc = inject(UserProfileService);
 
-  protected readonly sidebarCollapsed = signal(false);
-  protected readonly editMode         = signal(false);
-
-  protected readonly profile   = this.profSvc.profile;
-  protected readonly fullName  = this.profSvc.fullName;
-  protected readonly initials  = this.profSvc.initials;
-  protected readonly roleDefs  = ROLE_DEFINITIONS;
+  protected readonly profile  = this.profSvc.profile;
+  protected readonly fullName = this.profSvc.fullName;
+  protected readonly initials = this.profSvc.initials;
+  protected readonly roleDefs = ROLE_DEFINITIONS;
 
   protected get currentRole() {
     return this.roleDefs.find(r => r.id === this.profile().role);
   }
 
-  toggleSidebar(): void { this.sidebarCollapsed.update(v => !v); }
-
-  navigate(path: string): void { this.router.navigate([path]); }
+  openEditDialog(): void {
+    const p = this.profile();
+    this.dialog
+      .open(EditProfileDialogComponent, {
+        width: '520px',
+        disableClose: true,
+        restoreFocus: false,
+        data: {
+          firstName: p.firstName,
+          lastName:  p.lastName,
+          email:     p.email,
+          phone:     p.phone,
+        },
+      })
+      .afterClosed()
+      .subscribe(saved => {
+        if (saved) this.snack.open('Profile updated successfully.', 'Dismiss', { duration: 3000 });
+      });
+  }
 }

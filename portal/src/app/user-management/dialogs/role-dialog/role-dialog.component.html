@@ -1,0 +1,93 @@
+<div class="dialog-container">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>shield</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2>{{ isEdit ? 'Edit Role' : 'Add Role' }}</h2>
+      <p>{{ isEdit ? 'Update role details or tenant assignment' : 'Create a new role for a tenant' }}</p>
+    </div>
+    <button mat-icon-button class="dialog-close" (click)="dialogRef.close(false)">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Form -->
+  <mat-dialog-content>
+    <form [formGroup]="form" novalidate class="dialog-form">
+
+      <!-- No tenants warning -->
+      @if (tenants().length === 0) {
+        <div class="no-tenant-notice">
+          <mat-icon>info_outline</mat-icon>
+          <span>You must create a <strong>Tenant</strong> first before adding roles.</span>
+        </div>
+      }
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Role Name</mat-label>
+        <input
+          matInput
+          formControlName="name"
+          placeholder="e.g. Data Analyst"
+          autocomplete="off"
+        />
+        @if (hasError('name', 'required')) {
+          <mat-error>Role name is required.</mat-error>
+        } @else if (hasError('name', 'maxlength')) {
+          <mat-error>Maximum 120 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Tenant</mat-label>
+        <mat-select formControlName="tenantId" [disabled]="tenants().length === 0">
+          @for (t of tenants(); track t.id) {
+            <mat-option [value]="t.id">{{ t.name }}</mat-option>
+          }
+        </mat-select>
+        @if (hasError('tenantId', 'required')) {
+          <mat-error>Please select a tenant.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Description</mat-label>
+        <textarea
+          matInput
+          formControlName="description"
+          placeholder="Describe what this role is responsible for..."
+          rows="3"
+          autocomplete="off"
+        ></textarea>
+        @if (hasError('description', 'required')) {
+          <mat-error>Description is required.</mat-error>
+        } @else if (hasError('description', 'maxlength')) {
+          <mat-error>Maximum 300 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+    </form>
+  </mat-dialog-content>
+
+  <!-- Actions -->
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-stroked-button class="btn-cancel" (click)="dialogRef.close(false)">
+        Cancel
+      </button>
+      <button
+        mat-flat-button
+        class="btn-save"
+        [disabled]="tenants().length === 0"
+        (click)="save()"
+      >
+        <mat-icon>{{ isEdit ? 'save' : 'add' }}</mat-icon>
+        {{ isEdit ? 'Save Changes' : 'Add Role' }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

@@ -1,6 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { Router }               from '@angular/router';
-import { SidebarComponent }     from '../../../dashboard/layout/sidebar/sidebar.component';
 import { UserSettingsNavComponent } from '../../components/user-settings-nav/user-settings-nav.component';
 
 interface HelpLink { label: string; desc: string; icon: string; }
@@ -9,14 +8,12 @@ interface ShortcutRow { action: string; keys: string[]; }
 @Component({
   selector:    'app-help',
   standalone:  true,
-  imports:     [SidebarComponent, UserSettingsNavComponent],
+  imports:     [UserSettingsNavComponent],
   templateUrl: './help.component.html',
   styleUrl:    './help.component.scss',
 })
 export class HelpComponent {
   private readonly router = inject(Router);
-
-  protected readonly sidebarCollapsed = signal(false);
 
   protected readonly docs: HelpLink[] = [
     { label: 'Documentation', desc: 'Full FHIRBridge reference and guides', icon: '📚' },
@@ -40,6 +37,5 @@ export class HelpComponent {
     { action: 'Go to Pipeline Builder', keys: ['G', 'P'] },
   ];
 
-  toggleSidebar(): void { this.sidebarCollapsed.update(v => !v); }
   navigate(path: string): void { this.router.navigate([path]); }
 }

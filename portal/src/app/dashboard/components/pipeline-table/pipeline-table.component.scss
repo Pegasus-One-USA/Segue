@@ -13,22 +13,23 @@
   th {
     text-align: left;
     padding: 0 12px 10px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    color: #94A3B8;
+    color: var(--color-ink-2);
     text-transform: uppercase;
-    letter-spacing: 0.7px;
+    letter-spacing: 0.05em;
     white-space: nowrap;
-    border-bottom: 1px solid #F1F5F9;
+    border-bottom: 2px solid var(--color-border);
+    background: var(--color-side);
   }
 }
 
 .ptable-row {
-  border-bottom: 1px solid #F8FAFC;
-  transition: background 0.12s;
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--transition-fast);
 
   &:last-child { border-bottom: none; }
-  &:hover { background: #F8FAFC; }
+  &:hover { background: var(--color-side); }
 
   td {
     padding: 11px 12px;
@@ -37,40 +38,40 @@
   }
 }
 
-.name-cell  { color: #1A202C; font-weight: 500; }
-.muted      { color: #94A3B8; }
+.name-cell  { color: var(--color-ink); font-weight: 500; }
+.muted      { color: var(--color-muted-2); }
 .mono       { font-variant-numeric: tabular-nums; }
 .capitalize { text-transform: capitalize; }
 
 .status-badge {
   display: inline-block;
   padding: 3px 10px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.3px;
 
-  &.status-running   { background: #DBEAFE; color: #1D4ED8; }
-  &.status-completed { background: #D1FAE5; color: #065F46; }
-  &.status-failed    { background: #FEE2E2; color: #991B1B; }
-  &.status-queued    { background: #FEF3C7; color: #92400E; }
-  &.status-cancelled { background: #F3F4F6; color: #6B7280; }
+  &.status-running   { background: var(--color-info-soft);    color: #1D4ED8; }
+  &.status-completed { background: var(--color-success-soft); color: #065F46; }
+  &.status-failed    { background: var(--color-error-soft);   color: #991B1B; }
+  &.status-queued    { background: var(--color-warning-soft); color: #92400E; }
+  &.status-cancelled { background: var(--color-side);         color: var(--color-muted); }
 }
 
 .action-cell {
   display: flex;
   gap: 4px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--transition-base);
 
   .ptable-row:hover & { opacity: 1; }
 }
 
 .icon-btn {
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
-  color: #64748B;
-  border-radius: 6px;
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  border-radius: var(--radius-sm);
   width: 28px;
   height: 28px;
   display: flex;
@@ -78,14 +79,18 @@
   justify-content: center;
   cursor: pointer;
   font-size: 12px;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 
-  &:hover { background: #E6F9F7; color: #00A89D; border-color: #B2EAE6; }
+  &:hover {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    border-color: var(--color-primary-mid);
+  }
 }
 
 .empty-cell {
   text-align: center;
   padding: 32px;
   font-size: 13px;
-  color: #94A3B8;
+  color: var(--color-muted-2);
 }

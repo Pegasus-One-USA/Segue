@@ -1,14 +1,13 @@
 import { Component, inject, signal } from '@angular/core';
 import { Router }               from '@angular/router';
 import { FormsModule }          from '@angular/forms';
-import { SidebarComponent }     from '../../../dashboard/layout/sidebar/sidebar.component';
 import { UserSettingsNavComponent } from '../../components/user-settings-nav/user-settings-nav.component';
 import { UserProfileService }   from '../../services/user-profile.service';
 
 @Component({
   selector:    'app-account-settings',
   standalone:  true,
-  imports:     [FormsModule, SidebarComponent, UserSettingsNavComponent],
+  imports:     [FormsModule, UserSettingsNavComponent],
   templateUrl: './account-settings.component.html',
   styleUrl:    './account-settings.component.scss',
 })
@@ -16,8 +15,7 @@ export class AccountSettingsComponent {
   private readonly router  = inject(Router);
   protected readonly profSvc = inject(UserProfileService);
 
-  protected readonly sidebarCollapsed = signal(false);
-  protected readonly saved            = signal(false);
+  protected readonly saved = signal(false);
 
   protected readonly profile   = this.profSvc.profile;
   protected readonly fullName  = this.profSvc.fullName;
@@ -30,7 +28,6 @@ export class AccountSettingsComponent {
   protected designation = this.profile().designation;
   protected location   = this.profile().location;
 
-  toggleSidebar(): void { this.sidebarCollapsed.update(v => !v); }
   navigate(path: string): void { this.router.navigate([path]); }
 
   saveChanges(): void {

@@ -1,68 +1,129 @@
-import { Injectable, inject, signal, computed } from '@angular/core';
+import { Injectable, inject, computed } from '@angular/core';
 import { Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
-import { of, tap } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { Observable } from 'rxjs';
+import { IAuthService } from './i-auth.service';
+import { SessionService } from './session.service';
 import { TokenService } from './token.service';
-import { User, UserRole } from '../models/user.model';
-import { LoginRequest, ForgotPasswordRequest, ResetPasswordRequest } from '../models/auth-request.model';
-
-const MOCK_USER: User = {
-  id:    'dev-001',
-  email: 'dev@fhirbridge.local',
-  name:  'Dev User',
-  role:  'pipeline-editor',
-};
-
-const ROLE_REDIRECT: Record<UserRole, string> = {
-  'admin':           '/dashboard',
-  'pipeline-editor': '/dashboard',
-  'analyst':         '/dashboard',
-  'viewer':          '/dashboard',
-};
+import { AuthStore } from '../store/auth.store';
+import { User, UserRole, MessageResponse, TokenPair } from '../models/user.model';
+import {
+  LoginRequest, LoginResponse,
+  RegisterRequest, RegisterResponse,
+  ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
+} from '../models/auth-request.model';
+import { MOCK_USERS } from '../mock/mock-db';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly http   = inject(HttpClient);
-  private readonly router = inject(Router);
-  private readonly tokens = inject(TokenService);
+  private readonly api     = inject(IAuthService);
+  private readonly store   = inject(AuthStore);
+  private readonly tokens  = inject(TokenService);
+  private readonly session = inject(SessionService);
+  private readonly router  = inject(Router);
 
-  readonly currentUser     = signal<User | null>(null);
-  readonly isLoading       = signal(false);
-  readonly error           = signal<string | null>(null);
-  readonly isAuthenticated = computed(() => !!this.currentUser());
+  // ─── Expose store signals directly ────────────────────────────────────────
+  readonly currentUser     = this.store.currentUser;
+  readonly isAuthenticated = this.store.isAuthenticated;
+  readonly isLoading       = this.store.isLoading;
+  readonly error           = this.store.error;
+  readonly roles           = this.store.roles;
+  readonly permissions     = this.store.permissions;
+  readonly initials        = this.store.initials;
+  readonly displayName     = this.store.displayName;
 
-  login(_req: LoginRequest) {
-    // TODO: replace with real HTTP call when backend is ready
-    // return this.http.post<{ token: string; user: User }>('/api/auth/login', _req).pipe(...)
-    this.tokens.setToken('mock-token');
-    this.currentUser.set(MOCK_USER);
-    this.roleRedirect(MOCK_USER.role);
-    return of(null);
+  // ─── Login ─────────────────────────────────────────────────────────────────
+  login(req: LoginRequest): Observable<LoginResponse> {
+    this.store.setLoading(true);
+    this.store.setError(null);
+
+    return this.api.login(req).pipe(
+      tap({
+        next: (res) => {
+          this.store.setUser(res.user);
+          this.session.start(res.user.id, res.accessToken, res.refreshToken, req.rememberMe ?? false);
+          this.store.setLoading(false);
+          this.router.navigate(['/dashboard']);
+        },
+        error: (err) => {
+          this.store.setError(err?.message ?? 'Login failed. Please try again.');
+          this.store.setLoading(false);
+        },
+      })
+    );
   }
 
+  // ─── Logout ────────────────────────────────────────────────────────────────
   logout(): void {
-    this.tokens.clearToken();
-    this.currentUser.set(null);
-    this.router.navigate(['/auth/login']);
+    this.api.logout().subscribe(() => {
+      this.session.end();
+      this.router.navigate(['/auth/login']);
+    });
   }
 
-  forgotPassword(req: ForgotPasswordRequest) {
-    return this.http.post('/api/auth/forgot-password', req);
+  // ─── Register ──────────────────────────────────────────────────────────────
+  register(req: RegisterRequest): Observable<RegisterResponse> {
+    this.store.setLoading(true);
+    this.store.setError(null);
+
+    return this.api.register(req).pipe(
+      tap({
+        next: (res) => {
+          this.store.setUser(res.user);
+          this.session.start(res.user.id, res.accessToken, res.refreshToken);
+          this.store.setLoading(false);
+          this.router.navigate(['/dashboard']);
+        },
+        error: (err) => {
+          this.store.setError(err?.message ?? 'Registration failed. Please try again.');
+          this.store.setLoading(false);
+        },
+      })
+    );
   }
 
-  resetPassword(req: ResetPasswordRequest) {
-    return this.http.post('/api/auth/reset-password', req);
+  // ─── Forgot password ───────────────────────────────────────────────────────
+  forgotPassword(req: ForgotPasswordRequest): Observable<MessageResponse> {
+    return this.api.forgotPassword(req);
   }
 
-  roleRedirect(role: UserRole): void {
-    this.router.navigate([ROLE_REDIRECT[role]]);
+  // ─── Reset password ────────────────────────────────────────────────────────
+  resetPassword(req: ResetPasswordRequest): Observable<MessageResponse> {
+    return this.api.resetPassword(req);
   }
 
+  // ─── Change password ───────────────────────────────────────────────────────
+  changePassword(req: ChangePasswordRequest): Observable<MessageResponse> {
+    return this.api.changePassword(req);
+  }
+
+  // ─── Refresh ───────────────────────────────────────────────────────────────
+  refreshToken(refreshToken: string): Observable<TokenPair> {
+    return this.api.refreshToken(refreshToken).pipe(
+      tap(pair => this.tokens.setTokens(pair.accessToken, pair.refreshToken))
+    );
+  }
+
+  // ─── Permission helpers ───────────────────────────────────────────────────
+  hasRole(...roles: UserRole[]): boolean    { return this.store.hasRole(...roles); }
+  hasPermission(perm: string): boolean      { return this.store.hasPermission(perm); }
+  isAdmin(): boolean                        { return this.store.isAdmin(); }
+
+  // ─── Initialise from stored token (called in app init) ───────────────────
   initFromToken(): void {
-    const token = this.tokens.getToken();
-    if (!token) return;
-    const payload = this.tokens.decodePayload(token);
+    const token = this.tokens.getAccessToken();
+    if (!token || this.tokens.isExpired(token)) {
+      this.tokens.clearTokens();
+      return;
+    }
+    const payload = this.tokens.decodePayload<{ sub: string }>(token);
     if (!payload) return;
-    this.currentUser.set(payload['user'] as User);
+
+    // Restore user from mock DB by subject claim
+    const user = MOCK_USERS.find(u => u.id === payload.sub);
+    if (user) {
+      const { passwordHash: _, ...safe } = user;
+      this.store.setUser(safe);
+    }
   }
 }

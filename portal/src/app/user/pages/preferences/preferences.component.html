@@ -1,17 +1,4 @@
-<div class="dash-shell">
-  <app-sidebar [collapsed]="sidebarCollapsed()" />
-
-  <div class="dash-main">
-    <header class="dash-topbar">
-      <button class="collapse-btn" type="button" (click)="toggleSidebar()">&#9776;</button>
-      <div class="dash-breadcrumb">
-        <span class="breadcrumb-root" (click)="navigate('/dashboard')">Dashboard</span>
-        <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-page">Preferences</span>
-      </div>
-    </header>
-
-    <div class="dash-content">
+<div class="dash-content">
       <div class="page-header">
         <div>
           <h1 class="page-title">Preferences</h1>
@@ -120,6 +107,4 @@
 
         </div>
       </div>
-    </div>
-  </div>
 </div>

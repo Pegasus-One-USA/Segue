@@ -1,0 +1,43 @@
+:host { display: flex; flex: 1; height: 100%; }
+
+.stub-page {
+  display: flex; align-items: center; justify-content: center;
+  flex: 1; padding: 48px 24px;
+  background: var(--color-bg, #F8FAFC);
+}
+
+.stub-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 16px; max-width: 420px; text-align: center;
+  background: #fff; border: 1px solid #E2E8F0;
+  border-radius: 20px; padding: 52px 40px;
+  box-shadow: 0 4px 24px rgba(15,23,42,.06);
+}
+
+.stub-icon {
+  width: 80px; height: 80px;
+  color: var(--color-primary, #00A89D);
+  opacity: .85;
+
+  svg { width: 100%; height: 100%; }
+}
+
+.stub-title {
+  font-size: 22px; font-weight: 700; color: #0F172A;
+  margin: 0; letter-spacing: -.02em;
+}
+
+.stub-desc {
+  font-size: 14px; color: #64748B; line-height: 1.6;
+  margin: 0;
+}
+
+.stub-badge {
+  display: inline-block;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--color-primary, #00A89D);
+  background: rgba(0,168,157,.1);
+  border: 1px solid rgba(0,168,157,.25);
+  border-radius: 99px; padding: 4px 14px;
+}

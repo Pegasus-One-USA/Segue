@@ -1,7 +1,129 @@
-:host { position: absolute; z-index: 2; display: grid; justify-items: center; gap: 10px; width: 168px; transform: translate(-50%, -60px); touch-action: none; &:hover .node-tools { display: flex; } }
-.port { position: absolute; top: 60px; width: 18px; height: 18px; transform: translate(-50%,-50%); border-radius: 50%; background: #fff; border: 3px solid var(--purple); z-index: 6; }
-.port-in  { left: 24px; }
-.port-out { left: 144px; cursor: crosshair; &:hover { background: var(--purple); transform: translate(-50%,-50%) scale(1.18); } }
-.node-circle { width: 120px; height: 120px; position: relative; display: grid; place-items: center; color: #fff; border: 11px solid rgba(255,255,255,.9); border-radius: 50%; box-shadow: 0 22px 42px rgba(18,20,27,.2), inset 0 -16px 28px rgba(15,23,42,.12); cursor: pointer; user-select: none; &::before { content: ''; position: absolute; inset: -16px; border: 11px solid color-mix(in srgb, var(--node-color) 36%, transparent); border-radius: 50%; z-index: -1; } b { font-size: 22px; letter-spacing: -.05em; } }
-.node-badge { position: absolute; right: -10px; top: -10px; min-width: 46px; height: 24px; padding: 0 8px; display: grid; place-items: center; color: #fff; border: 5px solid #fff; border-radius: 999px; font-size: 11px; font-weight: 800; }
-.node-label { display: grid; gap: 3px; text-align: center; pointer-events: none; strong { font-size: 17px; line-height: 1.1; } span { color: #424650; font-size: 12.5px; line-height: 1.2; font-weight: 550; } }
+/* ── Merge Node ─────────────────────────────────────────────────────────────── */
+
+:host {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 52px;
+  border-radius: 10px;
+  border: 2px solid var(--color-muted-2, #94A3B8);
+  background: var(--color-surface, #fff);
+  box-shadow: var(--shadow-sm, 0 2px 12px rgba(0, 0, 0, 0.06));
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  cursor: pointer;
+  overflow: visible;
+  transition: box-shadow 0.18s, border-color 0.18s;
+
+  &:hover .node-tools { display: flex; }
+
+  /* ── States ── */
+  &:hover {
+    box-shadow: var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.10));
+    border-color: var(--color-muted, #64748B);
+  }
+
+  &.selected {
+    box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.30),
+                var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.10));
+  }
+
+  &.running {
+    animation: merge-pulse 1.4s ease-in-out infinite;
+  }
+
+  &.completed {
+    border-color: var(--color-success, #10B981);
+  }
+
+  &.failed {
+    border-color: var(--color-error, #EF4444);
+  }
+
+  &.disabled {
+    opacity: 0.38;
+    pointer-events: none;
+  }
+}
+
+/* ── Label (centered, with ⊕ symbol) ───────────────────────────────────────── */
+.node-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  text-align: center;
+  user-select: none;
+
+  .merge-symbol {
+    font-size: 16px;
+    color: var(--color-muted-2, #94A3B8);
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-ink, #1A202C);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 72px;
+  }
+}
+
+/* ── Connection handles (ports) ─────────────────────────────────────────────── */
+.port {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--color-surface, #fff);
+  border: 2px solid var(--color-muted-2, #94A3B8);
+  z-index: 6;
+  transition: background 0.12s, transform 0.12s;
+}
+
+.port-in  { left: -5px; }
+.port-out {
+  right: -5px;
+  cursor: crosshair;
+
+  &:hover {
+    background: var(--color-muted-2, #94A3B8);
+    transform: translateY(-50%) scale(1.25);
+  }
+}
+
+/* ── Status badges ──────────────────────────────────────────────────────────── */
+.node-badge {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  border: 2px solid var(--color-surface, #fff);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 10px;
+  font-weight: 800;
+
+  &.badge-success { background: var(--color-success, #10B981); }
+  &.badge-error   { background: var(--color-error,   #EF4444); }
+}
+
+/* ── Running pulse animation ────────────────────────────────────────────────── */
+@keyframes merge-pulse {
+  0%, 100% { border-color: var(--color-muted-2, #94A3B8); }
+  50%       { border-color: var(--color-primary, #00A89D); }
+}

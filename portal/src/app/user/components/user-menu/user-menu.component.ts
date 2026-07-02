@@ -56,6 +56,7 @@ export class UserMenuComponent {
     this.profSvc.setTheme(theme);
   }
 
+  closeMenu(): void      { this.menuOpen.set(false); this.showLogout.set(false); }
   confirmLogout(): void  { this.showLogout.set(true); }
   cancelLogout(): void   { this.showLogout.set(false); }
 

@@ -7,18 +7,27 @@
   </div>
 
   <nav class="sidebar-nav">
-    @for (item of navItems; track item.route) {
-      <a
-        class="nav-item"
-        [routerLink]="item.route"
-        routerLinkActive="active"
-        [title]="collapsed() ? item.label : ''"
-      >
-        <span class="nav-icon">{{ item.icon }}</span>
+    @for (entry of navEntries; track $index) {
+      @if (isSection(entry)) {
         @if (!collapsed()) {
-          <span class="nav-label">{{ item.label }}</span>
+          <div class="nav-section">{{ entry.label }}</div>
+        } @else {
+          <div class="nav-divider"></div>
         }
-      </a>
+      } @else if (isItem(entry)) {
+        <a
+          class="nav-item"
+          [routerLink]="entry.route"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: entry.exact ?? false }"
+          [title]="collapsed() ? entry.label : ''"
+        >
+          <span class="nav-icon">{{ entry.icon }}</span>
+          @if (!collapsed()) {
+            <span class="nav-label">{{ entry.label }}</span>
+          }
+        </a>
+      }
     }
   </nav>
 </aside>

@@ -1,51 +1,123 @@
-<app-auth-card>
-  <h1 class="auth-title">Sign in</h1>
-  <p class="auth-sub">Welcome back to FHIRBridge</p>
+<!-- auth/pages/login/login.component.html -->
+<div class="auth-page" role="main">
 
-  @if (error()) {
-    <div class="auth-error">{{ error() }}</div>
-  }
+  <!-- Decorative background orbs -->
+  <div class="auth-orb auth-orb--primary" aria-hidden="true"></div>
+  <div class="auth-orb auth-orb--indigo"  aria-hidden="true"></div>
 
-  <form class="auth-form" (ngSubmit)="submit()">
+  <div class="auth-card" role="region" aria-label="Sign in to FHIRBridge">
 
-    <div class="auth-field">
-      <label for="login-email">Email</label>
-      <input
-        id="login-email"
-        type="email"
-        autocomplete="email"
-        placeholder="you@org.com"
-        [(ngModel)]="email"
-        name="email"
-        required
-      />
-    </div>
-
-    <div class="auth-field">
-      <label for="login-password">Password</label>
-      <div class="pw-wrap">
-        <input
-          id="login-password"
-          [type]="showPw() ? 'text' : 'password'"
-          autocomplete="current-password"
-          placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
-          [(ngModel)]="password"
-          name="password"
-          required
-        />
-        <button type="button" class="pw-toggle" (click)="showPw.set(!showPw())">
-          {{ showPw() ? 'Hide' : 'Show' }}
-        </button>
+    <!-- ── Brand / Logo ──────────────────────────────────────────── -->
+    <header class="auth-logo">
+      <div class="logo-icon" aria-hidden="true">
+        <svg width="40" height="40" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="10" fill="#00A89D"/>
+          <path d="M10 18h16M18 10v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="18" cy="18" r="5" stroke="#fff" stroke-width="2"/>
+        </svg>
       </div>
-    </div>
+      <div class="logo-text">
+        <span class="brand">FHIRBridge</span>
+        <span class="brand-tag">Healthcare Integration Platform</span>
+      </div>
+    </header>
 
-    <div class="auth-links">
-      <a routerLink="/auth/forgot-password">Forgot password?</a>
-    </div>
+    <!-- ── Heading ───────────────────────────────────────────────── -->
+    <p class="auth-sub">Sign in to your account to continue</p>
 
-    <button class="auth-btn" type="submit" [disabled]="isLoading()">
-      @if (isLoading()) { Signing in… } @else { Sign in }
-    </button>
+    <!-- ── Global error ─────────────────────────────────────────── -->
+    @if (error()) {
+      <div class="auth-alert" role="alert" aria-live="assertive">
+        <mat-icon class="alert-icon" aria-hidden="true">error_outline</mat-icon>
+        <span>{{ error() }}</span>
+      </div>
+    }
 
-  </form>
-</app-auth-card>
+    <!-- ── Form ──────────────────────────────────────────────────── -->
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate autocomplete="on">
+
+      <!-- Email -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Email address</mat-label>
+        <mat-icon matPrefix class="field-icon" aria-hidden="true">email</mat-icon>
+        <input
+          matInput
+          type="email"
+          formControlName="email"
+          autocomplete="email"
+          (keydown)="onKeydown($event)"
+          aria-required="true"
+        />
+        @if (fieldError('email', 'required')) {
+          <mat-error>Email is required</mat-error>
+        } @else if (fieldError('email', 'email')) {
+          <mat-error>Enter a valid email address</mat-error>
+        }
+      </mat-form-field>
+
+      <!-- Password -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Password</mat-label>
+        <mat-icon matPrefix class="field-icon" aria-hidden="true">lock</mat-icon>
+        <input
+          matInput
+          [type]="showPassword() ? 'text' : 'password'"
+          formControlName="password"
+          autocomplete="current-password"
+          (keydown)="onKeydown($event)"
+          aria-required="true"
+        />
+        <button
+          type="button"
+          mat-icon-button
+          matSuffix
+          class="pw-toggle"
+          (click)="togglePassword()"
+          [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+        >
+          <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
+        @if (fieldError('password', 'required')) {
+          <mat-error>Password is required</mat-error>
+        } @else if (fieldError('password', 'minlength')) {
+          <mat-error>Password must be at least 8 characters</mat-error>
+        }
+      </mat-form-field>
+
+      <!-- Caps Lock warning -->
+      @if (capsLockOn()) {
+        <div class="caps-warning" role="status" aria-live="polite">
+          <mat-icon aria-hidden="true">keyboard_capslock</mat-icon>
+          <span>Caps Lock is on</span>
+        </div>
+      }
+
+      <!-- Remember Me + Forgot Password -->
+      <div class="form-options">
+        <mat-checkbox formControlName="rememberMe" color="primary">
+          Remember me
+        </mat-checkbox>
+        <a routerLink="/auth/forgot-password" class="forgot-link">Forgot password?</a>
+      </div>
+
+      <!-- Submit -->
+      <button
+        mat-flat-button
+        color="primary"
+        type="submit"
+        class="submit-btn"
+        [disabled]="isLoading()"
+        aria-label="Sign in"
+      >
+        @if (isLoading()) {
+          <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
+          <span>Signing in…</span>
+        } @else {
+          <span>Sign In</span>
+        }
+      </button>
+
+    </form>
+
+  </div>
+</div>

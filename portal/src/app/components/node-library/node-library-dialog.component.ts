@@ -1,13 +1,19 @@
-import { Component, input, output, inject, computed, signal } from '@angular/core';
+import { Component, input, output, inject, computed, signal, viewChild } from '@angular/core';
 import { ModalOverlayComponent } from '../shared/modal-overlay/modal-overlay.component';
 import { PipelineStore } from '../../services/pipeline.store';
 import { ApplicabilityService } from '../../services/applicability.service';
 import { PhaseConfigService } from '../../services/phase-config.service';
+import { WizardService } from '../../services/wizard.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
 import { CanvasNode } from '../../models/node.model';
 import { MergeNodeOption } from '../../models/wizard-state.model';
+import { EnvKey } from '../../models/epic-env.model';
+import { EpicStepConnectComponent } from '../epic-source-wizard/steps/epic-step-connect/epic-step-connect.component';
+import { EpicStepAuthenticateComponent } from '../epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component';
+import { EpicStepDataComponent } from '../epic-source-wizard/steps/epic-step-data/epic-step-data.component';
+import { EpicStepTestComponent } from '../epic-source-wizard/steps/epic-step-test/epic-step-test.component';
 
 export type LibraryMode = 'source' | 'transform';
 
@@ -99,7 +105,13 @@ const RANK_META: Record<number, { icon: string; catColor: string }> = {
 @Component({
   selector: 'app-node-library-dialog',
   standalone: true,
-  imports: [ModalOverlayComponent],
+  imports: [
+    ModalOverlayComponent,
+    EpicStepConnectComponent,
+    EpicStepAuthenticateComponent,
+    EpicStepDataComponent,
+    EpicStepTestComponent,
+  ],
   templateUrl: './node-library-dialog.component.html',
   styleUrl: './node-library-dialog.component.scss',
 })
@@ -107,6 +119,7 @@ export class NodeLibraryDialogComponent {
   private readonly store    = inject(PipelineStore);
   private readonly appSvc   = inject(ApplicabilityService);
   private readonly phaseCfg = inject(PhaseConfigService);
+  readonly wiz              = inject(WizardService);
 
   readonly open         = input(false);
   readonly mode         = input<LibraryMode>('source');
@@ -122,6 +135,25 @@ export class NodeLibraryDialogComponent {
   readonly selectedId    = signal<string | null>(null);
   readonly expandedRanks = signal<Set<number>>(new Set([0, 2, 3, 4, 5, 6, 7]));
   readonly showHidden    = signal(false);
+
+  // ── inline wizard state ───────────────────────────────────────────────────
+  readonly showInlineWizard = computed(() => this.wiz.isOpen() && this.wiz.openedInline());
+  readonly wizStep          = signal(1);
+  readonly wizShowAdvanced  = signal(false);
+
+  protected readonly stepConnect      = viewChild(EpicStepConnectComponent);
+  protected readonly stepAuthenticate = viewChild(EpicStepAuthenticateComponent);
+  protected readonly stepData         = viewChild(EpicStepDataComponent);
+  protected readonly stepTest         = viewChild(EpicStepTestComponent);
+
+  readonly WIZARD_STEPS = [
+    { n: 1, label: 'Connect' },
+    { n: 2, label: 'Authenticate' },
+    { n: 3, label: 'Data' },
+    { n: 4, label: 'Test' },
+    { n: 5, label: 'Transform' },
+    { n: 6, label: 'Destination' },
+  ];
 
   // ── picker model (transform mode only) ───────────────────────────────────
   private readonly pickerModel = computed(() => {
@@ -166,6 +198,8 @@ export class NodeLibraryDialogComponent {
     TRANSFORMS.forEach(t => {
       // Skip entire rank categories hidden by phase config
       if (this.phaseCfg.isRankHidden(t.rank)) return;
+      // Hide items not enabled in this phase (don't show as disabled)
+      if (!this.phaseCfg.isTransformEnabled(t.id)) return;
 
       const meta = TRANSFORM_META[t.id] ?? { abbr: t.name.slice(0, 3).toUpperCase(), color: '#64748B' };
       let status: ItemStatus = 'disabled';
@@ -280,12 +314,81 @@ export class NodeLibraryDialogComponent {
     this.selectedId.set(item.id);
   }
 
+  // ── inline wizard methods ─────────────────────────────────────────────────
+  openEpicWizard(): void {
+    this.wizStep.set(1);
+    this.wizShowAdvanced.set(false);
+    this.wiz.open();
+    this.wiz.openedInline.set(true);
+  }
+
+  wizGoToStep(n: number): void {
+    this.wizStep.set(Math.max(1, Math.min(6, n)));
+  }
+
+  wizGoBack(): void { this.wizGoToStep(this.wizStep() - 1); }
+
+  wizGoNext(): void {
+    const step = this.wizStep();
+    if (step === 1 && !this.stepConnect()?.validate()) return;
+    if (step === 2 && !this.stepAuthenticate()?.validate()) return;
+    if (step === 3 && !this.stepData()?.validate()) return;
+    if (step === 6) { this.wizFinish(); return; }
+    this.wizGoToStep(step + 1);
+  }
+
+  wizFinish(): void {
+    const connect = this.stepConnect();
+    const auth    = this.stepAuthenticate();
+    if (!connect || !auth) return;
+
+    const cv = connect.getConnectValues();
+    const av = auth.getAuthValues();
+    const envKey: EnvKey = cv.environment === 'production' ? 'production' : 'sandbox';
+
+    this.wiz.setAppKey('provider-ehr-launch');
+    this.wiz.setEnv(envKey);
+    this.wiz.stepName.set(cv.appName);
+    this.wiz.baseUrl.set(cv.fhirBaseUrl || cv.epicBaseUrl);
+    this.wiz.token.set(cv.tokenEndpoint);
+    this.wiz.authorize.set(cv.authzEndpoint);
+    this.wiz.setDiscovered(connect.discoveryStatus() === 'done');
+
+    this.wiz.save({
+      stepName:    cv.appName,
+      baseUrl:     cv.fhirBaseUrl || cv.epicBaseUrl,
+      token:       cv.tokenEndpoint,
+      authorize:   cv.authzEndpoint,
+      algorithm:   av.signingAlgorithm,
+      jwksMethod:  av.keySource === 'gen' ? 'hosted' : 'external',
+      jwksUrl:     av.jwksUrl,
+      kid:         av.keyId,
+      kvRef:       av.keyVaultRef,
+      redirectUri: cv.redirectUri,
+      launchUrl:   cv.launchUrl,
+    }, {});
+
+    this._close();
+  }
+
+  wizClose(): void {
+    this.wiz.close();
+  }
+
+  wizToggleAdvanced(): void {
+    this.wizShowAdvanced.update(v => !v);
+  }
+
   // ── add to pipeline ───────────────────────────────────────────────────────
   addSelected(): void {
     const item = this.selectedItem();
     if (!item) return;
 
     if (item.isSource) {
+      if (item.id === 'epic') {
+        this.openEpicWizard();
+        return;
+      }
       this._close();
       this.sourceSelected.emit(item.id);
       return;

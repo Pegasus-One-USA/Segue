@@ -1,0 +1,204 @@
+// user-management/dialogs/create-user-dialog/create-user-dialog.component.scss
+
+:host {
+  display: block;
+}
+
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+  width: 100%;
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--color-primary-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    mat-icon { color: var(--color-primary); font-size: 22px; height: 22px; width: 22px; }
+  }
+
+  &__text {
+    flex: 1;
+
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-ink);
+      margin: 0 0 2px;
+      padding: 0;
+    }
+
+    p {
+      font-size: 13px;
+      color: var(--color-muted);
+      margin: 0;
+    }
+  }
+}
+
+.dialog-close {
+  color: var(--color-muted) !important;
+  &:hover { background: var(--color-bg) !important; }
+}
+
+// ─── Content / Form ───────────────────────────────────────────────────────────
+mat-dialog-content {
+  padding: 20px 24px !important;
+  overflow-y: auto;
+  flex: 1;
+  max-height: calc(90vh - 180px);
+}
+
+.user-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-row {
+  &--2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+
+    @media (max-width: 480px) { grid-template-columns: 1fr; }
+  }
+}
+
+.form-field {
+  width: 100%;
+  margin-bottom: 4px;
+
+  &--full { grid-column: 1 / -1; }
+
+  ::ng-deep {
+    .mat-mdc-form-field-infix {
+      min-height: 44px;
+      padding-top: 10px !important;
+      padding-bottom: 10px !important;
+    }
+
+    .mat-mdc-text-field-wrapper {
+      border-radius: var(--radius-base);
+    }
+
+    // Remove Material's default top-padding on the prefix so the icon
+    // doesn't sit above the middle of the field, then re-center it.
+    .mat-mdc-form-field-icon-prefix {
+      padding:     0 !important;
+      align-self:  center !important;
+      display:     flex !important;
+      align-items: center !important;
+
+      mat-icon {
+        color:       var(--color-muted);
+        font-size:   18px;
+        height:      18px;
+        width:       18px;
+        line-height: 1;
+        margin-right: 6px;
+        display:     flex;
+        align-items: center;
+      }
+    }
+  }
+}
+
+// ─── Form Section Labels ──────────────────────────────────────────────────────
+.form-section-label {
+  font-size:      11px;
+  font-weight:    700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color:          var(--color-muted);
+  margin:         12px 0 8px;
+  padding-bottom: 6px;
+  border-bottom:  1px solid var(--color-border);
+}
+
+// ─── Hint styles ──────────────────────────────────────────────────────────────
+::ng-deep .hint-warn {
+  color: var(--color-warning) !important;
+  font-size: 11.5px !important;
+}
+
+.checkbox-row {
+  padding: 4px 0 8px;
+
+  .checkbox-hint {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin: 4px 0 0 28px;
+  }
+
+  ::ng-deep .mat-mdc-checkbox .mdc-checkbox__background {
+    border-color: var(--color-border);
+  }
+
+  ::ng-deep .mat-mdc-checkbox.mat-primary .mdc-checkbox__native-control:enabled:checked ~ .mdc-checkbox__background {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+mat-dialog-actions {
+  padding: 16px 24px !important;
+  margin: 0 !important;
+}
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.btn-cancel {
+  border-color: var(--color-border) !important;
+  color: var(--color-ink-2) !important;
+  border-radius: var(--radius-base);
+  font-weight: 500;
+  height: 40px;
+
+  &:hover {
+    background: var(--color-bg) !important;
+    border-color: var(--color-muted) !important;
+  }
+
+  &:disabled { opacity: 0.5; }
+}
+
+.btn-submit {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 130px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+  mat-spinner { display: inline-flex; }
+
+  &:hover:not(:disabled) { background: var(--color-primary-dark) !important; }
+  &:disabled { background: var(--color-muted) !important; opacity: 0.7; cursor: not-allowed; }
+}

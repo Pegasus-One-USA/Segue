@@ -1,6 +1,17 @@
 @if (toastService.current(); as toast) {
-  <div class="toast">
-    <strong>{{ toast.title }}</strong>
-    <p>{{ toast.text }}</p>
+  <div class="toast-wrap" [class]="'toast-' + (toast.type ?? 'info')">
+    <div class="toast-icon">
+      @switch (toast.type) {
+        @case ('success') { <span>&#10003;</span> }
+        @case ('error')   { <span>&#10005;</span> }
+        @case ('warning') { <span>&#9888;</span> }
+        @default          { <span>&#9432;</span> }
+      }
+    </div>
+    <div class="toast-body">
+      <strong class="toast-title">{{ toast.title }}</strong>
+      <p class="toast-text">{{ toast.text }}</p>
+    </div>
+    <button class="toast-dismiss" (click)="toastService.dismiss()" aria-label="Dismiss">&#10005;</button>
   </div>
 }

@@ -1,0 +1,157 @@
+<!-- tenant-tab.component.html -->
+<div class="tab-content">
+
+  <!-- ─── Form Card ──────────────────────────────────────────────────────── -->
+  <div class="form-card" [class.form-card--editing]="editId()">
+    <div class="form-card__header">
+      <div class="form-card__title-row">
+        <div class="form-card__icon-wrap" [class.form-card__icon-wrap--edit]="editId()">
+          <mat-icon>{{ editId() ? 'edit' : 'domain_add' }}</mat-icon>
+        </div>
+        <div>
+          <h3 class="form-card__title">{{ editId() ? 'Edit Tenant' : 'Create New Tenant' }}</h3>
+          <p class="form-card__sub">
+            {{ editId() ? 'Update the tenant name or code.' : 'Define an organizational tenant for role and user assignment.' }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate class="form-body">
+      <div class="form-grid">
+
+        <!-- Name -->
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Tenant Name</mat-label>
+          <mat-icon matPrefix class="field-prefix-icon">domain</mat-icon>
+          <input
+            matInput
+            formControlName="name"
+            placeholder="e.g. Acme Corporation"
+            autocomplete="off"
+          />
+          @if (hasError('name', 'required')) {
+            <mat-error>Tenant name is required</mat-error>
+          }
+          @if (hasError('name', 'maxlength')) {
+            <mat-error>Name must not exceed 120 characters</mat-error>
+          }
+        </mat-form-field>
+
+        <!-- Code -->
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Tenant Code</mat-label>
+          <mat-icon matPrefix class="field-prefix-icon">tag</mat-icon>
+          <input
+            matInput
+            formControlName="code"
+            placeholder="e.g. ACME"
+            autocomplete="off"
+            style="text-transform: uppercase"
+          />
+          @if (hasError('code', 'required')) {
+            <mat-error>Tenant code is required</mat-error>
+          }
+          @if (hasError('code', 'pattern')) {
+            <mat-error>Letters, numbers, hyphens and underscores only</mat-error>
+          }
+          @if (hasError('code', 'maxlength')) {
+            <mat-error>Code must not exceed 20 characters</mat-error>
+          }
+        </mat-form-field>
+
+      </div>
+
+      <div class="form-actions">
+        <button mat-flat-button type="submit" class="btn-submit">
+          <mat-icon>{{ editId() ? 'save' : 'add_circle' }}</mat-icon>
+          {{ editId() ? 'Update Tenant' : 'Create Tenant' }}
+        </button>
+        @if (editId()) {
+          <button mat-button type="button" class="btn-cancel-edit" (click)="cancelEdit()">
+            Cancel
+          </button>
+        }
+      </div>
+    </form>
+  </div>
+
+  <!-- ─── Data Table Card ────────────────────────────────────────────────── -->
+  <div class="data-card">
+    <div class="data-card__header">
+      <div>
+        <h3 class="data-card__title">All Tenants</h3>
+        <p class="data-card__sub">
+          {{ tenants().length }} tenant{{ tenants().length !== 1 ? 's' : '' }} registered
+        </p>
+      </div>
+    </div>
+
+    @if (tenants().length === 0) {
+      <div class="empty-state">
+        <div class="empty-state__icon-wrap">
+          <mat-icon>domain_disabled</mat-icon>
+        </div>
+        <p class="empty-state__title">No tenants yet</p>
+        <p class="empty-state__sub">Create your first tenant using the form above.</p>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table mat-table [dataSource]="tenants()" class="data-table">
+
+          <!-- Name -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="cell-primary">{{ row.name }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Code -->
+          <ng-container matColumnDef="code">
+            <th mat-header-cell *matHeaderCellDef>Code</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="code-badge">{{ row.code }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Created -->
+          <ng-container matColumnDef="createdAt">
+            <th mat-header-cell *matHeaderCellDef>Created Date</th>
+            <td mat-cell *matCellDef="let row">
+              <span class="cell-muted">{{ formatDate(row.createdAt) }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Actions -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let row">
+              <div class="actions-cell">
+                <button
+                  mat-icon-button
+                  class="btn-action btn-action--edit"
+                  (click)="startEdit(row)"
+                >
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="btn-action btn-action--delete"
+                  (click)="deleteTenant(row)"
+                >
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"
+              [class.data-row--editing]="editId() === row.id"></tr>
+        </table>
+      </div>
+    }
+  </div>
+
+</div>

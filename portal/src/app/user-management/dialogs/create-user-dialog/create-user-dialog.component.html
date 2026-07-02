@@ -1,0 +1,120 @@
+<!-- user-management/dialogs/create-user-dialog/create-user-dialog.component.html -->
+<div class="dialog-container">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>person_add</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2 mat-dialog-title>Create New User</h2>
+      <p>Fill in the details to provision a new platform user</p>
+    </div>
+    <button mat-icon-button class="dialog-close" (click)="cancel()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <!-- Content -->
+  <mat-dialog-content>
+    <form [formGroup]="form" (ngSubmit)="submit()" class="user-form">
+
+      <!-- Section: Identity -->
+      <p class="form-section-label">Identity</p>
+
+      <!-- Row 1: First + Last name -->
+      <div class="form-row form-row--2col">
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>First Name</mat-label>
+          <input matInput formControlName="firstName" placeholder="John" autocomplete="off" />
+          <mat-error *ngIf="hasError('firstName', 'required')">First name is required</mat-error>
+          <mat-error *ngIf="hasError('firstName', 'maxlength')">Too long</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Last Name</mat-label>
+          <input matInput formControlName="lastName" placeholder="Doe" autocomplete="off" />
+          <mat-error *ngIf="hasError('lastName', 'required')">Last name is required</mat-error>
+          <mat-error *ngIf="hasError('lastName', 'maxlength')">Too long</mat-error>
+        </mat-form-field>
+      </div>
+
+      <!-- Row 2: Email -->
+      <mat-form-field appearance="outline" class="form-field form-field--full">
+        <mat-label>Email Address</mat-label>
+        <mat-icon matPrefix>email</mat-icon>
+        <input matInput formControlName="email" type="email" placeholder="john.doe@example.com" autocomplete="off" />
+        <mat-error *ngIf="hasError('email', 'required')">Email is required</mat-error>
+        <mat-error *ngIf="hasError('email', 'email')">Enter a valid email address</mat-error>
+      </mat-form-field>
+
+      <!-- Row 3: Tenant + Role -->
+      <div class="form-row form-row--2col">
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Tenant</mat-label>
+          <mat-icon matPrefix>domain</mat-icon>
+          <mat-select formControlName="tenantId">
+            @if (tenants.length === 0) {
+              <mat-option disabled value="">No tenants available</mat-option>
+            }
+            @for (t of tenants; track t.id) {
+              <mat-option [value]="t.id">{{ t.name }}</mat-option>
+            }
+          </mat-select>
+          <mat-error *ngIf="hasError('tenantId', 'required')">Tenant is required</mat-error>
+          @if (tenants.length === 0) {
+            <mat-hint class="hint-warn">Create a tenant first in the Tenant tab</mat-hint>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Role</mat-label>
+          <mat-icon matPrefix>shield</mat-icon>
+          <mat-select formControlName="customRoleId" [disabled]="!form.get('tenantId')?.value">
+            @if (rolesForSelectedTenant().length === 0) {
+              <mat-option disabled value="">
+                {{ form.get('tenantId')?.value ? 'No roles for this tenant' : 'Select a tenant first' }}
+              </mat-option>
+            }
+            @for (r of rolesForSelectedTenant(); track r.id) {
+              <mat-option [value]="r.id">{{ r.name }}</mat-option>
+            }
+          </mat-select>
+          <mat-error *ngIf="hasError('customRoleId', 'required')">Role is required</mat-error>
+          @if (form.get('tenantId')?.value && rolesForSelectedTenant().length === 0) {
+            <mat-hint class="hint-warn">Create a role for this tenant first</mat-hint>
+          }
+        </mat-form-field>
+      </div>
+
+    </form>
+  </mat-dialog-content>
+
+  <mat-divider></mat-divider>
+
+  <!-- Actions -->
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-stroked-button class="btn-cancel" (click)="cancel()" [disabled]="loading()">
+        Cancel
+      </button>
+      <button
+        mat-flat-button
+        class="btn-submit"
+        (click)="submit()"
+        [disabled]="loading()"
+      >
+        @if (loading()) {
+          <mat-spinner diameter="18" color="accent"></mat-spinner>
+          Creating...
+        } @else {
+          <mat-icon>person_add</mat-icon>
+          Create User
+        }
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

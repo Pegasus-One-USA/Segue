@@ -1,0 +1,121 @@
+// ── Shell layout ───────────────────────────────────────────────────────────────
+.shell {
+  display:    flex;
+  height:     100vh;
+  overflow:   hidden;
+  background: var(--color-bg);
+}
+
+// ── Main column ────────────────────────────────────────────────────────────────
+.shell-main {
+  flex:           1;
+  display:        flex;
+  flex-direction: column;
+  min-width:      0;
+  overflow:       hidden;
+}
+
+// ── Topbar ─────────────────────────────────────────────────────────────────────
+// No z-index here — adding one creates a stacking context that traps the user
+// menu panel inside it and lets sticky table headers bleed over the dropdown.
+// The topbar is held in place by flexbox (flex-shrink:0), not by position:sticky.
+.shell-topbar {
+  display:       flex;
+  align-items:   center;
+  gap:           12px;
+  padding:       0 var(--space-10);
+  height:        56px;
+  background:    var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink:   0;
+  box-shadow:    var(--shadow-xs);
+}
+
+// Hamburger
+.shell-hamburger {
+  display:        flex;
+  flex-direction: column;
+  gap:            4px;
+  padding:        7px 8px;
+  background:     none;
+  border:         none;
+  border-radius:  var(--radius-base);
+  cursor:         pointer;
+  color:          var(--color-muted);
+  flex-shrink:    0;
+  transition:     background var(--transition-base), color var(--transition-base);
+
+  &:hover {
+    background: var(--color-side);
+    color:      var(--color-ink);
+  }
+}
+
+.h-line {
+  display:       block;
+  width:         17px;
+  height:        1.5px;
+  background:    currentColor;
+  border-radius: var(--radius-pill);
+}
+
+// Breadcrumb
+.shell-page-title {
+  flex:        1;
+  font-size:   14px;
+  font-weight: 600;
+  color:       var(--color-ink);
+}
+
+// Right actions cluster
+.shell-actions {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  margin-left: auto;
+}
+
+// Notification bell
+.shell-notif {
+  position:      relative;
+  width:         36px;
+  height:        36px;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  background:    none;
+  border:        none;
+  border-radius: var(--radius-base);
+  color:         var(--color-muted);
+  cursor:        pointer;
+  transition:    background var(--transition-base), color var(--transition-base);
+
+  &:hover {
+    background: var(--color-side);
+    color:      var(--color-ink);
+  }
+}
+
+.shell-notif-badge {
+  position:      absolute;
+  top:           4px;
+  right:         4px;
+  background:    var(--color-error);
+  color:         var(--color-surface);
+  font-size:     9px;
+  font-weight:   700;
+  border-radius: var(--radius-pill);
+  padding:       1px 4px;
+  min-width:     14px;
+  text-align:    center;
+  line-height:   1.4;
+  pointer-events: none;
+}
+
+// ── Page content ───────────────────────────────────────────────────────────────
+.shell-content {
+  flex:       1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}

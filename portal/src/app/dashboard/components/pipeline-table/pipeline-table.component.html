@@ -1,7 +1,7 @@
 <div class="panel">
   <div class="panel-header">
     <h2 class="panel-title">Recent Pipelines</h2>
-    <a class="panel-link">View all →</a>
+    <a class="panel-link" routerLink="/pipelines">View all →</a>
   </div>
 
   <div class="table-wrap">
@@ -12,9 +12,6 @@
           <th>Source</th>
           <th>Status</th>
           <th>Last Run</th>
-          <th>Duration</th>
-          <th>Triggered</th>
-          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -28,18 +25,11 @@
               </span>
             </td>
             <td class="muted">{{ run.startedAt | date:'MMM d, h:mm a' }}</td>
-            <td class="muted mono">{{ formatDuration(run.duration) }}</td>
-            <td class="muted capitalize">{{ run.triggeredBy }}</td>
-            <td class="action-cell">
-              <button class="icon-btn" title="Run again"  (click)="runClicked.emit(run.id)">▶</button>
-              <button class="icon-btn" title="Edit"       (click)="editClicked.emit(run.id)">✎</button>
-              <button class="icon-btn" title="View logs"  (click)="logsClicked.emit(run.id)">≡</button>
-            </td>
           </tr>
         }
         @empty {
           <tr>
-            <td colspan="7" class="empty-cell muted">No pipeline runs found.</td>
+            <td colspan="4" class="empty-cell muted">No pipeline runs found.</td>
           </tr>
         }
       </tbody>
