@@ -1,0 +1,56 @@
+tests/FHIRBridge.UnitTests/Security/DataProtectionLaunchTokenProtectorTests.cs
+  s_c6334a9b5a646f::t_1bac7923697b96 1-52
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_c6334a9b5a646f::t_ba4adf026246de 4,20-23,32-33,44-45,55-56,62-64,77-78,95-96,98-99,101,111-137,149,152-153,166,169-192,196,198-199,204-206,222-225,259-260,264-270,275-318,331-351,395-397
+src/FHIRBridge.Infrastructure/Security/DataProtectionLaunchTokenProtector.cs
+  s_c6334a9b5a646f::t_cc5ce561f0a058 1-70
+src/FHIRBridge.Application/Abstractions/Security/ILaunchTokenProtector.cs
+  s_c6334a9b5a646f::t_6316e21c3fb6ee 1-24
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_c6334a9b5a646f::t_2d6a863170302e 30-31
+  s_c6334a9b5a646f::t_4421dd1843a721 3
+  s_c6334a9b5a646f::t_bddd01e1cda683 11,17
+  s_c6334a9b5a646f::t_d31f5e00e9ffd1 49-50,70-87,210,230,234,239,243,257
+  s_c6334a9b5a646f::t_e05f0c4e2d33d6 208-209
+  s_c6334a9b5a646f::t_83801e9988e3ef 211-213,227-229
+  s_c6334a9b5a646f::t_283093ae3bd4b1 231-233
+  s_c6334a9b5a646f::t_b9d3d5b9c37df8 235-238
+  s_c6334a9b5a646f::t_cb976799524ac9 240-242
+  s_c6334a9b5a646f::t_ec0faeac31f771 244-246,254-256
+  s_c6334a9b5a646f::t_045de220cafd4b 258
+  s_c6334a9b5a646f::t_cd7ae27618d9ff 108,110-112,146-147,151,164,166,171,189-190,201,214-226,247-253
+docs/fhirbridge-epic-provider-ehr-launch-source-wizard.html
+  s_c6334a9b5a646f::t_fa82263b2eb930 1-502
+docs/mapping.html
+  s_c6334a9b5a646f::t_806418a3fb3571 1-2321
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_c6334a9b5a646f::t_a3fbb4d5456fd7 66-105,146-148
+src/Api/FHIRBridge.Api/Program.cs
+  s_c6334a9b5a646f::t_42e7505c741dc6 40-42
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_c6334a9b5a646f::t_f8f4077d1832b3 29-40,42-44
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_c6334a9b5a646f::t_973eedb48fe3e7 271
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_c6334a9b5a646f::t_e50a2ad10b0fa9 13
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IOAuthAuthorizationStateStore.cs
+  s_c6334a9b5a646f::t_c055cf1c9f324d 31-32
+tests/FHIRBridge.UnitTests/FHIRBridge.UnitTests.csproj
+  s_c6334a9b5a646f::t_723772f89c7fe3 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "0365202f79cea7777f669c2ce5114f023a3ecb7d",
+  "prompts": {},
+  "sessions": {
+    "s_c6334a9b5a646f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f46fcae-4d19-4461-b4b5-61fa608674fc",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
