@@ -184,6 +184,15 @@
     margin-top:  1px;
     color:       var(--color-error);
   }
+
+  &--success {
+    background:  #ECFDF5;
+    border-color: #6EE7B7;
+    border-left-color: #059669;
+    color:        #065F46;
+
+    .alert-icon { color: #059669; }
+  }
 }
 
 // ── Form Fields (host class helpers) ─────────────────────────────────────────
@@ -206,6 +215,11 @@
 // All form-field theming goes here so we never touch MDC custom properties
 // at :host level (which break the notch-width calculation).
 ::ng-deep {
+
+  // ── Hide internal MDC line ripple ────────────────────────────────────────
+  .mat-mdc-form-field .mdc-line-ripple {
+    display: none !important;
+  }
 
   // ── Outline border: default ───────────────────────────────────────────────
   .mat-mdc-form-field .mdc-notched-outline__leading,

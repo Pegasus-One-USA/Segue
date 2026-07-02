@@ -34,6 +34,11 @@ export const AUTH_ROUTES: Routes = [
       import('./pages/change-password/change-password.component').then(m => m.ChangePasswordComponent),
   },
   {
+    path: 'set-password',
+    loadComponent: () =>
+      import('./pages/set-password/set-password.component').then(m => m.SetPasswordComponent),
+  },
+  {
     path: 'unauthorized',
     loadComponent: () =>
       import('./pages/unauthorized/unauthorized.component').then(m => m.UnauthorizedComponent),
