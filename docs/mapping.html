@@ -1,0 +1,2321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FHIRBridge - FHIR Cardinality Mapping Validator</title>
+  <style>
+    :root {
+      --bg: #f4f7f8;
+      --surface: #ffffff;
+      --surface-soft: #f8fcfb;
+      --line: #d8e4e9;
+      --line-strong: #aebfc9;
+      --text: #10202c;
+      --muted: #5f6f7d;
+      --teal: #0f766e;
+      --teal-dark: #0b5f59;
+      --teal-soft: #dff7f2;
+      --blue: #2563eb;
+      --blue-soft: #e8f0ff;
+      --amber: #a16207;
+      --amber-soft: #fff4d6;
+      --red: #b42318;
+      --red-soft: #fee4e2;
+      --green: #087f5b;
+      --green-soft: #ddf7ed;
+      --shadow: 0 14px 34px rgba(16, 24, 40, 0.08);
+      font-family: Inter, "Segoe UI", system-ui, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 92% 0%, rgba(15, 118, 110, 0.12), transparent 28%),
+        linear-gradient(180deg, #fbfdfd 0, var(--bg) 320px);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    button, input, select, textarea { font: inherit; }
+
+    .hero {
+      padding: 24px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #073b3a 0%, #114e4b 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      display: inline-grid;
+      place-items: center;
+      color: #063b3b;
+      background: #6ee7d8;
+      border-radius: 8px;
+      font-weight: 900;
+    }
+
+    .hero h1 {
+      color: #ffffff;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .hero p {
+      max-width: 900px;
+      color: #ccebe7;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    main {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 18px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin-bottom: 12px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr)) auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: #354a5a;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: 40px;
+      padding: 8px 10px;
+      color: var(--text);
+      background: #ffffff;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      outline: none;
+      font-weight: 650;
+    }
+
+    textarea {
+      min-height: 92px;
+      resize: vertical;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+    }
+
+    button {
+      min-height: 40px;
+      padding: 9px 13px;
+      color: #ffffff;
+      background: var(--teal);
+      border: 1px solid var(--teal-dark);
+      border-radius: 7px;
+      cursor: pointer;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    button:hover { background: var(--teal-dark); }
+
+    button.secondary {
+      color: var(--text);
+      background: #ffffff;
+      border-color: var(--line-strong);
+    }
+
+    button.secondary:hover { background: var(--surface-soft); }
+
+    button.danger {
+      color: #ffffff;
+      background: var(--red);
+      border-color: #911b13;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .badge.array { color: #7a4d00; background: var(--amber-soft); border: 1px solid #efd28a; }
+    .badge.scalar { color: #0b4f49; background: var(--teal-soft); border: 1px solid #b6e4dc; }
+    .badge.ok { color: var(--green); background: var(--green-soft); border: 1px solid #abe6cc; }
+    .badge.warn { color: var(--amber); background: var(--amber-soft); border: 1px solid #efd28a; }
+    .badge.error { color: var(--red); background: var(--red-soft); border: 1px solid #f4aaa5; }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #445766;
+      background: #edf5f4;
+      font-weight: 900;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover td { background: #f7fcfb; }
+
+    code {
+      color: #174ea6;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .mapping-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .mapping-card {
+      padding: 13px;
+      display: grid;
+      gap: 10px;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--teal);
+      border-radius: 8px;
+    }
+
+    .mapping-card.array-risk {
+      border-left-color: var(--amber);
+      background: #fffbf0;
+    }
+
+    .mapping-card.multi-risk {
+      border-left-color: var(--red);
+    }
+
+    .mapping-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .mapping-title {
+      display: grid;
+      gap: 3px;
+    }
+
+    .mapping-title strong {
+      font-size: 15px;
+    }
+
+    .mapping-meta {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .message-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .message {
+      padding: 12px 13px;
+      display: grid;
+      gap: 5px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .message h3 {
+      font-size: 14px;
+    }
+
+    .message p, .message li {
+      color: #405566;
+    }
+
+    .message.info { border-left: 5px solid var(--blue); }
+    .message.warn { border-left: 5px solid var(--amber); background: #fffdf5; }
+    .message.error { border-left: 5px solid var(--red); background: #fff8f8; }
+    .message.ok { border-left: 5px solid var(--green); background: #f7fffb; }
+
+    .strategy-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      gap: 10px;
+    }
+
+    .strategy {
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .strategy strong { display: block; margin-bottom: 4px; }
+    .strategy span { color: var(--muted); font-size: 12px; }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 1180px) {
+      .grid, .split { grid-template-columns: 1fr; }
+      .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .strategy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 700px) {
+      .hero, .clinical-topbar { align-items: stretch; flex-direction: column; }
+      .row, .strategy-grid { grid-template-columns: 1fr; }
+      main { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <span class="brand-mark">FB</span>
+      <div>
+        <h1>FHIR Cardinality Mapping Validator</h1>
+        <p>Expanded static prototype for design-time validation across many FHIR resource types, scalar fields, repeating arrays, and N-level nested nodes into destination tables.</p>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <button type="button" id="loadPatientDemo">Patient address demo</button>
+      <button type="button" id="loadObservationDemo" class="secondary">Observation component demo</button>
+      <label style="display:flex; align-items:center; gap:6px; color:#cdeee9; font-weight:700; font-size:12px;">
+        <input type="checkbox" id="catalogToggle" style="width:auto; min-height:auto;">
+        Full R4 catalog (generated, default) &mdash; uncheck for fast curated view
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; color:#cdeee9; font-weight:700; font-size:12px;">
+        <input type="checkbox" id="advancedToggle" style="width:auto; min-height:auto;">
+        Show advanced details
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Mapping Row Builder</h2>
+      <p class="hint">Select a resource and source field. If the field crosses any FHIR element with max cardinality "*", the validator asks how the array should be handled.</p>
+      <div class="row">
+        <label>Resource type
+          <select id="resourceSelect"></select>
+        </label>
+        <label>Source field
+          <select id="fieldSelect"></select>
+        </label>
+        <label>Destination table
+          <input id="destinationTable" value="dbo.Patient">
+        </label>
+        <label>Destination column
+          <input id="destinationColumn" value="PatientId">
+        </label>
+        <label>Array handling
+          <select id="arrayPolicy">
+            <option value="FirstItem">Use first item only</option>
+            <option value="RepeatParent">Repeat parent row for each array item</option>
+            <option value="SeparateDestination">Use separate destination/table</option>
+            <option value="StoreJson">Store full array as JSON</option>
+            <option value="RejectIfMultiple">Reject if multiple values found</option>
+          </select>
+        </label>
+        <button type="button" id="addRow">Add mapping</button>
+      </div>
+      <p id="builderNotice" class="small" style="color: var(--red); font-weight: 800; margin: 4px 0;"></p>
+      <div class="advanced">
+        <label>Custom JSON path for N-level test
+          <input id="customPath" placeholder="Example: $.component[0].code.coding[0].code">
+        </label>
+        <p class="small">If custom path is filled, it overrides the selected source field and detects any [0] or [*] as a repeating FHIR node.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 12px;">
+        <h2>Configured Mapping Rows</h2>
+        <button type="button" id="clearRows" class="secondary">Clear rows</button>
+      </div>
+      <div id="mappingList" class="mapping-list"></div>
+    </section>
+
+    <section class="panel advanced">
+      <h2>Information</h2>
+      <p class="hint">Field-level array analysis for the current selection, plus validation across all configured rows.</p>
+      <div id="fieldAnalysis" class="message info"></div>
+      <div id="validationMessages" class="message-stack" style="margin-top: 12px;"></div>
+    </section>
+
+    <section class="panel advanced">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 12px;">
+        <h2>Sample Destination Preview</h2>
+        <div class="toolbar">
+          <label style="max-width: 150px;">Sample array size
+            <input id="sampleSize" type="number" min="1" max="6" value="3">
+          </label>
+          <button type="button" id="downloadSample" class="secondary">Download sample HTML</button>
+        </div>
+      </div>
+      <p class="hint">Generated from the configured mapping rows and each row's <strong>Array handling</strong> choice, using synthetic sample data. <em>First item only</em> &rarr; one value; <em>Repeat parent row</em> &rarr; multiple rows; <em>Separate destination</em> &rarr; child table with a parent foreign key; <em>Store as JSON</em> &rarr; a JSON array in one cell; <em>Reject if multiple</em> &rarr; single value flagged. Use the button to export a standalone example HTML file.</p>
+      <div id="samplePreview"></div>
+    </section>
+
+    <section class="panel advanced">
+      <h2>Array Handling Options</h2>
+      <div class="strategy-grid">
+        <div class="strategy">
+          <strong>Use first item only</strong>
+          <span>Saves one row per parent resource. Example: <code>$.address[0].city</code>.</span>
+        </div>
+        <div class="strategy">
+          <strong>Repeat parent row</strong>
+          <span>Creates multiple destination rows when the array has multiple items. Parent scalar fields repeat.</span>
+        </div>
+        <div class="strategy">
+          <strong>Separate destination/table</strong>
+          <span>Recommended for normalized SQL. Example: <code>Patient</code> and <code>PatientAddress</code>.</span>
+        </div>
+        <div class="strategy">
+          <strong>Store array as JSON</strong>
+          <span>Keeps the full repeating structure in one JSON column for staging or analytics.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel advanced">
+      <h2>Static Cardinality Metadata Snapshot</h2>
+      <p class="hint">This prototype now includes an expanded static metadata snapshot across <strong>100+ FHIR R4 resource types</strong> &mdash; foundation/infrastructure (Bundle, MessageHeader, OperationOutcome, Parameters, Subscription, Binary, Basic, Linkage), terminology/conformance (ValueSet, CodeSystem, ConceptMap, StructureDefinition, CapabilityStatement, Questionnaire), administrative, clinical, medication, scheduling, billing/financial (ClaimResponse, CoverageEligibilityRequest/Response, PaymentReconciliation, Invoice, ChargeItem, Contract, InsurancePlan), definitional/knowledge (PlanDefinition, ActivityDefinition, Measure, MeasureReport, Library), consent, provenance, audit, device, specimen, imaging, questionnaire, and workflow resources. Every resource also carries <strong>nested/complex extension nodes</strong> (<code>extension.extension.valueString</code>, <code>modifierExtension</code>, <code>extension.valueCodeableConcept.coding.code</code>) and deep N-level paths up to 5&ndash;6 levels (e.g. <code>InsurancePlan.plan.specificCost.benefit.cost.amount.value</code>, <code>MeasureReport.group.stratifier.stratum.population.count</code>, <code>ConceptMap.group.element.target.dependsOn.value</code>). It also keeps generic JSON-path array detection for any N-level custom path. Backend implementation should use generated FHIR StructureDefinition snapshots instead of hand-maintained metadata.</p>
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Resource</th>
+              <th>Field</th>
+              <th>Path</th>
+              <th>FHIR cardinality</th>
+              <th>Repeating ancestors</th>
+            </tr>
+          </thead>
+          <tbody id="metadataRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const curatedMetadata = (() => {
+      const baseFields = (resource, idColumn = resource + 'Id') => [
+        field('FHIR logical id', '$.id', `${resource}.id`, '0..1', idColumn),
+        field('Meta profile', '$.meta.profile[0]', `${resource}.meta.profile`, '0..1 / 0..*', 'MetaProfile', [`${resource}.meta.profile`]),
+        field('Meta tag code', '$.meta.tag[0].coding[0].code', `${resource}.meta.tag.coding.code`, '0..1 / 0..* / 0..* / 0..1', 'MetaTagCode', [`${resource}.meta.tag`, `${resource}.meta.tag.coding`]),
+        field('Identifier system', '$.identifier[0].system', `${resource}.identifier.system`, '0..* / 0..1', 'IdentifierSystem', [`${resource}.identifier`]),
+        field('Identifier value', '$.identifier[0].value', `${resource}.identifier.value`, '0..* / 0..1', 'IdentifierValue', [`${resource}.identifier`]),
+        field('Extension url', '$.extension[0].url', `${resource}.extension.url`, '0..* / 1..1', 'ExtensionUrl', [`${resource}.extension`]),
+        field('Extension value string', '$.extension[0].valueString', `${resource}.extension.valueString`, '0..* / 0..1', 'ExtensionValueString', [`${resource}.extension`]),
+        field('Contained resource type', '$.contained[0].resourceType', `${resource}.contained.resourceType`, '0..* / 1..1', 'ContainedResourceType', [`${resource}.contained`]),
+        field('Meta security code', '$.meta.security[0].code', `${resource}.meta.security.code`, '0..1 / 0..* / 0..1', 'MetaSecurityCode', [`${resource}.meta.security`]),
+        field('Identifier type code', '$.identifier[0].type.coding[0].code', `${resource}.identifier.type.coding.code`, '0..* / 0..1 / 0..* / 0..1', 'IdentifierTypeCode', [`${resource}.identifier`, `${resource}.identifier.type.coding`]),
+        field('Modifier extension url', '$.modifierExtension[0].url', `${resource}.modifierExtension.url`, '0..* / 1..1', 'ModifierExtensionUrl', [`${resource}.modifierExtension`]),
+        field('Extension value codeable code', '$.extension[0].valueCodeableConcept.coding[0].code', `${resource}.extension.valueCodeableConcept.coding.code`, '0..* / 0..1 / 0..* / 0..1', 'ExtensionValueCode', [`${resource}.extension`, `${resource}.extension.valueCodeableConcept.coding`]),
+        field('Nested extension url', '$.extension[0].extension[0].url', `${resource}.extension.extension.url`, '0..* / 0..* / 1..1', 'NestedExtensionUrl', [`${resource}.extension`, `${resource}.extension.extension`]),
+        field('Nested extension value', '$.extension[0].extension[0].valueString', `${resource}.extension.extension.valueString`, '0..* / 0..* / 0..1', 'NestedExtensionValue', [`${resource}.extension`, `${resource}.extension.extension`])
+      ];
+
+      const coding = (resource, label, jsonPath, fhirPath, target, ancestors = []) =>
+        field(label, jsonPath, fhirPath, 'CodeableConcept 0..* / coding 0..* / code 0..1', target, ancestors);
+
+      return {
+        Patient: [
+          ...baseFields('Patient', 'PatientId'),
+          field('Active', '$.active', 'Patient.active', '0..1', 'IsActive'),
+          field('Family name', '$.name[0].family', 'Patient.name.family', '0..* / 0..1', 'FamilyName', ['Patient.name']),
+          field('Given name', '$.name[0].given[0]', 'Patient.name.given', '0..* / 0..*', 'GivenName', ['Patient.name', 'Patient.name.given']),
+          field('Telecom system', '$.telecom[0].system', 'Patient.telecom.system', '0..* / 0..1', 'TelecomSystem', ['Patient.telecom']),
+          field('Telecom value', '$.telecom[0].value', 'Patient.telecom.value', '0..* / 0..1', 'TelecomValue', ['Patient.telecom']),
+          field('Address line', '$.address[0].line[0]', 'Patient.address.line', '0..* / 0..*', 'AddressLine', ['Patient.address', 'Patient.address.line']),
+          field('Address city', '$.address[0].city', 'Patient.address.city', '0..* / 0..1', 'City', ['Patient.address']),
+          field('Contact relationship code', '$.contact[0].relationship[0].coding[0].code', 'Patient.contact.relationship.coding.code', '0..* / 0..* / 0..* / 0..1', 'ContactRelationshipCode', ['Patient.contact', 'Patient.contact.relationship', 'Patient.contact.relationship.coding']),
+          field('Contact telecom value', '$.contact[0].telecom[0].value', 'Patient.contact.telecom.value', '0..* / 0..* / 0..1', 'ContactPhone', ['Patient.contact', 'Patient.contact.telecom']),
+          field('Communication language code', '$.communication[0].language.coding[0].code', 'Patient.communication.language.coding.code', '0..* / 1..1 / 0..* / 0..1', 'PreferredLanguageCode', ['Patient.communication', 'Patient.communication.language.coding']),
+          field('General practitioner reference', '$.generalPractitioner[0].reference', 'Patient.generalPractitioner.reference', '0..* / 0..1', 'GeneralPractitionerReference', ['Patient.generalPractitioner']),
+          field('Managing organization reference', '$.managingOrganization.reference', 'Patient.managingOrganization.reference', '0..1 / 0..1', 'ManagingOrganizationReference'),
+          field('Gender', '$.gender', 'Patient.gender', '0..1', 'Gender'),
+          field('Birth date', '$.birthDate', 'Patient.birthDate', '0..1', 'BirthDate'),
+          field('Deceased boolean', '$.deceasedBoolean', 'Patient.deceasedBoolean', '0..1', 'DeceasedBoolean'),
+          field('Deceased date/time', '$.deceasedDateTime', 'Patient.deceasedDateTime', '0..1', 'DeceasedDateTime'),
+          field('Marital status code', '$.maritalStatus.coding[0].code', 'Patient.maritalStatus.coding.code', '0..1 / 0..* / 0..1', 'MaritalStatusCode', ['Patient.maritalStatus.coding']),
+          field('Multiple birth boolean', '$.multipleBirthBoolean', 'Patient.multipleBirthBoolean', '0..1', 'MultipleBirthBoolean'),
+          field('Multiple birth integer', '$.multipleBirthInteger', 'Patient.multipleBirthInteger', '0..1', 'MultipleBirthInteger'),
+          field('Photo content type', '$.photo[0].contentType', 'Patient.photo.contentType', '0..* / 0..1', 'PhotoContentType', ['Patient.photo']),
+          field('Photo url', '$.photo[0].url', 'Patient.photo.url', '0..* / 0..1', 'PhotoUrl', ['Patient.photo']),
+          field('Communication preferred', '$.communication[0].preferred', 'Patient.communication.preferred', '0..* / 0..1', 'CommunicationPreferred', ['Patient.communication']),
+          field('Link other reference', '$.link[0].other.reference', 'Patient.link.other.reference', '0..* / 1..1 / 0..1', 'LinkOtherReference', ['Patient.link']),
+          field('Link type', '$.link[0].type', 'Patient.link.type', '0..* / 1..1', 'LinkType', ['Patient.link']),
+          field('Language', '$.language', 'Patient.language', '0..1', 'Language'),
+          field('Narrative status', '$.text.status', 'Patient.text.status', '0..1 / 1..1', 'NarrativeStatus'),
+          field('Narrative div', '$.text.div', 'Patient.text.div', '0..1 / 1..1', 'NarrativeDiv'),
+          field('Implicit rules', '$.implicitRules', 'Patient.implicitRules', '0..1', 'ImplicitRules')
+        ],
+        RelatedPerson: [
+          ...baseFields('RelatedPerson', 'RelatedPersonId'),
+          field('Patient reference', '$.patient.reference', 'RelatedPerson.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Relationship code', '$.relationship[0].coding[0].code', 'RelatedPerson.relationship.coding.code', '0..* / 0..* / 0..1', 'RelationshipCode', ['RelatedPerson.relationship', 'RelatedPerson.relationship.coding']),
+          field('Name family', '$.name[0].family', 'RelatedPerson.name.family', '0..* / 0..1', 'FamilyName', ['RelatedPerson.name']),
+          field('Telecom value', '$.telecom[0].value', 'RelatedPerson.telecom.value', '0..* / 0..1', 'TelecomValue', ['RelatedPerson.telecom']),
+          field('Address line', '$.address[0].line[0]', 'RelatedPerson.address.line', '0..* / 0..*', 'AddressLine', ['RelatedPerson.address', 'RelatedPerson.address.line'])
+        ],
+        Practitioner: [
+          ...baseFields('Practitioner', 'PractitionerId'),
+          field('Active', '$.active', 'Practitioner.active', '0..1', 'IsActive'),
+          field('Name family', '$.name[0].family', 'Practitioner.name.family', '0..* / 0..1', 'FamilyName', ['Practitioner.name']),
+          field('Name given', '$.name[0].given[0]', 'Practitioner.name.given', '0..* / 0..*', 'GivenName', ['Practitioner.name', 'Practitioner.name.given']),
+          field('Qualification code', '$.qualification[0].code.coding[0].code', 'Practitioner.qualification.code.coding.code', '0..* / 1..1 / 0..* / 0..1', 'QualificationCode', ['Practitioner.qualification', 'Practitioner.qualification.code.coding']),
+          field('Qualification issuer', '$.qualification[0].issuer.reference', 'Practitioner.qualification.issuer.reference', '0..* / 0..1 / 0..1', 'QualificationIssuerReference', ['Practitioner.qualification'])
+        ],
+        PractitionerRole: [
+          ...baseFields('PractitionerRole', 'PractitionerRoleId'),
+          field('Practitioner reference', '$.practitioner.reference', 'PractitionerRole.practitioner.reference', '0..1 / 0..1', 'PractitionerReference'),
+          field('Organization reference', '$.organization.reference', 'PractitionerRole.organization.reference', '0..1 / 0..1', 'OrganizationReference'),
+          field('Code', '$.code[0].coding[0].code', 'PractitionerRole.code.coding.code', '0..* / 0..* / 0..1', 'RoleCode', ['PractitionerRole.code', 'PractitionerRole.code.coding']),
+          field('Specialty code', '$.specialty[0].coding[0].code', 'PractitionerRole.specialty.coding.code', '0..* / 0..* / 0..1', 'SpecialtyCode', ['PractitionerRole.specialty', 'PractitionerRole.specialty.coding']),
+          field('Location reference', '$.location[0].reference', 'PractitionerRole.location.reference', '0..* / 0..1', 'LocationReference', ['PractitionerRole.location'])
+        ],
+        Organization: [
+          ...baseFields('Organization', 'OrganizationId'),
+          field('Type code', '$.type[0].coding[0].code', 'Organization.type.coding.code', '0..* / 0..* / 0..1', 'OrganizationTypeCode', ['Organization.type', 'Organization.type.coding']),
+          field('Name', '$.name', 'Organization.name', '0..1', 'OrganizationName'),
+          field('Telecom value', '$.telecom[0].value', 'Organization.telecom.value', '0..* / 0..1', 'TelecomValue', ['Organization.telecom']),
+          field('Address line', '$.address[0].line[0]', 'Organization.address.line', '0..* / 0..*', 'AddressLine', ['Organization.address', 'Organization.address.line']),
+          field('Part of reference', '$.partOf.reference', 'Organization.partOf.reference', '0..1 / 0..1', 'ParentOrganizationReference')
+        ],
+        Location: [
+          ...baseFields('Location', 'LocationId'),
+          field('Status', '$.status', 'Location.status', '0..1', 'Status'),
+          field('Name', '$.name', 'Location.name', '0..1', 'LocationName'),
+          field('Type code', '$.type[0].coding[0].code', 'Location.type.coding.code', '0..* / 0..* / 0..1', 'LocationTypeCode', ['Location.type', 'Location.type.coding']),
+          field('Telecom value', '$.telecom[0].value', 'Location.telecom.value', '0..* / 0..1', 'TelecomValue', ['Location.telecom']),
+          field('Address line', '$.address.line[0]', 'Location.address.line', '0..1 / 0..*', 'AddressLine', ['Location.address.line']),
+          field('Managing organization', '$.managingOrganization.reference', 'Location.managingOrganization.reference', '0..1 / 0..1', 'ManagingOrganizationReference')
+        ],
+        Encounter: [
+          ...baseFields('Encounter', 'EncounterId'),
+          field('Status', '$.status', 'Encounter.status', '1..1', 'Status'),
+          field('Class code', '$.class.code', 'Encounter.class.code', '1..1 / 0..1', 'ClassCode'),
+          field('Type code', '$.type[0].coding[0].code', 'Encounter.type.coding.code', '0..* / 0..* / 0..1', 'TypeCode', ['Encounter.type', 'Encounter.type.coding']),
+          field('Subject reference', '$.subject.reference', 'Encounter.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Participant type code', '$.participant[0].type[0].coding[0].code', 'Encounter.participant.type.coding.code', '0..* / 0..* / 0..* / 0..1', 'ParticipantTypeCode', ['Encounter.participant', 'Encounter.participant.type', 'Encounter.participant.type.coding']),
+          field('Participant individual', '$.participant[0].individual.reference', 'Encounter.participant.individual.reference', '0..* / 0..1 / 0..1', 'ParticipantReference', ['Encounter.participant']),
+          field('Diagnosis condition', '$.diagnosis[0].condition.reference', 'Encounter.diagnosis.condition.reference', '0..* / 1..1 / 0..1', 'DiagnosisConditionReference', ['Encounter.diagnosis']),
+          field('Location reference', '$.location[0].location.reference', 'Encounter.location.location.reference', '0..* / 1..1 / 0..1', 'LocationReference', ['Encounter.location']),
+          field('Hospitalization discharge disposition', '$.hospitalization.dischargeDisposition.coding[0].code', 'Encounter.hospitalization.dischargeDisposition.coding.code', '0..1 / 0..1 / 0..* / 0..1', 'DischargeDispositionCode', ['Encounter.hospitalization.dischargeDisposition.coding'])
+        ],
+        Observation: [
+          ...baseFields('Observation', 'ObservationId'),
+          field('Status', '$.status', 'Observation.status', '1..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'Observation.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['Observation.category', 'Observation.category.coding']),
+          field('Code', '$.code.coding[0].code', 'Observation.code.coding.code', '1..1 / 0..* / 0..1', 'Code', ['Observation.code.coding']),
+          field('Subject reference', '$.subject.reference', 'Observation.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Encounter reference', '$.encounter.reference', 'Observation.encounter.reference', '0..1 / 0..1', 'EncounterReference'),
+          field('Value quantity value', '$.valueQuantity.value', 'Observation.valueQuantity.value', '0..1 / 0..1', 'ValueQuantity'),
+          field('Value quantity unit', '$.valueQuantity.unit', 'Observation.valueQuantity.unit', '0..1 / 0..1', 'ValueUnit'),
+          field('Performer reference', '$.performer[0].reference', 'Observation.performer.reference', '0..* / 0..1', 'PerformerReference', ['Observation.performer']),
+          field('Component code', '$.component[0].code.coding[0].code', 'Observation.component.code.coding.code', '0..* / 1..1 / 0..* / 0..1', 'ComponentCode', ['Observation.component', 'Observation.component.code.coding']),
+          field('Component value quantity', '$.component[0].valueQuantity.value', 'Observation.component.valueQuantity.value', '0..* / 0..1 / 0..1', 'ComponentValue', ['Observation.component']),
+          field('Reference range low', '$.referenceRange[0].low.value', 'Observation.referenceRange.low.value', '0..* / 0..1 / 0..1', 'ReferenceRangeLow', ['Observation.referenceRange'])
+        ],
+        DiagnosticReport: [
+          ...baseFields('DiagnosticReport', 'DiagnosticReportId'),
+          field('Status', '$.status', 'DiagnosticReport.status', '1..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'DiagnosticReport.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['DiagnosticReport.category', 'DiagnosticReport.category.coding']),
+          field('Code', '$.code.coding[0].code', 'DiagnosticReport.code.coding.code', '1..1 / 0..* / 0..1', 'ReportCode', ['DiagnosticReport.code.coding']),
+          field('Subject reference', '$.subject.reference', 'DiagnosticReport.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Performer reference', '$.performer[0].reference', 'DiagnosticReport.performer.reference', '0..* / 0..1', 'PerformerReference', ['DiagnosticReport.performer']),
+          field('Result reference', '$.result[0].reference', 'DiagnosticReport.result.reference', '0..* / 0..1', 'ResultReference', ['DiagnosticReport.result']),
+          field('Presented form content type', '$.presentedForm[0].contentType', 'DiagnosticReport.presentedForm.contentType', '0..* / 1..1', 'PresentedFormContentType', ['DiagnosticReport.presentedForm'])
+        ],
+        Condition: [
+          ...baseFields('Condition', 'ConditionId'),
+          field('Clinical status code', '$.clinicalStatus.coding[0].code', 'Condition.clinicalStatus.coding.code', '0..1 / 0..* / 0..1', 'ClinicalStatusCode', ['Condition.clinicalStatus.coding']),
+          field('Verification status code', '$.verificationStatus.coding[0].code', 'Condition.verificationStatus.coding.code', '0..1 / 0..* / 0..1', 'VerificationStatusCode', ['Condition.verificationStatus.coding']),
+          field('Category code', '$.category[0].coding[0].code', 'Condition.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['Condition.category', 'Condition.category.coding']),
+          field('Code', '$.code.coding[0].code', 'Condition.code.coding.code', '0..1 / 0..* / 0..1', 'ConditionCode', ['Condition.code.coding']),
+          field('Subject reference', '$.subject.reference', 'Condition.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Body site code', '$.bodySite[0].coding[0].code', 'Condition.bodySite.coding.code', '0..* / 0..* / 0..1', 'BodySiteCode', ['Condition.bodySite', 'Condition.bodySite.coding']),
+          field('Evidence code', '$.evidence[0].code[0].coding[0].code', 'Condition.evidence.code.coding.code', '0..* / 0..* / 0..* / 0..1', 'EvidenceCode', ['Condition.evidence', 'Condition.evidence.code', 'Condition.evidence.code.coding'])
+        ],
+        Procedure: [
+          ...baseFields('Procedure', 'ProcedureId'),
+          field('Status', '$.status', 'Procedure.status', '1..1', 'Status'),
+          field('Code', '$.code.coding[0].code', 'Procedure.code.coding.code', '0..1 / 0..* / 0..1', 'ProcedureCode', ['Procedure.code.coding']),
+          field('Subject reference', '$.subject.reference', 'Procedure.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Performer function code', '$.performer[0].function.coding[0].code', 'Procedure.performer.function.coding.code', '0..* / 0..1 / 0..* / 0..1', 'PerformerFunctionCode', ['Procedure.performer', 'Procedure.performer.function.coding']),
+          field('Performer actor', '$.performer[0].actor.reference', 'Procedure.performer.actor.reference', '0..* / 1..1 / 0..1', 'PerformerActorReference', ['Procedure.performer']),
+          field('Reason code', '$.reasonCode[0].coding[0].code', 'Procedure.reasonCode.coding.code', '0..* / 0..* / 0..1', 'ReasonCode', ['Procedure.reasonCode', 'Procedure.reasonCode.coding']),
+          field('Complication code', '$.complication[0].coding[0].code', 'Procedure.complication.coding.code', '0..* / 0..* / 0..1', 'ComplicationCode', ['Procedure.complication', 'Procedure.complication.coding']),
+          field('Used code', '$.usedCode[0].coding[0].code', 'Procedure.usedCode.coding.code', '0..* / 0..* / 0..1', 'UsedCode', ['Procedure.usedCode', 'Procedure.usedCode.coding'])
+        ],
+        AllergyIntolerance: [
+          ...baseFields('AllergyIntolerance', 'AllergyIntoleranceId'),
+          field('Clinical status code', '$.clinicalStatus.coding[0].code', 'AllergyIntolerance.clinicalStatus.coding.code', '0..1 / 0..* / 0..1', 'ClinicalStatusCode', ['AllergyIntolerance.clinicalStatus.coding']),
+          field('Category', '$.category[0]', 'AllergyIntolerance.category', '0..*', 'Category', ['AllergyIntolerance.category']),
+          field('Code', '$.code.coding[0].code', 'AllergyIntolerance.code.coding.code', '0..1 / 0..* / 0..1', 'AllergyCode', ['AllergyIntolerance.code.coding']),
+          field('Patient reference', '$.patient.reference', 'AllergyIntolerance.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Reaction manifestation', '$.reaction[0].manifestation[0].coding[0].code', 'AllergyIntolerance.reaction.manifestation.coding.code', '0..* / 1..* / 0..* / 0..1', 'ReactionManifestationCode', ['AllergyIntolerance.reaction', 'AllergyIntolerance.reaction.manifestation', 'AllergyIntolerance.reaction.manifestation.coding']),
+          field('Reaction exposure route', '$.reaction[0].exposureRoute.coding[0].code', 'AllergyIntolerance.reaction.exposureRoute.coding.code', '0..* / 0..1 / 0..* / 0..1', 'ReactionRouteCode', ['AllergyIntolerance.reaction', 'AllergyIntolerance.reaction.exposureRoute.coding'])
+        ],
+        MedicationRequest: [
+          ...baseFields('MedicationRequest', 'MedicationRequestId'),
+          field('Status', '$.status', 'MedicationRequest.status', '1..1', 'Status'),
+          field('Intent', '$.intent', 'MedicationRequest.intent', '1..1', 'Intent'),
+          field('Category code', '$.category[0].coding[0].code', 'MedicationRequest.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['MedicationRequest.category', 'MedicationRequest.category.coding']),
+          field('Medication code', '$.medicationCodeableConcept.coding[0].code', 'MedicationRequest.medicationCodeableConcept.coding.code', '0..1 / 0..* / 0..1', 'MedicationCode', ['MedicationRequest.medicationCodeableConcept.coding']),
+          field('Subject reference', '$.subject.reference', 'MedicationRequest.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Requester reference', '$.requester.reference', 'MedicationRequest.requester.reference', '0..1 / 0..1', 'RequesterReference'),
+          field('Reason code', '$.reasonCode[0].coding[0].code', 'MedicationRequest.reasonCode.coding.code', '0..* / 0..* / 0..1', 'ReasonCode', ['MedicationRequest.reasonCode', 'MedicationRequest.reasonCode.coding']),
+          field('Dosage text', '$.dosageInstruction[0].text', 'MedicationRequest.dosageInstruction.text', '0..* / 0..1', 'DosageText', ['MedicationRequest.dosageInstruction']),
+          field('Dose value', '$.dosageInstruction[0].doseAndRate[0].doseQuantity.value', 'MedicationRequest.dosageInstruction.doseAndRate.doseQuantity.value', '0..* / 0..* / 0..1 / 0..1', 'DoseValue', ['MedicationRequest.dosageInstruction', 'MedicationRequest.dosageInstruction.doseAndRate'])
+        ],
+        Medication: [
+          ...baseFields('Medication', 'MedicationId'),
+          field('Code', '$.code.coding[0].code', 'Medication.code.coding.code', '0..1 / 0..* / 0..1', 'MedicationCode', ['Medication.code.coding']),
+          field('Form code', '$.form.coding[0].code', 'Medication.form.coding.code', '0..1 / 0..* / 0..1', 'FormCode', ['Medication.form.coding']),
+          field('Ingredient item code', '$.ingredient[0].itemCodeableConcept.coding[0].code', 'Medication.ingredient.itemCodeableConcept.coding.code', '0..* / 1..1 / 0..* / 0..1', 'IngredientCode', ['Medication.ingredient', 'Medication.ingredient.itemCodeableConcept.coding']),
+          field('Ingredient strength numerator', '$.ingredient[0].strength.numerator.value', 'Medication.ingredient.strength.numerator.value', '0..* / 0..1 / 0..1 / 0..1', 'StrengthNumerator', ['Medication.ingredient'])
+        ],
+        MedicationStatement: [
+          ...baseFields('MedicationStatement', 'MedicationStatementId'),
+          field('Status', '$.status', 'MedicationStatement.status', '1..1', 'Status'),
+          field('Medication code', '$.medicationCodeableConcept.coding[0].code', 'MedicationStatement.medicationCodeableConcept.coding.code', '0..1 / 0..* / 0..1', 'MedicationCode', ['MedicationStatement.medicationCodeableConcept.coding']),
+          field('Subject reference', '$.subject.reference', 'MedicationStatement.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Reason code', '$.reasonCode[0].coding[0].code', 'MedicationStatement.reasonCode.coding.code', '0..* / 0..* / 0..1', 'ReasonCode', ['MedicationStatement.reasonCode', 'MedicationStatement.reasonCode.coding']),
+          field('Dosage text', '$.dosage[0].text', 'MedicationStatement.dosage.text', '0..* / 0..1', 'DosageText', ['MedicationStatement.dosage'])
+        ],
+        MedicationAdministration: [
+          ...baseFields('MedicationAdministration', 'MedicationAdministrationId'),
+          field('Status', '$.status', 'MedicationAdministration.status', '1..1', 'Status'),
+          field('Medication code', '$.medicationCodeableConcept.coding[0].code', 'MedicationAdministration.medicationCodeableConcept.coding.code', '0..1 / 0..* / 0..1', 'MedicationCode', ['MedicationAdministration.medicationCodeableConcept.coding']),
+          field('Subject reference', '$.subject.reference', 'MedicationAdministration.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Performer actor', '$.performer[0].actor.reference', 'MedicationAdministration.performer.actor.reference', '0..* / 0..1 / 0..1', 'PerformerActorReference', ['MedicationAdministration.performer']),
+          field('Dosage dose value', '$.dosage.dose.value', 'MedicationAdministration.dosage.dose.value', '0..1 / 0..1 / 0..1', 'DoseValue')
+        ],
+        Immunization: [
+          ...baseFields('Immunization', 'ImmunizationId'),
+          field('Status', '$.status', 'Immunization.status', '1..1', 'Status'),
+          field('Vaccine code', '$.vaccineCode.coding[0].code', 'Immunization.vaccineCode.coding.code', '1..1 / 0..* / 0..1', 'VaccineCode', ['Immunization.vaccineCode.coding']),
+          field('Patient reference', '$.patient.reference', 'Immunization.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Performer actor', '$.performer[0].actor.reference', 'Immunization.performer.actor.reference', '0..* / 0..1 / 0..1', 'PerformerActorReference', ['Immunization.performer']),
+          field('Protocol applied dose number', '$.protocolApplied[0].doseNumberPositiveInt', 'Immunization.protocolApplied.doseNumberPositiveInt', '0..* / 0..1', 'DoseNumber', ['Immunization.protocolApplied']),
+          field('Education document type', '$.education[0].documentType', 'Immunization.education.documentType', '0..* / 0..1', 'EducationDocumentType', ['Immunization.education']),
+          field('Reaction detail', '$.reaction[0].detail.reference', 'Immunization.reaction.detail.reference', '0..* / 0..1', 'ReactionDetailReference', ['Immunization.reaction'])
+        ],
+        ServiceRequest: [
+          ...baseFields('ServiceRequest', 'ServiceRequestId'),
+          field('Status', '$.status', 'ServiceRequest.status', '1..1', 'Status'),
+          field('Intent', '$.intent', 'ServiceRequest.intent', '1..1', 'Intent'),
+          field('Category code', '$.category[0].coding[0].code', 'ServiceRequest.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['ServiceRequest.category', 'ServiceRequest.category.coding']),
+          field('Code', '$.code.coding[0].code', 'ServiceRequest.code.coding.code', '0..1 / 0..* / 0..1', 'ServiceCode', ['ServiceRequest.code.coding']),
+          field('Subject reference', '$.subject.reference', 'ServiceRequest.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Performer reference', '$.performer[0].reference', 'ServiceRequest.performer.reference', '0..* / 0..1', 'PerformerReference', ['ServiceRequest.performer']),
+          field('Reason code', '$.reasonCode[0].coding[0].code', 'ServiceRequest.reasonCode.coding.code', '0..* / 0..* / 0..1', 'ReasonCode', ['ServiceRequest.reasonCode', 'ServiceRequest.reasonCode.coding']),
+          field('Specimen reference', '$.specimen[0].reference', 'ServiceRequest.specimen.reference', '0..* / 0..1', 'SpecimenReference', ['ServiceRequest.specimen'])
+        ],
+        CarePlan: [
+          ...baseFields('CarePlan', 'CarePlanId'),
+          field('Status', '$.status', 'CarePlan.status', '1..1', 'Status'),
+          field('Intent', '$.intent', 'CarePlan.intent', '1..1', 'Intent'),
+          field('Category code', '$.category[0].coding[0].code', 'CarePlan.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['CarePlan.category', 'CarePlan.category.coding']),
+          field('Subject reference', '$.subject.reference', 'CarePlan.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Care team reference', '$.careTeam[0].reference', 'CarePlan.careTeam.reference', '0..* / 0..1', 'CareTeamReference', ['CarePlan.careTeam']),
+          field('Goal reference', '$.goal[0].reference', 'CarePlan.goal.reference', '0..* / 0..1', 'GoalReference', ['CarePlan.goal']),
+          field('Activity detail code', '$.activity[0].detail.code.coding[0].code', 'CarePlan.activity.detail.code.coding.code', '0..* / 0..1 / 0..1 / 0..* / 0..1', 'ActivityCode', ['CarePlan.activity', 'CarePlan.activity.detail.code.coding'])
+        ],
+        CareTeam: [
+          ...baseFields('CareTeam', 'CareTeamId'),
+          field('Status', '$.status', 'CareTeam.status', '0..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'CareTeam.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['CareTeam.category', 'CareTeam.category.coding']),
+          field('Subject reference', '$.subject.reference', 'CareTeam.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Participant role code', '$.participant[0].role[0].coding[0].code', 'CareTeam.participant.role.coding.code', '0..* / 0..* / 0..* / 0..1', 'ParticipantRoleCode', ['CareTeam.participant', 'CareTeam.participant.role', 'CareTeam.participant.role.coding']),
+          field('Participant member', '$.participant[0].member.reference', 'CareTeam.participant.member.reference', '0..* / 0..1 / 0..1', 'MemberReference', ['CareTeam.participant'])
+        ],
+        Goal: [
+          ...baseFields('Goal', 'GoalId'),
+          field('Lifecycle status', '$.lifecycleStatus', 'Goal.lifecycleStatus', '1..1', 'LifecycleStatus'),
+          field('Category code', '$.category[0].coding[0].code', 'Goal.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['Goal.category', 'Goal.category.coding']),
+          field('Description code', '$.description.coding[0].code', 'Goal.description.coding.code', '1..1 / 0..* / 0..1', 'DescriptionCode', ['Goal.description.coding']),
+          field('Subject reference', '$.subject.reference', 'Goal.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Target measure code', '$.target[0].measure.coding[0].code', 'Goal.target.measure.coding.code', '0..* / 0..1 / 0..* / 0..1', 'TargetMeasureCode', ['Goal.target', 'Goal.target.measure.coding'])
+        ],
+        DocumentReference: [
+          ...baseFields('DocumentReference', 'DocumentReferenceId'),
+          field('Status', '$.status', 'DocumentReference.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'DocumentReference.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['DocumentReference.type.coding']),
+          field('Category code', '$.category[0].coding[0].code', 'DocumentReference.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['DocumentReference.category', 'DocumentReference.category.coding']),
+          field('Subject reference', '$.subject.reference', 'DocumentReference.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Author reference', '$.author[0].reference', 'DocumentReference.author.reference', '0..* / 0..1', 'AuthorReference', ['DocumentReference.author']),
+          field('Content attachment URL', '$.content[0].attachment.url', 'DocumentReference.content.attachment.url', '1..* / 1..1 / 0..1', 'AttachmentUrl', ['DocumentReference.content']),
+          field('Content format code', '$.content[0].format.code', 'DocumentReference.content.format.code', '1..* / 0..1 / 0..1', 'FormatCode', ['DocumentReference.content']),
+          field('Context encounter', '$.context.encounter[0].reference', 'DocumentReference.context.encounter.reference', '0..1 / 0..* / 0..1', 'EncounterReference', ['DocumentReference.context.encounter'])
+        ],
+        Composition: [
+          ...baseFields('Composition', 'CompositionId'),
+          field('Status', '$.status', 'Composition.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Composition.type.coding.code', '1..1 / 0..* / 0..1', 'TypeCode', ['Composition.type.coding']),
+          field('Subject reference', '$.subject.reference', 'Composition.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Author reference', '$.author[0].reference', 'Composition.author.reference', '1..* / 0..1', 'AuthorReference', ['Composition.author']),
+          field('Section code', '$.section[0].code.coding[0].code', 'Composition.section.code.coding.code', '0..* / 0..1 / 0..* / 0..1', 'SectionCode', ['Composition.section', 'Composition.section.code.coding']),
+          field('Section entry', '$.section[0].entry[0].reference', 'Composition.section.entry.reference', '0..* / 0..* / 0..1', 'SectionEntryReference', ['Composition.section', 'Composition.section.entry'])
+        ],
+        Appointment: [
+          ...baseFields('Appointment', 'AppointmentId'),
+          field('Status', '$.status', 'Appointment.status', '1..1', 'Status'),
+          field('Service category code', '$.serviceCategory[0].coding[0].code', 'Appointment.serviceCategory.coding.code', '0..* / 0..* / 0..1', 'ServiceCategoryCode', ['Appointment.serviceCategory', 'Appointment.serviceCategory.coding']),
+          field('Service type code', '$.serviceType[0].coding[0].code', 'Appointment.serviceType.coding.code', '0..* / 0..* / 0..1', 'ServiceTypeCode', ['Appointment.serviceType', 'Appointment.serviceType.coding']),
+          field('Specialty code', '$.specialty[0].coding[0].code', 'Appointment.specialty.coding.code', '0..* / 0..* / 0..1', 'SpecialtyCode', ['Appointment.specialty', 'Appointment.specialty.coding']),
+          field('Participant actor', '$.participant[0].actor.reference', 'Appointment.participant.actor.reference', '1..* / 0..1 / 0..1', 'ParticipantActorReference', ['Appointment.participant']),
+          field('Participant status', '$.participant[0].status', 'Appointment.participant.status', '1..* / 1..1', 'ParticipantStatus', ['Appointment.participant'])
+        ],
+        Schedule: [
+          ...baseFields('Schedule', 'ScheduleId'),
+          field('Active', '$.active', 'Schedule.active', '0..1', 'IsActive'),
+          field('Service category code', '$.serviceCategory[0].coding[0].code', 'Schedule.serviceCategory.coding.code', '0..* / 0..* / 0..1', 'ServiceCategoryCode', ['Schedule.serviceCategory', 'Schedule.serviceCategory.coding']),
+          field('Actor reference', '$.actor[0].reference', 'Schedule.actor.reference', '1..* / 0..1', 'ActorReference', ['Schedule.actor']),
+          field('Planning horizon start', '$.planningHorizon.start', 'Schedule.planningHorizon.start', '0..1 / 0..1', 'PlanningStart')
+        ],
+        Slot: [
+          ...baseFields('Slot', 'SlotId'),
+          field('Service category code', '$.serviceCategory[0].coding[0].code', 'Slot.serviceCategory.coding.code', '0..* / 0..* / 0..1', 'ServiceCategoryCode', ['Slot.serviceCategory', 'Slot.serviceCategory.coding']),
+          field('Schedule reference', '$.schedule.reference', 'Slot.schedule.reference', '1..1 / 0..1', 'ScheduleReference'),
+          field('Status', '$.status', 'Slot.status', '1..1', 'Status'),
+          field('Start', '$.start', 'Slot.start', '1..1', 'StartUtc'),
+          field('End', '$.end', 'Slot.end', '1..1', 'EndUtc')
+        ],
+        Coverage: [
+          ...baseFields('Coverage', 'CoverageId'),
+          field('Status', '$.status', 'Coverage.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Coverage.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['Coverage.type.coding']),
+          field('Beneficiary reference', '$.beneficiary.reference', 'Coverage.beneficiary.reference', '1..1 / 0..1', 'BeneficiaryReference'),
+          field('Payor reference', '$.payor[0].reference', 'Coverage.payor.reference', '1..* / 0..1', 'PayorReference', ['Coverage.payor']),
+          field('Class type code', '$.class[0].type.coding[0].code', 'Coverage.class.type.coding.code', '0..* / 1..1 / 0..* / 0..1', 'ClassTypeCode', ['Coverage.class', 'Coverage.class.type.coding']),
+          field('Class value', '$.class[0].value', 'Coverage.class.value', '0..* / 1..1', 'ClassValue', ['Coverage.class'])
+        ],
+        Claim: [
+          ...baseFields('Claim', 'ClaimId'),
+          field('Status', '$.status', 'Claim.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Claim.type.coding.code', '1..1 / 0..* / 0..1', 'TypeCode', ['Claim.type.coding']),
+          field('Use', '$.use', 'Claim.use', '1..1', 'Use'),
+          field('Patient reference', '$.patient.reference', 'Claim.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Provider reference', '$.provider.reference', 'Claim.provider.reference', '1..1 / 0..1', 'ProviderReference'),
+          field('Insurance coverage', '$.insurance[0].coverage.reference', 'Claim.insurance.coverage.reference', '1..* / 1..1 / 0..1', 'CoverageReference', ['Claim.insurance']),
+          field('Diagnosis code', '$.diagnosis[0].diagnosisCodeableConcept.coding[0].code', 'Claim.diagnosis.diagnosisCodeableConcept.coding.code', '0..* / 1..1 / 0..* / 0..1', 'DiagnosisCode', ['Claim.diagnosis', 'Claim.diagnosis.diagnosisCodeableConcept.coding']),
+          field('Item product code', '$.item[0].productOrService.coding[0].code', 'Claim.item.productOrService.coding.code', '0..* / 1..1 / 0..* / 0..1', 'ProductOrServiceCode', ['Claim.item', 'Claim.item.productOrService.coding']),
+          field('Item adjudication amount', '$.item[0].detail[0].subDetail[0].net.value', 'Claim.item.detail.subDetail.net.value', '0..* / 0..* / 0..* / 0..1 / 0..1', 'SubDetailNet', ['Claim.item', 'Claim.item.detail', 'Claim.item.detail.subDetail'])
+        ],
+        ExplanationOfBenefit: [
+          ...baseFields('ExplanationOfBenefit', 'EobId'),
+          field('Status', '$.status', 'ExplanationOfBenefit.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'ExplanationOfBenefit.type.coding.code', '1..1 / 0..* / 0..1', 'TypeCode', ['ExplanationOfBenefit.type.coding']),
+          field('Patient reference', '$.patient.reference', 'ExplanationOfBenefit.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Provider reference', '$.provider.reference', 'ExplanationOfBenefit.provider.reference', '0..1 / 0..1', 'ProviderReference'),
+          field('Insurance coverage', '$.insurance[0].coverage.reference', 'ExplanationOfBenefit.insurance.coverage.reference', '0..* / 1..1 / 0..1', 'CoverageReference', ['ExplanationOfBenefit.insurance']),
+          field('Diagnosis code', '$.diagnosis[0].diagnosisCodeableConcept.coding[0].code', 'ExplanationOfBenefit.diagnosis.diagnosisCodeableConcept.coding.code', '0..* / 1..1 / 0..* / 0..1', 'DiagnosisCode', ['ExplanationOfBenefit.diagnosis', 'ExplanationOfBenefit.diagnosis.diagnosisCodeableConcept.coding']),
+          field('Item product code', '$.item[0].productOrService.coding[0].code', 'ExplanationOfBenefit.item.productOrService.coding.code', '0..* / 1..1 / 0..* / 0..1', 'ProductOrServiceCode', ['ExplanationOfBenefit.item', 'ExplanationOfBenefit.item.productOrService.coding']),
+          field('Adjudication amount', '$.item[0].adjudication[0].amount.value', 'ExplanationOfBenefit.item.adjudication.amount.value', '0..* / 0..* / 0..1 / 0..1', 'AdjudicationAmount', ['ExplanationOfBenefit.item', 'ExplanationOfBenefit.item.adjudication'])
+        ],
+        Account: [
+          ...baseFields('Account', 'AccountId'),
+          field('Status', '$.status', 'Account.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Account.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['Account.type.coding']),
+          field('Subject reference', '$.subject[0].reference', 'Account.subject.reference', '0..* / 0..1', 'SubjectReference', ['Account.subject']),
+          field('Service period start', '$.servicePeriod.start', 'Account.servicePeriod.start', '0..1 / 0..1', 'ServiceStart'),
+          field('Guarantor party', '$.guarantor[0].party.reference', 'Account.guarantor.party.reference', '0..* / 1..1 / 0..1', 'GuarantorReference', ['Account.guarantor'])
+        ],
+        Consent: [
+          ...baseFields('Consent', 'ConsentId'),
+          field('Status', '$.status', 'Consent.status', '1..1', 'Status'),
+          field('Scope code', '$.scope.coding[0].code', 'Consent.scope.coding.code', '1..1 / 0..* / 0..1', 'ScopeCode', ['Consent.scope.coding']),
+          field('Category code', '$.category[0].coding[0].code', 'Consent.category.coding.code', '1..* / 0..* / 0..1', 'CategoryCode', ['Consent.category', 'Consent.category.coding']),
+          field('Patient reference', '$.patient.reference', 'Consent.patient.reference', '0..1 / 0..1', 'PatientReference'),
+          field('Performer reference', '$.performer[0].reference', 'Consent.performer.reference', '0..* / 0..1', 'PerformerReference', ['Consent.performer']),
+          field('Provision actor reference', '$.provision.actor[0].reference.reference', 'Consent.provision.actor.reference.reference', '0..1 / 0..* / 1..1 / 0..1', 'ProvisionActorReference', ['Consent.provision.actor'])
+        ],
+        Provenance: [
+          ...baseFields('Provenance', 'ProvenanceId'),
+          field('Target reference', '$.target[0].reference', 'Provenance.target.reference', '1..* / 0..1', 'TargetReference', ['Provenance.target']),
+          field('Recorded', '$.recorded', 'Provenance.recorded', '1..1', 'RecordedUtc'),
+          field('Agent type code', '$.agent[0].type.coding[0].code', 'Provenance.agent.type.coding.code', '1..* / 0..1 / 0..* / 0..1', 'AgentTypeCode', ['Provenance.agent', 'Provenance.agent.type.coding']),
+          field('Agent who reference', '$.agent[0].who.reference', 'Provenance.agent.who.reference', '1..* / 1..1 / 0..1', 'AgentWhoReference', ['Provenance.agent']),
+          field('Entity role', '$.entity[0].role', 'Provenance.entity.role', '0..* / 1..1', 'EntityRole', ['Provenance.entity']),
+          field('Signature type code', '$.signature[0].type[0].code', 'Provenance.signature.type.code', '0..* / 1..* / 0..1', 'SignatureTypeCode', ['Provenance.signature', 'Provenance.signature.type'])
+        ],
+        AuditEvent: [
+          ...baseFields('AuditEvent', 'AuditEventId'),
+          field('Type code', '$.type.code', 'AuditEvent.type.code', '1..1 / 0..1', 'AuditTypeCode'),
+          field('Subtype code', '$.subtype[0].code', 'AuditEvent.subtype.code', '0..* / 0..1', 'SubtypeCode', ['AuditEvent.subtype']),
+          field('Action', '$.action', 'AuditEvent.action', '0..1', 'Action'),
+          field('Agent who reference', '$.agent[0].who.reference', 'AuditEvent.agent.who.reference', '1..* / 0..1 / 0..1', 'AgentWhoReference', ['AuditEvent.agent']),
+          field('Agent network address', '$.agent[0].network.address', 'AuditEvent.agent.network.address', '1..* / 0..1 / 0..1', 'NetworkAddress', ['AuditEvent.agent']),
+          field('Source observer', '$.source.observer.reference', 'AuditEvent.source.observer.reference', '1..1 / 1..1 / 0..1', 'ObserverReference'),
+          field('Entity what reference', '$.entity[0].what.reference', 'AuditEvent.entity.what.reference', '0..* / 0..1 / 0..1', 'EntityReference', ['AuditEvent.entity']),
+          field('Entity detail value string', '$.entity[0].detail[0].valueString', 'AuditEvent.entity.detail.valueString', '0..* / 0..* / 1..1', 'EntityDetailValue', ['AuditEvent.entity', 'AuditEvent.entity.detail'])
+        ],
+        Device: [
+          ...baseFields('Device', 'DeviceId'),
+          field('Status', '$.status', 'Device.status', '0..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Device.type.coding.code', '0..1 / 0..* / 0..1', 'DeviceTypeCode', ['Device.type.coding']),
+          field('Patient reference', '$.patient.reference', 'Device.patient.reference', '0..1 / 0..1', 'PatientReference'),
+          field('Device name', '$.deviceName[0].name', 'Device.deviceName.name', '0..* / 1..1', 'DeviceName', ['Device.deviceName']),
+          field('Version value', '$.version[0].value', 'Device.version.value', '0..* / 0..1', 'VersionValue', ['Device.version'])
+        ],
+        Specimen: [
+          ...baseFields('Specimen', 'SpecimenId'),
+          field('Status', '$.status', 'Specimen.status', '0..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Specimen.type.coding.code', '0..1 / 0..* / 0..1', 'SpecimenTypeCode', ['Specimen.type.coding']),
+          field('Subject reference', '$.subject.reference', 'Specimen.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Collection collector', '$.collection.collector.reference', 'Specimen.collection.collector.reference', '0..1 / 0..1 / 0..1', 'CollectorReference'),
+          field('Container type code', '$.container[0].type.coding[0].code', 'Specimen.container.type.coding.code', '0..* / 0..1 / 0..* / 0..1', 'ContainerTypeCode', ['Specimen.container', 'Specimen.container.type.coding'])
+        ],
+        ImagingStudy: [
+          ...baseFields('ImagingStudy', 'ImagingStudyId'),
+          field('Status', '$.status', 'ImagingStudy.status', '1..1', 'Status'),
+          field('Subject reference', '$.subject.reference', 'ImagingStudy.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Encounter reference', '$.encounter.reference', 'ImagingStudy.encounter.reference', '0..1 / 0..1', 'EncounterReference'),
+          field('Modality code', '$.modality[0].code', 'ImagingStudy.modality.code', '0..* / 0..1', 'ModalityCode', ['ImagingStudy.modality']),
+          field('Series uid', '$.series[0].uid', 'ImagingStudy.series.uid', '0..* / 1..1', 'SeriesUid', ['ImagingStudy.series']),
+          field('Series instance sop class', '$.series[0].instance[0].sopClass.code', 'ImagingStudy.series.instance.sopClass.code', '0..* / 0..* / 1..1 / 0..1', 'SopClassCode', ['ImagingStudy.series', 'ImagingStudy.series.instance'])
+        ],
+        QuestionnaireResponse: [
+          ...baseFields('QuestionnaireResponse', 'QuestionnaireResponseId'),
+          field('Status', '$.status', 'QuestionnaireResponse.status', '1..1', 'Status'),
+          field('Subject reference', '$.subject.reference', 'QuestionnaireResponse.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Author reference', '$.author.reference', 'QuestionnaireResponse.author.reference', '0..1 / 0..1', 'AuthorReference'),
+          field('Item link id', '$.item[0].linkId', 'QuestionnaireResponse.item.linkId', '0..* / 1..1', 'ItemLinkId', ['QuestionnaireResponse.item']),
+          field('Item answer value string', '$.item[0].answer[0].valueString', 'QuestionnaireResponse.item.answer.valueString', '0..* / 0..* / 0..1', 'AnswerValueString', ['QuestionnaireResponse.item', 'QuestionnaireResponse.item.answer']),
+          field('Nested item answer', '$.item[0].item[0].answer[0].valueCoding.code', 'QuestionnaireResponse.item.item.answer.valueCoding.code', '0..* / 0..* / 0..* / 0..1 / 0..1', 'NestedAnswerCode', ['QuestionnaireResponse.item', 'QuestionnaireResponse.item.item', 'QuestionnaireResponse.item.item.answer'])
+        ],
+        FamilyMemberHistory: [
+          ...baseFields('FamilyMemberHistory', 'FamilyMemberHistoryId'),
+          field('Status', '$.status', 'FamilyMemberHistory.status', '1..1', 'Status'),
+          field('Patient reference', '$.patient.reference', 'FamilyMemberHistory.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Relationship code', '$.relationship.coding[0].code', 'FamilyMemberHistory.relationship.coding.code', '1..1 / 0..* / 0..1', 'RelationshipCode', ['FamilyMemberHistory.relationship.coding']),
+          field('Condition code', '$.condition[0].code.coding[0].code', 'FamilyMemberHistory.condition.code.coding.code', '0..* / 1..1 / 0..* / 0..1', 'ConditionCode', ['FamilyMemberHistory.condition', 'FamilyMemberHistory.condition.code.coding']),
+          field('Condition outcome', '$.condition[0].outcome.coding[0].code', 'FamilyMemberHistory.condition.outcome.coding.code', '0..* / 0..1 / 0..* / 0..1', 'OutcomeCode', ['FamilyMemberHistory.condition', 'FamilyMemberHistory.condition.outcome.coding'])
+        ],
+        Task: [
+          ...baseFields('Task', 'TaskId'),
+          field('Status', '$.status', 'Task.status', '1..1', 'Status'),
+          field('Intent', '$.intent', 'Task.intent', '1..1', 'Intent'),
+          field('Code', '$.code.coding[0].code', 'Task.code.coding.code', '0..1 / 0..* / 0..1', 'TaskCode', ['Task.code.coding']),
+          field('Focus reference', '$.focus.reference', 'Task.focus.reference', '0..1 / 0..1', 'FocusReference'),
+          field('For reference', '$.for.reference', 'Task.for.reference', '0..1 / 0..1', 'ForReference'),
+          field('Owner reference', '$.owner.reference', 'Task.owner.reference', '0..1 / 0..1', 'OwnerReference'),
+          field('Input type code', '$.input[0].type.coding[0].code', 'Task.input.type.coding.code', '0..* / 1..1 / 0..* / 0..1', 'InputTypeCode', ['Task.input', 'Task.input.type.coding']),
+          field('Output type code', '$.output[0].type.coding[0].code', 'Task.output.type.coding.code', '0..* / 1..1 / 0..* / 0..1', 'OutputTypeCode', ['Task.output', 'Task.output.type.coding'])
+        ],
+        Communication: [
+          ...baseFields('Communication', 'CommunicationId'),
+          field('Status', '$.status', 'Communication.status', '1..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'Communication.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['Communication.category', 'Communication.category.coding']),
+          field('Subject reference', '$.subject.reference', 'Communication.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Sender reference', '$.sender.reference', 'Communication.sender.reference', '0..1 / 0..1', 'SenderReference'),
+          field('Recipient reference', '$.recipient[0].reference', 'Communication.recipient.reference', '0..* / 0..1', 'RecipientReference', ['Communication.recipient']),
+          field('Payload content string', '$.payload[0].contentString', 'Communication.payload.contentString', '0..* / 1..1', 'PayloadContentString', ['Communication.payload'])
+        ],
+
+        // ===== Foundation / infrastructure =====
+        Bundle: [
+          ...baseFields('Bundle', 'BundleId'),
+          field('Type', '$.type', 'Bundle.type', '1..1', 'BundleType'),
+          field('Entry resource type', '$.entry[0].resource.resourceType', 'Bundle.entry.resource.resourceType', '0..* / 0..1 / 1..1', 'EntryResourceType', ['Bundle.entry']),
+          field('Entry full url', '$.entry[0].fullUrl', 'Bundle.entry.fullUrl', '0..* / 0..1', 'EntryFullUrl', ['Bundle.entry']),
+          field('Entry request method', '$.entry[0].request.method', 'Bundle.entry.request.method', '0..* / 0..1 / 1..1', 'EntryRequestMethod', ['Bundle.entry']),
+          field('Entry response status', '$.entry[0].response.status', 'Bundle.entry.response.status', '0..* / 0..1 / 1..1', 'EntryResponseStatus', ['Bundle.entry']),
+          field('Entry search mode', '$.entry[0].search.mode', 'Bundle.entry.search.mode', '0..* / 0..1 / 0..1', 'EntrySearchMode', ['Bundle.entry']),
+          field('Link relation', '$.link[0].relation', 'Bundle.link.relation', '0..* / 1..1', 'LinkRelation', ['Bundle.link'])
+        ],
+        MessageHeader: [
+          ...baseFields('MessageHeader', 'MessageHeaderId'),
+          field('Event coding code', '$.eventCoding.code', 'MessageHeader.eventCoding.code', '1..1 / 0..1', 'EventCode'),
+          field('Source endpoint', '$.source.endpoint', 'MessageHeader.source.endpoint', '1..1 / 1..1', 'SourceEndpoint'),
+          field('Destination endpoint', '$.destination[0].endpoint', 'MessageHeader.destination.endpoint', '0..* / 1..1', 'DestinationEndpoint', ['MessageHeader.destination']),
+          field('Focus reference', '$.focus[0].reference', 'MessageHeader.focus.reference', '0..* / 0..1', 'FocusReference', ['MessageHeader.focus']),
+          field('Response code', '$.response.code', 'MessageHeader.response.code', '0..1 / 1..1', 'ResponseCode')
+        ],
+        OperationOutcome: [
+          ...baseFields('OperationOutcome', 'OperationOutcomeId'),
+          field('Issue severity', '$.issue[0].severity', 'OperationOutcome.issue.severity', '1..* / 1..1', 'IssueSeverity', ['OperationOutcome.issue']),
+          field('Issue code', '$.issue[0].code', 'OperationOutcome.issue.code', '1..* / 1..1', 'IssueCode', ['OperationOutcome.issue']),
+          field('Issue details code', '$.issue[0].details.coding[0].code', 'OperationOutcome.issue.details.coding.code', '1..* / 0..1 / 0..* / 0..1', 'IssueDetailsCode', ['OperationOutcome.issue', 'OperationOutcome.issue.details.coding']),
+          field('Issue expression', '$.issue[0].expression[0]', 'OperationOutcome.issue.expression', '1..* / 0..*', 'IssueExpression', ['OperationOutcome.issue', 'OperationOutcome.issue.expression'])
+        ],
+        Parameters: [
+          ...baseFields('Parameters', 'ParametersId'),
+          field('Parameter name', '$.parameter[0].name', 'Parameters.parameter.name', '0..* / 1..1', 'ParameterName', ['Parameters.parameter']),
+          field('Parameter value string', '$.parameter[0].valueString', 'Parameters.parameter.valueString', '0..* / 0..1', 'ParameterValueString', ['Parameters.parameter']),
+          field('Nested part name', '$.parameter[0].part[0].name', 'Parameters.parameter.part.name', '0..* / 0..* / 1..1', 'PartName', ['Parameters.parameter', 'Parameters.parameter.part']),
+          field('Nested part value', '$.parameter[0].part[0].valueString', 'Parameters.parameter.part.valueString', '0..* / 0..* / 0..1', 'PartValueString', ['Parameters.parameter', 'Parameters.parameter.part'])
+        ],
+        Subscription: [
+          ...baseFields('Subscription', 'SubscriptionId'),
+          field('Status', '$.status', 'Subscription.status', '1..1', 'Status'),
+          field('Reason', '$.reason', 'Subscription.reason', '1..1', 'Reason'),
+          field('Criteria', '$.criteria', 'Subscription.criteria', '1..1', 'Criteria'),
+          field('Channel type', '$.channel.type', 'Subscription.channel.type', '1..1 / 1..1', 'ChannelType'),
+          field('Channel endpoint', '$.channel.endpoint', 'Subscription.channel.endpoint', '1..1 / 0..1', 'ChannelEndpoint'),
+          field('Channel header', '$.channel.header[0]', 'Subscription.channel.header', '1..1 / 0..*', 'ChannelHeader', ['Subscription.channel.header'])
+        ],
+        Binary: [
+          ...baseFields('Binary', 'BinaryId'),
+          field('Content type', '$.contentType', 'Binary.contentType', '1..1', 'ContentType'),
+          field('Security context', '$.securityContext.reference', 'Binary.securityContext.reference', '0..1 / 0..1', 'SecurityContextReference')
+        ],
+        Basic: [
+          ...baseFields('Basic', 'BasicId'),
+          field('Code', '$.code.coding[0].code', 'Basic.code.coding.code', '1..1 / 0..* / 0..1', 'Code', ['Basic.code.coding']),
+          field('Subject reference', '$.subject.reference', 'Basic.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Author reference', '$.author.reference', 'Basic.author.reference', '0..1 / 0..1', 'AuthorReference')
+        ],
+        Linkage: [
+          ...baseFields('Linkage', 'LinkageId'),
+          field('Active', '$.active', 'Linkage.active', '0..1', 'IsActive'),
+          field('Item type', '$.item[0].type', 'Linkage.item.type', '1..* / 1..1', 'ItemType', ['Linkage.item']),
+          field('Item resource reference', '$.item[0].resource.reference', 'Linkage.item.resource.reference', '1..* / 1..1 / 0..1', 'ItemResourceReference', ['Linkage.item'])
+        ],
+
+        // ===== Terminology / conformance =====
+        ValueSet: [
+          ...baseFields('ValueSet', 'ValueSetId'),
+          field('Status', '$.status', 'ValueSet.status', '1..1', 'Status'),
+          field('Url', '$.url', 'ValueSet.url', '0..1', 'Url'),
+          field('Include system', '$.compose.include[0].system', 'ValueSet.compose.include.system', '0..1 / 1..* / 0..1', 'IncludeSystem', ['ValueSet.compose.include']),
+          field('Include concept code', '$.compose.include[0].concept[0].code', 'ValueSet.compose.include.concept.code', '0..1 / 1..* / 0..* / 1..1', 'IncludeConceptCode', ['ValueSet.compose.include', 'ValueSet.compose.include.concept']),
+          field('Include filter value', '$.compose.include[0].filter[0].value', 'ValueSet.compose.include.filter.value', '0..1 / 1..* / 0..* / 1..1', 'IncludeFilterValue', ['ValueSet.compose.include', 'ValueSet.compose.include.filter']),
+          field('Expansion contains code', '$.expansion.contains[0].code', 'ValueSet.expansion.contains.code', '0..1 / 0..* / 0..1', 'ExpansionCode', ['ValueSet.expansion.contains']),
+          field('Expansion nested contains code', '$.expansion.contains[0].contains[0].code', 'ValueSet.expansion.contains.contains.code', '0..1 / 0..* / 0..* / 0..1', 'ExpansionNestedCode', ['ValueSet.expansion.contains', 'ValueSet.expansion.contains.contains'])
+        ],
+        CodeSystem: [
+          ...baseFields('CodeSystem', 'CodeSystemId'),
+          field('Status', '$.status', 'CodeSystem.status', '1..1', 'Status'),
+          field('Url', '$.url', 'CodeSystem.url', '0..1', 'Url'),
+          field('Content', '$.content', 'CodeSystem.content', '1..1', 'Content'),
+          field('Concept code', '$.concept[0].code', 'CodeSystem.concept.code', '0..* / 1..1', 'ConceptCode', ['CodeSystem.concept']),
+          field('Concept designation value', '$.concept[0].designation[0].value', 'CodeSystem.concept.designation.value', '0..* / 0..* / 1..1', 'DesignationValue', ['CodeSystem.concept', 'CodeSystem.concept.designation']),
+          field('Nested concept code', '$.concept[0].concept[0].code', 'CodeSystem.concept.concept.code', '0..* / 0..* / 1..1', 'NestedConceptCode', ['CodeSystem.concept', 'CodeSystem.concept.concept']),
+          field('Concept property code', '$.concept[0].property[0].code', 'CodeSystem.concept.property.code', '0..* / 0..* / 1..1', 'ConceptPropertyCode', ['CodeSystem.concept', 'CodeSystem.concept.property'])
+        ],
+        ConceptMap: [
+          ...baseFields('ConceptMap', 'ConceptMapId'),
+          field('Status', '$.status', 'ConceptMap.status', '1..1', 'Status'),
+          field('Group source', '$.group[0].source', 'ConceptMap.group.source', '0..* / 0..1', 'GroupSource', ['ConceptMap.group']),
+          field('Element code', '$.group[0].element[0].code', 'ConceptMap.group.element.code', '0..* / 0..* / 0..1', 'ElementCode', ['ConceptMap.group', 'ConceptMap.group.element']),
+          field('Target code', '$.group[0].element[0].target[0].code', 'ConceptMap.group.element.target.code', '0..* / 0..* / 0..* / 0..1', 'TargetCode', ['ConceptMap.group', 'ConceptMap.group.element', 'ConceptMap.group.element.target']),
+          field('Target dependsOn value', '$.group[0].element[0].target[0].dependsOn[0].value', 'ConceptMap.group.element.target.dependsOn.value', '0..* / 0..* / 0..* / 0..* / 1..1', 'DependsOnValue', ['ConceptMap.group', 'ConceptMap.group.element', 'ConceptMap.group.element.target', 'ConceptMap.group.element.target.dependsOn'])
+        ],
+        StructureDefinition: [
+          ...baseFields('StructureDefinition', 'StructureDefinitionId'),
+          field('Status', '$.status', 'StructureDefinition.status', '1..1', 'Status'),
+          field('Kind', '$.kind', 'StructureDefinition.kind', '1..1', 'Kind'),
+          field('Type', '$.type', 'StructureDefinition.type', '1..1', 'Type'),
+          field('Snapshot element path', '$.snapshot.element[0].path', 'StructureDefinition.snapshot.element.path', '0..1 / 1..* / 1..1', 'SnapshotElementPath', ['StructureDefinition.snapshot.element']),
+          field('Snapshot element type code', '$.snapshot.element[0].type[0].code', 'StructureDefinition.snapshot.element.type.code', '0..1 / 1..* / 0..* / 1..1', 'SnapshotElementTypeCode', ['StructureDefinition.snapshot.element', 'StructureDefinition.snapshot.element.type']),
+          field('Differential element path', '$.differential.element[0].path', 'StructureDefinition.differential.element.path', '0..1 / 1..* / 1..1', 'DifferentialElementPath', ['StructureDefinition.differential.element'])
+        ],
+        CapabilityStatement: [
+          ...baseFields('CapabilityStatement', 'CapabilityStatementId'),
+          field('Status', '$.status', 'CapabilityStatement.status', '1..1', 'Status'),
+          field('Kind', '$.kind', 'CapabilityStatement.kind', '1..1', 'Kind'),
+          field('FHIR version', '$.fhirVersion', 'CapabilityStatement.fhirVersion', '1..1', 'FhirVersion'),
+          field('Rest mode', '$.rest[0].mode', 'CapabilityStatement.rest.mode', '0..* / 1..1', 'RestMode', ['CapabilityStatement.rest']),
+          field('Rest resource type', '$.rest[0].resource[0].type', 'CapabilityStatement.rest.resource.type', '0..* / 0..* / 1..1', 'RestResourceType', ['CapabilityStatement.rest', 'CapabilityStatement.rest.resource']),
+          field('Rest resource interaction', '$.rest[0].resource[0].interaction[0].code', 'CapabilityStatement.rest.resource.interaction.code', '0..* / 0..* / 0..* / 1..1', 'RestInteractionCode', ['CapabilityStatement.rest', 'CapabilityStatement.rest.resource', 'CapabilityStatement.rest.resource.interaction'])
+        ],
+        Questionnaire: [
+          ...baseFields('Questionnaire', 'QuestionnaireId'),
+          field('Status', '$.status', 'Questionnaire.status', '1..1', 'Status'),
+          field('Url', '$.url', 'Questionnaire.url', '0..1', 'Url'),
+          field('Item link id', '$.item[0].linkId', 'Questionnaire.item.linkId', '0..* / 1..1', 'ItemLinkId', ['Questionnaire.item']),
+          field('Item type', '$.item[0].type', 'Questionnaire.item.type', '0..* / 1..1', 'ItemType', ['Questionnaire.item']),
+          field('Nested item link id', '$.item[0].item[0].linkId', 'Questionnaire.item.item.linkId', '0..* / 0..* / 1..1', 'NestedItemLinkId', ['Questionnaire.item', 'Questionnaire.item.item']),
+          field('Item answer option code', '$.item[0].answerOption[0].valueCoding.code', 'Questionnaire.item.answerOption.valueCoding.code', '0..* / 0..* / 0..1 / 0..1', 'AnswerOptionCode', ['Questionnaire.item', 'Questionnaire.item.answerOption']),
+          field('Item enableWhen question', '$.item[0].enableWhen[0].question', 'Questionnaire.item.enableWhen.question', '0..* / 0..* / 1..1', 'EnableWhenQuestion', ['Questionnaire.item', 'Questionnaire.item.enableWhen'])
+        ],
+
+        // ===== Clinical (additional) =====
+        EpisodeOfCare: [
+          ...baseFields('EpisodeOfCare', 'EpisodeOfCareId'),
+          field('Status', '$.status', 'EpisodeOfCare.status', '1..1', 'Status'),
+          field('Status history status', '$.statusHistory[0].status', 'EpisodeOfCare.statusHistory.status', '0..* / 1..1', 'StatusHistoryStatus', ['EpisodeOfCare.statusHistory']),
+          field('Type code', '$.type[0].coding[0].code', 'EpisodeOfCare.type.coding.code', '0..* / 0..* / 0..1', 'TypeCode', ['EpisodeOfCare.type', 'EpisodeOfCare.type.coding']),
+          field('Diagnosis condition', '$.diagnosis[0].condition.reference', 'EpisodeOfCare.diagnosis.condition.reference', '0..* / 1..1 / 0..1', 'DiagnosisConditionReference', ['EpisodeOfCare.diagnosis']),
+          field('Patient reference', '$.patient.reference', 'EpisodeOfCare.patient.reference', '1..1 / 0..1', 'PatientReference')
+        ],
+        ClinicalImpression: [
+          ...baseFields('ClinicalImpression', 'ClinicalImpressionId'),
+          field('Status', '$.status', 'ClinicalImpression.status', '1..1', 'Status'),
+          field('Subject reference', '$.subject.reference', 'ClinicalImpression.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Investigation item', '$.investigation[0].item[0].reference', 'ClinicalImpression.investigation.item.reference', '0..* / 0..* / 0..1', 'InvestigationItemReference', ['ClinicalImpression.investigation', 'ClinicalImpression.investigation.item']),
+          field('Finding code', '$.finding[0].itemCodeableConcept.coding[0].code', 'ClinicalImpression.finding.itemCodeableConcept.coding.code', '0..* / 0..1 / 0..* / 0..1', 'FindingCode', ['ClinicalImpression.finding', 'ClinicalImpression.finding.itemCodeableConcept.coding'])
+        ],
+        RiskAssessment: [
+          ...baseFields('RiskAssessment', 'RiskAssessmentId'),
+          field('Status', '$.status', 'RiskAssessment.status', '1..1', 'Status'),
+          field('Code', '$.code.coding[0].code', 'RiskAssessment.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['RiskAssessment.code.coding']),
+          field('Subject reference', '$.subject.reference', 'RiskAssessment.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Prediction outcome code', '$.prediction[0].outcome.coding[0].code', 'RiskAssessment.prediction.outcome.coding.code', '0..* / 0..1 / 0..* / 0..1', 'PredictionOutcomeCode', ['RiskAssessment.prediction', 'RiskAssessment.prediction.outcome.coding']),
+          field('Prediction probability', '$.prediction[0].probabilityDecimal', 'RiskAssessment.prediction.probabilityDecimal', '0..* / 0..1', 'PredictionProbability', ['RiskAssessment.prediction'])
+        ],
+        DetectedIssue: [
+          ...baseFields('DetectedIssue', 'DetectedIssueId'),
+          field('Status', '$.status', 'DetectedIssue.status', '1..1', 'Status'),
+          field('Code', '$.code.coding[0].code', 'DetectedIssue.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['DetectedIssue.code.coding']),
+          field('Mitigation action code', '$.mitigation[0].action.coding[0].code', 'DetectedIssue.mitigation.action.coding.code', '0..* / 1..1 / 0..* / 0..1', 'MitigationActionCode', ['DetectedIssue.mitigation', 'DetectedIssue.mitigation.action.coding']),
+          field('Evidence code', '$.evidence[0].code[0].coding[0].code', 'DetectedIssue.evidence.code.coding.code', '0..* / 0..* / 0..* / 0..1', 'EvidenceCode', ['DetectedIssue.evidence', 'DetectedIssue.evidence.code', 'DetectedIssue.evidence.code.coding'])
+        ],
+        AdverseEvent: [
+          ...baseFields('AdverseEvent', 'AdverseEventId'),
+          field('Actuality', '$.actuality', 'AdverseEvent.actuality', '1..1', 'Actuality'),
+          field('Category code', '$.category[0].coding[0].code', 'AdverseEvent.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['AdverseEvent.category', 'AdverseEvent.category.coding']),
+          field('Event code', '$.event.coding[0].code', 'AdverseEvent.event.coding.code', '0..1 / 0..* / 0..1', 'EventCode', ['AdverseEvent.event.coding']),
+          field('Suspect entity instance', '$.suspectEntity[0].instance.reference', 'AdverseEvent.suspectEntity.instance.reference', '0..* / 1..1 / 0..1', 'SuspectInstanceReference', ['AdverseEvent.suspectEntity']),
+          field('Suspect causality assessment', '$.suspectEntity[0].causality[0].assessment.coding[0].code', 'AdverseEvent.suspectEntity.causality.assessment.coding.code', '0..* / 0..* / 0..1 / 0..* / 0..1', 'CausalityAssessmentCode', ['AdverseEvent.suspectEntity', 'AdverseEvent.suspectEntity.causality', 'AdverseEvent.suspectEntity.causality.assessment.coding'])
+        ],
+        Flag: [
+          ...baseFields('Flag', 'FlagId'),
+          field('Status', '$.status', 'Flag.status', '1..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'Flag.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['Flag.category', 'Flag.category.coding']),
+          field('Code', '$.code.coding[0].code', 'Flag.code.coding.code', '1..1 / 0..* / 0..1', 'Code', ['Flag.code.coding']),
+          field('Subject reference', '$.subject.reference', 'Flag.subject.reference', '1..1 / 0..1', 'SubjectReference')
+        ],
+        List: [
+          ...baseFields('List', 'ListId'),
+          field('Status', '$.status', 'List.status', '1..1', 'Status'),
+          field('Mode', '$.mode', 'List.mode', '1..1', 'Mode'),
+          field('Code', '$.code.coding[0].code', 'List.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['List.code.coding']),
+          field('Entry item reference', '$.entry[0].item.reference', 'List.entry.item.reference', '0..* / 1..1 / 0..1', 'EntryItemReference', ['List.entry']),
+          field('Entry flag code', '$.entry[0].flag.coding[0].code', 'List.entry.flag.coding.code', '0..* / 0..1 / 0..* / 0..1', 'EntryFlagCode', ['List.entry', 'List.entry.flag.coding'])
+        ],
+        Media: [
+          ...baseFields('Media', 'MediaId'),
+          field('Status', '$.status', 'Media.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Media.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['Media.type.coding']),
+          field('Subject reference', '$.subject.reference', 'Media.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Content url', '$.content.url', 'Media.content.url', '1..1 / 0..1', 'ContentUrl')
+        ],
+        BodyStructure: [
+          ...baseFields('BodyStructure', 'BodyStructureId'),
+          field('Morphology code', '$.morphology.coding[0].code', 'BodyStructure.morphology.coding.code', '0..1 / 0..* / 0..1', 'MorphologyCode', ['BodyStructure.morphology.coding']),
+          field('Location code', '$.location.coding[0].code', 'BodyStructure.location.coding.code', '0..1 / 0..* / 0..1', 'LocationCode', ['BodyStructure.location.coding']),
+          field('Location qualifier code', '$.locationQualifier[0].coding[0].code', 'BodyStructure.locationQualifier.coding.code', '0..* / 0..* / 0..1', 'LocationQualifierCode', ['BodyStructure.locationQualifier', 'BodyStructure.locationQualifier.coding']),
+          field('Patient reference', '$.patient.reference', 'BodyStructure.patient.reference', '1..1 / 0..1', 'PatientReference')
+        ],
+        NutritionOrder: [
+          ...baseFields('NutritionOrder', 'NutritionOrderId'),
+          field('Status', '$.status', 'NutritionOrder.status', '1..1', 'Status'),
+          field('Patient reference', '$.patient.reference', 'NutritionOrder.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Oral diet type code', '$.oralDiet.type[0].coding[0].code', 'NutritionOrder.oralDiet.type.coding.code', '0..1 / 0..* / 0..* / 0..1', 'OralDietTypeCode', ['NutritionOrder.oralDiet.type', 'NutritionOrder.oralDiet.type.coding']),
+          field('Oral diet nutrient modifier', '$.oralDiet.nutrient[0].modifier.coding[0].code', 'NutritionOrder.oralDiet.nutrient.modifier.coding.code', '0..1 / 0..* / 0..1 / 0..* / 0..1', 'NutrientModifierCode', ['NutritionOrder.oralDiet.nutrient', 'NutritionOrder.oralDiet.nutrient.modifier.coding']),
+          field('Supplement type code', '$.supplement[0].type.coding[0].code', 'NutritionOrder.supplement.type.coding.code', '0..* / 0..1 / 0..* / 0..1', 'SupplementTypeCode', ['NutritionOrder.supplement', 'NutritionOrder.supplement.type.coding'])
+        ],
+        VisionPrescription: [
+          ...baseFields('VisionPrescription', 'VisionPrescriptionId'),
+          field('Status', '$.status', 'VisionPrescription.status', '1..1', 'Status'),
+          field('Patient reference', '$.patient.reference', 'VisionPrescription.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Lens product code', '$.lensSpecification[0].product.coding[0].code', 'VisionPrescription.lensSpecification.product.coding.code', '1..* / 1..1 / 0..* / 0..1', 'LensProductCode', ['VisionPrescription.lensSpecification', 'VisionPrescription.lensSpecification.product.coding']),
+          field('Lens eye', '$.lensSpecification[0].eye', 'VisionPrescription.lensSpecification.eye', '1..* / 1..1', 'LensEye', ['VisionPrescription.lensSpecification']),
+          field('Lens prism amount', '$.lensSpecification[0].prism[0].amount', 'VisionPrescription.lensSpecification.prism.amount', '1..* / 0..* / 1..1', 'LensPrismAmount', ['VisionPrescription.lensSpecification', 'VisionPrescription.lensSpecification.prism'])
+        ],
+        ImmunizationRecommendation: [
+          ...baseFields('ImmunizationRecommendation', 'ImmunizationRecommendationId'),
+          field('Patient reference', '$.patient.reference', 'ImmunizationRecommendation.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Recommendation vaccine code', '$.recommendation[0].vaccineCode[0].coding[0].code', 'ImmunizationRecommendation.recommendation.vaccineCode.coding.code', '1..* / 0..* / 0..* / 0..1', 'VaccineCode', ['ImmunizationRecommendation.recommendation', 'ImmunizationRecommendation.recommendation.vaccineCode', 'ImmunizationRecommendation.recommendation.vaccineCode.coding']),
+          field('Recommendation forecast status', '$.recommendation[0].forecastStatus.coding[0].code', 'ImmunizationRecommendation.recommendation.forecastStatus.coding.code', '1..* / 1..1 / 0..* / 0..1', 'ForecastStatusCode', ['ImmunizationRecommendation.recommendation', 'ImmunizationRecommendation.recommendation.forecastStatus.coding']),
+          field('Recommendation date criterion code', '$.recommendation[0].dateCriterion[0].code.coding[0].code', 'ImmunizationRecommendation.recommendation.dateCriterion.code.coding.code', '1..* / 0..* / 1..1 / 0..* / 0..1', 'DateCriterionCode', ['ImmunizationRecommendation.recommendation', 'ImmunizationRecommendation.recommendation.dateCriterion', 'ImmunizationRecommendation.recommendation.dateCriterion.code.coding'])
+        ],
+        ImmunizationEvaluation: [
+          ...baseFields('ImmunizationEvaluation', 'ImmunizationEvaluationId'),
+          field('Status', '$.status', 'ImmunizationEvaluation.status', '1..1', 'Status'),
+          field('Patient reference', '$.patient.reference', 'ImmunizationEvaluation.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Target disease code', '$.targetDisease.coding[0].code', 'ImmunizationEvaluation.targetDisease.coding.code', '1..1 / 0..* / 0..1', 'TargetDiseaseCode', ['ImmunizationEvaluation.targetDisease.coding']),
+          field('Dose status code', '$.doseStatus.coding[0].code', 'ImmunizationEvaluation.doseStatus.coding.code', '1..1 / 0..* / 0..1', 'DoseStatusCode', ['ImmunizationEvaluation.doseStatus.coding'])
+        ],
+
+        // ===== Medication (additional) =====
+        MedicationDispense: [
+          ...baseFields('MedicationDispense', 'MedicationDispenseId'),
+          field('Status', '$.status', 'MedicationDispense.status', '1..1', 'Status'),
+          field('Medication code', '$.medicationCodeableConcept.coding[0].code', 'MedicationDispense.medicationCodeableConcept.coding.code', '0..1 / 0..* / 0..1', 'MedicationCode', ['MedicationDispense.medicationCodeableConcept.coding']),
+          field('Subject reference', '$.subject.reference', 'MedicationDispense.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Performer actor', '$.performer[0].actor.reference', 'MedicationDispense.performer.actor.reference', '0..* / 1..1 / 0..1', 'PerformerActorReference', ['MedicationDispense.performer']),
+          field('Dosage route code', '$.dosageInstruction[0].route.coding[0].code', 'MedicationDispense.dosageInstruction.route.coding.code', '0..* / 0..1 / 0..* / 0..1', 'DosageRouteCode', ['MedicationDispense.dosageInstruction', 'MedicationDispense.dosageInstruction.route.coding']),
+          field('Dose value', '$.dosageInstruction[0].doseAndRate[0].doseQuantity.value', 'MedicationDispense.dosageInstruction.doseAndRate.doseQuantity.value', '0..* / 0..* / 0..1 / 0..1', 'DoseValue', ['MedicationDispense.dosageInstruction', 'MedicationDispense.dosageInstruction.doseAndRate'])
+        ],
+        MedicationKnowledge: [
+          ...baseFields('MedicationKnowledge', 'MedicationKnowledgeId'),
+          field('Status', '$.status', 'MedicationKnowledge.status', '0..1', 'Status'),
+          field('Code', '$.code.coding[0].code', 'MedicationKnowledge.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['MedicationKnowledge.code.coding']),
+          field('Ingredient code', '$.ingredient[0].itemCodeableConcept.coding[0].code', 'MedicationKnowledge.ingredient.itemCodeableConcept.coding.code', '0..* / 0..1 / 0..* / 0..1', 'IngredientCode', ['MedicationKnowledge.ingredient', 'MedicationKnowledge.ingredient.itemCodeableConcept.coding']),
+          field('Cost amount', '$.cost[0].cost.value', 'MedicationKnowledge.cost.cost.value', '0..* / 1..1 / 0..1', 'CostAmount', ['MedicationKnowledge.cost'])
+        ],
+        Substance: [
+          ...baseFields('Substance', 'SubstanceId'),
+          field('Status', '$.status', 'Substance.status', '0..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'Substance.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['Substance.category', 'Substance.category.coding']),
+          field('Code', '$.code.coding[0].code', 'Substance.code.coding.code', '1..1 / 0..* / 0..1', 'Code', ['Substance.code.coding']),
+          field('Instance quantity', '$.instance[0].quantity.value', 'Substance.instance.quantity.value', '0..* / 0..1 / 0..1', 'InstanceQuantity', ['Substance.instance']),
+          field('Ingredient substance code', '$.ingredient[0].substanceCodeableConcept.coding[0].code', 'Substance.ingredient.substanceCodeableConcept.coding.code', '0..* / 0..1 / 0..* / 0..1', 'IngredientSubstanceCode', ['Substance.ingredient', 'Substance.ingredient.substanceCodeableConcept.coding'])
+        ],
+
+        // ===== Devices / participants / scheduling =====
+        DeviceRequest: [
+          ...baseFields('DeviceRequest', 'DeviceRequestId'),
+          field('Status', '$.status', 'DeviceRequest.status', '0..1', 'Status'),
+          field('Intent', '$.intent', 'DeviceRequest.intent', '1..1', 'Intent'),
+          field('Code', '$.codeCodeableConcept.coding[0].code', 'DeviceRequest.codeCodeableConcept.coding.code', '1..1 / 0..* / 0..1', 'Code', ['DeviceRequest.codeCodeableConcept.coding']),
+          field('Subject reference', '$.subject.reference', 'DeviceRequest.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Parameter code', '$.parameter[0].code.coding[0].code', 'DeviceRequest.parameter.code.coding.code', '0..* / 0..1 / 0..* / 0..1', 'ParameterCode', ['DeviceRequest.parameter', 'DeviceRequest.parameter.code.coding'])
+        ],
+        DeviceUseStatement: [
+          ...baseFields('DeviceUseStatement', 'DeviceUseStatementId'),
+          field('Status', '$.status', 'DeviceUseStatement.status', '1..1', 'Status'),
+          field('Subject reference', '$.subject.reference', 'DeviceUseStatement.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Device reference', '$.device.reference', 'DeviceUseStatement.device.reference', '1..1 / 0..1', 'DeviceReference'),
+          field('Body site code', '$.bodySite.coding[0].code', 'DeviceUseStatement.bodySite.coding.code', '0..1 / 0..* / 0..1', 'BodySiteCode', ['DeviceUseStatement.bodySite.coding'])
+        ],
+        DeviceMetric: [
+          ...baseFields('DeviceMetric', 'DeviceMetricId'),
+          field('Category', '$.category', 'DeviceMetric.category', '1..1', 'Category'),
+          field('Type code', '$.type.coding[0].code', 'DeviceMetric.type.coding.code', '1..1 / 0..* / 0..1', 'TypeCode', ['DeviceMetric.type.coding']),
+          field('Calibration type', '$.calibration[0].type', 'DeviceMetric.calibration.type', '0..* / 0..1', 'CalibrationType', ['DeviceMetric.calibration'])
+        ],
+        Group: [
+          ...baseFields('Group', 'GroupId'),
+          field('Type', '$.type', 'Group.type', '1..1', 'Type'),
+          field('Actual', '$.actual', 'Group.actual', '1..1', 'Actual'),
+          field('Code', '$.code.coding[0].code', 'Group.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['Group.code.coding']),
+          field('Member entity', '$.member[0].entity.reference', 'Group.member.entity.reference', '0..* / 1..1 / 0..1', 'MemberEntityReference', ['Group.member']),
+          field('Characteristic code', '$.characteristic[0].code.coding[0].code', 'Group.characteristic.code.coding.code', '0..* / 1..1 / 0..* / 0..1', 'CharacteristicCode', ['Group.characteristic', 'Group.characteristic.code.coding']),
+          field('Characteristic value code', '$.characteristic[0].valueCodeableConcept.coding[0].code', 'Group.characteristic.valueCodeableConcept.coding.code', '0..* / 0..1 / 0..* / 0..1', 'CharacteristicValueCode', ['Group.characteristic', 'Group.characteristic.valueCodeableConcept.coding'])
+        ],
+        Person: [
+          ...baseFields('Person', 'PersonId'),
+          field('Active', '$.active', 'Person.active', '0..1', 'IsActive'),
+          field('Name family', '$.name[0].family', 'Person.name.family', '0..* / 0..1', 'FamilyName', ['Person.name']),
+          field('Telecom value', '$.telecom[0].value', 'Person.telecom.value', '0..* / 0..1', 'TelecomValue', ['Person.telecom']),
+          field('Link target reference', '$.link[0].target.reference', 'Person.link.target.reference', '0..* / 1..1 / 0..1', 'LinkTargetReference', ['Person.link']),
+          field('Managing organization', '$.managingOrganization.reference', 'Person.managingOrganization.reference', '0..1 / 0..1', 'ManagingOrganizationReference')
+        ],
+        Endpoint: [
+          ...baseFields('Endpoint', 'EndpointId'),
+          field('Status', '$.status', 'Endpoint.status', '1..1', 'Status'),
+          field('Connection type code', '$.connectionType.code', 'Endpoint.connectionType.code', '1..1 / 0..1', 'ConnectionTypeCode'),
+          field('Payload type code', '$.payloadType[0].coding[0].code', 'Endpoint.payloadType.coding.code', '1..* / 0..* / 0..1', 'PayloadTypeCode', ['Endpoint.payloadType', 'Endpoint.payloadType.coding']),
+          field('Address', '$.address', 'Endpoint.address', '1..1', 'Address')
+        ],
+        HealthcareService: [
+          ...baseFields('HealthcareService', 'HealthcareServiceId'),
+          field('Active', '$.active', 'HealthcareService.active', '0..1', 'IsActive'),
+          field('Category code', '$.category[0].coding[0].code', 'HealthcareService.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['HealthcareService.category', 'HealthcareService.category.coding']),
+          field('Type code', '$.type[0].coding[0].code', 'HealthcareService.type.coding.code', '0..* / 0..* / 0..1', 'TypeCode', ['HealthcareService.type', 'HealthcareService.type.coding']),
+          field('Available day of week', '$.availableTime[0].daysOfWeek[0]', 'HealthcareService.availableTime.daysOfWeek', '0..* / 0..*', 'AvailableDayOfWeek', ['HealthcareService.availableTime', 'HealthcareService.availableTime.daysOfWeek']),
+          field('Available start time', '$.availableTime[0].availableStartTime', 'HealthcareService.availableTime.availableStartTime', '0..* / 0..1', 'AvailableStartTime', ['HealthcareService.availableTime'])
+        ],
+        AppointmentResponse: [
+          ...baseFields('AppointmentResponse', 'AppointmentResponseId'),
+          field('Appointment reference', '$.appointment.reference', 'AppointmentResponse.appointment.reference', '1..1 / 0..1', 'AppointmentReference'),
+          field('Participant status', '$.participantStatus', 'AppointmentResponse.participantStatus', '1..1', 'ParticipantStatus'),
+          field('Actor reference', '$.actor.reference', 'AppointmentResponse.actor.reference', '0..1 / 0..1', 'ActorReference'),
+          field('Participant type code', '$.participantType[0].coding[0].code', 'AppointmentResponse.participantType.coding.code', '0..* / 0..* / 0..1', 'ParticipantTypeCode', ['AppointmentResponse.participantType', 'AppointmentResponse.participantType.coding'])
+        ],
+        SupplyRequest: [
+          ...baseFields('SupplyRequest', 'SupplyRequestId'),
+          field('Status', '$.status', 'SupplyRequest.status', '0..1', 'Status'),
+          field('Category code', '$.category.coding[0].code', 'SupplyRequest.category.coding.code', '0..1 / 0..* / 0..1', 'CategoryCode', ['SupplyRequest.category.coding']),
+          field('Item code', '$.itemCodeableConcept.coding[0].code', 'SupplyRequest.itemCodeableConcept.coding.code', '1..1 / 0..* / 0..1', 'ItemCode', ['SupplyRequest.itemCodeableConcept.coding']),
+          field('Supplier reference', '$.supplier[0].reference', 'SupplyRequest.supplier.reference', '0..* / 0..1', 'SupplierReference', ['SupplyRequest.supplier'])
+        ],
+        SupplyDelivery: [
+          ...baseFields('SupplyDelivery', 'SupplyDeliveryId'),
+          field('Status', '$.status', 'SupplyDelivery.status', '0..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'SupplyDelivery.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['SupplyDelivery.type.coding']),
+          field('Patient reference', '$.patient.reference', 'SupplyDelivery.patient.reference', '0..1 / 0..1', 'PatientReference'),
+          field('Supplied item code', '$.suppliedItem.itemCodeableConcept.coding[0].code', 'SupplyDelivery.suppliedItem.itemCodeableConcept.coding.code', '0..1 / 0..1 / 0..* / 0..1', 'SuppliedItemCode', ['SupplyDelivery.suppliedItem.itemCodeableConcept.coding'])
+        ],
+
+        // ===== Financial (additional) =====
+        ClaimResponse: [
+          ...baseFields('ClaimResponse', 'ClaimResponseId'),
+          field('Status', '$.status', 'ClaimResponse.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'ClaimResponse.type.coding.code', '1..1 / 0..* / 0..1', 'TypeCode', ['ClaimResponse.type.coding']),
+          field('Patient reference', '$.patient.reference', 'ClaimResponse.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Outcome', '$.outcome', 'ClaimResponse.outcome', '1..1', 'Outcome'),
+          field('Item adjudication category', '$.item[0].adjudication[0].category.coding[0].code', 'ClaimResponse.item.adjudication.category.coding.code', '0..* / 1..* / 1..1 / 0..* / 0..1', 'AdjudicationCategoryCode', ['ClaimResponse.item', 'ClaimResponse.item.adjudication', 'ClaimResponse.item.adjudication.category.coding']),
+          field('Total amount', '$.total[0].amount.value', 'ClaimResponse.total.amount.value', '0..* / 1..1 / 0..1', 'TotalAmount', ['ClaimResponse.total'])
+        ],
+        CoverageEligibilityRequest: [
+          ...baseFields('CoverageEligibilityRequest', 'CoverageEligibilityRequestId'),
+          field('Status', '$.status', 'CoverageEligibilityRequest.status', '1..1', 'Status'),
+          field('Purpose', '$.purpose[0]', 'CoverageEligibilityRequest.purpose', '1..*', 'Purpose', ['CoverageEligibilityRequest.purpose']),
+          field('Patient reference', '$.patient.reference', 'CoverageEligibilityRequest.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Item category code', '$.item[0].category.coding[0].code', 'CoverageEligibilityRequest.item.category.coding.code', '0..* / 0..1 / 0..* / 0..1', 'ItemCategoryCode', ['CoverageEligibilityRequest.item', 'CoverageEligibilityRequest.item.category.coding']),
+          field('Insurance coverage', '$.insurance[0].coverage.reference', 'CoverageEligibilityRequest.insurance.coverage.reference', '0..* / 1..1 / 0..1', 'CoverageReference', ['CoverageEligibilityRequest.insurance'])
+        ],
+        CoverageEligibilityResponse: [
+          ...baseFields('CoverageEligibilityResponse', 'CoverageEligibilityResponseId'),
+          field('Status', '$.status', 'CoverageEligibilityResponse.status', '1..1', 'Status'),
+          field('Outcome', '$.outcome', 'CoverageEligibilityResponse.outcome', '1..1', 'Outcome'),
+          field('Patient reference', '$.patient.reference', 'CoverageEligibilityResponse.patient.reference', '1..1 / 0..1', 'PatientReference'),
+          field('Insurance item category', '$.insurance[0].item[0].category.coding[0].code', 'CoverageEligibilityResponse.insurance.item.category.coding.code', '0..* / 0..* / 0..1 / 0..* / 0..1', 'InsuranceItemCategoryCode', ['CoverageEligibilityResponse.insurance', 'CoverageEligibilityResponse.insurance.item', 'CoverageEligibilityResponse.insurance.item.category.coding']),
+          field('Insurance item benefit type', '$.insurance[0].item[0].benefit[0].type.coding[0].code', 'CoverageEligibilityResponse.insurance.item.benefit.type.coding.code', '0..* / 0..* / 0..* / 1..1 / 0..* / 0..1', 'InsuranceBenefitTypeCode', ['CoverageEligibilityResponse.insurance', 'CoverageEligibilityResponse.insurance.item', 'CoverageEligibilityResponse.insurance.item.benefit', 'CoverageEligibilityResponse.insurance.item.benefit.type.coding'])
+        ],
+        PaymentReconciliation: [
+          ...baseFields('PaymentReconciliation', 'PaymentReconciliationId'),
+          field('Status', '$.status', 'PaymentReconciliation.status', '1..1', 'Status'),
+          field('Outcome', '$.outcome', 'PaymentReconciliation.outcome', '0..1', 'Outcome'),
+          field('Payment amount', '$.paymentAmount.value', 'PaymentReconciliation.paymentAmount.value', '1..1 / 0..1', 'PaymentAmount'),
+          field('Detail type code', '$.detail[0].type.coding[0].code', 'PaymentReconciliation.detail.type.coding.code', '0..* / 1..1 / 0..* / 0..1', 'DetailTypeCode', ['PaymentReconciliation.detail', 'PaymentReconciliation.detail.type.coding']),
+          field('Detail amount', '$.detail[0].amount.value', 'PaymentReconciliation.detail.amount.value', '0..* / 0..1 / 0..1', 'DetailAmount', ['PaymentReconciliation.detail'])
+        ],
+        PaymentNotice: [
+          ...baseFields('PaymentNotice', 'PaymentNoticeId'),
+          field('Status', '$.status', 'PaymentNotice.status', '1..1', 'Status'),
+          field('Payment reference', '$.payment.reference', 'PaymentNotice.payment.reference', '1..1 / 0..1', 'PaymentReference'),
+          field('Amount', '$.amount.value', 'PaymentNotice.amount.value', '1..1 / 0..1', 'Amount'),
+          field('Payment status code', '$.paymentStatus.coding[0].code', 'PaymentNotice.paymentStatus.coding.code', '0..1 / 0..* / 0..1', 'PaymentStatusCode', ['PaymentNotice.paymentStatus.coding'])
+        ],
+        Invoice: [
+          ...baseFields('Invoice', 'InvoiceId'),
+          field('Status', '$.status', 'Invoice.status', '1..1', 'Status'),
+          field('Subject reference', '$.subject.reference', 'Invoice.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Participant actor', '$.participant[0].actor.reference', 'Invoice.participant.actor.reference', '0..* / 1..1 / 0..1', 'ParticipantActorReference', ['Invoice.participant']),
+          field('Line item charge code', '$.lineItem[0].chargeItemCodeableConcept.coding[0].code', 'Invoice.lineItem.chargeItemCodeableConcept.coding.code', '0..* / 0..1 / 0..* / 0..1', 'LineItemChargeCode', ['Invoice.lineItem', 'Invoice.lineItem.chargeItemCodeableConcept.coding']),
+          field('Line item price amount', '$.lineItem[0].priceComponent[0].amount.value', 'Invoice.lineItem.priceComponent.amount.value', '0..* / 0..* / 0..1 / 0..1', 'PriceComponentAmount', ['Invoice.lineItem', 'Invoice.lineItem.priceComponent']),
+          field('Total net', '$.totalNet.value', 'Invoice.totalNet.value', '0..1 / 0..1', 'TotalNet')
+        ],
+        ChargeItem: [
+          ...baseFields('ChargeItem', 'ChargeItemId'),
+          field('Status', '$.status', 'ChargeItem.status', '1..1', 'Status'),
+          field('Code', '$.code.coding[0].code', 'ChargeItem.code.coding.code', '1..1 / 0..* / 0..1', 'Code', ['ChargeItem.code.coding']),
+          field('Subject reference', '$.subject.reference', 'ChargeItem.subject.reference', '1..1 / 0..1', 'SubjectReference'),
+          field('Performer function code', '$.performer[0].function.coding[0].code', 'ChargeItem.performer.function.coding.code', '0..* / 0..1 / 0..* / 0..1', 'PerformerFunctionCode', ['ChargeItem.performer', 'ChargeItem.performer.function.coding']),
+          field('Performer actor', '$.performer[0].actor.reference', 'ChargeItem.performer.actor.reference', '0..* / 1..1 / 0..1', 'PerformerActorReference', ['ChargeItem.performer'])
+        ],
+        Contract: [
+          ...baseFields('Contract', 'ContractId'),
+          field('Status', '$.status', 'Contract.status', '0..1', 'Status'),
+          field('Subject reference', '$.subject[0].reference', 'Contract.subject.reference', '0..* / 0..1', 'SubjectReference', ['Contract.subject']),
+          field('Term type code', '$.term[0].type.coding[0].code', 'Contract.term.type.coding.code', '0..* / 0..1 / 0..* / 0..1', 'TermTypeCode', ['Contract.term', 'Contract.term.type.coding']),
+          field('Term asset subtype code', '$.term[0].asset[0].subtype[0].coding[0].code', 'Contract.term.asset.subtype.coding.code', '0..* / 0..* / 0..* / 0..* / 0..1', 'AssetSubtypeCode', ['Contract.term', 'Contract.term.asset', 'Contract.term.asset.subtype', 'Contract.term.asset.subtype.coding']),
+          field('Signer party', '$.signer[0].party.reference', 'Contract.signer.party.reference', '0..* / 1..1 / 0..1', 'SignerPartyReference', ['Contract.signer'])
+        ],
+        InsurancePlan: [
+          ...baseFields('InsurancePlan', 'InsurancePlanId'),
+          field('Status', '$.status', 'InsurancePlan.status', '0..1', 'Status'),
+          field('Type code', '$.type[0].coding[0].code', 'InsurancePlan.type.coding.code', '0..* / 0..* / 0..1', 'TypeCode', ['InsurancePlan.type', 'InsurancePlan.type.coding']),
+          field('Coverage benefit type', '$.coverage[0].benefit[0].type.coding[0].code', 'InsurancePlan.coverage.benefit.type.coding.code', '0..* / 1..* / 1..1 / 0..* / 0..1', 'CoverageBenefitTypeCode', ['InsurancePlan.coverage', 'InsurancePlan.coverage.benefit', 'InsurancePlan.coverage.benefit.type.coding']),
+          field('Plan general cost', '$.plan[0].generalCost[0].cost.value', 'InsurancePlan.plan.generalCost.cost.value', '0..* / 0..* / 1..1 / 0..1', 'GeneralCostValue', ['InsurancePlan.plan', 'InsurancePlan.plan.generalCost']),
+          field('Plan specific cost amount', '$.plan[0].specificCost[0].benefit[0].cost[0].amount.value', 'InsurancePlan.plan.specificCost.benefit.cost.amount.value', '0..* / 0..* / 0..* / 0..* / 0..1 / 0..1', 'SpecificCostAmount', ['InsurancePlan.plan', 'InsurancePlan.plan.specificCost', 'InsurancePlan.plan.specificCost.benefit', 'InsurancePlan.plan.specificCost.benefit.cost'])
+        ],
+
+        // ===== Definitional / knowledge / request =====
+        PlanDefinition: [
+          ...baseFields('PlanDefinition', 'PlanDefinitionId'),
+          field('Status', '$.status', 'PlanDefinition.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'PlanDefinition.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['PlanDefinition.type.coding']),
+          field('Goal description code', '$.goal[0].description.coding[0].code', 'PlanDefinition.goal.description.coding.code', '0..* / 1..1 / 0..* / 0..1', 'GoalDescriptionCode', ['PlanDefinition.goal', 'PlanDefinition.goal.description.coding']),
+          field('Action title', '$.action[0].title', 'PlanDefinition.action.title', '0..* / 0..1', 'ActionTitle', ['PlanDefinition.action']),
+          field('Nested action title', '$.action[0].action[0].title', 'PlanDefinition.action.action.title', '0..* / 0..* / 0..1', 'NestedActionTitle', ['PlanDefinition.action', 'PlanDefinition.action.action']),
+          field('Action condition kind', '$.action[0].condition[0].kind', 'PlanDefinition.action.condition.kind', '0..* / 0..* / 1..1', 'ActionConditionKind', ['PlanDefinition.action', 'PlanDefinition.action.condition'])
+        ],
+        ActivityDefinition: [
+          ...baseFields('ActivityDefinition', 'ActivityDefinitionId'),
+          field('Status', '$.status', 'ActivityDefinition.status', '1..1', 'Status'),
+          field('Kind', '$.kind', 'ActivityDefinition.kind', '0..1', 'Kind'),
+          field('Code', '$.code.coding[0].code', 'ActivityDefinition.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['ActivityDefinition.code.coding']),
+          field('Dosage route code', '$.dosage[0].route.coding[0].code', 'ActivityDefinition.dosage.route.coding.code', '0..* / 0..1 / 0..* / 0..1', 'DosageRouteCode', ['ActivityDefinition.dosage', 'ActivityDefinition.dosage.route.coding']),
+          field('Participant type', '$.participant[0].type', 'ActivityDefinition.participant.type', '0..* / 1..1', 'ParticipantType', ['ActivityDefinition.participant'])
+        ],
+        Measure: [
+          ...baseFields('Measure', 'MeasureId'),
+          field('Status', '$.status', 'Measure.status', '1..1', 'Status'),
+          field('Scoring code', '$.scoring.coding[0].code', 'Measure.scoring.coding.code', '0..1 / 0..* / 0..1', 'ScoringCode', ['Measure.scoring.coding']),
+          field('Group population code', '$.group[0].population[0].code.coding[0].code', 'Measure.group.population.code.coding.code', '0..* / 0..* / 0..1 / 0..* / 0..1', 'PopulationCode', ['Measure.group', 'Measure.group.population', 'Measure.group.population.code.coding']),
+          field('Group stratifier code', '$.group[0].stratifier[0].code.coding[0].code', 'Measure.group.stratifier.code.coding.code', '0..* / 0..* / 0..1 / 0..* / 0..1', 'StratifierCode', ['Measure.group', 'Measure.group.stratifier', 'Measure.group.stratifier.code.coding'])
+        ],
+        MeasureReport: [
+          ...baseFields('MeasureReport', 'MeasureReportId'),
+          field('Status', '$.status', 'MeasureReport.status', '1..1', 'Status'),
+          field('Type', '$.type', 'MeasureReport.type', '1..1', 'Type'),
+          field('Measure', '$.measure', 'MeasureReport.measure', '1..1', 'Measure'),
+          field('Group population count', '$.group[0].population[0].count', 'MeasureReport.group.population.count', '0..* / 0..* / 0..1', 'PopulationCount', ['MeasureReport.group', 'MeasureReport.group.population']),
+          field('Stratum population count', '$.group[0].stratifier[0].stratum[0].population[0].count', 'MeasureReport.group.stratifier.stratum.population.count', '0..* / 0..* / 0..* / 0..* / 0..1', 'StratumPopulationCount', ['MeasureReport.group', 'MeasureReport.group.stratifier', 'MeasureReport.group.stratifier.stratum', 'MeasureReport.group.stratifier.stratum.population'])
+        ],
+        Library: [
+          ...baseFields('Library', 'LibraryId'),
+          field('Status', '$.status', 'Library.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'Library.type.coding.code', '1..1 / 0..* / 0..1', 'TypeCode', ['Library.type.coding']),
+          field('Subject code', '$.subjectCodeableConcept.coding[0].code', 'Library.subjectCodeableConcept.coding.code', '0..1 / 0..* / 0..1', 'SubjectCode', ['Library.subjectCodeableConcept.coding']),
+          field('Content type', '$.content[0].contentType', 'Library.content.contentType', '0..* / 0..1', 'ContentType', ['Library.content'])
+        ],
+        ResearchStudy: [
+          ...baseFields('ResearchStudy', 'ResearchStudyId'),
+          field('Status', '$.status', 'ResearchStudy.status', '1..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'ResearchStudy.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['ResearchStudy.category', 'ResearchStudy.category.coding']),
+          field('Phase code', '$.phase.coding[0].code', 'ResearchStudy.phase.coding.code', '0..1 / 0..* / 0..1', 'PhaseCode', ['ResearchStudy.phase.coding']),
+          field('Arm name', '$.arm[0].name', 'ResearchStudy.arm.name', '0..* / 1..1', 'ArmName', ['ResearchStudy.arm'])
+        ],
+        CommunicationRequest: [
+          ...baseFields('CommunicationRequest', 'CommunicationRequestId'),
+          field('Status', '$.status', 'CommunicationRequest.status', '1..1', 'Status'),
+          field('Category code', '$.category[0].coding[0].code', 'CommunicationRequest.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['CommunicationRequest.category', 'CommunicationRequest.category.coding']),
+          field('Subject reference', '$.subject.reference', 'CommunicationRequest.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Payload content string', '$.payload[0].contentString', 'CommunicationRequest.payload.contentString', '0..* / 1..1', 'PayloadContentString', ['CommunicationRequest.payload']),
+          field('Requester reference', '$.requester.reference', 'CommunicationRequest.requester.reference', '0..1 / 0..1', 'RequesterReference')
+        ],
+        RequestGroup: [
+          ...baseFields('RequestGroup', 'RequestGroupId'),
+          field('Status', '$.status', 'RequestGroup.status', '1..1', 'Status'),
+          field('Intent', '$.intent', 'RequestGroup.intent', '1..1', 'Intent'),
+          field('Code', '$.code.coding[0].code', 'RequestGroup.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['RequestGroup.code.coding']),
+          field('Action title', '$.action[0].title', 'RequestGroup.action.title', '0..* / 0..1', 'ActionTitle', ['RequestGroup.action']),
+          field('Nested action title', '$.action[0].action[0].title', 'RequestGroup.action.action.title', '0..* / 0..* / 0..1', 'NestedActionTitle', ['RequestGroup.action', 'RequestGroup.action.action']),
+          field('Action condition kind', '$.action[0].condition[0].kind', 'RequestGroup.action.condition.kind', '0..* / 0..* / 1..1', 'ActionConditionKind', ['RequestGroup.action', 'RequestGroup.action.condition'])
+        ],
+        SpecimenDefinition: [
+          ...baseFields('SpecimenDefinition', 'SpecimenDefinitionId'),
+          field('Type collected code', '$.typeCollected.coding[0].code', 'SpecimenDefinition.typeCollected.coding.code', '0..1 / 0..* / 0..1', 'TypeCollectedCode', ['SpecimenDefinition.typeCollected.coding']),
+          field('Type tested type code', '$.typeTested[0].type.coding[0].code', 'SpecimenDefinition.typeTested.type.coding.code', '0..* / 0..1 / 0..* / 0..1', 'TypeTestedCode', ['SpecimenDefinition.typeTested', 'SpecimenDefinition.typeTested.type.coding']),
+          field('Container material code', '$.typeTested[0].container.material.coding[0].code', 'SpecimenDefinition.typeTested.container.material.coding.code', '0..* / 0..1 / 0..1 / 0..* / 0..1', 'ContainerMaterialCode', ['SpecimenDefinition.typeTested', 'SpecimenDefinition.typeTested.container.material.coding'])
+        ],
+        ObservationDefinition: [
+          ...baseFields('ObservationDefinition', 'ObservationDefinitionId'),
+          field('Code', '$.code.coding[0].code', 'ObservationDefinition.code.coding.code', '1..1 / 0..* / 0..1', 'Code', ['ObservationDefinition.code.coding']),
+          field('Category code', '$.category[0].coding[0].code', 'ObservationDefinition.category.coding.code', '0..* / 0..* / 0..1', 'CategoryCode', ['ObservationDefinition.category', 'ObservationDefinition.category.coding']),
+          field('Quantitative unit code', '$.quantitativeDetails.unit.coding[0].code', 'ObservationDefinition.quantitativeDetails.unit.coding.code', '0..1 / 0..1 / 0..* / 0..1', 'UnitCode', ['ObservationDefinition.quantitativeDetails.unit.coding']),
+          field('Qualified interval condition', '$.qualifiedInterval[0].condition', 'ObservationDefinition.qualifiedInterval.condition', '0..* / 0..1', 'IntervalCondition', ['ObservationDefinition.qualifiedInterval'])
+        ],
+        GuidanceResponse: [
+          ...baseFields('GuidanceResponse', 'GuidanceResponseId'),
+          field('Status', '$.status', 'GuidanceResponse.status', '1..1', 'Status'),
+          field('Module uri', '$.moduleUri', 'GuidanceResponse.moduleUri', '1..1', 'ModuleUri'),
+          field('Subject reference', '$.subject.reference', 'GuidanceResponse.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Reason code', '$.reasonCode[0].coding[0].code', 'GuidanceResponse.reasonCode.coding.code', '0..* / 0..* / 0..1', 'ReasonCode', ['GuidanceResponse.reasonCode', 'GuidanceResponse.reasonCode.coding'])
+        ],
+        ResearchSubject: [
+          ...baseFields('ResearchSubject', 'ResearchSubjectId'),
+          field('Status', '$.status', 'ResearchSubject.status', '1..1', 'Status'),
+          field('Study reference', '$.study.reference', 'ResearchSubject.study.reference', '1..1 / 0..1', 'StudyReference'),
+          field('Individual reference', '$.individual.reference', 'ResearchSubject.individual.reference', '1..1 / 0..1', 'IndividualReference'),
+          field('Period start', '$.period.start', 'ResearchSubject.period.start', '0..1 / 0..1', 'PeriodStart')
+        ],
+        EnrollmentRequest: [
+          ...baseFields('EnrollmentRequest', 'EnrollmentRequestId'),
+          field('Status', '$.status', 'EnrollmentRequest.status', '0..1', 'Status'),
+          field('Candidate reference', '$.candidate.reference', 'EnrollmentRequest.candidate.reference', '0..1 / 0..1', 'CandidateReference'),
+          field('Coverage reference', '$.coverage.reference', 'EnrollmentRequest.coverage.reference', '0..1 / 0..1', 'CoverageReference'),
+          field('Insurer reference', '$.insurer.reference', 'EnrollmentRequest.insurer.reference', '0..1 / 0..1', 'InsurerReference')
+        ],
+        EnrollmentResponse: [
+          ...baseFields('EnrollmentResponse', 'EnrollmentResponseId'),
+          field('Status', '$.status', 'EnrollmentResponse.status', '0..1', 'Status'),
+          field('Outcome', '$.outcome', 'EnrollmentResponse.outcome', '0..1', 'Outcome'),
+          field('Request reference', '$.request.reference', 'EnrollmentResponse.request.reference', '0..1 / 0..1', 'RequestReference'),
+          field('Organization reference', '$.organization.reference', 'EnrollmentResponse.organization.reference', '0..1 / 0..1', 'OrganizationReference')
+        ],
+
+        // ===== Remaining R4 resources: products, evidence, conformance, substances, testing =====
+        BiologicallyDerivedProduct: [
+          ...baseFields('BiologicallyDerivedProduct', 'BiologicallyDerivedProductId'),
+          field('Product category', '$.productCategory', 'BiologicallyDerivedProduct.productCategory', '0..1', 'ProductCategory'),
+          field('Product code', '$.productCode.coding[0].code', 'BiologicallyDerivedProduct.productCode.coding.code', '0..1 / 0..* / 0..1', 'ProductCode', ['BiologicallyDerivedProduct.productCode.coding']),
+          field('Collection collector', '$.collection.collector.reference', 'BiologicallyDerivedProduct.collection.collector.reference', '0..1 / 0..1 / 0..1', 'CollectorReference'),
+          field('Processing procedure', '$.processing[0].procedure.coding[0].code', 'BiologicallyDerivedProduct.processing.procedure.coding.code', '0..* / 0..1 / 0..* / 0..1', 'ProcessingProcedureCode', ['BiologicallyDerivedProduct.processing', 'BiologicallyDerivedProduct.processing.procedure.coding'])
+        ],
+        CatalogEntry: [
+          ...baseFields('CatalogEntry', 'CatalogEntryId'),
+          field('Type code', '$.type.coding[0].code', 'CatalogEntry.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['CatalogEntry.type.coding']),
+          field('Status', '$.status', 'CatalogEntry.status', '0..1', 'Status'),
+          field('Referenced item', '$.referencedItem.reference', 'CatalogEntry.referencedItem.reference', '1..1 / 0..1', 'ReferencedItemReference'),
+          field('Related entry item', '$.relatedEntry[0].item.reference', 'CatalogEntry.relatedEntry.item.reference', '0..* / 1..1 / 0..1', 'RelatedEntryReference', ['CatalogEntry.relatedEntry'])
+        ],
+        ChargeItemDefinition: [
+          ...baseFields('ChargeItemDefinition', 'ChargeItemDefinitionId'),
+          field('Status', '$.status', 'ChargeItemDefinition.status', '1..1', 'Status'),
+          field('Url', '$.url', 'ChargeItemDefinition.url', '1..1', 'Url'),
+          field('Code', '$.code.coding[0].code', 'ChargeItemDefinition.code.coding.code', '0..1 / 0..* / 0..1', 'Code', ['ChargeItemDefinition.code.coding']),
+          field('Property group price amount', '$.propertyGroup[0].priceComponent[0].amount.value', 'ChargeItemDefinition.propertyGroup.priceComponent.amount.value', '0..* / 0..* / 0..1 / 0..1', 'PriceComponentAmount', ['ChargeItemDefinition.propertyGroup', 'ChargeItemDefinition.propertyGroup.priceComponent'])
+        ],
+        CompartmentDefinition: [
+          ...baseFields('CompartmentDefinition', 'CompartmentDefinitionId'),
+          field('Status', '$.status', 'CompartmentDefinition.status', '1..1', 'Status'),
+          field('Code', '$.code', 'CompartmentDefinition.code', '1..1', 'Code'),
+          field('Resource code', '$.resource[0].code', 'CompartmentDefinition.resource.code', '0..* / 1..1', 'ResourceCode', ['CompartmentDefinition.resource']),
+          field('Resource param', '$.resource[0].param[0]', 'CompartmentDefinition.resource.param', '0..* / 0..*', 'ResourceParam', ['CompartmentDefinition.resource', 'CompartmentDefinition.resource.param'])
+        ],
+        DeviceDefinition: [
+          ...baseFields('DeviceDefinition', 'DeviceDefinitionId'),
+          field('Device name', '$.deviceName[0].name', 'DeviceDefinition.deviceName.name', '0..* / 1..1', 'DeviceName', ['DeviceDefinition.deviceName']),
+          field('Type code', '$.type.coding[0].code', 'DeviceDefinition.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['DeviceDefinition.type.coding']),
+          field('Property type code', '$.property[0].type.coding[0].code', 'DeviceDefinition.property.type.coding.code', '0..* / 1..1 / 0..* / 0..1', 'PropertyTypeCode', ['DeviceDefinition.property', 'DeviceDefinition.property.type.coding']),
+          field('Capability type code', '$.capability[0].type.coding[0].code', 'DeviceDefinition.capability.type.coding.code', '0..* / 1..1 / 0..* / 0..1', 'CapabilityTypeCode', ['DeviceDefinition.capability', 'DeviceDefinition.capability.type.coding'])
+        ],
+        DocumentManifest: [
+          ...baseFields('DocumentManifest', 'DocumentManifestId'),
+          field('Status', '$.status', 'DocumentManifest.status', '1..1', 'Status'),
+          field('Type code', '$.type.coding[0].code', 'DocumentManifest.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['DocumentManifest.type.coding']),
+          field('Subject reference', '$.subject.reference', 'DocumentManifest.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Content reference', '$.content[0].reference', 'DocumentManifest.content.reference', '1..* / 0..1', 'ContentReference', ['DocumentManifest.content']),
+          field('Related ref', '$.related[0].ref.reference', 'DocumentManifest.related.ref.reference', '0..* / 0..1 / 0..1', 'RelatedRefReference', ['DocumentManifest.related'])
+        ],
+        EffectEvidenceSynthesis: [
+          ...baseFields('EffectEvidenceSynthesis', 'EffectEvidenceSynthesisId'),
+          field('Status', '$.status', 'EffectEvidenceSynthesis.status', '1..1', 'Status'),
+          field('Population reference', '$.population.reference', 'EffectEvidenceSynthesis.population.reference', '1..1 / 0..1', 'PopulationReference'),
+          field('Exposure reference', '$.exposure.reference', 'EffectEvidenceSynthesis.exposure.reference', '1..1 / 0..1', 'ExposureReference'),
+          field('Results by exposure synthesis', '$.resultsByExposure[0].riskEvidenceSynthesis.reference', 'EffectEvidenceSynthesis.resultsByExposure.riskEvidenceSynthesis.reference', '0..* / 1..1 / 0..1', 'RiskSynthesisReference', ['EffectEvidenceSynthesis.resultsByExposure'])
+        ],
+        EventDefinition: [
+          ...baseFields('EventDefinition', 'EventDefinitionId'),
+          field('Status', '$.status', 'EventDefinition.status', '1..1', 'Status'),
+          field('Trigger type', '$.trigger[0].type', 'EventDefinition.trigger.type', '1..* / 1..1', 'TriggerType', ['EventDefinition.trigger']),
+          field('Trigger name', '$.trigger[0].name', 'EventDefinition.trigger.name', '1..* / 0..1', 'TriggerName', ['EventDefinition.trigger'])
+        ],
+        Evidence: [
+          ...baseFields('Evidence', 'EvidenceId'),
+          field('Status', '$.status', 'Evidence.status', '1..1', 'Status'),
+          field('Exposure background', '$.exposureBackground.reference', 'Evidence.exposureBackground.reference', '1..1 / 0..1', 'ExposureBackgroundReference'),
+          field('Exposure variant', '$.exposureVariant[0].reference', 'Evidence.exposureVariant.reference', '0..* / 0..1', 'ExposureVariantReference', ['Evidence.exposureVariant']),
+          field('Outcome', '$.outcome[0].reference', 'Evidence.outcome.reference', '0..* / 0..1', 'OutcomeReference', ['Evidence.outcome'])
+        ],
+        EvidenceVariable: [
+          ...baseFields('EvidenceVariable', 'EvidenceVariableId'),
+          field('Status', '$.status', 'EvidenceVariable.status', '1..1', 'Status'),
+          field('Type', '$.type', 'EvidenceVariable.type', '0..1', 'Type'),
+          field('Characteristic definition', '$.characteristic[0].definitionReference.reference', 'EvidenceVariable.characteristic.definitionReference.reference', '1..* / 1..1 / 0..1', 'CharacteristicDefinitionReference', ['EvidenceVariable.characteristic']),
+          field('Characteristic usage context', '$.characteristic[0].usageContext[0].code.code', 'EvidenceVariable.characteristic.usageContext.code.code', '1..* / 0..* / 1..1 / 1..1', 'UsageContextCode', ['EvidenceVariable.characteristic', 'EvidenceVariable.characteristic.usageContext'])
+        ],
+        ExampleScenario: [
+          ...baseFields('ExampleScenario', 'ExampleScenarioId'),
+          field('Status', '$.status', 'ExampleScenario.status', '1..1', 'Status'),
+          field('Actor id', '$.actor[0].actorId', 'ExampleScenario.actor.actorId', '0..* / 1..1', 'ActorId', ['ExampleScenario.actor']),
+          field('Process step operation name', '$.process[0].step[0].operation.name', 'ExampleScenario.process.step.operation.name', '0..* / 0..* / 0..1 / 0..1', 'StepOperationName', ['ExampleScenario.process', 'ExampleScenario.process.step']),
+          field('Instance resource type', '$.instance[0].resourceType', 'ExampleScenario.instance.resourceType', '0..* / 1..1', 'InstanceResourceType', ['ExampleScenario.instance'])
+        ],
+        GraphDefinition: [
+          ...baseFields('GraphDefinition', 'GraphDefinitionId'),
+          field('Status', '$.status', 'GraphDefinition.status', '1..1', 'Status'),
+          field('Start', '$.start', 'GraphDefinition.start', '1..1', 'Start'),
+          field('Link path', '$.link[0].path', 'GraphDefinition.link.path', '0..* / 0..1', 'LinkPath', ['GraphDefinition.link']),
+          field('Link target type', '$.link[0].target[0].type', 'GraphDefinition.link.target.type', '0..* / 0..* / 1..1', 'LinkTargetType', ['GraphDefinition.link', 'GraphDefinition.link.target']),
+          field('Link target compartment code', '$.link[0].target[0].compartment[0].code', 'GraphDefinition.link.target.compartment.code', '0..* / 0..* / 0..* / 1..1', 'LinkTargetCompartmentCode', ['GraphDefinition.link', 'GraphDefinition.link.target', 'GraphDefinition.link.target.compartment'])
+        ],
+        ImplementationGuide: [
+          ...baseFields('ImplementationGuide', 'ImplementationGuideId'),
+          field('Status', '$.status', 'ImplementationGuide.status', '1..1', 'Status'),
+          field('Package id', '$.packageId', 'ImplementationGuide.packageId', '1..1', 'PackageId'),
+          field('Depends on uri', '$.dependsOn[0].uri', 'ImplementationGuide.dependsOn.uri', '0..* / 1..1', 'DependsOnUri', ['ImplementationGuide.dependsOn']),
+          field('Definition resource reference', '$.definition.resource[0].reference.reference', 'ImplementationGuide.definition.resource.reference.reference', '0..1 / 1..* / 1..1 / 0..1', 'DefinitionResourceReference', ['ImplementationGuide.definition.resource'])
+        ],
+        MedicinalProduct: [
+          ...baseFields('MedicinalProduct', 'MedicinalProductId'),
+          field('Type code', '$.type.coding[0].code', 'MedicinalProduct.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['MedicinalProduct.type.coding']),
+          field('Name product name', '$.name[0].productName', 'MedicinalProduct.name.productName', '1..* / 1..1', 'ProductName', ['MedicinalProduct.name']),
+          field('Manufacturing operation type', '$.manufacturingBusinessOperation[0].operationType.coding[0].code', 'MedicinalProduct.manufacturingBusinessOperation.operationType.coding.code', '0..* / 0..1 / 0..* / 0..1', 'OperationTypeCode', ['MedicinalProduct.manufacturingBusinessOperation', 'MedicinalProduct.manufacturingBusinessOperation.operationType.coding'])
+        ],
+        MedicinalProductAuthorization: [
+          ...baseFields('MedicinalProductAuthorization', 'MedicinalProductAuthorizationId'),
+          field('Status code', '$.status.coding[0].code', 'MedicinalProductAuthorization.status.coding.code', '0..1 / 0..* / 0..1', 'StatusCode', ['MedicinalProductAuthorization.status.coding']),
+          field('Subject reference', '$.subject.reference', 'MedicinalProductAuthorization.subject.reference', '0..1 / 0..1', 'SubjectReference'),
+          field('Country code', '$.country[0].coding[0].code', 'MedicinalProductAuthorization.country.coding.code', '0..* / 0..* / 0..1', 'CountryCode', ['MedicinalProductAuthorization.country', 'MedicinalProductAuthorization.country.coding']),
+          field('Procedure type code', '$.procedure.type.coding[0].code', 'MedicinalProductAuthorization.procedure.type.coding.code', '0..1 / 1..1 / 0..* / 0..1', 'ProcedureTypeCode', ['MedicinalProductAuthorization.procedure.type.coding'])
+        ],
+        MedicinalProductContraindication: [
+          ...baseFields('MedicinalProductContraindication', 'MedicinalProductContraindicationId'),
+          field('Subject reference', '$.subject[0].reference', 'MedicinalProductContraindication.subject.reference', '0..* / 0..1', 'SubjectReference', ['MedicinalProductContraindication.subject']),
+          field('Disease code', '$.disease.coding[0].code', 'MedicinalProductContraindication.disease.coding.code', '0..1 / 0..* / 0..1', 'DiseaseCode', ['MedicinalProductContraindication.disease.coding']),
+          field('Other therapy relationship', '$.otherTherapy[0].therapyRelationshipType.coding[0].code', 'MedicinalProductContraindication.otherTherapy.therapyRelationshipType.coding.code', '0..* / 1..1 / 0..* / 0..1', 'TherapyRelationshipCode', ['MedicinalProductContraindication.otherTherapy', 'MedicinalProductContraindication.otherTherapy.therapyRelationshipType.coding'])
+        ],
+        MedicinalProductIndication: [
+          ...baseFields('MedicinalProductIndication', 'MedicinalProductIndicationId'),
+          field('Subject reference', '$.subject[0].reference', 'MedicinalProductIndication.subject.reference', '0..* / 0..1', 'SubjectReference', ['MedicinalProductIndication.subject']),
+          field('Disease code', '$.diseaseSymptomProcedure.coding[0].code', 'MedicinalProductIndication.diseaseSymptomProcedure.coding.code', '0..1 / 0..* / 0..1', 'DiseaseSymptomCode', ['MedicinalProductIndication.diseaseSymptomProcedure.coding']),
+          field('Other therapy medication', '$.otherTherapy[0].medicationCodeableConcept.coding[0].code', 'MedicinalProductIndication.otherTherapy.medicationCodeableConcept.coding.code', '0..* / 0..1 / 0..* / 0..1', 'OtherTherapyMedicationCode', ['MedicinalProductIndication.otherTherapy', 'MedicinalProductIndication.otherTherapy.medicationCodeableConcept.coding'])
+        ],
+        MedicinalProductIngredient: [
+          ...baseFields('MedicinalProductIngredient', 'MedicinalProductIngredientId'),
+          field('Role code', '$.role.coding[0].code', 'MedicinalProductIngredient.role.coding.code', '1..1 / 0..* / 0..1', 'RoleCode', ['MedicinalProductIngredient.role.coding']),
+          field('Substance code', '$.substance.code.coding[0].code', 'MedicinalProductIngredient.substance.code.coding.code', '0..1 / 1..1 / 0..* / 0..1', 'SubstanceCode', ['MedicinalProductIngredient.substance.code.coding']),
+          field('Specified substance code', '$.specifiedSubstance[0].code.coding[0].code', 'MedicinalProductIngredient.specifiedSubstance.code.coding.code', '0..* / 1..1 / 0..* / 0..1', 'SpecifiedSubstanceCode', ['MedicinalProductIngredient.specifiedSubstance', 'MedicinalProductIngredient.specifiedSubstance.code.coding'])
+        ],
+        MedicinalProductInteraction: [
+          ...baseFields('MedicinalProductInteraction', 'MedicinalProductInteractionId'),
+          field('Subject reference', '$.subject[0].reference', 'MedicinalProductInteraction.subject.reference', '0..* / 0..1', 'SubjectReference', ['MedicinalProductInteraction.subject']),
+          field('Type code', '$.type.coding[0].code', 'MedicinalProductInteraction.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['MedicinalProductInteraction.type.coding']),
+          field('Interactant item code', '$.interactant[0].itemCodeableConcept.coding[0].code', 'MedicinalProductInteraction.interactant.itemCodeableConcept.coding.code', '1..* / 0..1 / 0..* / 0..1', 'InteractantCode', ['MedicinalProductInteraction.interactant', 'MedicinalProductInteraction.interactant.itemCodeableConcept.coding'])
+        ],
+        MedicinalProductManufactured: [
+          ...baseFields('MedicinalProductManufactured', 'MedicinalProductManufacturedId'),
+          field('Manufactured dose form code', '$.manufacturedDoseForm.coding[0].code', 'MedicinalProductManufactured.manufacturedDoseForm.coding.code', '1..1 / 0..* / 0..1', 'DoseFormCode', ['MedicinalProductManufactured.manufacturedDoseForm.coding']),
+          field('Ingredient reference', '$.ingredient[0].reference', 'MedicinalProductManufactured.ingredient.reference', '0..* / 0..1', 'IngredientReference', ['MedicinalProductManufactured.ingredient']),
+          field('Physical height value', '$.physicalCharacteristics.height.value', 'MedicinalProductManufactured.physicalCharacteristics.height.value', '0..1 / 0..1 / 0..1', 'HeightValue')
+        ],
+        MedicinalProductPackaged: [
+          ...baseFields('MedicinalProductPackaged', 'MedicinalProductPackagedId'),
+          field('Subject reference', '$.subject[0].reference', 'MedicinalProductPackaged.subject.reference', '0..* / 0..1', 'SubjectReference', ['MedicinalProductPackaged.subject']),
+          field('Package item type code', '$.packageItem[0].type.coding[0].code', 'MedicinalProductPackaged.packageItem.type.coding.code', '1..* / 1..1 / 0..* / 0..1', 'PackageItemTypeCode', ['MedicinalProductPackaged.packageItem', 'MedicinalProductPackaged.packageItem.type.coding']),
+          field('Nested package item quantity', '$.packageItem[0].packageItem[0].quantity.value', 'MedicinalProductPackaged.packageItem.packageItem.quantity.value', '1..* / 0..* / 1..1 / 0..1', 'NestedPackageQuantity', ['MedicinalProductPackaged.packageItem', 'MedicinalProductPackaged.packageItem.packageItem'])
+        ],
+        MedicinalProductPharmaceutical: [
+          ...baseFields('MedicinalProductPharmaceutical', 'MedicinalProductPharmaceuticalId'),
+          field('Administrable dose form code', '$.administrableDoseForm.coding[0].code', 'MedicinalProductPharmaceutical.administrableDoseForm.coding.code', '1..1 / 0..* / 0..1', 'AdministrableDoseFormCode', ['MedicinalProductPharmaceutical.administrableDoseForm.coding']),
+          field('Route of administration code', '$.routeOfAdministration[0].code.coding[0].code', 'MedicinalProductPharmaceutical.routeOfAdministration.code.coding.code', '1..* / 1..1 / 0..* / 0..1', 'RouteCode', ['MedicinalProductPharmaceutical.routeOfAdministration', 'MedicinalProductPharmaceutical.routeOfAdministration.code.coding']),
+          field('Characteristics code', '$.characteristics[0].code.coding[0].code', 'MedicinalProductPharmaceutical.characteristics.code.coding.code', '0..* / 1..1 / 0..* / 0..1', 'CharacteristicsCode', ['MedicinalProductPharmaceutical.characteristics', 'MedicinalProductPharmaceutical.characteristics.code.coding'])
+        ],
+        MedicinalProductUndesirableEffect: [
+          ...baseFields('MedicinalProductUndesirableEffect', 'MedicinalProductUndesirableEffectId'),
+          field('Subject reference', '$.subject[0].reference', 'MedicinalProductUndesirableEffect.subject.reference', '0..* / 0..1', 'SubjectReference', ['MedicinalProductUndesirableEffect.subject']),
+          field('Symptom condition effect code', '$.symptomConditionEffect.coding[0].code', 'MedicinalProductUndesirableEffect.symptomConditionEffect.coding.code', '0..1 / 0..* / 0..1', 'SymptomConditionCode', ['MedicinalProductUndesirableEffect.symptomConditionEffect.coding']),
+          field('Classification code', '$.classification.coding[0].code', 'MedicinalProductUndesirableEffect.classification.coding.code', '0..1 / 0..* / 0..1', 'ClassificationCode', ['MedicinalProductUndesirableEffect.classification.coding'])
+        ],
+        MessageDefinition: [
+          ...baseFields('MessageDefinition', 'MessageDefinitionId'),
+          field('Status', '$.status', 'MessageDefinition.status', '1..1', 'Status'),
+          field('Event coding code', '$.eventCoding.code', 'MessageDefinition.eventCoding.code', '1..1 / 0..1', 'EventCode'),
+          field('Focus code', '$.focus[0].code', 'MessageDefinition.focus.code', '0..* / 1..1', 'FocusCode', ['MessageDefinition.focus']),
+          field('Focus profile', '$.focus[0].profile', 'MessageDefinition.focus.profile', '0..* / 0..1', 'FocusProfile', ['MessageDefinition.focus'])
+        ],
+        MolecularSequence: [
+          ...baseFields('MolecularSequence', 'MolecularSequenceId'),
+          field('Type', '$.type', 'MolecularSequence.type', '0..1', 'Type'),
+          field('Coordinate system', '$.coordinateSystem', 'MolecularSequence.coordinateSystem', '1..1', 'CoordinateSystem'),
+          field('Reference seq id code', '$.referenceSeq.referenceSeqId.coding[0].code', 'MolecularSequence.referenceSeq.referenceSeqId.coding.code', '0..1 / 0..1 / 0..* / 0..1', 'ReferenceSeqIdCode', ['MolecularSequence.referenceSeq.referenceSeqId.coding']),
+          field('Variant start', '$.variant[0].start', 'MolecularSequence.variant.start', '0..* / 0..1', 'VariantStart', ['MolecularSequence.variant'])
+        ],
+        NamingSystem: [
+          ...baseFields('NamingSystem', 'NamingSystemId'),
+          field('Status', '$.status', 'NamingSystem.status', '1..1', 'Status'),
+          field('Kind', '$.kind', 'NamingSystem.kind', '1..1', 'Kind'),
+          field('Unique id type', '$.uniqueId[0].type', 'NamingSystem.uniqueId.type', '1..* / 1..1', 'UniqueIdType', ['NamingSystem.uniqueId']),
+          field('Unique id value', '$.uniqueId[0].value', 'NamingSystem.uniqueId.value', '1..* / 1..1', 'UniqueIdValue', ['NamingSystem.uniqueId'])
+        ],
+        OperationDefinition: [
+          ...baseFields('OperationDefinition', 'OperationDefinitionId'),
+          field('Status', '$.status', 'OperationDefinition.status', '1..1', 'Status'),
+          field('Code', '$.code', 'OperationDefinition.code', '1..1', 'Code'),
+          field('Kind', '$.kind', 'OperationDefinition.kind', '1..1', 'Kind'),
+          field('Parameter name', '$.parameter[0].name', 'OperationDefinition.parameter.name', '0..* / 1..1', 'ParameterName', ['OperationDefinition.parameter']),
+          field('Nested part name', '$.parameter[0].part[0].name', 'OperationDefinition.parameter.part.name', '0..* / 0..* / 1..1', 'PartName', ['OperationDefinition.parameter', 'OperationDefinition.parameter.part'])
+        ],
+        OrganizationAffiliation: [
+          ...baseFields('OrganizationAffiliation', 'OrganizationAffiliationId'),
+          field('Active', '$.active', 'OrganizationAffiliation.active', '0..1', 'IsActive'),
+          field('Organization reference', '$.organization.reference', 'OrganizationAffiliation.organization.reference', '0..1 / 0..1', 'OrganizationReference'),
+          field('Code', '$.code[0].coding[0].code', 'OrganizationAffiliation.code.coding.code', '0..* / 0..* / 0..1', 'Code', ['OrganizationAffiliation.code', 'OrganizationAffiliation.code.coding']),
+          field('Specialty code', '$.specialty[0].coding[0].code', 'OrganizationAffiliation.specialty.coding.code', '0..* / 0..* / 0..1', 'SpecialtyCode', ['OrganizationAffiliation.specialty', 'OrganizationAffiliation.specialty.coding']),
+          field('Healthcare service reference', '$.healthcareService[0].reference', 'OrganizationAffiliation.healthcareService.reference', '0..* / 0..1', 'HealthcareServiceReference', ['OrganizationAffiliation.healthcareService'])
+        ],
+        ResearchDefinition: [
+          ...baseFields('ResearchDefinition', 'ResearchDefinitionId'),
+          field('Status', '$.status', 'ResearchDefinition.status', '1..1', 'Status'),
+          field('Population reference', '$.population.reference', 'ResearchDefinition.population.reference', '1..1 / 0..1', 'PopulationReference'),
+          field('Subject code', '$.subjectCodeableConcept.coding[0].code', 'ResearchDefinition.subjectCodeableConcept.coding.code', '0..1 / 0..* / 0..1', 'SubjectCode', ['ResearchDefinition.subjectCodeableConcept.coding'])
+        ],
+        ResearchElementDefinition: [
+          ...baseFields('ResearchElementDefinition', 'ResearchElementDefinitionId'),
+          field('Status', '$.status', 'ResearchElementDefinition.status', '1..1', 'Status'),
+          field('Type', '$.type', 'ResearchElementDefinition.type', '1..1', 'Type'),
+          field('Characteristic definition code', '$.characteristic[0].definitionCodeableConcept.coding[0].code', 'ResearchElementDefinition.characteristic.definitionCodeableConcept.coding.code', '1..* / 1..1 / 0..* / 0..1', 'CharacteristicDefinitionCode', ['ResearchElementDefinition.characteristic', 'ResearchElementDefinition.characteristic.definitionCodeableConcept.coding'])
+        ],
+        RiskEvidenceSynthesis: [
+          ...baseFields('RiskEvidenceSynthesis', 'RiskEvidenceSynthesisId'),
+          field('Status', '$.status', 'RiskEvidenceSynthesis.status', '1..1', 'Status'),
+          field('Population reference', '$.population.reference', 'RiskEvidenceSynthesis.population.reference', '1..1 / 0..1', 'PopulationReference'),
+          field('Risk estimate value', '$.riskEstimate.value', 'RiskEvidenceSynthesis.riskEstimate.value', '0..1 / 0..1', 'RiskEstimateValue'),
+          field('Certainty rating code', '$.certainty[0].rating[0].coding[0].code', 'RiskEvidenceSynthesis.certainty.rating.coding.code', '0..* / 0..* / 0..* / 0..1', 'CertaintyRatingCode', ['RiskEvidenceSynthesis.certainty', 'RiskEvidenceSynthesis.certainty.rating', 'RiskEvidenceSynthesis.certainty.rating.coding'])
+        ],
+        StructureMap: [
+          ...baseFields('StructureMap', 'StructureMapId'),
+          field('Status', '$.status', 'StructureMap.status', '1..1', 'Status'),
+          field('Url', '$.url', 'StructureMap.url', '1..1', 'Url'),
+          field('Group name', '$.group[0].name', 'StructureMap.group.name', '1..* / 1..1', 'GroupName', ['StructureMap.group']),
+          field('Group rule name', '$.group[0].rule[0].name', 'StructureMap.group.rule.name', '1..* / 1..* / 1..1', 'RuleName', ['StructureMap.group', 'StructureMap.group.rule']),
+          field('Group rule source context', '$.group[0].rule[0].source[0].context', 'StructureMap.group.rule.source.context', '1..* / 1..* / 1..* / 1..1', 'RuleSourceContext', ['StructureMap.group', 'StructureMap.group.rule', 'StructureMap.group.rule.source'])
+        ],
+        SubstanceNucleicAcid: [
+          ...baseFields('SubstanceNucleicAcid', 'SubstanceNucleicAcidId'),
+          field('Sequence type code', '$.sequenceType.coding[0].code', 'SubstanceNucleicAcid.sequenceType.coding.code', '0..1 / 0..* / 0..1', 'SequenceTypeCode', ['SubstanceNucleicAcid.sequenceType.coding']),
+          field('Subunit sequence', '$.subunit[0].sequence', 'SubstanceNucleicAcid.subunit.sequence', '0..* / 0..1', 'SubunitSequence', ['SubstanceNucleicAcid.subunit']),
+          field('Subunit linkage connectivity', '$.subunit[0].linkage[0].connectivity', 'SubstanceNucleicAcid.subunit.linkage.connectivity', '0..* / 0..* / 0..1', 'LinkageConnectivity', ['SubstanceNucleicAcid.subunit', 'SubstanceNucleicAcid.subunit.linkage'])
+        ],
+        SubstancePolymer: [
+          ...baseFields('SubstancePolymer', 'SubstancePolymerId'),
+          field('Class code', '$.class.coding[0].code', 'SubstancePolymer.class.coding.code', '0..1 / 0..* / 0..1', 'ClassCode', ['SubstancePolymer.class.coding']),
+          field('Geometry code', '$.geometry.coding[0].code', 'SubstancePolymer.geometry.coding.code', '0..1 / 0..* / 0..1', 'GeometryCode', ['SubstancePolymer.geometry.coding']),
+          field('Repeat unit amount', '$.repeat[0].repeatUnit[0].amount.amount.value', 'SubstancePolymer.repeat.repeatUnit.amount.amount.value', '0..* / 0..* / 0..1 / 0..1 / 0..1', 'RepeatUnitAmount', ['SubstancePolymer.repeat', 'SubstancePolymer.repeat.repeatUnit'])
+        ],
+        SubstanceProtein: [
+          ...baseFields('SubstanceProtein', 'SubstanceProteinId'),
+          field('Sequence type code', '$.sequenceType.coding[0].code', 'SubstanceProtein.sequenceType.coding.code', '0..1 / 0..* / 0..1', 'SequenceTypeCode', ['SubstanceProtein.sequenceType.coding']),
+          field('Subunit sequence', '$.subunit[0].sequence', 'SubstanceProtein.subunit.sequence', '0..* / 0..1', 'SubunitSequence', ['SubstanceProtein.subunit']),
+          field('Subunit number', '$.subunit[0].subunit', 'SubstanceProtein.subunit.subunit', '0..* / 0..1', 'SubunitNumber', ['SubstanceProtein.subunit'])
+        ],
+        SubstanceReferenceInformation: [
+          ...baseFields('SubstanceReferenceInformation', 'SubstanceReferenceInformationId'),
+          field('Comment', '$.comment', 'SubstanceReferenceInformation.comment', '0..1', 'Comment'),
+          field('Gene code', '$.gene[0].gene.coding[0].code', 'SubstanceReferenceInformation.gene.gene.coding.code', '0..* / 0..1 / 0..* / 0..1', 'GeneCode', ['SubstanceReferenceInformation.gene', 'SubstanceReferenceInformation.gene.gene.coding']),
+          field('Target code', '$.target[0].target.coding[0].code', 'SubstanceReferenceInformation.target.target.coding.code', '0..* / 0..1 / 0..* / 0..1', 'TargetCode', ['SubstanceReferenceInformation.target', 'SubstanceReferenceInformation.target.target.coding'])
+        ],
+        SubstanceSourceMaterial: [
+          ...baseFields('SubstanceSourceMaterial', 'SubstanceSourceMaterialId'),
+          field('Source material class code', '$.sourceMaterialClass.coding[0].code', 'SubstanceSourceMaterial.sourceMaterialClass.coding.code', '0..1 / 0..* / 0..1', 'SourceMaterialClassCode', ['SubstanceSourceMaterial.sourceMaterialClass.coding']),
+          field('Organism species code', '$.organism.species.coding[0].code', 'SubstanceSourceMaterial.organism.species.coding.code', '0..1 / 0..1 / 0..* / 0..1', 'OrganismSpeciesCode', ['SubstanceSourceMaterial.organism.species.coding']),
+          field('Fraction description', '$.fractionDescription[0].fraction', 'SubstanceSourceMaterial.fractionDescription.fraction', '0..* / 0..1', 'FractionDescription', ['SubstanceSourceMaterial.fractionDescription'])
+        ],
+        SubstanceSpecification: [
+          ...baseFields('SubstanceSpecification', 'SubstanceSpecificationId'),
+          field('Type code', '$.type.coding[0].code', 'SubstanceSpecification.type.coding.code', '0..1 / 0..* / 0..1', 'TypeCode', ['SubstanceSpecification.type.coding']),
+          field('Name', '$.name[0].name', 'SubstanceSpecification.name.name', '0..* / 1..1', 'Name', ['SubstanceSpecification.name']),
+          field('Moiety molecular formula', '$.moiety[0].molecularFormula', 'SubstanceSpecification.moiety.molecularFormula', '0..* / 0..1', 'MoietyMolecularFormula', ['SubstanceSpecification.moiety']),
+          field('Property code', '$.property[0].code.coding[0].code', 'SubstanceSpecification.property.code.coding.code', '0..* / 0..1 / 0..* / 0..1', 'PropertyCode', ['SubstanceSpecification.property', 'SubstanceSpecification.property.code.coding'])
+        ],
+        TerminologyCapabilities: [
+          ...baseFields('TerminologyCapabilities', 'TerminologyCapabilitiesId'),
+          field('Status', '$.status', 'TerminologyCapabilities.status', '1..1', 'Status'),
+          field('Kind', '$.kind', 'TerminologyCapabilities.kind', '1..1', 'Kind'),
+          field('Code system uri', '$.codeSystem[0].uri', 'TerminologyCapabilities.codeSystem.uri', '0..* / 0..1', 'CodeSystemUri', ['TerminologyCapabilities.codeSystem']),
+          field('Code system version code', '$.codeSystem[0].version[0].code', 'TerminologyCapabilities.codeSystem.version.code', '0..* / 0..* / 0..1', 'CodeSystemVersionCode', ['TerminologyCapabilities.codeSystem', 'TerminologyCapabilities.codeSystem.version'])
+        ],
+        TestReport: [
+          ...baseFields('TestReport', 'TestReportId'),
+          field('Status', '$.status', 'TestReport.status', '1..1', 'Status'),
+          field('Result', '$.result', 'TestReport.result', '1..1', 'Result'),
+          field('Test script reference', '$.testScript.reference', 'TestReport.testScript.reference', '1..1 / 0..1', 'TestScriptReference'),
+          field('Setup action operation result', '$.setup.action[0].operation.result', 'TestReport.setup.action.operation.result', '0..1 / 1..* / 0..1 / 1..1', 'SetupOperationResult', ['TestReport.setup.action']),
+          field('Test action assert result', '$.test[0].action[0].assert.result', 'TestReport.test.action.assert.result', '0..* / 1..* / 0..1 / 1..1', 'TestAssertResult', ['TestReport.test', 'TestReport.test.action'])
+        ],
+        TestScript: [
+          ...baseFields('TestScript', 'TestScriptId'),
+          field('Status', '$.status', 'TestScript.status', '1..1', 'Status'),
+          field('Url', '$.url', 'TestScript.url', '1..1', 'Url'),
+          field('Test name', '$.test[0].name', 'TestScript.test.name', '0..* / 0..1', 'TestName', ['TestScript.test']),
+          field('Test action operation description', '$.test[0].action[0].operation.description', 'TestScript.test.action.operation.description', '0..* / 1..* / 0..1 / 0..1', 'TestActionOperationDescription', ['TestScript.test', 'TestScript.test.action']),
+          field('Setup action assert description', '$.setup.action[0].assert.description', 'TestScript.setup.action.assert.description', '0..1 / 1..* / 0..1 / 0..1', 'SetupAssertDescription', ['TestScript.setup.action'])
+        ],
+        VerificationResult: [
+          ...baseFields('VerificationResult', 'VerificationResultId'),
+          field('Status', '$.status', 'VerificationResult.status', '1..1', 'Status'),
+          field('Target reference', '$.target[0].reference', 'VerificationResult.target.reference', '0..* / 0..1', 'TargetReference', ['VerificationResult.target']),
+          field('Primary source who', '$.primarySource[0].who.reference', 'VerificationResult.primarySource.who.reference', '0..* / 0..1 / 0..1', 'PrimarySourceWhoReference', ['VerificationResult.primarySource']),
+          field('Validator organization', '$.validator[0].organization.reference', 'VerificationResult.validator.organization.reference', '0..* / 1..1 / 0..1', 'ValidatorOrganizationReference', ['VerificationResult.validator'])
+        ]
+      };
+    })();
+
+    let metadata = curatedMetadata;
+
+    const policies = {
+      FirstItem: 'Use first item only',
+      RepeatParent: 'Repeat parent row for each array item',
+      SeparateDestination: 'Use separate destination/table',
+      StoreJson: 'Store full array as JSON',
+      RejectIfMultiple: 'Reject if multiple values found'
+    };
+
+    let mappings = [];
+    let rowCounter = 1;
+
+    const resourceSelect = document.getElementById('resourceSelect');
+    const fieldSelect = document.getElementById('fieldSelect');
+    const destinationTable = document.getElementById('destinationTable');
+    const destinationColumn = document.getElementById('destinationColumn');
+    const arrayPolicy = document.getElementById('arrayPolicy');
+    const customPath = document.getElementById('customPath');
+    const fieldAnalysis = document.getElementById('fieldAnalysis');
+    const mappingList = document.getElementById('mappingList');
+    const validationMessages = document.getElementById('validationMessages');
+    const metadataRows = document.getElementById('metadataRows');
+
+    function field(label, path, fhirPath, cardinality, target, arrays = []) {
+      return { label, path, fhirPath, cardinality, target, arrays };
+    }
+
+    function selectedField() {
+      const resource = resourceSelect.value;
+      return metadata[resource].find(x => x.path === fieldSelect.value) || metadata[resource][0];
+    }
+
+    function getEffectiveField() {
+      const resource = resourceSelect.value;
+      const base = selectedField();
+      const custom = customPath.value.trim();
+      if (!custom) {
+        return base;
+      }
+      return {
+        label: 'Custom path',
+        path: custom,
+        fhirPath: resource + '.' + custom.replace(/^\$\./, '').replace(/\[(0|\*)\]/g, ''),
+        cardinality: inferCardinality(custom),
+        target: destinationColumn.value || 'CustomColumn',
+        arrays: inferArrays(resource, custom)
+      };
+    }
+
+    function inferCardinality(path) {
+      return /(\[\d+\]|\[\*\])/.test(path) ? 'custom path with repeating node(s)' : 'custom scalar path';
+    }
+
+    function inferArrays(resource, path) {
+      const cleaned = path.replace(/^\$\./, '');
+      const parts = cleaned.split('.');
+      const arrays = [];
+      let chain = resource;
+      for (const part of parts) {
+        const match = part.match(/^([A-Za-z0-9_]+)(\[(\d+|\*)\])?/);
+        if (!match) continue;
+        chain += '.' + match[1];
+        if (match[2]) {
+          arrays.push(chain);
+        }
+      }
+      return arrays;
+    }
+
+    function analyze(fieldOption) {
+      const arrays = Array.from(new Set([...(fieldOption.arrays || []), ...inferArrays(resourceSelect.value, fieldOption.path)]));
+      return {
+        isArray: arrays.length > 0,
+        arrays,
+        firstPath: fieldOption.path.replace(/\[\*\]/g, '[0]').replace(/\[(\d+)\]/g, '[0]'),
+        deepestArray: arrays[arrays.length - 1] || '',
+        path: fieldOption.path
+      };
+    }
+
+    function renderResourceOptions() {
+      resourceSelect.innerHTML = Object.keys(metadata)
+        .map(resource => `<option value="${resource}">${resource}</option>`)
+        .join('');
+      renderFieldOptions();
+    }
+
+    function renderFieldOptions() {
+      const resource = resourceSelect.value;
+      const fields = metadata[resource] || [];
+      fieldSelect.innerHTML = fields
+        .map(option => `<option value="${escapeHtml(option.path)}">${option.label} - ${option.path}</option>`)
+        .join('');
+      destinationTable.value = `dbo.${resource}`;
+      destinationColumn.value = fields[0] ? fields[0].target : '';
+      customPath.value = '';
+      updateCurrentAnalysis();
+      renderMetadata();
+    }
+
+    function updateCurrentAnalysis() {
+      const option = getEffectiveField();
+      const result = analyze(option);
+      destinationColumn.value = customPath.value.trim() ? destinationColumn.value : option.target;
+      arrayPolicy.disabled = !result.isArray;
+      if (!result.isArray) {
+        arrayPolicy.value = 'FirstItem';
+      }
+      const badge = result.isArray ? '<span class="badge array">Array path</span>' : '<span class="badge scalar">Scalar path</span>';
+      const arrayText = result.isArray
+        ? `<p>This source field crosses repeating FHIR node(s): <strong>${result.arrays.join(', ')}</strong>.</p>
+           <p>Default output path becomes <code>${escapeHtml(result.firstPath)}</code> if first-item handling is selected.</p>`
+        : '<p>This source field is scalar for the selected path, so no array expansion choice is required.</p>';
+      fieldAnalysis.className = result.isArray ? 'message warn' : 'message ok';
+      fieldAnalysis.innerHTML = `
+        <h3>${badge} ${escapeHtml(resourceSelect.value)} / ${escapeHtml(option.label)}</h3>
+        <p>FHIR path: <code>${escapeHtml(option.fhirPath)}</code></p>
+        <p>Cardinality: <strong>${escapeHtml(option.cardinality)}</strong></p>
+        ${arrayText}`;
+    }
+
+    function rowKey(r) {
+      return [r.resource, r.path, (r.destinationTable || '').trim().toLowerCase(), (r.destinationColumn || '').trim().toLowerCase()].join('|');
+    }
+
+    function isDuplicate(candidate, excludeId) {
+      return mappings.some(r => r.id !== excludeId && rowKey(r) === rowKey(candidate));
+    }
+
+    let noticeTimer = null;
+    function setNotice(msg) {
+      const n = document.getElementById('builderNotice');
+      if (!n) return;
+      n.textContent = msg;
+      if (noticeTimer) { clearTimeout(noticeTimer); noticeTimer = null; }
+      if (msg) noticeTimer = setTimeout(() => { n.textContent = ''; }, 5000);
+    }
+
+    function addMapping() {
+      const option = getEffectiveField();
+      const result = analyze(option);
+      const resource = resourceSelect.value;
+      const policy = result.isArray ? arrayPolicy.value : 'Scalar';
+      const candidate = {
+        resource,
+        path: option.path,
+        destinationTable: destinationTable.value.trim() || `dbo.${resource}`,
+        destinationColumn: destinationColumn.value.trim() || option.target || option.label.replace(/\s+/g, '')
+      };
+      if (isDuplicate(candidate, null)) {
+        setNotice(`Duplicate not added: ${resource} ${option.path} is already mapped to ${candidate.destinationTable}.${candidate.destinationColumn}.`);
+        return;
+      }
+      mappings.push({
+        id: rowCounter++,
+        resource,
+        label: option.label,
+        path: option.path,
+        fhirPath: option.fhirPath,
+        cardinality: option.cardinality,
+        destinationTable: candidate.destinationTable,
+        destinationColumn: candidate.destinationColumn,
+        arrays: result.arrays,
+        firstPath: result.firstPath,
+        policy
+      });
+      setNotice('');
+      customPath.value = '';
+      renderAll();
+    }
+
+    function onRowEdit(e) {
+      const el = e.target;
+      const id = Number(el.dataset.id);
+      const field = el.dataset.field;
+      if (!id || !field) return;
+      const row = mappings.find(r => r.id === id);
+      if (!row) return;
+      const previous = row[field];
+      row[field] = el.value;
+      if ((field === 'destinationTable' || field === 'destinationColumn') && isDuplicate(row, id)) {
+        row[field] = previous;
+        el.value = previous;
+        setNotice(`Duplicate not allowed: ${row.resource} ${row.path} already maps to ${row.destinationTable}.${row.destinationColumn}.`);
+        renderMessages();
+        renderSamplePreview();
+        return;
+      }
+      setNotice('');
+      if (field === 'policy') {
+        renderAll();
+      } else {
+        renderMessages();
+        renderSamplePreview();
+      }
+    }
+
+    function removeMapping(id) {
+      mappings = mappings.filter(row => row.id !== id);
+      renderAll();
+    }
+
+    function renderMappings() {
+      if (!mappings.length) {
+        mappingList.innerHTML = '<p class="hint">No mapping rows yet. Add Patient.id, Patient.address, Claim.item.detail.subDetail, or QuestionnaireResponse.item.item.answer to see N-level array validation.</p>';
+        return;
+      }
+
+      mappingList.innerHTML = mappings.map(row => {
+        const isArray = row.arrays.length > 0;
+        const classes = ['mapping-card'];
+        if (isArray) classes.push('array-risk');
+        const policyOptions = Object.keys(policies)
+          .map(k => `<option value="${k}" ${row.policy === k ? 'selected' : ''}>${escapeHtml(policies[k])}</option>`)
+          .join('');
+        const policyControl = isArray
+          ? `<select data-id="${row.id}" data-field="policy">${policyOptions}</select>`
+          : `<select disabled title="Scalar (one-to-one) field — no array handling needed"><option>Scalar (one-to-one)</option></select>`;
+        return `
+          <article class="${classes.join(' ')}">
+            <div class="mapping-head">
+              <div class="mapping-title">
+                <strong>${escapeHtml(row.resource)} / ${escapeHtml(row.label)}</strong>
+                <code>${escapeHtml(row.path)}</code>
+              </div>
+              <div class="mapping-meta">
+                <span class="badge ${isArray ? 'array' : 'scalar'}">${isArray ? 'Array' : 'Scalar'}</span>
+                <button type="button" class="danger" onclick="removeMapping(${row.id})">Remove</button>
+              </div>
+            </div>
+            <div class="row" style="grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0;">
+              <label>Destination table
+                <input data-id="${row.id}" data-field="destinationTable" value="${escapeHtml(row.destinationTable)}">
+              </label>
+              <label>Destination column
+                <input data-id="${row.id}" data-field="destinationColumn" value="${escapeHtml(row.destinationColumn)}">
+              </label>
+              <label>Array handling
+                ${policyControl}
+              </label>
+            </div>
+            ${isArray ? `<p class="hint">Repeating nodes: ${escapeHtml(row.arrays.join(', '))}</p>` : ''}
+          </article>`;
+      }).join('');
+    }
+
+    function buildValidationMessages() {
+      const messages = [];
+      if (!mappings.length) {
+        messages.push({
+          kind: 'info',
+          title: 'No mappings configured',
+          body: 'Add mapping rows to see scalar, array, N-level nesting, multi-resource, and row-repetition validation.'
+        });
+        return messages;
+      }
+
+      const resources = new Set(mappings.map(row => row.resource));
+      if (resources.size > 1) {
+        messages.push({
+          kind: 'warn',
+          title: 'Multiple resource types in one profile',
+          body: `This mapping contains ${Array.from(resources).join(', ')}. Runtime usually processes each FHIR resource independently. Split into separate profiles/routes unless this is an intentional joined export.`
+        });
+      }
+
+      for (const row of mappings) {
+        if (!row.arrays.length) continue;
+        if (row.policy === 'FirstItem') {
+          messages.push({
+            kind: 'warn',
+            title: `${row.resource}.${row.label} uses first item only`,
+            body: `${row.fhirPath} is repeating. FHIRBridge would map ${row.firstPath}. If source has multiple values, all except the first are ignored.`
+          });
+        }
+        if (row.policy === 'RepeatParent') {
+          messages.push({
+            kind: 'warn',
+            title: `${row.resource}.${row.label} repeats parent rows`,
+            body: `${row.arrays.join(', ')} can create multiple rows in ${row.destinationTable}. Parent columns such as id/name repeat for each array item.`
+          });
+        }
+        if (row.policy === 'SeparateDestination') {
+          messages.push({
+            kind: 'ok',
+            title: `${row.resource}.${row.label} is modeled as a child destination`,
+            body: `Recommended for normalized relational outputs. Keep parent id in both parent and child table for joins.`
+          });
+        }
+        if (row.policy === 'StoreJson') {
+          messages.push({
+            kind: 'info',
+            title: `${row.resource}.${row.label} stores the full array as JSON`,
+            body: `Good for staging/blob/analytics, but SQL consumers must parse JSON to query individual array items.`
+          });
+        }
+        if (row.policy === 'RejectIfMultiple') {
+          messages.push({
+            kind: 'error',
+            title: `${row.resource}.${row.label} rejects multiple values`,
+            body: `Strict policy selected. Runtime should fail validation if ${row.arrays.join(', ')} contains more than one item.`
+          });
+        }
+      }
+
+      const byDestination = groupBy(mappings, row => `${row.resource}|${row.destinationTable}`);
+      for (const rows of Object.values(byDestination)) {
+        const arrayRoots = new Set(rows.flatMap(row => row.arrays));
+        const repeatRows = rows.filter(row => row.policy === 'RepeatParent');
+        if (arrayRoots.size > 1 && repeatRows.length > 1) {
+          messages.push({
+            kind: 'error',
+            title: 'Cartesian repetition risk',
+            body: `Destination ${rows[0].destinationTable} maps multiple independent arrays: ${Array.from(arrayRoots).join(', ')}. A resource with 2 addresses and 3 telecom values can become 6 rows unless arrays are separated or constrained.`
+          });
+        }
+      }
+
+      const parentWithArray = Object.values(byDestination).filter(rows =>
+        rows.some(row => !row.arrays.length) && rows.some(row => row.arrays.length && row.policy !== 'SeparateDestination')
+      );
+      for (const rows of parentWithArray) {
+        const arrayRows = rows.filter(row => row.arrays.length);
+        if (arrayRows.length) {
+          messages.push({
+            kind: 'warn',
+            title: `Parent scalar fields mixed with array fields in ${rows[0].destinationTable}`,
+            body: `Scalar rows and repeating rows are mapped into the same destination. Confirm whether the business wants first item only, repeated parent rows, JSON array storage, or child tables.`
+          });
+        }
+      }
+
+      if (!messages.length) {
+        messages.push({
+          kind: 'ok',
+          title: 'No array risk detected',
+          body: 'All selected mappings are scalar or have explicit safe array handling.'
+        });
+      }
+      return messages;
+    }
+
+    function renderMessages() {
+      validationMessages.innerHTML = buildValidationMessages().map(message => `
+        <section class="message ${message.kind}">
+          <h3>${escapeHtml(message.title)}</h3>
+          <p>${escapeHtml(message.body)}</p>
+        </section>
+      `).join('');
+    }
+
+    function renderMetadata() {
+      const resource = resourceSelect.value;
+      const fields = metadata[resource] || [];
+      metadataRows.innerHTML = fields.map(row => `
+          <tr>
+            <td>${escapeHtml(resource)}</td>
+            <td>${escapeHtml(row.label)}</td>
+            <td><code>${escapeHtml(row.path)}</code></td>
+            <td>${escapeHtml(row.cardinality)}</td>
+            <td>${row.arrays.length ? escapeHtml(row.arrays.join(', ')) : '<span class="badge scalar">None</span>'}</td>
+          </tr>`).join('');
+    }
+
+    function renderAll() {
+      renderMappings();
+      renderMessages();
+      renderSamplePreview();
+    }
+
+    function sampleValue(column, resource, i) {
+      const c = column || 'Value';
+      if (/Id$/.test(c)) return `${resource.toLowerCase()}-${i + 1}`;
+      if (/Reference$/.test(c)) return `${(c.replace(/Reference$/, '') || 'Ref')}/${i + 1}`;
+      if (/(Code|Status|Type|Category|Use|Mode|Intent|Kind|Action|Severity|Outcome|Result)$/.test(c)) return `${c.replace(/[a-z]/g, '').slice(0, 4) || 'CD'}-${i + 1}`;
+      if (/(Date|Utc|Start|End|Recorded|Time)$/.test(c)) return `2026-06-${String(10 + i).padStart(2, '0')}`;
+      if (/(Amount|Value|Net|Count|Quantity|Number|Numerator)$/.test(c)) return 10 * (i + 1);
+      if (/(Url|System|Address|Uri|Profile|Formula|Sequence)$/.test(c)) return `https://example.org/${c.toLowerCase()}/${i + 1}`;
+      return `${c} ${i + 1}`;
+    }
+
+    function buildSampleTablesHtml(size) {
+      const groups = groupBy(mappings, row => `${row.resource}|${row.destinationTable}`);
+      return Object.entries(groups).map(([key, rows]) => {
+        const [resource, table] = key.split('|');
+        const isChild = rows.length > 0 && rows.every(r => r.policy === 'SeparateDestination');
+        const hasFanout = rows.some(r => r.arrays.length && (r.policy === 'RepeatParent' || r.policy === 'SeparateDestination'));
+        const rowCount = hasFanout ? size : 1;
+        const cols = rows.map(r => r.destinationColumn);
+        const headerCols = isChild ? ['ParentId (FK)', ...cols] : cols;
+        const bodyRows = [];
+        for (let i = 0; i < rowCount; i++) {
+          const cells = [];
+          if (isChild) cells.push(escapeHtml(`${resource.toLowerCase()}-1`));
+          for (const r of rows) {
+            const arr = r.arrays.length > 0;
+            if (!arr || r.policy === 'FirstItem') {
+              cells.push(escapeHtml(String(sampleValue(r.destinationColumn, resource, 0))));
+            } else if (r.policy === 'RepeatParent' || r.policy === 'SeparateDestination') {
+              cells.push(escapeHtml(String(sampleValue(r.destinationColumn, resource, i))));
+            } else if (r.policy === 'StoreJson') {
+              const arrVals = Array.from({ length: size }, (_, k) => sampleValue(r.destinationColumn, resource, k));
+              cells.push('<code>' + escapeHtml(JSON.stringify(arrVals)) + '</code>');
+            } else if (r.policy === 'RejectIfMultiple') {
+              cells.push(escapeHtml(String(sampleValue(r.destinationColumn, resource, 0))) + ' <span class="badge error">reject if &gt;1</span>');
+            } else {
+              cells.push(escapeHtml(String(sampleValue(r.destinationColumn, resource, 0))));
+            }
+          }
+          bodyRows.push('<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>');
+        }
+        const policyset = Array.from(new Set(rows.map(r => r.policy === 'Scalar' ? 'Scalar' : policies[r.policy])));
+        return `
+          <div style="margin-bottom: 18px;">
+            <div class="toolbar" style="justify-content: space-between; margin-bottom: 6px;">
+              <strong>${escapeHtml(table)}</strong>
+              <span class="badge ${isChild ? 'array' : 'scalar'}">${isChild ? 'Child table' : 'Parent table'} &middot; ${rowCount} row(s)</span>
+            </div>
+            <p class="small">Resource: ${escapeHtml(resource)} &middot; Policies: ${escapeHtml(policyset.join(', '))}</p>
+            <div style="overflow:auto;"><table>
+              <thead><tr>${headerCols.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
+              <tbody>${bodyRows.join('')}</tbody>
+            </table></div>
+          </div>`;
+      }).join('');
+    }
+
+    function renderSamplePreview() {
+      const host = document.getElementById('samplePreview');
+      if (!host) return;
+      if (!mappings.length) {
+        host.innerHTML = '<p class="hint">Add mapping rows to generate a sample destination preview.</p>';
+        return;
+      }
+      const size = Math.max(1, Math.min(6, parseInt(document.getElementById('sampleSize').value, 10) || 3));
+      host.innerHTML = buildSampleTablesHtml(size);
+    }
+
+    function downloadSampleHtml() {
+      const size = Math.max(1, Math.min(6, parseInt(document.getElementById('sampleSize').value, 10) || 3));
+      const tables = mappings.length ? buildSampleTablesHtml(size) : '<p>No mappings configured.</p>';
+      const rowsSummary = mappings.map(r =>
+        `<tr><td>${escapeHtml(r.resource)}</td><td><code>${escapeHtml(r.path)}</code></td><td>${escapeHtml(r.destinationTable)}.${escapeHtml(r.destinationColumn)}</td><td>${escapeHtml(r.policy === 'Scalar' ? 'Scalar' : policies[r.policy])}</td></tr>`
+      ).join('');
+      const doc = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FHIRBridge Sample Mapping Output</title>
+<style>
+  body { font-family: Inter, "Segoe UI", Arial, sans-serif; margin: 24px; color: #10202c; background: #f4f7f8; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 24px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 8px; font-size: 13px; background: #fff; }
+  th, td { border: 1px solid #c7d6dc; padding: 8px; text-align: left; vertical-align: top; }
+  th { background: #edf5f4; }
+  code { color: #174ea6; font-family: Consolas, "Courier New", monospace; }
+  .small { color: #5f6f7d; font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .badge.error { color: #b42318; background: #fee4e2; }
+  .badge.array { color: #7a4d00; background: #fff4d6; }
+  .badge.scalar { color: #0b4f49; background: #dff7f2; }
+  .toolbar { display: flex; gap: 10px; align-items: center; }
+</style></head>
+<body>
+  <h1>FHIRBridge &mdash; Sample Mapping Output</h1>
+  <p class="small">Generated example with sample array size <strong>${size}</strong>. Destination rows reflect each mapping's array-handling policy.</p>
+  <h2>Configured mappings</h2>
+  <table><thead><tr><th>Resource</th><th>Source path</th><th>Destination</th><th>Array handling</th></tr></thead><tbody>${rowsSummary || '<tr><td colspan="4">None</td></tr>'}</tbody></table>
+  <h2>Sample destination tables</h2>
+  ${tables}
+</body></html>`;
+      const blob = new Blob([doc], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'fhirbridge-sample-mapping-output.html';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function loadPatientDemo() {
+      mappings = [
+        demoRow('Patient', 'Identifier', 'dbo.Patient', 'PatientId', 'Scalar'),
+        demoRow('Patient', 'Family name', 'dbo.Patient', 'FamilyName', 'FirstItem'),
+        demoRow('Patient', 'Address line', 'dbo.Patient', 'AddressLine1', 'FirstItem'),
+        demoRow('Patient', 'Phone', 'dbo.Patient', 'Phone', 'RepeatParent')
+      ].filter(Boolean);
+      rowCounter = 100;
+      renderAll();
+    }
+
+    function loadObservationDemo() {
+      mappings = [
+        demoRow('Observation', 'Identifier', 'dbo.Observation', 'ObservationId', 'Scalar'),
+        demoRow('Observation', 'Component code', 'dbo.ObservationComponent', 'Code', 'SeparateDestination'),
+        demoRow('Observation', 'Component value quantity', 'dbo.ObservationComponent', 'ValueQuantity', 'SeparateDestination'),
+        demoRow('Observation', 'Category code', 'dbo.Observation', 'CategoryCode', 'FirstItem')
+      ].filter(Boolean);
+      rowCounter = 200;
+      renderAll();
+    }
+
+    function applyCatalog(useGenerated) {
+      metadata = (useGenerated && window.FHIR_R4_METADATA) ? window.FHIR_R4_METADATA : curatedMetadata;
+      mappings = [];
+      renderResourceOptions();
+      renderMetadata();
+      renderAll();
+    }
+
+    function demoRow(resource, label, destinationTableName, destinationColumnName, policy) {
+      const option = (metadata[resource] || []).find(item => item.label === label);
+      if (!option) return null;
+      const result = analyzeForResource(resource, option);
+      return {
+        id: rowCounter++,
+        resource,
+        label: option.label,
+        path: option.path,
+        fhirPath: option.fhirPath,
+        cardinality: option.cardinality,
+        destinationTable: destinationTableName,
+        destinationColumn: destinationColumnName,
+        arrays: result.arrays,
+        firstPath: result.firstPath,
+        policy: result.arrays.length ? policy : 'Scalar'
+      };
+    }
+
+    function analyzeForResource(resource, option) {
+      const arrays = Array.from(new Set([...(option.arrays || []), ...inferArrays(resource, option.path)]));
+      return {
+        arrays,
+        firstPath: option.path.replace(/\[\*\]/g, '[0]').replace(/\[(\d+)\]/g, '[0]')
+      };
+    }
+
+    function groupBy(items, keyFn) {
+      return items.reduce((acc, item) => {
+        const key = keyFn(item);
+        acc[key] = acc[key] || [];
+        acc[key].push(item);
+        return acc;
+      }, {});
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    resourceSelect.addEventListener('change', renderFieldOptions);
+    fieldSelect.addEventListener('change', () => {
+      const option = selectedField();
+      destinationColumn.value = option.target;
+      updateCurrentAnalysis();
+    });
+    customPath.addEventListener('input', updateCurrentAnalysis);
+    document.getElementById('addRow').addEventListener('click', addMapping);
+    document.getElementById('clearRows').addEventListener('click', () => { mappings = []; renderAll(); });
+    document.getElementById('loadPatientDemo').addEventListener('click', loadPatientDemo);
+    document.getElementById('loadObservationDemo').addEventListener('click', loadObservationDemo);
+    document.getElementById('sampleSize').addEventListener('input', renderSamplePreview);
+    document.getElementById('downloadSample').addEventListener('click', downloadSampleHtml);
+    mappingList.addEventListener('input', (e) => { if (e.target.tagName === 'INPUT') onRowEdit(e); });
+    mappingList.addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') onRowEdit(e); });
+
+    const advancedToggle = document.getElementById('advancedToggle');
+    function applyAdvanced() {
+      const on = advancedToggle.checked;
+      document.querySelectorAll('.advanced').forEach(el => { el.style.display = on ? '' : 'none'; });
+    }
+    advancedToggle.addEventListener('change', applyAdvanced);
+    const catalogToggle = document.getElementById('catalogToggle');
+    let generatedLoading = false;
+
+    function ensureGenerated(onReady, onError) {
+      if (window.FHIR_R4_METADATA) { onReady(); return; }
+      if (generatedLoading) return;
+      generatedLoading = true;
+      catalogToggle.disabled = true;
+      const s = document.createElement('script');
+      s.src = 'fhir-r4-metadata.generated.js';
+      s.onload = () => { generatedLoading = false; catalogToggle.disabled = false; onReady(); };
+      s.onerror = () => { generatedLoading = false; catalogToggle.disabled = false; if (onError) onError(); };
+      document.head.appendChild(s);
+    }
+
+    catalogToggle.addEventListener('change', (e) => {
+      if (!e.target.checked) { applyCatalog(false); return; }
+      ensureGenerated(() => applyCatalog(true), () => {
+        catalogToggle.checked = false;
+        alert('Could not load fhir-r4-metadata.generated.js. Run the generator (tools/MappingMetadataGenerator) and keep the .js file next to this HTML.');
+      });
+    });
+
+    window.removeMapping = removeMapping;
+
+    renderResourceOptions();
+    renderMetadata();
+    loadPatientDemo();
+    applyAdvanced();
+
+    // Default to the complete snapshot-derived catalog so no element is ever missed.
+    // Falls back to the fast curated view if the generated file is not present next to this HTML.
+    ensureGenerated(
+      () => { catalogToggle.checked = true; applyCatalog(true); },
+      () => { /* generated file absent — stay on curated lite view */ }
+    );
+  </script>
+</body>
+</html>

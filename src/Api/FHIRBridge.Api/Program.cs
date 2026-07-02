@@ -37,6 +37,9 @@ builder.Services
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
+// Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector). In production,
+// persist the key ring to shared storage (Key Vault / blob) so tokens survive restarts and work across instances.
+builder.Services.AddDataProtection();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {

@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
@@ -7,11 +8,13 @@ using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Sources;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Infrastructure.Auth;
 using FluentAssertions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -24,6 +27,8 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     private readonly Mock<IInteractiveAuthorizationFlow> _flow = new();
     private readonly InMemoryOAuthAuthorizationStateStore _stateStore = new();
     private readonly Mock<ISecretProvider> _secretProvider = new();
+    private readonly ILaunchTokenProtector _protector = new DataProtectionLaunchTokenProtector(new EphemeralDataProtectionProvider());
+    private readonly Mock<IConfiguredPipelineService> _pipeline = new();
     private readonly Mock<IOperationalAuditService> _audit = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
 
@@ -41,6 +46,8 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _flow.Object,
         _stateStore,
         _secretProvider.Object,
+        _protector,
+        _pipeline.Object,
         _audit.Object,
         _currentUser.Object,
         NullLogger<InteractiveSourceAuthorizationService>.Instance);
@@ -58,6 +65,24 @@ public sealed class InteractiveSourceAuthorizationServiceTests
 
         _tenantRepository.Setup(x => x.GetByIdAsync(TenantId, It.IsAny<CancellationToken>())).ReturnsAsync(tenant);
         return source;
+    }
+
+    // Seeds the full chain a route-scoped launch resolves through: source + destination + mapping + route.
+    private (Guid RouteId, SourceConnection Source) SeedRoute(SourceInteractiveConfiguration? interactive = null)
+    {
+        var tenant = new Tenant("Contoso Health", "contoso");
+        var auth = new SourceAuthenticationConfiguration(
+            AuthenticationType.OAuthClientCredentials, "client-1", null, ["user/Patient.read"], null, null, null);
+        var source = tenant.AddSourceConnection(
+            "Epic EHR Launch", SourceSystemType.Epic, "https://fhir.example.com", auth, interactive: interactive);
+        var destination = tenant.AddDestinationConfiguration(
+            "SQL", DestinationType.SqlServer, new SecretReference("vault", "sql-conn"), "dbo.Observations");
+        var mapping = tenant.AddMappingProfile(
+            "Observation → SQL", "Observation", source.Id, destination.Id, "dbo.Observations", Array.Empty<MappingField>());
+        var route = tenant.AddRoute(IngestionMode.ScheduledPull, null, mapping.Id, null, null, true, 1);
+
+        _tenantRepository.Setup(x => x.GetByIdAsync(TenantId, It.IsAny<CancellationToken>())).ReturnsAsync(tenant);
+        return (route.Id, source);
     }
 
     private void SetupDiscovery(string? authorize = "https://auth.example.com/authorize", string? token = "https://auth.example.com/token")
@@ -80,9 +105,11 @@ public sealed class InteractiveSourceAuthorizationServiceTests
 
         url.ToString().Should().StartWith("https://auth.example.com/authorize?state=");
 
-        // The state carried in the URL must resolve to a saved, single-use pending authorization for this source.
+        // The state in the URL is an encrypted token; decrypting it yields the single-use nonce that keys the store.
         var state = System.Web.HttpUtility.ParseQueryString(url.Query)["state"]!;
-        var pending = await _stateStore.TakeAsync(state, CancellationToken.None);
+        var nonce = _protector.UnprotectState(state);
+        nonce.Should().NotBeNull();
+        var pending = await _stateStore.TakeAsync(nonce!, CancellationToken.None);
         pending.Should().NotBeNull();
         pending!.SourceConnectionId.Should().Be(source.Id);
         pending.CodeVerifier.Should().Be("verifier-1");
@@ -116,11 +143,12 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     public async Task CompleteAsync_exchanges_the_code_with_the_retained_verifier_and_redirect()
     {
         var source = SeedEpicSource();
-        await _stateStore.SaveAsync("state-xyz", new PendingAuthorization(
+        const string nonce = "nonce-xyz";
+        await _stateStore.SaveAsync(nonce, new PendingAuthorization(
             TenantId, source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
             "verifier-1", "https://app.example.com/api/v1/oauth/callback", "https://auth.example.com/token", "client-1"),
             CancellationToken.None);
-        var sourceConnectionId = source.Id;
+        var state = _protector.ProtectState(nonce);
 
         string? usedVerifier = null;
         string? usedRedirect = null;
@@ -133,14 +161,14 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             })
             .ReturnsAsync("access-token");
 
-        var result = await Service().CompleteAsync("state-xyz", "auth-code", CancellationToken.None);
+        var result = await Service().CompleteAsync(state, "auth-code", CancellationToken.None);
 
-        result.SourceConnectionId.Should().Be(sourceConnectionId);
+        result.SourceConnectionId.Should().Be(source.Id);
         usedVerifier.Should().Be("verifier-1");
         usedRedirect.Should().Be("https://app.example.com/api/v1/oauth/callback");
 
         // State is single-use — a replay finds nothing.
-        (await _stateStore.TakeAsync("state-xyz", CancellationToken.None)).Should().BeNull();
+        (await _stateStore.TakeAsync(nonce, CancellationToken.None)).Should().BeNull();
     }
 
     [Fact]
@@ -158,7 +186,8 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _secretProvider.Setup(x => x.GetSecretAsync(
                 It.Is<SecretReference>(s => s.SecretName == "epic-client-secret"), It.IsAny<CancellationToken>()))
             .ReturnsAsync("resolved-secret");
-        await _stateStore.SaveAsync("state-conf", new PendingAuthorization(
+        const string nonce = "nonce-conf";
+        await _stateStore.SaveAsync(nonce, new PendingAuthorization(
             TenantId, source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
             "verifier-1", "https://app/callback", "https://auth.example.com/token", "client-1"),
             CancellationToken.None);
@@ -169,11 +198,62 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             .Callback((FhirSourceConfiguration s, string _, string _, string _, CancellationToken _) => exchanged = s)
             .ReturnsAsync("access-token");
 
-        await Service().CompleteAsync("state-conf", "auth-code", CancellationToken.None);
+        await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
 
         // The resolved secret is carried into the exchange, where the provider turns it into client authentication.
         exchanged.Should().NotBeNull();
         exchanged!.ClientSecret.Should().Be("resolved-secret");
+    }
+
+    [Fact]
+    public async Task CompleteAsync_triggers_the_route_pipeline_for_a_route_scoped_launch()
+    {
+        var (routeId, source) = SeedRoute();
+        const string nonce = "nonce-route";
+        await _stateStore.SaveAsync(nonce, new PendingAuthorization(
+            TenantId, source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic EHR Launch",
+            "verifier-1", "https://app/cb", "https://auth.example.com/token", "client-1", routeId),
+            CancellationToken.None);
+        _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
+                It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("access-token");
+
+        StartConfiguredPipelineRunRequest? runRequest = null;
+        _pipeline.Setup(x => x.StartAsync(TenantId, It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
+            .Callback((Guid _, StartConfiguredPipelineRunRequest r, CancellationToken _) => runRequest = r)
+            .Returns(Task.FromResult<ConfiguredPipelineRunDto>(null!));
+
+        await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
+
+        runRequest.Should().NotBeNull();
+        runRequest!.RouteIds.Should().Contain(routeId);
+    }
+
+    [Fact]
+    public async Task StartEhrLaunchFromContextAsync_rejects_a_tampered_context()
+    {
+        var act = () => Service().StartEhrLaunchFromContextAsync(
+            "not-a-valid-token", "https://ehr.trusted.com/fhir", "launch", "https://app/cb", CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task StartEhrLaunchFromContextAsync_resolves_the_route_and_forwards_the_launch_token()
+    {
+        var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, ["https://ehr.trusted.com/fhir"]));
+        SetupDiscovery();
+        var context = _protector.ProtectContext(TenantId, routeId);
+        string? forwardedLaunch = null;
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback((FhirSourceConfiguration _, string _, string _, string? launch) => forwardedLaunch = launch)
+            .Returns(new SmartAuthorizationRequest("https://auth.example.com/authorize", "verifier-1", "state"));
+
+        await Service().StartEhrLaunchFromContextAsync(
+            context, "https://ehr.trusted.com/fhir", "launch-token", "https://fallback/cb", CancellationToken.None);
+
+        forwardedLaunch.Should().Be("launch-token");
     }
 
     [Fact]

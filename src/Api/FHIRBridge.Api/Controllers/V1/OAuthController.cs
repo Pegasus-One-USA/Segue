@@ -64,6 +64,46 @@ public sealed class OAuthController : ControllerBase
     }
 
     /// <summary>
+    /// Returns the opaque, encrypted launch URL to register with the EHR for a specific pipeline route. The tenant and
+    /// route ids are encrypted into the URL, so raw GUIDs are never exposed. Admin-only.
+    /// </summary>
+    [Authorize]
+    [HttpGet("tenants/{tenantId:guid}/pipelines/{routeId:guid}/launch-url")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetLaunchUrl(Guid tenantId, Guid routeId)
+    {
+        var context = _authorizationService.BuildLaunchContextToken(tenantId, routeId);
+        return Ok(new { launchUrl = BuildLaunchUri(context) });
+    }
+
+    /// <summary>
+    /// The SMART EHR-launch entry point registered with the EHR for a specific pipeline route. The route (and tenant)
+    /// are carried in the encrypted <paramref name="context"/> segment — no raw GUIDs in the URL. The EHR appends the
+    /// issuer (<c>iss</c>) + opaque <c>launch</c> token; on callback the resolved route is run for the launched
+    /// patient. Anonymous — the launching user has no FHIRBridge session; security comes from the trusted-issuer check.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("oauth/launch/{context}")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> LaunchPipeline(
+        string context,
+        [FromQuery] string? iss,
+        [FromQuery] string? launch,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(iss) || string.IsNullOrWhiteSpace(launch))
+        {
+            return BadRequest(new { error = "invalid_request", error_description = "Missing iss or launch." });
+        }
+
+        var authorizationUrl = await _authorizationService.StartEhrLaunchFromContextAsync(
+            context, iss, launch, BuildCallbackUri(), cancellationToken);
+
+        return Redirect(authorizationUrl.ToString());
+    }
+
+    /// <summary>
     /// The OAuth redirect target registered with the EHR. Anonymous — it is secured by the single-use, unguessable
     /// <c>state</c> value rather than the caller's session. Completes the sign-in and persists the token.
     /// </summary>
@@ -103,4 +143,7 @@ public sealed class OAuthController : ControllerBase
     // admin is on; a multi-host deployment would instead resolve this from configuration.
     private string BuildCallbackUri() =>
         $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/callback";
+
+    private string BuildLaunchUri(string context) =>
+        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/launch/{context}";
 }

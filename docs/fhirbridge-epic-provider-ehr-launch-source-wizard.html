@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FHIRBridge · Epic Provider EHR Launch — Source Wizard</title>
+<style>
+  :root{
+    --navy:#1F3864; --blue:#2E75B6; --blue-soft:#DCE6F1; --blue-bg:#f3f8fd;
+    --green:#2e8b57; --green-soft:#e6f3ec; --amber:#bf8f00; --amber-soft:#fff6e0;
+    --ink:#1f2733; --mute:#6b7785; --line:#d9e0e8; --bg:#eef1f5; --panel:#fff;
+    --epic:#7a1f3d; --red:#c0392b; --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5}
+  .app{max-width:1000px;margin:32px auto;padding:0 20px}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .logo{width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,var(--blue),var(--navy));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px}
+  .brand h1{font-size:20px;margin:0;color:var(--navy)}
+  .brand .sub{font-size:13px;color:var(--mute)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:0 1px 3px rgba(16,40,80,.06);overflow:hidden}
+  .stepper{display:flex;background:#f7f9fc;border-bottom:1px solid var(--line)}
+  .stepper .st{flex:1;padding:14px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;
+    border-right:1px solid var(--line)}
+  .stepper .st:last-child{border-right:0}
+  .stepper .num{width:26px;height:26px;border-radius:50%;background:#dde4ec;color:var(--mute);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:0 0 auto}
+  .stepper .st.active{background:#fff} .stepper .st.active .num{background:var(--blue);color:#fff}
+  .stepper .st.done .num{background:var(--green);color:#fff}
+  .stepper .lbl{font-size:13px;font-weight:600;color:var(--ink)}
+  .stepper .lbl small{display:block;font-weight:400;color:var(--mute);font-size:11px}
+  .body{padding:26px 30px;min-height:440px}
+  .body h2{margin:0 0 4px;font-size:18px;color:var(--navy)}
+  .body .lead{color:var(--mute);margin:0 0 20px;font-size:13.5px}
+  .footer{display:flex;justify-content:space-between;align-items:center;padding:16px 30px;
+    border-top:1px solid var(--line);background:#fafbfd}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-weight:600;font-size:13px;margin-bottom:5px}
+  .field .hint{font-weight:400;color:var(--mute);font-size:12px}
+  input[type=text],input[type=password],select{width:100%;padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;font-size:14px;font-family:inherit;background:#fff}
+  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+  .ro{display:flex;gap:8px;align-items:center}
+  .ro input{background:#f4f6f9;color:#445}
+  .copy{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:7px;padding:8px 12px;
+    cursor:pointer;font-size:12px;font-weight:600;color:var(--blue)}
+  .copy:active{background:var(--blue-soft)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{border:0;background:#fff;padding:8px 18px;font-size:13px;font-weight:600;color:var(--mute);cursor:pointer}
+  .seg button.on{background:var(--blue);color:#fff}
+  .opts{display:flex;flex-direction:column;gap:10px}
+  .opt{border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;display:flex;gap:12px;align-items:flex-start}
+  .opt.on{border-color:var(--blue);background:var(--blue-bg)}
+  .opt.dis{opacity:.5;pointer-events:none}
+  .opt .dot{width:18px;height:18px;border-radius:50%;border:2px solid #b9c3d0;flex:0 0 auto;margin-top:2px}
+  .opt.on .dot{border-color:var(--blue);background:radial-gradient(circle,#fff 0 3px,var(--blue) 4px)}
+  .opt b{font-size:14px} .opt .d{color:var(--mute);font-size:12.5px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;
+    background:var(--green-soft);color:var(--green);margin-left:6px;vertical-align:middle}
+  .tag.cap{background:var(--blue-soft);color:var(--navy)}
+  details.adv{margin-top:8px;border:1px dashed var(--line);border-radius:10px;padding:0 14px}
+  details.adv summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--blue);padding:12px 0}
+  .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+  .toggle-row .t b{font-size:13px} .toggle-row .t span{display:block;color:var(--mute);font-size:12px}
+  .sw{width:42px;height:24px;border-radius:14px;background:#cdd5df;position:relative;cursor:pointer;flex:0 0 auto;transition:.15s}
+  .sw::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:.15s}
+  .sw.on{background:var(--green)} .sw.on::after{left:21px} .sw.dis{opacity:.4;pointer-events:none}
+  .capgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 26px;margin-top:6px}
+  .cap{display:flex;align-items:center;gap:9px;font-size:13.5px}
+  .ck{width:18px;height:18px;border-radius:50%;background:var(--green);flex:0 0 auto;position:relative}
+  .ck::after{content:"";position:absolute;left:5px;top:2.5px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+  .chip{font-size:11.5px;font-weight:600;background:#eef3f8;border:1px solid #dce6f1;color:var(--navy);padding:3px 9px;border-radius:20px}
+  .banner{display:flex;align-items:center;gap:10px;background:var(--green-soft);border:1px solid #bfe0cc;
+    color:#1d6b41;border-radius:9px;padding:11px 14px;font-weight:600;font-size:13.5px;margin-bottom:16px}
+  .note{background:var(--amber-soft);border:1px solid #f0d98a;border-radius:9px;padding:11px 14px;font-size:12.5px;color:#6b5500;margin-top:14px}
+  .note b{color:#6b5500}
+  /* loading + supported-scopes expander */
+  .loading{display:flex;align-items:center;gap:11px;color:var(--mute);font-size:14px;padding:14px 0}
+  .spin{width:22px;height:22px;border:3px solid #dde4ec;border-top-color:var(--blue);border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  details.exp{border:1px solid var(--line);border-radius:10px;margin-top:6px;overflow:hidden}
+  details.exp summary{cursor:pointer;list-style:none;padding:11px 14px;font-weight:600;font-size:13px;color:var(--navy);
+    display:flex;align-items:center;gap:8px;background:#f7f9fc}
+  details.exp summary::-webkit-details-marker{display:none}
+  details.exp summary::after{content:"▸ show";margin-left:auto;color:var(--blue);font-weight:600;font-size:12px}
+  details.exp[open] summary::after{content:"▾ hide"}
+  .scopelist{padding:14px;margin-top:0}
+  .sgroup{margin-bottom:12px} .sgroup:last-child{margin-bottom:0}
+  .sgroup h4{margin:0 0 7px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute)}
+  .sgroup .ss{display:flex;flex-wrap:wrap;gap:6px}
+  .ss code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#f4f7fb;border:1px solid #e2e9f1;
+    color:var(--navy);padding:3px 8px;border-radius:6px}
+  .countpill{display:inline-block;background:var(--blue);color:#fff;font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;margin-left:6px}
+  .res{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .res .rrow{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .res .rrow:last-child{border-bottom:0}
+  .res .rname{flex:1;font-weight:600;font-size:13.5px}
+  .res .rname small{display:block;font-weight:400;color:var(--mute);font-size:11.5px}
+  .ix{display:flex;gap:6px}
+  .ix label{font-size:12px;border:1px solid var(--line);border-radius:7px;padding:5px 10px;cursor:pointer;color:var(--mute);user-select:none}
+  .ix label.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .scopebox{margin-top:16px;background:#0f172a;border-radius:10px;padding:14px 16px;color:#e6edf3;
+    font-family:ui-monospace,Consolas,monospace;font-size:12.5px;white-space:pre-wrap;word-break:break-word;min-height:46px}
+  .scopebox .k{color:#9cdcfe}
+  .rev{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:16px}
+  .rev .row{display:flex;border-bottom:1px solid var(--line)} .rev .row:last-child{border-bottom:0}
+  .rev .key{width:220px;background:#f7f9fc;padding:10px 14px;font-weight:600;font-size:13px;color:var(--navy);border-right:1px solid var(--line)}
+  .rev .val{flex:1;padding:10px 14px;font-size:13px;word-break:break-word}
+  .btn{border:0;border-radius:9px;padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer}
+  .btn.prim{background:var(--blue);color:#fff} .btn.prim:disabled{background:#aebfd2;cursor:not-allowed}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink)} .btn.go{background:var(--green);color:#fff}
+  .pill{display:inline-flex;align-items:center;gap:7px;background:#fbe9ef;border:1px solid #e9c4d2;color:var(--epic);
+    border-radius:20px;padding:5px 13px;font-size:12.5px;font-weight:700}
+  .small{font-size:12px;color:var(--mute)} .hide{display:none!important}
+  .rofield{display:flex;align-items:center;gap:10px;background:#f4f6f9;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="brand">
+    <div class="logo">FB</div>
+    <div>
+      <h1>Connect Epic — Provider EHR Launch (Source)</h1>
+      <div class="sub">New source connection · no destination · SMART App Launch (R4)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stepper" id="stepper">
+      <div class="st active" data-go="0"><div class="num">1</div><div class="lbl">Connection<small>identity</small></div></div>
+      <div class="st" data-go="1"><div class="num">2</div><div class="lbl">SMART Capability<small>auto-loaded</small></div></div>
+      <div class="st" data-go="2"><div class="num">3</div><div class="lbl">Authentication<small>from capability</small></div></div>
+      <div class="st" data-go="3"><div class="num">4</div><div class="lbl">Scope &amp; Review<small>finish</small></div></div>
+    </div>
+
+    <div class="body">
+      <!-- ===== STEP 1: CONNECTION ===== -->
+      <section id="s0">
+        <h2>Connection</h2>
+        <p class="lead">Just enough to reach the server and load its SMART capability. Auth method &amp; PKCE are decided <b>after</b> capability — not here.</p>
+        <div class="field">
+          <label>Environment</label>
+          <div class="seg" id="envSeg">
+            <button class="on" data-env="Non-Production">Non-Production</button>
+            <button data-env="Production">Production</button>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label>Client ID <span class="hint">— issued by Epic, per environment</span></label>
+            <input type="text" id="clientId" class="mono" placeholder="e.g. 3f9a1c2e-…" />
+          </div>
+          <div class="field">
+            <label>FHIR base (iss) <span class="hint">— used to load capability</span></label>
+            <input type="text" id="iss" class="mono" value="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Fixed FHIRBridge endpoints <span class="hint">— register these in Epic (read-only)</span></label>
+          <div class="ro" style="margin-bottom:8px"><input type="text" readonly class="mono" id="launchUrl" value="https://app.fhirbridge.io/launch" /><button class="copy" data-copy="launchUrl">Copy</button></div>
+          <div class="ro"><input type="text" readonly class="mono" id="redirectUri" value="https://app.fhirbridge.io/oauth/callback" /><button class="copy" data-copy="redirectUri">Copy</button></div>
+          <div class="small" style="margin-top:6px">Launch URL = where Epic opens the app. Redirect URI = the OAuth callback.</div>
+        </div>
+      </section>
+
+      <!-- ===== STEP 2: SMART CAPABILITY ===== -->
+      <section id="s1" class="hide">
+        <h2>SMART Capability</h2>
+        <p class="lead">Loaded automatically when you continue from the previous step — you type nothing here.</p>
+        <div id="capLoading" class="loading"><span class="spin"></span> Loading SMART capability…</div>
+        <div id="capResult" class="hide" style="margin-top:4px">
+          <div class="banner"><span class="ck"></span> SMART capability loaded from <span class="mono" id="capIss"></span></div>
+          <div class="capgrid">
+            <div class="cap"><span class="ck"></span><span class="mono">authorization_endpoint</span></div>
+            <div class="cap"><span class="ck"></span><span class="mono">token_endpoint</span></div>
+            <div class="cap"><span class="ck"></span><span class="mono">code_challenge_methods&nbsp;&nbsp;S256</span></div>
+            <div class="cap"><span class="ck"></span><span class="mono">fhirVersion&nbsp;&nbsp;R4</span></div>
+          </div>
+          <div style="margin-top:16px"><b style="font-size:13px;color:var(--navy)">SMART capabilities</b>
+            <div class="chips">
+              <span class="chip">launch-ehr</span><span class="chip">context-ehr-patient</span>
+              <span class="chip">context-ehr-encounter</span><span class="chip">client-confidential-asymmetric</span>
+              <span class="chip">client-confidential-symmetric</span><span class="chip">permission-v2</span><span class="chip">sso-openid-connect</span>
+            </div>
+          </div>
+          <div style="margin-top:16px"><b style="font-size:13px;color:var(--navy)">token_endpoint_auth_methods_supported</b>
+            <div class="chips"><span class="chip">private_key_jwt</span><span class="chip">client_secret_post</span></div>
+          </div>
+          <div style="margin-top:18px">
+            <b style="font-size:13px;color:var(--navy)">scopes_supported</b>
+            <details class="exp" id="scopeExp" style="margin-top:8px">
+              <summary>scopes_supported<span class="countpill" id="scopeCount">0</span></summary>
+              <div class="scopelist" id="scopeList"></div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== STEP 3: AUTHENTICATION (after capability) ===== -->
+      <section id="s2" class="hide">
+        <h2>Authentication</h2>
+        <p class="lead">Methods below are limited to what the capability reported. PKCE is taken from capability — not chosen here.</p>
+
+        <div class="field">
+          <label>Authentication method <span class="hint">— constrained by token_endpoint_auth_methods_supported</span></label>
+          <div class="opts" id="authOpts">
+            <div class="opt on" data-auth="asym"><div class="dot"></div><div>
+              <b>Confidential — Asymmetric (private_key_jwt)</b><span class="tag">Recommended</span><span class="tag cap">supported</span>
+              <div class="d">No shared secret. Epic verifies a signed JWT against your public JWKS.</div></div></div>
+            <div class="opt" data-auth="sym"><div class="dot"></div><div>
+              <b>Confidential — Symmetric (client_secret_post)</b><span class="tag cap">supported</span>
+              <div class="d">Server-side shared secret presented at the token endpoint.</div></div></div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="field">
+            <label>PKCE <span class="hint">— from SMART capability</span></label>
+            <div class="rofield"><span class="ck"></span><span class="mono">code_challenge_method = S256</span></div>
+          </div>
+          <div class="field" id="credAsymWrap">
+            <label>FHIRBridge JWKS URL <span class="hint">— register in Epic</span></label>
+            <div class="ro"><input type="text" readonly class="mono" id="jwksUrl" value="https://app.fhirbridge.io/.well-known/jwks-nonprod.json" /><button class="copy" data-copy="jwksUrl">Copy</button></div>
+          </div>
+          <div class="field hide" id="credSymWrap">
+            <label>Client Secret</label>
+            <input type="password" id="clientSecret" class="mono" placeholder="••••••••••••" />
+          </div>
+        </div>
+
+        <details class="adv">
+          <summary>Advanced — token persistence</summary>
+          <div class="toggle-row"><div class="t"><b>Requires Persistent Access</b><span>offline_access → issues a refresh token</span></div><div class="sw" id="swOffline" data-flag="offline"></div></div>
+          <div class="toggle-row"><div class="t"><b>Uses Rolling Refresh Tokens</b><span>rotate refresh token on every use</span></div><div class="sw" id="swRolling" data-flag="rolling"></div></div>
+          <div class="toggle-row"><div class="t"><b>Can Have Indefinite Access</b><span>refresh chain does not idle-expire</span></div><div class="sw" id="swIndef" data-flag="indef"></div></div>
+        </details>
+      </section>
+
+      <!-- ===== STEP 4: SCOPE & REVIEW (no destination) ===== -->
+      <section id="s3" class="hide">
+        <h2>Scope &amp; Review</h2>
+        <p class="lead">Pick what this source reads. The picker is gated to scopes the capability supports.</p>
+        <div class="grid" style="margin-bottom:6px">
+          <div class="field">
+            <label>Trigger</label>
+            <span class="pill">● EHR Launch — patient &amp; encounter from launch token</span>
+          </div>
+          <div class="field">
+            <label>Context</label>
+            <div class="seg" id="ctxSeg">
+              <button class="on" data-ctx="patient">patient/</button>
+              <button data-ctx="user">user/</button>
+            </div>
+            <div class="small" id="ctxNote" style="margin-top:6px">Patient is fixed from the launch — no picker.</div>
+          </div>
+        </div>
+        <div class="res" id="resList"></div>
+        <div style="margin-top:18px"><b style="font-size:13px;color:var(--navy)">Composed scope (requested)</b></div>
+        <div class="scopebox" id="scopeBox"></div>
+        <div class="note"><b>Requested ≠ granted.</b> The consent screen shows what is <i>requested</i>; the authoritative set comes back in the token response and may be narrower. Pipeline nodes light up from the <i>granted</i> scope.</div>
+        <div class="rev" id="review"></div>
+      </section>
+    </div>
+
+    <div class="footer">
+      <button class="btn ghost" id="backBtn" disabled>Back</button>
+      <div class="small" id="stepHint">Step 1 of 4</div>
+      <button class="btn prim" id="nextBtn">Next</button>
+    </div>
+  </div>
+  <div class="small" style="text-align:center;margin:14px 0;color:#9aa6b2">Prototype · illustrative · Epic Provider EHR Launch source connection</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var step=0, TOTAL=4, capLoaded=false, capLoading=false;
+  var state={env:"Non-Production", auth:"asym", ctx:"patient", offline:false, rolling:false, indef:false};
+
+  // The server's advertised scopes_supported (28). Resource picker is derived from these.
+  var CAP_SCOPES=[
+    "openid","fhirUser","profile","launch","launch/patient","online_access","offline_access",
+    "patient/Patient.rs","patient/Observation.rs","patient/Condition.rs","patient/MedicationRequest.rs",
+    "patient/AllergyIntolerance.rs","patient/Encounter.rs","patient/DocumentReference.rs",
+    "patient/Immunization.rs","patient/Procedure.rs","patient/DiagnosticReport.rs","patient/CarePlan.rs",
+    "user/Patient.rs","user/Observation.rs","user/Condition.rs","user/MedicationRequest.rs",
+    "user/AllergyIntolerance.rs","user/Encounter.rs","user/DocumentReference.rs","user/Practitioner.rs",
+    "user/Schedule.rs","user/Appointment.rs"
+  ];
+  var RES_DESC={
+    Patient:"Demographics", Observation:"Vitals, labs, results", Condition:"Problems / diagnoses",
+    MedicationRequest:"Active medications", AllergyIntolerance:"Allergies", Encounter:"Visit context",
+    DocumentReference:"Clinical notes", Immunization:"Immunizations", Procedure:"Procedures",
+    DiagnosticReport:"Diagnostic reports", CarePlan:"Care plans", Practitioner:"Providers",
+    Schedule:"Schedules", Appointment:"Appointments"
+  };
+
+  var $=function(id){return document.getElementById(id);};
+  function copy(id){var el=$(id); navigator.clipboard&&navigator.clipboard.writeText(el.value);}
+
+  // parse capability scopes into { patient:{Res:[ix...]}, user:{...} }
+  function capByContext(){
+    var m={patient:{}, user:{}};
+    CAP_SCOPES.forEach(function(s){
+      var mm=s.match(/^(patient|user)\/([A-Za-z]+)\.([cruds]+)$/);
+      if(mm){ m[mm[1]][mm[2]]=mm[3].split(""); }
+    });
+    return m;
+  }
+  var CAP=capByContext();
+  // selection state per context (default Patient.r + Observation.rs where available)
+  var sel={patient:{}, user:{}};
+  ["patient","user"].forEach(function(c){
+    Object.keys(CAP[c]).forEach(function(r){ sel[c][r]=[]; });
+    if(CAP[c].Patient) sel[c].Patient=["r"];
+    if(CAP[c].Observation) sel[c].Observation=["r","s"];
+  });
+
+  // ---- step 1: env ----
+  $("envSeg").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    state.env=b.dataset.env;
+    [].forEach.call(this.children,function(c){c.classList.toggle("on",c===b);});
+    $("jwksUrl").value = state.env==="Production"
+      ? "https://app.fhirbridge.io/.well-known/jwks-prod.json"
+      : "https://app.fhirbridge.io/.well-known/jwks-nonprod.json";
+  });
+
+  // ---- step 2: load capability + render scopes ----
+  function renderScopeList(){
+    $("scopeCount").textContent=CAP_SCOPES.length;
+    var groups={ "Identity & launch":[], "patient/ resource scopes":[], "user/ resource scopes":[] };
+    CAP_SCOPES.forEach(function(s){
+      if(s.indexOf("patient/")===0) groups["patient/ resource scopes"].push(s);
+      else if(s.indexOf("user/")===0) groups["user/ resource scopes"].push(s);
+      else groups["Identity & launch"].push(s);
+    });
+    $("scopeList").innerHTML=Object.keys(groups).map(function(g){
+      return '<div class="sgroup"><h4>'+g+' · '+groups[g].length+'</h4><div class="ss">'+
+        groups[g].map(function(s){return '<code>'+s+'</code>';}).join("")+'</div></div>';
+    }).join("");
+  }
+  function showCapState(){
+    $("capLoading").classList.toggle("hide", !(step===1 && capLoading));
+    $("capResult").classList.toggle("hide", !capLoaded);
+  }
+  function startCapLoad(){
+    if(capLoaded||capLoading) return;
+    capLoading=true; showCapState();
+    setTimeout(function(){
+      capLoaded=true; capLoading=false;
+      $("capIss").textContent=$("iss").value; renderScopeList();
+      showCapState(); updateNav();
+    },650);
+  }
+
+  // ---- step 3: auth method ----
+  $("authOpts").addEventListener("click",function(e){
+    var o=e.target.closest(".opt"); if(!o) return;
+    state.auth=o.dataset.auth;
+    [].forEach.call(this.children,function(c){c.classList.toggle("on",c===o);});
+    $("credAsymWrap").classList.toggle("hide", state.auth!=="asym");
+    $("credSymWrap").classList.toggle("hide", state.auth!=="sym");
+    renderReview(); updateNav();
+  });
+  $("clientSecret") && $("clientSecret").addEventListener("input",function(){updateNav();});
+
+  // ---- toggles ----
+  function syncSwitches(){
+    $("swOffline").classList.toggle("on",state.offline);
+    $("swRolling").classList.toggle("on",state.rolling);
+    $("swIndef").classList.toggle("on",state.indef);
+  }
+  document.addEventListener("click",function(e){
+    var sw=e.target.closest(".sw"); if(!sw||sw.classList.contains("dis")) return;
+    var f=sw.dataset.flag; state[f]=!state[f];
+    if(f==="offline"&&!state.offline){state.rolling=false;state.indef=false;}
+    if((f==="rolling"||f==="indef")&&!state.offline){state[f]=false;}
+    syncSwitches(); updateScope();
+  });
+
+  // ---- step 4: context + resources ----
+  $("ctxSeg").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    state.ctx=b.dataset.ctx;
+    [].forEach.call(this.children,function(c){c.classList.toggle("on",c===b);});
+    $("ctxNote").textContent= state.ctx==="patient"
+      ? "Patient is fixed from the launch — no picker."
+      : "User/role-scoped — broader queries within the user’s access.";
+    buildResList(); updateScope();
+  });
+  function buildResList(){
+    var ctx=state.ctx, cap=CAP[ctx];
+    var html=Object.keys(cap).map(function(r){
+      var allowed=cap[r]; // letters supported by capability
+      var labels={r:"Read", s:"Search", c:"Create", u:"Update", d:"Delete"};
+      var chips=allowed.map(function(p){
+        var on=sel[ctx][r].indexOf(p)>=0;
+        return '<label class="'+(on?"on":"")+'" data-res="'+r+'" data-ix="'+p+'">'+(labels[p]||p)+'</label>';
+      }).join("");
+      return '<div class="rrow"><div class="rname">'+r+'<small>'+(RES_DESC[r]||"")+'</small></div><div class="ix">'+chips+'</div></div>';
+    }).join("");
+    $("resList").innerHTML=html;
+  }
+  $("resList").addEventListener("click",function(e){
+    var l=e.target.closest("label"); if(!l) return;
+    var ctx=state.ctx, r=l.dataset.res, ix=l.dataset.ix, arr=sel[ctx][r], i=arr.indexOf(ix);
+    if(i>=0) arr.splice(i,1); else arr.push(ix);
+    l.classList.toggle("on"); updateScope();
+  });
+
+  function orderIx(a){return ["c","r","u","d","s"].filter(function(x){return a.indexOf(x)>=0;}).join("");}
+  function updateScope(){
+    var ctx=state.ctx, head=["launch"], tail=["openid","fhirUser"];
+    tail.push(state.offline?"offline_access":"online_access");
+    var resParts=[];
+    Object.keys(sel[ctx]).forEach(function(r){
+      var ixs=orderIx(sel[ctx][r]); if(ixs) resParts.push(ctx+"/"+r+"."+ixs);
+    });
+    var str=head.concat(resParts,tail).join(" ");
+    if($("scopeBox")) $("scopeBox").innerHTML='<span class="k">scope</span> = '+(resParts.length?str:"(nothing selected)");
+    renderReview();
+  }
+
+  function renderReview(){
+    if(!$("review")) return;
+    var authLabel={asym:"Confidential · asymmetric (private_key_jwt)",sym:"Confidential · symmetric (client_secret_post)"}[state.auth];
+    var ctx=state.ctx;
+    var picks=Object.keys(sel[ctx]).filter(function(r){return sel[ctx][r].length;})
+      .map(function(r){return r+"."+orderIx(sel[ctx][r]);}).join(", ")||"—";
+    var persist= state.offline ? ("offline"+(state.rolling?" · rolling":"")+(state.indef?" · indefinite":"")) : "session-bound (online_access)";
+    var rows=[
+      ["Environment", state.env],
+      ["Client ID", $("clientId").value||"—"],
+      ["FHIR base (iss)", $("iss").value],
+      ["Authentication", authLabel],
+      ["PKCE", "S256 (from capability)"],
+      ["Trigger", "EHR Launch (patient context from launch token)"],
+      ["Context", ctx+"/"],
+      ["Resources", picks],
+      ["Access persistence", persist]
+    ];
+    $("review").innerHTML=rows.map(function(r){
+      return '<div class="row"><div class="key">'+r[0]+'</div><div class="val">'+r[1]+'</div></div>';
+    }).join("");
+  }
+
+  // ---- copy ----
+  document.addEventListener("click",function(e){
+    var c=e.target.closest(".copy"); if(c){copy(c.dataset.copy);c.textContent="Copied";setTimeout(function(){c.textContent="Copy";},1200);} });
+
+  // ---- nav ----
+  var hints=["Step 1 of 4 · identity","Step 2 of 4 · auto-loaded","Step 3 of 4 · from capability","Step 4 of 4 · finish"];
+  function canAdvance(){
+    if(step===0) return !!$("clientId").value.trim();
+    if(step===1) return capLoaded;
+    if(step===2) return state.auth!=="sym" || !!($("clientSecret")&&$("clientSecret").value.trim());
+    return true;
+  }
+  function updateNav(){
+    for(var i=0;i<TOTAL;i++) $("s"+i).classList.toggle("hide", i!==step);
+    var sts=$("stepper").children;
+    for(var j=0;j<sts.length;j++){ sts[j].classList.toggle("active",j===step); sts[j].classList.toggle("done",j<step); }
+    $("backBtn").disabled=step===0; $("stepHint").textContent=hints[step];
+    var last=step===TOTAL-1;
+    $("nextBtn").textContent=last?"Create source":"Next";
+    $("nextBtn").className="btn "+(last?"go":"prim");
+    $("nextBtn").disabled=!canAdvance();
+    if(step===3){ buildResList(); updateScope(); }
+    showCapState();
+  }
+  $("nextBtn").addEventListener("click",function(){
+    if(!canAdvance()){
+      if(step===0) alert("Enter a Client ID to continue.");
+      else if(step===1) alert("Load the SMART capability to continue.");
+      else if(step===2) alert("Enter the client secret to continue.");
+      return;
+    }
+    if(step===TOTAL-1){ alert("✅ Source connection created (prototype). Composed scope captured — no destination."); return; }
+    step++; updateNav();
+    if(step===1) startCapLoad();
+  });
+  $("backBtn").addEventListener("click",function(){ if(step>0){step--; updateNav();} });
+  $("stepper").addEventListener("click",function(e){
+    var st=e.target.closest(".st"); if(!st) return;
+    var go=parseInt(st.dataset.go,10); if(go<=step){ step=go; updateNav(); }
+  });
+  $("clientId").addEventListener("input",function(){updateNav();renderReview();});
+  $("iss").addEventListener("input",function(){renderReview();});
+
+  // init
+  buildResList(); updateScope(); syncSwitches(); updateNav();
+})();
+</script>
+</body>
+</html>
