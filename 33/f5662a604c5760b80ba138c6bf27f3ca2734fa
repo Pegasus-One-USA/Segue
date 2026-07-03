@@ -1,0 +1,50 @@
+portal/src/app/app.routes.ts
+  s_6fe72b0759281b::t_a6632aeb58fa67 11
+  s_6fe72b0759281b::t_1f194600a764bb 4,8-10
+  s_6fe72b0759281b::t_5c4595fd77f317 12-14
+  s_1064c90cc369a1::t_c59ec1520632e7 15-17
+portal/src/app/auth/guards/guest.guard.ts
+  s_6fe72b0759281b::t_ff98b32660f7ae 4,8-9
+  s_6fe72b0759281b::t_e689b9f7ab0224 10-12
+  s_1064c90cc369a1::t_d512c1f703d472 13-15
+portal/src/app/auth/guards/auth.guard.ts
+  s_6fe72b0759281b::t_482756d3912011 4,7-9
+  s_6fe72b0759281b::t_e5ab17f9610da7 10-12
+  s_1064c90cc369a1::t_0e630bec854549 13-14
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.ts
+  s_6fe72b0759281b::t_a426506e22eb44 1-146
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.html
+  s_6fe72b0759281b::t_6bbefeadfbdd38 1-200
+portal/src/app/auth/guards/setup.guard.ts
+  s_6fe72b0759281b::t_98afe52a96d32c 1-13
+portal/src/app/onboarding/services/app-init.service.ts
+  s_6fe72b0759281b::t_ef1ffb30e61b5c 1-69
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.scss
+  s_6fe72b0759281b::t_44b8d2442c54a5 1-406
+portal/src/app/app.config.ts
+  s_1064c90cc369a1::t_f85056013b5ba2 12,14-21,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "33f5662a604c5760b80ba138c6bf27f3ca2734fa",
+  "prompts": {},
+  "sessions": {
+    "s_1064c90cc369a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a48086d11d1ff2d55",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
