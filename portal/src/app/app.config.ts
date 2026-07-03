@@ -2,7 +2,6 @@ import { ApplicationConfig, provideZoneChangeDetection, APP_INITIALIZER } from '
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { IAuthService } from './auth/services/i-auth.service';
@@ -12,6 +11,7 @@ import { ApiUserService } from './auth/services/api-user.service';
 import { AuthService } from './auth/services/auth.service';
 import { AppInitService } from './onboarding/services/app-init.service';
 import { IRoleService } from './user-management/services/i-role.service';
+import { ApiRoleService } from './user-management/services/api-role.service';
 
 function initApp(auth: AuthService, appInit: AppInitService) {
   // Restore any stored session, then resolve the first-run setup flag before routing starts.
