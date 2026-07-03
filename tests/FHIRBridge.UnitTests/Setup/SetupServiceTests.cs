@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
@@ -12,8 +13,10 @@ public sealed class SetupServiceTests
     private readonly Mock<IUserAccessRepository> _repository = new();
     private readonly Mock<IUserManagementService> _userManagement = new();
     private readonly Mock<ILocalAuthService> _localAuth = new();
+    private readonly Mock<IExternalTokenValidator> _externalTokenValidator = new();
 
-    private SetupService Service() => new(_repository.Object, _userManagement.Object, _localAuth.Object);
+    private SetupService Service() =>
+        new(_repository.Object, _userManagement.Object, _localAuth.Object, _externalTokenValidator.Object);
 
     [Fact]
     public async Task RequiresSetup_is_true_when_no_users_exist()

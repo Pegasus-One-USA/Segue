@@ -129,6 +129,15 @@ public static class DependencyInjection
         services.AddScoped<IScheduleEvaluationService, ScheduleEvaluationService>();
         services.AddScoped<IScheduleDispatcher, ScheduleDispatcher>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+
+        // SSO token exchange (validate an external IdP token -> mint a FHIRBridge JWT). Providers are OFF
+        // by default; the composite validator throws when a disabled provider is requested.
+        services.Configure<EntraAuthenticationOptions>(configuration.GetSection("Authentication:Entra"));
+        services.Configure<GoogleAuthenticationOptions>(configuration.GetSection("Authentication:Google"));
+        services.AddSingleton<IProviderTokenValidator, EntraTokenValidator>();
+        services.AddSingleton<IProviderTokenValidator, GoogleTokenValidator>();
+        services.AddSingleton<IExternalTokenValidator, CompositeExternalTokenValidator>();
+
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.Configure<Email.EmailOptions>(configuration.GetSection("Email"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();

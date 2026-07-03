@@ -1,4 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -6,6 +8,24 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Api.IntegrationTests;
+
+/// <summary>
+/// Stub external-token validator: returns a canned <see cref="ExternalIdentity"/> so SSO endpoints can be
+/// tested hermetically (no network to Entra/Google). The token string doubles as the returned email, which
+/// lets a test drive the accept-invite-sso email-match guard by choosing the token value.
+/// </summary>
+public sealed class StubExternalTokenValidator : IExternalTokenValidator
+{
+    public const string CannedSubject = "sso-subject-123";
+    public const string CannedName = "SSO User";
+
+    public Task<ExternalIdentity> ValidateAsync(LoginProvider provider, string token, CancellationToken cancellationToken)
+    {
+        // The token is treated as "provider:email". A bare value is used verbatim as the email.
+        var email = token.Contains(':') ? token[(token.IndexOf(':') + 1)..] : token;
+        return Task.FromResult(new ExternalIdentity(provider, CannedSubject, email, CannedName));
+    }
+}
 
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
@@ -30,7 +50,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["LocalAuth:SeedAdmin:Email"]               = "admin@testhospital.test",
                 ["LocalAuth:SeedAdmin:Password"]            = "Admin@Test1234!",
                 ["LocalAuth:SeedAdmin:DisplayName"]         = "Test Admin",
-                ["LocalAuth:SeedAdmin:RequirePasswordChange"] = "false"
+                ["LocalAuth:SeedAdmin:RequirePasswordChange"] = "false",
+                // Enable Google SSO in config so GET /config reports it; Entra stays disabled.
+                ["Authentication:Google:Enabled"]           = "true",
+                ["Authentication:Google:ClientId"]          = "test-google-client-id"
             });
         });
 
@@ -48,6 +71,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 services.Remove(d);
 
             services.AddSingleton<IUserAccessRepository, InMemoryUserAccessRepository>();
+
+            // Replace the real Entra/Google validators with a hermetic stub (no network).
+            var validators = services
+                .Where(d => d.ServiceType == typeof(IExternalTokenValidator))
+                .ToList();
+            foreach (var d in validators)
+                services.Remove(d);
+
+            services.AddSingleton<IExternalTokenValidator, StubExternalTokenValidator>();
         });
     }
 }

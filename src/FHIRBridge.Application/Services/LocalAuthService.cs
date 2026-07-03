@@ -179,6 +179,24 @@ public sealed class LocalAuthService : ILocalAuthService
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
 
+    public async Task<LocalLoginResponse> IssueSessionAsync(User user, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+
+        if (!user.IsEnabled)
+        {
+            throw new InvalidOperationException("This account is disabled.");
+        }
+
+        user.RecordLogin();
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        await AuditAsync("SsoLogin", "Completed", $"SSO login completed for {user.Email}.", user.Email, cancellationToken);
+        await RecordActivityAsync("Login", UserActivityStatuses.Success, user.Email, user.Id,
+            UserActivitySeverities.Information, null, cancellationToken);
+
+        return await CreateLoginResponseAsync(user, cancellationToken);
+    }
+
     public async Task LogoutAsync(CancellationToken cancellationToken)
     {
         var externalUserId = _currentUserService.CurrentUser.ExternalUserId;

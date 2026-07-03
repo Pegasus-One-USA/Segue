@@ -12,17 +12,20 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IUserAccessService _userAccessService;
     private readonly ILocalAuthService _localAuthService;
+    private readonly ISsoAuthService _ssoAuthService;
     private readonly ISetupService _setupService;
     private readonly IConfiguration _configuration;
 
     public AuthController(
         IUserAccessService userAccessService,
         ILocalAuthService localAuthService,
+        ISsoAuthService ssoAuthService,
         ISetupService setupService,
         IConfiguration configuration)
     {
         _userAccessService = userAccessService;
         _localAuthService = localAuthService;
+        _ssoAuthService = ssoAuthService;
         _setupService = setupService;
         _configuration = configuration;
     }
@@ -58,6 +61,68 @@ public sealed class AuthController : ControllerBase
         var response = await _setupService.CreateFirstSuperAdminAsync(request, cancellationToken);
 
         return Ok(response);
+    }
+
+    /// <summary>
+    /// SSO token exchange: validate an external IdP (Entra/Google) token and return a FHIRBridge session
+    /// for a known, enabled user. Returns 401 when no matching enabled account exists.
+    /// </summary>
+    [HttpPost("sso/login")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> SsoLogin(
+        [FromBody] SsoLoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _ssoAuthService.LoginAsync(request, cancellationToken);
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// First-run creation of the sole SuperAdmin via an external IdP identity (no password). One-shot:
+    /// returns 409 once any user exists.
+    /// </summary>
+    [HttpPost("setup-superadmin-sso")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SetupSuperAdminSso(
+        [FromBody] CreateFirstSuperAdminSsoRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!await _setupService.RequiresSetupAsync(cancellationToken))
+        {
+            return Conflict(new { error = "setup_already_completed", message = "A user already exists; setup is complete." });
+        }
+
+        var response = await _setupService.CreateFirstSuperAdminViaSsoAsync(request, cancellationToken);
+
+        return Ok(response);
+    }
+
+    /// <summary>Public SSO configuration for the portal: which providers are enabled and their client settings.</summary>
+    [HttpGet("/api/v1/config")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(SsoConfigDto), StatusCodes.Status200OK)]
+    public IActionResult GetSsoConfig()
+    {
+        var entra = _configuration.GetSection("Authentication:Entra");
+        var google = _configuration.GetSection("Authentication:Google");
+
+        var entraEnabled = entra.GetValue<bool>("Enabled");
+        var instance = (entra["Instance"] ?? "https://login.microsoftonline.com/").TrimEnd('/');
+        var tenantId = entra["TenantId"];
+        var authority = entraEnabled && !string.IsNullOrWhiteSpace(tenantId)
+            ? $"{instance}/{tenantId}"
+            : null;
+
+        var dto = new SsoConfigDto(
+            new SsoEntraConfigDto(entraEnabled, authority, entra["ClientId"]),
+            new SsoGoogleConfigDto(google.GetValue<bool>("Enabled"), google["ClientId"]));
+
+        return Ok(dto);
     }
 
     [HttpGet("me")]

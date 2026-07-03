@@ -272,6 +272,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     PasswordResetTokenHash = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     PasswordResetTokenExpiresOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Status = table.Column<int>(type: "int", nullable: false),
+                    LoginProvider = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     IsEnabled = table.Column<bool>(type: "bit", nullable: false),
                     LastLoginOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     FailedLoginCount = table.Column<int>(type: "int", nullable: false),

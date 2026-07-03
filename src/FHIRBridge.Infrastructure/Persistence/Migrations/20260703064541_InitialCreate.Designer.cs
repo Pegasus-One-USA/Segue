@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260703011047_InitialCreate")]
+    [Migration("20260703064541_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -1286,6 +1286,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("LockoutEndUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("LoginProvider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("MfaEnabled")
                         .HasColumnType("bit");

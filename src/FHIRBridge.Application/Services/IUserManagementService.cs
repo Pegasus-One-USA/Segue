@@ -18,6 +18,14 @@ public interface IUserManagementService
 
     Task<UserDetailDto> AcceptInviteAsync(AcceptInviteRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Accepts a pending invitation using an external IdP identity instead of a password. Validates the
+    /// invitation token (same guards as <see cref="AcceptInviteAsync"/>) and the external token, requires
+    /// the external email to equal the invite email (case-insensitive), then links the identity and
+    /// activates the account. Returns the signed-in session.
+    /// </summary>
+    Task<LocalLoginResponse> AcceptInviteViaSsoAsync(AcceptInviteSsoRequest request, CancellationToken cancellationToken);
+
     Task<UserDetailDto> UpdateUserStatusAsync(Guid userId, UpdateUserStatusRequest request, CancellationToken cancellationToken);
 
     Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken);

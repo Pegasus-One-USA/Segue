@@ -22,6 +22,7 @@ public sealed class User : AuditableChildEntity<Guid>
         IsEnabled = true;
         IsLocalLoginEnabled = false;
         MustChangePassword = false;
+        LoginProvider = LoginProvider.Local;
     }
 
     public string ExternalUserId { get; private set; } = default!;
@@ -39,6 +40,9 @@ public sealed class User : AuditableChildEntity<Guid>
 
     /// <summary>Account status: Active, Inactive, or Invited.</summary>
     public UserStatus Status { get; private set; }
+
+    /// <summary>Which identity provider authenticates this user (Local password, Entra, or Google).</summary>
+    public LoginProvider LoginProvider { get; private set; } = LoginProvider.Local;
 
     /// <summary>Account enable/disable. When false the user cannot authenticate.</summary>
     public bool IsEnabled { get; private set; }
@@ -145,6 +149,42 @@ public sealed class User : AuditableChildEntity<Guid>
         LastPasswordChangedOnUtc = DateTime.UtcNow;
         FailedLoginCount = 0;
         LockoutEndUtc = null;
+        InvitationTokenHash = null;
+        InvitationTokenExpiresOnUtc = null;
+        if (firstName is not null) FirstName = firstName;
+        if (lastName is not null) LastName = lastName;
+    }
+
+    /// <summary>
+    /// Links this account to an external identity provider (Entra/Google). Local password login is
+    /// disabled: the user now authenticates by exchanging an external IdP token for a FHIRBridge JWT.
+    /// </summary>
+    public void LinkExternalIdentity(string externalUserId, LoginProvider provider)
+    {
+        if (string.IsNullOrWhiteSpace(externalUserId))
+        {
+            throw new InvalidOperationException("External user id is required to link an external identity.");
+        }
+
+        ExternalUserId = externalUserId;
+        LoginProvider = provider;
+        IsLocalLoginEnabled = false;
+    }
+
+    /// <summary>
+    /// Accepts an invitation via an external identity provider: activates the account, links the external
+    /// identity (no password), sets any provided names, and clears the invitation token.
+    /// </summary>
+    public void AcceptInvitationViaSso(
+        string externalUserId,
+        LoginProvider provider,
+        string? firstName,
+        string? lastName)
+    {
+        Status = UserStatus.Active;
+        IsEnabled = true;
+        MustChangePassword = false;
+        LinkExternalIdentity(externalUserId, provider);
         InvitationTokenHash = null;
         InvitationTokenExpiresOnUtc = null;
         if (firstName is not null) FirstName = firstName;
