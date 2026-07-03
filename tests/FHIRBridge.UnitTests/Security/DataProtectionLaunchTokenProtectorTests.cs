@@ -11,19 +11,17 @@ public sealed class DataProtectionLaunchTokenProtectorTests
         new DataProtectionLaunchTokenProtector(new EphemeralDataProtectionProvider());
 
     [Fact]
-    public void Context_round_trips_the_tenant_and_route_ids()
+    public void Context_round_trips_the_route_id()
     {
         var protector = Protector();
-        var tenantId = Guid.NewGuid();
         var routeId = Guid.NewGuid();
 
-        var token = protector.ProtectContext(tenantId, routeId);
+        var token = protector.ProtectContext(routeId);
         var context = protector.UnprotectContext(token);
 
-        token.Should().NotContain(tenantId.ToString());
+        token.Should().NotContain(routeId.ToString());
         context.Should().NotBeNull();
-        context!.TenantId.Should().Be(tenantId);
-        context.RouteId.Should().Be(routeId);
+        context!.RouteId.Should().Be(routeId);
     }
 
     [Fact]

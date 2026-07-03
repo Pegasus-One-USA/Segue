@@ -9,7 +9,6 @@ public sealed class InMemoryOAuthAuthorizationStateStoreTests
 {
     private static PendingAuthorization Pending() => new(
         Guid.NewGuid(),
-        Guid.NewGuid(),
         RuntimeSourceType.Epic,
         "Epic Standalone",
         "verifier",

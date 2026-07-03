@@ -4,7 +4,6 @@ using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
-using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -22,7 +21,7 @@ namespace FHIRBridge.UnitTests.Sources;
 
 public sealed class InteractiveSourceAuthorizationServiceTests
 {
-    private readonly Mock<ITenantConfigurationRepository> _tenantRepository = new();
+    private readonly Mock<IConfigurationRepository> _configurationRepository = new();
     private readonly Mock<ISourceCapabilityDiscoveryService> _discovery = new();
     private readonly Mock<IInteractiveAuthorizationFlow> _flow = new();
     private readonly InMemoryOAuthAuthorizationStateStore _stateStore = new();
@@ -32,8 +31,6 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     private readonly Mock<IOperationalAuditService> _audit = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
 
-    private static readonly Guid TenantId = Guid.NewGuid();
-
     public InteractiveSourceAuthorizationServiceTests()
     {
         _currentUser.SetupGet(x => x.CurrentUser)
@@ -41,7 +38,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     }
 
     private InteractiveSourceAuthorizationService Service() => new(
-        _tenantRepository.Object,
+        _configurationRepository.Object,
         _discovery.Object,
         _flow.Object,
         _stateStore,
@@ -57,37 +54,46 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         SourceInteractiveConfiguration? interactive = null,
         SecretReference? clientSecret = null)
     {
-        var tenant = new Tenant("Contoso Health", "contoso");
         var auth = new SourceAuthenticationConfiguration(
             AuthenticationType.OAuthClientCredentials, clientId, null, ["user/Patient.read"], clientSecret, null, null);
-        var source = tenant.AddSourceConnection(
+        var source = new SourceConnection(
             "Epic Standalone", SourceSystemType.Epic, "https://fhir.example.com", auth, interactive: interactive);
 
-        _tenantRepository.Setup(x => x.GetByIdAsync(TenantId, It.IsAny<CancellationToken>())).ReturnsAsync(tenant);
+        _configurationRepository
+            .Setup(x => x.GetSourceConnectionAsync(source.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(source);
         return source;
     }
 
     // Seeds the full chain a route-scoped launch resolves through: source + destination + mapping + route.
     private (Guid RouteId, SourceConnection Source) SeedRoute(SourceInteractiveConfiguration? interactive = null)
     {
-        var tenant = new Tenant("Contoso Health", "contoso");
         var auth = new SourceAuthenticationConfiguration(
             AuthenticationType.OAuthClientCredentials, "client-1", null, ["user/Patient.read"], null, null, null);
-        var source = tenant.AddSourceConnection(
+        var source = new SourceConnection(
             "Epic EHR Launch", SourceSystemType.Epic, "https://fhir.example.com", auth, interactive: interactive);
-        var destination = tenant.AddDestinationConfiguration(
+        var destination = new DestinationConfiguration(
             "SQL", DestinationType.SqlServer, new SecretReference("vault", "sql-conn"), "dbo.Observations");
-        var mapping = tenant.AddMappingProfile(
+        var mapping = new MappingProfile(
             "Observation → SQL", "Observation", source.Id, destination.Id, "dbo.Observations", Array.Empty<MappingField>());
-        var route = tenant.AddRoute(IngestionMode.ScheduledPull, null, mapping.Id, null, null, true, 1);
+        var route = new ResourcePipelineRoute(
+            null, mapping.Id, IngestionMode.ScheduledPull, null, null, true, 1);
 
-        _tenantRepository.Setup(x => x.GetByIdAsync(TenantId, It.IsAny<CancellationToken>())).ReturnsAsync(tenant);
+        _configurationRepository
+            .Setup(x => x.GetSourceConnectionAsync(source.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(source);
+        _configurationRepository
+            .Setup(x => x.GetMappingProfileAsync(mapping.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mapping);
+        _configurationRepository
+            .Setup(x => x.GetRouteAsync(route.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(route);
         return (route.Id, source);
     }
 
     private void SetupDiscovery(string? authorize = "https://auth.example.com/authorize", string? token = "https://auth.example.com/token")
     {
-        _discovery.Setup(x => x.DiscoverSmartConfigurationAsync(TenantId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        _discovery.Setup(x => x.DiscoverSmartConfigurationAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SmartConfigurationDto(authorize, token, null, null, null, [], [], [], [], []));
     }
 
@@ -101,7 +107,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             .Returns((FhirSourceConfiguration _, string redirect, string state, string? launch) =>
                 new SmartAuthorizationRequest($"https://auth.example.com/authorize?state={state}", "verifier-1", state));
 
-        var url = await Service().StartAsync(TenantId, source.Id, "https://app.example.com/api/v1/oauth/callback", CancellationToken.None);
+        var url = await Service().StartAsync(source.Id, "https://app.example.com/api/v1/oauth/callback", CancellationToken.None);
 
         url.ToString().Should().StartWith("https://auth.example.com/authorize?state=");
 
@@ -123,7 +129,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         var source = SeedEpicSource();
         SetupDiscovery(authorize: null);
 
-        var act = () => Service().StartAsync(TenantId, source.Id, "https://app.example.com/api/v1/oauth/callback", CancellationToken.None);
+        var act = () => Service().StartAsync(source.Id, "https://app.example.com/api/v1/oauth/callback", CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -134,7 +140,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         var source = SeedEpicSource(clientId: "");
         SetupDiscovery();
 
-        var act = () => Service().StartAsync(TenantId, source.Id, "https://app.example.com/api/v1/oauth/callback", CancellationToken.None);
+        var act = () => Service().StartAsync(source.Id, "https://app.example.com/api/v1/oauth/callback", CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -145,7 +151,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         var source = SeedEpicSource();
         const string nonce = "nonce-xyz";
         await _stateStore.SaveAsync(nonce, new PendingAuthorization(
-            TenantId, source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
+            source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
             "verifier-1", "https://app.example.com/api/v1/oauth/callback", "https://auth.example.com/token", "client-1"),
             CancellationToken.None);
         var state = _protector.ProtectState(nonce);
@@ -188,7 +194,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             .ReturnsAsync("resolved-secret");
         const string nonce = "nonce-conf";
         await _stateStore.SaveAsync(nonce, new PendingAuthorization(
-            TenantId, source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
+            source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
             "verifier-1", "https://app/callback", "https://auth.example.com/token", "client-1"),
             CancellationToken.None);
 
@@ -211,7 +217,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         var (routeId, source) = SeedRoute();
         const string nonce = "nonce-route";
         await _stateStore.SaveAsync(nonce, new PendingAuthorization(
-            TenantId, source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic EHR Launch",
+            source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic EHR Launch",
             "verifier-1", "https://app/cb", "https://auth.example.com/token", "client-1", routeId),
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
@@ -219,8 +225,8 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             .ReturnsAsync("access-token");
 
         StartConfiguredPipelineRunRequest? runRequest = null;
-        _pipeline.Setup(x => x.StartAsync(TenantId, It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
-            .Callback((Guid _, StartConfiguredPipelineRunRequest r, CancellationToken _) => runRequest = r)
+        _pipeline.Setup(x => x.StartAsync(It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
+            .Callback((StartConfiguredPipelineRunRequest r, CancellationToken _) => runRequest = r)
             .Returns(Task.FromResult<ConfiguredPipelineRunDto>(null!));
 
         await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
@@ -244,7 +250,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
             ["https://app.example.com/api/v1/oauth/callback"], null, ["https://ehr.trusted.com/fhir"]));
         SetupDiscovery();
-        var context = _protector.ProtectContext(TenantId, routeId);
+        var context = _protector.ProtectContext(routeId);
         string? forwardedLaunch = null;
         _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
             .Callback((FhirSourceConfiguration _, string _, string _, string? launch) => forwardedLaunch = launch)
@@ -267,7 +273,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             .Callback((FhirSourceConfiguration s, string _, string _, string? _) => captured = s)
             .Returns(new SmartAuthorizationRequest("https://auth.example.com/authorize", "verifier-1", "state"));
 
-        await Service().StartAsync(TenantId, source.Id, "https://fallback/callback", CancellationToken.None);
+        await Service().StartAsync(source.Id, "https://fallback/callback", CancellationToken.None);
 
         captured.Should().NotBeNull();
         captured!.Scopes.Should().Contain("launch/patient");
@@ -281,7 +287,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         SetupDiscovery();
 
         var act = () => Service().StartEhrLaunchAsync(
-            TenantId, source.Id, "https://evil.attacker.com/fhir", "launch-token", "https://fallback/callback", CancellationToken.None);
+            source.Id, "https://evil.attacker.com/fhir", "launch-token", "https://fallback/callback", CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -298,7 +304,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             .Returns(new SmartAuthorizationRequest("https://auth.example.com/authorize", "verifier-1", "state"));
 
         await Service().StartEhrLaunchAsync(
-            TenantId, source.Id, "https://ehr.trusted.com/fhir/", "launch-token", "https://fallback/callback", CancellationToken.None);
+            source.Id, "https://ehr.trusted.com/fhir/", "launch-token", "https://fallback/callback", CancellationToken.None);
 
         forwardedLaunch.Should().Be("launch-token");
     }

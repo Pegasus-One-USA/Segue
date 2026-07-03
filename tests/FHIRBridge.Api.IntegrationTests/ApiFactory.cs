@@ -24,7 +24,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Authentication:SigningKey"]               = "IntegrationTest-HS256-SigningKey-MustBeAtLeast32Chars!",
                 ["Authentication:TokenLifetimeMinutes"]     = "60",
                 ["Authentication:RefreshTokenLifetimeDays"] = "7",
-                ["LocalAuth:ExposeResetTokens"]             = "true"
+                ["LocalAuth:ExposeResetTokens"]             = "true",
+                // Single-org bootstrap: seed a SuperAdmin at startup (no tenant registration).
+                // The integration fixture authenticates as this user via /api/v1/auth/internal/login.
+                ["LocalAuth:SeedAdmin:Email"]               = "admin@testhospital.test",
+                ["LocalAuth:SeedAdmin:Password"]            = "Admin@Test1234!",
+                ["LocalAuth:SeedAdmin:DisplayName"]         = "Test Admin",
+                ["LocalAuth:SeedAdmin:RequirePasswordChange"] = "false"
             });
         });
 

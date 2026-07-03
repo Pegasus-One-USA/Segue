@@ -140,7 +140,7 @@ public sealed class RankedWorkflowOrchestratorTests
         => new(new WorkflowGraphValidator(), new WorkflowNodeExecutorRegistry(executors));
 
     private static WorkflowExecutionContext CreateContext()
-        => new(Guid.NewGuid(), Guid.NewGuid(), "test-correlation");
+        => new(Guid.NewGuid(), "test-correlation");
 
     private static WorkflowNode AddNode(
         WorkflowDefinition workflow,
