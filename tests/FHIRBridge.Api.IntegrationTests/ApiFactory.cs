@@ -45,12 +45,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Authentication:TokenLifetimeMinutes"]     = "60",
                 ["Authentication:RefreshTokenLifetimeDays"] = "7",
                 ["LocalAuth:ExposeResetTokens"]             = "true",
-                // Single-org bootstrap: seed a SuperAdmin at startup (no tenant registration).
-                // The integration fixture authenticates as this user via /api/v1/auth/internal/login.
-                ["LocalAuth:SeedAdmin:Email"]               = "admin@testhospital.test",
-                ["LocalAuth:SeedAdmin:Password"]            = "Admin@Test1234!",
-                ["LocalAuth:SeedAdmin:DisplayName"]         = "Test Admin",
-                ["LocalAuth:SeedAdmin:RequirePasswordChange"] = "false",
+                // Single-org bootstrap: no user is seeded. The RBAC catalog (roles/permissions) is provisioned
+                // at startup (in-memory repo self-seed on this path), and the fixture creates the first
+                // SuperAdmin via POST /api/v1/auth/setup-superadmin, then authenticates as that user.
                 // Enable Google SSO in config so GET /config reports it; Entra stays disabled.
                 ["Authentication:Google:Enabled"]           = "true",
                 ["Authentication:Google:ClientId"]          = "test-google-client-id"

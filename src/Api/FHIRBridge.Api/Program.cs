@@ -8,9 +8,11 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure;
+using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,15 +22,7 @@ if (builder.Environment.IsDevelopment())
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     {
         ["Authentication:SigningKey"] = builder.Configuration["Authentication:SigningKey"]
-            ?? "StepBase-FHIRBridge-local-development-signing-key-2026-06-22",
-        ["LocalAuth:SeedAdmin:Email"] = builder.Configuration["LocalAuth:SeedAdmin:Email"]
-            ?? "admin@fhirbridge.local",
-        ["LocalAuth:SeedAdmin:Password"] = builder.Configuration["LocalAuth:SeedAdmin:Password"]
-            ?? "FHIRBridgeAdmin123!",
-        ["LocalAuth:SeedAdmin:DisplayName"] = builder.Configuration["LocalAuth:SeedAdmin:DisplayName"]
-            ?? "FHIRBridge Super Admin",
-        ["LocalAuth:SeedAdmin:RequirePasswordChange"] = builder.Configuration["LocalAuth:SeedAdmin:RequirePasswordChange"]
-            ?? "false"
+            ?? "StepBase-FHIRBridge-local-development-signing-key-2026-06-22"
     });
 }
 
@@ -154,8 +148,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+BootstrapDatabase(app);
 SyncDiscoveredPermissions(app);
-SeedLocalIdentity(app);
 
 app.UseCors("Portal");
 app.UseAuthentication();
@@ -188,16 +182,23 @@ app.MapWorkflowEndpoints();
 
 app.Run();
 
-static void SeedLocalIdentity(WebApplication app)
+// Applies pending EF migrations (empty DB → full schema) then runs the RBAC bootstrapper so the
+// permission catalog + system roles + grants self-provision on boot. No users are created — a freshly
+// migrated database has zero users, so the portal routes to first-run setup (POST /auth/setup-superadmin).
+// No-ops on the in-memory path (no DbContext / no bootstrapper registered); that path self-seeds the same
+// RBAC catalog in InMemoryUserAccessRepository's constructor.
+static void BootstrapDatabase(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
-    var seedService = scope.ServiceProvider.GetService<IIdentitySeedService>();
-    if (seedService is null)
+
+    var dbContext = scope.ServiceProvider.GetService<FHIRBridgeDbContext>();
+    if (dbContext is not null)
     {
-        return;
+        dbContext.Database.Migrate();
     }
 
-    seedService.SeedAsync(CancellationToken.None).GetAwaiter().GetResult();
+    var bootstrapper = scope.ServiceProvider.GetService<IRbacBootstrapper>();
+    bootstrapper?.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only
