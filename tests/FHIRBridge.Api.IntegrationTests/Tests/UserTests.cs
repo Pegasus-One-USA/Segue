@@ -130,6 +130,39 @@ public sealed class UserTests(ApiFixture f)
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
+    // ── POST /api/v1/users/{userId}/resend-invite ────────────────────────────────
+
+    [Fact]
+    public async Task POST_users_resend_invite__pending_invite__returns_200_with_new_token()
+    {
+        // Create a fresh invite, capture its token, then resend and expect a different token.
+        var inviteResp = await f.AdminClient.PostAsJsonAsync("/api/v1/users/invite", new
+        {
+            Email     = $"resend-{Guid.NewGuid():N}@testhospital.test",
+            RoleId    = f.TestRoleId,
+            FirstName = "Resend",
+            LastName  = "Test"
+        });
+        inviteResp.EnsureSuccessStatusCode();
+        var inv = JsonDocument.Parse(await inviteResp.Content.ReadAsStringAsync()).RootElement;
+        var userId = inv.GetProperty("id").GetGuid();
+        var firstToken = inv.GetProperty("invitationToken").GetString()!;
+
+        var resp = await f.AdminClient.PostAsync($"/api/v1/users/{userId}/resend-invite", content: null);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+        var newToken = doc.GetProperty("invitationToken").GetString()!;
+        Assert.False(string.IsNullOrWhiteSpace(newToken));
+        Assert.NotEqual(firstToken, newToken);
+    }
+
+    [Fact]
+    public async Task POST_users_resend_invite__unauthenticated__returns_401()
+    {
+        var resp = await f.AnonClient.PostAsync($"/api/v1/users/{f.InvitedUserId}/resend-invite", content: null);
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
     // ── POST /api/v1/users/accept-invite ─────────────────────────────────────────
 
     [Fact]

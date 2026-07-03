@@ -77,6 +77,17 @@ public sealed class UsersController : ControllerBase
         return Created($"/api/v1/users/{user.Id}", user);
     }
 
+    [HttpPost("{userId:guid}/resend-invite")]
+    [StandardPermission(UnifiedPermissions.UserInvite)]
+    [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResendInvite(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _userManagementService.ResendInviteAsync(userId, cancellationToken);
+
+        return Ok(user);
+    }
+
     [HttpPost("accept-invite")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
