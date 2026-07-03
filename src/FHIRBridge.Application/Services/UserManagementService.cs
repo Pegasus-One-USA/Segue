@@ -78,6 +78,7 @@ public sealed class UserManagementService : IUserManagementService
         }
 
         var user = new User(LocalExternalId(email), email, request.DisplayName);
+        user.UpdateName(request.FirstName, request.LastName);
         user.EnableLocalLogin(_passwordHasher.Hash(request.Password), request.RequirePasswordChange);
 
         await _repository.AddUserAsync(user, cancellationToken);
@@ -306,7 +307,7 @@ public sealed class UserManagementService : IUserManagementService
                 role.Id,
                 role.Name,
                 role.Description,
-                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description)).ToArray(),
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description, p.CategoryId)).ToArray(),
                 role.IsSystem));
         }
 
@@ -356,6 +357,65 @@ public sealed class UserManagementService : IUserManagementService
         await AuditAsync("UserRoleRemoved", $"Role '{role.Name}' removed from user {user.Email ?? user.ExternalUserId}.", cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PermissionAllocationDto>> GetUserPermissionAllocationsAsync(
+        Guid userId, CancellationToken cancellationToken)
+    {
+        var allocations = await _repository.GetUserPermissionAllocationsAsync(userId, cancellationToken);
+
+        return allocations
+            .Select(a => new PermissionAllocationDto(a.Permission.Id, a.Permission.Name, a.Permission.Description, a.IsEnabled))
+            .ToArray();
+    }
+
+    public async Task<UserDetailDto> SetUserPermissionAllocationAsync(
+        Guid userId,
+        Guid permissionId,
+        UpsertUserPermissionAllocationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        var permission = await _repository.GetPermissionByIdAsync(permissionId, cancellationToken)
+            ?? throw new InvalidOperationException("Permission was not found.");
+
+        await _repository.AddUserPermissionAllocationAsync(userId, permissionId, request.IsEnabled, cancellationToken);
+        await AuditAsync(
+            request.IsEnabled ? "UserPermissionGranted" : "UserPermissionDenied",
+            $"Permission '{permission.Name}' {(request.IsEnabled ? "granted" : "denied")} directly to user {user.Email ?? user.ExternalUserId}.",
+            cancellationToken);
+        await ForceReauthenticationAsync(user, cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
+    public async Task RemoveUserPermissionAllocationAsync(Guid userId, Guid permissionId, CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        var permission = await _repository.GetPermissionByIdAsync(permissionId, cancellationToken)
+            ?? throw new InvalidOperationException("Permission was not found.");
+
+        await _repository.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
+        await AuditAsync(
+            "UserPermissionAllocationRemoved",
+            $"Direct permission override for '{permission.Name}' removed from user {user.Email ?? user.ExternalUserId}; now inherits role grants.",
+            cancellationToken);
+        await ForceReauthenticationAsync(user, cancellationToken);
+    }
+
+    /// <summary>
+    /// Clears the user's refresh token so their next silent-refresh attempt fails and they're forced
+    /// through a real login, picking up the newly resolved permission set. The access token already in
+    /// their possession remains valid for its existing (short) lifetime — an accepted JWT tradeoff.
+    /// </summary>
+    private async Task ForceReauthenticationAsync(User user, CancellationToken cancellationToken)
+    {
+        user.ClearRefreshToken();
+        await _repository.UpdateUserAsync(user, cancellationToken);
+    }
+
     private async Task SetUserRolesAsync(
         Guid userId,
         IReadOnlyCollection<string> roleNames,
@@ -387,9 +447,14 @@ public sealed class UserManagementService : IUserManagementService
                 role.Id,
                 role.Name,
                 role.Description,
-                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description)).ToArray(),
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description, p.CategoryId)).ToArray(),
                 role.IsSystem));
         }
+
+        var allocations = await _repository.GetUserPermissionAllocationsAsync(user.Id, cancellationToken);
+        var allocationDtos = allocations
+            .Select(a => new PermissionAllocationDto(a.Permission.Id, a.Permission.Name, a.Permission.Description, a.IsEnabled))
+            .ToArray();
 
         return new UserDetailDto(
             user.Id,
@@ -400,6 +465,7 @@ public sealed class UserManagementService : IUserManagementService
             user.Status,
             user.IsEnabled,
             roleDtos,
+            allocationDtos,
             user.CreatedOnUtc,
             user.LastLoginOnUtc,
             invitationToken);

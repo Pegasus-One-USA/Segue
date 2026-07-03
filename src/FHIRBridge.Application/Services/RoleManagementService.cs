@@ -192,7 +192,7 @@ public sealed class RoleManagementService : IRoleManagementService
 
     private static PermissionDto ToDto(Permission permission)
     {
-        return new PermissionDto(permission.Id, permission.Name, permission.Description);
+        return new PermissionDto(permission.Id, permission.Name, permission.Description, permission.CategoryId);
     }
 
     private async Task ValidatePermissionsAsync(

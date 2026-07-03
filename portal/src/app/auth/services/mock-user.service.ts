@@ -3,7 +3,7 @@ import { Observable, of, throwError } from 'rxjs';
 import { delay, switchMap } from 'rxjs/operators';
 import { IUserService } from './i-user.service';
 import {
-  User, Role, Permission,
+  User, Role, Permission, PermissionAllocationDto,
   PaginatedResponse, MessageResponse, UserQueryParams, UserStatus, InviteResult,
 } from '../models/user.model';
 import { CreateUserRequest, UpdateUserRequest, InviteUserRequest } from '../models/auth-request.model';
@@ -11,6 +11,8 @@ import { MOCK_USERS, ALL_ROLES, ALL_PERMISSIONS, DEFAULT_PASSWORD } from '../moc
 
 @Injectable({ providedIn: 'root' })
 export class MockUserService extends IUserService {
+  // userId -> permissionId -> isEnabled (direct override). Not persisted; dev/demo only.
+  private readonly mockAllocations = new Map<string, Map<string, boolean>>();
 
   // ─── Get Users (with filter, sort, pagination) ────────────────────────────
   override getUsers(params: UserQueryParams = {}): Observable<PaginatedResponse<User>> {
@@ -192,7 +194,7 @@ export class MockUserService extends IUserService {
         const user = MOCK_USERS.find(u => u.id === userId);
         if (!user) return throwError(() => ({ code: 'NOT_FOUND', message: 'User not found.' }));
         user.roles       = user.roles.filter(r => r.id !== roleId);
-        user.role        = user.roles[0]?.name ?? 'viewer';
+        user.role        = user.roles[0]?.name ?? 'Audit';
         user.updatedAt   = new Date().toISOString();
         return of(this.sanitise(user));
       })
@@ -280,6 +282,59 @@ export class MockUserService extends IUserService {
         user.mustChangePassword = true;
         user.passwordHash       = DEFAULT_PASSWORD;
         return of<MessageResponse>({ success: true, message: `Password reset email sent to ${user.email}.` });
+      })
+    );
+  }
+
+  // ─── Direct permission overrides ─────────────────────────────────────────
+  override getUserPermissionAllocations(userId: string): Observable<PermissionAllocationDto[]> {
+    return of(null).pipe(
+      delay(200),
+      switchMap(() => {
+        const overrides = this.mockAllocations.get(userId);
+        if (!overrides) return of<PermissionAllocationDto[]>([]);
+
+        const dtos = [...overrides.entries()]
+          .map(([permissionId, isEnabled]) => {
+            const permission = ALL_PERMISSIONS.find(p => p.id === permissionId);
+            if (!permission) return null;
+            return {
+              permissionId,
+              permissionName: permission.name,
+              permissionDescription: permission.description,
+              isEnabled,
+            };
+          })
+          .filter((d): d is PermissionAllocationDto => d !== null);
+
+        return of(dtos);
+      })
+    );
+  }
+
+  override setUserPermissionAllocation(userId: string, permissionId: string, isEnabled: boolean): Observable<User> {
+    return of(null).pipe(
+      delay(300),
+      switchMap(() => {
+        const user = MOCK_USERS.find(u => u.id === userId);
+        if (!user) return throwError(() => ({ code: 'NOT_FOUND', message: 'User not found.' }));
+
+        if (!this.mockAllocations.has(userId)) {
+          this.mockAllocations.set(userId, new Map());
+        }
+        this.mockAllocations.get(userId)!.set(permissionId, isEnabled);
+
+        return of(this.sanitise(user));
+      })
+    );
+  }
+
+  override removeUserPermissionAllocation(userId: string, permissionId: string): Observable<void> {
+    return of(null).pipe(
+      delay(300),
+      switchMap(() => {
+        this.mockAllocations.get(userId)?.delete(permissionId);
+        return of<void>(undefined);
       })
     );
   }

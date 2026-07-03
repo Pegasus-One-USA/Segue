@@ -115,7 +115,7 @@ export class SetupSuperAdminComponent {
 
     this.isLoading.set(true);
 
-    this.appInit.createSuperAdmin({ email, displayName, password }).subscribe({
+    this.appInit.createSuperAdmin({ email, displayName, password, firstName, lastName }).subscribe({
       next: (res) => {
         // Reuse the exact login success handling: store tokens + rebuild user from the JWT.
         const payload = this.tokens.decodePayload<Record<string, unknown>>(res.accessToken) ?? {};

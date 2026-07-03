@@ -15,6 +15,28 @@ public static class RbacSeedData
     /// <summary>A built-in role row.</summary>
     public sealed record RoleSeed(Guid Id, string Name, string Description);
 
+    /// <summary>A built-in permission category row.</summary>
+    public sealed record CategorySeed(Guid Id, string Name);
+
+    /// <summary>
+    /// The distinct permission categories, with stable GUIDs so bootstrap is idempotent across restarts.
+    /// </summary>
+    public static IReadOnlyList<CategorySeed> Categories { get; } =
+    [
+        new(SeededSecurityIds.ConfigurationCategoryId, "Configuration"),
+        new(SeededSecurityIds.PipelineCategoryId, "Pipeline"),
+        new(SeededSecurityIds.AuditCategoryId, "Audit"),
+        new(SeededSecurityIds.UserCategoryId, "User"),
+        new(SeededSecurityIds.RoleCategoryId, "Role"),
+        new(SeededSecurityIds.WorkflowCategoryId, "Workflow"),
+        new(SeededSecurityIds.ReportCategoryId, "Report"),
+        new(SeededSecurityIds.PayloadCategoryId, "Payload"),
+    ];
+
+    /// <summary>Looks up a category's seeded id by its canonical name (used to resolve <see cref="PermissionSeed.Category"/>).</summary>
+    public static IReadOnlyDictionary<string, Guid> CategoryIdsByName { get; } =
+        Categories.ToDictionary(c => c.Name, c => c.Id, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The 20 built-in platform permissions, in seed order. Category/description are preserved verbatim
     /// from the former <c>PermissionConfiguration.HasData</c> block.

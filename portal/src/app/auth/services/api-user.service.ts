@@ -8,33 +8,18 @@ import { CreateUserRequest, UpdateUserRequest, InviteUserRequest } from '../mode
 import {
   User, UserRole, UserStatus, UserQueryParams, PaginatedResponse, MessageResponse,
   UserManagementDto, UserDetailDto, RoleDto, PermissionDto, Role, Permission,
-  BackendUserStatus, InviteResult,
+  BackendUserStatus, InviteResult, PermissionAllocationDto, SYSTEM_ROLE_NAMES,
 } from '../models/user.model';
 
-// ─── Role-name → front-end UserRole mapping ──────────────────────────────────
-const ROLE_MAP: Record<string, UserRole> = {
-  'admin':          'system-admin',
-  'superadmin':     'system-admin',
-  'globaladmin':    'system-admin',
-  'unifiedadmin':   'system-admin',
-  'systemadmin':    'system-admin',
-  'tenantadmin':    'tenant-admin',
-  'developer':      'developer',
-  'pipelineeditor': 'pipeline-editor',
-  'reviewer':       'reviewer',
-  'auditor':        'auditor',
-  'analyst':        'analyst',
-  'viewer':         'viewer',
-  // Added for the real backend's seeded roles (UnifiedRoles.cs), which don't match
-  // the frontend's original 8-role taxonomy — 'audit'/'operations' had no entry before.
-  'audit':          'auditor',
-  'operations':     'pipeline-editor',
-};
-
-// Exported (was private) so auth-api.service.ts maps backend claim-role names the same way.
+// ─── Role-name → front-end UserRole ──────────────────────────────────────────
+// UserRole is just the backend's exact role name — including customer-created custom roles,
+// which are not a fixed set. This only normalizes one of the 4 known system-role names to its
+// canonical casing (so "superadmin"/"SUPERADMIN" both render as "SuperAdmin"); anything else
+// (a custom role) passes through verbatim so its real name is never lost/misrepresented.
 export function toUserRole(name: string | undefined): UserRole {
-  const raw = (name ?? '').toLowerCase().replace(/[\s-]/g, '');
-  return ROLE_MAP[raw] ?? 'viewer';
+  const trimmed = (name ?? '').trim();
+  const canonical = SYSTEM_ROLE_NAMES.find(r => r.toLowerCase() === trimmed.toLowerCase());
+  return canonical ?? trimmed;
 }
 
 /** Backend numeric status (1 Invited / 2 Active / 3 Inactive) → front-end string. */
@@ -115,7 +100,7 @@ function mapDetailDto(dto: UserDetailDto): User {
     firstName,
     lastName,
     fullName:           dto.displayName || `${firstName} ${lastName}`.trim(),
-    role:               roles[0]?.name ?? 'viewer',
+    role:               roles[0]?.name ?? 'Audit',
     roles,
     permissions:        [...new Map(roles.flatMap(r => r.permissions).map(p => [p.id, p])).values()],
     orgId:              '',
@@ -301,6 +286,29 @@ export class ApiUserService extends IUserService {
   getPermissions(): Observable<Permission[]> {
     return this.http.get<PermissionDto[]>(PERMISSIONS_ENDPOINTS.list).pipe(
       map(dtos => (dtos ?? []).map(mapPermissionDto)),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Direct permission overrides ─────────────────────────────────────────
+  getUserPermissionAllocations(userId: string): Observable<PermissionAllocationDto[]> {
+    return this.http.get<PermissionAllocationDto[]>(USERS_ENDPOINTS.permissionAllocations(userId)).pipe(
+      map(dtos => dtos ?? []),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  setUserPermissionAllocation(userId: string, permissionId: string, isEnabled: boolean): Observable<User> {
+    return this.http
+      .put<UserDetailDto>(USERS_ENDPOINTS.permissionAllocationById(userId, permissionId), { isEnabled })
+      .pipe(
+        map(mapDetailDto),
+        catchError(err => throwError(() => err))
+      );
+  }
+
+  removeUserPermissionAllocation(userId: string, permissionId: string): Observable<void> {
+    return this.http.delete<void>(USERS_ENDPOINTS.permissionAllocationById(userId, permissionId)).pipe(
       catchError(err => throwError(() => err))
     );
   }

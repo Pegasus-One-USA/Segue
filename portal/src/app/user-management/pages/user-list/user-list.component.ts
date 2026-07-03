@@ -32,14 +32,10 @@ import { InviteResultDialogComponent } from '../../dialogs/invite-result-dialog/
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 
 export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
-  'system-admin':    { label: 'System Admin',    color: '#5B21B6', bg: '#EDE9FE' },
-  'tenant-admin':    { label: 'Tenant Admin',    color: '#1D4ED8', bg: '#DBEAFE' },
-  'developer':       { label: 'Developer',       color: '#0369A1', bg: '#E0F2FE' },
-  'pipeline-editor': { label: 'Pipeline Editor', color: '#00A89D', bg: '#E6F9F7' },
-  'reviewer':        { label: 'Reviewer',        color: '#0891B2', bg: '#E0F9FF' },
-  'auditor':         { label: 'Auditor',         color: '#059669', bg: '#ECFDF5' },
-  'analyst':         { label: 'Analyst',         color: '#D97706', bg: '#FEF3C7' },
-  'viewer':          { label: 'Viewer',          color: '#64748B', bg: '#F1F5F9' },
+  'SuperAdmin': { label: 'Super Admin', color: '#5B21B6', bg: '#EDE9FE' },
+  'Admin':      { label: 'Admin',       color: '#1D4ED8', bg: '#DBEAFE' },
+  'Operations': { label: 'Operations',  color: '#00A89D', bg: '#E6F9F7' },
+  'Audit':      { label: 'Audit',       color: '#059669', bg: '#ECFDF5' },
 };
 
 @Component({
@@ -94,10 +90,7 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actions'];
 
-  readonly roleOptions: UserRole[] = [
-    'system-admin', 'tenant-admin', 'developer', 'pipeline-editor',
-    'reviewer', 'auditor', 'analyst', 'viewer',
-  ];
+  readonly roleOptions: UserRole[] = ['SuperAdmin', 'Admin', 'Operations', 'Audit'];
 
   readonly statusOptions: UserStatus[] = ['active', 'inactive', 'pending'];
   readonly roleConfig = ROLE_CONFIG;

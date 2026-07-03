@@ -226,13 +226,18 @@ static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repositor
 
     var superAdminRole = await repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, CancellationToken.None);
 
+    var categories = (await repository.GetPermissionCategoriesAsync(CancellationToken.None))
+        .ToDictionary(c => c.Name, c => c.Id, StringComparer.OrdinalIgnoreCase);
+
     foreach (var code in discoveredCodes.Where(code => !existingCodes.Contains(code)))
     {
+        var categoryId = await GetOrCreateCategoryIdAsync(repository, categories, code, CancellationToken.None);
+
         var permission = new Permission(
             Guid.NewGuid(),
             code,
             $"Auto-registered permission for '{code}'.",
-            CategoryFromPermissionCode(code),
+            categoryId,
             isSystem: false);
 
         await repository.AddPermissionAsync(permission, CancellationToken.None);
@@ -247,11 +252,33 @@ static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repositor
     }
 }
 
-static string CategoryFromPermissionCode(string code)
+// Derives a category from the permission code's prefix (e.g. "Epic.patient.view" -> "Epic"),
+// reusing an existing category case-insensitively so "Epic" and "epic" never both exist. The
+// in-flight `categories` dictionary is updated too, so multiple new codes sharing a fresh prefix
+// within the same sync run reuse the one category created for the first of them.
+static async Task<Guid?> GetOrCreateCategoryIdAsync(
+    IUserAccessRepository repository,
+    Dictionary<string, Guid> categories,
+    string code,
+    CancellationToken cancellationToken)
 {
     var prefix = code.Split('.', 2)[0];
+    if (prefix.Length == 0)
+    {
+        return null;
+    }
 
-    return prefix.Length == 0 ? prefix : char.ToUpperInvariant(prefix[0]) + prefix[1..];
+    var categoryName = char.ToUpperInvariant(prefix[0]) + prefix[1..];
+    if (categories.TryGetValue(categoryName, out var existingId))
+    {
+        return existingId;
+    }
+
+    var category = new PermissionCategory(Guid.NewGuid(), categoryName);
+    await repository.AddPermissionCategoryAsync(category, cancellationToken);
+    categories[categoryName] = category.Id;
+
+    return category.Id;
 }
 
 static (int status, string message) MapException(Exception ex)

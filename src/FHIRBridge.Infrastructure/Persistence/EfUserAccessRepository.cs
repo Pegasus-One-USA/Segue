@@ -67,9 +67,17 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
         var userRoles = await _dbContext.UserRoles
             .Where(x => x.UserId == user.Id)
             .ToListAsync(cancellationToken);
-
         _dbContext.UserRoles.RemoveRange(userRoles);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // PermissionAllocation is ISoftDeletable, so a tracked Remove() would be converted to a soft
+        // delete by AuditingSaveChangesInterceptor — which would leave the row occupying the
+        // (UserId, PermissionId) unique index and break any future re-grant for this user. Use
+        // ExecuteDeleteAsync to bypass the change tracker (and interceptor) for a genuine hard delete.
+        await _dbContext.PermissionAllocations
+            .Where(x => x.UserId == user.Id)
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     public Task<Role?> GetRoleByNameAsync(string roleName, CancellationToken cancellationToken)
@@ -114,6 +122,19 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
             .CountAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PermissionCategory>> GetPermissionCategoriesAsync(CancellationToken cancellationToken)
+    {
+        return await _dbContext.PermissionCategories
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddPermissionCategoryAsync(PermissionCategory category, CancellationToken cancellationToken)
+    {
+        await _dbContext.PermissionCategories.AddAsync(category, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Permission>> GetPermissionsAsync(CancellationToken cancellationToken)
     {
         return await _dbContext.Permissions
@@ -134,11 +155,11 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
 
     public async Task<IReadOnlyList<Permission>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        return await _dbContext.RolePermissions
+        return await _dbContext.PermissionAllocations
             .Where(x => x.RoleId == roleId)
             .Join(
                 _dbContext.Permissions,
-                rolePermission => rolePermission.PermissionId,
+                allocation => allocation.PermissionId,
                 permission => permission.Id,
                 (_, permission) => permission)
             .OrderBy(x => x.Name)
@@ -150,39 +171,93 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
         IReadOnlyCollection<Guid> permissionIds,
         CancellationToken cancellationToken)
     {
-        var existing = await _dbContext.RolePermissions
+        // ExecuteDeleteAsync bypasses the change tracker (and AuditingSaveChangesInterceptor's
+        // soft-delete conversion for ISoftDeletable entities) — see DeleteUserAsync for why a
+        // genuine hard delete is required here.
+        await _dbContext.PermissionAllocations
             .Where(x => x.RoleId == roleId)
-            .ToListAsync(cancellationToken);
+            .ExecuteDeleteAsync(cancellationToken);
 
-        _dbContext.RolePermissions.RemoveRange(existing);
-        await _dbContext.RolePermissions.AddRangeAsync(
-            permissionIds.Distinct().Select(permissionId => new RolePermission(roleId, permissionId)),
+        await _dbContext.PermissionAllocations.AddRangeAsync(
+            permissionIds.Distinct().Select(permissionId => PermissionAllocation.ForRole(Guid.NewGuid(), roleId, permissionId)),
             cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task AddRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken)
     {
-        var exists = await _dbContext.RolePermissions
+        var exists = await _dbContext.PermissionAllocations
             .AnyAsync(x => x.RoleId == roleId && x.PermissionId == permissionId, cancellationToken);
 
         if (!exists)
         {
-            await _dbContext.RolePermissions.AddAsync(new RolePermission(roleId, permissionId), cancellationToken);
+            await _dbContext.PermissionAllocations.AddAsync(PermissionAllocation.ForRole(Guid.NewGuid(), roleId, permissionId), cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 
     public async Task RemoveRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken)
     {
-        var link = await _dbContext.RolePermissions
-            .FirstOrDefaultAsync(x => x.RoleId == roleId && x.PermissionId == permissionId, cancellationToken);
+        await _dbContext.PermissionAllocations
+            .Where(x => x.RoleId == roleId && x.PermissionId == permissionId)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
 
-        if (link is not null)
+    public async Task<IReadOnlyList<(Permission Permission, bool IsEnabled)>> GetUserPermissionAllocationsAsync(
+        Guid userId, CancellationToken cancellationToken)
+    {
+        var rows = await _dbContext.PermissionAllocations
+            .Where(x => x.UserId == userId)
+            .Join(
+                _dbContext.Permissions,
+                allocation => allocation.PermissionId,
+                permission => permission.Id,
+                (allocation, permission) => new { allocation.IsEnabled, Permission = permission })
+            .OrderBy(x => x.Permission.Name)
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(x => (x.Permission, x.IsEnabled)).ToArray();
+    }
+
+    public async Task SetUserPermissionAllocationsAsync(
+        Guid userId,
+        IReadOnlyDictionary<Guid, bool> permissionIdToIsEnabled,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.PermissionAllocations
+            .Where(x => x.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await _dbContext.PermissionAllocations.AddRangeAsync(
+            permissionIdToIsEnabled.Select(kv => PermissionAllocation.ForUser(Guid.NewGuid(), userId, kv.Key, kv.Value)),
+            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task AddUserPermissionAllocationAsync(
+        Guid userId, Guid permissionId, bool isEnabled, CancellationToken cancellationToken)
+    {
+        var existing = await _dbContext.PermissionAllocations
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.PermissionId == permissionId, cancellationToken);
+
+        if (existing is not null)
         {
-            _dbContext.RolePermissions.Remove(link);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            existing.SetEnabled(isEnabled);
         }
+        else
+        {
+            await _dbContext.PermissionAllocations.AddAsync(
+                PermissionAllocation.ForUser(Guid.NewGuid(), userId, permissionId, isEnabled), cancellationToken);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveUserPermissionAllocationAsync(Guid userId, Guid permissionId, CancellationToken cancellationToken)
+    {
+        await _dbContext.PermissionAllocations
+            .Where(x => x.UserId == userId && x.PermissionId == permissionId)
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Role>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)

@@ -4,7 +4,9 @@ namespace FHIRBridge.Application.DTOs;
 public sealed record CreateFirstSuperAdminRequest(
     string Email,
     string? DisplayName,
-    string Password);
+    string Password,
+    string? FirstName = null,
+    string? LastName = null);
 
 /// <summary>Reports whether the deployment still needs its first SuperAdmin created.</summary>
 public sealed record SetupStatusDto(bool RequiresSetup);

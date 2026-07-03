@@ -22,14 +22,10 @@ interface DialogData {
 }
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: 'system-admin',    label: 'System Admin' },
-  { value: 'tenant-admin',    label: 'Tenant Admin' },
-  { value: 'developer',       label: 'Developer' },
-  { value: 'pipeline-editor', label: 'Pipeline Editor' },
-  { value: 'reviewer',        label: 'Reviewer' },
-  { value: 'auditor',         label: 'Auditor' },
-  { value: 'analyst',         label: 'Analyst' },
-  { value: 'viewer',          label: 'Viewer' },
+  { value: 'SuperAdmin', label: 'Super Admin' },
+  { value: 'Admin',      label: 'Admin' },
+  { value: 'Operations', label: 'Operations' },
+  { value: 'Audit',      label: 'Audit' },
 ];
 
 const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [

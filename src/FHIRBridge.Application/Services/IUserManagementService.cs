@@ -35,4 +35,11 @@ public interface IUserManagementService
     Task<UserDetailDto> AssignUserRoleAsync(Guid userId, AssignUserRoleRequest request, CancellationToken cancellationToken);
 
     Task RemoveUserRoleAsync(Guid userId, Guid roleId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PermissionAllocationDto>> GetUserPermissionAllocationsAsync(Guid userId, CancellationToken cancellationToken);
+
+    Task<UserDetailDto> SetUserPermissionAllocationAsync(
+        Guid userId, Guid permissionId, UpsertUserPermissionAllocationRequest request, CancellationToken cancellationToken);
+
+    Task RemoveUserPermissionAllocationAsync(Guid userId, Guid permissionId, CancellationToken cancellationToken);
 }

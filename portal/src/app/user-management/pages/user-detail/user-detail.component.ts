@@ -27,6 +27,7 @@ import {
 import { ROLE_CONFIG } from '../user-list/user-list.component';
 import { EditUserDialogComponent } from '../../dialogs/edit-user-dialog/edit-user-dialog.component';
 import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/assign-roles-dialog.component';
+import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
 
 @Component({
   selector: 'app-user-detail',
@@ -44,6 +45,7 @@ import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/as
     MatDividerModule,
     MatCardModule,
     MatBadgeModule,
+    UserPermissionOverridesComponent,
   ],
   templateUrl: './user-detail.component.html',
   styleUrls: ['./user-detail.component.scss'],

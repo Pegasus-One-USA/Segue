@@ -1,0 +1,116 @@
+// user-management/pages/user-detail/user-permission-overrides.component.scss
+
+.permission-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 0;
+}
+
+// ─── Notices ──────────────────────────────────────────────────────────────────
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-base);
+  font-size: 13px;
+  color: #92400E;
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; flex-shrink: 0; color: var(--color-warning); }
+
+  &.error-notice {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+    color: #991B1B;
+
+    mat-icon { color: #DC2626; }
+  }
+}
+
+.no-results {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--color-muted);
+}
+
+// ─── Permission list ────────────────────────────────────────────────────────
+.permissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.permission-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  padding: 14px 18px;
+
+  &__header {
+    display: flex;
+    align-items: center;
+  }
+
+  &__title {
+    display: inline-flex;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-primary-dark);
+    background: var(--color-primary-soft);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+  }
+
+  &__items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+.permission-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+
+  &:last-child { border-bottom: none; }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+}
+
+.permission-name {
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+.permission-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.override-toggle {
+  flex-shrink: 0;
+}

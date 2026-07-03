@@ -52,7 +52,9 @@ public sealed class SetupService : ISetupService
                 request.DisplayName,
                 request.Password,
                 [UnifiedRoles.SuperAdmin],
-                RequirePasswordChange: false),
+                RequirePasswordChange: false,
+                request.FirstName,
+                request.LastName),
             cancellationToken);
 
         return await _localAuth.LoginAsync(new LocalLoginRequest(request.Email, request.Password), cancellationToken);

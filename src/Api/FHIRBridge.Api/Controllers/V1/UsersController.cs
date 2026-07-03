@@ -171,4 +171,41 @@ public sealed class UsersController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpGet("{userId:guid}/permission-allocations")]
+    [StandardPermission(UnifiedPermissions.UserView)]
+    [ProducesResponseType(typeof(IReadOnlyList<PermissionAllocationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUserPermissionAllocations(Guid userId, CancellationToken cancellationToken)
+    {
+        var allocations = await _userManagementService.GetUserPermissionAllocationsAsync(userId, cancellationToken);
+
+        return Ok(allocations);
+    }
+
+    [HttpPut("{userId:guid}/permission-allocations/{permissionId:guid}")]
+    [StandardPermission(UnifiedPermissions.UserEdit)]
+    [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetUserPermissionAllocation(
+        Guid userId,
+        Guid permissionId,
+        [FromBody] UpsertUserPermissionAllocationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManagementService.SetUserPermissionAllocationAsync(userId, permissionId, request, cancellationToken);
+
+        return Ok(user);
+    }
+
+    [HttpDelete("{userId:guid}/permission-allocations/{permissionId:guid}")]
+    [StandardPermission(UnifiedPermissions.UserEdit)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RemoveUserPermissionAllocation(
+        Guid userId,
+        Guid permissionId,
+        CancellationToken cancellationToken)
+    {
+        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
+
+        return NoContent();
+    }
 }

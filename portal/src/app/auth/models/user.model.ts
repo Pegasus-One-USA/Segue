@@ -1,12 +1,11 @@
-export type UserRole =
-  | 'system-admin'
-  | 'tenant-admin'
-  | 'developer'
-  | 'pipeline-editor'
-  | 'reviewer'
-  | 'auditor'
-  | 'analyst'
-  | 'viewer';
+// The backend's role model is open-ended — RolesController lets admins create arbitrary custom
+// roles (RoleManagementService.CreateRoleAsync) alongside the 4 built-in system roles — so this
+// must stay a plain string (the exact `Role.Name` value verbatim), never a closed union. Use
+// SYSTEM_ROLE_NAMES below when code specifically needs to reference one of the 4 built-ins.
+export type UserRole = string;
+
+/** The 4 built-in, non-deletable roles (UnifiedRoles.cs). Any other role name is a customer-created custom role. */
+export const SYSTEM_ROLE_NAMES = ['SuperAdmin', 'Admin', 'Operations', 'Audit'] as const;
 
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'pending';
 export type LoginType   = 'local' | 'sso' | 'oauth';
@@ -95,6 +94,19 @@ export interface PermissionDto {
   id:          string;
   name:        string;
   description: string;
+  categoryId?: string | null;
+}
+
+/** A user's direct permission allocation — grant/deny override on top of role-derived permissions. */
+export interface PermissionAllocationDto {
+  permissionId:          string;
+  permissionName:        string;
+  permissionDescription: string;
+  isEnabled:             boolean;
+}
+
+export interface UpsertUserPermissionAllocationRequest {
+  isEnabled: boolean;
 }
 
 export interface RoleDto {
@@ -123,17 +135,18 @@ export interface UserManagementDto {
 }
 
 export interface UserDetailDto {
-  id:               string;
-  email:            string;
-  firstName:        string;
-  lastName:         string;
-  displayName:      string;
-  status:           BackendUserStatus;
-  isEnabled:        boolean;
-  roles:            RoleDto[];
-  createdOnUtc:     string;
-  lastLoginOnUtc:   string | null;
-  invitationToken?: string;
+  id:                        string;
+  email:                     string;
+  firstName:                 string;
+  lastName:                  string;
+  displayName:               string;
+  status:                    BackendUserStatus;
+  isEnabled:                 boolean;
+  roles:                     RoleDto[];
+  directPermissionAllocations: PermissionAllocationDto[];
+  createdOnUtc:              string;
+  lastLoginOnUtc:            string | null;
+  invitationToken?:          string;
 }
 
 /** Result of an invite / resend-invite call, surfaced to the UI so it can show the invite link. */

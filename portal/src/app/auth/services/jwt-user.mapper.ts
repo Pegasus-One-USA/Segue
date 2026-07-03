@@ -1,4 +1,5 @@
-import { User, UserRole, Role, Permission } from '../models/user.model';
+import { User, Role, Permission } from '../models/user.model';
+import { toUserRole } from './api-user.service';
 
 /**
  * Builds the portal `User` (roles + permissions) from the decoded FHIRBridge access-token payload.
@@ -6,29 +7,12 @@ import { User, UserRole, Role, Permission } from '../models/user.model';
  * gating (`AuthStore.hasPermission`) keys off `permission.name`, which we set to the backend code verbatim.
  */
 
-// Backend role name (case-insensitive) → portal UserRole union. Unknown roles fall back to 'viewer'.
-const ROLE_MAP: Record<string, UserRole> = {
-  superadmin: 'system-admin',
-  admin: 'tenant-admin',
-  operations: 'pipeline-editor',
-  pipelineengineer: 'pipeline-editor',
-  developer: 'developer',
-  reviewer: 'reviewer',
-  analyst: 'analyst',
-  auditor: 'auditor',
-  viewer: 'viewer',
-};
-
 const EMAIL_URI = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress';
 const NAMEID_URI = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier';
 
 function toArray(value: unknown): string[] {
   if (value === null || value === undefined) return [];
   return Array.isArray(value) ? value.map(String) : [String(value)];
-}
-
-function mapRoleName(name: string): UserRole {
-  return ROLE_MAP[name.toLowerCase()] ?? 'viewer';
 }
 
 export function buildUserFromJwt(payload: Record<string, unknown>): User {
@@ -45,7 +29,7 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
 
   const roles: Role[] = toArray(payload['roles']).map(rn => ({
     id: rn,
-    name: mapRoleName(rn),
+    name: toUserRole(rn),
     displayName: rn,
     description: rn,
     permissions,
@@ -63,7 +47,7 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     firstName: firstName ?? '',
     lastName: rest.join(' '),
     fullName: displayName,
-    role: roles.length ? roles[0].name : 'viewer',
+    role: roles.length ? roles[0].name : 'Audit',
     roles,
     permissions,
     orgId: 'org',

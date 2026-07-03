@@ -71,8 +71,8 @@ export class InviteUserDialogComponent implements OnInit {
         this.roles.set(roles);
         this.rolesLoading.set(false);
         // Default to a sensible non-admin role if present.
-        const viewer = roles.find(r => r.name === 'viewer') ?? roles[0];
-        if (viewer) this.form.get('roleId')!.setValue(viewer.id);
+        const defaultRole = roles.find(r => r.name === 'Audit') ?? roles[0];
+        if (defaultRole) this.form.get('roleId')!.setValue(defaultRole.id);
       },
       error: err => {
         this.rolesLoading.set(false);
@@ -102,7 +102,7 @@ export class InviteUserDialogComponent implements OnInit {
       email:     value.email.trim().toLowerCase(),
       firstName: value.firstName?.trim() ?? '',
       lastName:  value.lastName?.trim() ?? '',
-      role:      (selectedRole?.name ?? 'viewer') as UserRole,
+      role:      (selectedRole?.name ?? 'Audit') as UserRole,
       roleId:    value.roleId,
     };
 

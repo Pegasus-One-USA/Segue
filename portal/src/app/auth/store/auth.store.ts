@@ -52,6 +52,6 @@ export class AuthStore {
   }
 
   isAdmin(): boolean {
-    return this.hasRole('system-admin', 'tenant-admin');
+    return this.hasRole('SuperAdmin', 'Admin');
   }
 }
