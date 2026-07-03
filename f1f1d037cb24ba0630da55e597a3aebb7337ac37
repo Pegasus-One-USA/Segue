@@ -1,0 +1,85 @@
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.html
+  s_c8649c9e9a8f4d::t_4c46f7b6c8583d 5-6,9-12,14,19-22,24-33,35-41,43-56,59,61-98,101,104-106,109,112-131
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_c8649c9e9a8f4d::t_98356351b95123 10
+portal/src/app/auth/models/password-policy.model.ts
+  s_c8649c9e9a8f4d::t_602fece50d8e64 1-15
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.ts
+  s_c8649c9e9a8f4d::t_a386102d6165d2 56,58,60
+portal/src/app/auth/services/email-notification.service.ts
+  s_c8649c9e9a8f4d::t_8cdd859ac9e9c5 1-83
+portal/src/app/auth/services/account-security.service.ts
+  s_c8649c9e9a8f4d::t_34b980530f8be3 1-108
+portal/src/app/auth/pages/login/login.component.scss
+  s_c8649c9e9a8f4d::t_00856086c6d9cb 219-221
+  s_c8649c9e9a8f4d::t_3aee76842302b0 222-223
+  s_c8649c9e9a8f4d::t_ea898885949c99 187-195
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.scss
+  s_c8649c9e9a8f4d::t_bf9446aa1aa7ed 32,35-39
+  s_c8649c9e9a8f4d::t_4b22d958173896 173-323
+  s_c8649c9e9a8f4d::t_4fa92f56fe3f61 141-147
+  s_c8649c9e9a8f4d::t_660c14af4c4d21 21
+  s_c8649c9e9a8f4d::t_eaeb69fe3804d6 360-361,363
+  s_c8649c9e9a8f4d::t_570fd832d5cb38 328
+portal/src/app/auth/models/security-event.model.ts
+  s_c8649c9e9a8f4d::t_ffa11c392923d3 1-19
+portal/src/app/auth/auth.routes.ts
+  s_c8649c9e9a8f4d::t_d1bd6d804532ce 37-40
+  s_c8649c9e9a8f4d::t_1cfa1561040313 36
+portal/src/app/auth/pages/login/login.component.ts
+  s_c8649c9e9a8f4d::t_f8afb7c6018cec 4-6
+  s_c8649c9e9a8f4d::t_2109e9a90e056c 32-33,39-42
+  s_c8649c9e9a8f4d::t_a28c0103a640f5 43
+portal/src/app/auth/pages/login/login.component.html
+  s_c8649c9e9a8f4d::t_ac9e99cae7dd5a 28-35
+portal/src/app/auth/services/password-policy.service.ts
+  s_c8649c9e9a8f4d::t_e87d69c44e77d9 1-76
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.html
+  s_c8649c9e9a8f4d::t_be447c93a6dc8f 10
+portal/src/app/auth/services/auth.service.ts
+  s_c8649c9e9a8f4d::t_470ef9a80745f2 23-29
+  s_c8649c9e9a8f4d::t_f18e201ad458a7 43-50,57,64-74
+  s_c8649c9e9a8f4d::t_277801c441138d 19-20
+  s_c8649c9e9a8f4d::t_89716d73c4188a 4,9-10
+portal/src/app/auth/pages/set-password/set-password.component.html
+  s_c8649c9e9a8f4d::t_ed0d9c3b47d071 1-123,131,138-212
+  s_c8649c9e9a8f4d::t_e326d65e32b9f1 124-130,132-137
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_c8649c9e9a8f4d::t_6b1a1b8bcd62fe 13
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_c8649c9e9a8f4d::t_02ce9f60f7fcc7 22
+portal/src/app/auth/models/invitation.model.ts
+  s_c8649c9e9a8f4d::t_6263dfa99bd368 1-30
+portal/src/app/auth/services/invitation.service.ts
+  s_c8649c9e9a8f4d::t_78414e1ca2aa1e 1-14,16-23,25-27,52-108,114-208,211-212,217-271,277-278
+  s_c8649c9e9a8f4d::t_abcb0b98d16f92 15,24,28-51
+  s_c8649c9e9a8f4d::t_0ec0a137724c0a 109-113
+  s_c8649c9e9a8f4d::t_00d4fe37dbf394 209-210,213-216
+  s_c8649c9e9a8f4d::t_5398c393f911a1 272-276
+portal/src/app/auth/pages/set-password/set-password.component.scss
+  s_c8649c9e9a8f4d::t_aec7fc2c4b9da5 1-429
+portal/src/app/auth/pages/set-password/set-password.component.ts
+  s_c8649c9e9a8f4d::t_9dd87029953125 4
+  s_c8649c9e9a8f4d::t_37412a4c1d65ba 29
+  s_c8649c9e9a8f4d::t_e8c08208f5500c 65
+  s_c8649c9e9a8f4d::t_48ba1a6564e2ef 1-3,5-28,30-64,66-152
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.ts
+  s_c8649c9e9a8f4d::t_58f3c8a38073f5 14-28,48-59,62,64-67,72-75,93-101,103-104,109,111,117-126
+  s_c8649c9e9a8f4d::t_50d58ce8c18c68 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "f1f1d037cb24ba0630da55e597a3aebb7337ac37",
+  "prompts": {},
+  "sessions": {
+    "s_c8649c9e9a8f4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6410a6b7-bcd1-4768-ad82-af7853ea4ed5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
