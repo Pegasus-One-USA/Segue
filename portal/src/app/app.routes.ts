@@ -1,8 +1,19 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './auth/guards/auth.guard';
 import { permissionGuard } from './auth/guards/permission.guard';
+import { setupGuard } from './auth/guards/setup.guard';
 
 export const routes: Routes = [
+
+  // ── First-run setup (no shell) — MUST precede the AppShell route ─────────────
+  {
+    path: 'setup',
+    canActivate: [setupGuard],
+    loadComponent: () =>
+      import('./onboarding/pages/setup-super-admin/setup-super-admin.component').then(
+        m => m.SetupSuperAdminComponent
+      ),
+  },
 
   // ── Auth (no shell) ─────────────────────────────────────────────────────────
   {

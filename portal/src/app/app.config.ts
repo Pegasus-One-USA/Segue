@@ -9,9 +9,16 @@ import { IUserService } from './auth/services/i-user.service';
 import { AuthApiService } from './auth/services/auth-api.service';
 import { ApiUserService } from './auth/services/api-user.service';
 import { AuthService } from './auth/services/auth.service';
+import { AppInitService } from './onboarding/services/app-init.service';
 
-function initApp(auth: AuthService) {
-  return () => auth.initFromToken();
+function initApp(auth: AuthService, appInit: AppInitService) {
+  // Restore any stored session, then resolve the first-run setup flag before routing starts.
+  // checkSetup() is self-resilient (defaults requiresSetup=false if the API is unreachable),
+  // so returning its Observable keeps the app booting even when the backend is down.
+  return () => {
+    auth.initFromToken();
+    return appInit.checkSetup();
+  };
 }
 
 export const appConfig: ApplicationConfig = {
@@ -29,7 +36,7 @@ export const appConfig: ApplicationConfig = {
     {
       provide: APP_INITIALIZER,
       useFactory: initApp,
-      deps: [AuthService],
+      deps: [AuthService, AppInitService],
       multi: true,
     },
   ],
