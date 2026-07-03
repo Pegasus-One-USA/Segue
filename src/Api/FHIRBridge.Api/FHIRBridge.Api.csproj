@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>044077df-af7f-484b-a9fc-ef5a02828198</UserSecretsId>
+    <!-- IIS defaults ASPNETCORE_ENVIRONMENT to Production; bake Development into web.config so Swagger/CORS behave like `dotnet run`. -->
+    <EnvironmentName>Development</EnvironmentName>
   </PropertyGroup>
 
   <ItemGroup>

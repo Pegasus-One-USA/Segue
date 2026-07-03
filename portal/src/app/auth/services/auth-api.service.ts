@@ -1,12 +1,14 @@
 /**
- * AuthApiService — real HTTP implementation of IAuthService against the FHIRBridge backend
- * (`${apiBase}/api/v1/auth/internal/*`). The access token is a JWT carrying `roles` + `permissions`
- * claims; the current user is rebuilt from those claims (see jwt-user.mapper). Wired in app.config.ts.
+ * AuthApiService — real HTTP implementation of IAuthService, wired to the FHIRBridge backend
+ * via AUTH_ENDPOINTS (see core/api-endpoints.ts). The access token is a JWT carrying `roles` +
+ * `permissions` claims; the current user is rebuilt from those claims through the single shared
+ * `buildUserFromJwt` mapper (also used by the SSO login path). Wired in app.config.ts.
  */
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map, of, throwError } from 'rxjs';
-import { environment } from '../../../environments/environment';
+import { Observable, of, throwError } from 'rxjs';
+import { map, catchError, tap } from 'rxjs/operators';
+import { AUTH_ENDPOINTS } from '../../core/api-endpoints';
 import { IAuthService } from './i-auth.service';
 import { TokenService } from './token.service';
 import { User, MessageResponse, TokenPair } from '../models/user.model';
@@ -17,41 +19,72 @@ import {
 } from '../models/auth-request.model';
 import { buildUserFromJwt } from './jwt-user.mapper';
 
-const BASE = `${environment.apiBase}/api/v1/auth/internal`;
+// ─── Backend DTO shapes (camelCase over the wire) ──────────────────────────────
+interface AuthProfileDto {
+  userId:         string;
+  externalUserId: string;
+  email:          string | null;
+  displayName:    string | null;
+  claimRoles:     string[];
+}
 
-interface BackendLoginResponse {
-  accessToken: string;
-  tokenType: string;
-  expiresOnUtc: string;
-  requiresPasswordChange: boolean;
-  refreshToken?: string;
+interface LocalLoginResponseDto {
+  accessToken:              string;
+  tokenType:                string;
+  expiresOnUtc:             string;
+  requiresPasswordChange:   boolean;
+  profile?:                 AuthProfileDto;
+  refreshToken?:            string;
   refreshTokenExpiresOnUtc?: string;
+}
+
+interface ForgotPasswordResponseDto {
+  accepted:      boolean;
+  resetToken?:   string | null;
+  expiresOnUtc?: string | null;
+}
+
+// Backend returns an absolute expiry timestamp; LoginResponse/TokenPair need relative seconds.
+function secondsUntil(isoUtc: string | undefined): number {
+  if (!isoUtc) return 3600;
+  return Math.max(60, Math.round((new Date(isoUtc).getTime() - Date.now()) / 1000));
 }
 
 @Injectable({ providedIn: 'root' })
 export class AuthApiService extends IAuthService {
-  private readonly http = inject(HttpClient);
+  private readonly http   = inject(HttpClient);
   private readonly tokens = inject(TokenService);
 
+  // ─── Login ─────────────────────────────────────────────────────────────────
   override login(req: LoginRequest): Observable<LoginResponse> {
     return this.http
-      .post<BackendLoginResponse>(`${BASE}/login`, { email: req.email, password: req.password })
-      .pipe(map(res => {
-        const payload = this.tokens.decodePayload<Record<string, unknown>>(res.accessToken) ?? {};
-        const user = buildUserFromJwt(payload);
-        user.mustChangePassword = res.requiresPasswordChange ?? false;
-        const expiresIn = res.expiresOnUtc
-          ? Math.max(60, Math.floor((new Date(res.expiresOnUtc).getTime() - Date.now()) / 1000))
-          : 3600;
-        return { accessToken: res.accessToken, refreshToken: res.refreshToken ?? '', expiresIn, user };
-      }));
+      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.login, { email: req.email, password: req.password })
+      .pipe(
+        map(dto => {
+          // The JWT carries the roles + permissions claims — rebuild the user from those so
+          // every login path (local + SSO) produces the same User shape.
+          const payload = this.tokens.decodePayload<Record<string, unknown>>(dto.accessToken) ?? {};
+          const user = buildUserFromJwt(payload);
+          user.mustChangePassword = dto.requiresPasswordChange ?? false;
+          return {
+            accessToken:  dto.accessToken,
+            refreshToken: dto.refreshToken ?? '',
+            expiresIn:    secondsUntil(dto.expiresOnUtc),
+            user,
+          };
+        }),
+        catchError(err => throwError(() => err)),
+      );
   }
 
+  // ─── Logout ────────────────────────────────────────────────────────────────
   override logout(): Observable<void> {
-    // Stateless JWT — nothing to invalidate server-side; the facade clears the local session.
-    return of(void 0);
+    return this.http.post<void>(AUTH_ENDPOINTS.logout, {}).pipe(
+      catchError(() => of(void 0)),
+    );
   }
 
+  // ─── Register — no self-registration endpoint exists on the backend ────────
   override register(_req: RegisterRequest): Observable<RegisterResponse> {
     return throwError(() => ({
       code: 'NOT_SUPPORTED',
@@ -59,24 +92,50 @@ export class AuthApiService extends IAuthService {
     }));
   }
 
+  // ─── Forgot password ───────────────────────────────────────────────────────
   override forgotPassword(req: ForgotPasswordRequest): Observable<MessageResponse> {
-    return this.http.post(`${BASE}/forgot-password`, { email: req.email }).pipe(
-      map(() => ({ success: true, message: `If an account exists for ${req.email}, a password-reset link has been sent.` })),
+    return this.http.post<ForgotPasswordResponseDto>(AUTH_ENDPOINTS.forgotPassword, { email: req.email }).pipe(
+      map(dto => ({
+        success: dto?.accepted ?? true,
+        message: `If an account exists for ${req.email}, a password-reset link has been sent.`,
+      })),
+      catchError(err => throwError(() => err)),
     );
   }
 
+  // ─── Reset password ────────────────────────────────────────────────────────
   override resetPassword(req: ResetPasswordRequest): Observable<MessageResponse> {
-    return this.http.post(`${BASE}/reset-password`, { token: req.token, newPassword: req.newPassword }).pipe(
+    return this.http.post(AUTH_ENDPOINTS.resetPassword, { token: req.token, newPassword: req.newPassword }).pipe(
       map(() => ({ success: true, message: 'Password has been reset successfully. You may now sign in.' })),
+      catchError(err => throwError(() => err)),
     );
   }
 
+  // ─── Change password ───────────────────────────────────────────────────────
   override changePassword(req: ChangePasswordRequest): Observable<MessageResponse> {
     return this.http
-      .post(`${BASE}/change-password`, { currentPassword: req.currentPassword, newPassword: req.newPassword })
-      .pipe(map(() => ({ success: true, message: 'Password changed successfully.' })));
+      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.changePassword, {
+        currentPassword: req.currentPassword,
+        newPassword: req.newPassword,
+      })
+      .pipe(
+        tap(dto => {
+          // Backend issues a fresh token with an updated pwd_change_required claim on password
+          // change — persist it, or the old token's stale claim keeps forcing a change prompt.
+          if (dto?.accessToken) {
+            this.tokens.setTokens(
+              dto.accessToken,
+              dto.refreshToken ?? this.tokens.getRefreshToken() ?? '',
+              this.tokens.isRemembered,
+            );
+          }
+        }),
+        map(() => ({ success: true, message: 'Password changed successfully.' })),
+        catchError(err => throwError(() => err)),
+      );
   }
 
+  // ─── Get current user ──────────────────────────────────────────────────────
   override getCurrentUser(): Observable<User> {
     const token = this.tokens.getAccessToken();
     if (!token || this.tokens.isExpired(token)) {
@@ -87,8 +146,15 @@ export class AuthApiService extends IAuthService {
     return of(buildUserFromJwt(payload));
   }
 
-  override refreshToken(_refreshToken: string): Observable<TokenPair> {
-    // No refresh endpoint on the backend; the interceptor redirects to login on 401.
-    return throwError(() => ({ code: 'NOT_SUPPORTED', message: 'Token refresh is not available.' }));
+  // ─── Refresh ───────────────────────────────────────────────────────────────
+  override refreshToken(refreshToken: string): Observable<TokenPair> {
+    return this.http.post<LocalLoginResponseDto>(AUTH_ENDPOINTS.refresh, { refreshToken }).pipe(
+      map(dto => ({
+        accessToken:  dto.accessToken,
+        refreshToken: dto.refreshToken ?? '',
+        expiresIn:    secondsUntil(dto.expiresOnUtc),
+      })),
+      catchError(err => throwError(() => err)),
+    );
   }
 }

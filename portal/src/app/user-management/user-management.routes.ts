@@ -21,6 +21,12 @@ export const USER_MANAGEMENT_ROUTES: Routes = [
       import('./pages/role-list/role-list.component').then(m => m.RoleListComponent),
   },
   {
+    path: 'roles/:id/permissions',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/role-permissions/role-permissions.component').then(m => m.RolePermissionsComponent),
+  },
+  {
     path: ':id',
     canActivate: [authGuard],
     loadComponent: () =>

@@ -1,0 +1,411 @@
+// user-management/pages/role-permissions/role-permissions.component.scss
+
+// ─── Page layout ─────────────────────────────────────────────────────────────
+.role-permissions-page {
+  padding: 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 100%;
+  background: var(--color-bg);
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 0;
+}
+
+// ─── Breadcrumb + header ─────────────────────────────────────────────────────
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  &__link {
+    color: var(--color-muted) !important;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 0 8px;
+    min-width: 0;
+    height: 28px;
+
+    mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 4px; }
+
+    &:hover { color: var(--color-primary) !important; }
+  }
+
+  &__sep { color: var(--color-border); font-size: 18px; height: 18px; width: 18px; }
+
+  &__current {
+    font-size: 13px;
+    color: var(--color-ink-2);
+    font-weight: 500;
+  }
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.header-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.role-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: #EDE9FE;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  mat-icon { font-size: 24px; height: 24px; width: 24px; color: #5B21B6; }
+}
+
+.hero-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--color-ink);
+  margin: 0 0 2px;
+}
+
+.hero-sub {
+  font-size: 13.5px;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.system-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.role-switcher {
+  width: 240px;
+  flex-shrink: 0;
+
+  ::ng-deep {
+    .mat-mdc-form-field-infix { min-height: 44px; padding-top: 10px !important; padding-bottom: 10px !important; }
+    .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
+    .mat-mdc-select-panel { background: #fff !important; }
+  }
+}
+
+// ─── Notices ──────────────────────────────────────────────────────────────────
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-base);
+  font-size: 13px;
+  color: #92400E;
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; flex-shrink: 0; color: var(--color-warning); }
+
+  &.error-notice {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+    color: #991B1B;
+
+    mat-icon { color: #DC2626; }
+  }
+}
+
+// ─── Permissions ───────────────────────────────────────────────────────────────
+.permissions-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 24px 28px;
+}
+
+// ─── Toolbar: search + reset + global select-all ─────────────────────────────
+.permissions-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.search-wrap {
+  flex: 1 1 260px;
+  min-width: 200px;
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .search-ico {
+    position: absolute;
+    left: 12px;
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: var(--color-muted);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    height: 40px;
+    padding: 0 14px 0 38px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    background: var(--color-bg);
+    font-size: 14px;
+    color: var(--color-ink);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+    &::placeholder { color: var(--color-muted); }
+
+    &:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
+    }
+  }
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.permissions-count {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.btn-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-muted);
+    background: var(--color-side);
+    color: var(--color-ink);
+  }
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+// Tri-state select-all checkbox, shared by the toolbar (regular size) and each group
+// header (smaller, --sm modifier). No visible label — colored to match the role-avatar
+// icon (#5B21B6) so it reads as visually distinct from the regular permission checkboxes.
+// Overrides the MDC internals directly (::ng-deep + !important) rather than the
+// --mdc-checkbox-* custom properties, since the app's global theme sets those with
+// equal specificity and wins the cascade.
+.select-all-checkbox {
+  ::ng-deep {
+    .mdc-checkbox__native-control:enabled ~ .mdc-checkbox__background {
+      border-color: #C4B5FD !important;
+    }
+
+    .mdc-checkbox__native-control:enabled:checked ~ .mdc-checkbox__background,
+    .mdc-checkbox__native-control:enabled:indeterminate ~ .mdc-checkbox__background {
+      background-color: #5B21B6 !important;
+      border-color: #5B21B6 !important;
+    }
+
+    .mdc-checkbox__checkmark { color: #fff !important; }
+    .mdc-checkbox__mixedmark { border-color: #fff !important; }
+
+    .mdc-checkbox__native-control:enabled:checked ~ .mat-mdc-checkbox-ripple .mat-ripple-element,
+    .mdc-checkbox__native-control:enabled:indeterminate ~ .mat-mdc-checkbox-ripple .mat-ripple-element {
+      background-color: #5B21B6 !important;
+    }
+  }
+}
+
+.no-results {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--color-muted);
+}
+
+.permissions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.permission-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  // Bordered "card within a card" so each resource group reads as a distinct block.
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  padding: 14px 18px;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  &__title {
+    display: inline-flex;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-primary-dark);
+    background: var(--color-primary-soft);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+  }
+
+  // Responsive 2-3 column layout for the checkboxes within a group — auto-fit yields
+  // 3 columns at full width, 2 on narrower viewports, 1 on mobile, no media query needed.
+  &__items {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 8px 20px;
+  }
+
+  mat-checkbox {
+    display: block;
+    margin: 0;
+    min-width: 0;
+
+    ::ng-deep .mdc-label {
+      font-size: 14.5px;
+      color: var(--color-ink);
+    }
+  }
+}
+
+.permission-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+// ─── Actions ───────────────────────────────────────────────────────────────────
+.page-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.btn-cancel {
+  border-color: var(--color-border) !important;
+  color: var(--color-ink-2) !important;
+  border-radius: var(--radius-base);
+  font-weight: 500;
+  height: 40px;
+
+  &:hover {
+    background: var(--color-bg) !important;
+    border-color: var(--color-muted) !important;
+  }
+}
+
+.btn-save {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  --mat-flat-button-hover-state-layer-opacity: 0;
+  --mat-flat-button-focus-state-layer-opacity: 0;
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+
+  &:hover:not([disabled]) { background: var(--color-primary-dark) !important; }
+  &[disabled] { background: var(--color-muted) !important; opacity: 0.7; }
+
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0 !important; }
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 32px;
+  text-align: center;
+  gap: 12px;
+
+  &__icon-wrap {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--color-side);
+    border: 2px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+
+    mat-icon { font-size: 32px; height: 32px; width: 32px; color: var(--color-border); }
+  }
+
+  &__title { font-size: 17px; font-weight: 600; color: var(--color-ink); margin: 0; }
+  &__sub   { font-size: 14px; color: var(--color-muted); margin: 0 0 8px; max-width: 320px; }
+}

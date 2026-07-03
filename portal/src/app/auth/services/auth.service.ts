@@ -1,14 +1,14 @@
 import { Injectable, inject, computed } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
-import { Observable, EMPTY } from 'rxjs';
+import { tap, catchError, map } from 'rxjs/operators';
+import { Observable, EMPTY, of } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { AuthStore } from '../store/auth.store';
 import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
-import { User, UserRole, MessageResponse, TokenPair } from '../models/user.model';
+import { UserRole, MessageResponse, TokenPair } from '../models/user.model';
 import {
   LoginRequest, LoginResponse,
   RegisterRequest, RegisterResponse,
@@ -135,16 +135,19 @@ export class AuthService {
   isAdmin(): boolean                        { return this.store.isAdmin(); }
 
   // ─── Initialise from stored token (called in app init) ───────────────────
-  initFromToken(): void {
+  // Rebuild the current user (roles + permissions) synchronously from the stored JWT claims via
+  // buildUserFromJwt — the same mapper login/SSO use, so no API round-trip or mock lookup is
+  // needed. Returns an Observable so app.config's APP_INITIALIZER can treat it uniformly.
+  initFromToken(): Observable<void> {
     const token = this.tokens.getAccessToken();
     if (!token || this.tokens.isExpired(token)) {
       this.tokens.clearTokens();
-      return;
+      return of(undefined);
     }
     const payload = this.tokens.decodePayload<Record<string, unknown>>(token);
-    if (!payload) return;
-
-    // Rebuild the current user (roles + permissions) from the JWT claims.
-    this.store.setUser(buildUserFromJwt(payload));
+    if (payload) {
+      this.store.setUser(buildUserFromJwt(payload));
+    }
+    return of(undefined);
   }
 }

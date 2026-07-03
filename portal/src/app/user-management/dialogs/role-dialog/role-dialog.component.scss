@@ -69,7 +69,7 @@
   border-radius: var(--radius-base);
   font-size: 13px;
   color: #92400E;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 
   mat-icon {
     font-size: 18px;
@@ -77,6 +77,14 @@
     width: 18px;
     flex-shrink: 0;
     color: var(--color-warning);
+  }
+
+  &.error-notice {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+    color: #991B1B;
+
+    mat-icon { color: #DC2626; }
   }
 }
 
