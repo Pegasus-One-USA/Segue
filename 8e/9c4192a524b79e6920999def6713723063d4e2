@@ -1,0 +1,67 @@
+portal/src/app/auth/services/sso-auth-api.service.ts
+  s_6fe72b0759281b::t_97079c1f715236 1-89
+portal/src/app/auth/pages/login/login.component.ts
+  s_6fe72b0759281b::t_29506f601d9049 13-14
+  s_6fe72b0759281b::t_195a13db298acd 15,17-19,33
+  s_1c6ff506359a07::t_6930bcbf1f1b77 39-43,46-47,87-108
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.ts
+  s_6fe72b0759281b::t_accfb4b62d118c 146-176
+  s_6fe72b0759281b::t_d0665eada02ae9 22-24
+  s_6fe72b0759281b::t_d526a70fd92dbc 41,52,59
+  s_6fe72b0759281b::t_e18858f8c47ea7 60
+portal/src/app/auth/components/sso-buttons/sso-buttons.component.html
+  s_6fe72b0759281b::t_2d4a2d61142abf 1-59
+portal/src/app/auth/services/sso.service.ts
+  s_6fe72b0759281b::t_2e7a31596f9540 1-144
+portal/src/app/auth/services/sso-config.service.ts
+  s_6fe72b0759281b::t_1b13c5a5f8b745 1-83
+portal/src/app/auth/components/sso-buttons/sso-buttons.component.ts
+  s_6fe72b0759281b::t_72714ebd46ef34 1-68
+portal/src/app/auth/services/google-identity.d.ts
+  s_6fe72b0759281b::t_9862d637a1478e 1-47
+portal/src/app/auth/components/sso-buttons/sso-buttons.component.scss
+  s_6fe72b0759281b::t_43074cab11f35f 1-92
+portal/src/app/onboarding/services/app-init.service.ts
+  s_6fe72b0759281b::t_bc5114e58cb491 62-66
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.html
+  s_6fe72b0759281b::t_3c56b1d1ac8f55 197-199,201-204
+  s_6fe72b0759281b::t_12518be26e6531 200
+portal/src/app/auth/pages/set-password/set-password.component.ts
+  s_6fe72b0759281b::t_b850c04f4e13ca 12
+  s_6fe72b0759281b::t_e1fd1e54ba96f0 13,18-20,42
+  s_1c6ff506359a07::t_1251df6c17443b 53-54,65-68,124-154
+portal/package-lock.json
+  s_6fe72b0759281b::t_a13d1efddd18d6 21-22,967-1000
+portal/package.json
+  s_6fe72b0759281b::t_76fbb75b2ac8f9 23-24
+portal/src/app/auth/pages/login/login.component.html
+  s_1c6ff506359a07::t_fb46782266cd96 130-137
+portal/src/app/auth/pages/set-password/set-password.component.html
+  s_1c6ff506359a07::t_0dbad697dc055d 105-144,248
+portal/src/app/auth/pages/set-password/set-password.component.scss
+  s_1c6ff506359a07::t_0f9bd938543185 196-243
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "8e9c4192a524b79e6920999def6713723063d4e2",
+  "prompts": {},
+  "sessions": {
+    "s_1c6ff506359a07": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a01a89d925e21f4ac",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
