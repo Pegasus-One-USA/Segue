@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<ILocalAuthService, LocalAuthService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
+        services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IRoleManagementService, RoleManagementService>();
         services.AddScoped<IHedisMeasureReportService, HedisMeasureReportService>();
         services.AddScoped<IAnomalyDetectionService, RunAnomalyDetectionService>();

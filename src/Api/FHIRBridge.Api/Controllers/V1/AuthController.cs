@@ -12,16 +12,52 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IUserAccessService _userAccessService;
     private readonly ILocalAuthService _localAuthService;
+    private readonly ISetupService _setupService;
     private readonly IConfiguration _configuration;
 
     public AuthController(
         IUserAccessService userAccessService,
         ILocalAuthService localAuthService,
+        ISetupService setupService,
         IConfiguration configuration)
     {
         _userAccessService = userAccessService;
         _localAuthService = localAuthService;
+        _setupService = setupService;
         _configuration = configuration;
+    }
+
+    /// <summary>First-run check — true when the deployment still needs its initial SuperAdmin created.</summary>
+    [HttpGet("setup-status")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(SetupStatusDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSetupStatus(CancellationToken cancellationToken)
+    {
+        var requiresSetup = await _setupService.RequiresSetupAsync(cancellationToken);
+
+        return Ok(new SetupStatusDto(requiresSetup));
+    }
+
+    /// <summary>
+    /// First-run creation of the sole SuperAdmin (local/password). Anonymous but one-shot: returns 409 once any user
+    /// exists. On success returns a signed-in session.
+    /// </summary>
+    [HttpPost("setup-superadmin")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SetupSuperAdmin(
+        [FromBody] CreateFirstSuperAdminRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!await _setupService.RequiresSetupAsync(cancellationToken))
+        {
+            return Conflict(new { error = "setup_already_completed", message = "A user already exists; setup is complete." });
+        }
+
+        var response = await _setupService.CreateFirstSuperAdminAsync(request, cancellationToken);
+
+        return Ok(response);
     }
 
     [HttpGet("me")]
