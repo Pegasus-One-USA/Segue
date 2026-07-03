@@ -1,0 +1,35 @@
+src/FHIRBridge.Application/DTOs/CreateFirstSuperAdminRequest.cs
+  s_6fe72b0759281b::t_d6dd0b0b7537ea 1-10
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  s_6fe72b0759281b::t_39d6ea4c409fda 15,21,26,30-36,46,52
+  s_6fe72b0759281b::t_d2fffa70b74927 37-39,43-45
+  s_6fe72b0759281b::t_9c474a2fc149f8 47-51
+  s_6fe72b0759281b::t_06308af46b5a6a 53-55
+  s_6fe72b0759281b::t_d9cb2245ee32cf 40-42,56-62
+src/FHIRBridge.Application/Services/SetupService.cs
+  s_6fe72b0759281b::t_6293ed5a966200 1-55
+src/FHIRBridge.Application/Services/ISetupService.cs
+  s_6fe72b0759281b::t_9ffd0803ae1df0 1-19
+tests/FHIRBridge.Api.IntegrationTests/Tests/SetupTests.cs
+  s_6fe72b0759281b::t_7cdde0e55700af 1-33
+tests/FHIRBridge.UnitTests/Setup/SetupServiceTests.cs
+  s_6fe72b0759281b::t_022ec08a57e3bc 1-48
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_6fe72b0759281b::t_d062b9f39ce88d 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "5fc226e4bd6fa4bbf5d22b932d98c3164dd2bc9f",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
