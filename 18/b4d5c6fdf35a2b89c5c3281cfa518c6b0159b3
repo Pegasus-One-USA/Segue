@@ -1,0 +1,66 @@
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_6fe72b0759281b::t_810c2b63c92b2a 31-32
+  s_a9f0e927680e93::t_945f85195045d8 102,105-114,156,158-163,217-225,227-240,243-246,249-250,252,254-255,264,266-268,270-271,276-278,292-300
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_6fe72b0759281b::t_08bb4e339d0dfb 11-16
+  s_a9f0e927680e93::t_505cc963c059d4 106,177,208-210,212-253,279-280,282
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.ts
+  s_6fe72b0759281b::t_d86ff0d3f31e6a 1-44
+portal/src/app/auth/services/mock-user.service.ts
+  s_6fe72b0759281b::t_85a2c729b71b2d 7
+  s_a9f0e927680e93::t_c5da44f39f5cf4 212,242-249,255,261-268
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.html
+  s_6fe72b0759281b::t_4e2f08fea86a47 1-39
+portal/src/app/auth/services/api-user.service.ts
+  s_6fe72b0759281b::t_c727ef5fe78f00 121
+  s_6fe72b0759281b::t_49fd1d0343c324 4
+  s_6fe72b0759281b::t_aaf39933979271 9-11,14-60,62-76,83,87,95,97-120,122-132,135-136,143,147,158,161,196,198-199,204-273,275,279,281-286,291-292,296-299
+  s_6fe72b0759281b::t_003a6f561642bf 274,276-278
+  s_6fe72b0759281b::t_3e00341ed13887 96
+  s_6fe72b0759281b::t_fb8fcea59750e8 280
+portal/src/app/app.routes.ts
+  s_6fe72b0759281b::t_8804bc4bb3cb6f 3
+  s_a9f0e927680e93::t_d7d5c230ae4568 46,49-50
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.scss
+  s_6fe72b0759281b::t_7e738d701e7c53 1-71
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.ts
+  s_6fe72b0759281b::t_fcee994c6ba4cd 6,17,19,42,47-50,58-80,100,102-106,117-120,126
+portal/src/app/app.config.ts
+  s_a9f0e927680e93::t_87a9a4222ae274 25,27-28
+portal/src/app/auth/guards/permission.guard.ts
+  s_a9f0e927680e93::t_3af2e99f539473 14-16
+portal/src/app/auth/mock/mock-db.ts
+  s_a9f0e927680e93::t_e0dda902599514 25-33,52
+portal/src/app/auth/models/auth-request.model.ts
+  s_a9f0e927680e93::t_b56223bf08cebb 52-53
+portal/src/app/auth/models/user.model.ts
+  s_a9f0e927680e93::t_475146094f2a80 108-110,116,124-147
+portal/src/app/auth/services/i-user.service.ts
+  s_a9f0e927680e93::t_599daf7e69e88d 4,23-24
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.html
+  s_a9f0e927680e93::t_651d96c807e65b 39,42,47,56-58,61-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "18b4d5c6fdf35a2b89c5c3281cfa518c6b0159b3",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a9f0e927680e93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8289ad858e3d8ec0",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
