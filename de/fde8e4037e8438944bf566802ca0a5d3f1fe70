@@ -1,0 +1,25 @@
+portal/src/app/auth/services/auth-api.service.ts
+  s_6fe72b0759281b::t_359b74521ee123 2-4,8-9,11,18,20-29,34,37-47,51-52,55-59,63-65,69-71,75-77,81-87,90-92
+portal/src/app/auth/services/jwt-user.mapper.ts
+  s_6fe72b0759281b::t_d60cbdcce7498e 1-78
+portal/src/app/app.config.ts
+  s_6fe72b0759281b::t_4d1fa859e7b7f4 9,24-25
+portal/src/app/auth/services/auth.service.ts
+  s_6fe72b0759281b::t_8f09737baed599 17,144,147-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "defde8e4037e8438944bf566802ca0a5d3f1fe70",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
