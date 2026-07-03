@@ -149,8 +149,6 @@
         <h3 class="empty-state__title">
           @if (searchQuery() || tenantFilter()) {
             No roles matched your filters
-          } @else if (tenants().length === 0) {
-            Create a tenant first
           } @else {
             No roles yet
           }
@@ -158,8 +156,6 @@
         <p class="empty-state__sub">
           @if (searchQuery() || tenantFilter()) {
             Try adjusting your search or filter.
-          } @else if (tenants().length === 0) {
-            You need at least one tenant before creating roles.
           } @else {
             Get started by adding your first role.
           }

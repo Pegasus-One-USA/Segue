@@ -7,7 +7,7 @@ import { UserMenuComponent } from '../../user/components/user-menu/user-menu.com
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':                    'Dashboard',
   '/workflow-builder':             'Pipeline Builder',
-  '/user-management':              'Users',
+  '/user-management':              'User Management',
   '/user-management/tenants':      'Tenant',
   '/user-management/roles':        'Role',
   '/profile':                      'My Profile',

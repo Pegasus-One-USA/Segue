@@ -1,11 +1,13 @@
 import { Injectable, inject, computed } from '@angular/core';
 import { Router } from '@angular/router';
 import { tap } from 'rxjs/operators';
-import { Observable } from 'rxjs';
+import { Observable, EMPTY } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { AuthStore } from '../store/auth.store';
+import { AccountSecurityService } from './account-security.service';
+import { EmailNotificationService } from './email-notification.service';
 import { User, UserRole, MessageResponse, TokenPair } from '../models/user.model';
 import {
   LoginRequest, LoginResponse,
@@ -14,13 +16,17 @@ import {
 } from '../models/auth-request.model';
 import { MOCK_USERS } from '../mock/mock-db';
 
+const LOCKOUT_MINUTES = 30;
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly api     = inject(IAuthService);
-  private readonly store   = inject(AuthStore);
-  private readonly tokens  = inject(TokenService);
-  private readonly session = inject(SessionService);
-  private readonly router  = inject(Router);
+  private readonly api      = inject(IAuthService);
+  private readonly store    = inject(AuthStore);
+  private readonly tokens   = inject(TokenService);
+  private readonly session  = inject(SessionService);
+  private readonly router   = inject(Router);
+  private readonly security = inject(AccountSecurityService);
+  private readonly emailSvc = inject(EmailNotificationService);
 
   // ─── Expose store signals directly ────────────────────────────────────────
   readonly currentUser     = this.store.currentUser;
@@ -34,19 +40,38 @@ export class AuthService {
 
   // ─── Login ─────────────────────────────────────────────────────────────────
   login(req: LoginRequest): Observable<LoginResponse> {
+    // Check account lockout before hitting the API
+    const lockInfo = this.security.getLockoutInfo(req.email);
+    if (lockInfo.locked) {
+      const msg = `Account locked. Try again in ${lockInfo.minutesRemaining} minute${lockInfo.minutesRemaining !== 1 ? 's' : ''}.`;
+      this.store.setError(msg);
+      return EMPTY;
+    }
+
     this.store.setLoading(true);
     this.store.setError(null);
 
     return this.api.login(req).pipe(
       tap({
         next: (res) => {
+          this.security.clearAttempts(req.email, res.user.id);
           this.store.setUser(res.user);
           this.session.start(res.user.id, res.accessToken, res.refreshToken, req.rememberMe ?? false);
           this.store.setLoading(false);
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
-          this.store.setError(err?.message ?? 'Login failed. Please try again.');
+          const info = this.security.recordFailedAttempt(req.email);
+          let message = err?.message ?? 'Login failed. Please try again.';
+
+          if (info.locked) {
+            message = `Account locked for ${LOCKOUT_MINUTES} minutes due to too many failed attempts.`;
+            this.emailSvc.sendAccountLockedEmail(req.email, LOCKOUT_MINUTES).subscribe();
+          } else if (info.attemptsLeft <= 2 && info.attemptsLeft > 0) {
+            message += ` ${info.attemptsLeft} attempt${info.attemptsLeft !== 1 ? 's' : ''} remaining before lockout.`;
+          }
+
+          this.store.setError(message);
           this.store.setLoading(false);
         },
       })

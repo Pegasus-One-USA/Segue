@@ -1,7 +1,9 @@
 // auth/pages/login/login.component.ts
 import { Component, inject, signal, computed } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { RouterLink, ActivatedRoute } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs/operators';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,11 +29,17 @@ import { AuthService } from '../../services/auth.service';
   styleUrl: './login.component.scss',
 })
 export class LoginComponent {
-  private readonly fb   = inject(FormBuilder);
+  private readonly fb    = inject(FormBuilder);
+  private readonly route = inject(ActivatedRoute);
   protected readonly auth = inject(AuthService);
 
   protected readonly isLoading = this.auth.isLoading;
   protected readonly error     = this.auth.error;
+
+  protected readonly activated = toSignal(
+    this.route.queryParamMap.pipe(map(p => p.get('activated') === '1')),
+    { initialValue: false },
+  );
 
   protected readonly showPassword = signal(false);
   protected readonly capsLockOn   = signal(false);
