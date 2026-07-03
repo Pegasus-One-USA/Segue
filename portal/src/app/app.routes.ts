@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './auth/guards/auth.guard';
-import { roleGuard } from './auth/guards/role.guard';
+import { permissionGuard } from './auth/guards/permission.guard';
 
 export const routes: Routes = [
 
@@ -43,11 +43,11 @@ export const routes: Routes = [
           ),
       },
 
-      // User Management (admin only)
+      // User Management (permission-gated; SuperAdmin / GlobalAdmin fall through)
       {
         path: 'user-management',
-        canActivate: [roleGuard],
-        data: { roles: ['system-admin', 'tenant-admin'] },
+        canActivate: [permissionGuard],
+        data: { permissions: ['user.view'] },
         loadChildren: () =>
           import('./user-management/user-management.routes').then(
             m => m.USER_MANAGEMENT_ROUTES

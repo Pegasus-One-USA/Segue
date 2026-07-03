@@ -25,10 +25,11 @@ import {
   User, UserRole, UserStatus, UserQueryParams,
 } from '../../../auth/models/user.model';
 
-import { CreateUserDialogComponent } from '../../dialogs/create-user-dialog/create-user-dialog.component';
 import { EditUserDialogComponent } from '../../dialogs/edit-user-dialog/edit-user-dialog.component';
 import { InviteUserDialogComponent } from '../../dialogs/invite-user-dialog/invite-user-dialog.component';
 import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/assign-roles-dialog.component';
+import { InviteResultDialogComponent } from '../../dialogs/invite-result-dialog/invite-result-dialog.component';
+import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 
 export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
   'system-admin':    { label: 'System Admin',    color: '#5B21B6', bg: '#EDE9FE' },
@@ -98,8 +99,18 @@ export class UserListComponent implements OnInit, OnDestroy {
     'reviewer', 'auditor', 'analyst', 'viewer',
   ];
 
-  readonly statusOptions: UserStatus[] = ['active', 'inactive', 'suspended', 'pending'];
+  readonly statusOptions: UserStatus[] = ['active', 'inactive', 'pending'];
   readonly roleConfig = ROLE_CONFIG;
+
+  // ─── Permission gating ──────────────────────────────────────────────────────
+  private isAdmin(): boolean            { return this.authService.isAdmin(); }
+  canInvite    = (): boolean => this.isAdmin() || this.authService.hasPermission('user.invite');
+  canToggle    = (): boolean => this.isAdmin() || this.authService.hasPermission('user.deactivate');
+  canEdit      = (): boolean => this.isAdmin() || this.authService.hasPermission('user.edit');
+  canAssignRole = (): boolean => this.isAdmin() || this.authService.hasPermission('role.assign');
+  canDelete    = (): boolean => this.isAdmin() || this.authService.hasPermission('user.delete');
+  hasRowMenu   = (): boolean =>
+    this.canEdit() || this.canAssignRole() || this.canToggle() || this.canInvite() || this.canDelete();
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   ngOnInit(): void {
@@ -142,9 +153,14 @@ export class UserListComponent implements OnInit, OnDestroy {
           this.total.set(res.total);
           this.loading.set(false);
         },
-        error: (err: {message?: string}) => {
+        error: (err: { status?: number; message?: string }) => {
           this.loading.set(false);
-          this.snackBar.open(err?.message ?? 'Failed to load users.', 'Dismiss', { duration: 4000 });
+          this.users.set([]);
+          this.total.set(0);
+          const msg = err?.status === 403
+            ? 'You do not have permission to view users.'
+            : err?.message ?? 'Failed to load users.';
+          this.snackBar.open(msg, 'Dismiss', { duration: 4000 });
         },
       });
   }
@@ -175,13 +191,6 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   // ─── Dialogs ─────────────────────────────────────────────────────────────
-  openCreateDialog(): void {
-    const ref = this.dialog.open(CreateUserDialogComponent, {
-      width: '640px', disableClose: true, restoreFocus: false,
-    });
-    ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
-  }
-
   openEditDialog(user: User): void {
     const ref = this.dialog.open(EditUserDialogComponent, {
       width: '640px', disableClose: true, restoreFocus: false, data: { user },
@@ -205,38 +214,45 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // ─── User actions ─────────────────────────────────────────────────────────
   deleteUser(user: User): void {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${user.fullName}"? This action cannot be undone.`,
-    );
-    if (!confirmed) return;
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '420px', restoreFocus: false,
+      data: {
+        title:        'Delete user',
+        message:      `Are you sure you want to delete "${user.fullName}"? This action cannot be undone.`,
+        confirmLabel: 'Delete',
+        danger:       true,
+      },
+    });
 
-    this.userService.deleteUser(user.id)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          this.snackBar.open(`User "${user.fullName}" deleted.`, 'Dismiss', { duration: 3000 });
-          this.loadUsers();
-        },
-        error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to delete user.', 'Dismiss', { duration: 4000 });
-        },
-      });
+    ref.afterClosed().subscribe(confirmed => {
+      if (!confirmed) return;
+      this.userService.deleteUser(user.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => {
+            this.snackBar.open(`User "${user.fullName}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.loadUsers();
+          },
+          error: (err: { status?: number; message?: string }) => {
+            this.snackBar.open(this.errMsg(err, 'Failed to delete user.'), 'Dismiss', { duration: 4000 });
+          },
+        });
+    });
   }
 
-  toggleStatus(user: User, action: 'enable' | 'disable' | 'suspend'): void {
-    const call$ =
-      action === 'enable'  ? this.userService.enableUser(user.id)  :
-      action === 'disable' ? this.userService.disableUser(user.id) :
-                             this.userService.suspendUser(user.id);
+  toggleStatus(user: User, action: 'enable' | 'disable'): void {
+    const call$ = action === 'enable'
+      ? this.userService.enableUser(user.id)
+      : this.userService.disableUser(user.id);
 
     call$.pipe(takeUntil(this.destroy$)).subscribe({
-      next: updated => {
-        this.users.update(list => list.map(u => u.id === updated.id ? updated : u));
-        const label = action === 'enable' ? 'enabled' : action === 'disable' ? 'disabled' : 'suspended';
+      next: () => {
+        const label = action === 'enable' ? 'activated' : 'deactivated';
         this.snackBar.open(`User "${user.fullName}" ${label}.`, 'Dismiss', { duration: 3000 });
+        this.loadUsers();
       },
-      error: err => {
-        this.snackBar.open(err?.message ?? `Failed to ${action} user.`, 'Dismiss', { duration: 4000 });
+      error: (err: { status?: number; message?: string }) => {
+        this.snackBar.open(this.errMsg(err, `Failed to ${action} user.`), 'Dismiss', { duration: 4000 });
       },
     });
   }
@@ -245,26 +261,21 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.userService.resendInvitation(user.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: () => {
+        next: res => {
           this.snackBar.open(`Invitation resent to "${user.email}".`, 'Dismiss', { duration: 3000 });
+          this.dialog.open(InviteResultDialogComponent, {
+            width: '540px', restoreFocus: false, data: res,
+          });
         },
-        error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to resend invitation.', 'Dismiss', { duration: 4000 });
+        error: (err: { status?: number; message?: string }) => {
+          this.snackBar.open(this.errMsg(err, 'Failed to resend invitation.'), 'Dismiss', { duration: 4000 });
         },
       });
   }
 
-  resetPassword(user: User): void {
-    this.userService.resetUserPassword(user.id)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          this.snackBar.open(`Password reset email sent to "${user.email}".`, 'Dismiss', { duration: 3000 });
-        },
-        error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to reset password.', 'Dismiss', { duration: 4000 });
-        },
-      });
+  private errMsg(err: { status?: number; message?: string; error?: { message?: string } }, fallback: string): string {
+    if (err?.status === 403) return 'You do not have permission to perform this action.';
+    return err?.error?.message ?? err?.message ?? fallback;
   }
 
   navigateToDetail(user: User): void {
@@ -276,6 +287,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     const f = (user.firstName ?? '').charAt(0).toUpperCase();
     const l = (user.lastName  ?? '').charAt(0).toUpperCase();
     return f + l || user.email.charAt(0).toUpperCase();
+  }
+
+  getStatusLabel(status: string): string {
+    const map: Record<string, string> = {
+      active:   'Active',
+      inactive: 'Inactive',
+      pending:  'Invited',
+    };
+    return map[status] ?? status;
   }
 
   getStatusClass(status: string): string {

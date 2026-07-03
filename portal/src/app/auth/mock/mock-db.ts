@@ -22,6 +22,15 @@ export const ALL_PERMISSIONS: Permission[] = [
   { id: 'p-18', name: 'roles:manage',        resource: 'roles',          action: 'manage',  description: 'Full role administration' },
   { id: 'p-19', name: 'configurations:read', resource: 'configurations', action: 'read',    description: 'View source configurations' },
   { id: 'p-20', name: 'configurations:write',resource: 'configurations', action: 'write',   description: 'Edit source configurations' },
+
+  // ── Backend-style dotted permission names (match the real API + UI gating) ──
+  { id: 'p-21', name: 'user.view',           resource: 'user',           action: 'view',       description: 'View users' },
+  { id: 'p-22', name: 'user.invite',         resource: 'user',           action: 'invite',     description: 'Invite / resend invites to users' },
+  { id: 'p-23', name: 'user.edit',           resource: 'user',           action: 'edit',       description: 'Edit users' },
+  { id: 'p-24', name: 'user.deactivate',     resource: 'user',           action: 'deactivate', description: 'Activate / deactivate users' },
+  { id: 'p-25', name: 'user.delete',         resource: 'user',           action: 'delete',     description: 'Delete users' },
+  { id: 'p-26', name: 'role.assign',         resource: 'role',           action: 'assign',     description: 'Assign / remove user roles' },
+  { id: 'p-27', name: 'role.view',           resource: 'role',           action: 'view',       description: 'View roles' },
 ];
 
 function perms(...ids: string[]): Permission[] {
@@ -40,7 +49,7 @@ export const ALL_ROLES: Role[] = [
     id: 'r-02', name: 'tenant-admin', displayName: 'Tenant Administrator',
     description: 'Manages users, roles, and configurations within their organisation.',
     color: '#1D4ED8', isSystemRole: true, createdAt: '2024-01-01T00:00:00Z',
-    permissions: perms('p-01','p-02','p-03','p-04','p-05','p-06','p-07','p-08','p-09','p-10','p-11','p-16','p-17','p-19','p-20'),
+    permissions: perms('p-01','p-02','p-03','p-04','p-05','p-06','p-07','p-08','p-09','p-10','p-11','p-16','p-17','p-19','p-20','p-21','p-22','p-23','p-24','p-25','p-26','p-27'),
   },
   {
     id: 'r-03', name: 'developer', displayName: 'Developer',

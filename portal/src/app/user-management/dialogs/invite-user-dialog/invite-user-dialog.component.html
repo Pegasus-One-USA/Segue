@@ -36,18 +36,16 @@
         <mat-error *ngIf="hasError('email', 'email')">Enter a valid email address</mat-error>
       </mat-form-field>
 
-      <!-- First + Last name -->
+      <!-- First + Last name (optional) -->
       <div class="form-row form-row--2col">
         <mat-form-field appearance="outline" class="form-field">
-          <mat-label>First Name</mat-label>
+          <mat-label>First Name (optional)</mat-label>
           <input matInput formControlName="firstName" placeholder="Jane" autocomplete="off" />
-          <mat-error *ngIf="hasError('firstName', 'required')">First name is required</mat-error>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="form-field">
-          <mat-label>Last Name</mat-label>
+          <mat-label>Last Name (optional)</mat-label>
           <input matInput formControlName="lastName" placeholder="Smith" autocomplete="off" />
-          <mat-error *ngIf="hasError('lastName', 'required')">Last name is required</mat-error>
         </mat-form-field>
       </div>
 
@@ -55,19 +53,15 @@
       <mat-form-field appearance="outline" class="form-field form-field--full">
         <mat-label>Assigned Role</mat-label>
         <mat-icon matPrefix>badge</mat-icon>
-        <mat-select formControlName="role">
-          @for (opt of roleOptions; track opt.value) {
-            <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+        <mat-select formControlName="roleId" [disabled]="rolesLoading()">
+          @for (role of roles(); track role.id) {
+            <mat-option [value]="role.id">{{ role.displayName }}</mat-option>
           }
         </mat-select>
-        <mat-error *ngIf="hasError('role', 'required')">Role is required</mat-error>
-      </mat-form-field>
-
-      <!-- Department -->
-      <mat-form-field appearance="outline" class="form-field form-field--full">
-        <mat-label>Department (optional)</mat-label>
-        <mat-icon matPrefix>business</mat-icon>
-        <input matInput formControlName="department" placeholder="e.g. Engineering" autocomplete="off" />
+        @if (rolesLoading()) {
+          <mat-hint>Loading roles…</mat-hint>
+        }
+        <mat-error *ngIf="hasError('roleId', 'required')">Role is required</mat-error>
       </mat-form-field>
 
       <!-- Invitation note -->

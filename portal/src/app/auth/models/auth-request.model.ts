@@ -49,6 +49,8 @@ export interface InviteUserRequest {
   firstName:   string;
   lastName:    string;
   role:        UserRole;
+  /** Backend role id (guid). When present it is sent verbatim as `roleId`. */
+  roleId?:     string;
   department?: string;
 }
 

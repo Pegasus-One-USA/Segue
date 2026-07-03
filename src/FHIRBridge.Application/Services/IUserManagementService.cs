@@ -14,6 +14,8 @@ public interface IUserManagementService
 
     Task<UserDetailDto> InviteUserAsync(InviteUserRequest request, CancellationToken cancellationToken);
 
+    Task<UserDetailDto> ResendInviteAsync(Guid userId, CancellationToken cancellationToken);
+
     Task<UserDetailDto> AcceptInviteAsync(AcceptInviteRequest request, CancellationToken cancellationToken);
 
     Task<UserDetailDto> UpdateUserStatusAsync(Guid userId, UpdateUserStatusRequest request, CancellationToken cancellationToken);

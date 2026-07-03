@@ -1,0 +1,39 @@
+<div class="invite-result">
+  <div class="invite-result__header">
+    <div class="invite-result__icon">
+      <mat-icon>mark_email_read</mat-icon>
+    </div>
+    <div>
+      <h2 mat-dialog-title>Invitation ready</h2>
+      <p class="invite-result__sub">
+        Share this secure link with <strong>{{ data.email }}</strong> so they can set their password.
+      </p>
+    </div>
+  </div>
+
+  <mat-dialog-content>
+    @if (shareValue) {
+      <label class="invite-result__label">Invitation link</label>
+      <div class="invite-result__link-row">
+        <input class="invite-result__link" type="text" [value]="shareValue" readonly
+               (focus)="$any($event.target).select()" />
+        <button mat-flat-button class="invite-result__copy" (click)="copy()">
+          <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
+          {{ copied() ? 'Copied' : 'Copy' }}
+        </button>
+      </div>
+      <p class="invite-result__hint">
+        <mat-icon>info</mat-icon>
+        This link contains a one-time invitation token. Anyone with it can complete the account setup.
+      </p>
+    } @else {
+      <p class="invite-result__hint">
+        The invitation was created, but no token was returned by the server.
+      </p>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-flat-button color="primary" (click)="close()">Done</button>
+  </mat-dialog-actions>
+</div>

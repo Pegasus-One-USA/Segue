@@ -158,6 +158,38 @@ public sealed class UserManagementService : IUserManagementService
         return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken);
     }
 
+    public async Task<UserDetailDto> ResendInviteAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        if (user.Status != UserStatus.Invited)
+        {
+            throw new InvalidOperationException("Only a pending invitation can be resent.");
+        }
+
+        var rawToken = GenerateToken();
+        var tokenHash = _passwordHasher.Hash(rawToken);
+        var expiresOnUtc = DateTime.UtcNow.AddHours(InvitationTokenLifetimeHours);
+
+        // Reissuing the invitation refreshes the single-use token and its expiry; any previously sent token is invalidated.
+        user.SetInvited(tokenHash, expiresOnUtc);
+        await _repository.UpdateUserAsync(user, cancellationToken);
+
+        var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
+        var roleName = roles.FirstOrDefault()?.Name ?? "user";
+
+        await AuditAsync("InvitationResent", $"Invitation resent: {user.Email ?? user.ExternalUserId}.", cancellationToken);
+
+        await _emailSender.SendAsync(
+            user.Email!,
+            "Your FHIRBridge invitation (resent)",
+            BuildInviteEmailBody(user.FirstName, roleName, BuildInviteLink(user.Email!, rawToken), expiresOnUtc),
+            cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken);
+    }
+
     public async Task<UserDetailDto> AcceptInviteAsync(
         AcceptInviteRequest request,
         CancellationToken cancellationToken)

@@ -11,6 +11,9 @@ export const permissionGuard: CanActivateFn = (route: ActivatedRouteSnapshot) =>
   if (!store.isAuthenticated()) return router.createUrlTree(['/auth/login']);
   if (!required?.length)        return true;
 
+  // SuperAdmin / GlobalAdmin always pass (map to system-admin / tenant-admin here).
+  if (store.isAdmin()) return true;
+
   const hasAccess = requireAll
     ? required.every(p => store.hasPermission(p))
     : required.some(p  => store.hasPermission(p));
