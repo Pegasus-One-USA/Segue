@@ -1,0 +1,48 @@
+tests/FHIRBridge.UnitTests/Configuration/InMemoryConfigurationRepositoryTests.cs
+  s_6fe72b0759281b::t_430ed35e9e18a1 77
+  s_6fe72b0759281b::t_6e64f7175bd38d 101
+  s_6fe72b0759281b::t_afd7bef1861f31 51
+  s_6fe72b0759281b::t_6c887e4ecc7c7b 1-50,52-76,78-100,102-107
+tests/FHIRBridge.Api.IntegrationTests/ApiFixture.cs
+  s_6fe72b0759281b::t_a730077e498923 13
+  s_6fe72b0759281b::t_261734734a8cd0 14-15
+  s_2d8c1991f50033::t_736432fc2636ef 62-64,66-67,69,71-74
+tests/FHIRBridge.UnitTests/Sources/SourceConnectionApplicationTypeMappingTests.cs
+  s_6fe72b0759281b::t_25928fb1e4e77b 3,21,25,37,39,51
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_6fe72b0759281b::t_c72ded943af6e0 24,41,59,62-64,73,75,77,79-90,96,110,132,143,154,197,220,228-229,253,276,290,307
+tests/FHIRBridge.Api.IntegrationTests/ApiFactory.cs
+  s_2d8c1991f50033::t_36f5ce4d7bf753 27-33
+tests/FHIRBridge.Api.IntegrationTests/Tests/PermissionTests.cs
+  s_2d8c1991f50033::t_5dc93691b6a207 13,20-21
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_2d8c1991f50033::t_940068ee32a0d1 143
+tests/FHIRBridge.UnitTests/Security/DataProtectionLaunchTokenProtectorTests.cs
+  s_2d8c1991f50033::t_c8b79e86266aa2 14,19,22,24
+tests/FHIRBridge.UnitTests/Sources/SourceJwksServiceTests.cs
+  s_2d8c1991f50033::t_36db8c5afb0f5c 17,21,30,33-35,49,73,83,95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "ebed2b59f8293bbde06194ca12b54a9b384ed543",
+  "prompts": {},
+  "sessions": {
+    "s_2d8c1991f50033": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8672b8303734257f",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
