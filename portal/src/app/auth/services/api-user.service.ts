@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
-import { environment } from '../../../environments/environment';
+import { USERS_ENDPOINTS, ROLES_ENDPOINTS, PERMISSIONS_ENDPOINTS } from '../../core/api-endpoints';
 import { IUserService } from './i-user.service';
 import { CreateUserRequest, UpdateUserRequest, InviteUserRequest } from '../models/auth-request.model';
 import {
@@ -25,9 +25,14 @@ const ROLE_MAP: Record<string, UserRole> = {
   'auditor':        'auditor',
   'analyst':        'analyst',
   'viewer':         'viewer',
+  // Added for the real backend's seeded roles (UnifiedRoles.cs), which don't match
+  // the frontend's original 8-role taxonomy — 'audit'/'operations' had no entry before.
+  'audit':          'auditor',
+  'operations':     'pipeline-editor',
 };
 
-function toUserRole(name: string | undefined): UserRole {
+// Exported (was private) so auth-api.service.ts maps backend claim-role names the same way.
+export function toUserRole(name: string | undefined): UserRole {
   const raw = (name ?? '').toLowerCase().replace(/[\s-]/g, '');
   return ROLE_MAP[raw] ?? 'viewer';
 }
@@ -42,26 +47,31 @@ function toStatus(status: BackendUserStatus | undefined, isEnabled: boolean): Us
   }
 }
 
-function splitName(displayName: string, first?: string, last?: string): { firstName: string; lastName: string } {
+// Exported so auth-api.service.ts's login mapping shares this instead of a second literal.
+export const DEFAULT_ROLE_COLOR = '#64748B';
+
+// Exported so auth-api.service.ts can reuse this instead of re-implementing name-splitting.
+export function splitName(displayName: string, first?: string, last?: string): { firstName: string; lastName: string } {
   if (first || last) return { firstName: first ?? '', lastName: last ?? '' };
   const parts = (displayName ?? '').trim().split(/\s+/);
   return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') };
 }
 
-function mapRoleDto(dto: RoleDto): Role {
+// Exported (was private) so api-role.service.ts can map RoleDto/PermissionDto identically.
+export function mapRoleDto(dto: RoleDto): Role {
   return {
     id:           dto.id,
     name:         toUserRole(dto.name),
     displayName:  dto.name,
     description:  dto.description,
     permissions:  (dto.permissions ?? []).map(mapPermissionDto),
-    color:        '#64748B',
+    color:        DEFAULT_ROLE_COLOR,
     isSystemRole: dto.isSystemRole,
     createdAt:    '',
   };
 }
 
-function mapPermissionDto(dto: PermissionDto): Permission {
+export function mapPermissionDto(dto: PermissionDto): Permission {
   const [resource, action] = (dto.name ?? '').split(/[.:]/);
   return {
     id:          dto.id,
@@ -138,11 +148,10 @@ const notImpl = () =>
 @Injectable({ providedIn: 'root' })
 export class ApiUserService extends IUserService {
   private readonly http = inject(HttpClient);
-  private readonly base = `${environment.apiBase}/api/v1`;
 
   // ─── List ──────────────────────────────────────────────────────────────────
   getUsers(params?: UserQueryParams): Observable<PaginatedResponse<User>> {
-    return this.http.get<UserManagementDto[]>(`${this.base}/users`).pipe(
+    return this.http.get<UserManagementDto[]>(USERS_ENDPOINTS.list).pipe(
       map(dtos => {
         let items = (dtos ?? []).map(mapListDto);
 
@@ -195,7 +204,7 @@ export class ApiUserService extends IUserService {
 
   // ─── Get one ───────────────────────────────────────────────────────────────
   getUser(id: string): Observable<User> {
-    return this.http.get<UserDetailDto>(`${this.base}/users/${id}`).pipe(
+    return this.http.get<UserDetailDto>(USERS_ENDPOINTS.byId(id)).pipe(
       map(mapDetailDto),
       catchError(err => throwError(() => err))
     );
@@ -209,7 +218,7 @@ export class ApiUserService extends IUserService {
       firstName: req.firstName || undefined,
       lastName:  req.lastName || undefined,
     };
-    return this.http.post<UserDetailDto>(`${this.base}/users/invite`, body).pipe(
+    return this.http.post<UserDetailDto>(USERS_ENDPOINTS.invite, body).pipe(
       map(dto => toInviteResult(dto, req.email)),
       catchError(err => throwError(() => err))
     );
@@ -217,7 +226,7 @@ export class ApiUserService extends IUserService {
 
   // ─── Resend invite ───────────────────────────────────────────────────────
   resendInvitation(userId: string): Observable<InviteResult> {
-    return this.http.post<UserDetailDto>(`${this.base}/users/${userId}/resend-invite`, {}).pipe(
+    return this.http.post<UserDetailDto>(USERS_ENDPOINTS.resendInvite(userId), {}).pipe(
       map(dto => toInviteResult(dto, dto?.email ?? '')),
       catchError(err => throwError(() => err))
     );
@@ -225,7 +234,7 @@ export class ApiUserService extends IUserService {
 
   // ─── Delete ────────────────────────────────────────────────────────────────
   deleteUser(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/users/${id}`).pipe(
+    return this.http.delete<void>(USERS_ENDPOINTS.byId(id)).pipe(
       catchError(err => throwError(() => err))
     );
   }
@@ -240,7 +249,7 @@ export class ApiUserService extends IUserService {
   }
 
   private setStatus(id: string, isEnabled: boolean): Observable<User> {
-    return this.http.patch<UserDetailDto>(`${this.base}/users/${id}/status`, { isEnabled }).pipe(
+    return this.http.patch<UserDetailDto>(USERS_ENDPOINTS.status(id), { isEnabled }).pipe(
       map(mapDetailDto),
       catchError(err => throwError(() => err))
     );
@@ -256,7 +265,7 @@ export class ApiUserService extends IUserService {
       roleNames,
       requirePasswordChange: false,
     };
-    return this.http.put<UserManagementDto>(`${this.base}/users/${id}`, body).pipe(
+    return this.http.put<UserManagementDto>(USERS_ENDPOINTS.byId(id), body).pipe(
       map(mapListDto),
       catchError(err => throwError(() => err))
     );
@@ -264,7 +273,7 @@ export class ApiUserService extends IUserService {
 
   // ─── Assign / remove role ────────────────────────────────────────────────
   assignRole(userId: string, roleId: string): Observable<User> {
-    return this.http.post<UserDetailDto>(`${this.base}/users/${userId}/roles`, { roleId }).pipe(
+    return this.http.post<UserDetailDto>(USERS_ENDPOINTS.roles(userId), { roleId }).pipe(
       map(mapDetailDto),
       catchError(err => throwError(() => err))
     );
@@ -272,7 +281,7 @@ export class ApiUserService extends IUserService {
 
   removeRole(userId: string, roleId: string): Observable<User> {
     // Backend returns 204; re-fetch the user so callers get the updated role set.
-    return this.http.delete<void>(`${this.base}/users/${userId}/roles/${roleId}`).pipe(
+    return this.http.delete<void>(USERS_ENDPOINTS.removeRole(userId, roleId)).pipe(
       switchMap(() => this.getUser(userId)),
       catchError(err => throwError(() => err))
     );
@@ -280,14 +289,14 @@ export class ApiUserService extends IUserService {
 
   // ─── Roles (read-only, for dropdowns) ────────────────────────────────────
   getRoles(): Observable<Role[]> {
-    return this.http.get<RoleDto[]>(`${this.base}/roles`).pipe(
+    return this.http.get<RoleDto[]>(ROLES_ENDPOINTS.list).pipe(
       map(dtos => (dtos ?? []).map(mapRoleDto)),
       catchError(err => throwError(() => err))
     );
   }
 
   getPermissions(): Observable<Permission[]> {
-    return this.http.get<PermissionDto[]>(`${this.base}/permissions`).pipe(
+    return this.http.get<PermissionDto[]>(PERMISSIONS_ENDPOINTS.list).pipe(
       map(dtos => (dtos ?? []).map(mapPermissionDto)),
       catchError(err => throwError(() => err))
     );
