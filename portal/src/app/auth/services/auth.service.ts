@@ -1,20 +1,19 @@
 import { Injectable, inject, computed } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
-import { Observable, EMPTY } from 'rxjs';
+import { tap, catchError, map } from 'rxjs/operators';
+import { Observable, EMPTY, of } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { AuthStore } from '../store/auth.store';
 import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
-import { User, UserRole, MessageResponse, TokenPair } from '../models/user.model';
+import { UserRole, MessageResponse, TokenPair } from '../models/user.model';
 import {
   LoginRequest, LoginResponse,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
-import { MOCK_USERS } from '../mock/mock-db';
 
 const LOCKOUT_MINUTES = 30;
 
@@ -135,20 +134,22 @@ export class AuthService {
   isAdmin(): boolean                        { return this.store.isAdmin(); }
 
   // ─── Initialise from stored token (called in app init) ───────────────────
-  initFromToken(): void {
+  // Real backend JWTs carry no `sub` claim (unlike the old mock tokens), so the user can't
+  // be looked up locally on refresh — this now re-fetches the profile from the API instead.
+  initFromToken(): Observable<void> {
     const token = this.tokens.getAccessToken();
     if (!token || this.tokens.isExpired(token)) {
       this.tokens.clearTokens();
-      return;
+      return of(undefined);
     }
-    const payload = this.tokens.decodePayload<{ sub: string }>(token);
-    if (!payload) return;
 
-    // Restore user from mock DB by subject claim
-    const user = MOCK_USERS.find(u => u.id === payload.sub);
-    if (user) {
-      const { passwordHash: _, ...safe } = user;
-      this.store.setUser(safe);
-    }
+    return this.api.getCurrentUser().pipe(
+      tap(user => this.store.setUser(user)),
+      map(() => undefined),
+      catchError(() => {
+        this.tokens.clearTokens();
+        return of(undefined);
+      })
+    );
   }
 }

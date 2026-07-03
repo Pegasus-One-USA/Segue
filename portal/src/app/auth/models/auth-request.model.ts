@@ -75,3 +75,15 @@ export interface UpdateUserRequest {
   role?:       UserRole;
   status?:     UserStatus;
 }
+
+export interface CreateRoleRequest {
+  name:          string;
+  description:   string;
+  permissionIds: string[];
+}
+
+export interface UpdateRoleRequest {
+  name:          string;
+  description:   string;
+  permissionIds: string[];
+}

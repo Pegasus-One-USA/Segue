@@ -1,0 +1,164 @@
+<!-- user-management/pages/role-permissions/role-permissions.component.html -->
+<div class="role-permissions-page">
+
+  @if (loading()) {
+    <div class="loading-state">
+      <mat-spinner diameter="32"></mat-spinner>
+    </div>
+  }
+
+  @if (!loading()) {
+    @if (!role()) {
+      <div class="empty-state">
+        <div class="empty-state__icon-wrap">
+          <mat-icon>error_outline</mat-icon>
+        </div>
+        <h3 class="empty-state__title">Role not found</h3>
+        <p class="empty-state__sub">It may have been deleted. Go back and pick another role.</p>
+        <button mat-stroked-button class="btn-cancel" (click)="goBack()">Back to Roles</button>
+      </div>
+    } @else {
+
+      <!-- Breadcrumb + Header -->
+      <div class="page-header">
+        <div class="breadcrumb">
+          <button mat-button class="breadcrumb__link" (click)="goBack()">
+            <mat-icon>arrow_back</mat-icon>
+            Roles
+          </button>
+          <mat-icon class="breadcrumb__sep">chevron_right</mat-icon>
+          <span class="breadcrumb__current">{{ role()!.displayName }} Permissions</span>
+        </div>
+
+        <div class="header-content">
+          <div class="header-identity">
+            <div class="role-avatar">
+              <mat-icon>shield</mat-icon>
+            </div>
+            <div class="hero-info">
+              <h1 class="hero-name">
+                {{ role()!.displayName }}
+                @if (isSystemRole()) {
+                  <span class="system-badge">System</span>
+                }
+              </h1>
+              <p class="hero-sub">{{ role()!.description }}</p>
+            </div>
+          </div>
+
+          <mat-form-field appearance="outline" class="role-switcher">
+            <mat-label>Switch Role</mat-label>
+            <mat-select [value]="role()!.id" (selectionChange)="onRoleChange($event.value)">
+              @for (r of roles(); track r.id) {
+                <mat-option [value]="r.id">{{ r.displayName }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+      </div>
+
+      @if (isSystemRole()) {
+        <div class="notice">
+          <mat-icon>lock</mat-icon>
+          <span>System roles cannot be modified.</span>
+        </div>
+      }
+
+      @if (errorMessage()) {
+        <div class="notice error-notice">
+          <mat-icon>error_outline</mat-icon>
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
+      <!-- Permissions -->
+      <div class="permissions-card">
+
+        <!-- Toolbar: search + reset + global select-all -->
+        <div class="permissions-toolbar">
+          <div class="search-wrap">
+            <mat-icon class="search-ico">search</mat-icon>
+            <input
+              type="search"
+              class="search-input"
+              placeholder="Search permissions or groups..."
+              [value]="searchQuery()"
+              (input)="onSearch($any($event.target).value)"
+            />
+          </div>
+
+          <div class="toolbar-right">
+            <span class="permissions-count">{{ selectedIds().size }} of {{ allPermissions().length }} selected</span>
+            <button type="button" class="btn-reset" [disabled]="isSystemRole() || !isDirty()" (click)="reset()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 .49-3.5"></path>
+              </svg>
+              Reset
+            </button>
+            <mat-checkbox
+              class="select-all-checkbox"
+              aria-label="Select all permissions"
+              [checked]="isAllChecked()"
+              [indeterminate]="isAllIndeterminate()"
+              [disabled]="isSystemRole()"
+              (change)="toggleAll($event.checked)"
+            ></mat-checkbox>
+          </div>
+        </div>
+
+        <div class="permissions-list">
+          @for (group of permissionGroups(); track group.resource) {
+            <div class="permission-group">
+              <div class="permission-group__header">
+                <span class="permission-group__title">{{ group.resource }}</span>
+                <mat-checkbox
+                  class="select-all-checkbox select-all-checkbox--sm"
+                  [attr.aria-label]="'Select all ' + group.resource + ' permissions'"
+                  [checked]="isGroupChecked(group)"
+                  [indeterminate]="isGroupIndeterminate(group)"
+                  [disabled]="isSystemRole()"
+                  (change)="toggleGroup(group, $event.checked)"
+                ></mat-checkbox>
+              </div>
+              <div class="permission-group__items">
+                @for (perm of group.permissions; track perm.id) {
+                  <mat-checkbox
+                    [checked]="isChecked(perm.id)"
+                    [disabled]="isSystemRole()"
+                    (change)="togglePermission(perm.id)"
+                  >
+                    {{ perm.name }}
+                    <span class="permission-desc">{{ perm.description }}</span>
+                  </mat-checkbox>
+                }
+              </div>
+            </div>
+          } @empty {
+            <div class="no-results">No permissions matched "{{ searchQuery() }}".</div>
+          }
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="page-actions">
+        <button mat-stroked-button class="btn-cancel" (click)="goBack()">Cancel</button>
+        <button
+          mat-flat-button
+          class="btn-save"
+          [disabled]="isSystemRole() || saving()"
+          (click)="save()"
+        >
+          @if (saving()) {
+            <mat-spinner diameter="16"></mat-spinner>
+          } @else {
+            <mat-icon>save</mat-icon>
+          }
+          Save Permissions
+        </button>
+      </div>
+
+    }
+  }
+
+</div>
