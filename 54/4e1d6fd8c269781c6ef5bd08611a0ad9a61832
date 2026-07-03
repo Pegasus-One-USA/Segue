@@ -1,0 +1,33 @@
+portal/src/app/auth/services/sso-auth-api.service.ts
+  s_6fe72b0759281b::t_5a36222d1304ab 53-65
+portal/src/app/auth/pages/set-password/set-password.component.html
+  s_6fe72b0759281b::t_5bc2da0ca9721a 88,93-98,138,233
+portal/src/app/auth/pages/set-password/set-password.component.ts
+  s_4734bfee1600f5::t_19fbc4d8782eaa 52-53,95-97,99-101,107,120-121,125,153,159,161-163
+portal/src/app/auth/services/api-user.service.ts
+  s_4734bfee1600f5::t_248429f538eadb 126,129-130,132-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "544e1d6fd8c269781c6ef5bd08611a0ad9a61832",
+  "prompts": {},
+  "sessions": {
+    "s_4734bfee1600f5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a31481bd6b870b02c",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
