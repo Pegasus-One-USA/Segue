@@ -1,8 +1,8 @@
 namespace FHIRBridge.Application.Abstractions.Governance;
 
 /// <summary>
-/// Evaluates patient/tenant consent before a resource is delivered. Backed by FHIR <c>Consent</c> resources (parsed
-/// into <see cref="TenantConsent"/>) and/or configuration. When no consent is on file the default is permissive; an
+/// Evaluates patient consent before a resource is delivered. Backed by FHIR <c>Consent</c> resources (parsed
+/// into <see cref="ConsentDirective"/>) and/or configuration. When no consent is on file the default is permissive; an
 /// inactive (withdrawn) consent denies, and an active consent's provisions decide per resource type.
 /// </summary>
 public interface IConsentService
@@ -16,8 +16,8 @@ public enum ConsentProvisionType
     Deny = 1
 }
 
-/// <summary>A consent directive in effect for a tenant.</summary>
-public sealed record TenantConsent(
+/// <summary>A consent directive in effect for the organization.</summary>
+public sealed record ConsentDirective(
     bool IsActive,
     ConsentProvisionType BaseProvision,
     IReadOnlyCollection<string> ExceptionResourceTypes)
