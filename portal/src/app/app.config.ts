@@ -6,7 +6,7 @@ import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { IAuthService } from './auth/services/i-auth.service';
 import { IUserService } from './auth/services/i-user.service';
-import { MockAuthService } from './auth/services/mock-auth.service';
+import { AuthApiService } from './auth/services/auth-api.service';
 import { ApiUserService } from './auth/services/api-user.service';
 import { AuthService } from './auth/services/auth.service';
 
@@ -21,10 +21,8 @@ export const appConfig: ApplicationConfig = {
     provideAnimationsAsync(),
     provideHttpClient(withInterceptors([authInterceptor])),
 
-    // ── Mock ↔ Real swap point ────────────────────────────────────────────────
-    // Auth (login) still runs against the mock until the auth backend is wired.
-    { provide: IAuthService, useClass: MockAuthService },
-    // User + Role management now hits the real backend at environment.apiBase.
+    // ── Real backend wiring (environment.apiBase) ────────────────────────────
+    { provide: IAuthService, useClass: AuthApiService },
     { provide: IUserService, useClass: ApiUserService },
 
     // ── Restore session on app start ──────────────────────────────────────────

@@ -14,7 +14,7 @@ import {
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
-import { MOCK_USERS } from '../mock/mock-db';
+import { buildUserFromJwt } from './jwt-user.mapper';
 
 const LOCKOUT_MINUTES = 30;
 
@@ -141,14 +141,10 @@ export class AuthService {
       this.tokens.clearTokens();
       return;
     }
-    const payload = this.tokens.decodePayload<{ sub: string }>(token);
+    const payload = this.tokens.decodePayload<Record<string, unknown>>(token);
     if (!payload) return;
 
-    // Restore user from mock DB by subject claim
-    const user = MOCK_USERS.find(u => u.id === payload.sub);
-    if (user) {
-      const { passwordHash: _, ...safe } = user;
-      this.store.setUser(safe);
-    }
+    // Rebuild the current user (roles + permissions) from the JWT claims.
+    this.store.setUser(buildUserFromJwt(payload));
   }
 }
