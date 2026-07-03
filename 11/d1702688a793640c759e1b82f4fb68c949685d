@@ -1,0 +1,28 @@
+portal/src/app/auth/services/auth.service.ts
+  s_6fe72b0759281b::t_34f2f9e83a5ffa 1
+  s_ce44b50d6f94e5::t_6424e5db02d52f 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "11d1702688a793640c759e1b82f4fb68c949685d",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_ce44b50d6f94e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a573c1f7ff0e25362",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
