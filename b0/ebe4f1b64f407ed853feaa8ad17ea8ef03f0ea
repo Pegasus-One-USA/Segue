@@ -1,0 +1,109 @@
+.claude/skills/fullstack-architect-angular-dotnet/SKILL.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-119
+.claude/skills/healthcare-interop-ehr/SKILL.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-152
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.html
+  s_6fe72b0759281b::t_364f6e87dc3806 19-21
+  s_6fe72b0759281b::t_7bf4212b33eb96 22-24
+portal/src/app/auth/services/auth.service.ts
+  s_6fe72b0759281b::t_32e9d34e42060c 4,11
+  s_6fe72b0759281b::t_364f6e87dc3806 3
+  s_ce44b50d6f94e5::t_2c72d55538e300 138-141,145,148-151
+.claude/skills/rbac-abac-security/SKILL.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-191
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 2,4,10-12,15,22,29,35-37,40-44,47-48
+  s_6fe72b0759281b::t_fcebadc92fc59e 49-51
+portal/src/app/user-management/services/api-role.service.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 1-55
+portal/src/app/core/api-endpoints.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 1-39
+.claude/skills/hipaa-healthcare-compliance/SKILL.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-98
+.claude/skills/azure-marketplace-dev/SKILL.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-157
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_6fe72b0759281b::t_364f6e87dc3806 44-60,62-84,86-116,118,120-121
+  s_6fe72b0759281b::t_5f37813acea8b0 117
+  s_6fe72b0759281b::t_830c863282ef36 119
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 1,4-5,12-15,29-30,35-36,39,41-44,46-48,51-55
+src/Api/FHIRBridge.Api/web.config
+  s_6fe72b0759281b::t_364f6e87dc3806 1-18
+portal/src/environments/environment.prod.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 2-3
+  s_6fe72b0759281b::t_c9941924898c77 4
+portal/src/app/auth/services/auth-api.service.ts
+  s_6fe72b0759281b::t_2d70ff02aca7bf 2-5,9-11,22-29,31-37,41-52,55,58,61-77,80,82-84,87,95,97-102,106,108,110,114,117-135,138,149-158
+portal/src/app/auth/services/api-user.service.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 5
+  s_4734bfee1600f5::t_ab831f5efd12e2 28-31,34-35,50-54,60-61,68,74,157,210,224,232,240,255,271,279,287,295,302
+CLAUDE.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-183
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_6fe72b0759281b::t_364f6e87dc3806 1-411
+.claude/skills/healthcare-fhir-etl-bridge/SKILL.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-139
+.claude/skills/ui-ux-expert/SKILL.md
+  s_6fe72b0759281b::t_364f6e87dc3806 1-99
+portal/src/app/user-management/services/i-role.service.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 1-12
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  s_6fe72b0759281b::t_364f6e87dc3806 1-164
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_6fe72b0759281b::t_364f6e87dc3806 1-227
+src/Api/FHIRBridge.Api/Properties/PublishProfiles/FolderProfile.pubxml
+  s_6fe72b0759281b::t_364f6e87dc3806 1-15
+portal/src/app/app.config.ts
+  s_1064c90cc369a1::t_ccc44748e3e05d 5,14,36
+portal/src/app/auth/models/auth-request.model.ts
+  s_a9f0e927680e93::t_ee1958226e3602 78-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b0ebe4f1b64f407ed853feaa8ad17ea8ef03f0ea",
+  "prompts": {},
+  "sessions": {
+    "s_1064c90cc369a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a48086d11d1ff2d55",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_4734bfee1600f5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a31481bd6b870b02c",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a9f0e927680e93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8289ad858e3d8ec0",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_ce44b50d6f94e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a573c1f7ff0e25362",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
