@@ -1,0 +1,48 @@
+src/FHIRBridge.Infrastructure/Security/RbacBootstrapper.cs
+  s_6fe72b0759281b::t_80fd797a077319 1-82
+src/FHIRBridge.Application/Abstractions/Security/IRbacBootstrapper.cs
+  s_6fe72b0759281b::t_8cd5750262c2e8 1-16
+src/FHIRBridge.Infrastructure/Persistence/Configurations/RoleConfiguration.cs
+  s_6fe72b0759281b::t_22fc61cd16c05a 30-31
+src/FHIRBridge.Application/Security/RbacSeedData.cs
+  s_6fe72b0759281b::t_5f85ed9d46ecbb 1-72
+src/Api/FHIRBridge.Api/Program.cs
+  s_6fe72b0759281b::t_6cad991b8fc664 11,15
+  s_4e7137d0982cf8::t_d7ea6185dd97ea 25,151,185-190,193-195,197,200-201
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PermissionConfiguration.cs
+  s_6fe72b0759281b::t_21f5c7ef1c450a 28-29
+src/FHIRBridge.Infrastructure/Persistence/Configurations/RolePermissionConfiguration.cs
+  s_6fe72b0759281b::t_0b7e319f14544f 24-25
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260703082401_InitialCreate.Designer.cs
+  s_6fe72b0759281b::t_94cd0381018b45 15
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_4e7137d0982cf8::t_6f103862c86507 110-114
+tests/FHIRBridge.Api.IntegrationTests/ApiFactory.cs
+  s_4e7137d0982cf8::t_e954849ceaf215 48-50
+tests/FHIRBridge.Api.IntegrationTests/ApiFixture.cs
+  s_4e7137d0982cf8::t_bc041709e55ea7 62-65,67-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "989bb6d6afe6e41320c2a0a7fa8ea2edbb81de48",
+  "prompts": {},
+  "sessions": {
+    "s_4e7137d0982cf8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a2fa2cdb40a16bbd1",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
