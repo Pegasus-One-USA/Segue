@@ -8,8 +8,7 @@ namespace FHIRBridge.Domain.Entities;
 /// CapabilityStatement (<c>/metadata</c>). Persisted per source connection and refreshed on demand.
 /// Used to gate which FHIR resource types a mapping may bind to: a mapping's resource type must be supported
 /// by its source here, otherwise the mapping is rejected at save time before any pipeline can fail at runtime.
-/// This is a standalone entity (deliberately NOT part of the <c>Tenant</c> aggregate) so discovery can refresh
-/// it independently of configuration edits and without aggregate contention.
+/// This is a standalone entity so discovery can refresh it independently of configuration edits.
 /// </summary>
 public sealed class SourceCapabilityProfile : AuditableChildEntity<Guid>
 {
@@ -18,7 +17,6 @@ public sealed class SourceCapabilityProfile : AuditableChildEntity<Guid>
     }
 
     public SourceCapabilityProfile(
-        Guid tenantId,
         Guid sourceConnectionId,
         string fhirVersion,
         IReadOnlyList<CapabilityResource> resources,
@@ -27,12 +25,10 @@ public sealed class SourceCapabilityProfile : AuditableChildEntity<Guid>
         DateTime discoveredOnUtc)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         SourceConnectionId = sourceConnectionId;
         Replace(fhirVersion, resources, configuredScopes, rawCapabilityJson, discoveredOnUtc);
     }
 
-    public Guid TenantId { get; private set; }
     public Guid SourceConnectionId { get; private set; }
     public string FhirVersion { get; private set; } = default!;
 

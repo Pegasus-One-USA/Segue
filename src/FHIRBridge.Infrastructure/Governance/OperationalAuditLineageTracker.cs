@@ -33,7 +33,6 @@ public sealed class OperationalAuditLineageTracker : ILineageTracker
 
         await _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                record.TenantId,
                 record.PipelineRunId,
                 record.RouteId,
                 record.SourceConnectionId,

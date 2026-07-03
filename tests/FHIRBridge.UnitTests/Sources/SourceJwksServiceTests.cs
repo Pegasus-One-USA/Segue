@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
-using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -15,26 +14,25 @@ namespace FHIRBridge.UnitTests.Sources;
 
 public sealed class SourceJwksServiceTests
 {
-    private readonly Mock<ITenantConfigurationRepository> _tenantRepository = new();
+    private readonly Mock<IConfigurationRepository> _configurationRepository = new();
     private readonly Mock<ISecretProvider> _secretProvider = new();
 
-    private static readonly Guid TenantId = Guid.NewGuid();
-
     private SourceJwksService Service() => new(
-        _tenantRepository.Object,
+        _configurationRepository.Object,
         _secretProvider.Object,
         NullLogger<SourceJwksService>.Instance);
 
     private SourceConnection SeedSource(SecretReference? privateKey, string? keyId)
     {
-        var tenant = new Tenant("Contoso Health", "contoso");
         var auth = new SourceAuthenticationConfiguration(
             AuthenticationType.SmartBackendServices, "client-1", "https://auth.example.com/token",
             ["system/*.read"], null, privateKey, keyId);
-        var source = tenant.AddSourceConnection(
+        var source = new SourceConnection(
             "Epic Backend", SourceSystemType.Epic, "https://fhir.example.com", auth);
 
-        _tenantRepository.Setup(x => x.GetByIdAsync(TenantId, It.IsAny<CancellationToken>())).ReturnsAsync(tenant);
+        _configurationRepository
+            .Setup(x => x.GetSourceConnectionAsync(source.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(source);
         return source;
     }
 
@@ -48,7 +46,7 @@ public sealed class SourceJwksServiceTests
                 It.Is<SecretReference>(s => s.SecretName == "epic-private-key"), It.IsAny<CancellationToken>()))
             .ReturnsAsync(rsa.ExportPkcs8PrivateKeyPem());
 
-        var jwks = await Service().GetPublicJwksAsync(TenantId, source.Id, CancellationToken.None);
+        var jwks = await Service().GetPublicJwksAsync(source.Id, CancellationToken.None);
 
         jwks.Keys.Should().ContainSingle();
         var key = jwks.Keys[0];
@@ -72,7 +70,7 @@ public sealed class SourceJwksServiceTests
         _secretProvider.Setup(x => x.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(rsa.ExportPkcs8PrivateKeyPem());
 
-        var jwks = await Service().GetPublicJwksAsync(TenantId, source.Id, CancellationToken.None);
+        var jwks = await Service().GetPublicJwksAsync(source.Id, CancellationToken.None);
 
         jwks.Keys.Should().ContainSingle().Which.KeyId.Should().BeNull();
     }
@@ -82,7 +80,7 @@ public sealed class SourceJwksServiceTests
     {
         var source = SeedSource(privateKey: null, keyId: null);
 
-        var jwks = await Service().GetPublicJwksAsync(TenantId, source.Id, CancellationToken.None);
+        var jwks = await Service().GetPublicJwksAsync(source.Id, CancellationToken.None);
 
         jwks.Keys.Should().BeEmpty();
         _secretProvider.Verify(
@@ -94,7 +92,7 @@ public sealed class SourceJwksServiceTests
     {
         SeedSource(new SecretReference("vault", "epic-private-key"), keyId: null);
 
-        var act = () => Service().GetPublicJwksAsync(TenantId, Guid.NewGuid(), CancellationToken.None);
+        var act = () => Service().GetPublicJwksAsync(Guid.NewGuid(), CancellationToken.None);
 
         await act.Should().ThrowAsync<NotFoundException>();
     }

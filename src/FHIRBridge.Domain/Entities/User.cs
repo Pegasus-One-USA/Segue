@@ -31,11 +31,6 @@ public sealed class User : AuditableChildEntity<Guid>
     public string? FirstName { get; private set; }
     public string? LastName { get; private set; }
 
-    /// <summary>
-    /// Optional "home"/primary tenant. Null for platform users such as SuperAdmin.
-    /// </summary>
-    public Guid? TenantId { get; private set; }
-
     public string? PasswordHash { get; private set; }
     public bool IsLocalLoginEnabled { get; private set; }
     public bool MustChangePassword { get; private set; }
@@ -77,11 +72,6 @@ public sealed class User : AuditableChildEntity<Guid>
     {
         FirstName = firstName;
         LastName = lastName;
-    }
-
-    public void SetHomeTenant(Guid? tenantId)
-    {
-        TenantId = tenantId;
     }
 
     public void UpdateExternalUserId(string externalUserId)

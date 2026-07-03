@@ -8,7 +8,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
-[Route("api/v1/tenants/{tenantId:guid}/audit-logs")]
+[Route("api/v1/audit-logs")]
 public sealed class OperationalAuditLogsController : ControllerBase
 {
     private readonly IOperationalAuditService _auditService;
@@ -21,12 +21,10 @@ public sealed class OperationalAuditLogsController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<OperationalAuditLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRecent(
-        Guid tenantId,
         [FromQuery] int count,
         CancellationToken cancellationToken)
     {
         var auditLogs = await _auditService.GetRecentAsync(
-            tenantId,
             count <= 0 ? 100 : count,
             cancellationToken);
 

@@ -5,11 +5,6 @@ public sealed class WorkflowRun
     private readonly List<WorkflowNodeRun> _nodeRuns = [];
 
     public WorkflowRun(Guid id, Guid workflowDefinitionId, DateTimeOffset startedAt)
-        : this(id, workflowDefinitionId, Guid.Empty, startedAt)
-    {
-    }
-
-    public WorkflowRun(Guid id, Guid workflowDefinitionId, Guid tenantId, DateTimeOffset startedAt)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -18,7 +13,6 @@ public sealed class WorkflowRun
 
         Id = id == Guid.Empty ? Guid.NewGuid() : id;
         WorkflowDefinitionId = workflowDefinitionId;
-        TenantId = tenantId;
         StartedAt = startedAt;
         Status = WorkflowRunStatus.Running;
     }
@@ -26,8 +20,6 @@ public sealed class WorkflowRun
     public Guid Id { get; }
 
     public Guid WorkflowDefinitionId { get; }
-
-    public Guid TenantId { get; }
 
     public DateTimeOffset StartedAt { get; }
 

@@ -1,56 +1,16 @@
 using FHIRBridge.Application.DTOs;
-using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.ValueObjects;
 
 namespace FHIRBridge.Application.Mappings;
 
-public static class TenantConfigurationMapper
+/// <summary>
+/// Entity ↔ DTO mapping for the flat configuration entities that used to live under the Tenant aggregate. This is the
+/// de-tenanted successor to <c>TenantConfigurationMapper</c>; the tenant-scoped read models (TenantConfigurationDto,
+/// resource-group grouping) are gone.
+/// </summary>
+public static class ConfigurationMapper
 {
-    public static TenantConfigurationDto ToDto(Tenant tenant)
-    {
-        return new TenantConfigurationDto(
-            tenant.Id,
-            tenant.Name,
-            tenant.Code,
-            tenant.Status,
-            tenant.SourceConnections.Select(ToDto).ToList(),
-            tenant.WebhookConfigurations.Select(ToDto).ToList(),
-            tenant.DestinationConfigurations.Select(ToDto).ToList(),
-            tenant.MappingProfiles.Select(ToDto).ToList(),
-            ToResourceGroupDtos(tenant));
-    }
-
-    /// <summary>
-    /// Builds the resource-grouped read model from routes. Resource type is derived from each route's mapping
-    /// profile (the single source of truth) — there is no ResourceConfiguration entity. The group <c>Id</c> is
-    /// <see cref="Guid.Empty"/> because the grouping is computed, not stored.
-    /// </summary>
-    public static IReadOnlyList<ResourceConfigurationDto> ToResourceGroupDtos(Tenant tenant)
-    {
-        return tenant.ResourcePipelineRoutes
-            .GroupBy(route => tenant.ResolveResourceType(route) ?? "Unknown", StringComparer.OrdinalIgnoreCase)
-            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(group => new ResourceConfigurationDto(
-                Guid.Empty,
-                group.Key,
-                group.Any(route => route.IsEnabled),
-                group
-                    .OrderBy(route => route.Priority)
-                    .ThenBy(route => route.Id)
-                    .Select(ToDto)
-                    .ToList()))
-            .ToList();
-    }
-
-    /// <summary>The derived resource group for a single resource type (used by single-resource responses).</summary>
-    public static ResourceConfigurationDto ToResourceGroupDto(Tenant tenant, string resourceType)
-    {
-        return ToResourceGroupDtos(tenant)
-            .FirstOrDefault(group => string.Equals(group.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
-            ?? new ResourceConfigurationDto(Guid.Empty, resourceType, false, []);
-    }
-
     public static SourceConnectionDto ToDto(SourceConnection sourceConnection)
     {
         return new SourceConnectionDto(

@@ -3,13 +3,12 @@ using FHIRBridge.Domain.Entities;
 namespace FHIRBridge.Application.Abstractions.Persistence;
 
 /// <summary>
-/// Persistence for per-source <see cref="SourceCapabilityProfile"/> snapshots. Kept separate from the tenant
-/// aggregate repository so capability discovery can read/refresh snapshots without loading the whole tenant.
+/// Persistence for per-source <see cref="SourceCapabilityProfile"/> snapshots. Kept separate from the
+/// configuration aggregate repository so capability discovery can read/refresh snapshots independently.
 /// </summary>
 public interface ISourceCapabilityRepository
 {
     Task<SourceCapabilityProfile?> GetBySourceConnectionIdAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken);
 

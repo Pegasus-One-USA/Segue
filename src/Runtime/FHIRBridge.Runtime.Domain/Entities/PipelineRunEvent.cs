@@ -6,7 +6,6 @@ public sealed class PipelineRunEvent
 {
     public PipelineRunEvent(
         Guid pipelineRunId,
-        Guid tenantId,
         string eventType,
         PipelineStepType? stepType,
         string? resourceType,
@@ -16,7 +15,6 @@ public sealed class PipelineRunEvent
     {
         Id = Guid.NewGuid();
         PipelineRunId = pipelineRunId;
-        TenantId = tenantId;
         EventType = eventType;
         StepType = stepType;
         ResourceType = resourceType;
@@ -28,7 +26,6 @@ public sealed class PipelineRunEvent
 
     public Guid Id { get; }
     public Guid PipelineRunId { get; }
-    public Guid TenantId { get; }
     public string EventType { get; }
     public PipelineStepType? StepType { get; }
     public string? ResourceType { get; }

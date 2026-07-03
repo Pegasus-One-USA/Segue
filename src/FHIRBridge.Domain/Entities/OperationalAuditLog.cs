@@ -9,7 +9,6 @@ public sealed class OperationalAuditLog : Entity<Guid>
     }
 
     public OperationalAuditLog(
-        Guid tenantId,
         Guid? pipelineRunId,
         Guid? resourcePipelineRouteId,
         Guid? sourceConnectionId,
@@ -25,7 +24,6 @@ public sealed class OperationalAuditLog : Entity<Guid>
         DateTime occurredOnUtc)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         PipelineRunId = pipelineRunId;
         ResourcePipelineRouteId = resourcePipelineRouteId;
         SourceConnectionId = sourceConnectionId;
@@ -41,7 +39,6 @@ public sealed class OperationalAuditLog : Entity<Guid>
         OccurredOnUtc = occurredOnUtc;
     }
 
-    public Guid TenantId { get; private set; }
     public Guid? PipelineRunId { get; private set; }
     public Guid? ResourcePipelineRouteId { get; private set; }
     public Guid? SourceConnectionId { get; private set; }

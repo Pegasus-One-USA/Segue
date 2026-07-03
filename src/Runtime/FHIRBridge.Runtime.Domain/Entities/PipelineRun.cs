@@ -7,7 +7,6 @@ public sealed class PipelineRun
     private readonly List<PipelineRunStep> _steps = [];
 
     public PipelineRun(
-        Guid tenantId,
         RuntimeSourceType sourceType,
         RuntimeDestinationType destinationType,
         IEnumerable<string> requestedResourceTypes,
@@ -15,7 +14,6 @@ public sealed class PipelineRun
         string? correlationId)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         SourceType = sourceType;
         DestinationType = destinationType;
         RequestedResourceTypes = requestedResourceTypes.ToArray();
@@ -26,7 +24,6 @@ public sealed class PipelineRun
     }
 
     public Guid Id { get; }
-    public Guid TenantId { get; }
     public RuntimeSourceType SourceType { get; }
     public RuntimeDestinationType DestinationType { get; }
     public IReadOnlyList<string> RequestedResourceTypes { get; }

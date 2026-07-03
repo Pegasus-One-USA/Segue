@@ -1,6 +1,6 @@
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
-using FHIRBridge.Domain.Aggregates;
+using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Enums;
@@ -16,14 +16,13 @@ public sealed class SourceConnectionApplicationTypeMappingTests
     [Fact]
     public void ToDto_carries_the_application_type_and_interactive_configuration()
     {
-        var tenant = new Tenant("Contoso Health", "contoso");
         var interactive = new SourceInteractiveConfiguration(
             ["https://app.example.com/callback"], "https://app.example.com/launch", ["https://ehr.example.com/fhir"]);
-        var source = tenant.AddSourceConnection(
+        var source = new SourceConnection(
             "Epic Standalone", SourceSystemType.Epic, "https://fhir.example.com", Auth,
             ApplicationType.Standalone, interactive);
 
-        var dto = TenantConfigurationMapper.ToDto(source);
+        var dto = ConfigurationMapper.ToDto(source);
 
         dto.ApplicationType.Should().Be(ApplicationType.Standalone);
         dto.Interactive.Should().NotBeNull();
@@ -35,10 +34,9 @@ public sealed class SourceConnectionApplicationTypeMappingTests
     [Fact]
     public void Backend_source_leaves_application_type_null_and_no_interactive_config()
     {
-        var tenant = new Tenant("Contoso Health", "contoso");
-        var source = tenant.AddSourceConnection("Epic Backend", SourceSystemType.Epic, "https://fhir.example.com", Auth);
+        var source = new SourceConnection("Epic Backend", SourceSystemType.Epic, "https://fhir.example.com", Auth);
 
-        var dto = TenantConfigurationMapper.ToDto(source);
+        var dto = ConfigurationMapper.ToDto(source);
 
         dto.ApplicationType.Should().BeNull();
         dto.Interactive.Should().BeNull();
@@ -50,7 +48,7 @@ public sealed class SourceConnectionApplicationTypeMappingTests
         var dto = new SourceInteractiveConfigurationDto(
             ["https://a/cb", "https://b/cb"], "https://a/launch", ["https://iss1", "https://iss2"]);
 
-        var domain = TenantConfigurationMapper.ToDomain(dto);
+        var domain = ConfigurationMapper.ToDomain(dto);
 
         domain.Should().NotBeNull();
         domain!.RedirectUris.Should().BeEquivalentTo("https://a/cb", "https://b/cb");

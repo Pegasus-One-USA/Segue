@@ -15,27 +15,27 @@ using Microsoft.Extensions.Logging;
 namespace FHIRBridge.Infrastructure.Aggregation;
 
 /// <summary>
-/// Best-effort, pass-through implementation of <see cref="IPatientAggregationService"/>. Resolves the tenant's
+/// Best-effort, pass-through implementation of <see cref="IPatientAggregationService"/>. Resolves the configured
 /// source connection, scopes one query per requested resource type (plus the Patient root), and fans them out with
 /// a bounded degree of parallelism. Reuses the runtime connector layer (auth, pagination, retry, throttle) via
 /// <see cref="IFhirSourceClient"/> — it does not touch the write-side pipeline.
 /// </summary>
 public sealed class PatientAggregationService : IPatientAggregationService
 {
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly IFhirSourceClientFactory _sourceClientFactory;
     private readonly ISecretProvider _secretProvider;
     private readonly PatientAggregationOptions _options;
     private readonly ILogger<PatientAggregationService> _logger;
 
     public PatientAggregationService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         IFhirSourceClientFactory sourceClientFactory,
         ISecretProvider secretProvider,
         ILogger<PatientAggregationService> logger,
         PatientAggregationOptions? options = null)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
         _secretProvider = secretProvider;
         _options = options ?? PatientAggregationOptions.Default;
@@ -43,7 +43,6 @@ public sealed class PatientAggregationService : IPatientAggregationService
     }
 
     public async Task<PatientAggregationResult> GetEverythingAsync(
-        Guid tenantId,
         string patientId,
         IReadOnlyCollection<string> resourceTypes,
         Guid? sourceConnectionId,
@@ -55,10 +54,9 @@ public sealed class PatientAggregationService : IPatientAggregationService
             throw new ArgumentException("Patient id is required.", nameof(patientId));
         }
 
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
+        var sourceConnections = await _configurationRepository.GetSourceConnectionsAsync(cancellationToken);
 
-        var sourceConnection = ResolveSourceConnection(tenant.SourceConnections, sourceConnectionId);
+        var sourceConnection = ResolveSourceConnection(sourceConnections, sourceConnectionId);
 
         // One query per type: the Patient root (_id) plus each requested compartment type (patient=).
         var queries = new List<ResourceQuery>(resourceTypes.Count + 1)
@@ -131,10 +129,10 @@ public sealed class PatientAggregationService : IPatientAggregationService
         var enabled = sourceConnections.Where(x => x.IsEnabled).ToList();
         return enabled.Count switch
         {
-            0 => throw new SourceConnectionUnavailableException("The tenant has no enabled source connection."),
+            0 => throw new SourceConnectionUnavailableException("There is no enabled source connection."),
             1 => enabled[0],
             _ => throw new SourceConnectionUnavailableException(
-                "The tenant has multiple enabled source connections; specify which source to read from."),
+                "There are multiple enabled source connections; specify which source to read from."),
         };
     }
 
@@ -185,7 +183,6 @@ public sealed class PatientAggregationService : IPatientAggregationService
             sourceConnection.Authentication.Scopes,
             _options.SearchCount,
             _options.MaxPages,
-            sourceConnection.TenantId,
             sourceConnection.Id,
             searchParameters,
             clientSecret);

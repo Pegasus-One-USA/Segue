@@ -8,13 +8,12 @@ namespace FHIRBridge.Infrastructure.Persistence;
 public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 {
     private readonly ConcurrentDictionary<Guid, User> _users = new();
-    private readonly ConcurrentDictionary<Guid, TenantUser> _tenantUsers = new();
     private readonly ConcurrentDictionary<Guid, Role> _roles = new(
         new[]
         {
-            new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator across all tenants.", isSystem: true),
-            new Role(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users within a tenant.", isSystem: true),
-            new Role(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output, within a tenant.", isSystem: true),
+            new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator.", isSystem: true),
+            new Role(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users.", isSystem: true),
+            new Role(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output.", isSystem: true),
             new Role(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs.", isSystem: true)
         }.ToDictionary(role => role.Id));
 
@@ -22,15 +21,13 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         new[]
         {
             // Original platform permissions.
-            new Permission(SeededSecurityIds.TenantsReadPermissionId, UnifiedPermissions.TenantsRead, "Read tenant configuration.", "Tenancy"),
-            new Permission(SeededSecurityIds.TenantsWritePermissionId, UnifiedPermissions.TenantsWrite, "Create and update tenants.", "Tenancy"),
             new Permission(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration.", "Configuration"),
             new Permission(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes.", "Pipeline"),
             new Permission(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs.", "Audit"),
             new Permission(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.", "Configuration"),
 
             // User-module permissions.
-            new Permission(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the tenant.", "User"),
+            new Permission(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the organization.", "User"),
             new Permission(SeededSecurityIds.UserViewPermissionId, UnifiedPermissions.UserView, "View the list of users.", "User"),
             new Permission(SeededSecurityIds.UserEditPermissionId, UnifiedPermissions.UserEdit, "Update a user's profile information.", "User"),
             new Permission(SeededSecurityIds.UserDeactivatePermissionId, UnifiedPermissions.UserDeactivate, "Deactivate a user account.", "User"),
@@ -48,10 +45,6 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
             new Permission(SeededSecurityIds.WorkflowDeletePermissionId, UnifiedPermissions.WorkflowDelete, "Delete a workflow.", "Workflow"),
             new Permission(SeededSecurityIds.WorkflowRunPermissionId, UnifiedPermissions.WorkflowRun, "Execute a workflow.", "Workflow"),
             new Permission(SeededSecurityIds.WorkflowViewPermissionId, UnifiedPermissions.WorkflowView, "View workflow details.", "Workflow"),
-
-            // Tenant permissions.
-            new Permission(SeededSecurityIds.TenantSettingsEditPermissionId, UnifiedPermissions.TenantSettingsEdit, "Update organization settings.", "Tenant"),
-            new Permission(SeededSecurityIds.TenantBillingViewPermissionId, UnifiedPermissions.TenantBillingView, "View billing and subscription information.", "Tenant"),
 
             // Report / payload permissions.
             new Permission(SeededSecurityIds.ReportViewPermissionId, UnifiedPermissions.ReportView, "View reports and analytics.", "Report"),
@@ -80,16 +73,6 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.Email)
             .ThenBy(x => x.DisplayName)
-            .ToList();
-
-        return Task.FromResult<IReadOnlyList<User>>(users);
-    }
-
-    public Task<IReadOnlyList<User>> GetUsersByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken)
-    {
-        var users = _users.Values
-            .Where(x => !x.IsDeleted && x.TenantId == tenantId)
-            .OrderBy(x => x.Email)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<User>>(users);
@@ -165,16 +148,6 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     {
         var roles = _roles.Values
             .Where(x => !x.IsDeleted)
-            .OrderBy(x => x.Name)
-            .ToList();
-
-        return Task.FromResult<IReadOnlyList<Role>>(roles);
-    }
-
-    public Task<IReadOnlyList<Role>> GetRolesByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken)
-    {
-        var roles = _roles.Values
-            .Where(x => !x.IsDeleted && x.TenantId == tenantId)
             .OrderBy(x => x.Name)
             .ToList();
 
@@ -353,92 +326,6 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         _userRoles.TryRemove(LinkKey(userId, roleId), out _);
 
         return Task.CompletedTask;
-    }
-
-    // ── Tenant Users ─────────────────────────────────────────────────────────
-
-    public Task<IReadOnlyList<TenantUser>> GetTenantUsersAsync(Guid tenantId, CancellationToken cancellationToken)
-    {
-        var users = _tenantUsers.Values
-            .Where(x => x.TenantId == tenantId)
-            .OrderBy(x => x.CreatedOnUtc)
-            .ToList();
-
-        return Task.FromResult<IReadOnlyList<TenantUser>>(users);
-    }
-
-    public Task<IReadOnlyList<TenantUser>> GetTenantMembershipsByUserIdAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        var users = _tenantUsers.Values
-            .Where(x => x.UserId == userId && x.IsEnabled)
-            .OrderBy(x => x.CreatedOnUtc)
-            .ToList();
-
-        return Task.FromResult<IReadOnlyList<TenantUser>>(users);
-    }
-
-    public Task<TenantUser?> GetTenantUserAsync(
-        Guid tenantId,
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        var tenantUser = _tenantUsers.Values
-            .FirstOrDefault(x => x.TenantId == tenantId && x.UserId == userId);
-
-        return Task.FromResult(tenantUser);
-    }
-
-    public Task AddTenantUserAsync(TenantUser tenantUser, CancellationToken cancellationToken)
-    {
-        _tenantUsers[tenantUser.Id] = tenantUser;
-
-        return Task.CompletedTask;
-    }
-
-    public Task UpdateTenantUserAsync(TenantUser tenantUser, CancellationToken cancellationToken)
-    {
-        _tenantUsers[tenantUser.Id] = tenantUser;
-
-        return Task.CompletedTask;
-    }
-
-    public Task<bool> HasTenantRoleAsync(
-        Guid tenantId,
-        string externalUserId,
-        IReadOnlyCollection<string> roleNames,
-        CancellationToken cancellationToken)
-    {
-        var user = _users.Values.FirstOrDefault(x =>
-            !x.IsDeleted &&
-            string.Equals(x.ExternalUserId, externalUserId, StringComparison.Ordinal));
-
-        if (user is null)
-        {
-            return Task.FromResult(false);
-        }
-
-        var roleIds = _roles.Values
-            .Where(x => !x.IsDeleted && roleNames.Contains(x.Name, StringComparer.OrdinalIgnoreCase))
-            .Select(x => x.Id)
-            .ToHashSet();
-
-        var hasRole = _tenantUsers.Values.Any(x =>
-            x.TenantId == tenantId &&
-            x.UserId == user.Id &&
-            x.IsEnabled &&
-            roleIds.Contains(x.RoleId));
-
-        return Task.FromResult(hasRole);
-    }
-
-    public Task<bool> TenantHasSuperAdminAsync(Guid tenantId, Guid superAdminRoleId, CancellationToken cancellationToken)
-    {
-        var hasSuperAdmin = _tenantUsers.Values.Any(x =>
-            x.TenantId == tenantId &&
-            x.IsEnabled &&
-            x.RoleId == superAdminRoleId);
-
-        return Task.FromResult(hasSuperAdmin);
     }
 
     private static string LinkKey(Guid leftId, Guid rightId)

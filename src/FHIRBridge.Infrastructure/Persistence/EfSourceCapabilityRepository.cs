@@ -14,14 +14,13 @@ public sealed class EfSourceCapabilityRepository : ISourceCapabilityRepository
     }
 
     public Task<SourceCapabilityProfile?> GetBySourceConnectionIdAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
         return _dbContext.SourceCapabilityProfiles
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                x => x.TenantId == tenantId && x.SourceConnectionId == sourceConnectionId,
+                x => x.SourceConnectionId == sourceConnectionId,
                 cancellationToken);
     }
 
@@ -29,7 +28,7 @@ public sealed class EfSourceCapabilityRepository : ISourceCapabilityRepository
     {
         var existing = await _dbContext.SourceCapabilityProfiles
             .FirstOrDefaultAsync(
-                x => x.TenantId == profile.TenantId && x.SourceConnectionId == profile.SourceConnectionId,
+                x => x.SourceConnectionId == profile.SourceConnectionId,
                 cancellationToken);
 
         if (existing is null)

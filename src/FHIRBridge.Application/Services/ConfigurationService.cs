@@ -4,23 +4,28 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
-using FHIRBridge.Domain.Aggregates;
+using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Application.Services;
 
-public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurationService
+/// <summary>
+/// De-tenanted configuration CRUD. Successor to <c>UnifiedTenantConfigurationService</c>: talks directly to the flat
+/// <see cref="IConfigurationRepository"/> instead of loading/saving a Tenant aggregate. Resource "groups" are derived
+/// from routes by resolving each route's resource type through its mapping profile.
+/// </summary>
+public sealed class ConfigurationService : IConfigurationService
 {
-    private readonly ITenantConfigurationRepository _repository;
+    private readonly IConfigurationRepository _repository;
     private readonly ISourceCapabilityRepository _capabilityRepository;
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly IOperationalAuditService _auditService;
     private readonly ICurrentUserService _currentUserService;
 
-    public UnifiedTenantConfigurationService(
-        ITenantConfigurationRepository repository,
+    public ConfigurationService(
+        IConfigurationRepository repository,
         ISourceCapabilityRepository capabilityRepository,
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
         IOperationalAuditService auditService,
@@ -33,387 +38,317 @@ public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurat
         _currentUserService = currentUserService;
     }
 
-    public async Task<TenantConfigurationDto> CreateTenantAsync(
-        CreateTenantRequest request,
-        CancellationToken cancellationToken)
-    {
-        var tenant = new Tenant(request.Name, request.Code);
-
-        await _repository.AddAsync(tenant, cancellationToken);
-        await RecordConfigurationAuditAsync(
-            tenant.Id,
-            null,
-            "TenantCreated",
-            "Tenant configuration created.",
-            cancellationToken);
-
-        return TenantConfigurationMapper.ToDto(tenant);
-    }
-
-    public async Task<TenantConfigurationDto?> GetTenantAsync(Guid tenantId, CancellationToken cancellationToken)
-    {
-        var tenant = await _repository.GetByIdAsync(tenantId, cancellationToken);
-
-        return tenant is null ? null : TenantConfigurationMapper.ToDto(tenant);
-    }
-
-    public async Task<IReadOnlyList<TenantConfigurationDto>> GetTenantsAsync(CancellationToken cancellationToken)
-    {
-        var tenants = await _repository.GetAllAsync(cancellationToken);
-
-        return tenants
-            .Select(TenantConfigurationMapper.ToDto)
-            .ToList();
-    }
-
     public async Task<SourceConnectionDto> AddSourceConnectionAsync(
-        Guid tenantId,
         CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
         ValidateSourceConnectionRequest(request);
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var sourceConnection = tenant.AddSourceConnection(
+        var sourceConnection = new SourceConnection(
             request.Name,
             request.SourceSystemType,
             request.BaseUrl,
-            TenantConfigurationMapper.ToDomain(request.Authentication),
+            ConfigurationMapper.ToDomain(request.Authentication),
             request.ApplicationType,
-            TenantConfigurationMapper.ToDomain(request.Interactive));
+            ConfigurationMapper.ToDomain(request.Interactive));
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.AddSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             sourceConnection.Id,
             "SourceConnectionConfigured",
             $"Source connection configured for {request.SourceSystemType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(sourceConnection);
+        return ConfigurationMapper.ToDto(sourceConnection);
     }
 
     public async Task<SourceConnectionDto> UpdateSourceConnectionAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
         ValidateSourceConnectionRequest(request);
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var sourceConnection = tenant.UpdateSourceConnection(
-            sourceConnectionId,
+        var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        sourceConnection.Update(
             request.Name,
             request.SourceSystemType,
             request.BaseUrl,
-            TenantConfigurationMapper.ToDomain(request.Authentication),
+            ConfigurationMapper.ToDomain(request.Authentication),
             request.ApplicationType,
-            TenantConfigurationMapper.ToDomain(request.Interactive));
+            ConfigurationMapper.ToDomain(request.Interactive));
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             sourceConnection.Id,
             "SourceConnectionUpdated",
             $"Source connection updated for {request.SourceSystemType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(sourceConnection);
+        return ConfigurationMapper.ToDto(sourceConnection);
     }
 
     public async Task<SourceConnectionDto> SetSourceConnectionEnabledAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var sourceConnection = tenant.SetSourceConnectionEnabled(sourceConnectionId, isEnabled);
+        var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        sourceConnection.SetEnabled(isEnabled);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             sourceConnection.Id,
             isEnabled ? "SourceConnectionActivated" : "SourceConnectionDeactivated",
             $"Source connection {sourceConnection.Name} was {(isEnabled ? "activated" : "deactivated")}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(sourceConnection);
+        return ConfigurationMapper.ToDto(sourceConnection);
     }
 
     public async Task<WebhookConfigurationDto> AddWebhookConfigurationAsync(
-        Guid tenantId,
         CreateWebhookConfigurationRequest request,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var webhookConfiguration = tenant.AddWebhookConfiguration(
+        var webhookConfiguration = new WebhookConfiguration(
             request.SourceConnectionId,
             request.ResourceType,
             request.Name,
             request.Path,
             request.IsEnabled);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.AddWebhookAsync(webhookConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             webhookConfiguration.SourceConnectionId,
             "WebhookConfigured",
             $"Webhook configuration saved for {request.ResourceType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(webhookConfiguration);
+        return ConfigurationMapper.ToDto(webhookConfiguration);
     }
 
     public async Task<WebhookConfigurationDto> SetWebhookConfigurationEnabledAsync(
-        Guid tenantId,
         Guid webhookConfigurationId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var webhookConfiguration = tenant.SetWebhookConfigurationEnabled(webhookConfigurationId, isEnabled);
+        var webhookConfiguration = await GetWebhookRequiredAsync(webhookConfigurationId, cancellationToken);
+        webhookConfiguration.SetEnabled(isEnabled);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateWebhookAsync(webhookConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             webhookConfiguration.SourceConnectionId,
             isEnabled ? "WebhookActivated" : "WebhookDeactivated",
             $"Webhook configuration {webhookConfiguration.Name} was {(isEnabled ? "activated" : "deactivated")}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(webhookConfiguration);
+        return ConfigurationMapper.ToDto(webhookConfiguration);
     }
 
     public async Task<DestinationConfigurationDto> AddDestinationConfigurationAsync(
-        Guid tenantId,
         CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var destinationConfiguration = tenant.AddDestinationConfiguration(
+        var destinationConfiguration = new DestinationConfiguration(
             request.Name,
             request.DestinationType,
             new SecretReference(request.KeyVaultName, request.SecretName),
             request.Target);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.AddDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             null,
             "DestinationConfigured",
             $"Destination configuration created for {request.DestinationType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(destinationConfiguration);
+        return ConfigurationMapper.ToDto(destinationConfiguration);
     }
 
     public async Task<DestinationConfigurationDto> UpdateDestinationConfigurationAsync(
-        Guid tenantId,
         Guid destinationId,
         CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var destinationConfiguration = tenant.UpdateDestinationConfiguration(
-            destinationId,
+        var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        destinationConfiguration.Update(
             request.Name,
             request.DestinationType,
             new SecretReference(request.KeyVaultName, request.SecretName),
             request.Target);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             null,
             "DestinationUpdated",
             $"Destination configuration {destinationConfiguration.Name} updated for {request.DestinationType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(destinationConfiguration);
+        return ConfigurationMapper.ToDto(destinationConfiguration);
     }
 
     public async Task<DestinationConfigurationDto> SetDestinationConfigurationEnabledAsync(
-        Guid tenantId,
         Guid destinationId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var destinationConfiguration = tenant.SetDestinationConfigurationEnabled(destinationId, isEnabled);
+        var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        destinationConfiguration.SetEnabled(isEnabled);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             null,
             isEnabled ? "DestinationActivated" : "DestinationDeactivated",
             $"Destination configuration {destinationConfiguration.Name} was {(isEnabled ? "activated" : "deactivated")}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(destinationConfiguration);
+        return ConfigurationMapper.ToDto(destinationConfiguration);
     }
 
     public async Task<MappingProfileDto> AddMappingProfileAsync(
-        Guid tenantId,
         CreateMappingProfileRequest request,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        await EnsureSourceSupportsResourceTypeAsync(
-            tenant, request.SourceConnectionId, request.ResourceType, cancellationToken);
-        var mappingProfile = tenant.AddMappingProfile(
+        await EnsureSourceSupportsResourceTypeAsync(request.SourceConnectionId, request.ResourceType, cancellationToken);
+        var mappingProfile = new MappingProfile(
             request.Name,
             request.ResourceType,
             request.SourceConnectionId,
             request.DestinationId,
             request.DestinationObject,
-            request.Fields.Select(TenantConfigurationMapper.ToDomain));
+            request.Fields.Select(ConfigurationMapper.ToDomain));
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.AddMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             null,
             "MappingProfileConfigured",
             $"Mapping profile configured for {mappingProfile.ResourceType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(mappingProfile);
+        return ConfigurationMapper.ToDto(mappingProfile);
     }
 
     public async Task<MappingProfileDto> UpdateMappingProfileAsync(
-        Guid tenantId,
         Guid mappingProfileId,
         CreateMappingProfileRequest request,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        await EnsureSourceSupportsResourceTypeAsync(
-            tenant, request.SourceConnectionId, request.ResourceType, cancellationToken);
-        var mappingProfile = tenant.UpdateMappingProfile(
-            mappingProfileId,
+        await EnsureSourceSupportsResourceTypeAsync(request.SourceConnectionId, request.ResourceType, cancellationToken);
+        var mappingProfile = await GetMappingProfileRequiredAsync(mappingProfileId, cancellationToken);
+        mappingProfile.Update(
             request.Name,
             request.ResourceType,
             request.SourceConnectionId,
             request.DestinationId,
             request.DestinationObject,
-            request.Fields.Select(TenantConfigurationMapper.ToDomain));
+            request.Fields.Select(ConfigurationMapper.ToDomain));
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             null,
             "MappingProfileUpdated",
             $"Mapping profile {mappingProfile.Name} updated for {mappingProfile.ResourceType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(mappingProfile);
+        return ConfigurationMapper.ToDto(mappingProfile);
     }
 
     public async Task<MappingProfileDto> SetMappingProfileEnabledAsync(
-        Guid tenantId,
         Guid mappingProfileId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var mappingProfile = tenant.SetMappingProfileEnabled(mappingProfileId, isEnabled);
+        var mappingProfile = await GetMappingProfileRequiredAsync(mappingProfileId, cancellationToken);
+        mappingProfile.SetEnabled(isEnabled);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             null,
             isEnabled ? "MappingProfileActivated" : "MappingProfileDeactivated",
             $"Mapping profile {mappingProfile.Name} was {(isEnabled ? "activated" : "deactivated")}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(mappingProfile);
+        return ConfigurationMapper.ToDto(mappingProfile);
     }
 
     public async Task<ResourceConfigurationDto> ConfigureResourceAsync(
-        Guid tenantId,
         ConfigureResourceRequest request,
         CancellationToken cancellationToken)
     {
         // A route's resource type, source, and destination are all owned by the mapping profile.
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var route = tenant.AddRoute(
-            request.IngestionMode,
+        var route = new ResourcePipelineRoute(
             request.WebhookConfigurationId,
             request.MappingProfileId,
+            request.IngestionMode,
             request.ScheduleExpression,
             request.SearchParameters,
             request.IsEnabled,
             priority: 0);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
-        var resourceType = tenant.ResolveResourceType(route) ?? "Unknown";
+        await _repository.AddRouteAsync(route, cancellationToken);
+
+        var resourceType = await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown";
         await RecordConfigurationAuditAsync(
-            tenantId,
-            tenant.ResolveSourceConnectionId(route),
+            await ResolveSourceConnectionIdAsync(route, cancellationToken),
             "ResourceConfigured",
             $"Resource route saved for {resourceType}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToResourceGroupDto(tenant, resourceType);
+        return await BuildResourceGroupDtoAsync(resourceType, cancellationToken);
     }
 
     public async Task<ResourceConfigurationDto> SetResourceConfigurationEnabledAsync(
-        Guid tenantId,
         string resourceType,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        tenant.SetRoutesEnabledForResourceType(resourceType, isEnabled);
+        var routes = await GetRoutesForResourceTypeAsync(resourceType, cancellationToken);
+        foreach (var route in routes)
+        {
+            route.SetEnabled(isEnabled);
+            await _repository.UpdateRouteAsync(route, cancellationToken);
+        }
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
             null,
             isEnabled ? "ResourceActivated" : "ResourceDeactivated",
             $"Routes for resource type {resourceType} were {(isEnabled ? "activated" : "deactivated")}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToResourceGroupDto(tenant, resourceType);
+        return await BuildResourceGroupDtoAsync(resourceType, cancellationToken);
     }
 
     public async Task<ResourcePipelineRouteDto> AddResourceRouteAsync(
-        Guid tenantId,
         string resourceType,
         CreateResourceRouteRequest request,
         CancellationToken cancellationToken)
     {
         // resourceType path segment is ignored; the route's resource type, source, and destination come from its mapping.
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var route = tenant.AddRoute(
-            request.IngestionMode,
+        var route = new ResourcePipelineRoute(
             request.WebhookConfigurationId,
             request.MappingProfileId,
+            request.IngestionMode,
             request.ScheduleExpression,
             request.SearchParameters,
             request.IsEnabled,
             request.Priority);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.AddRouteAsync(route, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
-            tenant.ResolveSourceConnectionId(route),
+            await ResolveSourceConnectionIdAsync(route, cancellationToken),
             "ResourceRouteConfigured",
-            $"Resource route configured for {tenant.ResolveResourceType(route) ?? "Unknown"}.",
+            $"Resource route configured for {await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown"}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(route);
+        return ConfigurationMapper.ToDto(route);
     }
 
     public async Task<ResourcePipelineRouteDto> UpdateResourceRouteAsync(
-        Guid tenantId,
         string resourceType,
         Guid routeId,
         CreateResourceRouteRequest request,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var route = tenant.UpdateRoute(
-            routeId,
+        var route = await GetRouteRequiredAsync(routeId, cancellationToken);
+        route.Update(
             request.IngestionMode,
             request.WebhookConfigurationId,
             request.MappingProfileId,
@@ -422,67 +357,118 @@ public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurat
             request.IsEnabled,
             request.Priority);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateRouteAsync(route, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
-            tenant.ResolveSourceConnectionId(route),
+            await ResolveSourceConnectionIdAsync(route, cancellationToken),
             "ResourceRouteUpdated",
-            $"Resource route {route.Id} updated for {tenant.ResolveResourceType(route) ?? "Unknown"}.",
+            $"Resource route {route.Id} updated for {await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown"}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(route);
+        return ConfigurationMapper.ToDto(route);
     }
 
     public async Task<ResourcePipelineRouteDto> SetResourceRouteEnabledAsync(
-        Guid tenantId,
         string resourceType,
         Guid routeId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
-        var tenant = await GetTenantRequiredAsync(tenantId, cancellationToken);
-        var route = tenant.SetRouteEnabled(routeId, isEnabled);
+        var route = await GetRouteRequiredAsync(routeId, cancellationToken);
+        route.SetEnabled(isEnabled);
 
-        await _repository.UpdateAsync(tenant, cancellationToken);
+        await _repository.UpdateRouteAsync(route, cancellationToken);
         await RecordConfigurationAuditAsync(
-            tenantId,
-            tenant.ResolveSourceConnectionId(route),
+            await ResolveSourceConnectionIdAsync(route, cancellationToken),
             isEnabled ? "ResourceRouteActivated" : "ResourceRouteDeactivated",
             $"Resource route {route.Id} was {(isEnabled ? "activated" : "deactivated")}.",
             cancellationToken);
 
-        return TenantConfigurationMapper.ToDto(route);
+        return ConfigurationMapper.ToDto(route);
     }
 
-    private async Task<Tenant> GetTenantRequiredAsync(Guid tenantId, CancellationToken cancellationToken)
+    // ── Route resource-type resolution (via mapping profile) ───────────────────
+
+    private async Task<string?> ResolveResourceTypeAsync(ResourcePipelineRoute route, CancellationToken cancellationToken)
     {
-        var tenant = await _repository.GetByIdAsync(tenantId, cancellationToken);
-
-        return tenant ?? throw new NotFoundException("Tenant", tenantId);
+        var mapping = await _repository.GetMappingProfileAsync(route.MappingProfileId, cancellationToken);
+        return mapping?.ResourceType;
     }
+
+    private async Task<Guid?> ResolveSourceConnectionIdAsync(ResourcePipelineRoute route, CancellationToken cancellationToken)
+    {
+        var mapping = await _repository.GetMappingProfileAsync(route.MappingProfileId, cancellationToken);
+        return mapping?.SourceConnectionId;
+    }
+
+    private async Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesForResourceTypeAsync(
+        string resourceType,
+        CancellationToken cancellationToken)
+    {
+        var routes = await _repository.GetRoutesAsync(cancellationToken);
+        var mappings = (await _repository.GetMappingProfilesAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+
+        return routes
+            .Where(route =>
+                mappings.TryGetValue(route.MappingProfileId, out var mapping) &&
+                string.Equals(mapping.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private async Task<ResourceConfigurationDto> BuildResourceGroupDtoAsync(
+        string resourceType,
+        CancellationToken cancellationToken)
+    {
+        var routes = await GetRoutesForResourceTypeAsync(resourceType, cancellationToken);
+
+        return new ResourceConfigurationDto(
+            Guid.Empty,
+            resourceType,
+            routes.Any(route => route.IsEnabled),
+            routes
+                .OrderBy(route => route.Priority)
+                .ThenBy(route => route.Id)
+                .Select(ConfigurationMapper.ToDto)
+                .ToList());
+    }
+
+    // ── Required getters ───────────────────────────────────────────────────────
+
+    private async Task<SourceConnection> GetSourceConnectionRequiredAsync(Guid id, CancellationToken cancellationToken) =>
+        await _repository.GetSourceConnectionAsync(id, cancellationToken)
+        ?? throw new NotFoundException("SourceConnection", id);
+
+    private async Task<WebhookConfiguration> GetWebhookRequiredAsync(Guid id, CancellationToken cancellationToken) =>
+        await _repository.GetWebhookAsync(id, cancellationToken)
+        ?? throw new NotFoundException("WebhookConfiguration", id);
+
+    private async Task<DestinationConfiguration> GetDestinationRequiredAsync(Guid id, CancellationToken cancellationToken) =>
+        await _repository.GetDestinationAsync(id, cancellationToken)
+        ?? throw new NotFoundException("DestinationConfiguration", id);
+
+    private async Task<MappingProfile> GetMappingProfileRequiredAsync(Guid id, CancellationToken cancellationToken) =>
+        await _repository.GetMappingProfileAsync(id, cancellationToken)
+        ?? throw new NotFoundException("MappingProfile", id);
+
+    private async Task<ResourcePipelineRoute> GetRouteRequiredAsync(Guid id, CancellationToken cancellationToken) =>
+        await _repository.GetRouteAsync(id, cancellationToken)
+        ?? throw new NotFoundException("ResourcePipelineRoute", id);
 
     /// <summary>
     /// Hard-blocks saving a mapping whose FHIR resource type the chosen source cannot provide, per its discovered
-    /// capability profile. A mapping owns its source connection, so this is the natural enforcement point — the
-    /// resource type is validated against the same source every route built on this mapping will inherit.
-    /// When no capability snapshot exists yet, discovery is run on demand for sources that support it (Epic), so the
-    /// save is always validated against the source's real capabilities rather than silently allowed through. If the
-    /// source type has no discovery support, we cannot prove the resource type is invalid and so fail open.
+    /// capability profile. When no snapshot exists yet, discovery is run on demand for sources that support it (Epic);
+    /// if the source type has no discovery support, we cannot prove the resource type is invalid and so fail open.
     /// </summary>
     private async Task EnsureSourceSupportsResourceTypeAsync(
-        Tenant tenant,
         Guid sourceConnectionId,
         string resourceType,
         CancellationToken cancellationToken)
     {
-        var capability = await _capabilityRepository.GetBySourceConnectionIdAsync(
-            tenant.Id,
-            sourceConnectionId,
-            cancellationToken);
+        var capability = await _capabilityRepository.GetBySourceConnectionIdAsync(sourceConnectionId, cancellationToken);
 
         if (capability is null)
         {
-            var sourceConnection = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId);
+            var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
             if (sourceConnection is null || sourceConnection.SourceSystemType != SourceSystemType.Epic)
             {
                 // Discovery is not implemented for this source type, so we cannot prove the resource type is
@@ -490,13 +476,8 @@ public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurat
                 return;
             }
 
-            // No snapshot yet: discover the source's capabilities now so the save is validated against what the
-            // source actually exposes. A discovery failure (e.g. source unreachable) propagates as the save error.
-            await _capabilityDiscoveryService.DiscoverAsync(tenant.Id, sourceConnectionId, cancellationToken);
-            capability = await _capabilityRepository.GetBySourceConnectionIdAsync(
-                tenant.Id,
-                sourceConnectionId,
-                cancellationToken);
+            await _capabilityDiscoveryService.DiscoverAsync(sourceConnectionId, cancellationToken);
+            capability = await _capabilityRepository.GetBySourceConnectionIdAsync(sourceConnectionId, cancellationToken);
 
             if (capability is null)
             {
@@ -573,7 +554,6 @@ public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurat
     }
 
     private Task RecordConfigurationAuditAsync(
-        Guid tenantId,
         Guid? sourceConnectionId,
         string action,
         string message,
@@ -581,7 +561,6 @@ public sealed class UnifiedTenantConfigurationService : IUnifiedTenantConfigurat
     {
         return _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                tenantId,
                 null,
                 null,
                 sourceConnectionId,

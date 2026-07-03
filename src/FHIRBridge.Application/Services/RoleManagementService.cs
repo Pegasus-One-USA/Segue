@@ -213,7 +213,6 @@ public sealed class RoleManagementService : IRoleManagementService
     {
         await _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                Guid.Empty,
                 null,
                 null,
                 null,

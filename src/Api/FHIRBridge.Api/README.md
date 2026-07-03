@@ -1,6 +1,6 @@
 # FHIRBridge.Api
 
-> The public-facing ASP.NET Core Web API host for FHIRBridge: versioned REST/JSON controllers, minimal-API workflow endpoints, JWT/Entra authentication, and the tenant-scoped administration and FHIR-aggregation surface that the Angular portal and external callers consume.
+> The public-facing ASP.NET Core Web API host for FHIRBridge: versioned REST/JSON controllers, minimal-API workflow endpoints, JWT/Entra authentication, and the single-org administration and FHIR-aggregation surface that the Angular portal and external callers consume.
 
 **Layer:** Host (Web API) · **SDK:** Microsoft.NET.Sdk.Web · **Target:** net9.0
 
@@ -10,8 +10,8 @@
 ## Responsibilities
 - Bootstrap the web host (`Program.cs`): register controllers + JSON options (string-enum serialization), Swagger, `HttpContextAccessor`, and the Application/Infrastructure/Runtime DI extension methods (`AddFHIRBridgeApplication`, `AddFHIRBridgeInfrastructure`, `AddWorkflowCore`, `AddWorkflowInfrastructure`).
 - Wire authentication and authorization: a policy scheme that forwards bearer tokens to either the local HS256 scheme or Microsoft Entra ID, plus the `UnifiedAdmin` authorization policy.
-- Expose versioned (`api/v1/...`) REST controllers for auth, tenant configuration, mapping, pipeline runs, observability, insights, lineage, audit, roles, users, subscriptions, source capabilities, webhook ingestion, and patient-scoped FHIR aggregation.
-- Expose the workflow designer minimal-API endpoints (`/api/v1/tenants/{tenantId}/workflows/...`) for CRUD, validate, run, activate/deactivate, and the node catalog.
+- Expose versioned (`api/v1/...`) REST controllers for auth, configuration, mapping, pipeline runs, observability, insights, lineage, audit, roles, users, subscriptions, source capabilities, webhook ingestion, and patient-scoped FHIR aggregation.
+- Expose the workflow designer minimal-API endpoints (`/api/v1/workflows/...`) for CRUD, validate, run, activate/deactivate, and the node catalog.
 - Apply the CORS `Portal` policy (configurable allowed origins, defaults to `localhost:4200`) so the SPA can call the API with credentials.
 - Seed a local identity (super-admin) on startup in environments where `IIdentitySeedService` is registered.
 - Shape unhandled exceptions into JSON problem responses via `GlobalExceptionHandlingMiddleware`.
@@ -24,30 +24,30 @@
 
 ### Controllers (`Controllers/V1`)
 - **AuthController** (`api/v1/auth`) — `GET me`, `POST login` (record login), and the local-auth flows `POST local/login`, `local/change-password`, `local/forgot-password`, `local/reset-password`. Local login/forgot/reset are `[AllowAnonymous]`; forgot-password reset tokens are suppressed unless `LocalAuth:ExposeResetTokens` is set.
-- **FhirBridgeAggregationController** (`api/v1/tenants/{tenantId}/fhirbridge`) — `GET Patient/{id}?include=all|CSV&source={id}`: synchronous, pass-through patient-scoped aggregation returning an `application/fhir+json` searchset Bundle. No mapping/destination/PipelineRun; best-effort fan-out across compartment resource types; emits a PHI-free `DataAccess` user-activity audit on every call and returns FHIR `OperationOutcome` errors.
-- **TenantConfigurationsController** (`api/v1/tenants`) — the largest surface: tenant CRUD + import, and nested management of source connections (create/update/deactivate/test), users, webhooks, destinations (+ schema), mapping profiles, resources, and resource pipeline routes.
+- **FhirBridgeAggregationController** (`api/v1/fhirbridge`) — `GET Patient/{id}?include=all|CSV&source={id}`: synchronous, pass-through patient-scoped aggregation returning an `application/fhir+json` searchset Bundle. No mapping/destination/PipelineRun; best-effort fan-out across compartment resource types; emits a PHI-free `DataAccess` user-activity audit on every call and returns FHIR `OperationOutcome` errors.
+- **ConfigurationsController** (`api/v1`) — the largest surface: single-org, flat configuration CRUD for source connections (create/update/deactivate/test), webhooks, destinations (+ schema), mapping profiles, resources, and resource pipeline routes. Successor to the deleted `TenantConfigurationsController`, with the `{tenantId}` route segment and tenant CRUD removed.
 - **MappingController** (`api/v1/mapping`) — `POST test` (mapping test execution) plus the FHIR R4 catalog: `GET catalog/resources` and `GET catalog/resources/{resourceType}/fields`.
-- **PipelineRunsController** (`api/v1/tenants/{tenantId}/pipeline-runs`) — `POST` start a configured run (returns 201 synchronously, or 202 queued for bulk-export when a shared messaging transport is configured), `GET` recent runs, `POST {id}/deactivate`.
-- **WebhookIngestionController** (`api/v1/tenants/{tenantId}/webhooks/{webhookConfigurationId}/ingest`) — `[AllowAnonymous]` `POST` accepting a raw FHIR JSON payload; runs inline (202 with the run) or enqueues for the Worker when `WebhookIngestion:Async` is enabled.
+- **PipelineRunsController** (`api/v1/pipeline-runs`) — `POST` start a configured run (returns 201 synchronously, or 202 queued for bulk-export when a shared messaging transport is configured), `GET` recent runs, `POST {id}/deactivate`.
+- **WebhookIngestionController** (`api/v1/webhooks/{webhookConfigurationId}/ingest`) — `[AllowAnonymous]` `POST` accepting a raw FHIR JSON payload; runs inline (202 with the run) or enqueues for the Worker when `WebhookIngestion:Async` is enabled.
 - **ObservabilityController** (`api/v1/observability`) — `GET metrics`.
-- **InsightsController** (`api/v1/tenants/{tenantId}/insights`) — `GET measure-report`, `GET anomalies`.
-- **LineageController** (`api/v1/tenants/{tenantId}/lineage`) — `GET` data-lineage records.
-- **OperationalAuditLogsController** (`api/v1/tenants/{tenantId}/audit-logs`) — `GET` operational/user-activity audit log entries.
+- **InsightsController** (`api/v1/insights`) — `GET measure-report`, `GET anomalies`.
+- **LineageController** (`api/v1/lineage`) — `GET` data-lineage records.
+- **OperationalAuditLogsController** (`api/v1/audit-logs`) — `GET` operational/user-activity audit log entries.
 - **RolesController** (`api/v1/roles`) — list roles, list permissions, create/update/delete role.
 - **UsersController** (`api/v1/users`) — list/create/update users.
-- **SubscriptionsController** (`api/v1/tenants/{tenantId}/subscriptions`) — create/delete FHIR subscriptions.
-- **SourceCapabilitiesController** (`api/v1/tenants/{tenantId}/source-connections/{sourceConnectionId}`) — `POST capabilities/discover`, `GET capabilities`, `GET catalog/resources` (capability-gated resource catalog).
+- **SubscriptionsController** (`api/v1/subscriptions`) — create/delete FHIR subscriptions.
+- **SourceCapabilitiesController** (`api/v1/source-connections/{sourceConnectionId}`) — `POST capabilities/discover`, `GET capabilities`, `GET catalog/resources` (capability-gated resource catalog).
 
-All controllers except the anonymous local-auth and webhook-ingest endpoints require authentication; tenant-scoped controllers carry `[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]`.
+All controllers except the anonymous local-auth and webhook-ingest endpoints require authentication; administrative controllers carry `[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]`.
 
 ### Security (`Security/`)
 - **FhirBridgeAuthenticationExtensions** — `AddFhirBridgeAuthentication`. Registers a `FhirBridgeSelector` policy scheme that reads (without validating) the incoming bearer token's issuer and forwards to the `Local` HS256 `JwtBearer` scheme or, when `Authentication:Entra:Enabled`, the `Entra` `AddMicrosoftIdentityWebApi` scheme. Entra security groups are projected onto the five built-in roles after token validation. Local scheme validates the symmetric signing key; `roles`/`name` claim types are normalized across both schemes.
 - **JwtAccessTokenIssuer** (`IAccessTokenIssuer`) — mints local HS256 access tokens for `LocalAuthService` logins, embedding `oid`, name/email, `pwd_change_required`, `scope`, and role claims; lifetime from `Authentication:TokenLifetimeMinutes` (default 480).
 - **HttpContextCurrentUserService** (`ICurrentUserService`) — projects the authenticated `ClaimsPrincipal` into the Application-layer current-user abstraction.
-- **UnifiedAdminAuthorizationHandler** / **UnifiedAdminRequirement** — satisfies the `UnifiedAdmin` policy when the principal carries an accepted global role claim, or (for tenant-scoped routes) when `IUserAccessRepository.HasTenantRoleAsync` confirms a SuperAdmin/Admin role for the route's `tenantId`.
+- **UnifiedAdminAuthorizationHandler** / **UnifiedAdminRequirement** — satisfies the `UnifiedAdmin` policy when the principal carries an accepted admin role claim (SuperAdmin/Admin, including the retained legacy claim names).
 
 ### Workflows (`Workflows/`)
-- **WorkflowEndpoints** — `MapWorkflowEndpoints` registers minimal-API routes under `/api/v1/tenants/{tenantId}`: `GET workflow-catalog`, `POST/GET/PUT workflows`, `GET workflows/{id}`, and `POST workflows/{id}/{validate|run|activate|deactivate}`. Translates request DTOs into `WorkflowDefinition` aggregates (nodes + edges) and delegates to the Runtime workflow store, validator, and ranked orchestrator.
+- **WorkflowEndpoints** — `MapWorkflowEndpoints` registers minimal-API routes under `/api/v1`: `GET workflow-catalog`, `POST/GET/PUT workflows`, `GET workflows/{id}`, and `POST workflows/{id}/{validate|run|activate|deactivate}`. Translates request DTOs into `WorkflowDefinition` aggregates (nodes + edges) and delegates to the Runtime workflow store, validator, and ranked orchestrator.
 - **WorkflowApiModels** — request/response records (`WorkflowDefinitionRequest`, node/edge requests, `WorkflowRunRequest`).
 
 ### Cross-cutting
@@ -71,7 +71,7 @@ Only a placeholder `Program.cs` exists (a minimal `WebApplication` host that bui
 2. **Authentication & authorization.** Port `AddFhirBridgeAuthentication` (the Local/Entra policy-scheme selector and Entra-group→role projection) and register the `UnifiedAdmin` policy backed by `UnifiedAdminRequirement` + `UnifiedAdminAuthorizationHandler`. Wire `app.UseAuthentication()`/`UseAuthorization()`.
 3. **REST surface.** Port the V1 controllers, preserving routes/policies:
    - Identity & access: `auth`, `users`, `roles`.
-   - Tenant administration: `tenants` (sources, destinations, mapping profiles, resources, routes, webhooks, users) — the configuration backbone.
+   - Configuration administration: flat `api/v1` configuration CRUD (sources, destinations, mapping profiles, resources, routes, webhooks) — the configuration backbone.
    - Pipeline execution: `pipeline-runs` (sync/queued, bulk-export hand-off), `webhooks/{id}/ingest` (sync/async webhook ingestion).
    - Read/analytics: `fhirbridge/Patient/{id}` aggregation (FHIR Bundle), `insights` (measure reports, anomalies), `lineage`, `observability/metrics`, `audit-logs`.
    - Source capability discovery & catalog gating; FHIR R4 mapping catalog and mapping test.

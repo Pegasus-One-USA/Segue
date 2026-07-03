@@ -9,7 +9,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
-[Route("api/v1/tenants/{tenantId:guid}/source-connections/{sourceConnectionId:guid}")]
+[Route("api/v1/source-connections/{sourceConnectionId:guid}")]
 public sealed class SourceCapabilitiesController : ControllerBase
 {
     // Interaction codes that mean "this source can hand us this resource type" (read direction).
@@ -30,11 +30,10 @@ public sealed class SourceCapabilitiesController : ControllerBase
     [HttpPost("capabilities/discover")]
     [ProducesResponseType(typeof(SourceCapabilityProfileDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Discover(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var capability = await _discoveryService.DiscoverAsync(tenantId, sourceConnectionId, cancellationToken);
+        var capability = await _discoveryService.DiscoverAsync(sourceConnectionId, cancellationToken);
 
         return Ok(capability);
     }
@@ -46,12 +45,10 @@ public sealed class SourceCapabilitiesController : ControllerBase
     [HttpGet("smart-configuration")]
     [ProducesResponseType(typeof(SmartConfigurationDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DiscoverSmartConfiguration(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
         var configuration = await _discoveryService.DiscoverSmartConfigurationAsync(
-            tenantId,
             sourceConnectionId,
             cancellationToken);
 
@@ -63,11 +60,10 @@ public sealed class SourceCapabilitiesController : ControllerBase
     [ProducesResponseType(typeof(SourceCapabilityProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var capability = await _discoveryService.GetAsync(tenantId, sourceConnectionId, cancellationToken);
+        var capability = await _discoveryService.GetAsync(sourceConnectionId, cancellationToken);
 
         return capability is null ? NotFound() : Ok(capability);
     }
@@ -80,11 +76,10 @@ public sealed class SourceCapabilitiesController : ControllerBase
     [HttpGet("catalog/resources")]
     [ProducesResponseType(typeof(IReadOnlyList<CatalogResourceAvailabilityDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCatalogResourceAvailability(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var capability = await _discoveryService.GetAsync(tenantId, sourceConnectionId, cancellationToken);
+        var capability = await _discoveryService.GetAsync(sourceConnectionId, cancellationToken);
 
         var result = _catalog.ResourceTypes
             .Select(resourceType => Annotate(resourceType, capability))

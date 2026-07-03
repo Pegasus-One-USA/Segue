@@ -10,7 +10,6 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
     }
 
     public ResourcePipelineRoute(
-        Guid tenantId,
         Guid? webhookConfigurationId,
         Guid mappingProfileId,
         IngestionMode ingestionMode,
@@ -20,7 +19,6 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         int priority)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         WebhookConfigurationId = webhookConfigurationId;
         MappingProfileId = mappingProfileId;
         IngestionMode = ingestionMode;
@@ -30,7 +28,6 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         Priority = priority;
     }
 
-    public Guid TenantId { get; private set; }
     public Guid? WebhookConfigurationId { get; private set; }
 
     /// <summary>

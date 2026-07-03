@@ -59,14 +59,6 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
             cancellationToken);
     }
 
-    public async Task<IReadOnlyList<User>> GetUsersByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken)
-    {
-        return await _dbContext.Users
-            .Where(x => x.TenantId == tenantId)
-            .OrderBy(x => x.Email)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task DeleteUserAsync(User user, CancellationToken cancellationToken)
     {
         user.ApplyDeleted("system", DateTime.UtcNow);
@@ -113,14 +105,6 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
     {
         _dbContext.Roles.Remove(role);
         await _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<Role>> GetRolesByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken)
-    {
-        return await _dbContext.Roles
-            .Where(x => x.TenantId == tenantId)
-            .OrderBy(x => x.Name)
-            .ToListAsync(cancellationToken);
     }
 
     public Task<int> GetRoleUserCountAsync(Guid roleId, CancellationToken cancellationToken)
@@ -252,72 +236,5 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
             _dbContext.UserRoles.Remove(link);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
-    }
-
-    public async Task<IReadOnlyList<TenantUser>> GetTenantUsersAsync(Guid tenantId, CancellationToken cancellationToken)
-    {
-        return await _dbContext.TenantUsers
-            .Where(x => x.TenantId == tenantId)
-            .OrderBy(x => x.CreatedOnUtc)
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<TenantUser>> GetTenantMembershipsByUserIdAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        return await _dbContext.TenantUsers
-            .Where(x => x.UserId == userId && x.IsEnabled)
-            .OrderBy(x => x.CreatedOnUtc)
-            .ToListAsync(cancellationToken);
-    }
-
-    public Task<TenantUser?> GetTenantUserAsync(
-        Guid tenantId,
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        return _dbContext.TenantUsers.FirstOrDefaultAsync(
-            x => x.TenantId == tenantId && x.UserId == userId,
-            cancellationToken);
-    }
-
-    public async Task AddTenantUserAsync(TenantUser tenantUser, CancellationToken cancellationToken)
-    {
-        await _dbContext.TenantUsers.AddAsync(tenantUser, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task UpdateTenantUserAsync(TenantUser tenantUser, CancellationToken cancellationToken)
-    {
-        _dbContext.TenantUsers.Update(tenantUser);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public Task<bool> HasTenantRoleAsync(
-        Guid tenantId,
-        string externalUserId,
-        IReadOnlyCollection<string> roleNames,
-        CancellationToken cancellationToken)
-    {
-        return _dbContext.TenantUsers
-            .Where(x => x.TenantId == tenantId && x.IsEnabled)
-            .Join(_dbContext.Users,
-                tenantUser => tenantUser.UserId,
-                user => user.Id,
-                (tenantUser, user) => new { tenantUser, user })
-            .Join(_dbContext.Roles,
-                joined => joined.tenantUser.RoleId,
-                role => role.Id,
-                (joined, role) => new { joined.user, role })
-            .AnyAsync(
-                x => x.user.ExternalUserId == externalUserId && roleNames.Contains(x.role.Name),
-                cancellationToken);
-    }
-
-    public Task<bool> TenantHasSuperAdminAsync(Guid tenantId, Guid superAdminRoleId, CancellationToken cancellationToken)
-    {
-        return _dbContext.TenantUsers
-            .AnyAsync(
-                x => x.TenantId == tenantId && x.IsEnabled && x.RoleId == superAdminRoleId,
-                cancellationToken);
     }
 }

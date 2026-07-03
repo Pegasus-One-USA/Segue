@@ -83,7 +83,6 @@ public sealed class TerminologyMappedRecordNormalizationService : IMappedRecordN
         }
 
         return new MappedDestinationRecord(
-            request.Record.TenantId,
             request.Record.PipelineRunId,
             request.Record.ResourceType,
             request.Record.DestinationObject,

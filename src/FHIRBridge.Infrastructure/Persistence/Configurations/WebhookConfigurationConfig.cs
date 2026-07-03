@@ -11,16 +11,15 @@ public sealed class WebhookConfigurationConfig : IEntityTypeConfiguration<Webhoo
         builder.ToTable("WebhookConfigurations");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.SourceConnectionId).IsRequired();
         builder.Property(x => x.ResourceType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Path).HasMaxLength(500).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
 
-        builder.HasIndex(x => new { x.TenantId, x.SourceConnectionId, x.ResourceType })
+        builder.HasIndex(x => new { x.SourceConnectionId, x.ResourceType })
             .IsUnique();
 
-        builder.HasIndex(x => new { x.TenantId, x.Path });
+        builder.HasIndex(x => x.Path);
     }
 }

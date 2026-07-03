@@ -12,19 +12,18 @@ public sealed class InMemoryWorkflowDefinitionStore : IWorkflowDefinitionStore
         return Task.FromResult(workflowDefinition);
     }
 
-    public Task<IReadOnlyCollection<WorkflowDefinition>> ListAsync(Guid tenantId, CancellationToken cancellationToken)
+    public Task<IReadOnlyCollection<WorkflowDefinition>> ListAsync(CancellationToken cancellationToken)
     {
         IReadOnlyCollection<WorkflowDefinition> workflows = _workflows.Values
-            .Where(workflow => workflow.TenantId == tenantId)
             .OrderBy(workflow => workflow.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         return Task.FromResult(workflows);
     }
 
-    public Task<WorkflowDefinition?> GetAsync(Guid tenantId, Guid workflowId, CancellationToken cancellationToken)
+    public Task<WorkflowDefinition?> GetAsync(Guid workflowId, CancellationToken cancellationToken)
     {
         _workflows.TryGetValue(workflowId, out var workflowDefinition);
-        return Task.FromResult(workflowDefinition?.TenantId == tenantId ? workflowDefinition : null);
+        return Task.FromResult(workflowDefinition);
     }
 }

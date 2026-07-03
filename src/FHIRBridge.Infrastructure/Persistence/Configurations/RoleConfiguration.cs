@@ -24,15 +24,14 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.Property(x => x.IsSystem).IsRequired();
         builder.Property(x => x.IsDefault).IsRequired();
 
-        // Unique per tenant (and per the null-tenant platform scope), not globally — every tenant
-        // gets its own SuperAdmin/Admin/Operations/Audit roles alongside the platform's.
-        builder.HasIndex(x => new { x.TenantId, x.Name })
+        // Role names are globally unique.
+        builder.HasIndex(x => x.Name)
             .IsUnique();
 
         builder.HasData(
-            RoleSeed(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator across all tenants."),
-            RoleSeed(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users within a tenant."),
-            RoleSeed(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output, within a tenant."),
+            RoleSeed(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator."),
+            RoleSeed(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users."),
+            RoleSeed(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output."),
             RoleSeed(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs."));
     }
 

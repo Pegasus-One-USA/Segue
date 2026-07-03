@@ -17,7 +17,6 @@ internal static class MappedDestinationSerialization
     {
         return new
         {
-            record.TenantId,
             record.PipelineRunId,
             record.ResourceType,
             record.DestinationObject,
@@ -79,7 +78,6 @@ internal static class MappedDestinationSerialization
 
         return new[]
         {
-            "TenantId",
             "PipelineRunId",
             "ResourceType",
             "DestinationObject",
@@ -93,7 +91,6 @@ internal static class MappedDestinationSerialization
     {
         var value = column switch
         {
-            "TenantId" => record.TenantId,
             "PipelineRunId" => record.PipelineRunId,
             "ResourceType" => record.ResourceType,
             "DestinationObject" => record.DestinationObject,
@@ -114,7 +111,6 @@ internal static class MappedDestinationSerialization
             .ToList();
         var columns = new[]
         {
-            "TenantId",
             "PipelineRunId",
             "ResourceType",
             "DestinationObject",
@@ -130,7 +126,6 @@ internal static class MappedDestinationSerialization
             {
                 var value = column switch
                 {
-                    "TenantId" => record.TenantId,
                     "PipelineRunId" => record.PipelineRunId,
                     "ResourceType" => record.ResourceType,
                     "DestinationObject" => record.DestinationObject,

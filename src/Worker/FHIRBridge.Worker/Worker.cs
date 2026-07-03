@@ -1,7 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.DTOs;
-using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Pipeline;
@@ -48,18 +47,11 @@ public sealed class Worker : BackgroundService
     {
         var options = _options.Value;
 
-        if (options.TenantId == Guid.Empty)
-        {
-            _logger.LogWarning("RuntimeWorker:TenantId is missing. Scheduled pipeline run skipped.");
-            return;
-        }
-
         using var scope = _serviceScopeFactory.CreateScope();
-        var tenantRepository = scope.ServiceProvider.GetRequiredService<ITenantConfigurationRepository>();
+        var configurationRepository = scope.ServiceProvider.GetRequiredService<IConfigurationRepository>();
         var nowUtc = DateTime.UtcNow;
         var dueResourceTypes = await GetDueResourceTypesAsync(
-            tenantRepository,
-            options.TenantId,
+            configurationRepository,
             options.ResourceTypes,
             nowUtc,
             cancellationToken);
@@ -67,8 +59,7 @@ public sealed class Worker : BackgroundService
         if (dueResourceTypes.Count == 0)
         {
             _logger.LogInformation(
-                "No configured routes were due for tenant {TenantId} at {ScheduledAtUtc}.",
-                options.TenantId,
+                "No configured routes were due at {ScheduledAtUtc}.",
                 nowUtc);
 
             return;
@@ -76,7 +67,6 @@ public sealed class Worker : BackgroundService
 
         var pipelineService = scope.ServiceProvider.GetRequiredService<IConfiguredPipelineService>();
         var pipelineRun = await pipelineService.StartAsync(
-            options.TenantId,
             new StartConfiguredPipelineRunRequest(
                 dueResourceTypes,
                 "worker",
@@ -96,30 +86,33 @@ public sealed class Worker : BackgroundService
     }
 
     private static async Task<IReadOnlyList<string>> GetDueResourceTypesAsync(
-        ITenantConfigurationRepository tenantRepository,
-        Guid tenantId,
+        IConfigurationRepository configurationRepository,
         IReadOnlyCollection<string> configuredResourceTypes,
         DateTime nowUtc,
         CancellationToken cancellationToken)
     {
-        var tenant = await tenantRepository.GetByIdAsync(tenantId, cancellationToken);
-        if (tenant is null)
-        {
-            return [];
-        }
+        var routes = await configurationRepository.GetRoutesAsync(cancellationToken);
+        var mappings = (await configurationRepository.GetMappingProfilesAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+        var sources = (await configurationRepository.GetSourceConnectionsAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+        var destinations = (await configurationRepository.GetDestinationsAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+        var webhooks = (await configurationRepository.GetWebhooksAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
 
         var requestedResourceTypes = configuredResourceTypes.Count == 0
             ? null
             : configuredResourceTypes.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Resource type is owned by each route's mapping profile (single source of truth).
-        return tenant.ResourcePipelineRoutes
+        return routes
             .Where(route =>
                 route.IsEnabled &&
-                RouteDependenciesAreEnabled(tenant, route) &&
+                RouteDependenciesAreEnabled(route, mappings, sources, destinations, webhooks) &&
                 IsScheduledPullMode(route.IngestionMode) &&
                 ScheduleExpressionMatcher.IsDue(route.ScheduleExpression, nowUtc))
-            .Select(route => tenant.ResolveResourceType(route))
+            .Select(route => mappings.TryGetValue(route.MappingProfileId, out var mapping) ? mapping.ResourceType : null)
             .Where(resourceType => !string.IsNullOrWhiteSpace(resourceType))
             .Select(resourceType => resourceType!)
             .Where(resourceType => requestedResourceTypes is null || requestedResourceTypes.Contains(resourceType))
@@ -133,20 +126,26 @@ public sealed class Worker : BackgroundService
         return ingestionMode is IngestionMode.ScheduledPull or IngestionMode.WebhookAndScheduledPull;
     }
 
-    private static bool RouteDependenciesAreEnabled(Tenant tenant, ResourcePipelineRoute route)
+    private static bool RouteDependenciesAreEnabled(
+        ResourcePipelineRoute route,
+        IReadOnlyDictionary<Guid, MappingProfile> mappings,
+        IReadOnlyDictionary<Guid, SourceConnection> sources,
+        IReadOnlyDictionary<Guid, DestinationConfiguration> destinations,
+        IReadOnlyDictionary<Guid, WebhookConfiguration> webhooks)
     {
         // A route's source and destination are owned by its mapping profile, so resolve them through the mapping.
-        var mapping = tenant.MappingProfiles.FirstOrDefault(x => x.Id == route.MappingProfileId);
-        if (mapping is null)
+        if (!mappings.TryGetValue(route.MappingProfileId, out var mapping))
         {
             return false;
         }
 
-        var source = tenant.SourceConnections.FirstOrDefault(x => x.Id == mapping.SourceConnectionId);
-        var destination = tenant.DestinationConfigurations.FirstOrDefault(x => x.Id == mapping.DestinationId);
-        var webhook = route.WebhookConfigurationId.HasValue
-            ? tenant.WebhookConfigurations.FirstOrDefault(x => x.Id == route.WebhookConfigurationId.Value)
-            : null;
+        sources.TryGetValue(mapping.SourceConnectionId, out var source);
+        destinations.TryGetValue(mapping.DestinationId, out var destination);
+        WebhookConfiguration? webhook = null;
+        if (route.WebhookConfigurationId.HasValue)
+        {
+            webhooks.TryGetValue(route.WebhookConfigurationId.Value, out webhook);
+        }
 
         return source?.IsEnabled == true &&
                destination?.IsEnabled == true &&

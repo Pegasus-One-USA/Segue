@@ -13,7 +13,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
 [AllowAnonymous]
-[Route("api/v1/tenants/{tenantId:guid}/webhooks/{webhookConfigurationId:guid}/ingest")]
+[Route("api/v1/webhooks/{webhookConfigurationId:guid}/ingest")]
 public sealed class WebhookIngestionController : ControllerBase
 {
     private readonly IConfiguredPipelineService _configuredPipelineService;
@@ -33,7 +33,6 @@ public sealed class WebhookIngestionController : ControllerBase
     [HttpPost]
     [ProducesResponseType(typeof(ConfiguredPipelineRunDto), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Ingest(
-        Guid tenantId,
         Guid webhookConfigurationId,
         [FromBody] JsonElement payload,
         CancellationToken cancellationToken)
@@ -44,10 +43,9 @@ public sealed class WebhookIngestionController : ControllerBase
         if (_async)
         {
             var payloadHash = ComputePayloadHash(request.ResourceJson);
-            var messageId = $"webhook:{tenantId:N}:{webhookConfigurationId:N}:{payloadHash}";
+            var messageId = $"webhook:{webhookConfigurationId:N}:{payloadHash}";
             await _webhookDispatcher.EnqueueAsync(
                 new WebhookIngestionCommand(
-                    tenantId,
                     webhookConfigurationId,
                     request.ResourceJson,
                     payloadHash,
@@ -61,12 +59,11 @@ public sealed class WebhookIngestionController : ControllerBase
 
         // Synchronous mode (default): run inline and return the resulting run.
         var pipelineRun = await _configuredPipelineService.StartWebhookAsync(
-            tenantId,
             webhookConfigurationId,
             request,
             cancellationToken);
 
-        return Accepted($"/api/v1/tenants/{tenantId}/pipeline-runs/{pipelineRun.Id}", pipelineRun);
+        return Accepted($"/api/v1/pipeline-runs/{pipelineRun.Id}", pipelineRun);
     }
 
     private static WebhookIngestionRequest CreateRequest(JsonElement payload)

@@ -10,8 +10,9 @@ namespace FHIRBridge.Api.IntegrationTests;
 public sealed class ApiTestCollection : ICollectionFixture<ApiFixture> { }
 
 /// <summary>
-/// Shared fixture: registers a tenant + admin once, then exposes pre-built state
-/// used by all test classes in the "ApiTests" collection.
+/// Shared fixture: authenticates as the auto-seeded single-org SuperAdmin once
+/// (no tenant registration), then exposes pre-built state used by all test classes
+/// in the "ApiTests" collection.
 /// </summary>
 public sealed class ApiFixture : IAsyncLifetime
 {
@@ -22,7 +23,6 @@ public sealed class ApiFixture : IAsyncLifetime
     public HttpClient AnonClient  { get; private set; } = null!;
 
     // ── Identity state ──────────────────────────────────────────────────────────
-    public Guid   TenantId    { get; private set; }
     public Guid   AdminUserId { get; private set; }
     public string AdminJwt    { get; private set; } = "";
     public string RefreshToken { get; private set; } = "";
@@ -59,25 +59,19 @@ public sealed class ApiFixture : IAsyncLifetime
     {
         AnonClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        // 1. Register tenant — response contains access token directly.
-        var regResp = await AnonClient.PostAsJsonAsync("/api/v1/register", new
+        // 1. Authenticate as the auto-seeded SuperAdmin (seeded at host startup via
+        //    LocalAuth:SeedAdmin config in ApiFactory) — no tenant registration.
+        var loginResp = await AnonClient.PostAsJsonAsync("/api/v1/auth/internal/login", new
         {
-            OrgName       = "Test Hospital",
-            OrgType       = "Hospital",
-            Country       = "US",
-            Timezone      = "UTC",
-            AdminEmail,
-            AdminPassword,
-            AdminFirstName = "Test",
-            AdminLastName  = "Admin"
+            Email    = AdminEmail,
+            Password = AdminPassword
         });
-        regResp.EnsureSuccessStatusCode();
+        loginResp.EnsureSuccessStatusCode();
 
-        var reg = JsonDocument.Parse(await regResp.Content.ReadAsStringAsync()).RootElement;
-        TenantId    = reg.GetProperty("tenantId").GetGuid();
-        AdminUserId = reg.GetProperty("userId").GetGuid();
-        AdminJwt    = reg.GetProperty("accessToken").GetString()!;
-        if (reg.TryGetProperty("refreshToken", out var rtProp) && rtProp.ValueKind != JsonValueKind.Null)
+        var login = JsonDocument.Parse(await loginResp.Content.ReadAsStringAsync()).RootElement;
+        AdminJwt    = login.GetProperty("accessToken").GetString()!;
+        AdminUserId = login.GetProperty("profile").GetProperty("userId").GetGuid();
+        if (login.TryGetProperty("refreshToken", out var rtProp) && rtProp.ValueKind != JsonValueKind.Null)
             RefreshToken = rtProp.GetString() ?? "";
 
         AdminClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

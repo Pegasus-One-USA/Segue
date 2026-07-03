@@ -26,11 +26,11 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         ORDER BY table_schema, table_name, ordinal_position
         """;
 
-    private readonly ITenantConfigurationRepository _repository;
+    private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
 
     public SqlDestinationSchemaService(
-        ITenantConfigurationRepository repository,
+        IConfigurationRepository repository,
         ISecretProvider secretProvider)
     {
         _repository = repository;
@@ -38,13 +38,10 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
     }
 
     public async Task<DestinationSchemaDto> GetSchemaAsync(
-        Guid tenantId,
         Guid destinationId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _repository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-        var destination = tenant.DestinationConfigurations.FirstOrDefault(x => x.Id == destinationId)
+        var destination = await _repository.GetDestinationAsync(destinationId, cancellationToken)
             ?? throw new NotFoundException("DestinationConfiguration", destinationId);
 
         if (!IsRelational(destination.DestinationType))

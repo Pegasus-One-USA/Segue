@@ -10,7 +10,6 @@ public sealed class DefaultGovernancePolicyService : IGovernancePolicyService
     {
         IReadOnlyCollection<string> policies =
         [
-            "TenantIsolation",
             "PhiFreeAudit",
             "ResourceLevelAccessAudit"
         ];

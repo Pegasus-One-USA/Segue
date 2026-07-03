@@ -1,7 +1,6 @@
 namespace FHIRBridge.Application.DTOs;
 
 public sealed record SourceCapabilityProfileDto(
-    Guid TenantId,
     Guid SourceConnectionId,
     string FhirVersion,
     DateTime DiscoveredOnUtc,

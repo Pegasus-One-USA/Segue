@@ -1,7 +1,6 @@
 namespace FHIRBridge.Application.DTOs;
 
 public sealed record RunAnomalySummaryDto(
-    Guid TenantId,
     DateTime EvaluatedOnUtc,
     int EvaluatedRunCount,
     IReadOnlyList<RunAnomalyDto> Anomalies);

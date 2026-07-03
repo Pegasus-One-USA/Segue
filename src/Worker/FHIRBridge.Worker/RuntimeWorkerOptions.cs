@@ -7,7 +7,6 @@ public sealed class RuntimeWorkerOptions
 {
     public bool Enabled { get; set; }
     public int IntervalSeconds { get; set; } = 300;
-    public Guid TenantId { get; set; }
     public string[] ResourceTypes { get; set; } = SupportedFhirResourceTypes.All.ToArray();
     public RuntimeWorkerSourceOptions Source { get; set; } = new();
     public RuntimeWorkerDestinationOptions Destination { get; set; } = new();

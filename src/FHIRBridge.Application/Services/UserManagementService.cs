@@ -127,16 +127,8 @@ public sealed class UserManagementService : IUserManagementService
     {
         var email = NormalizeEmail(request.Email);
 
-        var currentTenantId = _currentUserService.CurrentUser.TenantId
-            ?? throw new InvalidOperationException("Tenant context is required to invite users.");
-
         var role = await _repository.GetRoleByIdAsync(request.RoleId, cancellationToken)
             ?? throw new InvalidOperationException("The specified role does not exist.");
-
-        if (role.TenantId.HasValue && role.TenantId != currentTenantId)
-        {
-            throw new InvalidOperationException("The specified role does not belong to this tenant.");
-        }
 
         var existingUser = await _repository.GetUserByEmailAsync(email, cancellationToken);
         if (existingUser is not null)
@@ -150,14 +142,10 @@ public sealed class UserManagementService : IUserManagementService
 
         var user = new User(LocalExternalId(email), email, null);
         user.UpdateName(request.FirstName, request.LastName);
-        user.SetHomeTenant(currentTenantId);
         user.SetInvited(tokenHash, expiresOnUtc);
 
         await _repository.AddUserAsync(user, cancellationToken);
         await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);
-
-        var tenantUser = new TenantUser(currentTenantId, user.Id, role.Id);
-        await _repository.AddTenantUserAsync(tenantUser, cancellationToken);
 
         await AuditAsync("UserInvited", $"User invited: {email}.", cancellationToken);
 
@@ -263,17 +251,6 @@ public sealed class UserManagementService : IUserManagementService
             throw new InvalidOperationException("This role is already assigned to the user.");
         }
 
-        if (role.Name == "SuperAdmin" && user.TenantId.HasValue)
-        {
-            var alreadyHasSuperAdmin = await _repository.TenantHasSuperAdminAsync(
-                user.TenantId.Value, role.Id, cancellationToken);
-            if (alreadyHasSuperAdmin)
-            {
-                throw new InvalidOperationException(
-                    "The Super Admin role is already assigned to another user in this tenant.");
-            }
-        }
-
         await _repository.AddUserRoleAsync(userId, role.Id, cancellationToken);
         await AuditAsync("UserRoleAssigned", $"Role '{role.Name}' assigned to user {user.Email ?? user.ExternalUserId}.", cancellationToken);
 
@@ -371,7 +348,6 @@ public sealed class UserManagementService : IUserManagementService
     {
         await _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                Guid.Empty,
                 null,
                 null,
                 null,

@@ -13,7 +13,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// </summary>
 [ApiController]
 [AllowAnonymous]
-[Route("api/v1/tenants/{tenantId:guid}/source-connections/{sourceConnectionId:guid}")]
+[Route("api/v1/source-connections/{sourceConnectionId:guid}")]
 public sealed class SourceJwksController : ControllerBase
 {
     private readonly ISourceJwksService _jwksService;
@@ -25,17 +25,16 @@ public sealed class SourceJwksController : ControllerBase
 
     /// <summary>
     /// Returns the source connection's public keys as a JWKS. A connection with no asymmetric signing key returns an
-    /// empty (but valid) key set; an unknown tenant or source connection returns 404.
+    /// empty (but valid) key set; an unknown source connection returns 404.
     /// </summary>
     [HttpGet(".well-known/jwks.json")]
     [ProducesResponseType(typeof(JsonWebKeySetDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetJwks(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var jwks = await _jwksService.GetPublicJwksAsync(tenantId, sourceConnectionId, cancellationToken);
+        var jwks = await _jwksService.GetPublicJwksAsync(sourceConnectionId, cancellationToken);
 
         return Ok(jwks);
     }

@@ -19,12 +19,12 @@ namespace FHIRBridge.Infrastructure.Sources;
 /// Orchestrates the interactive OAuth sign-in for a source connection. It resolves the source, discovers its SMART
 /// authorization/token endpoints on demand, starts the authorization-code + PKCE flow, and completes it from the
 /// callback — persisting the token so later pipeline runs read it back. For a route-scoped EHR launch it also runs
-/// the launched pipeline route once the token is acquired. Tenant/route identifiers are carried as encrypted opaque
+/// the launched pipeline route once the token is acquired. Source/route identifiers are carried as encrypted opaque
 /// tokens (see <see cref="ILaunchTokenProtector"/>) so raw GUIDs never appear in a launch URL or the OAuth state.
 /// </summary>
 public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAuthorizationService
 {
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly ISourceCapabilityDiscoveryService _discoveryService;
     private readonly IInteractiveAuthorizationFlow _authorizationFlow;
     private readonly IOAuthAuthorizationStateStore _stateStore;
@@ -36,7 +36,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     private readonly ILogger<InteractiveSourceAuthorizationService> _logger;
 
     public InteractiveSourceAuthorizationService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         ISourceCapabilityDiscoveryService discoveryService,
         IInteractiveAuthorizationFlow authorizationFlow,
         IOAuthAuthorizationStateStore stateStore,
@@ -47,7 +47,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         ICurrentUserService currentUserService,
         ILogger<InteractiveSourceAuthorizationService> logger)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _discoveryService = discoveryService;
         _authorizationFlow = authorizationFlow;
         _stateStore = stateStore;
@@ -59,11 +59,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _logger = logger;
     }
 
-    public string BuildLaunchContextToken(Guid tenantId, Guid routeId) =>
-        _launchTokenProtector.ProtectContext(tenantId, routeId);
+    public string BuildLaunchContextToken(Guid routeId) =>
+        _launchTokenProtector.ProtectContext(routeId);
 
     public async Task<Uri> StartAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         string redirectUri,
         CancellationToken cancellationToken)
@@ -73,8 +72,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             throw new ArgumentException("A redirect URI is required to start interactive authorization.", nameof(redirectUri));
         }
 
-        var sourceConnection = await GetSourceConnectionAsync(tenantId, sourceConnectionId, cancellationToken);
-        var smartConfiguration = await DiscoverEndpointsAsync(tenantId, sourceConnectionId, cancellationToken);
+        var sourceConnection = await GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+        var smartConfiguration = await DiscoverEndpointsAsync(sourceConnectionId, cancellationToken);
         var clientId = RequireClientId(sourceConnection);
 
         var source = new FhirSourceConfiguration(
@@ -88,29 +87,27 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             Scopes: ApplyPatientSelection(
                 sourceConnection.Authentication.Scopes,
                 sourceConnection.Interactive?.PatientSelectionMethod),
-            TenantId: tenantId,
             SourceConnectionId: sourceConnectionId,
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId: null, requestedRedirectUri: redirectUri, cancellationToken);
 
-        await RecordAuditAsync(tenantId, sourceConnectionId, "InteractiveAuthorizationStarted", "Started",
+        await RecordAuditAsync(sourceConnectionId, "InteractiveAuthorizationStarted", "Started",
             $"Interactive OAuth sign-in started for {sourceConnection.Name}.", cancellationToken);
 
         return authorizationUrl;
     }
 
     public async Task<Uri> StartEhrLaunchAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         string issuer,
         string launch,
         string redirectUri,
         CancellationToken cancellationToken)
     {
-        var sourceConnection = await GetSourceConnectionAsync(tenantId, sourceConnectionId, cancellationToken);
-        return await StartEhrLaunchCoreAsync(tenantId, sourceConnection, issuer, launch, redirectUri, routeId: null, cancellationToken);
+        var sourceConnection = await GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+        return await StartEhrLaunchCoreAsync(sourceConnection, issuer, launch, redirectUri, routeId: null, cancellationToken);
     }
 
     public async Task<Uri> StartEhrLaunchFromContextAsync(
@@ -123,12 +120,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         var context = _launchTokenProtector.UnprotectContext(launchContext)
             ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
 
-        var (sourceConnection, routeId) = await ResolveRouteSourceAsync(context.TenantId, context.RouteId, cancellationToken);
-        return await StartEhrLaunchCoreAsync(context.TenantId, sourceConnection, issuer, launch, redirectUri, routeId, cancellationToken);
+        var (sourceConnection, routeId) = await ResolveRouteSourceAsync(context.RouteId, cancellationToken);
+        return await StartEhrLaunchCoreAsync(sourceConnection, issuer, launch, redirectUri, routeId, cancellationToken);
     }
 
     private async Task<Uri> StartEhrLaunchCoreAsync(
-        Guid tenantId,
         SourceConnection sourceConnection,
         string issuer,
         string launch,
@@ -149,7 +145,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             throw new InvalidOperationException("The launch issuer (iss) is not in the source's trusted-issuer allow-list.");
         }
 
-        var smartConfiguration = await DiscoverEndpointsAsync(tenantId, sourceConnection.Id, cancellationToken);
+        var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken);
         var clientId = RequireClientId(sourceConnection);
 
         var source = new FhirSourceConfiguration(
@@ -162,14 +158,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             KeyId: null,
             PrivateKeyPem: null,
             Scopes: sourceConnection.Authentication.Scopes,
-            TenantId: tenantId,
             SourceConnectionId: sourceConnection.Id,
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch, routeId, requestedRedirectUri: redirectUri, cancellationToken);
 
-        await RecordAuditAsync(tenantId, sourceConnection.Id, "EhrLaunchAuthorizationStarted", "Started",
+        await RecordAuditAsync(sourceConnection.Id, "EhrLaunchAuthorizationStarted", "Started",
             $"EHR launch started for {sourceConnection.Name} (iss {issuer}).", cancellationToken);
 
         return authorizationUrl;
@@ -195,7 +190,6 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         await _stateStore.SaveAsync(
             nonce,
             new PendingAuthorization(
-                source.TenantId!.Value,
                 source.SourceConnectionId!.Value,
                 source.SourceType,
                 sourceConnection.Name,
@@ -227,7 +221,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         // Re-load the source to resolve confidential-client credentials for the token exchange. Secrets are resolved
         // here (not carried in the pending state) so they are never persisted in the short-lived authorization store.
-        var sourceConnection = await GetSourceConnectionAsync(pending.TenantId, pending.SourceConnectionId, cancellationToken);
+        var sourceConnection = await GetSourceConnectionAsync(pending.SourceConnectionId, cancellationToken);
         var (clientSecret, privateKeyPem) = await ResolveClientCredentialsAsync(sourceConnection, cancellationToken);
 
         var source = new FhirSourceConfiguration(
@@ -239,7 +233,6 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             KeyId: sourceConnection.Authentication.KeyId,
             PrivateKeyPem: privateKeyPem,
             Scopes: [],
-            TenantId: pending.TenantId,
             SourceConnectionId: pending.SourceConnectionId,
             ClientSecret: clientSecret);
 
@@ -252,55 +245,53 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         {
             _logger.LogWarning(
                 exception,
-                "Interactive authorization exchange failed for tenant {TenantId}, source {SourceConnectionId}.",
-                pending.TenantId,
+                "Interactive authorization exchange failed for source {SourceConnectionId}.",
                 pending.SourceConnectionId);
 
-            await RecordAuditAsync(pending.TenantId, pending.SourceConnectionId, "InteractiveAuthorizationFailed", "Failed",
+            await RecordAuditAsync(pending.SourceConnectionId, "InteractiveAuthorizationFailed", "Failed",
                 exception.Message, cancellationToken);
             throw;
         }
 
-        await RecordAuditAsync(pending.TenantId, pending.SourceConnectionId, "InteractiveAuthorizationCompleted", "Completed",
+        await RecordAuditAsync(pending.SourceConnectionId, "InteractiveAuthorizationCompleted", "Completed",
             $"Interactive OAuth sign-in completed for {pending.SourceName}.", cancellationToken);
 
         if (pending.RouteId is { } routeId)
         {
-            await TriggerRouteRunAsync(pending.TenantId, pending.SourceConnectionId, routeId, cancellationToken);
+            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, cancellationToken);
         }
 
-        return new InteractiveAuthorizationResult(pending.TenantId, pending.SourceConnectionId, pending.SourceName);
+        return new InteractiveAuthorizationResult(pending.SourceConnectionId, pending.SourceName);
     }
 
     // After a route-scoped launch completes, run just that pipeline route. The stored token is patient-scoped, so the
     // run flows the launched patient's data through Source → Mapping → Destination. A run failure does not fail the
     // sign-in (the token is already stored and the run can be retried) — it is logged and audited.
-    private async Task TriggerRouteRunAsync(Guid tenantId, Guid sourceConnectionId, Guid routeId, CancellationToken cancellationToken)
+    private async Task TriggerRouteRunAsync(Guid sourceConnectionId, Guid routeId, CancellationToken cancellationToken)
     {
         try
         {
             var request = new StartConfiguredPipelineRunRequest(null, "epic-ehr-launch", null) { RouteIds = [routeId] };
-            await _pipelineService.StartAsync(tenantId, request, cancellationToken);
+            await _pipelineService.StartAsync(request, cancellationToken);
 
-            await RecordAuditAsync(tenantId, sourceConnectionId, "EhrLaunchPipelineTriggered", "Started",
+            await RecordAuditAsync(sourceConnectionId, "EhrLaunchPipelineTriggered", "Started",
                 $"Pipeline route {routeId} triggered by EHR launch.", cancellationToken);
         }
         catch (Exception exception)
         {
             _logger.LogWarning(
                 exception,
-                "EHR-launch pipeline trigger failed for tenant {TenantId}, route {RouteId}.",
-                tenantId,
+                "EHR-launch pipeline trigger failed for route {RouteId}.",
                 routeId);
 
-            await RecordAuditAsync(tenantId, sourceConnectionId, "EhrLaunchPipelineTriggerFailed", "Failed",
+            await RecordAuditAsync(sourceConnectionId, "EhrLaunchPipelineTriggerFailed", "Failed",
                 exception.Message, cancellationToken);
         }
     }
 
-    private async Task<SmartConfigurationDto> DiscoverEndpointsAsync(Guid tenantId, Guid sourceConnectionId, CancellationToken cancellationToken)
+    private async Task<SmartConfigurationDto> DiscoverEndpointsAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
-        var smartConfiguration = await _discoveryService.DiscoverSmartConfigurationAsync(tenantId, sourceConnectionId, cancellationToken);
+        var smartConfiguration = await _discoveryService.DiscoverSmartConfigurationAsync(sourceConnectionId, cancellationToken);
         if (string.IsNullOrWhiteSpace(smartConfiguration.AuthorizationEndpoint) ||
             string.IsNullOrWhiteSpace(smartConfiguration.TokenEndpoint))
         {
@@ -317,34 +308,26 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             : sourceConnection.Authentication.ClientId!;
 
     private async Task<SourceConnection> GetSourceConnectionAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-
-        return tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
+        return await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
     }
 
     // Resolves the source connection that backs a pipeline route (route → mapping profile → source connection).
     private async Task<(SourceConnection Source, Guid RouteId)> ResolveRouteSourceAsync(
-        Guid tenantId,
         Guid routeId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-
-        var route = tenant.ResourcePipelineRoutes.FirstOrDefault(x => x.Id == routeId)
+        var route = await _configurationRepository.GetRouteAsync(routeId, cancellationToken)
             ?? throw new NotFoundException("ResourcePipelineRoute", routeId);
 
-        var sourceConnectionId = tenant.ResolveSourceConnectionId(route)
-            ?? throw new InvalidOperationException("The pipeline route is not associated with a source connection.");
+        var mapping = await _configurationRepository.GetMappingProfileAsync(route.MappingProfileId, cancellationToken)
+            ?? throw new InvalidOperationException("The pipeline route is not associated with a mapping profile.");
 
-        var source = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
-            ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
+        var source = await _configurationRepository.GetSourceConnectionAsync(mapping.SourceConnectionId, cancellationToken)
+            ?? throw new NotFoundException("SourceConnection", mapping.SourceConnectionId);
 
         return (source, routeId);
     }
@@ -415,7 +398,6 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     };
 
     private Task RecordAuditAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         string action,
         string status,
@@ -424,7 +406,6 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     {
         return _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                tenantId,
                 null,
                 null,
                 sourceConnectionId,

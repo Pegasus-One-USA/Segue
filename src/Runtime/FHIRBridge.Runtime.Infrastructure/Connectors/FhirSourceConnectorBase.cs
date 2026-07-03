@@ -170,7 +170,7 @@ public abstract class FhirSourceConnectorBase : IFhirSourceClient
             return;
         }
 
-        var sourceKey = $"{source.TenantId?.ToString() ?? "none"}|{source.SourceConnectionId?.ToString() ?? source.ClientId ?? source.BaseUrl ?? "fhir"}";
+        var sourceKey = source.SourceConnectionId?.ToString() ?? source.ClientId ?? source.BaseUrl ?? "fhir";
         var throttle = SourceThrottles.GetOrAdd(sourceKey, _ => new SourceThrottle());
 
         await throttle.Gate.WaitAsync(cancellationToken);

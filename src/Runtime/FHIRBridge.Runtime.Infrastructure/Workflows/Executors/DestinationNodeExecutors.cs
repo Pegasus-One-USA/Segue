@@ -244,7 +244,6 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     {
         var target = ReadStringConfiguration(node, "target");
         return new DestinationConfiguration(
-            context.TenantId,
             node.DisplayName,
             _destinationType,
             new SecretReference(string.Empty, string.Empty),
@@ -262,7 +261,6 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
 
         return new MappingProfile(
-            context.TenantId,
             node.DisplayName,
             resourceType,
             Guid.Empty,

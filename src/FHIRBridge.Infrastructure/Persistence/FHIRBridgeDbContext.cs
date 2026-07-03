@@ -1,4 +1,3 @@
-using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.SharedKernel.Abstractions;
@@ -13,7 +12,6 @@ public sealed class FHIRBridgeDbContext : DbContext
     {
     }
 
-    public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<SourceConnection> SourceConnections => Set<SourceConnection>();
     public DbSet<WebhookConfiguration> WebhookConfigurations => Set<WebhookConfiguration>();
     public DbSet<DestinationConfiguration> DestinationConfigurations => Set<DestinationConfiguration>();
@@ -30,7 +28,6 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
-    public DbSet<TenantUser> TenantUsers => Set<TenantUser>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

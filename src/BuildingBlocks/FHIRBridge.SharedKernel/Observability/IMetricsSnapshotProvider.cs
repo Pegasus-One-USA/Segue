@@ -32,7 +32,6 @@ public sealed record MetricsSnapshot(
 /// A recent run summary for the dashboard activity table. PHI-free — counts, status and timing only.
 /// </summary>
 public sealed record RecentRunMetric(
-    Guid TenantId,
     string Status,
     int ExtractedResourceCount,
     int MappedRecordCount,

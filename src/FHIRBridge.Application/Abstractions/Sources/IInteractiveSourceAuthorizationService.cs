@@ -12,14 +12,13 @@ public interface IInteractiveSourceAuthorizationService
     /// redirect the browser to. <paramref name="redirectUri"/> must be the absolute callback URL registered with the
     /// EHR; it is retained so the token exchange presents the identical value.
     /// </summary>
-    Task<Uri> StartAsync(Guid tenantId, Guid sourceConnectionId, string redirectUri, CancellationToken cancellationToken);
+    Task<Uri> StartAsync(Guid sourceConnectionId, string redirectUri, CancellationToken cancellationToken);
 
     /// <summary>
     /// Prepares an EHR launch: validates the incoming issuer against the source's trusted-issuer allow-list, then
     /// returns the authorization-endpoint URL (carrying the launch scope + token) to redirect the browser to.
     /// </summary>
     Task<Uri> StartEhrLaunchAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         string issuer,
         string launch,
@@ -27,7 +26,7 @@ public interface IInteractiveSourceAuthorizationService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Prepares an EHR launch from an encrypted launch-context token (which resolves to the tenant + pipeline route).
+    /// Prepares an EHR launch from an encrypted launch-context token (which resolves to the pipeline route).
     /// Resolves the source from the route, validates the issuer, and — on callback — the resolved route is run.
     /// </summary>
     Task<Uri> StartEhrLaunchFromContextAsync(
@@ -41,8 +40,8 @@ public interface IInteractiveSourceAuthorizationService
     Task<InteractiveAuthorizationResult> CompleteAsync(string state, string authorizationCode, CancellationToken cancellationToken);
 
     /// <summary>Builds the opaque, encrypted launch-context token to embed in the launch URL registered with the EHR for a given pipeline route.</summary>
-    string BuildLaunchContextToken(Guid tenantId, Guid routeId);
+    string BuildLaunchContextToken(Guid routeId);
 }
 
 /// <summary>Which source connection was authorized once the callback completes.</summary>
-public sealed record InteractiveAuthorizationResult(Guid TenantId, Guid SourceConnectionId, string SourceName);
+public sealed record InteractiveAuthorizationResult(Guid SourceConnectionId, string SourceName);

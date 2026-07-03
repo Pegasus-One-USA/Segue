@@ -1,7 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Scheduling;
 using FHIRBridge.Application.Scheduling;
-using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Pipeline;
@@ -10,19 +9,19 @@ using Microsoft.Extensions.Logging;
 namespace FHIRBridge.Infrastructure.Scheduling;
 
 /// <summary>
-/// Multi-tenant generalization of the legacy single-tenant worker's due-route logic. Evaluates every tenant's
-/// scheduled-pull routes with catch-up awareness, stamps each claimed route, and persists the stamp.
+/// Single-org due-route logic. Evaluates the configured scheduled-pull routes with catch-up awareness, stamps each
+/// claimed route, and persists the stamp.
 /// </summary>
 public sealed class ScheduleEvaluationService : IScheduleEvaluationService
 {
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly ILogger<ScheduleEvaluationService> _logger;
 
     public ScheduleEvaluationService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         ILogger<ScheduleEvaluationService> logger)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _logger = logger;
     }
 
@@ -30,55 +29,63 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
         DateTime utcNow,
         CancellationToken cancellationToken)
     {
-        var tenants = await _tenantRepository.GetAllAsync(cancellationToken);
-        var dueRuns = new List<DueScheduledRun>();
+        var routes = await _configurationRepository.GetRoutesAsync(cancellationToken);
+        var mappings = (await _configurationRepository.GetMappingProfilesAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+        var sources = (await _configurationRepository.GetSourceConnectionsAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+        var destinations = (await _configurationRepository.GetDestinationsAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
+        var webhooks = (await _configurationRepository.GetWebhooksAsync(cancellationToken))
+            .ToDictionary(x => x.Id);
 
-        foreach (var tenant in tenants)
+        var dueResourceTypes = new List<string>();
+        var dueRouteIds = new List<Guid>();
+        var claimedRoutes = new List<ResourcePipelineRoute>();
+
+        foreach (var route in routes)
         {
-            var dueResourceTypes = new List<string>();
-            var dueRouteIds = new List<Guid>();
-
-            foreach (var route in tenant.ResourcePipelineRoutes)
+            if (!route.IsEnabled ||
+                !IsScheduledPullMode(route.IngestionMode) ||
+                !RouteDependenciesAreEnabled(route, mappings, sources, destinations, webhooks) ||
+                !ScheduleExpressionMatcher.IsDueSince(route.ScheduleExpression, route.LastTriggeredOnUtc, utcNow))
             {
-                if (!route.IsEnabled ||
-                    !IsScheduledPullMode(route.IngestionMode) ||
-                    !RouteDependenciesAreEnabled(tenant, route) ||
-                    !ScheduleExpressionMatcher.IsDueSince(route.ScheduleExpression, route.LastTriggeredOnUtc, utcNow))
-                {
-                    continue;
-                }
-
-                route.MarkTriggered(utcNow);
-                dueRouteIds.Add(route.Id);
-
-                // Resource type is owned by the route's mapping profile (single source of truth).
-                var resourceType = tenant.ResolveResourceType(route);
-                if (!string.IsNullOrWhiteSpace(resourceType))
-                {
-                    dueResourceTypes.Add(resourceType);
-                }
+                continue;
             }
 
-            if (dueRouteIds.Count > 0)
-            {
-                dueRuns.Add(new DueScheduledRun(
-                    tenant.Id,
-                    dueResourceTypes.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList(),
-                    dueRouteIds));
-            }
+            route.MarkTriggered(utcNow);
+            dueRouteIds.Add(route.Id);
+            claimedRoutes.Add(route);
 
-            if (dueRouteIds.Count > 0)
+            // Resource type is owned by the route's mapping profile (single source of truth).
+            if (mappings.TryGetValue(route.MappingProfileId, out var mapping) &&
+                !string.IsNullOrWhiteSpace(mapping.ResourceType))
             {
-                await _tenantRepository.UpdateAsync(tenant, cancellationToken);
-                _logger.LogInformation(
-                    "Claimed {ResourceTypeCount} due scheduled resource type(s) for tenant {TenantId} at {UtcNow}.",
-                    dueResourceTypes.Count,
-                    tenant.Id,
-                    utcNow);
+                dueResourceTypes.Add(mapping.ResourceType);
             }
         }
 
-        return dueRuns;
+        if (dueRouteIds.Count == 0)
+        {
+            return [];
+        }
+
+        foreach (var route in claimedRoutes)
+        {
+            await _configurationRepository.UpdateRouteAsync(route, cancellationToken);
+        }
+
+        _logger.LogInformation(
+            "Claimed {ResourceTypeCount} due scheduled resource type(s) at {UtcNow}.",
+            dueResourceTypes.Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+            utcNow);
+
+        return
+        [
+            new DueScheduledRun(
+                dueResourceTypes.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList(),
+                dueRouteIds)
+        ];
     }
 
     private static bool IsScheduledPullMode(IngestionMode ingestionMode)
@@ -86,20 +93,26 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
         return ingestionMode is IngestionMode.ScheduledPull or IngestionMode.WebhookAndScheduledPull;
     }
 
-    private static bool RouteDependenciesAreEnabled(Tenant tenant, ResourcePipelineRoute route)
+    private static bool RouteDependenciesAreEnabled(
+        ResourcePipelineRoute route,
+        IReadOnlyDictionary<Guid, MappingProfile> mappings,
+        IReadOnlyDictionary<Guid, SourceConnection> sources,
+        IReadOnlyDictionary<Guid, DestinationConfiguration> destinations,
+        IReadOnlyDictionary<Guid, WebhookConfiguration> webhooks)
     {
         // A route's source and destination are owned by its mapping profile, so resolve them through the mapping.
-        var mapping = tenant.MappingProfiles.FirstOrDefault(x => x.Id == route.MappingProfileId);
-        if (mapping is null)
+        if (!mappings.TryGetValue(route.MappingProfileId, out var mapping))
         {
             return false;
         }
 
-        var source = tenant.SourceConnections.FirstOrDefault(x => x.Id == mapping.SourceConnectionId);
-        var destination = tenant.DestinationConfigurations.FirstOrDefault(x => x.Id == mapping.DestinationId);
-        var webhook = route.WebhookConfigurationId.HasValue
-            ? tenant.WebhookConfigurations.FirstOrDefault(x => x.Id == route.WebhookConfigurationId.Value)
-            : null;
+        sources.TryGetValue(mapping.SourceConnectionId, out var source);
+        destinations.TryGetValue(mapping.DestinationId, out var destination);
+        WebhookConfiguration? webhook = null;
+        if (route.WebhookConfigurationId.HasValue)
+        {
+            webhooks.TryGetValue(route.WebhookConfigurationId.Value, out webhook);
+        }
 
         return source?.IsEnabled == true &&
                destination?.IsEnabled == true &&

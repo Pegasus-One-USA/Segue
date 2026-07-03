@@ -7,7 +7,7 @@ namespace FHIRBridge.Infrastructure.Scheduling;
 
 /// <summary>
 /// Claims due scheduled runs and publishes a <see cref="PipelineRunCommand"/> for each. The command's MessageId is
-/// deterministic per tenant and minute slot, so duplicate evaluations in the same minute dedupe downstream.
+/// deterministic per claimed route set and minute slot, so duplicate evaluations in the same minute dedupe downstream.
 /// </summary>
 public sealed class ScheduleDispatcher : IScheduleDispatcher
 {
@@ -32,9 +32,9 @@ public sealed class ScheduleDispatcher : IScheduleDispatcher
 
         foreach (var dueRun in dueRuns)
         {
-            var messageId = $"sched:{dueRun.TenantId:N}:{slotUtc:yyyyMMddHHmm}";
+            var routeKey = string.Join(",", dueRun.RouteIds.OrderBy(id => id).Select(id => id.ToString("N")));
+            var messageId = $"sched:{routeKey}:{slotUtc:yyyyMMddHHmm}";
             var command = new PipelineRunCommand(
-                dueRun.TenantId,
                 dueRun.ResourceTypes,
                 RunDueSchedulesOnly: true,
                 slotUtc,

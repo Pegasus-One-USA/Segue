@@ -2,7 +2,7 @@ namespace FHIRBridge.Application.Abstractions.Governance;
 
 public interface IRetentionPolicyService
 {
-    RetentionPolicy GetPolicy(Guid tenantId, string resourceType);
+    RetentionPolicy GetPolicy(string resourceType);
 }
 
 public sealed record RetentionPolicy(

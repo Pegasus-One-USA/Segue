@@ -60,7 +60,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
                 CREATE TABLE [{schemaName}].[FhirResources]
                 (
                     Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_FhirResources PRIMARY KEY,
-                    TenantId UNIQUEIDENTIFIER NOT NULL,
                     PipelineRunId UNIQUEIDENTIFIER NOT NULL,
                     ResourceType NVARCHAR(100) NOT NULL,
                     ResourceId NVARCHAR(200) NULL,
@@ -87,7 +86,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
                 CREATE TABLE [{schemaName}].[PipelineResourceAudit]
                 (
                     AuditId UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_{schemaName}_PipelineResourceAudit PRIMARY KEY,
-                    TenantId UNIQUEIDENTIFIER NOT NULL,
                     PipelineRunId UNIQUEIDENTIFIER NOT NULL,
                     ResourceType NVARCHAR(100) NOT NULL,
                     ResourceId NVARCHAR(200) NULL,
@@ -117,7 +115,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
         var sql = $"""
             INSERT INTO [{schemaName}].[FhirResources]
             (
-                TenantId,
                 PipelineRunId,
                 ResourceType,
                 ResourceId,
@@ -129,7 +126,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
             )
             VALUES
             (
-                @TenantId,
                 @PipelineRunId,
                 @ResourceType,
                 @ResourceId,
@@ -142,7 +138,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
             """;
 
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@TenantId", pipelineRun.TenantId);
         command.Parameters.AddWithValue("@PipelineRunId", pipelineRun.Id);
         command.Parameters.AddWithValue("@ResourceType", resource.ResourceType);
         command.Parameters.AddWithValue("@ResourceId", (object?)resource.ResourceId ?? DBNull.Value);
@@ -166,7 +161,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
             INSERT INTO [{schemaName}].[PipelineResourceAudit]
             (
                 AuditId,
-                TenantId,
                 PipelineRunId,
                 ResourceType,
                 ResourceId,
@@ -177,7 +171,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
             VALUES
             (
                 @AuditId,
-                @TenantId,
                 @PipelineRunId,
                 @ResourceType,
                 @ResourceId,
@@ -189,7 +182,6 @@ public sealed class SqlServerDestinationWriter : IDestinationWriter
 
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@AuditId", Guid.NewGuid());
-        command.Parameters.AddWithValue("@TenantId", pipelineRun.TenantId);
         command.Parameters.AddWithValue("@PipelineRunId", pipelineRun.Id);
         command.Parameters.AddWithValue("@ResourceType", resource.ResourceType);
         command.Parameters.AddWithValue("@ResourceId", (object?)resource.ResourceId ?? DBNull.Value);

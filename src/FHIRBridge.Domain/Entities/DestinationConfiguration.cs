@@ -11,14 +11,12 @@ public sealed class DestinationConfiguration : AuditableChildEntity<Guid>
     }
 
     public DestinationConfiguration(
-        Guid tenantId,
         string name,
         DestinationType destinationType,
         SecretReference secretReference,
         string? target)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         Name = name;
         DestinationType = destinationType;
         SecretReference = secretReference;
@@ -26,7 +24,6 @@ public sealed class DestinationConfiguration : AuditableChildEntity<Guid>
         IsEnabled = true;
     }
 
-    public Guid TenantId { get; private set; }
     public string Name { get; private set; } = default!;
     public DestinationType DestinationType { get; private set; }
     public SecretReference SecretReference { get; private set; } = default!;

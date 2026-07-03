@@ -12,7 +12,7 @@ namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
 /// Writes mapped records to SQL Server / Azure SQL, auto-creating the target schema and table.
-/// Supports Insert, Upsert (MERGE on tenant + resource type + key column), and CDC write modes.
+/// Supports Insert, Upsert (MERGE on resource type + key column), and CDC write modes.
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
 /// </summary>
@@ -22,7 +22,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
     // system value wins) so the generated CREATE TABLE / INSERT never declares a column twice.
     private static readonly HashSet<string> ReservedColumns = new(StringComparer.OrdinalIgnoreCase)
     {
-        "FHIRBridgeRowId", "TenantId", "PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc", "LastUpdatedOnUtc"
+        "FHIRBridgeRowId", "PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc", "LastUpdatedOnUtc"
     };
 
     private readonly ISecretProvider _secretProvider;
@@ -123,7 +123,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
                 CREATE TABLE [{schemaName}].[{tableName}]
                 (
                     FHIRBridgeRowId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_FHIRBridgeRowId PRIMARY KEY,
-                    TenantId UNIQUEIDENTIFIER NOT NULL,
                     PipelineRunId UNIQUEIDENTIFIER NOT NULL,
                     ResourceType NVARCHAR(100) NOT NULL,
                     SourceResourceId NVARCHAR(200) NULL,
@@ -154,7 +153,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             .ToList();
         var columns = new[]
         {
-            "TenantId",
             "PipelineRunId",
             "ResourceType",
             "SourceResourceId",
@@ -174,7 +172,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             """;
 
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@TenantId", record.TenantId);
         command.Parameters.AddWithValue("@PipelineRunId", record.PipelineRunId);
         command.Parameters.AddWithValue("@ResourceType", record.ResourceType);
         command.Parameters.AddWithValue("@SourceResourceId", (object?)record.SourceResourceId ?? DBNull.Value);
@@ -208,7 +205,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             .ToList();
         var standardColumns = new[]
         {
-            "TenantId",
             "PipelineRunId",
             "ResourceType",
             "SourceResourceId",
@@ -228,8 +224,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             (
                 SELECT {string.Join(", ", parameterNames.Select((parameter, index) => $"{parameter} AS [{columns[index]}]"))}
             ) AS source
-            ON target.[TenantId] = source.[TenantId]
-               AND target.[ResourceType] = source.[ResourceType]
+            ON target.[ResourceType] = source.[ResourceType]
                AND target.[{ValidateIdentifier(keyColumn)}] = source.[{ValidateIdentifier(keyColumn)}]
             WHEN MATCHED THEN
                 UPDATE SET {string.Join(", ", updateColumns)}
@@ -256,7 +251,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
                 CREATE TABLE [{schemaName}].[{cdcTableName}]
                 (
                     FHIRBridgeCdcId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{cdcTableName}_FHIRBridgeCdcId PRIMARY KEY,
-                    TenantId UNIQUEIDENTIFIER NOT NULL,
                     PipelineRunId UNIQUEIDENTIFIER NOT NULL,
                     ResourceType NVARCHAR(100) NOT NULL,
                     SourceResourceId NVARCHAR(200) NULL,
@@ -282,7 +276,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         var sql = $"""
             INSERT INTO [{schemaName}].[{cdcTableName}]
             (
-                TenantId,
                 PipelineRunId,
                 ResourceType,
                 SourceResourceId,
@@ -292,7 +285,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             )
             VALUES
             (
-                @TenantId,
                 @PipelineRunId,
                 @ResourceType,
                 @SourceResourceId,
@@ -303,7 +295,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             """;
 
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@TenantId", record.TenantId);
         command.Parameters.AddWithValue("@PipelineRunId", record.PipelineRunId);
         command.Parameters.AddWithValue("@ResourceType", record.ResourceType);
         command.Parameters.AddWithValue("@SourceResourceId", (object?)record.SourceResourceId ?? DBNull.Value);
@@ -325,7 +316,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         {
             var value = column switch
             {
-                "TenantId" => record.TenantId,
                 "PipelineRunId" => record.PipelineRunId,
                 "ResourceType" => record.ResourceType,
                 "SourceResourceId" => record.SourceResourceId,

@@ -11,7 +11,6 @@ public sealed record CurrentUserInfo(
     string? DisplayName,
     string[] Roles,
     bool IsAuthenticated,
-    Guid? TenantId = null,
     string[] Permissions = null!)
 {
     public string[] Permissions { get; init; } = Permissions ?? [];

@@ -36,7 +36,6 @@ public sealed class UserAccessService : IUserAccessService
 
         await _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                Guid.Empty,
                 null,
                 null,
                 null,
@@ -52,73 +51,6 @@ public sealed class UserAccessService : IUserAccessService
             cancellationToken);
 
         return await ToProfileDtoAsync(user, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<TenantUserDto>> GetTenantUsersAsync(
-        Guid tenantId,
-        CancellationToken cancellationToken)
-    {
-        var tenantUsers = await _repository.GetTenantUsersAsync(tenantId, cancellationToken);
-
-        return await ToTenantUserDtosAsync(tenantUsers, cancellationToken);
-    }
-
-    public async Task<TenantUserDto> AssignTenantUserAsync(
-        Guid tenantId,
-        AssignTenantUserRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(request.ExternalUserId))
-        {
-            throw new InvalidOperationException("External user id is required.");
-        }
-
-        var role = await _repository.GetRoleByNameAsync(request.RoleName, cancellationToken)
-            ?? throw new InvalidOperationException($"Role '{request.RoleName}' is not configured.");
-
-        var user = await _repository.GetUserByExternalIdAsync(request.ExternalUserId, cancellationToken);
-        if (user is null)
-        {
-            user = new User(request.ExternalUserId, request.Email, request.DisplayName);
-            await _repository.AddUserAsync(user, cancellationToken);
-        }
-        else
-        {
-            user.UpdateProfile(request.Email, request.DisplayName);
-            await _repository.UpdateUserAsync(user, cancellationToken);
-        }
-
-        var tenantUser = await _repository.GetTenantUserAsync(tenantId, user.Id, cancellationToken);
-        if (tenantUser is null)
-        {
-            tenantUser = new TenantUser(tenantId, user.Id, role.Id);
-            await _repository.AddTenantUserAsync(tenantUser, cancellationToken);
-        }
-        else
-        {
-            tenantUser.UpdateRole(role.Id);
-            tenantUser.Activate();
-            await _repository.UpdateTenantUserAsync(tenantUser, cancellationToken);
-        }
-
-        await _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                tenantId,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "TenantUserAssigned",
-                "Completed",
-                $"Tenant user role assigned: {role.Name}.",
-                null,
-                _currentUserService.CurrentUser.AuditName,
-                null),
-            cancellationToken);
-
-        return await ToTenantUserDtoAsync(tenantUser, cancellationToken);
     }
 
     private async Task<User> GetOrCreateCurrentUserAsync(
@@ -157,59 +89,15 @@ public sealed class UserAccessService : IUserAccessService
         return user;
     }
 
-    private async Task<UserProfileDto> ToProfileDtoAsync(
+    private Task<UserProfileDto> ToProfileDtoAsync(
         User user,
         CancellationToken cancellationToken)
     {
-        var memberships = await _repository.GetTenantMembershipsByUserIdAsync(user.Id, cancellationToken);
-        var tenantMemberships = await ToTenantUserDtosAsync(memberships, cancellationToken);
-
-        return new UserProfileDto(
+        return Task.FromResult(new UserProfileDto(
             user.Id,
             user.ExternalUserId,
             user.Email,
             user.DisplayName,
-            _currentUserService.CurrentUser.Roles,
-            tenantMemberships);
-    }
-
-    private async Task<IReadOnlyList<TenantUserDto>> ToTenantUserDtosAsync(
-        IReadOnlyCollection<TenantUser> tenantUsers,
-        CancellationToken cancellationToken)
-    {
-        var dtos = new List<TenantUserDto>();
-        foreach (var tenantUser in tenantUsers)
-        {
-            dtos.Add(await ToTenantUserDtoAsync(tenantUser, cancellationToken));
-        }
-
-        return dtos;
-    }
-
-    private async Task<TenantUserDto> ToTenantUserDtoAsync(
-        TenantUser tenantUser,
-        CancellationToken cancellationToken)
-    {
-        var user = await _repository.GetUserByIdAsync(tenantUser.UserId, cancellationToken)
-            ?? throw new InvalidOperationException("Tenant user references a missing user.");
-
-        var role = await GetRoleNameByIdAsync(tenantUser.RoleId, cancellationToken);
-
-        return new TenantUserDto(
-            tenantUser.Id,
-            tenantUser.TenantId,
-            user.Id,
-            user.ExternalUserId,
-            user.Email,
-            user.DisplayName,
-            role,
-            tenantUser.IsEnabled);
-    }
-
-    private async Task<string> GetRoleNameByIdAsync(Guid roleId, CancellationToken cancellationToken)
-    {
-        var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken);
-
-        return role?.Name ?? "Unknown";
+            _currentUserService.CurrentUser.Roles));
     }
 }

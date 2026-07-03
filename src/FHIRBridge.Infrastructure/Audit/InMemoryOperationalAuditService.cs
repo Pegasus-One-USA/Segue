@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.DTOs;
 
@@ -6,7 +5,8 @@ namespace FHIRBridge.Infrastructure.Audit;
 
 public sealed class InMemoryOperationalAuditService : IOperationalAuditService
 {
-    private readonly ConcurrentDictionary<Guid, List<OperationalAuditLogDto>> _logs = new();
+    private readonly List<OperationalAuditLogDto> _logs = [];
+    private readonly object _gate = new();
 
     public Task RecordAsync(
         RecordOperationalAuditLogRequest request,
@@ -14,7 +14,6 @@ public sealed class InMemoryOperationalAuditService : IOperationalAuditService
     {
         var log = new OperationalAuditLogDto(
             Guid.NewGuid(),
-            request.TenantId,
             request.PipelineRunId,
             request.ResourcePipelineRouteId,
             request.SourceConnectionId,
@@ -29,32 +28,24 @@ public sealed class InMemoryOperationalAuditService : IOperationalAuditService
             request.CorrelationId,
             DateTime.UtcNow);
 
-        var tenantLogs = _logs.GetOrAdd(request.TenantId, _ => []);
-
-        lock (tenantLogs)
+        lock (_gate)
         {
-            tenantLogs.Add(log);
+            _logs.Add(log);
         }
 
         return Task.CompletedTask;
     }
 
     public Task<IReadOnlyList<OperationalAuditLogDto>> GetRecentAsync(
-        Guid tenantId,
         int count,
         CancellationToken cancellationToken)
     {
-        if (!_logs.TryGetValue(tenantId, out var tenantLogs))
-        {
-            return Task.FromResult<IReadOnlyList<OperationalAuditLogDto>>([]);
-        }
-
         var take = Math.Clamp(count, 1, 500);
 
-        lock (tenantLogs)
+        lock (_gate)
         {
             return Task.FromResult<IReadOnlyList<OperationalAuditLogDto>>(
-                tenantLogs
+                _logs
                     .OrderByDescending(x => x.OccurredOnUtc)
                     .Take(take)
                     .ToList());

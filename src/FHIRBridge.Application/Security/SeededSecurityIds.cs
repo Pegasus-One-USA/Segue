@@ -9,8 +9,6 @@ public static class SeededSecurityIds
     public static readonly Guid AuditRoleId = Guid.Parse("10000000-0000-0000-0000-000000000005");
 
     // ── Original platform permissions ────────────────────────────────────────
-    public static readonly Guid TenantsReadPermissionId = Guid.Parse("20000000-0000-0000-0000-000000000001");
-    public static readonly Guid TenantsWritePermissionId = Guid.Parse("20000000-0000-0000-0000-000000000002");
     public static readonly Guid ConfigurationWritePermissionId = Guid.Parse("20000000-0000-0000-0000-000000000003");
     public static readonly Guid PipelineExecutePermissionId = Guid.Parse("20000000-0000-0000-0000-000000000004");
     public static readonly Guid AuditLogsReadPermissionId = Guid.Parse("20000000-0000-0000-0000-000000000005");
@@ -35,10 +33,6 @@ public static class SeededSecurityIds
     public static readonly Guid WorkflowDeletePermissionId = Guid.Parse("20000000-0000-0000-0003-000000000003");
     public static readonly Guid WorkflowRunPermissionId = Guid.Parse("20000000-0000-0000-0003-000000000004");
     public static readonly Guid WorkflowViewPermissionId = Guid.Parse("20000000-0000-0000-0003-000000000005");
-
-    // ── Tenant module permissions ─────────────────────────────────────────────
-    public static readonly Guid TenantSettingsEditPermissionId = Guid.Parse("20000000-0000-0000-0004-000000000001");
-    public static readonly Guid TenantBillingViewPermissionId = Guid.Parse("20000000-0000-0000-0004-000000000002");
 
     // ── Report / payload permissions ─────────────────────────────────────────
     public static readonly Guid ReportViewPermissionId = Guid.Parse("20000000-0000-0000-0005-000000000001");

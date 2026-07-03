@@ -28,15 +28,13 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
 
         builder.HasData(
             // Original platform permissions.
-            PermissionSeed(SeededSecurityIds.TenantsReadPermissionId, UnifiedPermissions.TenantsRead, "Read tenant configuration.", "Tenancy"),
-            PermissionSeed(SeededSecurityIds.TenantsWritePermissionId, UnifiedPermissions.TenantsWrite, "Create and update tenants.", "Tenancy"),
             PermissionSeed(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration.", "Configuration"),
             PermissionSeed(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes.", "Pipeline"),
             PermissionSeed(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs.", "Audit"),
             PermissionSeed(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.", "Configuration"),
 
             // User module permissions.
-            PermissionSeed(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the tenant.", "User"),
+            PermissionSeed(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the organization.", "User"),
             PermissionSeed(SeededSecurityIds.UserViewPermissionId, UnifiedPermissions.UserView, "View the list of users.", "User"),
             PermissionSeed(SeededSecurityIds.UserEditPermissionId, UnifiedPermissions.UserEdit, "Update a user's profile information.", "User"),
             PermissionSeed(SeededSecurityIds.UserDeactivatePermissionId, UnifiedPermissions.UserDeactivate, "Deactivate a user account.", "User"),
@@ -54,10 +52,6 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
             PermissionSeed(SeededSecurityIds.WorkflowDeletePermissionId, UnifiedPermissions.WorkflowDelete, "Delete a workflow.", "Workflow"),
             PermissionSeed(SeededSecurityIds.WorkflowRunPermissionId, UnifiedPermissions.WorkflowRun, "Execute a workflow.", "Workflow"),
             PermissionSeed(SeededSecurityIds.WorkflowViewPermissionId, UnifiedPermissions.WorkflowView, "View workflow details.", "Workflow"),
-
-            // Tenant module permissions.
-            PermissionSeed(SeededSecurityIds.TenantSettingsEditPermissionId, UnifiedPermissions.TenantSettingsEdit, "Update organization settings.", "Tenant"),
-            PermissionSeed(SeededSecurityIds.TenantBillingViewPermissionId, UnifiedPermissions.TenantBillingView, "View billing and subscription information.", "Tenant"),
 
             // Report / payload permissions.
             PermissionSeed(SeededSecurityIds.ReportViewPermissionId, UnifiedPermissions.ReportView, "View reports and analytics.", "Report"),

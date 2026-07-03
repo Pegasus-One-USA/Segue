@@ -7,7 +7,7 @@ namespace FHIRBridge.Application.Abstractions.Governance;
 /// </summary>
 public interface IConsentService
 {
-    ConsentDecision Evaluate(Guid tenantId, string resourceType, string? resourceId);
+    ConsentDecision Evaluate(string resourceType, string? resourceId);
 }
 
 public enum ConsentProvisionType

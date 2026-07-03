@@ -8,7 +8,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
-[Route("api/v1/tenants/{tenantId:guid}/insights")]
+[Route("api/v1/insights")]
 public sealed class InsightsController : ControllerBase
 {
     private readonly IHedisMeasureReportService _measureReportService;
@@ -25,7 +25,6 @@ public sealed class InsightsController : ControllerBase
     [HttpGet("measure-report")]
     [ProducesResponseType(typeof(HedisMeasureReportDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMeasureReport(
-        Guid tenantId,
         [FromQuery] string? measureId,
         [FromQuery] DateTime? periodStartUtc,
         [FromQuery] DateTime? periodEndUtc,
@@ -34,7 +33,6 @@ public sealed class InsightsController : ControllerBase
         var end = periodEndUtc ?? DateTime.UtcNow;
         var start = periodStartUtc ?? end.AddDays(-30);
         var report = await _measureReportService.GenerateAsync(
-            tenantId,
             measureId ?? HedisMeasureReportService.PipelineSuccessMeasure,
             DateTime.SpecifyKind(start, DateTimeKind.Utc),
             DateTime.SpecifyKind(end, DateTimeKind.Utc),
@@ -46,12 +44,10 @@ public sealed class InsightsController : ControllerBase
     [HttpGet("anomalies")]
     [ProducesResponseType(typeof(RunAnomalySummaryDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAnomalies(
-        Guid tenantId,
         [FromQuery] int count,
         CancellationToken cancellationToken)
     {
         var summary = await _anomalyDetectionService.AnalyzeRunsAsync(
-            tenantId,
             count,
             cancellationToken);
 

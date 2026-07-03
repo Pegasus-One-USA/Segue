@@ -12,14 +12,12 @@ public interface ILineageStore
 }
 
 public sealed record LineageQuery(
-    Guid TenantId,
     Guid? PipelineRunId = null,
     string? ResourceType = null,
     string? SourceResourceId = null);
 
 /// <summary>The ordered chain of lineage events reconstructed for a resource.</summary>
 public sealed record ResourceLineageChain(
-    Guid TenantId,
     string? SourceResourceId,
     IReadOnlyList<ResourceLineageRecord> Steps);
 

@@ -1,0 +1,100 @@
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace FHIRBridge.Infrastructure.Persistence;
+
+/// <summary>
+/// EF Core implementation of <see cref="IConfigurationRepository"/>. Add* inserts the entity and saves; Update*
+/// simply saves because the entity returned by a preceding Get* is tracked (change-tracked entities are updated by
+/// <see cref="DbContext.SaveChangesAsync(CancellationToken)"/> without an explicit Update call).
+/// </summary>
+public sealed class EfConfigurationRepository : IConfigurationRepository
+{
+    private readonly FHIRBridgeDbContext _db;
+
+    public EfConfigurationRepository(FHIRBridgeDbContext db)
+    {
+        _db = db;
+    }
+
+    // ── Source connections ────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) =>
+        await _db.SourceConnections.OrderBy(x => x.Name).ToListAsync(ct);
+
+    public async Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct) =>
+        await _db.SourceConnections.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct)
+    {
+        await _db.SourceConnections.AddAsync(e, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct) =>
+        _db.SaveChangesAsync(ct);
+
+    // ── Destinations ──────────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) =>
+        await _db.DestinationConfigurations.OrderBy(x => x.Name).ToListAsync(ct);
+
+    public async Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct) =>
+        await _db.DestinationConfigurations.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct)
+    {
+        await _db.DestinationConfigurations.AddAsync(e, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct) =>
+        _db.SaveChangesAsync(ct);
+
+    // ── Mapping profiles ──────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) =>
+        await _db.MappingProfiles.Include(x => x.Fields).OrderBy(x => x.Name).ToListAsync(ct);
+
+    public async Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) =>
+        await _db.MappingProfiles.Include(x => x.Fields).FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct)
+    {
+        await _db.MappingProfiles.AddAsync(e, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct) =>
+        _db.SaveChangesAsync(ct);
+
+    // ── Resource pipeline routes ──────────────────────────────────────────────
+    public async Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) =>
+        await _db.ResourcePipelineRoutes.OrderBy(x => x.Priority).ThenBy(x => x.Id).ToListAsync(ct);
+
+    public async Task<ResourcePipelineRoute?> GetRouteAsync(Guid id, CancellationToken ct) =>
+        await _db.ResourcePipelineRoutes.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task AddRouteAsync(ResourcePipelineRoute e, CancellationToken ct)
+    {
+        await _db.ResourcePipelineRoutes.AddAsync(e, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public Task UpdateRouteAsync(ResourcePipelineRoute e, CancellationToken ct) =>
+        _db.SaveChangesAsync(ct);
+
+    // ── Webhooks ──────────────────────────────────────────────────────────────
+    public async Task<IReadOnlyList<WebhookConfiguration>> GetWebhooksAsync(CancellationToken ct) =>
+        await _db.WebhookConfigurations.OrderBy(x => x.Name).ToListAsync(ct);
+
+    public async Task<WebhookConfiguration?> GetWebhookAsync(Guid id, CancellationToken ct) =>
+        await _db.WebhookConfigurations.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task AddWebhookAsync(WebhookConfiguration e, CancellationToken ct)
+    {
+        await _db.WebhookConfigurations.AddAsync(e, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public Task UpdateWebhookAsync(WebhookConfiguration e, CancellationToken ct) =>
+        _db.SaveChangesAsync(ct);
+}

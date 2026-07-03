@@ -4,7 +4,7 @@ namespace FHIRBridge.Application.Services;
 
 public sealed class DefaultRetentionPolicyService : IRetentionPolicyService
 {
-    public RetentionPolicy GetPolicy(Guid tenantId, string resourceType)
+    public RetentionPolicy GetPolicy(string resourceType)
     {
         return new RetentionPolicy(
             RetentionYears: 7,

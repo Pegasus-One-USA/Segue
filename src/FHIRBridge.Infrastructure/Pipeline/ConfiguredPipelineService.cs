@@ -9,7 +9,6 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Services;
-using FHIRBridge.Domain.Aggregates;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.Fhir;
@@ -27,7 +26,7 @@ namespace FHIRBridge.Infrastructure.Pipeline;
 
 public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 {
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly IFhirSourceClientFactory _sourceClientFactory;
     private readonly IJsonMappingEngine _mappingEngine;
     private readonly IConfiguredDestinationWriterFactory _destinationWriterFactory;
@@ -46,7 +45,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly ILogger<ConfiguredPipelineService> _logger;
 
     public ConfiguredPipelineService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         IFhirSourceClientFactory sourceClientFactory,
         IJsonMappingEngine mappingEngine,
         IConfiguredDestinationWriterFactory destinationWriterFactory,
@@ -64,7 +63,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IncrementalSyncOptions? incrementalSyncOptions = null,
         IDataSetDeIdentificationService? dataSetDeIdentificationService = null)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
         _mappingEngine = mappingEngine;
         _destinationWriterFactory = destinationWriterFactory;
@@ -84,27 +83,23 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     public Task<IReadOnlyList<ConfiguredPipelineRunDto>> GetRecentAsync(
-        Guid tenantId,
         int count,
         CancellationToken cancellationToken)
     {
-        return _pipelineRunRepository.GetRecentAsync(tenantId, count, cancellationToken);
+        return _pipelineRunRepository.GetRecentAsync(count, cancellationToken);
     }
 
     public async Task SetRunEnabledAsync(
-        Guid tenantId,
         Guid pipelineRunId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
         await _pipelineRunRepository.SetEnabledAsync(
-            tenantId,
             pipelineRunId,
             isEnabled,
             cancellationToken);
 
         await RecordAuditAsync(
-            tenantId,
             pipelineRunId,
             null,
             null,
@@ -121,7 +116,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     public async Task<ConfiguredPipelineRunDto> StartAsync(
-        Guid tenantId,
         StartConfiguredPipelineRunRequest request,
         CancellationToken cancellationToken)
     {
@@ -132,12 +126,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var mappedCount = 0;
         var writtenCount = 0;
 
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
+        var config = await LoadConfigurationAsync(cancellationToken);
         var scheduledAtUtc = request.ScheduledAtUtc ?? DateTime.UtcNow;
 
         await RecordAuditAsync(
-            tenantId,
             pipelineRunId,
             null,
             null,
@@ -152,7 +144,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             request.CorrelationId,
             cancellationToken);
 
-        var routesByResourceType = ResolveRoutesByResourceType(tenant, request.ResourceTypes);
+        var routesByResourceType = ResolveRoutesByResourceType(config, request.ResourceTypes);
         var processedResourceTypes = new List<string>();
 
         foreach (var (resourceType, routesForType) in routesByResourceType)
@@ -161,7 +153,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             var enabledRoutes = routesForType
                 .Where(route => route.IsEnabled)
-                .Where(route => RouteDependenciesAreEnabled(tenant, route))
+                .Where(route => RouteDependenciesAreEnabled(config, route))
                 .Where(route => IsScheduledPullMode(route.IngestionMode))
                 .Where(route => request.RouteIds is not null
                     ? request.RouteIds.Contains(route.Id)
@@ -181,19 +173,18 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 continue;
             }
 
-            foreach (var routeGroup in enabledRoutes.GroupBy(route => CreateRouteSourceKey(tenant, route)))
+            foreach (var routeGroup in enabledRoutes.GroupBy(route => CreateRouteSourceKey(config, route)))
             {
                 IReadOnlyList<ResourceEnvelope> resources;
 
                 try
                 {
                     var sourceConnection = GetRequired(
-                        tenant.SourceConnections,
+                        config.SourceConnections,
                         routeGroup.Key.SourceConnectionId,
                         "SourceConnection");
 
                     await RecordAuditAsync(
-                        tenantId,
                         pipelineRunId,
                         null,
                         sourceConnection.Id,
@@ -213,7 +204,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     var effectiveSearchParameters = request.UseBulkExport
                         ? routeGroup.Key.SearchParameters
                         : await ApplyIncrementalFilterAsync(
-                            tenantId,
                             resourceType,
                             routeGroup.Key.SearchParameters,
                             cancellationToken);
@@ -252,7 +242,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     // Expert Determination (k-anonymity) set-level de-identification across the extracted cohort.
                     // No-op passthrough unless explicitly enabled in configuration.
                     resources = await ApplyDataSetDeIdentificationAsync(
-                        tenantId,
                         pipelineRunId,
                         resourceType,
                         resources,
@@ -261,7 +250,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         cancellationToken);
 
                     await RecordAuditAsync(
-                        tenantId,
                         pipelineRunId,
                         null,
                         sourceConnection.Id,
@@ -280,15 +268,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 {
                     _logger.LogError(
                         exception,
-                        "Configured pipeline source extraction failed for tenant {TenantId}, resource {ResourceType}, source {SourceConnectionId}.",
-                        tenantId,
+                        "Configured pipeline source extraction failed for resource {ResourceType}, source {SourceConnectionId}.",
                         resourceType,
                         routeGroup.Key.SourceConnectionId);
 
                     errors.Add($"{resourceType}/{routeGroup.Key.SourceConnectionId}: {exception.Message}");
 
                     await RecordAuditAsync(
-                        tenantId,
                         pipelineRunId,
                         null,
                         routeGroup.Key.SourceConnectionId,
@@ -309,7 +295,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 foreach (var route in routeGroup)
                 {
                     var result = await ExecuteRouteAsync(
-                        tenant,
+                        config,
                         pipelineRunId,
                         resourceType,
                         route,
@@ -326,7 +312,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         }
 
         return await CompleteRunAsync(
-            tenantId,
             pipelineRunId,
             processedResourceTypes,
             extractedCount,
@@ -340,7 +325,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     public async Task<ConfiguredPipelineRunDto> StartWebhookAsync(
-        Guid tenantId,
         Guid webhookConfigurationId,
         WebhookIngestionRequest request,
         CancellationToken cancellationToken)
@@ -351,10 +335,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var mappedCount = 0;
         var writtenCount = 0;
 
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
+        var config = await LoadConfigurationAsync(cancellationToken);
         var webhookConfiguration = GetRequired(
-            tenant.WebhookConfigurations,
+            config.WebhookConfigurations,
             webhookConfigurationId,
             "WebhookConfiguration");
 
@@ -364,7 +347,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         }
 
         var webhookSourceConnection = GetRequired(
-            tenant.SourceConnections,
+            config.SourceConnections,
             webhookConfiguration.SourceConnectionId,
             "SourceConnection");
         if (!webhookSourceConnection.IsEnabled)
@@ -379,7 +362,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var processedResourceTypes = new List<string>();
 
         await RecordAuditAsync(
-            tenantId,
             pipelineRunId,
             null,
             webhookConfiguration.SourceConnectionId,
@@ -400,10 +382,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             processedResourceTypes.Add(resourceType);
 
             // Match routes whose mapping resolves to the incoming resource type (single source of truth).
-            var webhookRoutes = tenant.ResourcePipelineRoutes
-                .Where(route => string.Equals(tenant.ResolveResourceType(route), resourceType, StringComparison.OrdinalIgnoreCase))
+            var webhookRoutes = config.Routes
+                .Where(route => string.Equals(ResolveResourceType(config, route), resourceType, StringComparison.OrdinalIgnoreCase))
                 .Where(route => route.IsEnabled)
-                .Where(route => RouteDependenciesAreEnabled(tenant, route))
+                .Where(route => RouteDependenciesAreEnabled(config, route))
                 .Where(route => route.WebhookConfigurationId == webhookConfigurationId)
                 .Where(route => IsWebhookMode(route.IngestionMode))
                 .OrderBy(route => route.Priority)
@@ -419,7 +401,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             foreach (var route in webhookRoutes)
             {
                 var result = await ExecuteRouteAsync(
-                    tenant,
+                    config,
                     pipelineRunId,
                     resourceType,
                     route,
@@ -435,7 +417,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         }
 
         return await CompleteRunAsync(
-            tenantId,
             pipelineRunId,
             processedResourceTypes,
             extractedCount,
@@ -449,7 +430,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     private async Task<RouteExecutionResult> ExecuteRouteAsync(
-        Tenant tenant,
+        ConfigurationSnapshot config,
         Guid pipelineRunId,
         string resourceType,
         ResourcePipelineRoute route,
@@ -461,16 +442,15 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         // Source, destination, and resource type are all owned by the route's mapping profile.
         var mappingProfile = GetRequired(
-            tenant.MappingProfiles,
+            config.MappingProfiles,
             route.MappingProfileId,
             "MappingProfile");
 
         try
         {
-            if (!RouteDependenciesAreEnabled(tenant, route))
+            if (!RouteDependenciesAreEnabled(config, route))
             {
                 await RecordAuditAsync(
-                    tenant.Id,
                     pipelineRunId,
                     route.Id,
                     mappingProfile.SourceConnectionId,
@@ -489,12 +469,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             }
 
             var destination = GetRequired(
-                tenant.DestinationConfigurations,
+                config.DestinationConfigurations,
                 mappingProfile.DestinationId,
                 "DestinationConfiguration");
 
             await RecordAuditAsync(
-                tenant.Id,
                 pipelineRunId,
                 route.Id,
                 mappingProfile.SourceConnectionId,
@@ -510,7 +489,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
 
             var governedResources = await PrepareResourcesForRouteAsync(
-                tenant.Id,
                 pipelineRunId,
                 route,
                 destination,
@@ -523,7 +501,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
 
             var mappedRecords = await MapResourcesAsync(
-                tenant.Id,
                 pipelineRunId,
                 mappingProfile,
                 governedResources,
@@ -538,7 +515,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
 
             await RecordAuditAsync(
-                tenant.Id,
                 pipelineRunId,
                 route.Id,
                 mappingProfile.SourceConnectionId,
@@ -559,15 +535,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         {
             _logger.LogError(
                 exception,
-                "Configured pipeline route failed for tenant {TenantId}, resource {ResourceType}, route {RouteId}.",
-                tenant.Id,
+                "Configured pipeline route failed for resource {ResourceType}, route {RouteId}.",
                 resourceType,
                 route.Id);
 
             errors.Add($"{resourceType}/route/{route.Id}: {exception.Message}");
 
             await RecordAuditAsync(
-                tenant.Id,
                 pipelineRunId,
                 route.Id,
                 mappingProfile.SourceConnectionId,
@@ -587,7 +561,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     private async Task<IReadOnlyCollection<ResourceEnvelope>> PrepareResourcesForRouteAsync(
-        Guid tenantId,
         Guid pipelineRunId,
         ResourcePipelineRoute route,
         DestinationConfiguration destination,
@@ -605,7 +578,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         {
             var governanceDecision = await _governancePolicyService.EvaluateAsync(
                 new ResourceGovernanceContext(
-                    tenantId,
                     pipelineRunId,
                     route.Id,
                     resourceType,
@@ -620,7 +592,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 errors.Add($"{resourceType}/{resource.ResourceId ?? "unknown"}: Governance denied resource access. {governanceDecision.DenialReason}");
 
                 await RecordAuditAsync(
-                    tenantId,
                     pipelineRunId,
                     route.Id,
                     mappingProfile.SourceConnectionId,
@@ -640,7 +611,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             var normalizationResult = await _normalizationService.NormalizeAsync(
                 new ResourceNormalizationRequest(
-                    tenantId,
                     pipelineRunId,
                     resourceType,
                     resource.ResourceId,
@@ -649,14 +619,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             var governedJson = normalizationResult.NormalizedJson;
 
             await RecordLineageAsync(
-                tenantId, pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
+                pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
                 "ResourceNormalized", cancellationToken);
 
             if (governanceDecision.RequiresDeIdentification)
             {
                 governedJson = await _deIdentificationService.DeIdentifyAsync(
                     new DeIdentificationRequest(
-                        tenantId,
                         resourceType,
                         resource.ResourceId,
                         governedJson,
@@ -664,14 +633,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     cancellationToken);
 
                 await RecordLineageAsync(
-                    tenantId, pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
+                    pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
                     "ResourceDeIdentified", cancellationToken);
             }
 
             preparedResources.Add(resource with { RawJson = governedJson });
 
             await RecordLineageAsync(
-                tenantId, pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
+                pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
                 "ResourceAccessed", cancellationToken);
         }
 
@@ -679,7 +648,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     private async Task<ConfiguredPipelineRunDto> CompleteRunAsync(
-        Guid tenantId,
         Guid pipelineRunId,
         IReadOnlyList<string> resourceTypes,
         int extractedCount,
@@ -698,7 +666,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 : "Failed";
 
         await RecordAuditAsync(
-            tenantId,
             pipelineRunId,
             null,
             null,
@@ -717,7 +684,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
         var pipelineRun = new ConfiguredPipelineRunDto(
             pipelineRunId,
-            tenantId,
             status,
             resourceTypes.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList(),
             extractedCount,
@@ -733,7 +699,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         await _pipelineRunRepository.AddAsync(pipelineRun, cancellationToken);
 
         _pipelineMetrics?.RecordRun(new PipelineRunMetric(
-            tenantId,
             status,
             extractedCount,
             mappedCount,
@@ -746,7 +711,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     private Task RecordAuditAsync(
-        Guid tenantId,
         Guid? pipelineRunId,
         Guid? routeId,
         Guid? sourceConnectionId,
@@ -763,7 +727,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         return _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                tenantId,
                 pipelineRunId,
                 routeId,
                 sourceConnectionId,
@@ -781,7 +744,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
     // Records a PHI-free lineage step (access/normalize/de-id) for the resource so the full chain can be queried.
     private Task RecordLineageAsync(
-        Guid tenantId,
         Guid pipelineRunId,
         ResourcePipelineRoute route,
         DestinationConfiguration destination,
@@ -793,7 +755,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         return _lineageTracker.RecordAsync(
             new ResourceLineageRecord(
-                tenantId,
                 pipelineRunId,
                 route.Id,
                 mappingProfile.SourceConnectionId,
@@ -814,7 +775,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     /// exists (first run is a full pull).
     /// </summary>
     private async Task<string?> ApplyIncrementalFilterAsync(
-        Guid tenantId,
         string resourceType,
         string? searchParameters,
         CancellationToken cancellationToken)
@@ -830,7 +790,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             return searchParameters;
         }
 
-        var recentRuns = await _pipelineRunRepository.GetRecentAsync(tenantId, 100, cancellationToken);
+        var recentRuns = await _pipelineRunRepository.GetRecentAsync(100, cancellationToken);
         var watermark = recentRuns
             .Where(run => string.Equals(run.Status, "Completed", StringComparison.OrdinalIgnoreCase))
             .Where(run => run.ResourceTypes.Any(type => string.Equals(type, resourceType, StringComparison.OrdinalIgnoreCase)))
@@ -857,7 +817,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     /// no service is wired or the feature is disabled.
     /// </summary>
     private async Task<IReadOnlyList<ResourceEnvelope>> ApplyDataSetDeIdentificationAsync(
-        Guid tenantId,
         Guid pipelineRunId,
         string resourceType,
         IReadOnlyList<ResourceEnvelope> resources,
@@ -871,7 +830,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         }
 
         var result = await _dataSetDeIdentificationService.DeIdentifyAsync(
-            new DataSetDeIdentificationRequest(tenantId, resourceType, resources.Select(r => r.RawJson).ToList()),
+            new DataSetDeIdentificationRequest(resourceType, resources.Select(r => r.RawJson).ToList()),
             cancellationToken);
 
         // Disabled passthrough: same count, no suppression, no generalization signal.
@@ -885,7 +844,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             .ToList();
 
         await RecordAuditAsync(
-            tenantId,
             pipelineRunId,
             null,
             null,
@@ -915,16 +873,28 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return new ResourceEnvelope(resourceType, id, json, null, null);
     }
 
-    private static RouteSourceKey CreateRouteSourceKey(Tenant tenant, ResourcePipelineRoute route)
+    private RouteSourceKey CreateRouteSourceKey(ConfigurationSnapshot config, ResourcePipelineRoute route)
     {
         return new RouteSourceKey(
-            tenant.ResolveSourceConnectionId(route) ?? Guid.Empty,
+            ResolveSourceConnectionId(config, route) ?? Guid.Empty,
             route.SearchParameters);
     }
 
     private sealed record RouteSourceKey(
         Guid SourceConnectionId,
         string? SearchParameters);
+
+    private sealed record RouteExecutionResult(int MappedCount, int WrittenCount);
+
+    private sealed class NoOpLineageTracker : ILineageTracker
+    {
+        public Task RecordAsync(
+            ResourceLineageRecord record,
+            CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+    }
 
     private static bool IsScheduledPullMode(IngestionMode ingestionMode)
     {
@@ -936,20 +906,21 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return ingestionMode is IngestionMode.Webhook or IngestionMode.WebhookAndScheduledPull;
     }
 
-    private static bool RouteDependenciesAreEnabled(Tenant tenant, ResourcePipelineRoute route)
+    private static bool RouteDependenciesAreEnabled(ConfigurationSnapshot config, ResourcePipelineRoute route)
     {
         // A route's source and destination are owned by its mapping profile, so resolve them through the mapping.
-        var mapping = tenant.MappingProfiles.FirstOrDefault(x => x.Id == route.MappingProfileId);
-        if (mapping is null)
+        if (!config.MappingProfilesById.TryGetValue(route.MappingProfileId, out var mapping))
         {
             return false;
         }
 
-        var source = tenant.SourceConnections.FirstOrDefault(x => x.Id == mapping.SourceConnectionId);
-        var destination = tenant.DestinationConfigurations.FirstOrDefault(x => x.Id == mapping.DestinationId);
-        var webhook = route.WebhookConfigurationId.HasValue
-            ? tenant.WebhookConfigurations.FirstOrDefault(x => x.Id == route.WebhookConfigurationId.Value)
-            : null;
+        config.SourceConnectionsById.TryGetValue(mapping.SourceConnectionId, out var source);
+        config.DestinationsById.TryGetValue(mapping.DestinationId, out var destination);
+        WebhookConfiguration? webhook = null;
+        if (route.WebhookConfigurationId.HasValue)
+        {
+            config.WebhooksById.TryGetValue(route.WebhookConfigurationId.Value, out webhook);
+        }
 
         return source?.IsEnabled == true &&
                destination?.IsEnabled == true &&
@@ -957,8 +928,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                (!route.WebhookConfigurationId.HasValue || webhook?.IsEnabled == true);
     }
 
+    // Resolves a route's resource type through its mapping profile (single source of truth).
+    private static string? ResolveResourceType(ConfigurationSnapshot config, ResourcePipelineRoute route) =>
+        config.MappingProfilesById.TryGetValue(route.MappingProfileId, out var mapping) ? mapping.ResourceType : null;
+
+    // Resolves a route's source connection through its mapping profile (single source of truth).
+    private static Guid? ResolveSourceConnectionId(ConfigurationSnapshot config, ResourcePipelineRoute route) =>
+        config.MappingProfilesById.TryGetValue(route.MappingProfileId, out var mapping) ? mapping.SourceConnectionId : null;
+
     private IReadOnlyList<(string ResourceType, List<ResourcePipelineRoute> Routes)> ResolveRoutesByResourceType(
-        Tenant tenant,
+        ConfigurationSnapshot config,
         IReadOnlyCollection<string>? requestedResourceTypes)
     {
         var requested = requestedResourceTypes is null || requestedResourceTypes.Count == 0
@@ -968,8 +947,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Resource type is resolved from each route's mapping profile — the single source of truth for what to pull.
-        var groups = tenant.ResourcePipelineRoutes
-            .Select(route => (Route: route, ResourceType: tenant.ResolveResourceType(route)))
+        var groups = config.Routes
+            .Select(route => (Route: route, ResourceType: ResolveResourceType(config, route)))
             .Where(x => !string.IsNullOrWhiteSpace(x.ResourceType))
             .Where(x => requested is null || requested.Contains(x.ResourceType!))
             .GroupBy(x => x.ResourceType!, StringComparer.OrdinalIgnoreCase)
@@ -1030,7 +1009,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             sourceConnection.Authentication.Scopes,
             100,
             5,
-            sourceConnection.TenantId,
             sourceConnection.Id,
             searchParameters,
             clientSecret,
@@ -1038,7 +1016,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     }
 
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(
-        Guid tenantId,
         Guid pipelineRunId,
         MappingProfile mappingProfile,
         IReadOnlyCollection<ResourceEnvelope> resources,
@@ -1047,7 +1024,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         var mappedRecords = new List<MappedDestinationRecord>();
         var mappingFields = mappingProfile.Fields
-            .Select(TenantConfigurationMapper.ToDto)
+            .Select(ConfigurationMapper.ToDto)
             .Where(field =>
                 string.IsNullOrWhiteSpace(field.ResourceType) ||
                 string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
@@ -1067,7 +1044,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             }
 
             var mappedRecord = new MappedDestinationRecord(
-                tenantId,
                 pipelineRunId,
                 mappingProfile.ResourceType,
                 mappingProfile.DestinationObject,
@@ -1086,25 +1062,56 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return mappedRecords;
     }
 
-    private static T GetRequired<T>(
-        IEnumerable<T> values,
-        Guid id,
-        string entityName)
+    // Loads the flat configuration once per run and indexes it for the in-memory joins the pipeline performs.
+    private async Task<ConfigurationSnapshot> LoadConfigurationAsync(CancellationToken cancellationToken)
+    {
+        var sources = await _configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+        var destinations = await _configurationRepository.GetDestinationsAsync(cancellationToken);
+        var mappings = await _configurationRepository.GetMappingProfilesAsync(cancellationToken);
+        var routes = await _configurationRepository.GetRoutesAsync(cancellationToken);
+        var webhooks = await _configurationRepository.GetWebhooksAsync(cancellationToken);
+
+        return new ConfigurationSnapshot(sources, destinations, mappings, routes, webhooks);
+    }
+
+    private static T GetRequired<T>(IReadOnlyCollection<T> items, Guid id, string entityName)
         where T : FHIRBridge.SharedKernel.Abstractions.Entity<Guid>
     {
-        return values.FirstOrDefault(x => x.Id == id)
+        return items.FirstOrDefault(x => x.Id == id)
             ?? throw new NotFoundException(entityName, id);
     }
 
-    private sealed record RouteExecutionResult(int MappedCount, int WrittenCount);
-
-    private sealed class NoOpLineageTracker : ILineageTracker
+    // In-memory index of the flat configuration for a single pipeline run.
+    private sealed class ConfigurationSnapshot
     {
-        public Task RecordAsync(
-            ResourceLineageRecord record,
-            CancellationToken cancellationToken)
+        public ConfigurationSnapshot(
+            IReadOnlyList<SourceConnection> sourceConnections,
+            IReadOnlyList<DestinationConfiguration> destinationConfigurations,
+            IReadOnlyList<MappingProfile> mappingProfiles,
+            IReadOnlyList<ResourcePipelineRoute> routes,
+            IReadOnlyList<WebhookConfiguration> webhookConfigurations)
         {
-            return Task.CompletedTask;
+            SourceConnections = sourceConnections;
+            DestinationConfigurations = destinationConfigurations;
+            MappingProfiles = mappingProfiles;
+            Routes = routes;
+            WebhookConfigurations = webhookConfigurations;
+
+            SourceConnectionsById = sourceConnections.ToDictionary(x => x.Id);
+            DestinationsById = destinationConfigurations.ToDictionary(x => x.Id);
+            MappingProfilesById = mappingProfiles.ToDictionary(x => x.Id);
+            WebhooksById = webhookConfigurations.ToDictionary(x => x.Id);
         }
+
+        public IReadOnlyList<SourceConnection> SourceConnections { get; }
+        public IReadOnlyList<DestinationConfiguration> DestinationConfigurations { get; }
+        public IReadOnlyList<MappingProfile> MappingProfiles { get; }
+        public IReadOnlyList<ResourcePipelineRoute> Routes { get; }
+        public IReadOnlyList<WebhookConfiguration> WebhookConfigurations { get; }
+
+        public IReadOnlyDictionary<Guid, SourceConnection> SourceConnectionsById { get; }
+        public IReadOnlyDictionary<Guid, DestinationConfiguration> DestinationsById { get; }
+        public IReadOnlyDictionary<Guid, MappingProfile> MappingProfilesById { get; }
+        public IReadOnlyDictionary<Guid, WebhookConfiguration> WebhooksById { get; }
     }
 }

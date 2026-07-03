@@ -7,21 +7,20 @@ namespace FHIRBridge.Infrastructure.Persistence;
 /// <summary>In-memory capability store used when no database connection string is configured (dev only).</summary>
 public sealed class InMemorySourceCapabilityRepository : ISourceCapabilityRepository
 {
-    private readonly ConcurrentDictionary<(Guid TenantId, Guid SourceConnectionId), SourceCapabilityProfile> _store = new();
+    private readonly ConcurrentDictionary<Guid, SourceCapabilityProfile> _store = new();
 
     public Task<SourceCapabilityProfile?> GetBySourceConnectionIdAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        _store.TryGetValue((tenantId, sourceConnectionId), out var profile);
+        _store.TryGetValue(sourceConnectionId, out var profile);
 
         return Task.FromResult(profile);
     }
 
     public Task UpsertAsync(SourceCapabilityProfile profile, CancellationToken cancellationToken)
     {
-        _store[(profile.TenantId, profile.SourceConnectionId)] = profile;
+        _store[profile.SourceConnectionId] = profile;
 
         return Task.CompletedTask;
     }

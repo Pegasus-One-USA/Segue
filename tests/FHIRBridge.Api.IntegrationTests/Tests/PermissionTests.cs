@@ -10,14 +10,15 @@ public sealed class PermissionTests(ApiFixture f)
     // ── GET /api/v1/permissions ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task GET_permissions__admin__returns_200_list_of_24()
+    public async Task GET_permissions__admin__returns_200_list_of_20()
     {
         var resp = await f.AdminClient.GetAsync("/api/v1/permissions");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
 
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(JsonValueKind.Array, doc.ValueKind);
-        Assert.Equal(24, doc.GetArrayLength());
+        // 20 seeded platform permissions (the 4 tenant.* permissions were removed with multi-tenancy).
+        Assert.Equal(20, doc.GetArrayLength());
     }
 
     [Fact]

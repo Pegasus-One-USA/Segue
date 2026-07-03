@@ -9,7 +9,6 @@ public static class PipelineDtoMapper
     {
         return new PipelineRunDto(
             pipelineRun.Id,
-            pipelineRun.TenantId,
             pipelineRun.SourceType,
             pipelineRun.DestinationType,
             pipelineRun.Status,
@@ -37,7 +36,6 @@ public static class PipelineDtoMapper
         return new PipelineRunEventDto(
             pipelineRunEvent.Id,
             pipelineRunEvent.PipelineRunId,
-            pipelineRunEvent.TenantId,
             pipelineRunEvent.EventType,
             pipelineRunEvent.StepType,
             pipelineRunEvent.ResourceType,

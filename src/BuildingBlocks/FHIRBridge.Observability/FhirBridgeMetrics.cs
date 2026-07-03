@@ -104,7 +104,6 @@ public sealed class FhirBridgeMetrics : IPipelineMetrics, IMetricsSnapshotProvid
             _lastRunCompletedOnUtc = metric.CompletedOnUtc;
 
             _recentRuns.AddFirst(new RecentRunMetric(
-                metric.TenantId,
                 status,
                 metric.ExtractedResourceCount,
                 metric.MappedRecordCount,

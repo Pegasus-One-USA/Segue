@@ -78,7 +78,7 @@ public static class DependencyInjection
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            services.AddSingleton<ITenantConfigurationRepository, InMemoryTenantConfigurationRepository>();
+            services.AddSingleton<IConfigurationRepository, InMemoryConfigurationRepository>();
             services.AddSingleton<IUserAccessRepository, InMemoryUserAccessRepository>();
             services.AddSingleton<IOperationalAuditService, InMemoryOperationalAuditService>();
             services.AddSingleton<IUserActivityAuditService, InMemoryUserActivityAuditService>();
@@ -107,7 +107,7 @@ public static class DependencyInjection
                 options.AddInterceptors(sp.GetRequiredService<AuditingSaveChangesInterceptor>());
             });
 
-            services.AddScoped<ITenantConfigurationRepository, EfTenantConfigurationRepository>();
+            services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IOperationalAuditService, EfOperationalAuditService>();
             services.AddScoped<IUserActivityAuditService, EfUserActivityAuditService>();

@@ -2,7 +2,6 @@ namespace FHIRBridge.Application.DTOs;
 
 /// <summary>Inputs for recording one user-activity audit row. The hash chain is computed by the service.</summary>
 public sealed record RecordUserActivityRequest(
-    Guid? TenantId,
     Guid? UserId,
     string UserEmail,
     string Category,

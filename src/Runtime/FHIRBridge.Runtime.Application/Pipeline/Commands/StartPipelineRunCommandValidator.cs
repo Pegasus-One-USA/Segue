@@ -7,7 +7,6 @@ public sealed class StartPipelineRunCommandValidator : AbstractValidator<StartPi
 {
     public StartPipelineRunCommandValidator()
     {
-        RuleFor(x => x.Request.TenantId).NotEmpty();
         RuleFor(x => x.Request.Source).NotNull();
         RuleFor(x => x.Request.Destination).NotNull();
         RuleFor(x => x.Request.ResourceTypes)

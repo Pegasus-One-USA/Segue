@@ -11,7 +11,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// </summary>
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
-[Route("api/v1/tenants/{tenantId:guid}/lineage")]
+[Route("api/v1/lineage")]
 public sealed class LineageController : ControllerBase
 {
     private readonly ILineageQueryService _lineageQueryService;
@@ -24,14 +24,13 @@ public sealed class LineageController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(ResourceLineageChain), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetChain(
-        Guid tenantId,
         [FromQuery] Guid? pipelineRunId,
         [FromQuery] string? resourceType,
         [FromQuery] string? sourceResourceId,
         CancellationToken cancellationToken)
     {
         var chain = await _lineageQueryService.GetChainAsync(
-            new LineageQuery(tenantId, pipelineRunId, resourceType, sourceResourceId),
+            new LineageQuery(pipelineRunId, resourceType, sourceResourceId),
             cancellationToken);
 
         return Ok(chain);

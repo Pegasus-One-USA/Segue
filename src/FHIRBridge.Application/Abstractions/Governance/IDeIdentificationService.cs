@@ -8,7 +8,6 @@ public interface IDeIdentificationService
 }
 
 public sealed record DeIdentificationRequest(
-    Guid TenantId,
     string ResourceType,
     string? ResourceId,
     string RawJson,

@@ -6,14 +6,13 @@ namespace FHIRBridge.Infrastructure.Governance;
 /// <summary>
 /// Evaluates all registered <see cref="IGovernanceRule"/>s for a resource access. Access is denied as soon as any rule
 /// denies; de-identification is required if any rule requires it; the applied-policy names are aggregated. Always
-/// includes the baseline platform policies (tenant isolation, PHI-free audit) so the audit trail is unchanged when no
+/// includes the baseline platform policies (PHI-free audit) so the audit trail is unchanged when no
 /// custom rules deny.
 /// </summary>
 public sealed class CompositeGovernancePolicyService : IGovernancePolicyService
 {
     private static readonly string[] BaselinePolicies =
     [
-        "TenantIsolation",
         "PhiFreeAudit",
         "ResourceLevelAccessAudit"
     ];
@@ -45,8 +44,8 @@ public sealed class CompositeGovernancePolicyService : IGovernancePolicyService
             if (!result.IsAllowed)
             {
                 _logger.LogWarning(
-                    "Governance denied {ResourceType}/{ResourceId} for tenant {TenantId} by policy {PolicyName}: {Reason}",
-                    context.ResourceType, context.ResourceId, context.TenantId, result.PolicyName, result.DenialReason);
+                    "Governance denied {ResourceType}/{ResourceId} by policy {PolicyName}: {Reason}",
+                    context.ResourceType, context.ResourceId, result.PolicyName, result.DenialReason);
 
                 return new ResourceGovernanceDecision(
                     IsAllowed: false,

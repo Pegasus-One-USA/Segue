@@ -26,8 +26,8 @@ public sealed class RetentionPurgeService : IRetentionPurgeService
 
     public async Task<RetentionPurgeReport> RunAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        // Use the platform-default policy (tenant-agnostic) for the store-wide cutoff.
-        var policy = _retentionPolicyService.GetPolicy(Guid.Empty, "*");
+        // Use the platform-default policy for the store-wide cutoff.
+        var policy = _retentionPolicyService.GetPolicy("*");
         var cutoff = nowUtc.AddYears(-policy.RetentionYears);
 
         var purgedByDataClass = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);

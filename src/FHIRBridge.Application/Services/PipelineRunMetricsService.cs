@@ -29,7 +29,7 @@ public sealed class PipelineRunMetricsService : IPipelineRunMetricsService
     public async Task<MetricsSnapshot> GetProcessWideSnapshotAsync(int windowSize, CancellationToken cancellationToken)
     {
         var window = windowSize <= 0 ? 200 : windowSize;
-        var runs = await _runRepository.GetRecentAcrossTenantsAsync(window, cancellationToken);
+        var runs = await _runRepository.GetRecentAsync(window, cancellationToken);
 
         if (runs.Count == 0)
         {
@@ -72,7 +72,7 @@ public sealed class PipelineRunMetricsService : IPipelineRunMetricsService
             if (recent.Count < RecentRunsReturned)
             {
                 recent.Add(new RecentRunMetric(
-                    run.TenantId, status, run.ExtractedResourceCount, run.MappedRecordCount,
+                    status, run.ExtractedResourceCount, run.MappedRecordCount,
                     run.WrittenRecordCount, run.Errors.Count, durationMs, run.CompletedOnUtc));
             }
         }

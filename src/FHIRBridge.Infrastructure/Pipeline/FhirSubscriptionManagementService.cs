@@ -11,21 +11,21 @@ using FHIRBridge.SharedKernel.Exceptions;
 namespace FHIRBridge.Infrastructure.Pipeline;
 
 /// <summary>
-/// Builds a <see cref="FhirSourceConfiguration"/> from a tenant's configured source connection (resolving secrets) and
+/// Builds a <see cref="FhirSourceConfiguration"/> from a configured source connection (resolving secrets) and
 /// delegates to <see cref="IFhirSubscriptionClient"/> to create / delete rest-hook Subscriptions on that server.
 /// </summary>
 public sealed class FhirSubscriptionManagementService : IFhirSubscriptionManagementService
 {
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly ISecretProvider _secretProvider;
     private readonly IFhirSubscriptionClient _subscriptionClient;
 
     public FhirSubscriptionManagementService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         ISecretProvider secretProvider,
         IFhirSubscriptionClient subscriptionClient)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _secretProvider = secretProvider;
         _subscriptionClient = subscriptionClient;
     }
@@ -34,7 +34,7 @@ public sealed class FhirSubscriptionManagementService : IFhirSubscriptionManagem
         RegisterSubscriptionCommand command,
         CancellationToken cancellationToken)
     {
-        var source = await BuildSourceConfigurationAsync(command.TenantId, command.SourceConnectionId, cancellationToken);
+        var source = await BuildSourceConfigurationAsync(command.SourceConnectionId, cancellationToken);
 
         var registration = await _subscriptionClient.CreateAsync(
             new FhirSubscriptionRequest(command.Criteria, command.CallbackUrl, command.Reason, Headers: command.Headers),
@@ -45,24 +45,20 @@ public sealed class FhirSubscriptionManagementService : IFhirSubscriptionManagem
     }
 
     public async Task DeleteAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         string subscriptionId,
         CancellationToken cancellationToken)
     {
-        var source = await BuildSourceConfigurationAsync(tenantId, sourceConnectionId, cancellationToken);
+        var source = await BuildSourceConfigurationAsync(sourceConnectionId, cancellationToken);
         await _subscriptionClient.DeleteAsync(subscriptionId, source, cancellationToken);
     }
 
     // Mirrors ConfiguredPipelineService.BuildSourceConfigurationAsync — resolves the source connection + secrets.
     private async Task<FhirSourceConfiguration> BuildSourceConfigurationAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-        var sourceConnection = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
+        var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
 
         var sourceType = sourceConnection.SourceSystemType switch
@@ -90,7 +86,6 @@ public sealed class FhirSubscriptionManagementService : IFhirSubscriptionManagem
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
             sourceConnection.Authentication.Scopes,
-            TenantId: sourceConnection.TenantId,
             SourceConnectionId: sourceConnection.Id,
             ClientSecret: clientSecret);
     }

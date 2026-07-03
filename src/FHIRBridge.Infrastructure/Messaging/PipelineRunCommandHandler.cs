@@ -43,7 +43,6 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
         // Transient failures (e.g. source/DB unavailable) are retried with backoff.
         await MessageRetry.ExecuteAsync(
             async token => run = await _pipelineService.StartAsync(
-                command.TenantId,
                 new StartConfiguredPipelineRunRequest(command.ResourceTypes, command.TriggeredBy, command.CorrelationId)
                 {
                     RunDueSchedulesOnly = command.RunDueSchedulesOnly,
@@ -61,11 +60,11 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
         if (run is not null && string.Equals(run.Status, "Failed", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Pipeline run {run.Id} for tenant {command.TenantId} failed: {string.Join("; ", run.Errors)}");
+                $"Pipeline run {run.Id} failed: {string.Join("; ", run.Errors)}");
         }
 
         _logger.LogInformation(
-            "Pipeline run {RunId} for tenant {TenantId} finished with status {Status} ({Written} record(s) written).",
-            run?.Id, command.TenantId, run?.Status, run?.WrittenRecordCount);
+            "Pipeline run {RunId} finished with status {Status} ({Written} record(s) written).",
+            run?.Id, run?.Status, run?.WrittenRecordCount);
     }
 }

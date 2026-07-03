@@ -11,7 +11,6 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.ToTable("MappingProfiles");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.ResourceType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.SourceConnectionId).IsRequired();
@@ -19,7 +18,7 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.Property(x => x.DestinationObject).HasMaxLength(300).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
 
-        builder.HasIndex(x => new { x.TenantId, x.SourceConnectionId });
+        builder.HasIndex(x => x.SourceConnectionId);
 
         builder.HasOne<SourceConnection>()
             .WithMany()

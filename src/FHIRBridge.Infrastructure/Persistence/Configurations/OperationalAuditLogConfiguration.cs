@@ -11,7 +11,6 @@ public sealed class OperationalAuditLogConfiguration : IEntityTypeConfiguration<
         builder.ToTable("OperationalAuditLogs");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.Action).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.Message).HasMaxLength(2000).IsRequired();
@@ -20,7 +19,6 @@ public sealed class OperationalAuditLogConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
         builder.Property(x => x.OccurredOnUtc).IsRequired();
 
-        builder.HasIndex(x => x.TenantId);
         builder.HasIndex(x => x.OccurredOnUtc);
     }
 }

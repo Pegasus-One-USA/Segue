@@ -11,7 +11,6 @@ public sealed class ConfiguredPipelineRunRecordConfiguration : IEntityTypeConfig
         builder.ToTable("ConfiguredPipelineRuns");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.ResourceTypes).HasMaxLength(1000).IsRequired();
         builder.Property(x => x.ExtractedResourceCount).IsRequired();
@@ -22,7 +21,7 @@ public sealed class ConfiguredPipelineRunRecordConfiguration : IEntityTypeConfig
         builder.Property(x => x.CompletedOnUtc).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
 
-        builder.HasIndex(x => new { x.TenantId, x.StartedOnUtc });
-        builder.HasIndex(x => new { x.TenantId, x.Status });
+        builder.HasIndex(x => x.StartedOnUtc);
+        builder.HasIndex(x => x.Status);
     }
 }

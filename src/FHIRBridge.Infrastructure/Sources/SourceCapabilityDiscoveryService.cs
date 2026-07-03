@@ -23,7 +23,7 @@ namespace FHIRBridge.Infrastructure.Sources;
 /// </summary>
 public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscoveryService
 {
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly ISourceCapabilityRepository _capabilityRepository;
     private readonly ISecretProvider _secretProvider;
     private readonly IFhirAccessTokenProvider _accessTokenProvider;
@@ -31,14 +31,14 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
     private readonly ILogger<SourceCapabilityDiscoveryService> _logger;
 
     public SourceCapabilityDiscoveryService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         ISourceCapabilityRepository capabilityRepository,
         ISecretProvider secretProvider,
         IFhirAccessTokenProvider accessTokenProvider,
         IHttpClientFactory httpClientFactory,
         ILogger<SourceCapabilityDiscoveryService> logger)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _capabilityRepository = capabilityRepository;
         _secretProvider = secretProvider;
         _accessTokenProvider = accessTokenProvider;
@@ -47,13 +47,10 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
     }
 
     public async Task<SourceCapabilityProfileDto> DiscoverAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-        var sourceConnection = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
+        var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
 
         if (sourceConnection.SourceSystemType != SourceSystemType.Epic)
@@ -62,7 +59,7 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
                 $"Capability discovery is not implemented for {sourceConnection.SourceSystemType}.");
         }
 
-        var configuration = await BuildEpicSourceConfigurationAsync(tenantId, sourceConnection, cancellationToken);
+        var configuration = await BuildEpicSourceConfigurationAsync(sourceConnection, cancellationToken);
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(configuration, cancellationToken);
         var metadataUrl = $"{sourceConnection.BaseUrl.TrimEnd('/')}/metadata";
 
@@ -81,7 +78,6 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
         var (fhirVersion, resources) = ParseCapabilityStatement(json);
 
         var profile = new SourceCapabilityProfile(
-            tenantId,
             sourceConnectionId,
             fhirVersion,
             resources,
@@ -92,21 +88,18 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
         await _capabilityRepository.UpsertAsync(profile, cancellationToken);
 
         _logger.LogInformation(
-            "Discovered {ResourceCount} supported FHIR resource types for source {SourceConnectionId} (tenant {TenantId}).",
+            "Discovered {ResourceCount} supported FHIR resource types for source {SourceConnectionId}.",
             resources.Count,
-            sourceConnectionId,
-            tenantId);
+            sourceConnectionId);
 
         return ToDto(profile);
     }
 
     public async Task<SourceCapabilityProfileDto?> GetAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
         var profile = await _capabilityRepository.GetBySourceConnectionIdAsync(
-            tenantId,
             sourceConnectionId,
             cancellationToken);
 
@@ -114,13 +107,10 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
     }
 
     public async Task<SmartConfigurationDto> DiscoverSmartConfigurationAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-        var sourceConnection = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
+        var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
 
         // The SMART discovery document is public (no bearer token) per the SMART App Launch spec.
@@ -140,9 +130,8 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
         var configuration = ParseSmartConfiguration(json);
 
         _logger.LogInformation(
-            "Discovered SMART configuration for source {SourceConnectionId} (tenant {TenantId}); authorization endpoint {HasAuthorize}, token endpoint {HasToken}.",
+            "Discovered SMART configuration for source {SourceConnectionId}; authorization endpoint {HasAuthorize}, token endpoint {HasToken}.",
             sourceConnectionId,
-            tenantId,
             configuration.AuthorizationEndpoint is not null,
             configuration.TokenEndpoint is not null);
 
@@ -190,7 +179,6 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
     }
 
     private async Task<FhirSourceConfiguration> BuildEpicSourceConfigurationAsync(
-        Guid tenantId,
         SourceConnection sourceConnection,
         CancellationToken cancellationToken)
     {
@@ -214,7 +202,6 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
             sourceConnection.Authentication.Scopes,
             1,
             1,
-            tenantId,
             sourceConnection.Id);
     }
 
@@ -276,7 +263,6 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
     private static SourceCapabilityProfileDto ToDto(SourceCapabilityProfile profile)
     {
         return new SourceCapabilityProfileDto(
-            profile.TenantId,
             profile.SourceConnectionId,
             profile.FhirVersion,
             profile.DiscoveredOnUtc,

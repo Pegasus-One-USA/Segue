@@ -5,7 +5,6 @@ namespace FHIRBridge.Runtime.Application.DTOs;
 public sealed record PipelineRunEventDto(
     Guid Id,
     Guid PipelineRunId,
-    Guid TenantId,
     string EventType,
     PipelineStepType? StepType,
     string? ResourceType,

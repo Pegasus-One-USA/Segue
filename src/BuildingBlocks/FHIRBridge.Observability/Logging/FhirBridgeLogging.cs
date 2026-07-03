@@ -10,7 +10,7 @@ namespace FHIRBridge.Observability.Logging;
 /// <summary>
 /// Centralized Serilog configuration shared by every FHIRBridge host (API, Worker, ControlPlane, Runtime). Wires the
 /// console sink plus a Seq sink (dev) and Azure Application Insights sink (prod) when configured, enables
-/// <see cref="LogContext"/> correlation enrichment (TenantId/PipelineRunId/CorrelationId), and applies a PHI-masking
+/// <see cref="LogContext"/> correlation enrichment (PipelineRunId/CorrelationId), and applies a PHI-masking
 /// enricher so structured log properties never leak patient identifiers.
 /// </summary>
 public static class FhirBridgeLogging

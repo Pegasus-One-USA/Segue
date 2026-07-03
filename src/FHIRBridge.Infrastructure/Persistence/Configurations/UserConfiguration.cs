@@ -68,8 +68,6 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasIndex(x => x.Email);
 
-        builder.HasIndex(x => x.TenantId);
-
         builder.HasIndex(x => x.RefreshTokenHash);
     }
 }

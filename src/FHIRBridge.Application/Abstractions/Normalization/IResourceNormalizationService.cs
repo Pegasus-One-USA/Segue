@@ -24,7 +24,6 @@ public interface IResourceNormalizationStep
 }
 
 public sealed record ResourceNormalizationRequest(
-    Guid TenantId,
     Guid PipelineRunId,
     string ResourceType,
     string? ResourceId,
