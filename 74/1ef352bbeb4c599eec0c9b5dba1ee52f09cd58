@@ -1,0 +1,25 @@
+src/Api/FHIRBridge.Api/Controllers/V1/UsersController.cs
+  s_6fe72b0759281b::t_abee5ce306876e 80-90
+src/FHIRBridge.Application/Services/IUserManagementService.cs
+  s_6fe72b0759281b::t_7a704047086ff7 17-18
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_6fe72b0759281b::t_a0946c91e9cdf3 161-192
+tests/FHIRBridge.Api.IntegrationTests/Tests/UserTests.cs
+  s_6fe72b0759281b::t_1d49190924e705 133-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "741ef352bbeb4c599eec0c9b5dba1ee52f09cd58",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
