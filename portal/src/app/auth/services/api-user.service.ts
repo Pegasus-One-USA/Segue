@@ -47,7 +47,7 @@ function toStatus(status: BackendUserStatus | undefined, isEnabled: boolean): Us
   }
 }
 
-// Exported so auth-api.service.ts's login mapping shares this instead of a second literal.
+// Exported so callers that fabricate a Role share one canonical default color.
 export const DEFAULT_ROLE_COLOR = '#64748B';
 
 // Exported so auth-api.service.ts can reuse this instead of re-implementing name-splitting.
@@ -139,6 +139,7 @@ function toInviteResult(dto: UserDetailDto, fallbackEmail: string): InviteResult
     message:         `Invitation ready for ${email}.`,
     email,
     invitationToken: token,
+    // The set-password page needs the email alongside the token to POST /users/accept-invite.
     invitationLink:  token
       ? `${location.origin}/auth/set-password?token=${token}&email=${encodeURIComponent(email)}`
       : undefined,
