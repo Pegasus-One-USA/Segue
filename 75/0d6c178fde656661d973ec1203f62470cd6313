@@ -1,0 +1,27 @@
+src/FHIRBridge.Application/Abstractions/Governance/IConsentService.cs
+  s_6fe72b0759281b::t_b48babad6014fb 4
+  s_6fe72b0759281b::t_0d940b6c2226ef 5
+  s_6fe72b0759281b::t_e039e3b7625cf7 19-20
+src/Api/FHIRBridge.Api/Security/UnifiedAdminRequirement.cs
+  s_6fe72b0759281b::t_f7244c892feefc 14-15,17
+src/FHIRBridge.Infrastructure/Governance/ConfiguredConsentService.cs
+  s_6fe72b0759281b::t_daa209b917fa45 14,40,54
+src/FHIRBridge.Infrastructure/Governance/FhirConsentParser.cs
+  s_6fe72b0759281b::t_86a7f6c755e93d 7,13,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "750d6c178fde656661d973ec1203f62470cd6313",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
