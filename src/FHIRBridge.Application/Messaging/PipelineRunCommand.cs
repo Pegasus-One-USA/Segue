@@ -5,7 +5,6 @@ namespace FHIRBridge.Application.Messaging;
 /// (or a manual trigger) and consumed by the pipeline processor. <see cref="MessageId"/> is the idempotency key.
 /// </summary>
 public sealed record PipelineRunCommand(
-    Guid TenantId,
     IReadOnlyList<string> ResourceTypes,
     bool RunDueSchedulesOnly,
     DateTime? ScheduledAtUtc,

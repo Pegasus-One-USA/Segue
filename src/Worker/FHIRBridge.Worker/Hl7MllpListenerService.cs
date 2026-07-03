@@ -10,7 +10,7 @@ namespace FHIRBridge.Worker;
 
 /// <summary>
 /// Listens for HL7 v2 messages over MLLP (TCP), hands each to the <see cref="Hl7MessageProcessor"/>, and writes back
-/// the framed ACK. Disabled by default; enable via Hl7Mllp:Enabled with a Port, TenantId, and WebhookConfigurationId.
+/// the framed ACK. Disabled by default; enable via Hl7Mllp:Enabled with a Port and WebhookConfigurationId.
 /// </summary>
 public sealed class Hl7MllpListenerService : BackgroundService
 {

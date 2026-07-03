@@ -67,7 +67,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
             var mapped = _mappingEngine?.Map(sourceJson, fields);
             records.Add(new MappedDestinationRecord(
-                context.TenantId,
                 context.WorkflowRunId,
                 resource.ResourceType,
                 destinationObject,
@@ -198,7 +197,6 @@ public abstract class PassThroughNodeExecutor : WorkflowNodeExecutorBase
         {
             var result = await _normalizationService.NormalizeAsync(
                 new ResourceNormalizationRequest(
-                    context.TenantId,
                     context.WorkflowRunId,
                     resource.ResourceType,
                     resource.ResourceId,

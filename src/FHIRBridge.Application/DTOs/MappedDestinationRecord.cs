@@ -1,7 +1,6 @@
 namespace FHIRBridge.Application.DTOs;
 
 public sealed record MappedDestinationRecord(
-    Guid TenantId,
     Guid PipelineRunId,
     string ResourceType,
     string DestinationObject,

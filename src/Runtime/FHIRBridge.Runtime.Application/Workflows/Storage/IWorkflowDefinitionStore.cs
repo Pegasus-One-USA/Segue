@@ -6,7 +6,7 @@ public interface IWorkflowDefinitionStore
 {
     Task<WorkflowDefinition> SaveAsync(WorkflowDefinition workflowDefinition, CancellationToken cancellationToken);
 
-    Task<IReadOnlyCollection<WorkflowDefinition>> ListAsync(Guid tenantId, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<WorkflowDefinition>> ListAsync(CancellationToken cancellationToken);
 
-    Task<WorkflowDefinition?> GetAsync(Guid tenantId, Guid workflowId, CancellationToken cancellationToken);
+    Task<WorkflowDefinition?> GetAsync(Guid workflowId, CancellationToken cancellationToken);
 }

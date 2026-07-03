@@ -12,7 +12,6 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
     }
 
     public SourceConnection(
-        Guid tenantId,
         string name,
         SourceSystemType sourceSystemType,
         string baseUrl,
@@ -21,7 +20,6 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         SourceInteractiveConfiguration? interactive = null)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         Name = name;
         SourceSystemType = sourceSystemType;
         BaseUrl = baseUrl;
@@ -31,7 +29,6 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         IsEnabled = true;
     }
 
-    public Guid TenantId { get; private set; }
     public string Name { get; private set; } = default!;
     public SourceSystemType SourceSystemType { get; private set; }
     public string BaseUrl { get; private set; } = default!;

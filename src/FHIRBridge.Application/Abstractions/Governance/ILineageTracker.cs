@@ -8,7 +8,6 @@ public interface ILineageTracker
 }
 
 public sealed record ResourceLineageRecord(
-    Guid TenantId,
     Guid PipelineRunId,
     Guid? RouteId,
     Guid? SourceConnectionId,

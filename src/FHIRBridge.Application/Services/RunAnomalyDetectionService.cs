@@ -4,7 +4,7 @@ using FHIRBridge.Application.DTOs;
 namespace FHIRBridge.Application.Services;
 
 /// <summary>
-/// Detects anomalies across a tenant's recent pipeline runs using configurable, statistically-grounded heuristics.
+/// Detects anomalies across recent pipeline runs using configurable, statistically-grounded heuristics.
 /// Failure, write-ratio and error-rate signals are per-run; latency and throughput-drop signals are evaluated
 /// against a baseline computed from the run window (only when enough runs exist to trust the baseline).
 /// Thresholds and detector toggles come from <see cref="AnomalyDetectionOptions"/>.
@@ -23,19 +23,18 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
     }
 
     public async Task<RunAnomalySummaryDto> AnalyzeRunsAsync(
-        Guid tenantId,
         int count,
         CancellationToken cancellationToken)
     {
         var take = count <= 0 ? 100 : Math.Min(count, 1000);
-        var runs = (await _pipelineRunRepository.GetRecentAsync(tenantId, take, cancellationToken))
+        var runs = (await _pipelineRunRepository.GetRecentAsync(take, cancellationToken))
             .OrderBy(run => run.StartedOnUtc)
             .ToList();
         var anomalies = new List<RunAnomalyDto>();
 
         if (runs.Count == 0)
         {
-            return new RunAnomalySummaryDto(tenantId, DateTime.UtcNow, 0, anomalies);
+            return new RunAnomalySummaryDto(DateTime.UtcNow, 0, anomalies);
         }
 
         var durations = runs
@@ -137,7 +136,6 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
         }
 
         return new RunAnomalySummaryDto(
-            tenantId,
             DateTime.UtcNow,
             runs.Count,
             anomalies

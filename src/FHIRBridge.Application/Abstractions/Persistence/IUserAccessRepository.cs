@@ -8,8 +8,6 @@ public interface IUserAccessRepository
 
     Task<IReadOnlyList<User>> GetUsersAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<User>> GetUsersByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken);
-
     Task<User?> GetUserByExternalIdAsync(string externalUserId, CancellationToken cancellationToken);
 
     Task<User?> GetUserByEmailAsync(string email, CancellationToken cancellationToken);
@@ -27,8 +25,6 @@ public interface IUserAccessRepository
     // ── Roles ────────────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<Role>> GetRolesAsync(CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<Role>> GetRolesByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken);
 
     Task<Role?> GetRoleByIdAsync(Guid roleId, CancellationToken cancellationToken);
 
@@ -67,24 +63,4 @@ public interface IUserAccessRepository
     Task AddUserRoleAsync(Guid userId, Guid roleId, CancellationToken cancellationToken);
 
     Task RemoveUserRoleAsync(Guid userId, Guid roleId, CancellationToken cancellationToken);
-
-    // ── Tenant Users ─────────────────────────────────────────────────────────
-
-    Task<IReadOnlyList<TenantUser>> GetTenantUsersAsync(Guid tenantId, CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<TenantUser>> GetTenantMembershipsByUserIdAsync(Guid userId, CancellationToken cancellationToken);
-
-    Task<TenantUser?> GetTenantUserAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken);
-
-    Task AddTenantUserAsync(TenantUser tenantUser, CancellationToken cancellationToken);
-
-    Task UpdateTenantUserAsync(TenantUser tenantUser, CancellationToken cancellationToken);
-
-    Task<bool> HasTenantRoleAsync(
-        Guid tenantId,
-        string externalUserId,
-        IReadOnlyCollection<string> roleNames,
-        CancellationToken cancellationToken);
-
-    Task<bool> TenantHasSuperAdminAsync(Guid tenantId, Guid superAdminRoleId, CancellationToken cancellationToken);
 }

@@ -42,7 +42,6 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
 
         await MessageRetry.ExecuteAsync(
             async token => run = await _pipelineService.StartWebhookAsync(
-                command.TenantId,
                 command.WebhookConfigurationId,
                 new WebhookIngestionRequest(command.ResourceJson, command.TriggeredBy, command.CorrelationId),
                 token),
@@ -54,11 +53,11 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
         if (run is not null && string.Equals(run.Status, "Failed", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Webhook run {run.Id} for tenant {command.TenantId} failed: {string.Join("; ", run.Errors)}");
+                $"Webhook run {run.Id} failed: {string.Join("; ", run.Errors)}");
         }
 
         _logger.LogInformation(
-            "Webhook run {RunId} for tenant {TenantId} finished with status {Status} ({Written} record(s) written).",
-            run?.Id, command.TenantId, run?.Status, run?.WrittenRecordCount);
+            "Webhook run {RunId} finished with status {Status} ({Written} record(s) written).",
+            run?.Id, run?.Status, run?.WrittenRecordCount);
     }
 }

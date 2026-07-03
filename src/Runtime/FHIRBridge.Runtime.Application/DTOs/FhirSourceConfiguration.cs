@@ -14,7 +14,6 @@ public sealed record FhirSourceConfiguration(
     IReadOnlyCollection<string> Scopes,
     int SearchCount = 100,
     int MaxPages = 5,
-    Guid? TenantId = null,
     Guid? SourceConnectionId = null,
     string? SearchParameters = null,
     string? ClientSecret = null,

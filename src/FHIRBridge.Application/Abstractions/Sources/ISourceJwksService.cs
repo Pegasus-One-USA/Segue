@@ -12,10 +12,9 @@ public interface ISourceJwksService
 {
     /// <summary>
     /// Returns the public JWKS for the source connection. A connection with no asymmetric signing key configured yields
-    /// an empty key set (a valid JWKS); a missing tenant or source connection throws.
+    /// an empty key set (a valid JWKS); a missing source connection throws.
     /// </summary>
     Task<JsonWebKeySetDto> GetPublicJwksAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken);
 }

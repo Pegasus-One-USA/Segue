@@ -9,7 +9,6 @@ public sealed class WebhookConfiguration : AuditableChildEntity<Guid>
     }
 
     public WebhookConfiguration(
-        Guid tenantId,
         Guid sourceConnectionId,
         string resourceType,
         string name,
@@ -17,7 +16,6 @@ public sealed class WebhookConfiguration : AuditableChildEntity<Guid>
         bool isEnabled)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         SourceConnectionId = sourceConnectionId;
         ResourceType = resourceType;
         Name = name;
@@ -25,7 +23,6 @@ public sealed class WebhookConfiguration : AuditableChildEntity<Guid>
         IsEnabled = isEnabled;
     }
 
-    public Guid TenantId { get; private set; }
     public Guid SourceConnectionId { get; private set; }
     public string ResourceType { get; private set; } = default!;
     public string Name { get; private set; } = default!;

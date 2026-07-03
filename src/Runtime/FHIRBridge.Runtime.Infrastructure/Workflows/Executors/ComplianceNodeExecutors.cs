@@ -91,7 +91,7 @@ public sealed class ConsentNodeExecutor : PassThroughNodeExecutor
         string? resourceId,
         CancellationToken cancellationToken)
     {
-        var consentDecision = _consentService?.Evaluate(context.TenantId, resourceType, resourceId);
+        var consentDecision = _consentService?.Evaluate(resourceType, resourceId);
         if (consentDecision is { IsPermitted: false })
         {
             return false;
@@ -104,7 +104,6 @@ public sealed class ConsentNodeExecutor : PassThroughNodeExecutor
 
         var governanceDecision = await _governancePolicyService.EvaluateAsync(
             new ResourceGovernanceContext(
-                context.TenantId,
                 context.WorkflowRunId,
                 null,
                 resourceType,
@@ -154,7 +153,6 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                     ? Convert.ToString(resource.Payload) ?? "{}"
                     : await _deIdentificationService.DeIdentifyAsync(
                         new DeIdentificationRequest(
-                            context.TenantId,
                             resource.ResourceType,
                             resource.ResourceId,
                             Convert.ToString(resource.Payload) ?? "{}",
@@ -185,7 +183,6 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
             {
                 var result = await _dataSetDeIdentificationService.DeIdentifyAsync(
                     new DataSetDeIdentificationRequest(
-                        context.TenantId,
                         group.Key,
                         group.Select(record => record.SourceJson ?? "{}").ToArray()),
                     cancellationToken);
@@ -203,7 +200,6 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
             {
                 var sourceJson = await _deIdentificationService.DeIdentifyAsync(
                     new DeIdentificationRequest(
-                        context.TenantId,
                         record.ResourceType,
                         record.SourceResourceId,
                         record.SourceJson ?? "{}",

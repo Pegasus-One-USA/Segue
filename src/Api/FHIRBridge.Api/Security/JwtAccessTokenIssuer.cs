@@ -42,11 +42,6 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
             new("scope", "fhirbridge.full_access")
         };
 
-        if (user.TenantId.HasValue)
-        {
-            claims.Add(new Claim("tenant_id", user.TenantId.Value.ToString()));
-        }
-
         if (!string.IsNullOrWhiteSpace(user.Email))
         {
             claims.Add(new Claim(ClaimTypes.Email, user.Email));

@@ -12,7 +12,6 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     }
 
     public MappingProfile(
-        Guid tenantId,
         string name,
         string resourceType,
         Guid sourceConnectionId,
@@ -21,7 +20,6 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
         IEnumerable<MappingField> fields)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         Name = name;
         ResourceType = resourceType;
         SourceConnectionId = sourceConnectionId;
@@ -31,7 +29,6 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
         ReplaceFields(fields);
     }
 
-    public Guid TenantId { get; private set; }
     public string Name { get; private set; } = default!;
     public string ResourceType { get; private set; } = default!;
 

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
@@ -7,12 +6,12 @@ namespace FHIRBridge.Infrastructure.Audit;
 
 public sealed class InMemoryUserActivityAuditService : IUserActivityAuditService
 {
-    private readonly ConcurrentDictionary<Guid, List<UserActivityAuditLog>> _entries = new();
+    private readonly List<UserActivityAuditLog> _entries = [];
+    private readonly object _gate = new();
 
     public Task RecordAsync(RecordUserActivityRequest request, CancellationToken cancellationToken)
     {
         var entity = new UserActivityAuditLog(
-            request.TenantId,
             request.UserId,
             request.UserEmail,
             request.Category,
@@ -31,13 +30,10 @@ public sealed class InMemoryUserActivityAuditService : IUserActivityAuditService
             request.Severity,
             DateTime.UtcNow);
 
-        // Null tenant shares one chain bucket (Guid.Empty).
-        var chain = _entries.GetOrAdd(request.TenantId ?? Guid.Empty, _ => []);
-
-        lock (chain)
+        lock (_gate)
         {
-            entity.SealChain(chain.Count > 0 ? chain[^1].EntryHash : null);
-            chain.Add(entity);
+            entity.SealChain(_entries.Count > 0 ? _entries[^1].EntryHash : null);
+            _entries.Add(entity);
         }
 
         return Task.CompletedTask;

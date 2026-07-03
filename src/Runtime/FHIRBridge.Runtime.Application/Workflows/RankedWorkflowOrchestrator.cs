@@ -31,7 +31,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             throw new WorkflowGraphValidationException(validationResult.Errors);
         }
 
-        var workflowRun = new WorkflowRun(context.WorkflowRunId, workflowDefinition.Id, context.TenantId, DateTimeOffset.UtcNow);
+        var workflowRun = new WorkflowRun(context.WorkflowRunId, workflowDefinition.Id, DateTimeOffset.UtcNow);
         var orderedNodes = TopologicalSort(workflowDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
 

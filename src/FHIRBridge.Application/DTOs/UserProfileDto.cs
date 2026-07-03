@@ -5,5 +5,4 @@ public sealed record UserProfileDto(
     string ExternalUserId,
     string? Email,
     string? DisplayName,
-    IReadOnlyList<string> ClaimRoles,
-    IReadOnlyList<TenantUserDto> TenantMemberships);
+    IReadOnlyList<string> ClaimRoles);

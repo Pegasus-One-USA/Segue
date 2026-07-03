@@ -21,7 +21,6 @@ public sealed class EfConfiguredPipelineRunRepository : IConfiguredPipelineRunRe
     {
         var record = new ConfiguredPipelineRunRecord(
             pipelineRun.Id,
-            pipelineRun.TenantId,
             pipelineRun.Status,
             JsonSerializer.Serialize(pipelineRun.ResourceTypes),
             pipelineRun.ExtractedResourceCount,
@@ -39,27 +38,10 @@ public sealed class EfConfiguredPipelineRunRepository : IConfiguredPipelineRunRe
     }
 
     public async Task<IReadOnlyList<ConfiguredPipelineRunDto>> GetRecentAsync(
-        Guid tenantId,
         int count,
         CancellationToken cancellationToken)
     {
         var take = Math.Clamp(count, 1, 500);
-        var records = await _dbContext.ConfiguredPipelineRuns
-            .AsNoTracking()
-            .Where(x => x.TenantId == tenantId)
-            .Where(x => x.IsEnabled)
-            .OrderByDescending(x => x.StartedOnUtc)
-            .Take(take)
-            .ToListAsync(cancellationToken);
-
-        return records.Select(ToDto).ToList();
-    }
-
-    public async Task<IReadOnlyList<ConfiguredPipelineRunDto>> GetRecentAcrossTenantsAsync(
-        int count,
-        CancellationToken cancellationToken)
-    {
-        var take = Math.Clamp(count, 1, 1000);
         var records = await _dbContext.ConfiguredPipelineRuns
             .AsNoTracking()
             .Where(x => x.IsEnabled)
@@ -71,13 +53,12 @@ public sealed class EfConfiguredPipelineRunRepository : IConfiguredPipelineRunRe
     }
 
     public async Task SetEnabledAsync(
-        Guid tenantId,
         Guid pipelineRunId,
         bool isEnabled,
         CancellationToken cancellationToken)
     {
         var record = await _dbContext.ConfiguredPipelineRuns
-            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Id == pipelineRunId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == pipelineRunId, cancellationToken);
         if (record is null)
         {
             return;
@@ -91,7 +72,6 @@ public sealed class EfConfiguredPipelineRunRepository : IConfiguredPipelineRunRe
     {
         return new ConfiguredPipelineRunDto(
             record.Id,
-            record.TenantId,
             record.Status,
             JsonSerializer.Deserialize<IReadOnlyList<string>>(record.ResourceTypes) ?? [],
             record.ExtractedResourceCount,

@@ -27,7 +27,6 @@ public sealed class HedisMeasureReportNodeExecutor : WorkflowNodeExecutorBase
         object? result = _hedisMeasureReportService is null
             ? null
             : await _hedisMeasureReportService.GenerateAsync(
-                context.TenantId,
                 measureId,
                 DateTime.UtcNow.AddDays(-30),
                 DateTime.UtcNow,
@@ -66,7 +65,7 @@ public sealed class AnomalyDetectionNodeExecutor : WorkflowNodeExecutorBase
     {
         object? result = _anomalyDetectionService is null
             ? null
-            : await _anomalyDetectionService.AnalyzeRunsAsync(context.TenantId, 200, cancellationToken);
+            : await _anomalyDetectionService.AnalyzeRunsAsync(200, cancellationToken);
         result ??= new AuditResult(Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow);
 
         return new WorkflowNodeOutput(
@@ -103,7 +102,6 @@ public sealed class PatientAggregationNodeExecutor : WorkflowNodeExecutorBase
         object? result = _patientAggregationService is null || string.IsNullOrWhiteSpace(patientId)
             ? null
             : await _patientAggregationService.GetEverythingAsync(
-                context.TenantId,
                 patientId,
                 ["Patient", "Observation", "Condition", "Encounter"],
                 null,

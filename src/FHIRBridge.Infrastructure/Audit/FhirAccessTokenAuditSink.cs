@@ -21,14 +21,8 @@ public sealed class FhirAccessTokenAuditSink : IFhirAccessTokenAuditSink
         string message,
         CancellationToken cancellationToken)
     {
-        if (!source.TenantId.HasValue)
-        {
-            return Task.CompletedTask;
-        }
-
         return _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                source.TenantId.Value,
                 null,
                 null,
                 source.SourceConnectionId,

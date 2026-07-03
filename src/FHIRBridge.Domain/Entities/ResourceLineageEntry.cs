@@ -14,7 +14,6 @@ public sealed class ResourceLineageEntry : Entity<Guid>
     }
 
     public ResourceLineageEntry(
-        Guid tenantId,
         Guid pipelineRunId,
         Guid? routeId,
         Guid? sourceConnectionId,
@@ -27,7 +26,6 @@ public sealed class ResourceLineageEntry : Entity<Guid>
         DateTime occurredOnUtc)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         PipelineRunId = pipelineRunId;
         RouteId = routeId;
         SourceConnectionId = sourceConnectionId;
@@ -40,7 +38,6 @@ public sealed class ResourceLineageEntry : Entity<Guid>
         OccurredOnUtc = occurredOnUtc;
     }
 
-    public Guid TenantId { get; private set; }
     public Guid PipelineRunId { get; private set; }
     public Guid? RouteId { get; private set; }
     public Guid? SourceConnectionId { get; private set; }

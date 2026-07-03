@@ -7,7 +7,7 @@ namespace FHIRBridge.Domain.Entities;
 /// <summary>
 /// Append-only, PHI-free record of an end-user action (who did what, when, from where). Distinct from
 /// <see cref="OperationalAuditLog"/>, which records pipeline/system events. Each row is sealed into a
-/// per-tenant hash chain (<see cref="PreviousHash"/> + <see cref="EntryHash"/>) so tampering with history
+/// hash chain (<see cref="PreviousHash"/> + <see cref="EntryHash"/>) so tampering with history
 /// is detectable (HIPAA §164.312(b)/(c)).
 /// </summary>
 public sealed class UserActivityAuditLog : Entity<Guid>
@@ -17,7 +17,6 @@ public sealed class UserActivityAuditLog : Entity<Guid>
     }
 
     public UserActivityAuditLog(
-        Guid? tenantId,
         Guid? userId,
         string userEmail,
         string category,
@@ -37,7 +36,6 @@ public sealed class UserActivityAuditLog : Entity<Guid>
         DateTime occurredOnUtc)
     {
         Id = Guid.NewGuid();
-        TenantId = tenantId;
         UserId = userId;
         UserEmail = userEmail;
         Category = category;
@@ -57,7 +55,6 @@ public sealed class UserActivityAuditLog : Entity<Guid>
         OccurredOnUtc = occurredOnUtc;
     }
 
-    public Guid? TenantId { get; private set; }
     public Guid? UserId { get; private set; }
     public string UserEmail { get; private set; } = default!;
     public string Category { get; private set; } = default!;
@@ -76,7 +73,7 @@ public sealed class UserActivityAuditLog : Entity<Guid>
     public string Severity { get; private set; } = default!;
     public DateTime OccurredOnUtc { get; private set; }
 
-    /// <summary>Hash of the previous entry in this tenant's chain (null for the first entry).</summary>
+    /// <summary>Hash of the previous entry in the chain (null for the first entry).</summary>
     public string? PreviousHash { get; private set; }
 
     /// <summary>SHA-256 of this row's canonical content plus <see cref="PreviousHash"/>.</summary>
@@ -97,7 +94,6 @@ public sealed class UserActivityAuditLog : Entity<Guid>
         var canonical = string.Join(
             '|',
             Id,
-            TenantId,
             UserId,
             UserEmail,
             Category,

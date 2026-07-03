@@ -16,7 +16,6 @@ public sealed class HedisMeasureReportService : IHedisMeasureReportService
     }
 
     public async Task<HedisMeasureReportDto> GenerateAsync(
-        Guid tenantId,
         string measureId,
         DateTime periodStartUtc,
         DateTime periodEndUtc,
@@ -25,7 +24,7 @@ public sealed class HedisMeasureReportService : IHedisMeasureReportService
         var normalizedMeasureId = string.IsNullOrWhiteSpace(measureId)
             ? PipelineSuccessMeasure
             : measureId.Trim();
-        var recentRuns = await _pipelineRunRepository.GetRecentAsync(tenantId, 1000, cancellationToken);
+        var recentRuns = await _pipelineRunRepository.GetRecentAsync(1000, cancellationToken);
         var runs = recentRuns
             .Where(run => run.StartedOnUtc >= periodStartUtc && run.StartedOnUtc <= periodEndUtc)
             .ToList();
@@ -36,7 +35,7 @@ public sealed class HedisMeasureReportService : IHedisMeasureReportService
 
         return new HedisMeasureReportDto(
             "MeasureReport",
-            $"measurereport-{tenantId:N}-{normalizedMeasureId.ToLowerInvariant()}",
+            $"measurereport-{normalizedMeasureId.ToLowerInvariant()}",
             "complete",
             "summary",
             normalizedMeasureId,

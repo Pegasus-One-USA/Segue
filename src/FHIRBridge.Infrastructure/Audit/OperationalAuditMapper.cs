@@ -15,7 +15,6 @@ internal static class OperationalAuditMapper
     public static OperationalAuditLog ToEntity(RecordOperationalAuditLogRequest request)
     {
         return new OperationalAuditLog(
-            request.TenantId,
             request.PipelineRunId,
             request.ResourcePipelineRouteId,
             request.SourceConnectionId,
@@ -35,7 +34,6 @@ internal static class OperationalAuditMapper
     {
         return new OperationalAuditLogDto(
             auditLog.Id,
-            auditLog.TenantId,
             auditLog.PipelineRunId,
             auditLog.ResourcePipelineRouteId,
             auditLog.SourceConnectionId,

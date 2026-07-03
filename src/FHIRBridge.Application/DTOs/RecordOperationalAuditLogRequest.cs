@@ -1,7 +1,6 @@
 namespace FHIRBridge.Application.DTOs;
 
 public sealed record RecordOperationalAuditLogRequest(
-    Guid TenantId,
     Guid? PipelineRunId,
     Guid? ResourcePipelineRouteId,
     Guid? SourceConnectionId,

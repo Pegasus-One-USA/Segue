@@ -21,7 +21,6 @@ public interface IOAuthAuthorizationStateStore
 /// token endpoint / client id to exchange against.
 /// </summary>
 public sealed record PendingAuthorization(
-    Guid TenantId,
     Guid SourceConnectionId,
     RuntimeSourceType SourceType,
     string SourceName,

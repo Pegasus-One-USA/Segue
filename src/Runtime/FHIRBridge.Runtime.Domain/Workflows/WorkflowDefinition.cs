@@ -5,12 +5,7 @@ public sealed class WorkflowDefinition
     private readonly List<WorkflowNode> _nodes = [];
     private readonly List<WorkflowEdge> _edges = [];
 
-    public WorkflowDefinition(Guid id, string name, int version)
-        : this(id, Guid.Empty, name, version, isEnabled: true)
-    {
-    }
-
-    public WorkflowDefinition(Guid id, Guid tenantId, string name, int version, bool isEnabled = true)
+    public WorkflowDefinition(Guid id, string name, int version, bool isEnabled = true)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -23,15 +18,12 @@ public sealed class WorkflowDefinition
         }
 
         Id = id == Guid.Empty ? Guid.NewGuid() : id;
-        TenantId = tenantId;
         Name = name.Trim();
         Version = version;
         IsEnabled = isEnabled;
     }
 
     public Guid Id { get; }
-
-    public Guid TenantId { get; }
 
     public string Name { get; }
 

@@ -33,9 +33,9 @@ Only the `.csproj` (with package + SharedKernel references) exists in this skele
 ## Roadmap — what it will do in detail
 This block is the observability backbone for a HIPAA-sensitive platform, so the roadmap prioritizes correctness, privacy, and operability:
 - **Port the reference implementation** so every host gets metrics, traces, and structured logging from a single `AddFhirBridgeObservability` + `ConfigureFhirBridge` pair.
-- **Trace context propagation** across the async pipeline (API → Service Bus → Worker → Runtime) so a single pipeline run is one distributed trace, with `TenantId`/`PipelineRunId`/`CorrelationId` carried via `LogContext` and baggage.
+- **Trace context propagation** across the async pipeline (API → Service Bus → Worker → Runtime) so a single pipeline run is one distributed trace, with `PipelineRunId`/`CorrelationId` carried via `LogContext` and baggage.
 - **Custom activity sources** for pipeline stages (extract / map / write) to complement the counters, giving span-level latency attribution.
 - **Health and readiness checks** surfaced alongside metrics, and a hardened admin-dashboard snapshot endpoint backed by `IMetricsSnapshotProvider`.
 - **Alerting hooks** — error-rate and failed-run thresholds exported to Azure Monitor / OTLP backends.
 - **Hardened PHI masking** — expand the masked-property set, add value-pattern masking (e.g. detect MRN/SSN shapes), and verify masking against log fixtures so PHI can never reach a sink, satisfying audit requirements.
-- **Per-tenant / per-source metric dimensions** as the dashboard grows, kept aligned with the PHI-free contracts in SharedKernel.
+- **Per-source metric dimensions** as the dashboard grows, kept aligned with the PHI-free contracts in SharedKernel.

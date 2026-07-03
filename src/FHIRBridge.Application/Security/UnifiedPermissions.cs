@@ -3,8 +3,6 @@ namespace FHIRBridge.Application.Security;
 public static class UnifiedPermissions
 {
     // ── Platform / pipeline permissions (original) ───────────────────────────
-    public const string TenantsRead = "tenants.read";
-    public const string TenantsWrite = "tenants.write";
     public const string ConfigurationWrite = "configuration.write";
     public const string PipelineExecute = "pipeline.execute";
     public const string AuditLogsRead = "auditlogs.read";
@@ -29,10 +27,6 @@ public static class UnifiedPermissions
     public const string WorkflowDelete = "workflow.delete";
     public const string WorkflowRun = "workflow.run";
     public const string WorkflowView = "workflow.view";
-
-    // ── Tenant module permissions ─────────────────────────────────────────────
-    public const string TenantSettingsEdit = "tenant.settings.edit";
-    public const string TenantBillingView = "tenant.billing.view";
 
     // ── Report / payload permissions ─────────────────────────────────────────
     public const string ReportView = "report.view";

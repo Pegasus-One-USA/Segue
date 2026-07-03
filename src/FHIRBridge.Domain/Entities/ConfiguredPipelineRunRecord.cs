@@ -10,7 +10,6 @@ public sealed class ConfiguredPipelineRunRecord : Entity<Guid>
 
     public ConfiguredPipelineRunRecord(
         Guid id,
-        Guid tenantId,
         string status,
         string resourceTypes,
         int extractedResourceCount,
@@ -23,7 +22,6 @@ public sealed class ConfiguredPipelineRunRecord : Entity<Guid>
         string? triggerType = null)
     {
         Id = id;
-        TenantId = tenantId;
         Status = status;
         ResourceTypes = resourceTypes;
         ExtractedResourceCount = extractedResourceCount;
@@ -37,7 +35,6 @@ public sealed class ConfiguredPipelineRunRecord : Entity<Guid>
         IsEnabled = true;
     }
 
-    public Guid TenantId { get; private set; }
     public string Status { get; private set; } = default!;
     public string ResourceTypes { get; private set; } = default!;
     public int ExtractedResourceCount { get; private set; }

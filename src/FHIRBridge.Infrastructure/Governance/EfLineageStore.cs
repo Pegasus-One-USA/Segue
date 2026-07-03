@@ -26,7 +26,6 @@ public sealed class EfLineageStore : ILineageStore, ILineageQueryService, IPurge
     {
         await _dbContext.ResourceLineageEntries.AddAsync(
             new ResourceLineageEntry(
-                record.TenantId,
                 record.PipelineRunId,
                 record.RouteId,
                 record.SourceConnectionId,
@@ -48,7 +47,6 @@ public sealed class EfLineageStore : ILineageStore, ILineageQueryService, IPurge
     {
         var entries = await _dbContext.ResourceLineageEntries
             .AsNoTracking()
-            .Where(x => x.TenantId == query.TenantId)
             .Where(x => query.PipelineRunId == null || x.PipelineRunId == query.PipelineRunId)
             .Where(x => query.ResourceType == null || x.ResourceType == query.ResourceType)
             .Where(x => query.SourceResourceId == null || x.SourceResourceId == query.SourceResourceId)
@@ -57,7 +55,6 @@ public sealed class EfLineageStore : ILineageStore, ILineageQueryService, IPurge
 
         IReadOnlyList<ResourceLineageRecord> records = entries
             .Select(x => new ResourceLineageRecord(
-                x.TenantId,
                 x.PipelineRunId,
                 x.RouteId,
                 x.SourceConnectionId,
@@ -76,7 +73,7 @@ public sealed class EfLineageStore : ILineageStore, ILineageQueryService, IPurge
     public async Task<ResourceLineageChain> GetChainAsync(LineageQuery query, CancellationToken cancellationToken)
     {
         var steps = await QueryAsync(query, cancellationToken);
-        return new ResourceLineageChain(query.TenantId, query.SourceResourceId, steps);
+        return new ResourceLineageChain(query.SourceResourceId, steps);
     }
 
     public async Task<int> PurgeOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken)

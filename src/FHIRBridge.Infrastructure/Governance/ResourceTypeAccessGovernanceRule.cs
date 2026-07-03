@@ -2,7 +2,7 @@ using FHIRBridge.Application.Abstractions.Governance;
 
 namespace FHIRBridge.Infrastructure.Governance;
 
-/// <summary>Phase G1 — enforces per-resource-type RBAC by denying access to resource types a tenant is not permitted.</summary>
+/// <summary>Phase G1 — enforces per-resource-type RBAC by denying access to resource types that are not permitted.</summary>
 public sealed class ResourceTypeAccessGovernanceRule : IGovernanceRule
 {
     public const string PolicyName = "ResourceTypeRbac";
@@ -18,12 +18,12 @@ public sealed class ResourceTypeAccessGovernanceRule : IGovernanceRule
         ResourceGovernanceContext context,
         CancellationToken cancellationToken)
     {
-        var allowed = _accessPolicy.IsResourceTypeAllowed(context.TenantId, context.ResourceType);
+        var allowed = _accessPolicy.IsResourceTypeAllowed(context.ResourceType);
 
         return Task.FromResult(allowed
             ? GovernanceRuleResult.Allow(PolicyName)
             : GovernanceRuleResult.Deny(
                 PolicyName,
-                $"Tenant is not permitted to access resource type '{context.ResourceType}'."));
+                $"Access to resource type '{context.ResourceType}' is not permitted."));
     }
 }

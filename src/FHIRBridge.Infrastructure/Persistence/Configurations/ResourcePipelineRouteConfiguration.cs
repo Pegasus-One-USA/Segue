@@ -11,7 +11,6 @@ public sealed class ResourcePipelineRouteConfiguration : IEntityTypeConfiguratio
         builder.ToTable("ResourcePipelineRoutes");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.WebhookConfigurationId);
         builder.Property(x => x.MappingProfileId).IsRequired();
         builder.Property(x => x.IngestionMode).HasConversion<string>().HasMaxLength(100).IsRequired();
@@ -23,13 +22,12 @@ public sealed class ResourcePipelineRouteConfiguration : IEntityTypeConfiguratio
 
         builder.HasIndex(x => new
             {
-                x.TenantId,
                 x.WebhookConfigurationId,
                 x.MappingProfileId
             })
             .IsUnique();
 
-        builder.HasIndex(x => new { x.TenantId, x.MappingProfileId });
+        builder.HasIndex(x => x.MappingProfileId);
 
         builder.HasOne<WebhookConfiguration>()
             .WithMany()

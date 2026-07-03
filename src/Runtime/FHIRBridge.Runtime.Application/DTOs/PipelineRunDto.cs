@@ -4,7 +4,6 @@ namespace FHIRBridge.Runtime.Application.DTOs;
 
 public sealed record PipelineRunDto(
     Guid Id,
-    Guid TenantId,
     RuntimeSourceType SourceType,
     RuntimeDestinationType DestinationType,
     PipelineRunStatus Status,

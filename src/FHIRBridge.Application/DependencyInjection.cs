@@ -18,13 +18,11 @@ public static class DependencyInjection
         services.AddScoped<IGovernancePolicyService, DefaultGovernancePolicyService>();
         services.AddScoped<IDeIdentificationService, PassThroughDeIdentificationService>();
         services.AddScoped<IRetentionPolicyService, DefaultRetentionPolicyService>();
-        services.AddScoped<IUnifiedTenantConfigurationService, UnifiedTenantConfigurationService>();
-        services.AddScoped<IYamlManifestImportService, YamlManifestImportService>();
+        services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<ILocalAuthService, LocalAuthService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<IRoleManagementService, RoleManagementService>();
-        services.AddScoped<ITenantRegistrationService, TenantRegistrationService>();
         services.AddScoped<IHedisMeasureReportService, HedisMeasureReportService>();
         services.AddScoped<IAnomalyDetectionService, RunAnomalyDetectionService>();
         services.AddScoped<IPipelineRunMetricsService, PipelineRunMetricsService>();

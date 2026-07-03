@@ -29,7 +29,6 @@ public sealed class UserActivityAuditLogConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.EntryHash).HasMaxLength(128).IsRequired();
         builder.Property(x => x.OccurredOnUtc).IsRequired();
 
-        builder.HasIndex(x => x.TenantId);
         builder.HasIndex(x => x.UserId);
         builder.HasIndex(x => x.OccurredOnUtc);
     }

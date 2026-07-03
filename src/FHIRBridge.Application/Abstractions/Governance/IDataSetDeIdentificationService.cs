@@ -14,7 +14,6 @@ public interface IDataSetDeIdentificationService
 }
 
 public sealed record DataSetDeIdentificationRequest(
-    Guid TenantId,
     string ResourceType,
     IReadOnlyList<string> ResourcesJson);
 

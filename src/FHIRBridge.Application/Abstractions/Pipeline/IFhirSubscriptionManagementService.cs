@@ -1,8 +1,8 @@
 namespace FHIRBridge.Application.Abstractions.Pipeline;
 
 /// <summary>
-/// Registers / removes rest-hook <c>Subscription</c> resources on a tenant's configured source FHIR server so the
-/// source pushes changes to FHIRBridge's webhook endpoint. Resolves the source connection + secrets from tenant config.
+/// Registers / removes rest-hook <c>Subscription</c> resources on a configured source FHIR server so the
+/// source pushes changes to FHIRBridge's webhook endpoint. Resolves the source connection + secrets from config.
 /// </summary>
 public interface IFhirSubscriptionManagementService
 {
@@ -11,14 +11,12 @@ public interface IFhirSubscriptionManagementService
         CancellationToken cancellationToken);
 
     Task DeleteAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         string subscriptionId,
         CancellationToken cancellationToken);
 }
 
 public sealed record RegisterSubscriptionCommand(
-    Guid TenantId,
     Guid SourceConnectionId,
     string Criteria,
     string CallbackUrl,

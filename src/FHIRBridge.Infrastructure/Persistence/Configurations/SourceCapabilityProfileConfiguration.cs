@@ -16,14 +16,13 @@ public sealed class SourceCapabilityProfileConfiguration : IEntityTypeConfigurat
         builder.ToTable("SourceCapabilityProfiles");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.SourceConnectionId).IsRequired();
         builder.Property(x => x.FhirVersion).HasMaxLength(20).IsRequired();
         builder.Property(x => x.DiscoveredOnUtc).IsRequired();
         builder.Property(x => x.RawCapabilityJson);
 
         // One snapshot per source connection; UpsertAsync relies on this uniqueness.
-        builder.HasIndex(x => new { x.TenantId, x.SourceConnectionId }).IsUnique();
+        builder.HasIndex(x => x.SourceConnectionId).IsUnique();
 
         var scopesProperty = builder.Property(x => x.ConfiguredScopes)
             .HasConversion(

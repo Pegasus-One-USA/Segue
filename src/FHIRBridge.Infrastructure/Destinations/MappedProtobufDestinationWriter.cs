@@ -17,13 +17,12 @@ public sealed class MappedProtobufDestinationWriter : IConfiguredDestinationWrit
         package fhirbridge.destinations;
 
         message FHIRBridgeMappedRecord {
-          string tenant_id = 1;
-          string pipeline_run_id = 2;
-          string resource_type = 3;
-          string destination_object = 4;
-          string source_resource_id = 5;
-          string written_on_utc = 6;
-          map<string, string> values = 7;
+          string pipeline_run_id = 1;
+          string resource_type = 2;
+          string destination_object = 3;
+          string source_resource_id = 4;
+          string written_on_utc = 5;
+          map<string, string> values = 6;
         }
         """;
 
@@ -71,19 +70,18 @@ public sealed class MappedProtobufDestinationWriter : IConfiguredDestinationWrit
     private static byte[] EncodeRecord(MappedDestinationRecord record)
     {
         using var stream = new MemoryStream();
-        WriteStringField(stream, 1, record.TenantId.ToString());
-        WriteStringField(stream, 2, record.PipelineRunId.ToString());
-        WriteStringField(stream, 3, record.ResourceType);
-        WriteStringField(stream, 4, record.DestinationObject);
-        WriteStringField(stream, 5, record.SourceResourceId ?? string.Empty);
-        WriteStringField(stream, 6, DateTime.UtcNow.ToString("o"));
+        WriteStringField(stream, 1, record.PipelineRunId.ToString());
+        WriteStringField(stream, 2, record.ResourceType);
+        WriteStringField(stream, 3, record.DestinationObject);
+        WriteStringField(stream, 4, record.SourceResourceId ?? string.Empty);
+        WriteStringField(stream, 5, DateTime.UtcNow.ToString("o"));
 
         foreach (var (key, value) in record.Values.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
         {
             using var entry = new MemoryStream();
             WriteStringField(entry, 1, key ?? string.Empty);
             WriteStringField(entry, 2, value?.ToString() ?? string.Empty);
-            WriteLengthDelimitedField(stream, 7, entry.ToArray());
+            WriteLengthDelimitedField(stream, 6, entry.ToArray());
         }
 
         return stream.ToArray();

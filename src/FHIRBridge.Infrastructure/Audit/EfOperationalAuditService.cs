@@ -26,7 +26,6 @@ public sealed class EfOperationalAuditService : IOperationalAuditService
     }
 
     public async Task<IReadOnlyList<OperationalAuditLogDto>> GetRecentAsync(
-        Guid tenantId,
         int count,
         CancellationToken cancellationToken)
     {
@@ -34,7 +33,6 @@ public sealed class EfOperationalAuditService : IOperationalAuditService
 
         return await _dbContext.OperationalAuditLogs
             .AsNoTracking()
-            .Where(x => x.TenantId == tenantId)
             .OrderByDescending(x => x.OccurredOnUtc)
             .Take(take)
             .Select(x => OperationalAuditMapper.ToDto(x))

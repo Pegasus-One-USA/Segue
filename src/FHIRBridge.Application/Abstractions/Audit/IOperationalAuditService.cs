@@ -9,7 +9,6 @@ public interface IOperationalAuditService
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<OperationalAuditLogDto>> GetRecentAsync(
-        Guid tenantId,
         int count,
         CancellationToken cancellationToken);
 }

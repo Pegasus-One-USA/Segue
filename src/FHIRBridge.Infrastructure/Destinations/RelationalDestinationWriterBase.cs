@@ -19,7 +19,7 @@ namespace FHIRBridge.Infrastructure.Destinations;
 public abstract partial class RelationalDestinationWriterBase : IConfiguredDestinationWriter
 {
     private static readonly string[] StandardColumns =
-        ["TenantId", "PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc"];
+        ["PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc"];
 
     // A mapping field targeting one of the system-managed columns above is ignored (the system value wins) so the
     // generated DDL/INSERT never declares a column twice.
@@ -92,7 +92,6 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
 
         var columnDefinitions = new List<string>
         {
-            $"{Quote("TenantId")} {ColumnType(MappingValueType.String)}",
             $"{Quote("PipelineRunId")} {ColumnType(MappingValueType.String)}",
             $"{Quote("ResourceType")} {ColumnType(MappingValueType.String)}",
             $"{Quote("SourceResourceId")} {ColumnType(MappingValueType.String)}",
@@ -135,7 +134,6 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = sql;
-        AddParameter(command, "TenantId", record.TenantId.ToString());
         AddParameter(command, "PipelineRunId", record.PipelineRunId.ToString());
         AddParameter(command, "ResourceType", record.ResourceType);
         AddParameter(command, "SourceResourceId", Stringify(record.SourceResourceId));

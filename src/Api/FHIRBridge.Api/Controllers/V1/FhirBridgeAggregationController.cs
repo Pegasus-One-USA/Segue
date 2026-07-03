@@ -21,7 +21,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// </summary>
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
-[Route("api/v1/tenants/{tenantId:guid}/fhirbridge")]
+[Route("api/v1/fhirbridge")]
 public sealed class FhirBridgeAggregationController : ControllerBase
 {
     private const string FhirJsonContentType = "application/fhir+json";
@@ -47,12 +47,11 @@ public sealed class FhirBridgeAggregationController : ControllerBase
     /// <summary>
     /// <c>GET .../fhirbridge/Patient/{id}?include=all|Type,Type&amp;source={sourceConnectionId}</c>.
     /// <paramref name="include"/> defaults to <c>all</c> when omitted. <paramref name="source"/> is required only
-    /// when the tenant has more than one enabled source connection.
+    /// when there is more than one enabled source connection.
     /// </summary>
     [HttpGet("Patient/{id}")]
     [Produces(FhirJsonContentType)]
     public async Task<IActionResult> GetPatientEverything(
-        Guid tenantId,
         string id,
         [FromQuery] string? include,
         [FromQuery] Guid? source,
@@ -64,7 +63,7 @@ public sealed class FhirBridgeAggregationController : ControllerBase
             int resourceCount,
             string? failureReason)
         {
-            await RecordAccessAsync(tenantId, id, include, status, resourceCount, failureReason, cancellationToken);
+            await RecordAccessAsync(id, include, status, resourceCount, failureReason, cancellationToken);
             return result;
         }
 
@@ -84,7 +83,6 @@ public sealed class FhirBridgeAggregationController : ControllerBase
         try
         {
             result = await _aggregationService.GetEverythingAsync(
-                tenantId,
                 id,
                 resourceTypes,
                 source,
@@ -133,7 +131,6 @@ public sealed class FhirBridgeAggregationController : ControllerBase
     }
 
     private async Task RecordAccessAsync(
-        Guid tenantId,
         string patientId,
         string? include,
         string status,
@@ -150,7 +147,6 @@ public sealed class FhirBridgeAggregationController : ControllerBase
             // PHI-free: records the patient logical id (the access subject) and requested types/counts, never resource content.
             await _userActivityAuditService.RecordAsync(
                 new RecordUserActivityRequest(
-                    TenantId: tenantId,
                     UserId: userId,
                     UserEmail: user.AuditName,
                     Category: UserActivityCategories.DataAccess,

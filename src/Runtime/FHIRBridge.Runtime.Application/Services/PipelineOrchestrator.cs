@@ -51,7 +51,6 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
             .ToArray();
 
         var pipelineRun = new PipelineRun(
-            request.TenantId,
             request.Source.SourceType,
             request.Destination.DestinationType,
             resourceTypes,
@@ -172,7 +171,6 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
             .ToArray();
 
         var pipelineRun = new PipelineRun(
-            request.TenantId,
             request.Source.SourceType,
             request.Destination.DestinationType,
             resourceTypes,
@@ -344,7 +342,6 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
     {
         var pipelineRunEvent = new PipelineRunEvent(
             pipelineRun.Id,
-            pipelineRun.TenantId,
             eventType,
             stepType,
             resourceType,

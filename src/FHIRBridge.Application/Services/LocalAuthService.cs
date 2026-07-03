@@ -209,7 +209,6 @@ public sealed class LocalAuthService : ILocalAuthService
     {
         return _activityAuditService.RecordAsync(
             new RecordUserActivityRequest(
-                TenantId: null,
                 UserId: userId,
                 UserEmail: email ?? _currentUserService.CurrentUser.AuditName,
                 Category: UserActivityCategories.Authentication,
@@ -237,8 +236,6 @@ public sealed class LocalAuthService : ILocalAuthService
         user.SetRefreshToken(refreshHash, refreshExpiry);
         await _repository.UpdateUserAsync(user, cancellationToken);
 
-        var memberships = await ToTenantMembershipsAsync(user.Id, cancellationToken);
-
         return new LocalLoginResponse(
             token.AccessToken,
             token.TokenType,
@@ -249,8 +246,7 @@ public sealed class LocalAuthService : ILocalAuthService
                 user.ExternalUserId,
                 user.Email,
                 user.DisplayName,
-                roleNames,
-                memberships),
+                roleNames),
             BuildRawRefreshToken(refreshHash),
             refreshExpiry);
     }
@@ -269,39 +265,6 @@ public sealed class LocalAuthService : ILocalAuthService
         return [..codes];
     }
 
-    private async Task<IReadOnlyList<TenantUserDto>> ToTenantMembershipsAsync(
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        var memberships = await _repository.GetTenantMembershipsByUserIdAsync(userId, cancellationToken);
-        var dtos = new List<TenantUserDto>();
-        foreach (var membership in memberships)
-        {
-            var role = await GetRoleNameByIdAsync(membership.RoleId, cancellationToken);
-            var user = await _repository.GetUserByIdAsync(membership.UserId, cancellationToken)
-                ?? throw new InvalidOperationException("Tenant user references a missing user.");
-
-            dtos.Add(new TenantUserDto(
-                membership.Id,
-                membership.TenantId,
-                membership.UserId,
-                user.ExternalUserId,
-                user.Email,
-                user.DisplayName,
-                role,
-                membership.IsEnabled));
-        }
-
-        return dtos;
-    }
-
-    private async Task<string> GetRoleNameByIdAsync(Guid roleId, CancellationToken cancellationToken)
-    {
-        var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken);
-
-        return role?.Name ?? "Unknown";
-    }
-
     private async Task AuditAsync(
         string action,
         string status,
@@ -311,7 +274,6 @@ public sealed class LocalAuthService : ILocalAuthService
     {
         await _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                Guid.Empty,
                 null,
                 null,
                 null,

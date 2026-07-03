@@ -2,7 +2,6 @@ namespace FHIRBridge.Application.DTOs;
 
 public sealed record ConfiguredPipelineRunDto(
     Guid Id,
-    Guid TenantId,
     string Status,
     IReadOnlyList<string> ResourceTypes,
     int ExtractedResourceCount,

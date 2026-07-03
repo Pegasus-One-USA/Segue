@@ -11,7 +11,6 @@ public sealed class DestinationConfigurationConfig : IEntityTypeConfiguration<De
         builder.ToTable("DestinationConfigurations");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.DestinationType).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.Target).HasMaxLength(500);

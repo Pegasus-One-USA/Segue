@@ -22,77 +22,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("FHIRBridge.Domain.Aggregates.Tenant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("ContactEmail")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedOnUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedOnUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("ModifiedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("ModifiedOnUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Region")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("RetentionDays")
-                        .HasColumnType("int");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("TimeZone")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.ToTable("Tenants", (string)null);
-                });
-
             modelBuilder.Entity("FHIRBridge.Domain.Entities.ConfiguredPipelineRunRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -128,9 +57,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("TriggerType")
                         .HasColumnType("nvarchar(max)");
 
@@ -142,9 +68,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "StartedOnUtc");
+                    b.HasIndex("StartedOnUtc");
 
-                    b.HasIndex("TenantId", "Status");
+                    b.HasIndex("Status");
 
                     b.ToTable("ConfiguredPipelineRuns", (string)null);
                 });
@@ -199,12 +125,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("DestinationConfigurations", (string)null);
                 });
@@ -266,14 +187,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SourceConnectionId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("SourceConnectionId");
-
-                    b.HasIndex("TenantId", "SourceConnectionId");
 
                     b.ToTable("MappingProfiles", (string)null);
                 });
@@ -328,9 +244,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("TriggeredBy")
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
@@ -338,8 +251,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OccurredOnUtc");
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("OperationalAuditLogs", (string)null);
                 });
@@ -404,26 +315,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("20000000-0000-0000-0000-000000000001"),
-                            Category = "Tenancy",
-                            CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Read tenant configuration.",
-                            IsDeleted = false,
-                            IsSystem = true,
-                            Name = "tenants.read"
-                        },
-                        new
-                        {
-                            Id = new Guid("20000000-0000-0000-0000-000000000002"),
-                            Category = "Tenancy",
-                            CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Create and update tenants.",
-                            IsDeleted = false,
-                            IsSystem = true,
-                            Name = "tenants.write"
-                        },
-                        new
-                        {
                             Id = new Guid("20000000-0000-0000-0000-000000000003"),
                             Category = "Configuration",
                             CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -467,7 +358,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                             Id = new Guid("20000000-0000-0000-0001-000000000001"),
                             Category = "User",
                             CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Invite a new user to the tenant.",
+                            Description = "Invite a new user to the organization.",
                             IsDeleted = false,
                             IsSystem = true,
                             Name = "user.invite"
@@ -604,26 +495,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = new Guid("20000000-0000-0000-0004-000000000001"),
-                            Category = "Tenant",
-                            CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Update organization settings.",
-                            IsDeleted = false,
-                            IsSystem = true,
-                            Name = "tenant.settings.edit"
-                        },
-                        new
-                        {
-                            Id = new Guid("20000000-0000-0000-0004-000000000002"),
-                            Category = "Tenant",
-                            CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "View billing and subscription information.",
-                            IsDeleted = false,
-                            IsSystem = true,
-                            Name = "tenant.billing.view"
-                        },
-                        new
-                        {
                             Id = new Guid("20000000-0000-0000-0005-000000000001"),
                             Category = "Report",
                             CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -687,16 +558,13 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "OccurredOnUtc");
+                    b.HasIndex("OccurredOnUtc");
 
-                    b.HasIndex("TenantId", "PipelineRunId");
+                    b.HasIndex("PipelineRunId");
 
-                    b.HasIndex("TenantId", "SourceResourceId");
+                    b.HasIndex("SourceResourceId");
 
                     b.ToTable("ResourceLineageEntries", (string)null);
                 });
@@ -759,9 +627,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("WebhookConfigurationId")
                         .HasColumnType("uniqueidentifier");
 
@@ -769,11 +634,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MappingProfileId");
 
-                    b.HasIndex("WebhookConfigurationId");
-
-                    b.HasIndex("TenantId", "MappingProfileId");
-
-                    b.HasIndex("TenantId", "WebhookConfigurationId", "MappingProfileId")
+                    b.HasIndex("WebhookConfigurationId", "MappingProfileId")
                         .IsUnique()
                         .HasFilter("[WebhookConfigurationId] IS NOT NULL");
 
@@ -832,14 +693,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "Name")
-                        .IsUnique()
-                        .HasFilter("[TenantId] IS NOT NULL");
+                    b.HasIndex("Name")
+                        .IsUnique();
 
                     b.ToTable("Roles", (string)null);
 
@@ -848,7 +705,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000001"),
                             CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Full platform administrator across all tenants.",
+                            Description = "Full platform administrator.",
                             IsDefault = false,
                             IsDeleted = false,
                             IsEnabled = true,
@@ -859,7 +716,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000002"),
                             CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Administers configuration and users within a tenant.",
+                            Description = "Administers configuration and users.",
                             IsDefault = false,
                             IsDeleted = false,
                             IsEnabled = true,
@@ -870,7 +727,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000003"),
                             CreatedOnUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Builds and runs pipeline configurations, and reviews data and audit output, within a tenant.",
+                            Description = "Builds and runs pipeline configurations, and reviews data and audit output.",
                             IsDefault = false,
                             IsDeleted = false,
                             IsEnabled = true,
@@ -911,18 +768,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         new
                         {
                             RoleId = new Guid("10000000-0000-0000-0000-000000000001"),
-                            PermissionId = new Guid("20000000-0000-0000-0000-000000000001"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000001"),
-                            PermissionId = new Guid("20000000-0000-0000-0000-000000000002"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("20000000-0000-0000-0000-000000000003"),
                             IsEnabled = true
                         },
@@ -1031,18 +876,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         new
                         {
                             RoleId = new Guid("10000000-0000-0000-0000-000000000001"),
-                            PermissionId = new Guid("20000000-0000-0000-0004-000000000001"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000001"),
-                            PermissionId = new Guid("20000000-0000-0000-0004-000000000002"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("20000000-0000-0000-0005-000000000001"),
                             IsEnabled = true
                         },
@@ -1050,18 +883,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         {
                             RoleId = new Guid("10000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("20000000-0000-0000-0006-000000000001"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000002"),
-                            PermissionId = new Guid("20000000-0000-0000-0000-000000000001"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000002"),
-                            PermissionId = new Guid("20000000-0000-0000-0000-000000000002"),
                             IsEnabled = true
                         },
                         new
@@ -1175,18 +996,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         new
                         {
                             RoleId = new Guid("10000000-0000-0000-0000-000000000002"),
-                            PermissionId = new Guid("20000000-0000-0000-0004-000000000001"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000002"),
-                            PermissionId = new Guid("20000000-0000-0000-0004-000000000002"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000002"),
                             PermissionId = new Guid("20000000-0000-0000-0005-000000000001"),
                             IsEnabled = true
                         },
@@ -1194,12 +1003,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         {
                             RoleId = new Guid("10000000-0000-0000-0000-000000000002"),
                             PermissionId = new Guid("20000000-0000-0000-0006-000000000001"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000003"),
-                            PermissionId = new Guid("20000000-0000-0000-0000-000000000001"),
                             IsEnabled = true
                         },
                         new
@@ -1266,12 +1069,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         {
                             RoleId = new Guid("10000000-0000-0000-0000-000000000003"),
                             PermissionId = new Guid("20000000-0000-0000-0005-000000000001"),
-                            IsEnabled = true
-                        },
-                        new
-                        {
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000005"),
-                            PermissionId = new Guid("20000000-0000-0000-0000-000000000001"),
                             IsEnabled = true
                         },
                         new
@@ -1352,12 +1149,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SourceConnectionId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "SourceConnectionId")
+                    b.HasIndex("SourceConnectionId")
                         .IsUnique();
 
                     b.ToTable("SourceCapabilityProfiles", (string)null);
@@ -1418,71 +1212,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("SourceConnections", (string)null);
-                });
-
-            modelBuilder.Entity("FHIRBridge.Domain.Entities.TenantUser", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedOnUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedOnUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("ModifiedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("ModifiedOnUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RoleId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TenantId", "UserId")
-                        .IsUnique();
-
-                    b.ToTable("TenantUsers", (string)null);
                 });
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.User", b =>
@@ -1594,9 +1326,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("Email");
@@ -1605,8 +1334,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("RefreshTokenHash");
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("Users", (string)null);
                 });
@@ -1684,9 +1411,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("UserAgent")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -1702,8 +1426,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OccurredOnUtc");
-
-                    b.HasIndex("TenantId");
 
                     b.HasIndex("UserId");
 
@@ -1782,14 +1504,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SourceConnectionId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "Path");
+                    b.HasIndex("Path");
 
-                    b.HasIndex("TenantId", "SourceConnectionId", "ResourceType")
+                    b.HasIndex("SourceConnectionId", "ResourceType")
                         .IsUnique();
 
                     b.ToTable("WebhookConfigurations", (string)null);
@@ -1811,12 +1530,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.DestinationConfiguration", b =>
                 {
-                    b.HasOne("FHIRBridge.Domain.Aggregates.Tenant", null)
-                        .WithMany("DestinationConfigurations")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.OwnsOne("FHIRBridge.Domain.ValueObjects.SecretReference", "SecretReference", b1 =>
                         {
                             b1.Property<Guid>("DestinationConfigurationId")
@@ -1852,12 +1565,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SourceConnectionId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FHIRBridge.Domain.Aggregates.Tenant", null)
-                        .WithMany("MappingProfiles")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.OwnsMany("FHIRBridge.Domain.ValueObjects.MappingField", "Fields", b1 =>
@@ -1954,12 +1661,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("FHIRBridge.Domain.Aggregates.Tenant", null)
-                        .WithMany("ResourcePipelineRoutes")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("FHIRBridge.Domain.Entities.WebhookConfiguration", null)
                         .WithMany()
                         .HasForeignKey("WebhookConfigurationId")
@@ -1983,12 +1684,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.SourceConnection", b =>
                 {
-                    b.HasOne("FHIRBridge.Domain.Aggregates.Tenant", null)
-                        .WithMany("SourceConnections")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceAuthenticationConfiguration", "Authentication", b1 =>
                         {
                             b1.Property<Guid>("SourceConnectionId")
@@ -2124,27 +1819,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Navigation("Interactive");
                 });
 
-            modelBuilder.Entity("FHIRBridge.Domain.Entities.TenantUser", b =>
-                {
-                    b.HasOne("FHIRBridge.Domain.Entities.Role", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FHIRBridge.Domain.Aggregates.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("FHIRBridge.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("FHIRBridge.Domain.Entities.UserRole", b =>
                 {
                     b.HasOne("FHIRBridge.Domain.Entities.Role", null)
@@ -2158,28 +1832,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("FHIRBridge.Domain.Entities.WebhookConfiguration", b =>
-                {
-                    b.HasOne("FHIRBridge.Domain.Aggregates.Tenant", null)
-                        .WithMany("WebhookConfigurations")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("FHIRBridge.Domain.Aggregates.Tenant", b =>
-                {
-                    b.Navigation("DestinationConfigurations");
-
-                    b.Navigation("MappingProfiles");
-
-                    b.Navigation("ResourcePipelineRoutes");
-
-                    b.Navigation("SourceConnections");
-
-                    b.Navigation("WebhookConfigurations");
                 });
 #pragma warning restore 612, 618
         }

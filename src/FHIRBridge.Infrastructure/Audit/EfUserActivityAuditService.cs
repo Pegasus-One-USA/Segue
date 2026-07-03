@@ -18,7 +18,6 @@ public sealed class EfUserActivityAuditService : IUserActivityAuditService
     public async Task RecordAsync(RecordUserActivityRequest request, CancellationToken cancellationToken)
     {
         var entity = new UserActivityAuditLog(
-            request.TenantId,
             request.UserId,
             request.UserEmail,
             request.Category,
@@ -37,13 +36,9 @@ public sealed class EfUserActivityAuditService : IUserActivityAuditService
             request.Severity,
             DateTime.UtcNow);
 
-        // Per-chain (per-tenant; null tenant is its own chain) tamper-evident hash linking.
-        var chain = _dbContext.UserActivityAuditLogs.AsNoTracking();
-        chain = request.TenantId is null
-            ? chain.Where(x => x.TenantId == null)
-            : chain.Where(x => x.TenantId == request.TenantId);
-
-        var previousHash = await chain
+        // Single tamper-evident hash chain across all activity entries.
+        var previousHash = await _dbContext.UserActivityAuditLogs
+            .AsNoTracking()
             .OrderByDescending(x => x.OccurredOnUtc)
             .ThenByDescending(x => x.Id)
             .Select(x => x.EntryHash)

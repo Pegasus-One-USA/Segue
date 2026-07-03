@@ -21,8 +21,8 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
         _stateProtector = dataProtectionProvider.CreateProtector("FHIRBridge.OAuthLaunch.State.v1");
     }
 
-    public string ProtectContext(Guid tenantId, Guid routeId) =>
-        _contextProtector.Protect($"{tenantId:N}|{routeId:N}");
+    public string ProtectContext(Guid routeId) =>
+        _contextProtector.Protect($"{routeId:N}");
 
     public LaunchContext? UnprotectContext(string token)
     {
@@ -33,12 +33,10 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
 
         try
         {
-            var parts = _contextProtector.Unprotect(token).Split('|');
-            if (parts.Length == 2 &&
-                Guid.TryParseExact(parts[0], "N", out var tenantId) &&
-                Guid.TryParseExact(parts[1], "N", out var routeId))
+            var value = _contextProtector.Unprotect(token);
+            if (Guid.TryParseExact(value, "N", out var routeId))
             {
-                return new LaunchContext(tenantId, routeId);
+                return new LaunchContext(routeId);
             }
 
             return null;

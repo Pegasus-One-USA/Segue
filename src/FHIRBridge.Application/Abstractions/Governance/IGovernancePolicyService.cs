@@ -8,7 +8,6 @@ public interface IGovernancePolicyService
 }
 
 public sealed record ResourceGovernanceContext(
-    Guid TenantId,
     Guid PipelineRunId,
     Guid? RouteId,
     string ResourceType,

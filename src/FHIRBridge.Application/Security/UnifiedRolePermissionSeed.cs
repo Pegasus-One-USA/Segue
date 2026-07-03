@@ -9,8 +9,6 @@ public static class UnifiedRolePermissionSeed
     /// <summary>Every original platform permission id.</summary>
     private static readonly Guid[] OriginalPlatformPermissions =
     [
-        SeededSecurityIds.TenantsReadPermissionId,
-        SeededSecurityIds.TenantsWritePermissionId,
         SeededSecurityIds.ConfigurationWritePermissionId,
         SeededSecurityIds.PipelineExecutePermissionId,
         SeededSecurityIds.AuditLogsReadPermissionId,
@@ -34,8 +32,6 @@ public static class UnifiedRolePermissionSeed
         SeededSecurityIds.WorkflowDeletePermissionId,
         SeededSecurityIds.WorkflowRunPermissionId,
         SeededSecurityIds.WorkflowViewPermissionId,
-        SeededSecurityIds.TenantSettingsEditPermissionId,
-        SeededSecurityIds.TenantBillingViewPermissionId,
         SeededSecurityIds.ReportViewPermissionId,
         SeededSecurityIds.PayloadViewPermissionId
     ];
@@ -59,7 +55,6 @@ public static class UnifiedRolePermissionSeed
             // pipelines and workflows, plus review audit logs and reports).
             [SeededSecurityIds.OperationsRoleId] =
             [
-                SeededSecurityIds.TenantsReadPermissionId,
                 SeededSecurityIds.ConfigurationWritePermissionId,
                 SeededSecurityIds.PipelineExecutePermissionId,
                 SeededSecurityIds.SourceConnectionsTestPermissionId,
@@ -75,7 +70,6 @@ public static class UnifiedRolePermissionSeed
 
             [SeededSecurityIds.AuditRoleId] =
             [
-                SeededSecurityIds.TenantsReadPermissionId,
                 SeededSecurityIds.AuditLogsReadPermissionId,
                 SeededSecurityIds.WorkflowViewPermissionId,
                 SeededSecurityIds.ReportViewPermissionId

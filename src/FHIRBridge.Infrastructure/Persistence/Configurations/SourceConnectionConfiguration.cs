@@ -18,7 +18,6 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
         builder.ToTable("SourceConnections");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.TenantId).IsRequired();
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.SourceSystemType).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.BaseUrl).HasMaxLength(500).IsRequired();

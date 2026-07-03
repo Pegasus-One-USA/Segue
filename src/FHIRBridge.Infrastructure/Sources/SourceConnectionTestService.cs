@@ -16,7 +16,7 @@ namespace FHIRBridge.Infrastructure.Sources;
 
 public sealed class SourceConnectionTestService : ISourceConnectionTestService
 {
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly ISecretProvider _secretProvider;
     private readonly IFhirAccessTokenProvider _accessTokenProvider;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -25,7 +25,7 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
     private readonly ILogger<SourceConnectionTestService> _logger;
 
     public SourceConnectionTestService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         ISecretProvider secretProvider,
         IFhirAccessTokenProvider accessTokenProvider,
         IHttpClientFactory httpClientFactory,
@@ -33,7 +33,7 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         ICurrentUserService currentUserService,
         ILogger<SourceConnectionTestService> logger)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _secretProvider = secretProvider;
         _accessTokenProvider = accessTokenProvider;
         _httpClientFactory = httpClientFactory;
@@ -43,17 +43,13 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
     }
 
     public async Task<SourceConnectionTestResultDto> TestAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-        var sourceConnection = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
+        var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
 
         await RecordAuditAsync(
-            tenantId,
             sourceConnectionId,
             "SourceConnectionTestStarted",
             "Started",
@@ -64,7 +60,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         {
             const string message = "Source connection is disabled and cannot be tested.";
             await RecordAuditAsync(
-                tenantId,
                 sourceConnectionId,
                 "SourceConnectionTestSkipped",
                 "Skipped",
@@ -72,7 +67,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
                 cancellationToken);
 
             return new SourceConnectionTestResultDto(
-                tenantId,
                 sourceConnectionId,
                 sourceConnection.SourceSystemType.ToString(),
                 false,
@@ -86,19 +80,17 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
             var result = sourceConnection.SourceSystemType switch
             {
                 SourceSystemType.Sample => new SourceConnectionTestResultDto(
-                    tenantId,
                     sourceConnectionId,
                     sourceConnection.SourceSystemType.ToString(),
                     true,
                     "Completed",
                     "Sample source connection is available.",
                     DateTime.UtcNow),
-                SourceSystemType.Epic => await TestEpicAsync(tenantId, sourceConnection, cancellationToken),
+                SourceSystemType.Epic => await TestEpicAsync(sourceConnection, cancellationToken),
                 _ => throw new NotSupportedException($"Source connection test is not implemented for {sourceConnection.SourceSystemType}.")
             };
 
             await RecordAuditAsync(
-                tenantId,
                 sourceConnectionId,
                 result.IsSuccessful ? "SourceConnectionTestCompleted" : "SourceConnectionTestFailed",
                 result.Status,
@@ -111,12 +103,10 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         {
             _logger.LogWarning(
                 exception,
-                "Source connection test failed for tenant {TenantId}, source {SourceConnectionId}.",
-                tenantId,
+                "Source connection test failed for source {SourceConnectionId}.",
                 sourceConnectionId);
 
             await RecordAuditAsync(
-                tenantId,
                 sourceConnectionId,
                 "SourceConnectionTestFailed",
                 "Failed",
@@ -124,7 +114,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
                 cancellationToken);
 
             return new SourceConnectionTestResultDto(
-                tenantId,
                 sourceConnectionId,
                 sourceConnection.SourceSystemType.ToString(),
                 false,
@@ -135,11 +124,10 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
     }
 
     private async Task<SourceConnectionTestResultDto> TestEpicAsync(
-        Guid tenantId,
         SourceConnection sourceConnection,
         CancellationToken cancellationToken)
     {
-        var source = await BuildEpicSourceConfigurationAsync(tenantId, sourceConnection, cancellationToken);
+        var source = await BuildEpicSourceConfigurationAsync(sourceConnection, cancellationToken);
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
         var metadataUrl = $"{sourceConnection.BaseUrl.TrimEnd('/')}/metadata";
 
@@ -152,7 +140,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         if (!response.IsSuccessStatusCode)
         {
             return new SourceConnectionTestResultDto(
-                tenantId,
                 sourceConnection.Id,
                 sourceConnection.SourceSystemType.ToString(),
                 false,
@@ -162,7 +149,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         }
 
         return new SourceConnectionTestResultDto(
-            tenantId,
             sourceConnection.Id,
             sourceConnection.SourceSystemType.ToString(),
             true,
@@ -172,7 +158,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
     }
 
     private async Task<FhirSourceConfiguration> BuildEpicSourceConfigurationAsync(
-        Guid tenantId,
         SourceConnection sourceConnection,
         CancellationToken cancellationToken)
     {
@@ -196,13 +181,11 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
             sourceConnection.Authentication.Scopes,
             1,
             1,
-            tenantId,
             sourceConnection.Id,
             ApplicationType: sourceConnection.ApplicationType);
     }
 
     private Task RecordAuditAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         string action,
         string status,
@@ -211,7 +194,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
     {
         return _auditService.RecordAsync(
             new RecordOperationalAuditLogRequest(
-                tenantId,
                 null,
                 null,
                 sourceConnectionId,

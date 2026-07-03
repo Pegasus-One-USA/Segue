@@ -29,7 +29,6 @@ public sealed class InMemoryLineageStore : ILineageStore, ILineageQueryService, 
         lock (_gate)
         {
             IReadOnlyList<ResourceLineageRecord> matches = _records
-                .Where(r => r.TenantId == query.TenantId)
                 .Where(r => query.PipelineRunId is null || r.PipelineRunId == query.PipelineRunId)
                 .Where(r => query.ResourceType is null || string.Equals(r.ResourceType, query.ResourceType, StringComparison.OrdinalIgnoreCase))
                 .Where(r => query.SourceResourceId is null || string.Equals(r.SourceResourceId, query.SourceResourceId, StringComparison.OrdinalIgnoreCase))
@@ -43,7 +42,7 @@ public sealed class InMemoryLineageStore : ILineageStore, ILineageQueryService, 
     public async Task<ResourceLineageChain> GetChainAsync(LineageQuery query, CancellationToken cancellationToken)
     {
         var steps = await QueryAsync(query, cancellationToken);
-        return new ResourceLineageChain(query.TenantId, query.SourceResourceId, steps);
+        return new ResourceLineageChain(query.SourceResourceId, steps);
     }
 
     public Task<int> PurgeOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken)

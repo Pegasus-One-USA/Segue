@@ -19,28 +19,25 @@ public sealed class SourceJwksService : ISourceJwksService
     // Matches the signing algorithm used in BackendServicesJwtFactory.CreateClientAssertion.
     private const string SigningAlgorithm = "RS384";
 
-    private readonly ITenantConfigurationRepository _tenantRepository;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly ISecretProvider _secretProvider;
     private readonly ILogger<SourceJwksService> _logger;
 
     public SourceJwksService(
-        ITenantConfigurationRepository tenantRepository,
+        IConfigurationRepository configurationRepository,
         ISecretProvider secretProvider,
         ILogger<SourceJwksService> logger)
     {
-        _tenantRepository = tenantRepository;
+        _configurationRepository = configurationRepository;
         _secretProvider = secretProvider;
         _logger = logger;
     }
 
     public async Task<JsonWebKeySetDto> GetPublicJwksAsync(
-        Guid tenantId,
         Guid sourceConnectionId,
         CancellationToken cancellationToken)
     {
-        var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken)
-            ?? throw new NotFoundException("Tenant", tenantId);
-        var sourceConnection = tenant.SourceConnections.FirstOrDefault(x => x.Id == sourceConnectionId)
+        var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
 
         var privateKeyReference = sourceConnection.Authentication.PrivateKey;
@@ -49,9 +46,8 @@ public sealed class SourceJwksService : ISourceJwksService
             // Symmetric (or no) client authentication — there is no public key to publish. An empty set is a valid
             // JWKS and lets the endpoint answer uniformly without leaking whether a key was expected.
             _logger.LogInformation(
-                "Source {SourceConnectionId} (tenant {TenantId}) has no asymmetric signing key; returning an empty JWKS.",
-                sourceConnectionId,
-                tenantId);
+                "Source {SourceConnectionId} has no asymmetric signing key; returning an empty JWKS.",
+                sourceConnectionId);
 
             return new JsonWebKeySetDto([]);
         }

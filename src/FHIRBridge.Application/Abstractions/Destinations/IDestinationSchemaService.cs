@@ -4,5 +4,5 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 
 public interface IDestinationSchemaService
 {
-    Task<DestinationSchemaDto> GetSchemaAsync(Guid tenantId, Guid destinationId, CancellationToken cancellationToken);
+    Task<DestinationSchemaDto> GetSchemaAsync(Guid destinationId, CancellationToken cancellationToken);
 }

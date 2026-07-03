@@ -25,12 +25,12 @@ public sealed class OAuthController : ControllerBase
     /// endpoint. Admin-only; the source's SMART endpoints are discovered on demand.
     /// </summary>
     [Authorize]
-    [HttpGet("tenants/{tenantId:guid}/source-connections/{sourceConnectionId:guid}/oauth/authorize")]
+    [HttpGet("source-connections/{sourceConnectionId:guid}/oauth/authorize")]
     [ProducesResponseType(StatusCodes.Status302Found)]
-    public async Task<IActionResult> Authorize(Guid tenantId, Guid sourceConnectionId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Authorize(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
         var authorizationUrl = await _authorizationService.StartAsync(
-            tenantId, sourceConnectionId, BuildCallbackUri(), cancellationToken);
+            sourceConnectionId, BuildCallbackUri(), cancellationToken);
 
         return Redirect(authorizationUrl.ToString());
     }
@@ -42,11 +42,10 @@ public sealed class OAuthController : ControllerBase
     /// no FHIRBridge session; security comes from the trusted-issuer check.
     /// </summary>
     [AllowAnonymous]
-    [HttpGet("tenants/{tenantId:guid}/source-connections/{sourceConnectionId:guid}/oauth/launch")]
+    [HttpGet("source-connections/{sourceConnectionId:guid}/oauth/launch")]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Launch(
-        Guid tenantId,
         Guid sourceConnectionId,
         [FromQuery] string? iss,
         [FromQuery] string? launch,
@@ -58,27 +57,27 @@ public sealed class OAuthController : ControllerBase
         }
 
         var authorizationUrl = await _authorizationService.StartEhrLaunchAsync(
-            tenantId, sourceConnectionId, iss, launch, BuildCallbackUri(), cancellationToken);
+            sourceConnectionId, iss, launch, BuildCallbackUri(), cancellationToken);
 
         return Redirect(authorizationUrl.ToString());
     }
 
     /// <summary>
-    /// Returns the opaque, encrypted launch URL to register with the EHR for a specific pipeline route. The tenant and
-    /// route ids are encrypted into the URL, so raw GUIDs are never exposed. Admin-only.
+    /// Returns the opaque, encrypted launch URL to register with the EHR for a specific pipeline route. The route id
+    /// is encrypted into the URL, so raw GUIDs are never exposed. Admin-only.
     /// </summary>
     [Authorize]
-    [HttpGet("tenants/{tenantId:guid}/pipelines/{routeId:guid}/launch-url")]
+    [HttpGet("pipelines/{routeId:guid}/launch-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetLaunchUrl(Guid tenantId, Guid routeId)
+    public IActionResult GetLaunchUrl(Guid routeId)
     {
-        var context = _authorizationService.BuildLaunchContextToken(tenantId, routeId);
+        var context = _authorizationService.BuildLaunchContextToken(routeId);
         return Ok(new { launchUrl = BuildLaunchUri(context) });
     }
 
     /// <summary>
-    /// The SMART EHR-launch entry point registered with the EHR for a specific pipeline route. The route (and tenant)
-    /// are carried in the encrypted <paramref name="context"/> segment — no raw GUIDs in the URL. The EHR appends the
+    /// The SMART EHR-launch entry point registered with the EHR for a specific pipeline route. The route is
+    /// carried in the encrypted <paramref name="context"/> segment — no raw GUIDs in the URL. The EHR appends the
     /// issuer (<c>iss</c>) + opaque <c>launch</c> token; on callback the resolved route is run for the launched
     /// patient. Anonymous — the launching user has no FHIRBridge session; security comes from the trusted-issuer check.
     /// </summary>
@@ -133,7 +132,6 @@ public sealed class OAuthController : ControllerBase
         return Ok(new
         {
             message = "Authorization complete. You can close this window and return to FHIRBridge.",
-            tenantId = result.TenantId,
             sourceConnectionId = result.SourceConnectionId,
             source = result.SourceName
         });

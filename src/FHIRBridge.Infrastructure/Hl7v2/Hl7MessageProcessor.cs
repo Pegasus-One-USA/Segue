@@ -50,11 +50,10 @@ public sealed class Hl7MessageProcessor
         {
             var bundleJson = Hl7v2ToFhirMapper.MapToFhirBundleJson(message);
             var payloadHash = ComputeHash(bundleJson);
-            var messageId = $"hl7v2:{_options.TenantId:N}:{_options.WebhookConfigurationId:N}:{payloadHash}";
+            var messageId = $"hl7v2:{_options.WebhookConfigurationId:N}:{payloadHash}";
 
             await _dispatcher.EnqueueAsync(
                 new WebhookIngestionCommand(
-                    _options.TenantId,
                     _options.WebhookConfigurationId,
                     bundleJson,
                     payloadHash,

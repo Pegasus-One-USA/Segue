@@ -11,7 +11,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
-[Route("api/v1/tenants/{tenantId:guid}/pipeline-runs")]
+[Route("api/v1/pipeline-runs")]
 public sealed class PipelineRunsController : ControllerBase
 {
     private readonly IConfiguredPipelineService _configuredPipelineService;
@@ -37,7 +37,6 @@ public sealed class PipelineRunsController : ControllerBase
     [ProducesResponseType(typeof(ConfiguredPipelineRunDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Start(
-        Guid tenantId,
         [FromBody] StartConfiguredPipelineRunRequest request,
         CancellationToken cancellationToken)
     {
@@ -46,10 +45,9 @@ public sealed class PipelineRunsController : ControllerBase
         // the request. Without a shared transport, run synchronously so local/dev still works.
         if (request.UseBulkExport && _hasSharedTransport)
         {
-            var messageId = $"bulkexport:{tenantId:N}:{Guid.NewGuid():N}";
+            var messageId = $"bulkexport:{Guid.NewGuid():N}";
             await _pipelineRunDispatcher.EnqueueAsync(
                 new PipelineRunCommand(
-                    tenantId,
                     request.ResourceTypes?.ToList() ?? [],
                     request.RunDueSchedulesOnly,
                     request.ScheduledAtUtc,
@@ -66,22 +64,19 @@ public sealed class PipelineRunsController : ControllerBase
         }
 
         var pipelineRun = await _configuredPipelineService.StartAsync(
-            tenantId,
             request,
             cancellationToken);
 
-        return Created($"/api/v1/tenants/{tenantId}/pipeline-runs/{pipelineRun.Id}", pipelineRun);
+        return Created($"/api/v1/pipeline-runs/{pipelineRun.Id}", pipelineRun);
     }
 
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<ConfiguredPipelineRunDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRecent(
-        Guid tenantId,
         [FromQuery] int count,
         CancellationToken cancellationToken)
     {
         var pipelineRuns = await _configuredPipelineService.GetRecentAsync(
-            tenantId,
             count <= 0 ? 100 : count,
             cancellationToken);
 
@@ -91,12 +86,10 @@ public sealed class PipelineRunsController : ControllerBase
     [HttpPost("{pipelineRunId:guid}/deactivate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Deactivate(
-        Guid tenantId,
         Guid pipelineRunId,
         CancellationToken cancellationToken)
     {
         await _configuredPipelineService.SetRunEnabledAsync(
-            tenantId,
             pipelineRunId,
             false,
             cancellationToken);

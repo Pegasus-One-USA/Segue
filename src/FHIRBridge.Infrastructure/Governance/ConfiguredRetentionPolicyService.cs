@@ -4,9 +4,9 @@ using Microsoft.Extensions.Configuration;
 namespace FHIRBridge.Infrastructure.Governance;
 
 /// <summary>
-/// Configuration-driven retention policy. Resolves the retention period for a (tenant, resource type) from
-/// <c>Governance:Retention</c>, falling back from a per-resource-type override → per-tenant default → platform
-/// default (7 years). Replaces the hard-coded policy so retention is configurable per tenant and resource type.
+/// Configuration-driven retention policy. Resolves the retention period for a resource type from
+/// <c>Governance:Retention</c>, falling back from a per-resource-type override → platform default (7 years).
+/// Replaces the hard-coded policy so retention is configurable per resource type.
 /// </summary>
 public sealed class ConfiguredRetentionPolicyService : IRetentionPolicyService
 {
@@ -19,12 +19,11 @@ public sealed class ConfiguredRetentionPolicyService : IRetentionPolicyService
         _configuration = configuration;
     }
 
-    public RetentionPolicy GetPolicy(Guid tenantId, string resourceType)
+    public RetentionPolicy GetPolicy(string resourceType)
     {
         var section = _configuration.GetSection("Governance:Retention");
 
-        var years = ReadInt(section.GetSection($"Tenants:{tenantId}:ResourceTypes:{resourceType}:Years"))
-            ?? ReadInt(section.GetSection($"Tenants:{tenantId}:Years"))
+        var years = ReadInt(section.GetSection($"ResourceTypes:{resourceType}:Years"))
             ?? ReadInt(section.GetSection("DefaultYears"))
             ?? FallbackYears;
 

@@ -13,7 +13,6 @@ public interface IPipelineMetrics
 /// <summary>
 /// A single completed pipeline run, captured at completion time. PHI-free by construction — counts and timing only.
 /// </summary>
-/// <param name="TenantId">Tenant the run belongs to.</param>
 /// <param name="Status">Terminal status (Completed, CompletedWithErrors, Failed).</param>
 /// <param name="ExtractedResourceCount">FHIR resources read from the source(s).</param>
 /// <param name="MappedRecordCount">Records produced by the mapping engine.</param>
@@ -22,7 +21,6 @@ public interface IPipelineMetrics
 /// <param name="Duration">Wall-clock duration of the run.</param>
 /// <param name="CompletedOnUtc">When the run completed (UTC).</param>
 public sealed record PipelineRunMetric(
-    Guid TenantId,
     string Status,
     int ExtractedResourceCount,
     int MappedRecordCount,
