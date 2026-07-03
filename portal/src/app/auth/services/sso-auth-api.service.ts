@@ -50,6 +50,19 @@ export class SsoAuthApiService {
       .pipe(tap(res => this.establishSession(res)));
   }
 
+  /**
+   * POST /users/accept-invite — accept a PASSWORD-based invitation.
+   * Returns the created UserDetailDto (NOT a session); the user logs in normally afterwards,
+   * so we do not establish a session here. Backend returns 400 for invalid/expired tokens.
+   */
+  acceptInvite(email: string, invitationToken: string, password: string): Observable<void> {
+    return this.http.post<void>(`${API}/users/accept-invite`, {
+      email,
+      invitationToken,
+      password,
+    });
+  }
+
   /** POST /users/accept-invite-sso — accept an invitation using an external IdP identity. */
   acceptInviteViaSso(
     email: string,
