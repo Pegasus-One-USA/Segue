@@ -194,6 +194,14 @@
         </button>
 
       </form>
+
+      <!-- ── SSO — create the first admin via an external identity ─────────── -->
+      <app-sso-buttons
+        verb="Create"
+        [disabled]="isLoading() || ssoBusy()"
+        (authenticated)="onSsoAuthenticated($event)"
+        (failed)="onSsoFailed($event)"
+      />
     </div>
 
   </div>

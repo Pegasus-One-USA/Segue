@@ -1,0 +1,92 @@
+// Shared SSO section styling — matches the enterprise auth-card conventions (teal accents,
+// rounded fields, subtle shadows). Neutral outlined buttons so vendor icons carry the branding.
+
+.sso-section {
+  margin-top: 22px;
+}
+
+.sso-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 18px;
+  color: var(--color-muted-2);
+  font-size: 12.5px;
+  font-weight: 500;
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+  }
+
+  span { white-space: nowrap; }
+}
+
+.sso-error {
+  display: block;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-left: 4px solid #DC2626;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #991B1B;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.sso-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sso-btn {
+  width: 100%;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-ink-2, #1A202C);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover:not(:disabled) {
+    border-color: #9CA3AF;
+    background: var(--color-side, #F8FAFC);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .sso-icon {
+    flex-shrink: 0;
+    display: block;
+  }
+
+  .sso-spinner {
+    --mdc-circular-progress-active-indicator-color: var(--color-primary);
+  }
+}

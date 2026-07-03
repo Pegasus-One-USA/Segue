@@ -127,5 +127,13 @@
 
     </form>
 
+    <!-- ── SSO ─────────────────────────────────────────────────── -->
+    <app-sso-buttons
+      verb="Continue"
+      [disabled]="isLoading() || ssoBusy()"
+      (authenticated)="onSsoAuthenticated($event)"
+      (failed)="onSsoFailed($event)"
+    />
+
   </div>
 </div>

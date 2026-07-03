@@ -10,7 +10,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
+import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.component';
+import { SsoAuthApiService } from '../../services/sso-auth-api.service';
+import { SsoResult } from '../../services/sso.service';
 
 @Component({
   selector: 'app-login',
@@ -24,14 +30,20 @@ import { AuthService } from '../../services/auth.service';
     MatCheckboxModule,
     MatProgressSpinnerModule,
     MatIconModule,
+    SsoButtonsComponent,
   ],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
 })
 export class LoginComponent {
-  private readonly fb    = inject(FormBuilder);
-  private readonly route = inject(ActivatedRoute);
+  private readonly fb       = inject(FormBuilder);
+  private readonly route    = inject(ActivatedRoute);
+  private readonly router   = inject(Router);
+  private readonly ssoApi   = inject(SsoAuthApiService);
+  private readonly snackBar = inject(MatSnackBar);
   protected readonly auth = inject(AuthService);
+
+  protected readonly ssoBusy = signal(false);
 
   protected readonly isLoading = this.auth.isLoading;
   protected readonly error     = this.auth.error;
@@ -71,5 +83,27 @@ export class LoginComponent {
   protected fieldError(field: string, error: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl?.hasError(error) && (ctrl.touched || this.submitted()));
+  }
+
+  // ─── SSO ───────────────────────────────────────────────────────────────────
+  protected onSsoAuthenticated(result: SsoResult): void {
+    this.ssoBusy.set(true);
+    this.ssoApi.ssoLogin(result.provider, result.token).subscribe({
+      next: () => {
+        this.ssoBusy.set(false);
+        this.router.navigate(['/dashboard']);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.ssoBusy.set(false);
+        const message = err?.status === 401
+          ? 'No matching account found for this identity. Ask an administrator for an invitation.'
+          : err?.error?.message ?? 'Single sign-on failed. Please try again.';
+        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+      },
+    });
+  }
+
+  protected onSsoFailed(message: string): void {
+    this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
   }
 }

@@ -9,10 +9,15 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { HttpErrorResponse } from '@angular/common/http';
 import { InvitationService } from '../../services/invitation.service';
 import { PasswordPolicyService } from '../../services/password-policy.service';
 import { Invitation } from '../../models/invitation.model';
 import { PasswordValidation } from '../../models/password-policy.model';
+import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.component';
+import { SsoAuthApiService } from '../../services/sso-auth-api.service';
+import { SsoResult } from '../../services/sso.service';
 
 export type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepted' | 'success';
 
@@ -34,6 +39,7 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    SsoButtonsComponent,
   ],
   templateUrl: './set-password.component.html',
   styleUrl: './set-password.component.scss',
@@ -44,6 +50,8 @@ export class SetPasswordComponent implements OnInit {
   private readonly fb         = inject(FormBuilder);
   private readonly invSvc     = inject(InvitationService);
   private readonly policySvc  = inject(PasswordPolicyService);
+  private readonly ssoApi     = inject(SsoAuthApiService);
+  private readonly snackBar   = inject(MatSnackBar);
 
   protected readonly state      = signal<PageState>('loading');
   protected readonly invitation = signal<Invitation | null>(null);
@@ -53,6 +61,10 @@ export class SetPasswordComponent implements OnInit {
   protected readonly showCfm    = signal(false);
   protected readonly serverError = signal('');
   protected readonly redirectSeconds = signal(3);
+
+  /** Accept-invite method toggle: password (default) vs single sign-on. */
+  protected readonly method = signal<'password' | 'sso'>('password');
+  protected readonly ssoBusy = signal(false);
 
   private token = '';
 
@@ -108,6 +120,37 @@ export class SetPasswordComponent implements OnInit {
 
   protected togglePw():  void { this.showPw.update(v => !v); }
   protected toggleCfm(): void { this.showCfm.update(v => !v); }
+
+  protected setMethod(m: 'password' | 'sso'): void {
+    this.serverError.set('');
+    this.method.set(m);
+  }
+
+  // ─── SSO accept-invite ──────────────────────────────────────────────────────
+  protected onSsoAuthenticated(result: SsoResult): void {
+    const inv = this.invitation();
+    if (!inv) return;
+    this.serverError.set('');
+    this.ssoBusy.set(true);
+    // SsoAuthApiService.establishSession stores tokens + populates AuthStore on success.
+    this.ssoApi.acceptInviteViaSso(inv.email, this.token, result.provider, result.token).subscribe({
+      next: () => {
+        this.ssoBusy.set(false);
+        this.router.navigate(['/dashboard']);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.ssoBusy.set(false);
+        const message = err?.error?.message
+          ?? 'Could not accept the invitation with that identity. Ensure the email matches your invite.';
+        this.serverError.set(message);
+        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+      },
+    });
+  }
+
+  protected onSsoFailed(message: string): void {
+    this.serverError.set(message);
+  }
 
   protected submit(): void {
     this.submitted.set(true);

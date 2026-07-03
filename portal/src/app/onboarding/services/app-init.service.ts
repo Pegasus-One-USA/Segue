@@ -59,6 +59,11 @@ export class AppInitService {
     );
   }
 
+  /** Clears the first-run flag so guards stop routing to /setup (e.g. after SSO superadmin setup). */
+  markSetupComplete(): void {
+    this._requiresSetup.set(false);
+  }
+
   /** POSTs the one-time superadmin. Returns the LocalLoginResponse (login-shaped). */
   createSuperAdmin(req: CreateSuperAdminRequest): Observable<LocalLoginResponse> {
     return this.http.post<LocalLoginResponse>(`${BASE}/setup-superadmin`, req).pipe(

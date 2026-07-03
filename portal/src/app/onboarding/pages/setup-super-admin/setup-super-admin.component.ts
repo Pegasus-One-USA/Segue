@@ -19,6 +19,9 @@ import { AuthStore } from '../../../auth/store/auth.store';
 import { SessionService } from '../../../auth/services/session.service';
 import { TokenService } from '../../../auth/services/token.service';
 import { buildUserFromJwt } from '../../../auth/services/jwt-user.mapper';
+import { SsoButtonsComponent } from '../../../auth/components/sso-buttons/sso-buttons.component';
+import { SsoAuthApiService } from '../../../auth/services/sso-auth-api.service';
+import { SsoResult } from '../../../auth/services/sso.service';
 
 function matchPasswords(group: AbstractControl): ValidationErrors | null {
   const pw  = group.get('password')?.value        as string;
@@ -35,6 +38,7 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
     MatIconModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
+    SsoButtonsComponent,
   ],
   templateUrl: './setup-super-admin.component.html',
   styleUrl: './setup-super-admin.component.scss',
@@ -45,11 +49,14 @@ export class SetupSuperAdminComponent {
   private readonly appInit   = inject(AppInitService);
   private readonly policySvc = inject(PasswordPolicyService);
   private readonly snackBar  = inject(MatSnackBar);
+  private readonly ssoApi    = inject(SsoAuthApiService);
 
   // Login success handling — reuse the exact login pattern (see AuthService.login).
   private readonly store    = inject(AuthStore);
   private readonly session  = inject(SessionService);
   private readonly tokens   = inject(TokenService);
+
+  protected readonly ssoBusy = signal(false);
 
   protected readonly isLoading   = signal(false);
   protected readonly submitted   = signal(false);
@@ -134,6 +141,37 @@ export class SetupSuperAdminComponent {
         this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
       },
     });
+  }
+
+  // ─── SSO ───────────────────────────────────────────────────────────────────
+  protected onSsoAuthenticated(result: SsoResult): void {
+    this.serverError.set('');
+    this.ssoBusy.set(true);
+    // SsoAuthApiService.establishSession stores tokens + populates AuthStore on success.
+    this.ssoApi.setupSuperAdminSso(result.provider, result.token).subscribe({
+      next: () => {
+        this.appInit.markSetupComplete();
+        this.ssoBusy.set(false);
+        this.router.navigate(['/dashboard']);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.ssoBusy.set(false);
+        if (err?.status === 409) {
+          const msg = 'Setup already completed — please go to the sign-in page.';
+          this.serverError.set(msg);
+          this.snackBar.open(msg, 'Go to Sign In', { duration: 8000, panelClass: ['snack-error'] })
+            .onAction().subscribe(() => this.router.navigate(['/auth/login']));
+          return;
+        }
+        const message = err?.error?.message ?? 'Setup failed. Please try again.';
+        this.serverError.set(message);
+        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+      },
+    });
+  }
+
+  protected onSsoFailed(message: string): void {
+    this.serverError.set(message);
   }
 
   protected strengthLabel(v: PasswordValidation): string {
