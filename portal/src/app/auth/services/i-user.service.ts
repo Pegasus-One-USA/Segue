@@ -1,7 +1,7 @@
 import { Observable } from 'rxjs';
 import {
   User, Role, Permission,
-  PaginatedResponse, MessageResponse, UserQueryParams,
+  PaginatedResponse, MessageResponse, UserQueryParams, InviteResult,
 } from '../models/user.model';
 import {
   CreateUserRequest, UpdateUserRequest, InviteUserRequest,
@@ -20,7 +20,7 @@ export abstract class IUserService {
   abstract removeRole(userId: string, roleId: string): Observable<User>;
   abstract getRoles(): Observable<Role[]>;
   abstract getPermissions(): Observable<Permission[]>;
-  abstract inviteUser(req: InviteUserRequest): Observable<MessageResponse>;
-  abstract resendInvitation(userId: string): Observable<MessageResponse>;
+  abstract inviteUser(req: InviteUserRequest): Observable<InviteResult>;
+  abstract resendInvitation(userId: string): Observable<InviteResult>;
   abstract resetUserPassword(userId: string): Observable<MessageResponse>;
 }

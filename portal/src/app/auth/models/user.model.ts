@@ -105,15 +105,43 @@ export interface RoleDto {
   isSystemRole: boolean;
 }
 
+/** Backend numeric user status: 1 = Invited, 2 = Active, 3 = Inactive. */
+export type BackendUserStatus = 1 | 2 | 3;
+
 export interface UserManagementDto {
   id:                   string;
   externalUserId:       string;
   email:                string;
   displayName:          string;
+  status:               BackendUserStatus;
   isEnabled:            boolean;
   isLocalLoginEnabled:  boolean;
   mustChangePassword:   boolean;
   globalRoleNames:      string[];
   createdOnUtc:         string;
   lastLoginOnUtc:       string | null;
+}
+
+export interface UserDetailDto {
+  id:               string;
+  email:            string;
+  firstName:        string;
+  lastName:         string;
+  displayName:      string;
+  status:           BackendUserStatus;
+  isEnabled:        boolean;
+  roles:            RoleDto[];
+  createdOnUtc:     string;
+  lastLoginOnUtc:   string | null;
+  invitationToken?: string;
+}
+
+/** Result of an invite / resend-invite call, surfaced to the UI so it can show the invite link. */
+export interface InviteResult {
+  success:          boolean;
+  message:          string;
+  email:            string;
+  invitationToken?: string;
+  /** Absolute link the invited user should open to set their password. */
+  invitationLink?:  string;
 }

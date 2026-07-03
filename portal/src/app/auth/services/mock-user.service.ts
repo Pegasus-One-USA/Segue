@@ -4,7 +4,7 @@ import { delay, switchMap } from 'rxjs/operators';
 import { IUserService } from './i-user.service';
 import {
   User, Role, Permission,
-  PaginatedResponse, MessageResponse, UserQueryParams, UserStatus,
+  PaginatedResponse, MessageResponse, UserQueryParams, UserStatus, InviteResult,
 } from '../models/user.model';
 import { CreateUserRequest, UpdateUserRequest, InviteUserRequest } from '../models/auth-request.model';
 import { MOCK_USERS, ALL_ROLES, ALL_PERMISSIONS, DEFAULT_PASSWORD } from '../mock/mock-db';
@@ -209,7 +209,7 @@ export class MockUserService extends IUserService {
   }
 
   // ─── Invite User ──────────────────────────────────────────────────────────
-  override inviteUser(req: InviteUserRequest): Observable<MessageResponse> {
+  override inviteUser(req: InviteUserRequest): Observable<InviteResult> {
     return of(null).pipe(
       delay(900),
       switchMap(() => {
@@ -239,19 +239,33 @@ export class MockUserService extends IUserService {
         };
 
         MOCK_USERS.push(invited);
-        return of<MessageResponse>({ success: true, message: `Invitation sent to ${req.email}.` });
+        const token = `mock-invite-${Date.now().toString(36)}`;
+        return of<InviteResult>({
+          success:         true,
+          message:         `Invitation sent to ${req.email}.`,
+          email:           req.email,
+          invitationToken: token,
+          invitationLink:  `${location.origin}/auth/set-password?token=${token}`,
+        });
       })
     );
   }
 
   // ─── Resend Invitation ────────────────────────────────────────────────────
-  override resendInvitation(userId: string): Observable<MessageResponse> {
+  override resendInvitation(userId: string): Observable<InviteResult> {
     return of(null).pipe(
       delay(600),
       switchMap(() => {
         const user = MOCK_USERS.find(u => u.id === userId);
         if (!user) return throwError(() => ({ code: 'NOT_FOUND', message: 'User not found.' }));
-        return of<MessageResponse>({ success: true, message: `Invitation resent to ${user.email}.` });
+        const token = `mock-invite-${Date.now().toString(36)}`;
+        return of<InviteResult>({
+          success:         true,
+          message:         `Invitation resent to ${user.email}.`,
+          email:           user.email,
+          invitationToken: token,
+          invitationLink:  `${location.origin}/auth/set-password?token=${token}`,
+        });
       })
     );
   }

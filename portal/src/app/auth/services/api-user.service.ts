@@ -1,43 +1,90 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
+import { map, catchError, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { IUserService } from './i-user.service';
 import { CreateUserRequest, UpdateUserRequest, InviteUserRequest } from '../models/auth-request.model';
 import {
-  User, UserRole, UserQueryParams, PaginatedResponse, MessageResponse,
-  UserManagementDto, RoleDto, PermissionDto, Role, Permission,
+  User, UserRole, UserStatus, UserQueryParams, PaginatedResponse, MessageResponse,
+  UserManagementDto, UserDetailDto, RoleDto, PermissionDto, Role, Permission,
+  BackendUserStatus, InviteResult,
 } from '../models/user.model';
 
-function mapDto(dto: UserManagementDto): User {
-  const parts     = dto.displayName.trim().split(/\s+/);
-  const firstName = parts[0] ?? '';
-  const lastName  = parts.slice(1).join(' ');
-  const roleMap: Record<string, UserRole> = {
-    'admin':          'system-admin',
-    'unifiedadmin':   'system-admin',
-    'tenantadmin':    'tenant-admin',
-    'developer':      'developer',
-    'pipelineeditor': 'pipeline-editor',
-    'reviewer':       'reviewer',
-    'auditor':        'auditor',
-    'analyst':        'analyst',
-    'viewer':         'viewer',
+// ─── Role-name → front-end UserRole mapping ──────────────────────────────────
+const ROLE_MAP: Record<string, UserRole> = {
+  'admin':          'system-admin',
+  'superadmin':     'system-admin',
+  'globaladmin':    'system-admin',
+  'unifiedadmin':   'system-admin',
+  'systemadmin':    'system-admin',
+  'tenantadmin':    'tenant-admin',
+  'developer':      'developer',
+  'pipelineeditor': 'pipeline-editor',
+  'reviewer':       'reviewer',
+  'auditor':        'auditor',
+  'analyst':        'analyst',
+  'viewer':         'viewer',
+};
+
+function toUserRole(name: string | undefined): UserRole {
+  const raw = (name ?? '').toLowerCase().replace(/[\s-]/g, '');
+  return ROLE_MAP[raw] ?? 'viewer';
+}
+
+/** Backend numeric status (1 Invited / 2 Active / 3 Inactive) → front-end string. */
+function toStatus(status: BackendUserStatus | undefined, isEnabled: boolean): UserStatus {
+  switch (status) {
+    case 1:  return 'pending';   // Invited
+    case 2:  return 'active';
+    case 3:  return 'inactive';
+    default: return isEnabled ? 'active' : 'inactive';
+  }
+}
+
+function splitName(displayName: string, first?: string, last?: string): { firstName: string; lastName: string } {
+  if (first || last) return { firstName: first ?? '', lastName: last ?? '' };
+  const parts = (displayName ?? '').trim().split(/\s+/);
+  return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') };
+}
+
+function mapRoleDto(dto: RoleDto): Role {
+  return {
+    id:           dto.id,
+    name:         toUserRole(dto.name),
+    displayName:  dto.name,
+    description:  dto.description,
+    permissions:  (dto.permissions ?? []).map(mapPermissionDto),
+    color:        '#64748B',
+    isSystemRole: dto.isSystemRole,
+    createdAt:    '',
   };
-  const rawRole = (dto.globalRoleNames[0] ?? '').toLowerCase().replace(/[\s-]/g, '');
-  const role: UserRole = roleMap[rawRole] ?? 'viewer';
+}
+
+function mapPermissionDto(dto: PermissionDto): Permission {
+  const [resource, action] = (dto.name ?? '').split(/[.:]/);
+  return {
+    id:          dto.id,
+    name:        dto.name,
+    resource:    resource ?? '',
+    action:      action ?? '',
+    description: dto.description,
+  };
+}
+
+function mapListDto(dto: UserManagementDto): User {
+  const { firstName, lastName } = splitName(dto.displayName);
   return {
     id:                 dto.id,
     email:              dto.email,
     firstName,
     lastName,
     fullName:           dto.displayName,
-    role,
+    role:               toUserRole(dto.globalRoleNames?.[0]),
     roles:              [],
     permissions:        [],
     orgId:              '',
-    status:             dto.isEnabled ? 'active' : 'inactive',
+    status:             toStatus(dto.status, dto.isEnabled),
     loginType:          dto.isLocalLoginEnabled ? 'local' : 'sso',
     mustChangePassword: dto.mustChangePassword,
     emailVerified:      true,
@@ -45,23 +92,60 @@ function mapDto(dto: UserManagementDto): User {
     lastLoginAt:        dto.lastLoginOnUtc ?? undefined,
     createdAt:          dto.createdOnUtc,
     updatedAt:          dto.createdOnUtc,
-    _globalRoleNames:   dto.globalRoleNames,
-  } as any;
+    _globalRoleNames:   dto.globalRoleNames ?? [],
+  } as unknown as User;
 }
 
-const notImpl = () => throwError(() => new Error('Not implemented — backend endpoint not yet available'));
+function mapDetailDto(dto: UserDetailDto): User {
+  const { firstName, lastName } = splitName(dto.displayName, dto.firstName, dto.lastName);
+  const roles = (dto.roles ?? []).map(mapRoleDto);
+  return {
+    id:                 dto.id,
+    email:              dto.email,
+    firstName,
+    lastName,
+    fullName:           dto.displayName || `${firstName} ${lastName}`.trim(),
+    role:               roles[0]?.name ?? 'viewer',
+    roles,
+    permissions:        [...new Map(roles.flatMap(r => r.permissions).map(p => [p.id, p])).values()],
+    orgId:              '',
+    status:             toStatus(dto.status, dto.isEnabled),
+    loginType:          'local',
+    mustChangePassword: false,
+    emailVerified:      true,
+    twoFactorEnabled:   false,
+    lastLoginAt:        dto.lastLoginOnUtc ?? undefined,
+    createdAt:          dto.createdOnUtc,
+    updatedAt:          dto.createdOnUtc,
+    _globalRoleNames:   (dto.roles ?? []).map(r => r.name),
+  } as unknown as User;
+}
+
+function toInviteResult(dto: UserDetailDto, fallbackEmail: string): InviteResult {
+  const token = dto.invitationToken;
+  return {
+    success:         true,
+    message:         `Invitation ready for ${dto.email || fallbackEmail}.`,
+    email:           dto.email || fallbackEmail,
+    invitationToken: token,
+    invitationLink:  token ? `${location.origin}/auth/set-password?token=${token}` : undefined,
+  };
+}
+
+const notImpl = () =>
+  throwError(() => new Error('Not implemented — backend endpoint not yet available'));
 
 @Injectable({ providedIn: 'root' })
 export class ApiUserService extends IUserService {
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiBase}/api/v1`;
 
+  // ─── List ──────────────────────────────────────────────────────────────────
   getUsers(params?: UserQueryParams): Observable<PaginatedResponse<User>> {
     return this.http.get<UserManagementDto[]>(`${this.base}/users`).pipe(
       map(dtos => {
-        let items = dtos.map(mapDto);
+        let items = (dtos ?? []).map(mapListDto);
 
-        // search
         if (params?.search) {
           const q = params.search.toLowerCase();
           items = items.filter(u =>
@@ -70,22 +154,19 @@ export class ApiUserService extends IUserService {
           );
         }
 
-        // role filter (match against _globalRoleNames)
         if (params?.role) {
-          const targetRole = params.role.toLowerCase().replace(/[- ]/g, '');
+          const target = params.role.toLowerCase().replace(/[\s-]/g, '');
           items = items.filter(u =>
             ((u as any)._globalRoleNames as string[]).some(
-              (r: string) => r.toLowerCase().replace(/[\s-]/g, '') === targetRole
+              r => r.toLowerCase().replace(/[\s-]/g, '') === target
             )
           );
         }
 
-        // status filter
         if (params?.status) {
           items = items.filter(u => u.status === params.status);
         }
 
-        // sort
         const sortKey = params?.sortBy ?? 'createdAt';
         const dir     = params?.sortOrder === 'asc' ? 1 : -1;
         items = [...items].sort((a: any, b: any) => {
@@ -94,7 +175,6 @@ export class ApiUserService extends IUserService {
           return av < bv ? -dir : av > bv ? dir : 0;
         });
 
-        // paginate
         const page    = params?.page    ?? 1;
         const perPage = params?.perPage ?? 25;
         const total   = items.length;
@@ -113,39 +193,108 @@ export class ApiUserService extends IUserService {
     );
   }
 
+  // ─── Get one ───────────────────────────────────────────────────────────────
   getUser(id: string): Observable<User> {
-    return this.http.get<UserManagementDto>(`${this.base}/users/${id}`).pipe(
-      map(mapDto),
+    return this.http.get<UserDetailDto>(`${this.base}/users/${id}`).pipe(
+      map(mapDetailDto),
       catchError(err => throwError(() => err))
     );
   }
 
-  getUserRoles(userId: string): Observable<RoleDto[]> {
-    return this.http.get<RoleDto[]>(`${this.base}/users/${userId}/roles`);
+  // ─── Invite ────────────────────────────────────────────────────────────────
+  inviteUser(req: InviteUserRequest): Observable<InviteResult> {
+    const body = {
+      email:     req.email,
+      roleId:    req.roleId,
+      firstName: req.firstName || undefined,
+      lastName:  req.lastName || undefined,
+    };
+    return this.http.post<UserDetailDto>(`${this.base}/users/invite`, body).pipe(
+      map(dto => toInviteResult(dto, req.email)),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Resend invite ───────────────────────────────────────────────────────
+  resendInvitation(userId: string): Observable<InviteResult> {
+    return this.http.post<UserDetailDto>(`${this.base}/users/${userId}/resend-invite`, {}).pipe(
+      map(dto => toInviteResult(dto, dto?.email ?? '')),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Delete ────────────────────────────────────────────────────────────────
+  deleteUser(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/users/${id}`).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Activate / Deactivate (status endpoint) ────────────────────────────────
+  enableUser(id: string): Observable<User> {
+    return this.setStatus(id, true);
+  }
+
+  disableUser(id: string): Observable<User> {
+    return this.setStatus(id, false);
+  }
+
+  private setStatus(id: string, isEnabled: boolean): Observable<User> {
+    return this.http.patch<UserDetailDto>(`${this.base}/users/${id}/status`, { isEnabled }).pipe(
+      map(mapDetailDto),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Update ────────────────────────────────────────────────────────────────
+  updateUser(id: string, req: UpdateUserRequest): Observable<User> {
+    const displayName = [req.firstName, req.lastName].filter(Boolean).join(' ').trim() || undefined;
+    const roleNames   = req.role ? [req.role] : [];
+    const body = {
+      displayName,
+      isEnabled:            req.status ? req.status === 'active' : true,
+      roleNames,
+      requirePasswordChange: false,
+    };
+    return this.http.put<UserManagementDto>(`${this.base}/users/${id}`, body).pipe(
+      map(mapListDto),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Assign / remove role ────────────────────────────────────────────────
+  assignRole(userId: string, roleId: string): Observable<User> {
+    return this.http.post<UserDetailDto>(`${this.base}/users/${userId}/roles`, { roleId }).pipe(
+      map(mapDetailDto),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  removeRole(userId: string, roleId: string): Observable<User> {
+    // Backend returns 204; re-fetch the user so callers get the updated role set.
+    return this.http.delete<void>(`${this.base}/users/${userId}/roles/${roleId}`).pipe(
+      switchMap(() => this.getUser(userId)),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Roles (read-only, for dropdowns) ────────────────────────────────────
+  getRoles(): Observable<Role[]> {
+    return this.http.get<RoleDto[]>(`${this.base}/roles`).pipe(
+      map(dtos => (dtos ?? []).map(mapRoleDto)),
+      catchError(err => throwError(() => err))
+    );
   }
 
   getPermissions(): Observable<Permission[]> {
     return this.http.get<PermissionDto[]>(`${this.base}/permissions`).pipe(
-      map(dtos => dtos.map(d => ({
-        id:          d.id,
-        name:        d.name,
-        resource:    '',
-        action:      '',
-        description: d.description,
-      })))
+      map(dtos => (dtos ?? []).map(mapPermissionDto)),
+      catchError(err => throwError(() => err))
     );
   }
 
-  getRoles(): Observable<Role[]>                                     { return notImpl() as any; }
-  createUser(_req: CreateUserRequest): Observable<User>              { return notImpl() as any; }
-  updateUser(_id: string, _req: UpdateUserRequest): Observable<User> { return notImpl() as any; }
-  deleteUser(_id: string): Observable<void>                          { return notImpl() as any; }
-  enableUser(_id: string): Observable<User>                          { return notImpl() as any; }
-  disableUser(_id: string): Observable<User>                         { return notImpl() as any; }
-  suspendUser(_id: string): Observable<User>                         { return notImpl() as any; }
-  assignRole(_userId: string, _roleId: string): Observable<User>     { return notImpl() as any; }
-  removeRole(_userId: string, _roleId: string): Observable<User>     { return notImpl() as any; }
-  inviteUser(_req: InviteUserRequest): Observable<MessageResponse>   { return notImpl() as any; }
-  resendInvitation(_userId: string): Observable<MessageResponse>     { return notImpl() as any; }
-  resetUserPassword(_userId: string): Observable<MessageResponse>    { return notImpl() as any; }
+  // ─── Not backed by an endpoint yet ───────────────────────────────────────
+  createUser(_req: CreateUserRequest): Observable<User>          { return notImpl() as any; }
+  suspendUser(_id: string): Observable<User>                     { return notImpl() as any; }
+  resetUserPassword(_userId: string): Observable<MessageResponse>{ return notImpl() as any; }
 }

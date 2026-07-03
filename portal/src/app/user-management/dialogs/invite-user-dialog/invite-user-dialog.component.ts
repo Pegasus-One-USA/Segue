@@ -3,7 +3,7 @@ import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -14,19 +14,9 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { IUserService } from '../../../auth/services/i-user.service';
-import { UserRole } from '../../../auth/models/user.model';
+import { Role, UserRole } from '../../../auth/models/user.model';
 import { InviteUserRequest } from '../../../auth/models/auth-request.model';
-
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: 'system-admin',    label: 'System Admin' },
-  { value: 'tenant-admin',    label: 'Tenant Admin' },
-  { value: 'developer',       label: 'Developer' },
-  { value: 'pipeline-editor', label: 'Pipeline Editor' },
-  { value: 'reviewer',        label: 'Reviewer' },
-  { value: 'auditor',         label: 'Auditor' },
-  { value: 'analyst',         label: 'Analyst' },
-  { value: 'viewer',          label: 'Viewer' },
-];
+import { InviteResultDialogComponent } from '../invite-result-dialog/invite-result-dialog.component';
 
 @Component({
   selector: 'app-invite-user-dialog',
@@ -49,26 +39,45 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 export class InviteUserDialogComponent implements OnInit {
   private readonly userService = inject(IUserService);
   private readonly dialogRef   = inject(MatDialogRef<InviteUserDialogComponent>);
+  private readonly dialog      = inject(MatDialog);
   private readonly snackBar    = inject(MatSnackBar);
   private readonly fb          = inject(FormBuilder);
 
   // ─── State ───────────────────────────────────────────────────────────────
-  loading   = signal(false);
-  submitted = signal(false);
+  loading      = signal(false);
+  submitted    = signal(false);
+  rolesLoading = signal(true);
+  roles        = signal<Role[]>([]);
 
   // ─── Form ────────────────────────────────────────────────────────────────
   form!: FormGroup;
 
-  readonly roleOptions = ROLE_OPTIONS;
-
   // ─── Lifecycle ───────────────────────────────────────────────────────────
   ngOnInit(): void {
     this.form = this.fb.group({
-      email:      ['', [Validators.required, Validators.email]],
-      firstName:  ['', [Validators.required, Validators.maxLength(80)]],
-      lastName:   ['', [Validators.required, Validators.maxLength(80)]],
-      role:       ['viewer' as UserRole, Validators.required],
-      department: [''],
+      email:     ['', [Validators.required, Validators.email]],
+      firstName: ['', [Validators.maxLength(80)]],
+      lastName:  ['', [Validators.maxLength(80)]],
+      roleId:    ['', Validators.required],
+    });
+
+    this.loadRoles();
+  }
+
+  private loadRoles(): void {
+    this.rolesLoading.set(true);
+    this.userService.getRoles().subscribe({
+      next: roles => {
+        this.roles.set(roles);
+        this.rolesLoading.set(false);
+        // Default to a sensible non-admin role if present.
+        const viewer = roles.find(r => r.name === 'viewer') ?? roles[0];
+        if (viewer) this.form.get('roleId')!.setValue(viewer.id);
+      },
+      error: err => {
+        this.rolesLoading.set(false);
+        this.snackBar.open(err?.message ?? 'Failed to load roles.', 'Dismiss', { duration: 4000 });
+      },
     });
   }
 
@@ -88,12 +97,13 @@ export class InviteUserDialogComponent implements OnInit {
 
     this.loading.set(true);
     const value = this.form.value;
+    const selectedRole = this.roles().find(r => r.id === value.roleId);
     const req: InviteUserRequest = {
-      email:      value.email.trim().toLowerCase(),
-      firstName:  value.firstName.trim(),
-      lastName:   value.lastName.trim(),
-      role:       value.role,
-      department: value.department?.trim() || undefined,
+      email:     value.email.trim().toLowerCase(),
+      firstName: value.firstName?.trim() ?? '',
+      lastName:  value.lastName?.trim() ?? '',
+      role:      (selectedRole?.name ?? 'viewer') as UserRole,
+      roleId:    value.roleId,
     };
 
     this.userService.inviteUser(req).subscribe({
@@ -104,12 +114,16 @@ export class InviteUserDialogComponent implements OnInit {
           'Dismiss',
           { duration: 4000, panelClass: 'snack-success' },
         );
+        // Show the invitation link with a copy button.
+        this.dialog.open(InviteResultDialogComponent, {
+          width: '540px', restoreFocus: false, data: res,
+        });
         this.dialogRef.close(res);
       },
       error: err => {
         this.loading.set(false);
         this.snackBar.open(
-          err?.message ?? 'Failed to send invitation. Please try again.',
+          err?.error?.message ?? err?.message ?? 'Failed to send invitation. Please try again.',
           'Dismiss',
           { duration: 5000, panelClass: 'snack-error' },
         );
