@@ -11,13 +11,10 @@ public sealed class UnifiedAdminRequirement : IAuthorizationRequirement
             UnifiedRoles.Admin,
             "FHIRBridge.SuperAdmin",
             "FHIRBridge.Admin",
-            // Legacy role-claim names retained so tokens issued before the SuperAdmin/Admin
-            // rename (GlobalAdmin/TenantAdmin) — and the five-role migration before that —
-            // still authorize.
+            // Legacy role-claim name retained so tokens issued before the SuperAdmin/Admin
+            // rename (GlobalAdmin) still authorize.
             "GlobalAdmin",
-            "TenantAdmin",
-            "FHIRBridge.GlobalAdmin",
-            "FHIRBridge.TenantAdmin"
+            "FHIRBridge.GlobalAdmin"
         ],
         StringComparer.OrdinalIgnoreCase);
 }

@@ -3,8 +3,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
-
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
@@ -272,6 +270,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     PasswordResetTokenHash = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     PasswordResetTokenExpiresOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Status = table.Column<int>(type: "int", nullable: false),
+                    LoginProvider = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     IsEnabled = table.Column<bool>(type: "bit", nullable: false),
                     LastLoginOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     FailedLoginCount = table.Column<int>(type: "int", nullable: false),
@@ -472,105 +471,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         principalTable: "WebhookConfigurations",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.InsertData(
-                table: "Permissions",
-                columns: new[] { "Id", "Category", "CreatedBy", "CreatedOnUtc", "DeletedBy", "DeletedOnUtc", "Description", "IsDeleted", "IsSystem", "ModifiedBy", "ModifiedOnUtc", "Name" },
-                values: new object[,]
-                {
-                    { new Guid("20000000-0000-0000-0000-000000000003"), "Configuration", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Manage source, destination, mapping, webhook, and route configuration.", false, true, null, null, "configuration.write" },
-                    { new Guid("20000000-0000-0000-0000-000000000004"), "Pipeline", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Execute configured pipeline routes.", false, true, null, null, "pipeline.execute" },
-                    { new Guid("20000000-0000-0000-0000-000000000005"), "Audit", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Read operational audit logs.", false, true, null, null, "auditlogs.read" },
-                    { new Guid("20000000-0000-0000-0000-000000000006"), "Configuration", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Test source system connectivity.", false, true, null, null, "sourceconnections.test" },
-                    { new Guid("20000000-0000-0000-0001-000000000001"), "User", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Invite a new user to the organization.", false, true, null, null, "user.invite" },
-                    { new Guid("20000000-0000-0000-0001-000000000002"), "User", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "View the list of users.", false, true, null, null, "user.view" },
-                    { new Guid("20000000-0000-0000-0001-000000000003"), "User", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Update a user's profile information.", false, true, null, null, "user.edit" },
-                    { new Guid("20000000-0000-0000-0001-000000000004"), "User", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Deactivate a user account.", false, true, null, null, "user.deactivate" },
-                    { new Guid("20000000-0000-0000-0002-000000000001"), "Role", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Create a new custom role.", false, true, null, null, "role.create" },
-                    { new Guid("20000000-0000-0000-0002-000000000002"), "Role", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Edit an existing role.", false, true, null, null, "role.edit" },
-                    { new Guid("20000000-0000-0000-0002-000000000003"), "Role", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Delete a custom role.", false, true, null, null, "role.delete" },
-                    { new Guid("20000000-0000-0000-0002-000000000004"), "Role", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Assign or remove roles from users.", false, true, null, null, "role.assign" },
-                    { new Guid("20000000-0000-0000-0002-000000000005"), "Role", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "View roles and their permissions.", false, true, null, null, "role.view" },
-                    { new Guid("20000000-0000-0000-0003-000000000001"), "Workflow", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Create a new workflow.", false, true, null, null, "workflow.create" },
-                    { new Guid("20000000-0000-0000-0003-000000000002"), "Workflow", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Edit an existing workflow.", false, true, null, null, "workflow.edit" },
-                    { new Guid("20000000-0000-0000-0003-000000000003"), "Workflow", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Delete a workflow.", false, true, null, null, "workflow.delete" },
-                    { new Guid("20000000-0000-0000-0003-000000000004"), "Workflow", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Execute a workflow.", false, true, null, null, "workflow.run" },
-                    { new Guid("20000000-0000-0000-0003-000000000005"), "Workflow", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "View workflow details.", false, true, null, null, "workflow.view" },
-                    { new Guid("20000000-0000-0000-0005-000000000001"), "Report", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "View reports and analytics.", false, true, null, null, "report.view" },
-                    { new Guid("20000000-0000-0000-0006-000000000001"), "Payload", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "View data payloads from workflow runs.", false, true, null, null, "payload.view" }
-                });
-
-            migrationBuilder.InsertData(
-                table: "Roles",
-                columns: new[] { "Id", "CreatedBy", "CreatedOnUtc", "DeletedBy", "DeletedOnUtc", "Description", "IsDefault", "IsDeleted", "IsEnabled", "IsSystem", "ModifiedBy", "ModifiedOnUtc", "Name" },
-                values: new object[,]
-                {
-                    { new Guid("10000000-0000-0000-0000-000000000001"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Full platform administrator.", false, false, true, true, null, null, "SuperAdmin" },
-                    { new Guid("10000000-0000-0000-0000-000000000002"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Administers configuration and users.", false, false, true, true, null, null, "Admin" },
-                    { new Guid("10000000-0000-0000-0000-000000000003"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Builds and runs pipeline configurations, and reviews data and audit output.", false, false, true, true, null, null, "Operations" },
-                    { new Guid("10000000-0000-0000-0000-000000000005"), null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, null, "Read-only access to configuration and audit logs.", false, false, true, true, null, null, "Audit" }
-                });
-
-            migrationBuilder.InsertData(
-                table: "RolePermissions",
-                columns: new[] { "PermissionId", "RoleId", "IsEnabled" },
-                values: new object[,]
-                {
-                    { new Guid("20000000-0000-0000-0000-000000000003"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000004"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000005"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000006"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000001"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000002"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000003"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000004"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000001"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000002"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000003"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000004"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000005"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000001"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000002"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000003"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000004"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000005"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0005-000000000001"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0006-000000000001"), new Guid("10000000-0000-0000-0000-000000000001"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000003"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000004"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000005"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000006"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000001"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000002"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000003"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0001-000000000004"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000001"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000002"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000003"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000004"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0002-000000000005"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000001"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000002"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000003"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000004"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000005"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0005-000000000001"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0006-000000000001"), new Guid("10000000-0000-0000-0000-000000000002"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000003"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000004"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000005"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000006"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000001"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000002"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000003"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000004"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000005"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0005-000000000001"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0006-000000000001"), new Guid("10000000-0000-0000-0000-000000000003"), true },
-                    { new Guid("20000000-0000-0000-0000-000000000005"), new Guid("10000000-0000-0000-0000-000000000005"), true },
-                    { new Guid("20000000-0000-0000-0003-000000000005"), new Guid("10000000-0000-0000-0000-000000000005"), true },
-                    { new Guid("20000000-0000-0000-0005-000000000001"), new Guid("10000000-0000-0000-0000-000000000005"), true }
                 });
 
             migrationBuilder.CreateIndex(

@@ -59,12 +59,14 @@ public sealed class ApiFixture : IAsyncLifetime
     {
         AnonClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        // 1. Authenticate as the auto-seeded SuperAdmin (seeded at host startup via
-        //    LocalAuth:SeedAdmin config in ApiFactory) — no tenant registration.
-        var loginResp = await AnonClient.PostAsJsonAsync("/api/v1/auth/internal/login", new
+        // 1. First-run setup: no user is seeded, so create the sole SuperAdmin via the anonymous,
+        //    one-shot setup endpoint. It creates the user (assigning the bootstrapped SuperAdmin role)
+        //    and returns a signed-in session — the same response shape as internal/login.
+        var loginResp = await AnonClient.PostAsJsonAsync("/api/v1/auth/setup-superadmin", new
         {
-            Email    = AdminEmail,
-            Password = AdminPassword
+            Email       = AdminEmail,
+            DisplayName = "Test Admin",
+            Password    = AdminPassword
         });
         loginResp.EnsureSuccessStatusCode();
 

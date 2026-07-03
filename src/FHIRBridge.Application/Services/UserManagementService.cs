@@ -20,6 +20,8 @@ public sealed class UserManagementService : IUserManagementService
     private readonly ICurrentUserService _currentUserService;
     private readonly IOperationalAuditService _auditService;
     private readonly IEmailSender _emailSender;
+    private readonly IExternalTokenValidator _externalTokenValidator;
+    private readonly ILocalAuthService _localAuthService;
     private readonly LocalAuthOptions _localAuthOptions;
 
     public UserManagementService(
@@ -28,6 +30,8 @@ public sealed class UserManagementService : IUserManagementService
         ICurrentUserService currentUserService,
         IOperationalAuditService auditService,
         IEmailSender emailSender,
+        IExternalTokenValidator externalTokenValidator,
+        ILocalAuthService localAuthService,
         IOptions<LocalAuthOptions> localAuthOptions)
     {
         _repository = repository;
@@ -35,6 +39,8 @@ public sealed class UserManagementService : IUserManagementService
         _currentUserService = currentUserService;
         _auditService = auditService;
         _emailSender = emailSender;
+        _externalTokenValidator = externalTokenValidator;
+        _localAuthService = localAuthService;
         _localAuthOptions = localAuthOptions.Value;
     }
 
@@ -218,6 +224,47 @@ public sealed class UserManagementService : IUserManagementService
         await AuditAsync("InviteAccepted", $"User accepted invitation: {email}.", cancellationToken);
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
+    public async Task<LocalLoginResponse> AcceptInviteViaSsoAsync(
+        AcceptInviteSsoRequest request,
+        CancellationToken cancellationToken)
+    {
+        var email = NormalizeEmail(request.Email);
+        var user = await _repository.GetUserByEmailAsync(email, cancellationToken)
+            ?? throw new InvalidOperationException("Invitation is invalid or expired.");
+
+        // Same invitation-token guards as AcceptInviteAsync.
+        if (user.Status != UserStatus.Invited ||
+            string.IsNullOrWhiteSpace(user.InvitationTokenHash) ||
+            user.InvitationTokenExpiresOnUtc is null ||
+            user.InvitationTokenExpiresOnUtc < DateTime.UtcNow ||
+            !_passwordHasher.Verify(request.InvitationToken, user.InvitationTokenHash))
+        {
+            throw new InvalidOperationException("Invitation is invalid or expired.");
+        }
+
+        var identity = await _externalTokenValidator.ValidateAsync(request.Provider, request.Token, cancellationToken);
+
+        // The external identity must match the invited address so an invite cannot be redeemed by a
+        // different Google/Entra account. ArgumentException maps to HTTP 400.
+        if (string.IsNullOrWhiteSpace(identity.Email) ||
+            !string.Equals(identity.Email.Trim(), email, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("The external identity email does not match the invited email address.");
+        }
+
+        // Names captured at invite time are preserved; pass null so AcceptInvitationViaSso keeps them.
+        user.AcceptInvitationViaSso(
+            identity.Subject,
+            request.Provider,
+            firstName: null,
+            lastName: null);
+
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        await AuditAsync("InviteAcceptedSso", $"User accepted invitation via SSO: {email}.", cancellationToken);
+
+        return await _localAuthService.IssueSessionAsync(user, cancellationToken);
     }
 
     public async Task<UserDetailDto> UpdateUserStatusAsync(

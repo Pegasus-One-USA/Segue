@@ -133,12 +133,15 @@ function mapDetailDto(dto: UserDetailDto): User {
 
 function toInviteResult(dto: UserDetailDto, fallbackEmail: string): InviteResult {
   const token = dto.invitationToken;
+  const email = dto.email || fallbackEmail;
   return {
     success:         true,
-    message:         `Invitation ready for ${dto.email || fallbackEmail}.`,
-    email:           dto.email || fallbackEmail,
+    message:         `Invitation ready for ${email}.`,
+    email,
     invitationToken: token,
-    invitationLink:  token ? `${location.origin}/auth/set-password?token=${token}` : undefined,
+    invitationLink:  token
+      ? `${location.origin}/auth/set-password?token=${token}&email=${encodeURIComponent(email)}`
+      : undefined,
   };
 }
 

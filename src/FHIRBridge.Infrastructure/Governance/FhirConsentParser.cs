@@ -4,13 +4,13 @@ using FHIRBridge.Application.Abstractions.Governance;
 namespace FHIRBridge.Infrastructure.Governance;
 
 /// <summary>
-/// Parses a FHIR R4 <c>Consent</c> resource into a <see cref="TenantConsent"/> directive: reads the consent status,
+/// Parses a FHIR R4 <c>Consent</c> resource into a <see cref="ConsentDirective"/> directive: reads the consent status,
 /// the base provision type (permit/deny), and any nested sub-provisions whose <c>class</c> codings name the resource
 /// types they apply to (treated as exceptions to the base provision).
 /// </summary>
 public static class FhirConsentParser
 {
-    public static TenantConsent Parse(string consentJson)
+    public static ConsentDirective Parse(string consentJson)
     {
         using var document = JsonDocument.Parse(consentJson);
         var root = document.RootElement;
@@ -38,7 +38,7 @@ public static class FhirConsentParser
             }
         }
 
-        return new TenantConsent(isActive, baseProvision, exceptions);
+        return new ConsentDirective(isActive, baseProvision, exceptions);
     }
 
     private static IEnumerable<string> ReadResourceTypes(JsonElement provision)

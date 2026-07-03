@@ -100,6 +100,19 @@ public sealed class UsersController : ControllerBase
         return Ok(user);
     }
 
+    [HttpPost("accept-invite-sso")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AcceptInviteSso(
+        [FromBody] AcceptInviteSsoRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _userManagementService.AcceptInviteViaSsoAsync(request, cancellationToken);
+
+        return Ok(response);
+    }
+
     [HttpPatch("{userId:guid}/status")]
     [StandardPermission(UnifiedPermissions.UserDeactivate)]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]

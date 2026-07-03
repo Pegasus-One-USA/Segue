@@ -55,6 +55,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.Status)
             .IsRequired();
 
+        // LoginProvider enum stored as a readable string column (Local / Entra / Google).
+        builder.Property(x => x.LoginProvider)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
         // Invitation flow.
         builder.Property(x => x.InvitationTokenHash)
             .HasMaxLength(500);

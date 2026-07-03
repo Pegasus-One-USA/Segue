@@ -11,7 +11,7 @@ namespace FHIRBridge.Infrastructure.Governance;
 /// </summary>
 public sealed class ConfiguredConsentService : IConsentService
 {
-    private readonly TenantConsent? _consent;
+    private readonly ConsentDirective? _consent;
 
     public ConfiguredConsentService(IConfiguration configuration)
     {
@@ -37,7 +37,7 @@ public sealed class ConfiguredConsentService : IConsentService
         return new ConsentDecision(false, reason);
     }
 
-    private static TenantConsent? LoadConsent(IConfiguration configuration)
+    private static ConsentDirective? LoadConsent(IConfiguration configuration)
     {
         var section = configuration.GetSection("Governance:Consent");
         if (!section.Exists())
@@ -51,6 +51,6 @@ public sealed class ConfiguredConsentService : IConsentService
             : ConsentProvisionType.Permit;
         var exceptions = section.GetSection("ExceptionResourceTypes").Get<string[]>() ?? [];
 
-        return new TenantConsent(active, baseProvision, exceptions);
+        return new ConsentDirective(active, baseProvision, exceptions);
     }
 }

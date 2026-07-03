@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -26,49 +25,7 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
         builder.HasIndex(x => x.Name)
             .IsUnique();
 
-        builder.HasData(
-            // Original platform permissions.
-            PermissionSeed(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration.", "Configuration"),
-            PermissionSeed(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes.", "Pipeline"),
-            PermissionSeed(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs.", "Audit"),
-            PermissionSeed(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.", "Configuration"),
-
-            // User module permissions.
-            PermissionSeed(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the organization.", "User"),
-            PermissionSeed(SeededSecurityIds.UserViewPermissionId, UnifiedPermissions.UserView, "View the list of users.", "User"),
-            PermissionSeed(SeededSecurityIds.UserEditPermissionId, UnifiedPermissions.UserEdit, "Update a user's profile information.", "User"),
-            PermissionSeed(SeededSecurityIds.UserDeactivatePermissionId, UnifiedPermissions.UserDeactivate, "Deactivate a user account.", "User"),
-
-            // Role module permissions.
-            PermissionSeed(SeededSecurityIds.RoleCreatePermissionId, UnifiedPermissions.RoleCreate, "Create a new custom role.", "Role"),
-            PermissionSeed(SeededSecurityIds.RoleEditPermissionId, UnifiedPermissions.RoleEdit, "Edit an existing role.", "Role"),
-            PermissionSeed(SeededSecurityIds.RoleDeletePermissionId, UnifiedPermissions.RoleDelete, "Delete a custom role.", "Role"),
-            PermissionSeed(SeededSecurityIds.RoleAssignPermissionId, UnifiedPermissions.RoleAssign, "Assign or remove roles from users.", "Role"),
-            PermissionSeed(SeededSecurityIds.RoleViewPermissionId, UnifiedPermissions.RoleView, "View roles and their permissions.", "Role"),
-
-            // Workflow module permissions.
-            PermissionSeed(SeededSecurityIds.WorkflowCreatePermissionId, UnifiedPermissions.WorkflowCreate, "Create a new workflow.", "Workflow"),
-            PermissionSeed(SeededSecurityIds.WorkflowEditPermissionId, UnifiedPermissions.WorkflowEdit, "Edit an existing workflow.", "Workflow"),
-            PermissionSeed(SeededSecurityIds.WorkflowDeletePermissionId, UnifiedPermissions.WorkflowDelete, "Delete a workflow.", "Workflow"),
-            PermissionSeed(SeededSecurityIds.WorkflowRunPermissionId, UnifiedPermissions.WorkflowRun, "Execute a workflow.", "Workflow"),
-            PermissionSeed(SeededSecurityIds.WorkflowViewPermissionId, UnifiedPermissions.WorkflowView, "View workflow details.", "Workflow"),
-
-            // Report / payload permissions.
-            PermissionSeed(SeededSecurityIds.ReportViewPermissionId, UnifiedPermissions.ReportView, "View reports and analytics.", "Report"),
-            PermissionSeed(SeededSecurityIds.PayloadViewPermissionId, UnifiedPermissions.PayloadView, "View data payloads from workflow runs.", "Payload"));
-    }
-
-    private static object PermissionSeed(Guid id, string name, string description, string category)
-    {
-        return new
-        {
-            Id = id,
-            Name = name,
-            Description = description,
-            Category = category,
-            IsSystem = true,
-            IsDeleted = false,
-            CreatedOnUtc = SeedConstants.SeedTimestamp
-        };
+        // Built-in permission rows are provisioned at runtime by IRbacBootstrapper (RbacSeedData),
+        // not via migration HasData — a freshly-migrated empty database self-provisions them on boot.
     }
 }

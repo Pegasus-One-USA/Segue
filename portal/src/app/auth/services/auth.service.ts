@@ -1,6 +1,6 @@
-import { Injectable, inject, computed } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap, catchError, map } from 'rxjs/operators';
+import { tap } from 'rxjs/operators';
 import { Observable, EMPTY, of } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
@@ -14,6 +14,7 @@ import {
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
+import { buildUserFromJwt } from './jwt-user.mapper';
 
 const LOCKOUT_MINUTES = 30;
 
@@ -134,22 +135,19 @@ export class AuthService {
   isAdmin(): boolean                        { return this.store.isAdmin(); }
 
   // ─── Initialise from stored token (called in app init) ───────────────────
-  // Real backend JWTs carry no `sub` claim (unlike the old mock tokens), so the user can't
-  // be looked up locally on refresh — this now re-fetches the profile from the API instead.
+  // Rebuild the current user (roles + permissions) synchronously from the stored JWT claims via
+  // buildUserFromJwt — the same mapper login/SSO use, so no API round-trip or mock lookup is
+  // needed. Returns an Observable so app.config's APP_INITIALIZER can treat it uniformly.
   initFromToken(): Observable<void> {
     const token = this.tokens.getAccessToken();
     if (!token || this.tokens.isExpired(token)) {
       this.tokens.clearTokens();
       return of(undefined);
     }
-
-    return this.api.getCurrentUser().pipe(
-      tap(user => this.store.setUser(user)),
-      map(() => undefined),
-      catchError(() => {
-        this.tokens.clearTokens();
-        return of(undefined);
-      })
-    );
+    const payload = this.tokens.decodePayload<Record<string, unknown>>(token);
+    if (payload) {
+      this.store.setUser(buildUserFromJwt(payload));
+    }
+    return of(undefined);
   }
 }

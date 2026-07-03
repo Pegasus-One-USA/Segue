@@ -1,7 +1,6 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { DatePipe } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { startWith } from 'rxjs/operators';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -9,10 +8,13 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { InvitationService } from '../../services/invitation.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { HttpErrorResponse } from '@angular/common/http';
 import { PasswordPolicyService } from '../../services/password-policy.service';
-import { Invitation } from '../../models/invitation.model';
 import { PasswordValidation } from '../../models/password-policy.model';
+import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.component';
+import { SsoAuthApiService } from '../../services/sso-auth-api.service';
+import { SsoResult } from '../../services/sso.service';
 
 export type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepted' | 'success';
 
@@ -26,7 +28,6 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
   selector: 'app-set-password',
   standalone: true,
   imports: [
-    DatePipe,
     ReactiveFormsModule,
     RouterLink,
     MatFormFieldModule,
@@ -34,6 +35,7 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    SsoButtonsComponent,
   ],
   templateUrl: './set-password.component.html',
   styleUrl: './set-password.component.scss',
@@ -42,17 +44,23 @@ export class SetPasswordComponent implements OnInit {
   private readonly route      = inject(ActivatedRoute);
   private readonly router     = inject(Router);
   private readonly fb         = inject(FormBuilder);
-  private readonly invSvc     = inject(InvitationService);
   private readonly policySvc  = inject(PasswordPolicyService);
+  private readonly ssoApi     = inject(SsoAuthApiService);
+  private readonly snackBar   = inject(MatSnackBar);
 
   protected readonly state      = signal<PageState>('loading');
-  protected readonly invitation = signal<Invitation | null>(null);
+  /** Email being activated, sourced from the invite link query param. */
+  protected readonly email      = signal('');
   protected readonly isLoading  = signal(false);
   protected readonly submitted  = signal(false);
   protected readonly showPw     = signal(false);
   protected readonly showCfm    = signal(false);
   protected readonly serverError = signal('');
   protected readonly redirectSeconds = signal(3);
+
+  /** Accept-invite method toggle: password (default) vs single sign-on. */
+  protected readonly method = signal<'password' | 'sso'>('password');
+  protected readonly ssoBusy = signal(false);
 
   private token = '';
 
@@ -84,30 +92,54 @@ export class SetPasswordComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    this.token = this.route.snapshot.queryParamMap.get('token') ?? '';
+    const params = this.route.snapshot.queryParamMap;
+    this.token = params.get('token') ?? '';
+    this.email.set(params.get('email') ?? '');
 
+    // There is no backend "validate token" endpoint — the token is only checked
+    // when it is redeemed. So we don't block on validation: if the link carries a
+    // token, show the password form directly. A missing token is the invalid state.
     if (!this.token) {
       this.state.set('invalid');
       return;
     }
 
-    this.invSvc.validateToken(this.token).subscribe({
-      next: result => {
-        if (result.valid && result.invitation) {
-          this.invitation.set(result.invitation);
-          this.state.set('valid');
-        } else {
-          this.state.set(result.error === 'expired' ? 'expired'
-                       : result.error === 'already_accepted' ? 'accepted'
-                       : 'invalid');
-        }
-      },
-      error: () => this.state.set('invalid'),
-    });
+    this.state.set('valid');
   }
 
   protected togglePw():  void { this.showPw.update(v => !v); }
   protected toggleCfm(): void { this.showCfm.update(v => !v); }
+
+  protected setMethod(m: 'password' | 'sso'): void {
+    this.serverError.set('');
+    this.method.set(m);
+  }
+
+  // ─── SSO accept-invite ──────────────────────────────────────────────────────
+  protected onSsoAuthenticated(result: SsoResult): void {
+    const email = this.email();
+    if (!email || !this.token) return;
+    this.serverError.set('');
+    this.ssoBusy.set(true);
+    // SsoAuthApiService.establishSession stores tokens + populates AuthStore on success.
+    this.ssoApi.acceptInviteViaSso(email, this.token, result.provider, result.token).subscribe({
+      next: () => {
+        this.ssoBusy.set(false);
+        this.router.navigate(['/dashboard']);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.ssoBusy.set(false);
+        const message = err?.error?.message
+          ?? 'Could not accept the invitation with that identity. Ensure the email matches your invite.';
+        this.serverError.set(message);
+        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+      },
+    });
+  }
+
+  protected onSsoFailed(message: string): void {
+    this.serverError.set(message);
+  }
 
   protected submit(): void {
     this.submitted.set(true);
@@ -118,15 +150,17 @@ export class SetPasswordComponent implements OnInit {
     const { password } = this.form.getRawValue();
     this.isLoading.set(true);
 
-    this.invSvc.acceptInvitation(this.token, password).subscribe({
+    this.ssoApi.acceptInvite(this.email(), this.token, password).subscribe({
       next: () => {
         this.isLoading.set(false);
         this.state.set('success');
         this.startRedirectCountdown();
       },
-      error: (err) => {
+      error: (_err: HttpErrorResponse) => {
         this.isLoading.set(false);
-        this.serverError.set(err?.message ?? 'Something went wrong. Please try again.');
+        const message = 'This invitation is invalid or has expired.';
+        this.serverError.set(message);
+        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
       },
     });
   }

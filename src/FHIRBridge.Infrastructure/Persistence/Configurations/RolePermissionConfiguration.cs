@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -22,20 +21,7 @@ public sealed class RolePermissionConfiguration : IEntityTypeConfiguration<RoleP
             .HasForeignKey(x => x.PermissionId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        var rolePermissions = UnifiedRolePermissionSeed.Grants
-            .SelectMany(grant => grant.Value.Select(permissionId => Link(grant.Key, permissionId)))
-            .ToArray();
-
-        builder.HasData(rolePermissions);
-    }
-
-    private static object Link(Guid roleId, Guid permissionId)
-    {
-        return new
-        {
-            RoleId = roleId,
-            PermissionId = permissionId,
-            IsEnabled = true
-        };
+        // Built-in role→permission grants are provisioned at runtime by IRbacBootstrapper
+        // (RbacSeedData/UnifiedRolePermissionSeed), not via migration HasData.
     }
 }

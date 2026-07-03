@@ -107,6 +107,11 @@ public static class DependencyInjection
                 options.AddInterceptors(sp.GetRequiredService<AuditingSaveChangesInterceptor>());
             });
 
+            // Runtime RBAC reference-data bootstrapper (replaces the former migration HasData seed).
+            // Only registered in the DB path — it provisions rows into FHIRBridgeDbContext. The in-memory
+            // path self-seeds the same catalog in InMemoryUserAccessRepository's constructor.
+            services.AddScoped<IRbacBootstrapper, RbacBootstrapper>();
+
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IOperationalAuditService, EfOperationalAuditService>();
@@ -129,10 +134,18 @@ public static class DependencyInjection
         services.AddScoped<IScheduleEvaluationService, ScheduleEvaluationService>();
         services.AddScoped<IScheduleDispatcher, ScheduleDispatcher>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+
+        // SSO token exchange (validate an external IdP token -> mint a FHIRBridge JWT). Providers are OFF
+        // by default; the composite validator throws when a disabled provider is requested.
+        services.Configure<EntraAuthenticationOptions>(configuration.GetSection("Authentication:Entra"));
+        services.Configure<GoogleAuthenticationOptions>(configuration.GetSection("Authentication:Google"));
+        services.AddSingleton<IProviderTokenValidator, EntraTokenValidator>();
+        services.AddSingleton<IProviderTokenValidator, GoogleTokenValidator>();
+        services.AddSingleton<IExternalTokenValidator, CompositeExternalTokenValidator>();
+
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.Configure<Email.EmailOptions>(configuration.GetSection("Email"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
-        services.AddScoped<IIdentitySeedService, LocalIdentitySeedService>();
         services.AddScoped<IFhirAccessTokenAuditSink, FhirAccessTokenAuditSink>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));

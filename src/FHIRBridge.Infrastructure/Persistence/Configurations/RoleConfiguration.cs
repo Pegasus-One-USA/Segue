@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -28,25 +27,7 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.HasIndex(x => x.Name)
             .IsUnique();
 
-        builder.HasData(
-            RoleSeed(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator."),
-            RoleSeed(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users."),
-            RoleSeed(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output."),
-            RoleSeed(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs."));
-    }
-
-    private static object RoleSeed(Guid id, string name, string description)
-    {
-        return new
-        {
-            Id = id,
-            Name = name,
-            Description = description,
-            IsSystem = true,
-            IsDefault = false,
-            IsEnabled = true,
-            IsDeleted = false,
-            CreatedOnUtc = SeedConstants.SeedTimestamp
-        };
+        // Built-in system roles are provisioned at runtime by IRbacBootstrapper (RbacSeedData),
+        // not via migration HasData — a freshly-migrated empty database self-provisions them on boot.
     }
 }

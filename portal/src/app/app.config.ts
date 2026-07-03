@@ -10,12 +10,17 @@ import { IUserService } from './auth/services/i-user.service';
 import { AuthApiService } from './auth/services/auth-api.service';
 import { ApiUserService } from './auth/services/api-user.service';
 import { AuthService } from './auth/services/auth.service';
+import { AppInitService } from './onboarding/services/app-init.service';
 import { IRoleService } from './user-management/services/i-role.service';
-import { ApiRoleService } from './user-management/services/api-role.service';
 
-// initFromToken() now calls the real /me endpoint, so it's async — APP_INITIALIZER needs a Promise.
-function initApp(auth: AuthService) {
-  return () => firstValueFrom(auth.initFromToken());
+function initApp(auth: AuthService, appInit: AppInitService) {
+  // Restore any stored session, then resolve the first-run setup flag before routing starts.
+  // checkSetup() is self-resilient (defaults requiresSetup=false if the API is unreachable),
+  // so returning its Observable keeps the app booting even when the backend is down.
+  return () => {
+    auth.initFromToken();
+    return appInit.checkSetup();
+  };
 }
 
 export const appConfig: ApplicationConfig = {
@@ -25,10 +30,8 @@ export const appConfig: ApplicationConfig = {
     provideAnimationsAsync(),
     provideHttpClient(withInterceptors([authInterceptor])),
 
-    // ── Mock ↔ Real swap point ────────────────────────────────────────────────
-    // Auth (login) now hits the real backend at environment.apiBase.
+    // ── Real backend wiring (environment.apiBase) ────────────────────────────
     { provide: IAuthService, useClass: AuthApiService },
-    // User + Role management now hits the real backend at environment.apiBase.
     { provide: IUserService, useClass: ApiUserService },
     { provide: IRoleService, useClass: ApiRoleService },
 
@@ -36,7 +39,7 @@ export const appConfig: ApplicationConfig = {
     {
       provide: APP_INITIALIZER,
       useFactory: initApp,
-      deps: [AuthService],
+      deps: [AuthService, AppInitService],
       multi: true,
     },
   ],
