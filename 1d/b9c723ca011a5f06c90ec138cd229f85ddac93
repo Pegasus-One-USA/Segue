@@ -1,0 +1,100 @@
+src/FHIRBridge.Application/Security/GoogleAuthenticationOptions.cs
+  s_6fe72b0759281b::t_52bd5acb1c281d 1-15
+src/FHIRBridge.Infrastructure/Security/IProviderTokenValidator.cs
+  s_6fe72b0759281b::t_e813a6b097c14d 1-15
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  s_6fe72b0759281b::t_1dcfe52087c9fe 15,22,28
+  s_4277ffc327dedd::t_a4ee112d62e133 66-127
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_6fe72b0759281b::t_ff005b54e4a142 23-24,33-34,42-43
+  s_4277ffc327dedd::t_ee15bd7dea2205 229-269
+src/FHIRBridge.Application/Services/ISsoAuthService.cs
+  s_6fe72b0759281b::t_23ab2b6954f5a2 1-17
+src/FHIRBridge.Domain/Entities/User.cs
+  s_6fe72b0759281b::t_7eb3b0cc1a6c49 25
+  s_4277ffc327dedd::t_6e11e85c307830 44-46,158-193
+src/FHIRBridge.Application/Services/SetupService.cs
+  s_6fe72b0759281b::t_ce80bee7bc34c2 60-84
+  s_6fe72b0759281b::t_209473558e8636 19,24-25,30
+  s_6fe72b0759281b::t_35021b316a5197 2,5
+src/FHIRBridge.Infrastructure/Security/CompositeExternalTokenValidator.cs
+  s_6fe72b0759281b::t_b2786ad79dd2d1 1-53
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260703064541_InitialCreate.cs
+  s_6fe72b0759281b::t_862e169a2c23bc 1-750
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260703064541_InitialCreate.Designer.cs
+  s_6fe72b0759281b::t_862e169a2c23bc 1-1847
+src/FHIRBridge.Domain/Enums/LoginProvider.cs
+  s_6fe72b0759281b::t_8868d21251704d 1-12
+tests/FHIRBridge.UnitTests/Users/AcceptInviteViaSsoTests.cs
+  s_6fe72b0759281b::t_0501f8521c4ff7 1-25,32-90
+  s_6fe72b0759281b::t_6f32cb18ea6ea8 26-31
+src/FHIRBridge.Infrastructure/Security/GoogleTokenValidator.cs
+  s_6fe72b0759281b::t_4ad6a45daa8f78 1-77,80-81,84-85,88-91
+  s_6fe72b0759281b::t_3887f606443512 78-79,82-83,86-87
+src/FHIRBridge.Application/DTOs/SsoRequests.cs
+  s_6fe72b0759281b::t_f4d034cc1ee63c 1-34
+src/FHIRBridge.Infrastructure/Security/EntraTokenValidator.cs
+  s_6fe72b0759281b::t_3c805449418975 81-83,86-89,92-93
+  s_6fe72b0759281b::t_4595bede16d040 1-80,84-85,90-91,94-107
+src/FHIRBridge.Application/Services/SsoAuthService.cs
+  s_6fe72b0759281b::t_fa6422cb3fa08b 1-53
+src/FHIRBridge.Application/Services/ISetupService.cs
+  s_6fe72b0759281b::t_227b84f69da267 19-25
+src/FHIRBridge.Application/Abstractions/Security/IExternalTokenValidator.cs
+  s_6fe72b0759281b::t_aa37c891d02d1a 1-27
+tests/FHIRBridge.Api.IntegrationTests/ApiFactory.cs
+  s_6fe72b0759281b::t_03db8aedd79e9b 25-29
+  s_6fe72b0759281b::t_1ed12ab375c496 21-24
+  s_6fe72b0759281b::t_781467d15e2d9a 2-3,12-20
+  s_4277ffc327dedd::t_7f537d91c0e961 53-56,74-82
+tests/FHIRBridge.Api.IntegrationTests/Tests/SsoTests.cs
+  s_6fe72b0759281b::t_94336fdc11ad95 1-55
+src/FHIRBridge.Application/Services/ILocalAuthService.cs
+  s_6fe72b0759281b::t_98a0e51100dc25 2
+  s_4277ffc327dedd::t_ff3b53641cb248 18-24
+tests/FHIRBridge.UnitTests/Setup/SetupServiceTests.cs
+  s_6fe72b0759281b::t_561d9aef17690c 2
+  s_6fe72b0759281b::t_7598e7a5eb03ea 16,18-19
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6fe72b0759281b::t_35fa330d66da2e 1287-1291
+src/Api/FHIRBridge.Api/Controllers/V1/UsersController.cs
+  s_4277ffc327dedd::t_6934bc75bd71c8 103-115
+src/Api/FHIRBridge.Api/appsettings.json
+  s_4277ffc327dedd::t_e93354740516bb 16-19
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_4277ffc327dedd::t_629bbc8f7a885f 26
+src/FHIRBridge.Application/Services/IUserManagementService.cs
+  s_4277ffc327dedd::t_7835a5ca87e9bb 21-28
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_4277ffc327dedd::t_1ebe879808ea38 178-195
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_4277ffc327dedd::t_cc9eef7046c956 132-140
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_4277ffc327dedd::t_02a03f2c457d89 31-32
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserConfiguration.cs
+  s_4277ffc327dedd::t_613cc70f922200 58-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "1db9c723ca011a5f06c90ec138cd229f85ddac93",
+  "prompts": {},
+  "sessions": {
+    "s_4277ffc327dedd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a01ba15cfab0379d0",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
