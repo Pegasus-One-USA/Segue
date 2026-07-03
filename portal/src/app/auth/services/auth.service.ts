@@ -1,6 +1,6 @@
-import { Injectable, inject, computed } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap, catchError, map } from 'rxjs/operators';
+import { tap } from 'rxjs/operators';
 import { Observable, EMPTY, of } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
