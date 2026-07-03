@@ -18,24 +18,6 @@
         />
       </div>
 
-      <!-- Tenant filter -->
-      <div class="select-wrap">
-        <div class="select-box">
-          <select
-            [value]="tenantFilter()"
-            (change)="onTenantFilter($any($event.target).value)"
-          >
-            <option value="">All Tenants</option>
-            @for (t of tenants(); track t.id) {
-              <option [value]="t.id">{{ t.name }}</option>
-            }
-          </select>
-          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
-
       <div class="filter-actions">
         <button class="btn-reset" type="button" (click)="reset()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -59,121 +41,127 @@
   <!-- Table Card -->
   <div class="table-card">
 
-    <!-- Table meta row -->
-    <div class="table-meta">
-      <span class="entries-info">
-        @if (filtered().length > 0) {
-          Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
-          {{ filtered().length === 1 ? 'entry' : 'entries' }}
-        } @else {
-          No entries found
-        }
-      </span>
-    </div>
-
-    <div class="table-wrapper">
-      <table mat-table [dataSource]="paginated()" class="data-table">
-
-        <!-- # Column -->
-        <ng-container matColumnDef="index">
-          <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
-          <td mat-cell *matCellDef="let r; let i = index" class="col-index">
-            {{ pageIndex() * pageSize() + i + 1 }}
-          </td>
-        </ng-container>
-
-        <!-- Name Column -->
-        <ng-container matColumnDef="name">
-          <th mat-header-cell *matHeaderCellDef>Role Name</th>
-          <td mat-cell *matCellDef="let r">
-            <div class="cell-name">
-              <div class="role-avatar">
-                <mat-icon>shield</mat-icon>
-              </div>
-              <span class="cell-primary">{{ r.name }}</span>
-            </div>
-          </td>
-        </ng-container>
-
-        <!-- Description Column -->
-        <ng-container matColumnDef="description">
-          <th mat-header-cell *matHeaderCellDef>Description</th>
-          <td mat-cell *matCellDef="let r">
-            <span class="cell-description">{{ r.description }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Tenant Column -->
-        <ng-container matColumnDef="tenant">
-          <th mat-header-cell *matHeaderCellDef>Tenant</th>
-          <td mat-cell *matCellDef="let r">
-            <span class="tenant-badge">{{ r.tenantName }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Created Column -->
-        <ng-container matColumnDef="createdAt">
-          <th mat-header-cell *matHeaderCellDef>Created</th>
-          <td mat-cell *matCellDef="let r">
-            <span class="cell-muted">{{ formatDate(r.createdAt) }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Actions Column -->
-        <ng-container matColumnDef="actions">
-          <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
-          <td mat-cell *matCellDef="let r" class="col-actions">
-            <div class="actions-cell">
-              <button mat-icon-button class="btn-edit" (click)="openEdit(r)">
-                <mat-icon>edit</mat-icon>
-              </button>
-              <button mat-icon-button class="btn-delete" (click)="confirmDelete(r)">
-                <mat-icon>delete_outline</mat-icon>
-              </button>
-            </div>
-          </td>
-        </ng-container>
-
-        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
-
-      </table>
-    </div>
-
-    <!-- Empty State -->
-    @if (filtered().length === 0) {
-      <div class="empty-state">
-        <div class="empty-state__icon-wrap">
-          <mat-icon>shield</mat-icon>
-        </div>
-        <h3 class="empty-state__title">
-          @if (searchQuery() || tenantFilter()) {
-            No roles matched your filters
-          } @else {
-            No roles yet
-          }
-        </h3>
-        <p class="empty-state__sub">
-          @if (searchQuery() || tenantFilter()) {
-            Try adjusting your search or filter.
-          } @else {
-            Get started by adding your first role.
-          }
-        </p>
+    @if (loading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="32"></mat-spinner>
       </div>
-    }
+    } @else {
 
-    <!-- Paginator -->
-    @if (filtered().length > pageSize()) {
-      <mat-paginator
-        [length]="filtered().length"
-        [pageSize]="pageSize()"
-        [pageIndex]="pageIndex()"
-        [pageSizeOptions]="[5, 10, 25, 50]"
-        showFirstLastButtons
-        (page)="onPageChange($event)"
-        class="table-paginator"
-      ></mat-paginator>
+      <!-- Table meta row -->
+      <div class="table-meta">
+        <span class="entries-info">
+          @if (filtered().length > 0) {
+            Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
+            {{ filtered().length === 1 ? 'entry' : 'entries' }}
+          } @else {
+            No entries found
+          }
+        </span>
+      </div>
+
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="paginated()" class="data-table">
+
+          <!-- # Column -->
+          <ng-container matColumnDef="index">
+            <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
+            <td mat-cell *matCellDef="let r; let i = index" class="col-index">
+              {{ pageIndex() * pageSize() + i + 1 }}
+            </td>
+          </ng-container>
+
+          <!-- Name Column -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Role Name</th>
+            <td mat-cell *matCellDef="let r">
+              <div class="cell-name">
+                <div class="role-avatar" [class.role-avatar--system]="r.isSystemRole">
+                  <mat-icon>shield</mat-icon>
+                </div>
+                <span class="cell-primary">{{ r.displayName }}</span>
+                @if (r.isSystemRole) {
+                  <span class="system-badge" matTooltip="System roles cannot be modified">System</span>
+                }
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let r">
+              <span class="cell-description">{{ r.description }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Permissions Column -->
+          <ng-container matColumnDef="permissions">
+            <th mat-header-cell *matHeaderCellDef>Permissions</th>
+            <td mat-cell *matCellDef="let r">
+              <span class="cell-muted">{{ r.permissions.length }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let r" class="col-actions">
+              <div class="actions-cell">
+                <button mat-icon-button class="btn-edit" matTooltip="Edit Role" [disabled]="r.isSystemRole" (click)="openEdit(r)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button class="btn-permissions" matTooltip="Permissions" (click)="openPermissions(r)">
+                  <mat-icon>key</mat-icon>
+                </button>
+                <button mat-icon-button class="btn-delete" matTooltip="Delete Role" [disabled]="r.isSystemRole" (click)="confirmDelete(r)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      @if (filtered().length === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon-wrap">
+            <mat-icon>shield</mat-icon>
+          </div>
+          <h3 class="empty-state__title">
+            @if (searchQuery()) {
+              No roles matched your search
+            } @else {
+              No roles yet
+            }
+          </h3>
+          <p class="empty-state__sub">
+            @if (searchQuery()) {
+              Try adjusting your search.
+            } @else {
+              Get started by adding your first role.
+            }
+          </p>
+        </div>
+      }
+
+      <!-- Paginator -->
+      @if (filtered().length > pageSize()) {
+        <mat-paginator
+          [length]="filtered().length"
+          [pageSize]="pageSize()"
+          [pageIndex]="pageIndex()"
+          [pageSizeOptions]="[5, 10, 25, 50]"
+          showFirstLastButtons
+          (page)="onPageChange($event)"
+          class="table-paginator"
+        ></mat-paginator>
+      }
+
     }
 
   </div>

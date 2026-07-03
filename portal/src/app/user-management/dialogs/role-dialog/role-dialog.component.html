@@ -16,6 +16,21 @@
 
   <!-- Form -->
   <mat-dialog-content>
+
+    @if (isSystemRole) {
+      <div class="no-tenant-notice">
+        <mat-icon>lock</mat-icon>
+        <span>System roles cannot be modified.</span>
+      </div>
+    }
+
+    @if (errorMessage()) {
+      <div class="no-tenant-notice error-notice">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
     <form [formGroup]="form" novalidate class="dialog-form">
 
       <mat-form-field appearance="outline" class="form-field">
@@ -61,9 +76,14 @@
       <button
         mat-flat-button
         class="btn-save"
+        [disabled]="isSystemRole || saving()"
         (click)="save()"
       >
-        <mat-icon>{{ isEdit ? 'save' : 'add' }}</mat-icon>
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        } @else {
+          <mat-icon>{{ isEdit ? 'save' : 'add' }}</mat-icon>
+        }
         {{ isEdit ? 'Save Changes' : 'Add Role' }}
       </button>
     </div>
