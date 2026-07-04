@@ -19,8 +19,14 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
             .HasMaxLength(500)
             .IsRequired();
 
-        builder.Property(x => x.Category).HasMaxLength(100);
         builder.Property(x => x.IsSystem).IsRequired();
+
+        builder.HasOne<PermissionCategory>()
+            .WithMany()
+            .HasForeignKey(x => x.CategoryId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(x => x.CategoryId);
 
         builder.HasIndex(x => x.Name)
             .IsUnique();

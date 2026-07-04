@@ -1,6 +1,9 @@
-export type ExtendedUserRole =
-  | 'system-admin' | 'tenant-admin' | 'developer'
-  | 'pipeline-editor' | 'reviewer' | 'auditor' | 'analyst' | 'viewer';
+import { UserRole } from '../../auth/models/user.model';
+
+// Same value space as the auth model's UserRole (the backend's real role names) — kept as a
+// distinct alias since this file's RoleDefinition/ROLE_DEFINITIONS predate the auth model and
+// are consumed independently by the profile page.
+export type ExtendedUserRole = UserRole;
 
 export type AppTheme    = 'light' | 'dark' | 'system';
 export type UserStatus  = 'active' | 'inactive' | 'suspended';
@@ -48,60 +51,32 @@ export interface RoleDefinition {
 
 export const ROLE_DEFINITIONS: RoleDefinition[] = [
   {
-    id: 'system-admin',
-    label: 'System Admin',
-    description: 'Full system access including tenant management and infrastructure',
+    id: 'SuperAdmin',
+    label: 'Super Admin',
+    description: 'Full platform administrator across all modules and settings',
     color: '#CC2927',
     permissions: ['All permissions granted'],
   },
   {
-    id: 'tenant-admin',
-    label: 'Tenant Admin',
-    description: 'Manage users, roles, and all resources within the organization',
+    id: 'Admin',
+    label: 'Admin',
+    description: 'Administers configuration and users',
     color: '#7C3AED',
-    permissions: ['User management', 'Pipeline management', 'Org settings', 'Audit logs'],
+    permissions: ['User management', 'Role management', 'Configuration', 'Audit logs'],
   },
   {
-    id: 'developer',
-    label: 'Developer',
-    description: 'Build and test FHIR pipelines with full API access',
-    color: '#2563EB',
-    permissions: ['Pipeline creation', 'API access', 'Schema editor', 'Test runs'],
-  },
-  {
-    id: 'pipeline-editor',
-    label: 'Pipeline Editor',
-    description: 'Create and modify integration pipelines in the workflow builder',
+    id: 'Operations',
+    label: 'Operations',
+    description: 'Builds and runs pipeline configurations, and reviews data and audit output',
     color: '#00A89D',
-    permissions: ['Pipeline creation', 'Node editing', 'Run pipelines', 'View logs'],
+    permissions: ['Pipeline creation', 'Run pipelines', 'View logs', 'View reports'],
   },
   {
-    id: 'reviewer',
-    label: 'Reviewer',
-    description: 'Review and approve pipeline changes before deployment',
-    color: '#D97706',
-    permissions: ['View pipelines', 'Add comments', 'Approve / reject changes'],
-  },
-  {
-    id: 'auditor',
-    label: 'Auditor',
-    description: 'Read-only access to all resources for compliance review',
+    id: 'Audit',
+    label: 'Audit',
+    description: 'Read-only access to configuration and audit logs',
     color: '#6B7280',
     permissions: ['View all resources', 'Export audit logs'],
-  },
-  {
-    id: 'analyst',
-    label: 'Analyst',
-    description: 'Access dashboards and reporting for data-driven insights',
-    color: '#059669',
-    permissions: ['View dashboards', 'Export data', 'Run reports'],
-  },
-  {
-    id: 'viewer',
-    label: 'Viewer',
-    description: 'Read-only access to dashboards and pipeline definitions',
-    color: '#94A3B8',
-    permissions: ['View dashboards', 'View pipelines'],
   },
 ];
 

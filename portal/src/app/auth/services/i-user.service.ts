@@ -1,6 +1,6 @@
 import { Observable } from 'rxjs';
 import {
-  User, Role, Permission,
+  User, Role, Permission, PermissionAllocationDto,
   PaginatedResponse, MessageResponse, UserQueryParams, InviteResult,
 } from '../models/user.model';
 import {
@@ -23,4 +23,7 @@ export abstract class IUserService {
   abstract inviteUser(req: InviteUserRequest): Observable<InviteResult>;
   abstract resendInvitation(userId: string): Observable<InviteResult>;
   abstract resetUserPassword(userId: string): Observable<MessageResponse>;
+  abstract getUserPermissionAllocations(userId: string): Observable<PermissionAllocationDto[]>;
+  abstract setUserPermissionAllocation(userId: string, permissionId: string, isEnabled: boolean): Observable<User>;
+  abstract removeUserPermissionAllocation(userId: string, permissionId: string): Observable<void>;
 }

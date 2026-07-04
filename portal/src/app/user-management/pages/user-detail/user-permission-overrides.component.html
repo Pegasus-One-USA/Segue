@@ -1,0 +1,59 @@
+<!-- user-management/pages/user-detail/user-permission-overrides.component.html -->
+<div class="permission-overrides">
+
+  @if (loading()) {
+    <div class="loading-state">
+      <mat-spinner diameter="32"></mat-spinner>
+    </div>
+  }
+
+  @if (!loading()) {
+    @if (errorMessage()) {
+      <div class="notice error-notice">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <div class="notice">
+      <mat-icon>info</mat-icon>
+      <span>
+        Direct overrides always win over role-derived permissions. Leave a permission on
+        "Inherit" to use whatever the user's roles already grant.
+      </span>
+    </div>
+
+    <div class="permissions-list">
+      @for (group of permissionGroups(); track group.resource) {
+        <div class="permission-group">
+          <div class="permission-group__header">
+            <span class="permission-group__title">{{ group.resource }}</span>
+          </div>
+          <div class="permission-group__items">
+            @for (perm of group.permissions; track perm.id) {
+              <div class="permission-row">
+                <div class="permission-row__info">
+                  <span class="permission-name">{{ perm.name }}</span>
+                  <span class="permission-desc">{{ perm.description }}</span>
+                </div>
+                <mat-button-toggle-group
+                  class="override-toggle"
+                  [value]="stateFor(perm.id) === null ? 'inherit' : (stateFor(perm.id) ? 'grant' : 'deny')"
+                  [disabled]="isSaving(perm.id)"
+                  (change)="onToggle(perm.id, $event)"
+                >
+                  <mat-button-toggle value="deny">Deny</mat-button-toggle>
+                  <mat-button-toggle value="inherit">Inherit</mat-button-toggle>
+                  <mat-button-toggle value="grant">Grant</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
+            }
+          </div>
+        </div>
+      } @empty {
+        <div class="no-results">No permissions available.</div>
+      }
+    </div>
+  }
+
+</div>

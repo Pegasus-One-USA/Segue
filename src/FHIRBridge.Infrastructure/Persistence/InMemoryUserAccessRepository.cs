@@ -17,41 +17,47 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
             new Role(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs.", isSystem: true)
         }.ToDictionary(role => role.Id));
 
+    private readonly ConcurrentDictionary<Guid, PermissionCategory> _permissionCategories = new(
+        RbacSeedData.Categories
+            .Select(c => new PermissionCategory(c.Id, c.Name))
+            .ToDictionary(c => c.Id));
+
     private readonly ConcurrentDictionary<Guid, Permission> _permissions = new(
         new[]
         {
             // Original platform permissions.
-            new Permission(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration.", "Configuration"),
-            new Permission(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes.", "Pipeline"),
-            new Permission(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs.", "Audit"),
-            new Permission(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.", "Configuration"),
+            new Permission(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration.", SeededSecurityIds.ConfigurationCategoryId),
+            new Permission(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes.", SeededSecurityIds.PipelineCategoryId),
+            new Permission(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs.", SeededSecurityIds.AuditCategoryId),
+            new Permission(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.", SeededSecurityIds.ConfigurationCategoryId),
 
             // User-module permissions.
-            new Permission(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the organization.", "User"),
-            new Permission(SeededSecurityIds.UserViewPermissionId, UnifiedPermissions.UserView, "View the list of users.", "User"),
-            new Permission(SeededSecurityIds.UserEditPermissionId, UnifiedPermissions.UserEdit, "Update a user's profile information.", "User"),
-            new Permission(SeededSecurityIds.UserDeactivatePermissionId, UnifiedPermissions.UserDeactivate, "Deactivate a user account.", "User"),
+            new Permission(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the organization.", SeededSecurityIds.UserCategoryId),
+            new Permission(SeededSecurityIds.UserViewPermissionId, UnifiedPermissions.UserView, "View the list of users.", SeededSecurityIds.UserCategoryId),
+            new Permission(SeededSecurityIds.UserEditPermissionId, UnifiedPermissions.UserEdit, "Update a user's profile information.", SeededSecurityIds.UserCategoryId),
+            new Permission(SeededSecurityIds.UserDeactivatePermissionId, UnifiedPermissions.UserDeactivate, "Deactivate a user account.", SeededSecurityIds.UserCategoryId),
 
             // Role permissions.
-            new Permission(SeededSecurityIds.RoleCreatePermissionId, UnifiedPermissions.RoleCreate, "Create a new custom role.", "Role"),
-            new Permission(SeededSecurityIds.RoleEditPermissionId, UnifiedPermissions.RoleEdit, "Edit an existing role.", "Role"),
-            new Permission(SeededSecurityIds.RoleDeletePermissionId, UnifiedPermissions.RoleDelete, "Delete a custom role.", "Role"),
-            new Permission(SeededSecurityIds.RoleAssignPermissionId, UnifiedPermissions.RoleAssign, "Assign or remove roles from users.", "Role"),
-            new Permission(SeededSecurityIds.RoleViewPermissionId, UnifiedPermissions.RoleView, "View roles and their permissions.", "Role"),
+            new Permission(SeededSecurityIds.RoleCreatePermissionId, UnifiedPermissions.RoleCreate, "Create a new custom role.", SeededSecurityIds.RoleCategoryId),
+            new Permission(SeededSecurityIds.RoleEditPermissionId, UnifiedPermissions.RoleEdit, "Edit an existing role.", SeededSecurityIds.RoleCategoryId),
+            new Permission(SeededSecurityIds.RoleDeletePermissionId, UnifiedPermissions.RoleDelete, "Delete a custom role.", SeededSecurityIds.RoleCategoryId),
+            new Permission(SeededSecurityIds.RoleAssignPermissionId, UnifiedPermissions.RoleAssign, "Assign or remove roles from users.", SeededSecurityIds.RoleCategoryId),
+            new Permission(SeededSecurityIds.RoleViewPermissionId, UnifiedPermissions.RoleView, "View roles and their permissions.", SeededSecurityIds.RoleCategoryId),
 
             // Workflow permissions.
-            new Permission(SeededSecurityIds.WorkflowCreatePermissionId, UnifiedPermissions.WorkflowCreate, "Create a new workflow.", "Workflow"),
-            new Permission(SeededSecurityIds.WorkflowEditPermissionId, UnifiedPermissions.WorkflowEdit, "Edit an existing workflow.", "Workflow"),
-            new Permission(SeededSecurityIds.WorkflowDeletePermissionId, UnifiedPermissions.WorkflowDelete, "Delete a workflow.", "Workflow"),
-            new Permission(SeededSecurityIds.WorkflowRunPermissionId, UnifiedPermissions.WorkflowRun, "Execute a workflow.", "Workflow"),
-            new Permission(SeededSecurityIds.WorkflowViewPermissionId, UnifiedPermissions.WorkflowView, "View workflow details.", "Workflow"),
+            new Permission(SeededSecurityIds.WorkflowCreatePermissionId, UnifiedPermissions.WorkflowCreate, "Create a new workflow.", SeededSecurityIds.WorkflowCategoryId),
+            new Permission(SeededSecurityIds.WorkflowEditPermissionId, UnifiedPermissions.WorkflowEdit, "Edit an existing workflow.", SeededSecurityIds.WorkflowCategoryId),
+            new Permission(SeededSecurityIds.WorkflowDeletePermissionId, UnifiedPermissions.WorkflowDelete, "Delete a workflow.", SeededSecurityIds.WorkflowCategoryId),
+            new Permission(SeededSecurityIds.WorkflowRunPermissionId, UnifiedPermissions.WorkflowRun, "Execute a workflow.", SeededSecurityIds.WorkflowCategoryId),
+            new Permission(SeededSecurityIds.WorkflowViewPermissionId, UnifiedPermissions.WorkflowView, "View workflow details.", SeededSecurityIds.WorkflowCategoryId),
 
             // Report / payload permissions.
-            new Permission(SeededSecurityIds.ReportViewPermissionId, UnifiedPermissions.ReportView, "View reports and analytics.", "Report"),
-            new Permission(SeededSecurityIds.PayloadViewPermissionId, UnifiedPermissions.PayloadView, "View data payloads from workflow runs.", "Payload")
+            new Permission(SeededSecurityIds.ReportViewPermissionId, UnifiedPermissions.ReportView, "View reports and analytics.", SeededSecurityIds.ReportCategoryId),
+            new Permission(SeededSecurityIds.PayloadViewPermissionId, UnifiedPermissions.PayloadView, "View data payloads from workflow runs.", SeededSecurityIds.PayloadCategoryId)
         }.ToDictionary(permission => permission.Id));
 
-    private readonly ConcurrentDictionary<string, RolePermission> _rolePermissions = new();
+    private readonly ConcurrentDictionary<string, PermissionAllocation> _rolePermissionAllocations = new();
+    private readonly ConcurrentDictionary<string, PermissionAllocation> _userPermissionAllocations = new();
     private readonly ConcurrentDictionary<string, UserRole> _userRoles = new();
 
     public InMemoryUserAccessRepository()
@@ -60,7 +66,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         {
             foreach (var permissionId in permissionIds)
             {
-                _rolePermissions[LinkKey(roleId, permissionId)] = new RolePermission(roleId, permissionId);
+                _rolePermissionAllocations[LinkKey(roleId, permissionId)] = PermissionAllocation.ForRole(Guid.NewGuid(), roleId, permissionId);
             }
         }
     }
@@ -139,6 +145,14 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
             _userRoles.TryRemove(key, out _);
         }
 
+        // Remove all direct permission allocations for this user.
+        foreach (var key in _userPermissionAllocations.Keys
+            .Where(k => k.StartsWith($"{user.Id:N}:", StringComparison.Ordinal))
+            .ToArray())
+        {
+            _userPermissionAllocations.TryRemove(key, out _);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -188,11 +202,11 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     {
         _roles.TryRemove(role.Id, out _);
 
-        foreach (var key in _rolePermissions.Keys
+        foreach (var key in _rolePermissionAllocations.Keys
             .Where(k => k.StartsWith($"{role.Id:N}:", StringComparison.Ordinal))
             .ToArray())
         {
-            _rolePermissions.TryRemove(key, out _);
+            _rolePermissionAllocations.TryRemove(key, out _);
         }
 
         foreach (var key in _userRoles.Keys
@@ -210,6 +224,24 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         var count = _userRoles.Values.Count(x => x.RoleId == roleId);
 
         return Task.FromResult(count);
+    }
+
+    // ── Permission Categories ────────────────────────────────────────────────
+
+    public Task<IReadOnlyList<PermissionCategory>> GetPermissionCategoriesAsync(CancellationToken cancellationToken)
+    {
+        var categories = _permissionCategories.Values
+            .OrderBy(x => x.Name)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<PermissionCategory>>(categories);
+    }
+
+    public Task AddPermissionCategoryAsync(PermissionCategory category, CancellationToken cancellationToken)
+    {
+        _permissionCategories[category.Id] = category;
+
+        return Task.CompletedTask;
     }
 
     // ── Permissions ──────────────────────────────────────────────────────────
@@ -239,7 +271,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 
     public Task<IReadOnlyList<Permission>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        var permissions = _rolePermissions.Values
+        var permissions = _rolePermissionAllocations.Values
             .Where(x => x.RoleId == roleId)
             .Select(x => _permissions.TryGetValue(x.PermissionId, out var p) ? p : null)
             .OfType<Permission>()
@@ -254,16 +286,16 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         IReadOnlyCollection<Guid> permissionIds,
         CancellationToken cancellationToken)
     {
-        foreach (var key in _rolePermissions.Keys
+        foreach (var key in _rolePermissionAllocations.Keys
             .Where(k => k.StartsWith($"{roleId:N}:", StringComparison.Ordinal))
             .ToArray())
         {
-            _rolePermissions.TryRemove(key, out _);
+            _rolePermissionAllocations.TryRemove(key, out _);
         }
 
         foreach (var permissionId in permissionIds.Distinct())
         {
-            _rolePermissions[LinkKey(roleId, permissionId)] = new RolePermission(roleId, permissionId);
+            _rolePermissionAllocations[LinkKey(roleId, permissionId)] = PermissionAllocation.ForRole(Guid.NewGuid(), roleId, permissionId);
         }
 
         return Task.CompletedTask;
@@ -271,14 +303,65 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 
     public Task AddRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken)
     {
-        _rolePermissions[LinkKey(roleId, permissionId)] = new RolePermission(roleId, permissionId);
+        _rolePermissionAllocations[LinkKey(roleId, permissionId)] = PermissionAllocation.ForRole(Guid.NewGuid(), roleId, permissionId);
 
         return Task.CompletedTask;
     }
 
     public Task RemoveRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken)
     {
-        _rolePermissions.TryRemove(LinkKey(roleId, permissionId), out _);
+        _rolePermissionAllocations.TryRemove(LinkKey(roleId, permissionId), out _);
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<(Permission Permission, bool IsEnabled)>> GetUserPermissionAllocationsAsync(
+        Guid userId, CancellationToken cancellationToken)
+    {
+        var allocations = _userPermissionAllocations.Values
+            .Where(x => x.UserId == userId)
+            .Select(x => _permissions.TryGetValue(x.PermissionId, out var p) ? (Permission: p, x.IsEnabled) : default)
+            .Where(x => x.Permission is not null)
+            .OrderBy(x => x.Permission!.Name)
+            .Select(x => (x.Permission!, x.IsEnabled))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<(Permission, bool)>>(allocations);
+    }
+
+    public Task SetUserPermissionAllocationsAsync(
+        Guid userId,
+        IReadOnlyDictionary<Guid, bool> permissionIdToIsEnabled,
+        CancellationToken cancellationToken)
+    {
+        foreach (var key in _userPermissionAllocations.Keys
+            .Where(k => k.StartsWith($"{userId:N}:", StringComparison.Ordinal))
+            .ToArray())
+        {
+            _userPermissionAllocations.TryRemove(key, out _);
+        }
+
+        foreach (var (permissionId, isEnabled) in permissionIdToIsEnabled)
+        {
+            _userPermissionAllocations[LinkKey(userId, permissionId)] =
+                PermissionAllocation.ForUser(Guid.NewGuid(), userId, permissionId, isEnabled);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task AddUserPermissionAllocationAsync(
+        Guid userId, Guid permissionId, bool isEnabled, CancellationToken cancellationToken)
+    {
+        _userPermissionAllocations[LinkKey(userId, permissionId)] =
+            PermissionAllocation.ForUser(Guid.NewGuid(), userId, permissionId, isEnabled);
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveUserPermissionAllocationAsync(Guid userId, Guid permissionId, CancellationToken cancellationToken)
+    {
+        _userPermissionAllocations.TryRemove(LinkKey(userId, permissionId), out _);
 
         return Task.CompletedTask;
     }

@@ -23,6 +23,8 @@ export interface CreateSuperAdminRequest {
   email: string;
   displayName: string;
   password: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 /** Mirrors the backend LocalLoginResponse (same shape the login endpoint returns). */

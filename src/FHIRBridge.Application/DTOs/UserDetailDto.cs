@@ -11,6 +11,7 @@ public sealed record UserDetailDto(
     UserStatus Status,
     bool IsEnabled,
     IReadOnlyList<RoleDto> Roles,
+    IReadOnlyList<PermissionAllocationDto> DirectPermissionAllocations,
     DateTime CreatedOnUtc,
     DateTime? LastLoginOnUtc,
     string? InvitationToken);

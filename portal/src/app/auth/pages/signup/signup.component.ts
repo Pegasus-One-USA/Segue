@@ -92,11 +92,9 @@ export class SignupComponent {
   protected readonly submitted    = signal(false);
 
   protected readonly roles: RoleOption[] = [
-    { value: 'viewer',          label: 'Viewer'          },
-    { value: 'analyst',         label: 'Analyst'         },
-    { value: 'reviewer',        label: 'Reviewer'        },
-    { value: 'pipeline-editor', label: 'Pipeline Editor' },
-    { value: 'developer',       label: 'Developer'       },
+    { value: 'Audit',      label: 'Audit'      },
+    { value: 'Operations', label: 'Operations' },
+    { value: 'Admin',      label: 'Admin'      },
   ];
 
   protected readonly form = this.fb.nonNullable.group(
@@ -106,7 +104,7 @@ export class SignupComponent {
       email:           ['', [Validators.required, Validators.email]],
       password:        ['', [Validators.required, passwordStrengthValidator]],
       confirmPassword: ['', Validators.required],
-      role:            ['viewer' as UserRole],
+      role:            ['Audit' as UserRole],
       acceptTerms:     [false, mustBeTrueValidator],
     },
     { validators: passwordMatchValidator('password', 'confirmPassword') }

@@ -8,9 +8,9 @@ namespace FHIRBridge.Application.Abstractions.Security;
 public interface IRbacBootstrapper
 {
     /// <summary>
-    /// Inserts any missing Permission / Role / RolePermission rows (matched by Id). Existing rows are left
-    /// untouched, so it is safe to run on every boot and picks up permissions/roles/grants added since the
-    /// last run.
+    /// Inserts any missing PermissionCategory / Permission / Role / role-level PermissionAllocation rows
+    /// (matched by Id). Existing rows are left untouched, so it is safe to run on every boot and picks up
+    /// categories/permissions/roles/grants added since the last run.
     /// </summary>
     Task EnsureAsync(CancellationToken cancellationToken);
 }

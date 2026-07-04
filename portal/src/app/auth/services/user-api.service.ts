@@ -8,7 +8,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { IUserService } from './i-user.service';
 import {
-  User, Role, Permission,
+  User, Role, Permission, PermissionAllocationDto,
   PaginatedResponse, MessageResponse, UserQueryParams,
 } from '../models/user.model';
 import { CreateUserRequest, UpdateUserRequest, InviteUserRequest } from '../models/auth-request.model';
@@ -89,5 +89,17 @@ export class UserApiService extends IUserService {
 
   override resetUserPassword(userId: string): Observable<MessageResponse> {
     return this.http.post<MessageResponse>(`${BASE}/${userId}/reset-password`, {});
+  }
+
+  override getUserPermissionAllocations(userId: string): Observable<PermissionAllocationDto[]> {
+    return this.http.get<PermissionAllocationDto[]>(`${BASE}/${userId}/permission-allocations`);
+  }
+
+  override setUserPermissionAllocation(userId: string, permissionId: string, isEnabled: boolean): Observable<User> {
+    return this.http.put<User>(`${BASE}/${userId}/permission-allocations/${permissionId}`, { isEnabled });
+  }
+
+  override removeUserPermissionAllocation(userId: string, permissionId: string): Observable<void> {
+    return this.http.delete<void>(`${BASE}/${userId}/permission-allocations/${permissionId}`);
   }
 }

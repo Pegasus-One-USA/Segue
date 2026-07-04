@@ -80,14 +80,14 @@ export class MockAuthService extends IAuthService {
         if (exists)
           return throwError(() => ({ code: 'EMAIL_TAKEN', message: 'An account with this email already exists.' }));
 
-        const roleObj = ALL_ROLES.find(r => r.name === (req.role ?? 'viewer'))!;
+        const roleObj = ALL_ROLES.find(r => r.name === (req.role ?? 'Audit'))!;
         const newUser: User = {
           id:                 `u-${Date.now()}`,
           email:              req.email.trim().toLowerCase(),
           firstName:          req.firstName.trim(),
           lastName:           req.lastName.trim(),
           fullName:           `${req.firstName.trim()} ${req.lastName.trim()}`,
-          role:               req.role ?? 'viewer',
+          role:               req.role ?? 'Audit',
           roles:              [roleObj],
           permissions:        roleObj.permissions,
           orgId:              'org-001',

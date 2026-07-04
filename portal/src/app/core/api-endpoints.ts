@@ -26,6 +26,9 @@ export const USERS_ENDPOINTS = {
   status:       (id: string) => `${API_V1_BASE}/users/${id}/status`,
   roles:        (id: string) => `${API_V1_BASE}/users/${id}/roles`,
   removeRole:   (id: string, roleId: string) => `${API_V1_BASE}/users/${id}/roles/${roleId}`,
+  permissionAllocations:       (id: string) => `${API_V1_BASE}/users/${id}/permission-allocations`,
+  permissionAllocationById:    (id: string, permissionId: string) =>
+    `${API_V1_BASE}/users/${id}/permission-allocations/${permissionId}`,
 };
 
 // ─── Roles & Permissions (RolesController — api/v1/roles, permissions) ─────────

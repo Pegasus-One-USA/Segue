@@ -37,4 +37,14 @@ public static class SeededSecurityIds
     // ── Report / payload permissions ─────────────────────────────────────────
     public static readonly Guid ReportViewPermissionId = Guid.Parse("20000000-0000-0000-0005-000000000001");
     public static readonly Guid PayloadViewPermissionId = Guid.Parse("20000000-0000-0000-0006-000000000001");
+
+    // ── Permission categories ──────────────────────────────────────────────────
+    public static readonly Guid ConfigurationCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000001");
+    public static readonly Guid PipelineCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000002");
+    public static readonly Guid AuditCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000003");
+    public static readonly Guid UserCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000004");
+    public static readonly Guid RoleCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000005");
+    public static readonly Guid WorkflowCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000006");
+    public static readonly Guid ReportCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000007");
+    public static readonly Guid PayloadCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000008");
 }

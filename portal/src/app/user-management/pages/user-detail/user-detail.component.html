@@ -286,6 +286,16 @@
         </div>
       </mat-tab>
 
+      <!-- ── Tab: Direct Permission Overrides ─────────────────────── -->
+      <mat-tab label="Direct Permission Overrides">
+        <div class="tab-content">
+          <app-user-permission-overrides
+            [userId]="user()!.id"
+            [userDisplayName]="user()!.fullName"
+          ></app-user-permission-overrides>
+        </div>
+      </mat-tab>
+
       <!-- ── Tab 3: Security ───────────────────────────────────────── -->
       <mat-tab label="Security">
         <div class="tab-content">

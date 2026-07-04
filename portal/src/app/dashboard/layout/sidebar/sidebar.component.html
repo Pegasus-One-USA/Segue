@@ -7,7 +7,7 @@
   </div>
 
   <nav class="sidebar-nav">
-    @for (entry of navEntries; track $index) {
+    @for (entry of navEntries(); track $index) {
       @if (isSection(entry)) {
         @if (!collapsed()) {
           <div class="nav-section">{{ entry.label }}</div>

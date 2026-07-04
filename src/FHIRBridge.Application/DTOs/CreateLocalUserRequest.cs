@@ -5,4 +5,6 @@ public sealed record CreateLocalUserRequest(
     string? DisplayName,
     string Password,
     IReadOnlyCollection<string> RoleNames,
-    bool RequirePasswordChange);
+    bool RequirePasswordChange,
+    string? FirstName = null,
+    string? LastName = null);

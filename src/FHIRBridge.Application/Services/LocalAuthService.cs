@@ -246,7 +246,7 @@ public sealed class LocalAuthService : ILocalAuthService
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
         var roleNames = roles.Select(x => x.Name).ToArray();
 
-        var permissionCodes = await GetPermissionCodesAsync(roles.Select(r => r.Id).ToArray(), cancellationToken);
+        var permissionCodes = await GetPermissionCodesAsync(user.Id, roles.Select(r => r.Id).ToArray(), cancellationToken);
 
         var token = _accessTokenIssuer.Issue(user, roleNames, permissionCodes);
 
@@ -269,18 +269,40 @@ public sealed class LocalAuthService : ILocalAuthService
             refreshExpiry);
     }
 
+    /// <summary>
+    /// Effective permission codes for the user: the union of their role grants, with any direct
+    /// per-user <see cref="Domain.Entities.PermissionAllocation"/> overriding the role-derived result
+    /// for that specific code — enabled overrides add it even if no role grants it, disabled overrides
+    /// remove it even if a role does grant it.
+    /// </summary>
     private async Task<string[]> GetPermissionCodesAsync(
+        Guid userId,
         IReadOnlyCollection<Guid> roleIds,
         CancellationToken cancellationToken)
     {
-        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var roleCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var roleId in roleIds)
         {
             var perms = await _repository.GetRolePermissionsAsync(roleId, cancellationToken);
-            foreach (var p in perms) codes.Add(p.Name);
+            foreach (var p in perms) roleCodes.Add(p.Name);
         }
 
-        return [..codes];
+        var userAllocations = await _repository.GetUserPermissionAllocationsAsync(userId, cancellationToken);
+        var overridden = new HashSet<string>(
+            userAllocations.Select(a => a.Permission.Name), StringComparer.OrdinalIgnoreCase);
+
+        var result = new HashSet<string>(
+            roleCodes.Where(code => !overridden.Contains(code)), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var allocation in userAllocations)
+        {
+            if (allocation.IsEnabled)
+            {
+                result.Add(allocation.Permission.Name);
+            }
+        }
+
+        return [..result];
     }
 
     private async Task AuditAsync(

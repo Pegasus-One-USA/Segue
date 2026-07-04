@@ -38,6 +38,12 @@ public interface IUserAccessRepository
 
     Task<int> GetRoleUserCountAsync(Guid roleId, CancellationToken cancellationToken);
 
+    // ── Permission Categories ────────────────────────────────────────────────
+
+    Task<IReadOnlyList<PermissionCategory>> GetPermissionCategoriesAsync(CancellationToken cancellationToken);
+
+    Task AddPermissionCategoryAsync(PermissionCategory category, CancellationToken cancellationToken);
+
     // ── Permissions ──────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<Permission>> GetPermissionsAsync(CancellationToken cancellationToken);
@@ -53,6 +59,20 @@ public interface IUserAccessRepository
     Task AddRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken);
 
     Task RemoveRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken);
+
+    // ── User Permission Allocations (direct grant/deny overrides) ───────────
+
+    /// <summary>The user's direct permission allocations (grant or deny overrides), each paired with its Permission.</summary>
+    Task<IReadOnlyList<(Permission Permission, bool IsEnabled)>> GetUserPermissionAllocationsAsync(
+        Guid userId, CancellationToken cancellationToken);
+
+    Task SetUserPermissionAllocationsAsync(
+        Guid userId, IReadOnlyDictionary<Guid, bool> permissionIdToIsEnabled, CancellationToken cancellationToken);
+
+    Task AddUserPermissionAllocationAsync(
+        Guid userId, Guid permissionId, bool isEnabled, CancellationToken cancellationToken);
+
+    Task RemoveUserPermissionAllocationAsync(Guid userId, Guid permissionId, CancellationToken cancellationToken);
 
     // ── User ↔ Role (global assignments) ────────────────────────────────────
 
