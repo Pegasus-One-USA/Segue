@@ -11,7 +11,7 @@
   cursor: pointer;
   display: grid;
   gap: 3px;
-  background: #fff;
+  background: var(--color-surface);
   transition: all 0.15s;
 
   &:hover { border-color: var(--purple-line); }

@@ -1,0 +1,15 @@
+#!/bin/sh
+# FHIRBridge pre-push — design-token compliance (ratchet).
+# Enabled via `git config core.hooksPath .githooks` (portal's `npm install` sets this).
+# Fast, local mirror of the CI gate. Bypass with `git push --no-verify` (CI still enforces).
+echo "› checking design-token compliance…"
+if ! node portal/scripts/check-tokens.mjs; then
+  echo "✗ push blocked — fix the above, or bypass with --no-verify (CI will still enforce on the PR)."
+  exit 1
+fi
+
+echo "› checking lint ratchet (ESLint + stylelint)…"
+if ! node portal/scripts/lint-ratchet.mjs; then
+  echo "✗ push blocked — lint regressions above. Fix, or bypass with --no-verify (CI will still enforce)."
+  exit 1
+fi

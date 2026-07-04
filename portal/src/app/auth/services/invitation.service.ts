@@ -32,7 +32,7 @@ export class InvitationService {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return [];
-      const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
+      const parsed = JSON.parse(raw) as Record<string, unknown>[];
       return parsed.map(i => ({
         ...i,
         createdAt: new Date(i['createdAt'] as string),

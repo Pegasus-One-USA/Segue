@@ -7,7 +7,7 @@
   /* Dot grid: 1px dots at rgba(0,168,157,0.15), 26×26px spacing */
   background-image: radial-gradient(circle at 1px 1px, rgba(0, 168, 157, 0.15) 1px, transparent 0);
   background-size: 26px 26px;
-  background-color: var(--color-bg, #F5F7FA);
+  background-color: var(--color-bg, var(--color-bg));
   cursor: grab;
 
   &.panning { cursor: grabbing; }
@@ -35,20 +35,20 @@
 /* Default edge */
 .edge-path {
   fill: none;
-  stroke: var(--color-muted-2, #94A3B8);
+  stroke: var(--color-muted-2, var(--color-muted-2));
   stroke-width: 2;
   transition: stroke 0.15s, stroke-width 0.15s;
 }
 
 /* Selected edge */
 .edge-path.selected {
-  stroke: var(--color-primary, #00A89D);
+  stroke: var(--color-primary, var(--color-primary));
   stroke-width: 2.5;
 }
 
 /* Running edge — dashed animated */
 .edge-path.running {
-  stroke: var(--color-primary, #00A89D);
+  stroke: var(--color-primary, var(--color-primary));
   stroke-width: 2;
   stroke-dasharray: 8 5;
   animation: edge-dash 0.6s linear infinite;
@@ -71,7 +71,7 @@
   align-items: center;
   gap: 8px;
   color: #fff;
-  background: var(--color-primary, #00A89D);
+  background: var(--color-primary, var(--color-primary));
   border: 0;
   border-radius: var(--radius-pill, 999px);
   font-size: 15px;

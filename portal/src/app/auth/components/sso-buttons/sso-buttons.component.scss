@@ -27,7 +27,7 @@
 
 .sso-error {
   display: block;
-  background: #FEF2F2;
+  background: var(--color-error-soft);
   border: 1px solid #FECACA;
   border-left: 4px solid #DC2626;
   border-radius: 8px;
@@ -54,7 +54,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: 10px;
   background: var(--color-surface);
-  color: var(--color-ink-2, #1A202C);
+  color: var(--color-ink-2, var(--color-ink));
   font-size: 14px;
   font-weight: 600;
   font-family: var(--font-family);
@@ -63,7 +63,7 @@
 
   &:hover:not(:disabled) {
     border-color: #9CA3AF;
-    background: var(--color-side, #F8FAFC);
+    background: var(--color-side, var(--color-side));
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 

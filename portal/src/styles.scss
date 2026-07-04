@@ -6,19 +6,39 @@
 
 /* ─── Angular Material M3 Token Overrides ─────────────────────────────────── */
 html {
-  --mat-sys-primary:              #00A89D;
-  --mat-sys-on-primary:           #FFFFFF;
-  --mat-sys-primary-container:    #E6F9F7;
-  --mat-sys-on-primary-container: #004D47;
-  --mat-sys-secondary:            #0076A8;
-  --mat-sys-on-secondary:         #FFFFFF;
-  --mat-sys-tertiary:             #005E8D;
-  --mat-sys-error:                #EF4444;
-  --mat-sys-on-error:             #FFFFFF;
-  --mat-sys-background:           #F5F7FA;
-  --mat-sys-surface:              #FFFFFF;
-  --mat-sys-outline:              #E2E8F0;
-  --mat-sys-outline-variant:      #D1D5DB;
+  /* Colors reference the semantic tier (:root) so Material follows the theme. */
+  --mat-sys-primary:              var(--color-primary);
+  --mat-sys-on-primary:           var(--color-on-primary);
+  --mat-sys-primary-container:    var(--color-primary-soft);
+  --mat-sys-on-primary-container: var(--ref-teal-900);
+  --mat-sys-secondary:            var(--color-secondary);
+  --mat-sys-on-secondary:         var(--color-on-primary);
+  --mat-sys-tertiary:             var(--ref-cyan-700);
+  --mat-sys-error:                var(--color-error);
+  --mat-sys-on-error:             var(--color-on-primary);
+  --mat-sys-background:           var(--color-bg);
+  --mat-sys-surface:              var(--color-surface);
+  --mat-sys-outline:              var(--color-border);
+  --mat-sys-outline-variant:      var(--color-border-input);
+
+  /* Material typography — force Inter (prebuilt theme ships Roboto).
+     Overrides all 15 M3 role font-family tokens so Material components
+     (paginator, select, menu, form fields, chips) match the app font. */
+  --mat-sys-display-large-font:   var(--font-family);
+  --mat-sys-display-medium-font:  var(--font-family);
+  --mat-sys-display-small-font:   var(--font-family);
+  --mat-sys-headline-large-font:  var(--font-family);
+  --mat-sys-headline-medium-font: var(--font-family);
+  --mat-sys-headline-small-font:  var(--font-family);
+  --mat-sys-title-large-font:     var(--font-family);
+  --mat-sys-title-medium-font:    var(--font-family);
+  --mat-sys-title-small-font:     var(--font-family);
+  --mat-sys-body-large-font:      var(--font-family);
+  --mat-sys-body-medium-font:     var(--font-family);
+  --mat-sys-body-small-font:      var(--font-family);
+  --mat-sys-label-large-font:     var(--font-family);
+  --mat-sys-label-medium-font:    var(--font-family);
+  --mat-sys-label-small-font:     var(--font-family);
 }
 
 /* ─── Design Tokens ───────────────────────────────────────────────────────── */
@@ -29,35 +49,90 @@ html {
   --font-family: Inter, 'Segoe UI', system-ui, Arial, sans-serif;
   --font-mono:   ui-monospace, 'SF Mono', Consolas, monospace;
 
-  /* ── Brand Colors ── */
-  --color-primary:      #00A89D;
-  --color-primary-dark: #007A72;
-  --color-primary-soft: #E6F9F7;
-  --color-primary-mid:  #B2EAE6;
-  --color-secondary:    #0076A8;
-  --color-gold:         #F5A820;
-  --color-gold-soft:    #FEF3DC;
+  /* ═══════════════════════════════════════════════════════════════════════
+     TIER 1 · PRIMITIVES — raw palette. The ONLY place hex literals live.
+     Never reference --ref-* from components; use the semantic tier below.
+     ═══════════════════════════════════════════════════════════════════════ */
+  --ref-white: #FFFFFF;
+  --ref-black: #000000;
 
-  /* ── Semantic Colors ── */
-  --color-success:      #10B981;
-  --color-success-soft: #ECFDF5;
-  --color-warning:      #F59E0B;
-  --color-warning-soft: #FFF4E5;
-  --color-error:        #EF4444;
-  --color-error-soft:   #FEF2F2;
-  --color-info:         #3B7FFF;
-  --color-info-soft:    #EFF6FF;
+  --ref-teal-50:  #E6F9F7;  --ref-teal-100: #B2EAE6;  --ref-teal-500: #00A89D;
+  --ref-teal-600: #007A72;  --ref-teal-700: #006660;  --ref-teal-900: #004D47;
+  --ref-teal-ink: #1E403E;
 
-  /* ── Neutral Colors ── */
-  --color-ink:          #1A202C;
-  --color-ink-2:        #374151;
-  --color-muted:        #64748B;
-  --color-muted-2:      #94A3B8;
-  --color-border:       #E2E8F0;
-  --color-border-input: #D1D5DB;
-  --color-bg:           #F5F7FA;
-  --color-surface:      #FFFFFF;
-  --color-side:         #F8FAFC;
+  --ref-cyan-600: #0076A8;  --ref-cyan-700: #005E8D;
+
+  --ref-blue-50:  #EFF6FF;  --ref-blue-500: #3B7FFF;
+
+  --ref-green-50: #ECFDF5;  --ref-green-500: #10B981;
+
+  --ref-amber-50:  #FFF4E5;  --ref-amber-100: #FEF3DC;
+  --ref-amber-500: #F59E0B;  --ref-amber-600: #F5A820;
+
+  --ref-red-50: #FEF2F2;  --ref-red-500: #EF4444;
+
+  --ref-coral-50: #FFF0EE;  --ref-coral-500: #FF5A4F;
+
+  /* Strong status foregrounds (accessible text/icon on *-soft backgrounds) */
+  --ref-green-900: #065F46;  --ref-red-900:   #991B1B;
+  --ref-blue-700:  #1D4ED8;  --ref-amber-900: #92400E;
+
+  --ref-neutral-50:  #F9FAFB;  --ref-neutral-75:  #F8FAFC;  --ref-neutral-100: #F5F7FA;
+  --ref-neutral-130: #F1F5F9;  --ref-neutral-150: #EEF1F6;  --ref-neutral-200: #E2E8F0;
+  --ref-neutral-250: #D1D5DB;  --ref-neutral-300: #CBD5E1;  --ref-neutral-400: #94A3B8;
+  --ref-neutral-500: #64748B;  --ref-neutral-700: #374151;  --ref-neutral-850: #1E293B;
+  --ref-neutral-900: #1A202C;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     TIER 2 · SEMANTIC — intent-named; the layer components consume.
+     Values here are the LIGHT theme; html[data-theme="dark"] overrides them.
+     ═══════════════════════════════════════════════════════════════════════ */
+  /* Brand */
+  --color-primary:      var(--ref-teal-500);
+  --color-primary-dark: var(--ref-teal-600);
+  --color-primary-soft: var(--ref-teal-50);
+  --color-primary-mid:  var(--ref-teal-100);
+  --color-secondary:    var(--ref-cyan-600);
+  --color-on-primary:   var(--ref-white);
+  --color-gold:         var(--ref-amber-600);
+  --color-gold-soft:    var(--ref-amber-100);
+
+  /* Status */
+  --color-success:      var(--ref-green-500);
+  --color-success-soft: var(--ref-green-50);
+  --color-warning:      var(--ref-amber-500);
+  --color-warning-soft: var(--ref-amber-50);
+  --color-error:        var(--ref-red-500);
+  --color-error-soft:   var(--ref-red-50);
+  --color-info:         var(--ref-blue-500);
+  --color-info-soft:    var(--ref-blue-50);
+
+  /* Strong foreground — text/icon on the matching *-soft background (badges,
+     table-action buttons). Flips in dark so these never go dark-on-dark. */
+  --color-success-strong: var(--ref-green-900);
+  --color-warning-strong: var(--ref-amber-900);
+  --color-error-strong:   var(--ref-red-900);
+  --color-info-strong:    var(--ref-blue-700);
+
+  /* Neutral / surface */
+  --color-ink:          var(--ref-neutral-900);
+  --color-ink-2:        var(--ref-neutral-700);
+  --color-muted:        var(--ref-neutral-500);
+  --color-muted-2:      var(--ref-neutral-400);
+  --color-border:       var(--ref-neutral-200);
+  --color-border-input: var(--ref-neutral-250);
+  --color-bg:           var(--ref-neutral-100);
+  --color-surface:      var(--ref-white);
+  --color-side:         var(--ref-neutral-75);
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     TIER 3 · COMPONENT tokens — role-scoped, reference the semantic tier.
+     Adoption in progress (page + cards wired); expand with cleanup pass.
+     ═══════════════════════════════════════════════════════════════════════ */
+  --surface-page:   var(--color-bg);
+  --surface-raised: var(--color-surface);
+  --surface-sunken: var(--color-side);
+  --border-default: var(--color-border);
 
   /* ── Legacy Aliases (workflow builder compatibility) ── */
   --teal:        var(--color-primary);
@@ -71,7 +146,7 @@ html {
   --muted:       var(--color-muted);
   --muted-2:     var(--color-muted-2);
   --line:        var(--color-border);
-  --line-2:      #F1F5F9;
+  --line-2:      var(--ref-neutral-130);
   --canvas:      var(--color-bg);
   --surface:     var(--color-surface);
   --side:        var(--color-side);
@@ -85,8 +160,8 @@ html {
   --red:         var(--color-error);
   --red-soft:    var(--color-error-soft);
   --blue:        var(--color-info);
-  --epic:        #ff5a4f;
-  --epic-soft:   #fff0ee;
+  --epic:        var(--ref-coral-500);
+  --epic-soft:   var(--ref-coral-50);
 
   /* ── Border Radius ── */
   --radius-sm:    6px;
@@ -134,6 +209,57 @@ html {
   --z-modal:    200;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK THEME · activate with <html data-theme="dark"> (see ThemeService).
+   Overrides the SEMANTIC tier only — primitives, spacing, radius, motion and
+   the Material bridge all cascade automatically. First-pass palette pending
+   design review; promote raw values to dark primitives once finalized.
+   ═══════════════════════════════════════════════════════════════════════════ */
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Neutral / surface — inverted */
+  --color-bg:           #0F172A;
+  --color-surface:      #1E293B;
+  --color-side:         #172033;
+  --color-border:       #334155;
+  --color-border-input: #475569;
+  --color-ink:          #F1F5F9;
+  --color-ink-2:        #CBD5E1;
+  --color-muted:        #94A3B8;
+  --color-muted-2:      #8493AA;  /* lifted from #64748B → AA (4.69:1) on dark surface */
+
+  /* Brand — lifted for contrast on dark surfaces */
+  --color-primary:      #19C3B6;
+  --color-primary-dark: #14B8A6;
+  --color-primary-soft: #0E3A37;
+  --color-primary-mid:  #155E58;
+  --color-secondary:    #38BDF8;
+  --color-on-primary:   #04211F;
+  --color-gold:         #FBBF24;
+  --color-gold-soft:    #33270B;
+
+  /* Status — brighter foreground, dark-tinted soft background */
+  --color-success:      #34D399;  --color-success-soft: #0B2E22;
+  --color-warning:      #FBBF24;  --color-warning-soft: #33270B;
+  --color-error:        #F87171;  --color-error-soft:   #3B1418;
+  --color-info:         #60A5FA;  --color-info-soft:    #0E2A47;
+
+  /* Strong status foregrounds — lifted for AA on the dark soft backgrounds */
+  --color-success-strong: #6EE7B7;
+  --color-warning-strong: #FCD34D;
+  --color-error-strong:   #FCA5A5;
+  --color-info-strong:    #93C5FD;
+
+  /* Shadows read stronger on dark backgrounds */
+  --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.40);
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.50);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.55);
+
+  /* Material container foreground fix for dark */
+  --mat-sys-on-primary-container: #B2EAE6;
+}
+
 /* ─── Box Sizing Reset ────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -145,7 +271,7 @@ html, body {
   padding:                 0;
   height:                  100%;
   color:                   var(--color-ink);
-  background:              var(--color-bg);
+  background:              var(--surface-page);
   overflow:                hidden;
   -webkit-font-smoothing:  antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -391,7 +517,7 @@ a {
 /* Variants */
 .btn-primary {
   background:   var(--color-primary);
-  color:        var(--color-surface);
+  color:        var(--color-on-primary);
   border:       1px solid var(--color-primary);
 
   &:hover:not(:disabled) {
@@ -443,7 +569,7 @@ a {
 
 .btn-danger {
   background:   var(--color-error-soft);
-  color:        #991B1B;
+  color:        var(--color-error-strong);
   border:       1px solid #FECACA;
 
   &:hover:not(:disabled) {
@@ -470,7 +596,7 @@ a {
 /* Table action variants */
 .btn-table-edit {
   background:    var(--color-info-soft);
-  color:         #2563EB;
+  color:         var(--color-info-strong);
   border:        1px solid #BFDBFE;
   border-radius: var(--radius-sm);
   font-size:     12px;
@@ -483,7 +609,7 @@ a {
 
 .btn-table-suspend {
   background:    var(--color-error-soft);
-  color:         #991B1B;
+  color:         var(--color-error-strong);
   border:        1px solid #FECACA;
   border-radius: var(--radius-sm);
   font-size:     12px;
@@ -496,7 +622,7 @@ a {
 
 .btn-table-activate {
   background:    var(--color-success-soft);
-  color:         #065F46;
+  color:         var(--color-success-strong);
   border:        1px solid #A7F3D0;
   border-radius: var(--radius-sm);
   font-size:     12px;
@@ -509,7 +635,7 @@ a {
 
 .btn-table-save {
   background:    var(--color-primary);
-  color:         var(--color-surface);
+  color:         var(--color-on-primary);
   border:        1px solid var(--color-primary);
   border-radius: var(--radius-sm);
   font-size:     12px;
@@ -560,7 +686,7 @@ a {
 
 .badge-active {
   background: var(--color-success-soft);
-  color:      #065F46;
+  color:      var(--color-success-strong);
 
   &::before {
     background: var(--color-success);
@@ -578,7 +704,7 @@ a {
 
 .badge-suspended {
   background: var(--color-error-soft);
-  color:      #991B1B;
+  color:      var(--color-error-strong);
 
   &::before {
     background: var(--color-error);
@@ -587,7 +713,7 @@ a {
 
 .badge-running {
   background: var(--color-info-soft);
-  color:      #1D4ED8;
+  color:      var(--color-info-strong);
 
   &::before {
     background: var(--color-info);
@@ -598,7 +724,7 @@ a {
 
 .badge-completed {
   background: var(--color-success-soft);
-  color:      #065F46;
+  color:      var(--color-success-strong);
 
   &::before {
     background: var(--color-success);
@@ -607,7 +733,7 @@ a {
 
 .badge-failed {
   background: var(--color-error-soft);
-  color:      #991B1B;
+  color:      var(--color-error-strong);
 
   &::before {
     background: var(--color-error);
@@ -616,7 +742,7 @@ a {
 
 .badge-queued {
   background: var(--color-warning-soft);
-  color:      #92400E;
+  color:      var(--color-warning-strong);
 
   &::before {
     background: var(--color-warning);
@@ -666,7 +792,7 @@ a {
 
 /* ─── Card Utility Class ──────────────────────────────────────────────────── */
 .card {
-  background:    var(--color-surface);
+  background:    var(--surface-raised);
   border-radius: var(--radius-card);
   padding:       20px 22px 18px;
   box-shadow:    var(--shadow-xs);

@@ -14,22 +14,22 @@
   justify-content: center;
   gap: 8px;
   padding: 16px 12px;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   cursor: pointer;
   text-decoration: none;
   transition: background 0.15s, border-color 0.15s, transform 0.12s;
 
   &:hover {
-    background: #E6F9F7;
+    background: var(--color-primary-soft);
     transform: translateY(-1px);
   }
 
-  &.tile-blue    { &:hover { border-color: #00A89D; } .action-icon { color: #00A89D; } }
-  &.tile-green   { &:hover { border-color: #10b981; } .action-icon { color: #10b981; } }
-  &.tile-amber   { &:hover { border-color: #f59e0b; } .action-icon { color: #f59e0b; } }
-  &.tile-default { &:hover { border-color: #B2EAE6; } .action-icon { color: #64748B; } }
+  &.tile-blue    { &:hover { border-color: var(--color-primary); } .action-icon { color: var(--color-primary); } }
+  &.tile-green   { &:hover { border-color: var(--color-success); } .action-icon { color: var(--color-success); } }
+  &.tile-amber   { &:hover { border-color: var(--color-warning); } .action-icon { color: var(--color-warning); } }
+  &.tile-default { &:hover { border-color: var(--color-primary-mid); } .action-icon { color: var(--color-muted); } }
 }
 
 .action-icon {
@@ -41,7 +41,7 @@
 .action-label {
   font-size: 12px;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-ink-2);
   text-align: center;
   white-space: nowrap;
 }

@@ -115,7 +115,7 @@ mat-dialog-content {
     }
 
     // White background for the select panel dropdown
-    .mat-mdc-select-panel { background: #fff !important; }
+    .mat-mdc-select-panel { background: var(--color-surface) !important; }
   }
 }
 

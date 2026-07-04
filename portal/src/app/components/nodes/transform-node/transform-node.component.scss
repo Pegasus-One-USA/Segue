@@ -3,17 +3,17 @@
 /* Rank-based color tokens — applied by the component via [style] or host class */
 :host {
   /* Default fallback; component overrides --node-color per rank */
-  --node-color: var(--color-primary, #00A89D);
+  --node-color: var(--color-primary, var(--color-primary));
 
   /* Rank palette tokens */
   --rank-validation:   #6366F1;
   --rank-normalize:    #8B5CF6;
   --rank-terminology:  #EC4899;
   --rank-deidentify:   #F97316;
-  --rank-map:          #00A89D;
+  --rank-map:          var(--color-primary);
   --rank-sql:          #2563EB;
-  --rank-csv:          #10B981;
-  --rank-audit:        #64748B;
+  --rank-csv:          var(--color-success);
+  --rank-audit:        var(--color-muted);
   --rank-analytics:    #7C3AED;
 
   position: absolute;
@@ -50,13 +50,13 @@
   }
 
   &.completed {
-    border-color: var(--color-success, #10B981);
-    --node-color: var(--color-success, #10B981);
+    border-color: var(--color-success, var(--color-success));
+    --node-color: var(--color-success, var(--color-success));
   }
 
   &.failed {
-    border-color: var(--color-error, #EF4444);
-    --node-color: var(--color-error, #EF4444);
+    border-color: var(--color-error, var(--color-error));
+    --node-color: var(--color-error, var(--color-error));
   }
 
   &.disabled {
@@ -98,7 +98,7 @@
   strong {
     font-size: 12px;
     font-weight: 700;
-    color: var(--color-ink, #1A202C);
+    color: var(--color-ink, var(--color-ink));
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
@@ -108,7 +108,7 @@
   span {
     font-size: 10.5px;
     font-weight: 500;
-    color: var(--color-muted, #64748B);
+    color: var(--color-muted, var(--color-muted));
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
@@ -129,8 +129,8 @@
   white-space: nowrap;
 
   &.caveat {
-    background: var(--color-warning-soft, #FFF4E5);
-    color: var(--color-warning, #F59E0B);
+    background: var(--color-warning-soft, var(--color-warning-soft));
+    color: var(--color-warning, var(--color-warning));
   }
 }
 
@@ -175,8 +175,8 @@
   font-size: 10px;
   font-weight: 800;
 
-  &.badge-success { background: var(--color-success, #10B981); }
-  &.badge-error   { background: var(--color-error,   #EF4444); }
+  &.badge-success { background: var(--color-success, var(--color-success)); }
+  &.badge-error   { background: var(--color-error,   var(--color-error)); }
 }
 
 /* ── Running pulse animation ────────────────────────────────────────────────── */

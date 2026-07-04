@@ -21,7 +21,7 @@
     left: calc(50% + 16px);
     width: calc(100% - 32px);
     height: 2px;
-    background: #e2e8f0;
+    background: var(--color-border);
     z-index: 0;
     transition: background 0.3s;
   }
@@ -49,8 +49,8 @@
   font-weight: 800;
   position: relative;
   z-index: 1;
-  border: 2px solid #e2e8f0;
-  background: #f8fafc;
+  border: 2px solid var(--color-border);
+  background: var(--color-side);
   color: #9aa6b6;
   transition: all 0.2s;
 }
