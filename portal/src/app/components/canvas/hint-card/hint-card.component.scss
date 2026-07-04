@@ -1,7 +1,7 @@
 .hint-card {
   position: absolute; right: 18px; bottom: 18px; z-index: 8;
   width: 320px; padding: 14px 16px;
-  background: #fff; border: 1px solid #e3e8f1; border-radius: 16px;
+  background: var(--color-surface); border: 1px solid #e3e8f1; border-radius: 16px;
   box-shadow: 0 12px 28px rgba(18,20,27,.11);
 
   h3 { margin: 0 0 6px; font-size: 14px; padding-right: 22px; }
@@ -16,7 +16,7 @@
   border: none;
   font-size: 18px;
   line-height: 1;
-  color: #94A3B8;
+  color: var(--color-muted-2);
   cursor: pointer;
   padding: 2px 5px;
   border-radius: 4px;

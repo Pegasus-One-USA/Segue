@@ -171,7 +171,7 @@
   }
   // Tenant dropdown panel — white background
   app-role-tab .mat-mdc-select-panel {
-    background: #fff !important;
+    background: var(--color-surface) !important;
   }
 }
 
@@ -382,7 +382,7 @@
     }
     .mat-mdc-floating-label { color: var(--color-primary) !important; }
   }
-  .mat-mdc-form-field-icon-prefix .field-prefix-icon { color: #94A3B8; }
+  .mat-mdc-form-field-icon-prefix .field-prefix-icon { color: var(--color-muted-2); }
   .mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix .field-prefix-icon {
     color: var(--color-primary) !important;
   }

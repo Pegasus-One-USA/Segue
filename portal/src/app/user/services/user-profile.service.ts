@@ -8,6 +8,7 @@ import {
   ExtendedUserRole,
 } from '../models/user-profile.model';
 import { AuthService } from '../../auth/services/auth.service';
+import { ThemeService } from '../../services/theme.service';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,7 @@ const MOCK_API_KEYS: ApiKey[] = [
 @Injectable({ providedIn: 'root' })
 export class UserProfileService {
   private readonly auth = inject(AuthService);
+  private readonly themeSvc = inject(ThemeService);
 
   private readonly _profile  = signal<UserProfile>({ ...DEFAULT_PROFILE });
   private readonly _sessions = signal<ActiveSession[]>(MOCK_SESSIONS);
@@ -124,6 +126,10 @@ export class UserProfileService {
   readonly roleLabel = computed(() => this._profile().roleLabel);
 
   constructor() {
+    // Reflect the theme ThemeService actually applied at startup (it resolves
+    // 'system' and reads the persisted preference) so the settings UI matches.
+    this._profile.update(p => ({ ...p, theme: this.themeSvc.mode() }));
+
     // Sync identity fields from the auth store whenever the logged-in user changes.
     // Preference fields (theme, language, dateFormat, etc.) are preserved across syncs.
     effect(() => {
@@ -159,7 +165,9 @@ export class UserProfileService {
 
   setTheme(theme: AppTheme): void {
     this._profile.update(p => ({ ...p, theme }));
-    document.documentElement.setAttribute('data-theme', theme);
+    // Delegate application to ThemeService — it resolves 'system' via
+    // prefers-color-scheme, sets/removes data-theme correctly, and persists.
+    this.themeSvc.set(theme);
   }
 
   updateProfile(partial: Partial<UserProfile>): void {

@@ -15,7 +15,7 @@
   font-weight: 650;
   color: #41506a;
   cursor: pointer;
-  background: #fff;
+  background: var(--color-surface);
 
   &:hover { background: #f6f8fb; }
   &.on    { border-color: var(--purple); background: #f7f1ff; color: var(--purple); }

@@ -140,7 +140,7 @@ export class ApplicabilityService {
   pickerModel(
     node: CanvasNode,
     allNodes: CanvasNode[],
-    allEdges: Array<{ id: string; from: string; to: string }>,
+    allEdges: { id: string; from: string; to: string }[],
     showHidden: boolean
   ): PickerModel {
     const byId = (id: string) => allNodes.find(n => n.id === id);

@@ -98,7 +98,7 @@ function role(name: UserRole): Role {
 export const DEFAULT_PASSWORD = 'Password123!';
 
 // ─── Mock Users ───────────────────────────────────────────────────────────────
-export let MOCK_USERS: User[] = [
+export const MOCK_USERS: User[] = [
   {
     id: 'u-01',
     email: 'sarah.chen@fhirbridge.io',

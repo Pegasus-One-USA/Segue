@@ -8,7 +8,7 @@
 
   &.info   { background: #e6f3ff; border: 1px solid #b9dcff; color: #0f4c81; }
   &.warn   { background: var(--amber-soft); border: 1px solid #f5d99a; color: var(--amber); }
-  &.tip    { background: #f8fafc; border: 1px solid #e2e8f0; color: #5f6b7c; }
+  &.tip    { background: var(--color-side); border: 1px solid var(--color-border); color: #5f6b7c; }
 }
 
 .ci { flex-shrink: 0; font-size: 14px; line-height: 1.3; }
