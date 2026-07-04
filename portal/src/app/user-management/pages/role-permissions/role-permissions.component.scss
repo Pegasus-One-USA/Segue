@@ -283,22 +283,40 @@
   gap: 20px;
 }
 
-.permission-group {
+// ─── Permission grid: one .permission-category (table) per Permission Category ─
+.permission-category {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  // Bordered "card within a card" so each resource group reads as a distinct block.
+  gap: 10px;
+  // Bordered "card within a card" so each category reads as a distinct block.
   background: var(--color-side);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-base);
   padding: 14px 18px;
 
+  // Reset native <button> styling — the whole header row is the collapse/expand toggle.
   &__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  &__chevron {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: var(--color-muted);
+    transition: transform var(--transition-base);
+
+    &--collapsed {
+      transform: rotate(-90deg);
+    }
   }
 
   &__title {
@@ -311,32 +329,112 @@
     background: var(--color-primary-soft);
     padding: 4px 10px;
     border-radius: var(--radius-pill);
-  }
-
-  // Responsive 2-3 column layout for the checkboxes within a group — auto-fit yields
-  // 3 columns at full width, 2 on narrower viewports, 1 on mobile, no media query needed.
-  &__items {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 8px 20px;
-  }
-
-  mat-checkbox {
-    display: block;
     margin: 0;
-    min-width: 0;
-
-    ::ng-deep .mdc-label {
-      font-size: 14.5px;
-      color: var(--color-ink);
-    }
   }
 }
 
-.permission-desc {
-  display: block;
-  font-size: 11px;
-  color: var(--color-muted);
+.permission-grid {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: var(--radius-base);
+
+  // Compact rows: tighter padding + smaller text than a typical data table.
+  th, td {
+    padding: 2px 10px;
+    text-align: left;
+    font-size: 12.5px;
+    line-height: 1.2;
+  }
+
+  // Action/all-column cells hold nothing but a checkbox — collapse their padding further so
+  // the checkbox's own box is what determines row height, not extra cell padding around it.
+  &__cell {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  // Header row — tinted so it reads as a distinct band above the data rows.
+  thead th {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-primary-dark);
+    background: var(--color-primary-soft);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  &__group-col, &__group-name {
+    white-space: nowrap;
+  }
+
+  // First column (Permission Group) — tinted the same as the header so the row's identity
+  // reads as a distinct band down the left edge of the table.
+  &__group-col, &__group-name {
+    background: var(--color-primary-soft);
+  }
+
+  &__group-name {
+    font-weight: 600;
+    color: var(--color-primary-dark);
+  }
+
+  &__action-col, &__cell {
+    text-align: center;
+  }
+
+  // Trailing "All" column (per-row select-all) — its own tint so it reads as a structural
+  // column, distinct from both the action checkboxes and the group-name column.
+  &__all-col, &__cell--all {
+    text-align: center;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--color-border);
+
+    &:last-child { border-bottom: none; }
+
+    // Zebra striping on the action cells only — the group-name and "All" columns keep their
+    // own fixed tint (above) so the stripe doesn't wash out that coloring.
+    &:nth-child(even) td.permission-grid__cell:not(.permission-grid__cell--all) {
+      background: var(--color-bg);
+    }
+
+    // Hover wins over the stripe.
+    &:hover td.permission-grid__cell:not(.permission-grid__cell--all) {
+      background: var(--color-primary-soft);
+    }
+  }
+
+  // Angular Material reserves a 40px invisible touch target around every checkbox regardless
+  // of visual size — that's the bulk of the "extra" row padding, not the cell padding itself.
+  // Shrink the state-layer/touch-target via the supported CSS custom properties, and hide the
+  // touch-target element outright, so the checkbox's own ~18px box drives row height.
+  mat-checkbox {
+    display: inline-flex;
+    --mdc-checkbox-state-layer-size: 22px;
+
+    ::ng-deep {
+      .mdc-checkbox {
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        flex: 0 0 22px;
+      }
+
+      .mdc-checkbox__background {
+        top: 2px;
+        left: 2px;
+      }
+
+      .mat-mdc-checkbox-touch-target {
+        display: none;
+      }
+    }
+  }
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────

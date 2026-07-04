@@ -58,6 +58,31 @@ public sealed class RoleManagementService : IRoleManagementService
         return permissions.Select(ToDto).ToArray();
     }
 
+    public async Task<IReadOnlyList<PermissionCatalogCategoryDto>> GetPermissionCatalogAsync(CancellationToken cancellationToken)
+    {
+        var categories = await _repository.GetPermissionCategoriesAsync(cancellationToken);
+        var groups = await _repository.GetPermissionGroupsAsync(cancellationToken);
+        var permissions = await _repository.GetPermissionsAsync(cancellationToken);
+
+        var permissionsByGroupId = permissions
+            .Where(p => p.IsVisible && p.GroupId.HasValue)
+            .GroupBy(p => p.GroupId!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(ToDto).ToArray());
+
+        var groupsByCategoryId = groups
+            .Where(g => g.IsVisible && permissionsByGroupId.ContainsKey(g.Id))
+            .GroupBy(g => g.CategoryId)
+            .ToDictionary(g => g.Key, g => g
+                .Select(group => new PermissionCatalogGroupDto(
+                    group.Id, group.Name, group.DisplayName, permissionsByGroupId[group.Id]))
+                .ToArray());
+
+        return categories
+            .Where(c => c.IsVisible && groupsByCategoryId.ContainsKey(c.Id))
+            .Select(c => new PermissionCatalogCategoryDto(c.Id, c.Name, c.DisplayName, groupsByCategoryId[c.Id]))
+            .ToArray();
+    }
+
     public async Task<IReadOnlyList<PermissionDto>> GetRolePermissionsAsync(
         Guid roleId,
         CancellationToken cancellationToken)

@@ -13,10 +13,27 @@ export type LoginType   = 'local' | 'sso' | 'oauth';
 // ─── Permission ────────────────────────────────────────────────────────────────
 export interface Permission {
   id:          string;
-  name:        string;   // 'users:read'
-  resource:    string;   // 'users'
-  action:      string;   // 'read'
+  name:        string;   // 'user.view' (wire-format code)
+  displayName: string;   // 'View User'
+  resource:    string;   // 'user' — derived from name, matches the owning PermissionGroup
+  action:      string;   // 'view' — derived from name
   description: string;
+}
+
+/** One row (Permission Group) of a permission-category table. */
+export interface PermissionGroupNode {
+  id:          string;
+  name:        string;
+  displayName: string;
+  permissions: Permission[];
+}
+
+/** One table (Permission Category) in the permission-management grid. */
+export interface PermissionCategory {
+  id:          string;
+  name:        string;
+  displayName: string;
+  groups:      PermissionGroupNode[];
 }
 
 // ─── Role ──────────────────────────────────────────────────────────────────────
@@ -93,8 +110,24 @@ export interface UserQueryParams {
 export interface PermissionDto {
   id:          string;
   name:        string;
+  displayName: string;
   description: string;
-  categoryId?: string | null;
+  groupId?:    string | null;
+  isVisible:   boolean;
+}
+
+export interface PermissionCatalogGroupDto {
+  id:          string;
+  name:        string;
+  displayName: string;
+  permissions: PermissionDto[];
+}
+
+export interface PermissionCatalogCategoryDto {
+  id:          string;
+  name:        string;
+  displayName: string;
+  groups:      PermissionCatalogGroupDto[];
 }
 
 /** A user's direct permission allocation — grant/deny override on top of role-derived permissions. */

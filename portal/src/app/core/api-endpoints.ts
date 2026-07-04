@@ -38,5 +38,6 @@ export const ROLES_ENDPOINTS = {
 };
 
 export const PERMISSIONS_ENDPOINTS = {
-  list: `${API_V1_BASE}/permissions`,
+  list:    `${API_V1_BASE}/permissions`,
+  catalog: `${API_V1_BASE}/permissions/catalog`,
 };

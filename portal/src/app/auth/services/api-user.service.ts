@@ -9,6 +9,7 @@ import {
   User, UserRole, UserStatus, UserQueryParams, PaginatedResponse, MessageResponse,
   UserManagementDto, UserDetailDto, RoleDto, PermissionDto, Role, Permission,
   BackendUserStatus, InviteResult, PermissionAllocationDto, SYSTEM_ROLE_NAMES,
+  PermissionCatalogCategoryDto, PermissionCatalogGroupDto, PermissionCategory,
 } from '../models/user.model';
 
 // ─── Role-name → front-end UserRole ──────────────────────────────────────────
@@ -61,9 +62,24 @@ export function mapPermissionDto(dto: PermissionDto): Permission {
   return {
     id:          dto.id,
     name:        dto.name,
+    displayName: dto.displayName ?? dto.name,
     resource:    resource ?? '',
     action:      action ?? '',
     description: dto.description,
+  };
+}
+
+export function mapPermissionCatalogDto(dto: PermissionCatalogCategoryDto): PermissionCategory {
+  return {
+    id:          dto.id,
+    name:        dto.name,
+    displayName: dto.displayName,
+    groups: (dto.groups ?? []).map((g: PermissionCatalogGroupDto) => ({
+      id:          g.id,
+      name:        g.name,
+      displayName: g.displayName,
+      permissions: (g.permissions ?? []).map(mapPermissionDto),
+    })),
   };
 }
 

@@ -24,7 +24,7 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     const dot = code.indexOf('.');
     const resource = dot >= 0 ? code.slice(0, dot) : code;
     const action = dot >= 0 ? code.slice(dot + 1) : '';
-    return { id: code, name: code, resource, action, description: code };
+    return { id: code, name: code, displayName: code, resource, action, description: code };
   });
 
   const roles: Role[] = toArray(payload['roles']).map(rn => ({
