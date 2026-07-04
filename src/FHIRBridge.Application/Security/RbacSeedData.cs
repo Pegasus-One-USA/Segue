@@ -9,69 +9,111 @@ namespace FHIRBridge.Application.Security;
 /// </summary>
 public static class RbacSeedData
 {
-    /// <summary>A built-in permission row (metadata only; GUID + name + category + description).</summary>
-    public sealed record PermissionSeed(Guid Id, string Name, string Description, string Category);
+    /// <summary>
+    /// A built-in permission row. Id/Name/DisplayName are all derived from Group+Action, never hand-picked —
+    /// a new permission (a new Action under an existing or new Group) never needs a manually-minted GUID, and
+    /// the same Action reused under a different Group (e.g. View under both User and Role) naturally gets a
+    /// distinct Id since it's derived from the full Group+Action pair, not the Action alone.
+    /// </summary>
+    public sealed record PermissionSeed(string Description, PermissionGroupCode Group, PermissionActionCode Action)
+    {
+        public Guid Id => PermissionTaxonomy.BuildPermissionId(Group, Action);
+        public string Name => PermissionTaxonomy.BuildPermissionCode(Group, Action);
+        public string DisplayName => PermissionTaxonomy.BuildPermissionDisplayName(Group, Action);
+    }
 
     /// <summary>A built-in role row.</summary>
     public sealed record RoleSeed(Guid Id, string Name, string Description);
 
-    /// <summary>A built-in permission category row.</summary>
-    public sealed record CategorySeed(Guid Id, string Name);
+    /// <summary>
+    /// A built-in permission category row (top tier, above groups). Name/DisplayName are derived from the
+    /// enum itself so the database can never drift from what <see cref="PermissionCategoryCode"/> declares.
+    /// </summary>
+    public sealed record CategorySeed(Guid Id, PermissionCategoryCode Category)
+    {
+        public string Name => Category.ToString();
+        public string DisplayName => Category.GetDisplayName();
+    }
 
     /// <summary>
-    /// The distinct permission categories, with stable GUIDs so bootstrap is idempotent across restarts.
+    /// A built-in permission group row (middle tier, between categories and permissions). Name/DisplayName
+    /// are derived from the enum itself so the database can never drift from what <see cref="PermissionGroupCode"/>
+    /// declares.
+    /// </summary>
+    public sealed record GroupSeed(Guid Id, PermissionGroupCode Group)
+    {
+        public string Name => Group.ToString();
+        public string DisplayName => Group.GetDisplayName();
+    }
+
+    /// <summary>
+    /// The distinct top-level permission categories, with stable GUIDs so bootstrap is idempotent across restarts.
     /// </summary>
     public static IReadOnlyList<CategorySeed> Categories { get; } =
     [
-        new(SeededSecurityIds.ConfigurationCategoryId, "Configuration"),
-        new(SeededSecurityIds.PipelineCategoryId, "Pipeline"),
-        new(SeededSecurityIds.AuditCategoryId, "Audit"),
-        new(SeededSecurityIds.UserCategoryId, "User"),
-        new(SeededSecurityIds.RoleCategoryId, "Role"),
-        new(SeededSecurityIds.WorkflowCategoryId, "Workflow"),
-        new(SeededSecurityIds.ReportCategoryId, "Report"),
-        new(SeededSecurityIds.PayloadCategoryId, "Payload"),
+        new(SeededSecurityIds.AccessControlCategoryId, PermissionCategoryCode.AccessControl),
+        new(SeededSecurityIds.PlatformCategoryId, PermissionCategoryCode.Platform),
     ];
 
-    /// <summary>Looks up a category's seeded id by its canonical name (used to resolve <see cref="PermissionSeed.Category"/>).</summary>
-    public static IReadOnlyDictionary<string, Guid> CategoryIdsByName { get; } =
-        Categories.ToDictionary(c => c.Name, c => c.Id, StringComparer.OrdinalIgnoreCase);
+    /// <summary>Looks up a category's seeded id by its <see cref="PermissionCategoryCode"/>.</summary>
+    public static IReadOnlyDictionary<PermissionCategoryCode, Guid> CategoryIdsByCode { get; } =
+        Categories.ToDictionary(c => c.Category, c => c.Id);
 
     /// <summary>
-    /// The 20 built-in platform permissions, in seed order. Category/description are preserved verbatim
-    /// from the former <c>PermissionConfiguration.HasData</c> block.
+    /// The distinct permission groups, with stable GUIDs so bootstrap is idempotent across restarts.
+    /// </summary>
+    public static IReadOnlyList<GroupSeed> Groups { get; } =
+    [
+        new(SeededSecurityIds.ConfigurationGroupId, PermissionGroupCode.Configuration),
+        new(SeededSecurityIds.PipelineGroupId, PermissionGroupCode.Pipeline),
+        new(SeededSecurityIds.AuditLogsGroupId, PermissionGroupCode.AuditLogs),
+        new(SeededSecurityIds.SourceConnectionsGroupId, PermissionGroupCode.SourceConnections),
+        new(SeededSecurityIds.UserGroupId, PermissionGroupCode.User),
+        new(SeededSecurityIds.RoleGroupId, PermissionGroupCode.Role),
+        new(SeededSecurityIds.WorkflowGroupId, PermissionGroupCode.Workflow),
+        new(SeededSecurityIds.ReportGroupId, PermissionGroupCode.Report),
+        new(SeededSecurityIds.PayloadGroupId, PermissionGroupCode.Payload),
+    ];
+
+    /// <summary>Looks up a group's seeded id by its <see cref="PermissionGroupCode"/> (used to resolve <see cref="PermissionSeed.Group"/>).</summary>
+    public static IReadOnlyDictionary<PermissionGroupCode, Guid> GroupIdsByCode { get; } =
+        Groups.ToDictionary(g => g.Group, g => g.Id);
+
+    /// <summary>
+    /// The 20 built-in platform permissions, in seed order. Group/Action/description are preserved verbatim
+    /// from the former <c>PermissionConfiguration.HasData</c> block (Group+Action replace the former flat Category).
     /// </summary>
     public static IReadOnlyList<PermissionSeed> Permissions { get; } =
     [
         // Original platform permissions.
-        new(SeededSecurityIds.ConfigurationWritePermissionId, UnifiedPermissions.ConfigurationWrite, "Manage source, destination, mapping, webhook, and route configuration.", "Configuration"),
-        new(SeededSecurityIds.PipelineExecutePermissionId, UnifiedPermissions.PipelineExecute, "Execute configured pipeline routes.", "Pipeline"),
-        new(SeededSecurityIds.AuditLogsReadPermissionId, UnifiedPermissions.AuditLogsRead, "Read operational audit logs.", "Audit"),
-        new(SeededSecurityIds.SourceConnectionsTestPermissionId, UnifiedPermissions.SourceConnectionsTest, "Test source system connectivity.", "Configuration"),
+        new("Manage source, destination, mapping, webhook, and route configuration.", PermissionGroupCode.Configuration, PermissionActionCode.Write),
+        new("Execute configured pipeline routes.", PermissionGroupCode.Pipeline, PermissionActionCode.Execute),
+        new("Read operational audit logs.", PermissionGroupCode.AuditLogs, PermissionActionCode.Read),
+        new("Test source system connectivity.", PermissionGroupCode.SourceConnections, PermissionActionCode.Test),
 
         // User module permissions.
-        new(SeededSecurityIds.UserInvitePermissionId, UnifiedPermissions.UserInvite, "Invite a new user to the organization.", "User"),
-        new(SeededSecurityIds.UserViewPermissionId, UnifiedPermissions.UserView, "View the list of users.", "User"),
-        new(SeededSecurityIds.UserEditPermissionId, UnifiedPermissions.UserEdit, "Update a user's profile information.", "User"),
-        new(SeededSecurityIds.UserDeactivatePermissionId, UnifiedPermissions.UserDeactivate, "Deactivate a user account.", "User"),
+        new("Invite a new user to the organization.", PermissionGroupCode.User, PermissionActionCode.Invite),
+        new("View the list of users.", PermissionGroupCode.User, PermissionActionCode.View),
+        new("Update a user's profile information.", PermissionGroupCode.User, PermissionActionCode.Edit),
+        new("Deactivate a user account.", PermissionGroupCode.User, PermissionActionCode.Deactivate),
 
         // Role module permissions.
-        new(SeededSecurityIds.RoleCreatePermissionId, UnifiedPermissions.RoleCreate, "Create a new custom role.", "Role"),
-        new(SeededSecurityIds.RoleEditPermissionId, UnifiedPermissions.RoleEdit, "Edit an existing role.", "Role"),
-        new(SeededSecurityIds.RoleDeletePermissionId, UnifiedPermissions.RoleDelete, "Delete a custom role.", "Role"),
-        new(SeededSecurityIds.RoleAssignPermissionId, UnifiedPermissions.RoleAssign, "Assign or remove roles from users.", "Role"),
-        new(SeededSecurityIds.RoleViewPermissionId, UnifiedPermissions.RoleView, "View roles and their permissions.", "Role"),
+        new("Create a new custom role.", PermissionGroupCode.Role, PermissionActionCode.Create),
+        new("Edit an existing role.", PermissionGroupCode.Role, PermissionActionCode.Edit),
+        new("Delete a custom role.", PermissionGroupCode.Role, PermissionActionCode.Delete),
+        new("Assign or remove roles from users.", PermissionGroupCode.Role, PermissionActionCode.Assign),
+        new("View roles and their permissions.", PermissionGroupCode.Role, PermissionActionCode.View),
 
         // Workflow module permissions.
-        new(SeededSecurityIds.WorkflowCreatePermissionId, UnifiedPermissions.WorkflowCreate, "Create a new workflow.", "Workflow"),
-        new(SeededSecurityIds.WorkflowEditPermissionId, UnifiedPermissions.WorkflowEdit, "Edit an existing workflow.", "Workflow"),
-        new(SeededSecurityIds.WorkflowDeletePermissionId, UnifiedPermissions.WorkflowDelete, "Delete a workflow.", "Workflow"),
-        new(SeededSecurityIds.WorkflowRunPermissionId, UnifiedPermissions.WorkflowRun, "Execute a workflow.", "Workflow"),
-        new(SeededSecurityIds.WorkflowViewPermissionId, UnifiedPermissions.WorkflowView, "View workflow details.", "Workflow"),
+        new("Create a new workflow.", PermissionGroupCode.Workflow, PermissionActionCode.Create),
+        new("Edit an existing workflow.", PermissionGroupCode.Workflow, PermissionActionCode.Edit),
+        new("Delete a workflow.", PermissionGroupCode.Workflow, PermissionActionCode.Delete),
+        new("Execute a workflow.", PermissionGroupCode.Workflow, PermissionActionCode.Run),
+        new("View workflow details.", PermissionGroupCode.Workflow, PermissionActionCode.View),
 
         // Report / payload permissions.
-        new(SeededSecurityIds.ReportViewPermissionId, UnifiedPermissions.ReportView, "View reports and analytics.", "Report"),
-        new(SeededSecurityIds.PayloadViewPermissionId, UnifiedPermissions.PayloadView, "View data payloads from workflow runs.", "Payload"),
+        new("View reports and analytics.", PermissionGroupCode.Report, PermissionActionCode.View),
+        new("View data payloads from workflow runs.", PermissionGroupCode.Payload, PermissionActionCode.View),
     ];
 
     /// <summary>

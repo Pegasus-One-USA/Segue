@@ -8,10 +8,12 @@ namespace FHIRBridge.Infrastructure.Security;
 
 /// <summary>
 /// EF-backed runtime RBAC bootstrapper. Reads the canonical <see cref="RbacSeedData"/> and inserts any missing
-/// built-in PermissionCategory / Permission / Role / role-level PermissionAllocation rows by Id. Existing rows are
-/// never modified, so a partially-seeded database (e.g. a new permission added since the last release) is topped up
-/// on the next boot without disturbing operator customizations. No users, and no per-user allocations, are ever
-/// created here.
+/// built-in PermissionCategory / PermissionGroup / Permission / Role / role-level PermissionAllocation rows by Id,
+/// so a partially-seeded database (e.g. a new permission added since the last release) is topped up on the next
+/// boot without disturbing operator customizations. Identity-bearing fields (Name, GroupId, etc.) on existing rows
+/// are never touched, but <c>DisplayName</c> is re-synced from the seed data on every boot — it's cosmetic, not a
+/// wire-format contract, so a text change in code (e.g. renaming a <see cref="PermissionDisplayNameAttribute"/>)
+/// reaches an already-seeded database automatically. No users, and no per-user allocations, are ever created here.
 /// </summary>
 public sealed class RbacBootstrapper : IRbacBootstrapper
 {
@@ -24,39 +26,67 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
 
     public async Task EnsureAsync(CancellationToken cancellationToken)
     {
-        var existingCategoryIds = await _dbContext.PermissionCategories
+        var existingCategories = await _dbContext.PermissionCategories
             .IgnoreQueryFilters()
-            .Select(c => c.Id)
-            .ToListAsync(cancellationToken);
-        var categoryIdSet = existingCategoryIds.ToHashSet();
+            .ToDictionaryAsync(c => c.Id, cancellationToken);
 
         foreach (var seed in RbacSeedData.Categories)
         {
-            if (categoryIdSet.Contains(seed.Id))
+            if (existingCategories.TryGetValue(seed.Id, out var existing))
             {
+                if (existing.DisplayName != seed.DisplayName)
+                {
+                    existing.UpdateDisplayName(seed.DisplayName);
+                }
+
                 continue;
             }
 
-            _dbContext.PermissionCategories.Add(new PermissionCategory(seed.Id, seed.Name));
+            _dbContext.PermissionCategories.Add(new PermissionCategory(seed.Id, seed.Name, seed.DisplayName));
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var existingPermissionIds = await _dbContext.Permissions
+        var existingGroups = await _dbContext.PermissionGroups
             .IgnoreQueryFilters()
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-        var permissionIdSet = existingPermissionIds.ToHashSet();
+            .ToDictionaryAsync(g => g.Id, cancellationToken);
+
+        foreach (var seed in RbacSeedData.Groups)
+        {
+            if (existingGroups.TryGetValue(seed.Id, out var existing))
+            {
+                if (existing.DisplayName != seed.DisplayName)
+                {
+                    existing.UpdateDisplayName(seed.DisplayName);
+                }
+
+                continue;
+            }
+
+            var categoryId = RbacSeedData.CategoryIdsByCode[PermissionTaxonomy.GroupCategory[seed.Group]];
+            _dbContext.PermissionGroups.Add(new PermissionGroup(seed.Id, seed.Name, seed.DisplayName, categoryId));
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var existingPermissions = await _dbContext.Permissions
+            .IgnoreQueryFilters()
+            .ToDictionaryAsync(p => p.Id, cancellationToken);
 
         foreach (var seed in RbacSeedData.Permissions)
         {
-            if (permissionIdSet.Contains(seed.Id))
+            if (existingPermissions.TryGetValue(seed.Id, out var existing))
             {
+                if (existing.DisplayName != seed.DisplayName)
+                {
+                    existing.UpdateDisplayName(seed.DisplayName);
+                }
+
                 continue;
             }
 
             _dbContext.Permissions.Add(
-                new Permission(seed.Id, seed.Name, seed.Description, RbacSeedData.CategoryIdsByName[seed.Category], isSystem: true));
+                new Permission(seed.Id, seed.Name, seed.DisplayName, seed.Description, RbacSeedData.GroupIdsByCode[seed.Group], isSystem: true));
         }
 
         var existingRoleIds = await _dbContext.Roles

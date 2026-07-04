@@ -6,34 +6,44 @@ namespace FHIRBridge.Application.Security;
 /// </summary>
 public static class UnifiedRolePermissionSeed
 {
+    /// <summary>
+    /// Resolves a permission's id by its wire-format code (e.g. <see cref="UnifiedPermissions.UserInvite"/>)
+    /// against <see cref="RbacSeedData.Permissions"/> — the id itself is never hand-picked here, it's
+    /// whatever <see cref="PermissionTaxonomy.BuildPermissionId"/> derives for that permission's Group+Action.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, Guid> PermissionIdsByCode =
+        RbacSeedData.Permissions.ToDictionary(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase);
+
+    private static Guid Id(string code) => PermissionIdsByCode[code];
+
     /// <summary>Every original platform permission id.</summary>
     private static readonly Guid[] OriginalPlatformPermissions =
     [
-        SeededSecurityIds.ConfigurationWritePermissionId,
-        SeededSecurityIds.PipelineExecutePermissionId,
-        SeededSecurityIds.AuditLogsReadPermissionId,
-        SeededSecurityIds.SourceConnectionsTestPermissionId
+        Id(UnifiedPermissions.ConfigurationWrite),
+        Id(UnifiedPermissions.PipelineExecute),
+        Id(UnifiedPermissions.AuditLogsRead),
+        Id(UnifiedPermissions.SourceConnectionsTest)
     ];
 
     /// <summary>Every user-module permission id (spec §4.1).</summary>
     private static readonly Guid[] UserModulePermissions =
     [
-        SeededSecurityIds.UserInvitePermissionId,
-        SeededSecurityIds.UserViewPermissionId,
-        SeededSecurityIds.UserEditPermissionId,
-        SeededSecurityIds.UserDeactivatePermissionId,
-        SeededSecurityIds.RoleCreatePermissionId,
-        SeededSecurityIds.RoleEditPermissionId,
-        SeededSecurityIds.RoleDeletePermissionId,
-        SeededSecurityIds.RoleAssignPermissionId,
-        SeededSecurityIds.RoleViewPermissionId,
-        SeededSecurityIds.WorkflowCreatePermissionId,
-        SeededSecurityIds.WorkflowEditPermissionId,
-        SeededSecurityIds.WorkflowDeletePermissionId,
-        SeededSecurityIds.WorkflowRunPermissionId,
-        SeededSecurityIds.WorkflowViewPermissionId,
-        SeededSecurityIds.ReportViewPermissionId,
-        SeededSecurityIds.PayloadViewPermissionId
+        Id(UnifiedPermissions.UserInvite),
+        Id(UnifiedPermissions.UserView),
+        Id(UnifiedPermissions.UserEdit),
+        Id(UnifiedPermissions.UserDeactivate),
+        Id(UnifiedPermissions.RoleCreate),
+        Id(UnifiedPermissions.RoleEdit),
+        Id(UnifiedPermissions.RoleDelete),
+        Id(UnifiedPermissions.RoleAssign),
+        Id(UnifiedPermissions.RoleView),
+        Id(UnifiedPermissions.WorkflowCreate),
+        Id(UnifiedPermissions.WorkflowEdit),
+        Id(UnifiedPermissions.WorkflowDelete),
+        Id(UnifiedPermissions.WorkflowRun),
+        Id(UnifiedPermissions.WorkflowView),
+        Id(UnifiedPermissions.ReportView),
+        Id(UnifiedPermissions.PayloadView)
     ];
 
     /// <summary>All platform + user-module permissions combined.</summary>
@@ -55,24 +65,24 @@ public static class UnifiedRolePermissionSeed
             // pipelines and workflows, plus review audit logs and reports).
             [SeededSecurityIds.OperationsRoleId] =
             [
-                SeededSecurityIds.ConfigurationWritePermissionId,
-                SeededSecurityIds.PipelineExecutePermissionId,
-                SeededSecurityIds.SourceConnectionsTestPermissionId,
-                SeededSecurityIds.WorkflowCreatePermissionId,
-                SeededSecurityIds.WorkflowEditPermissionId,
-                SeededSecurityIds.WorkflowDeletePermissionId,
-                SeededSecurityIds.WorkflowRunPermissionId,
-                SeededSecurityIds.WorkflowViewPermissionId,
-                SeededSecurityIds.PayloadViewPermissionId,
-                SeededSecurityIds.AuditLogsReadPermissionId,
-                SeededSecurityIds.ReportViewPermissionId
+                Id(UnifiedPermissions.ConfigurationWrite),
+                Id(UnifiedPermissions.PipelineExecute),
+                Id(UnifiedPermissions.SourceConnectionsTest),
+                Id(UnifiedPermissions.WorkflowCreate),
+                Id(UnifiedPermissions.WorkflowEdit),
+                Id(UnifiedPermissions.WorkflowDelete),
+                Id(UnifiedPermissions.WorkflowRun),
+                Id(UnifiedPermissions.WorkflowView),
+                Id(UnifiedPermissions.PayloadView),
+                Id(UnifiedPermissions.AuditLogsRead),
+                Id(UnifiedPermissions.ReportView)
             ],
 
             [SeededSecurityIds.AuditRoleId] =
             [
-                SeededSecurityIds.AuditLogsReadPermissionId,
-                SeededSecurityIds.WorkflowViewPermissionId,
-                SeededSecurityIds.ReportViewPermissionId
+                Id(UnifiedPermissions.AuditLogsRead),
+                Id(UnifiedPermissions.WorkflowView),
+                Id(UnifiedPermissions.ReportView)
             ]
         };
 }

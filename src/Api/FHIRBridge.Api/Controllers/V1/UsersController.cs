@@ -30,7 +30,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("{userId:guid}")]
-    [StandardPermission(UnifiedPermissions.UserView)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.View, description: "View the list of users.")]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid userId, CancellationToken cancellationToken)
@@ -66,7 +66,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("invite")]
-    [StandardPermission(UnifiedPermissions.UserInvite)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.Invite, description: "Invite a new user to the organization.")]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> InviteUser(
         [FromBody] InviteUserRequest request,
@@ -78,7 +78,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("{userId:guid}/resend-invite")]
-    [StandardPermission(UnifiedPermissions.UserInvite)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.Invite, description: "Invite a new user to the organization.")]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ResendInvite(Guid userId, CancellationToken cancellationToken)
@@ -114,7 +114,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPatch("{userId:guid}/status")]
-    [StandardPermission(UnifiedPermissions.UserDeactivate)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.Deactivate, description: "Deactivate a user account.")]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateUserStatus(
         Guid userId,
@@ -137,7 +137,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("{userId:guid}/roles")]
-    [StandardPermission(UnifiedPermissions.UserView)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.View, description: "View the list of users.")]
     [ProducesResponseType(typeof(IReadOnlyList<RoleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserRoles(Guid userId, CancellationToken cancellationToken)
     {
@@ -147,7 +147,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("{userId:guid}/roles")]
-    [StandardPermission(UnifiedPermissions.RoleAssign)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.Role, PermissionActionCode.Assign, description: "Assign or remove roles from users.")]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> AssignUserRole(
         Guid userId,
@@ -160,7 +160,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpDelete("{userId:guid}/roles/{roleId:guid}")]
-    [StandardPermission(UnifiedPermissions.RoleAssign)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.Role, PermissionActionCode.Assign, description: "Assign or remove roles from users.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemoveUserRole(
         Guid userId,
@@ -173,7 +173,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("{userId:guid}/permission-allocations")]
-    [StandardPermission(UnifiedPermissions.UserView)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.View, description: "View the list of users.")]
     [ProducesResponseType(typeof(IReadOnlyList<PermissionAllocationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserPermissionAllocations(Guid userId, CancellationToken cancellationToken)
     {
@@ -183,7 +183,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{userId:guid}/permission-allocations/{permissionId:guid}")]
-    [StandardPermission(UnifiedPermissions.UserEdit)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.Edit, description: "Update a user's profile information.")]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> SetUserPermissionAllocation(
         Guid userId,
@@ -197,7 +197,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpDelete("{userId:guid}/permission-allocations/{permissionId:guid}")]
-    [StandardPermission(UnifiedPermissions.UserEdit)]
+    [StandardPermission(PermissionCategoryCode.AccessControl, PermissionGroupCode.User, PermissionActionCode.Edit, description: "Update a user's profile information.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemoveUserPermissionAllocation(
         Guid userId,

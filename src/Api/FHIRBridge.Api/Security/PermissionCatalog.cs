@@ -12,6 +12,14 @@ namespace FHIRBridge.Api.Security;
 /// </summary>
 public static class PermissionCatalog
 {
+    /// <summary>A permission discovered via <see cref="StandardPermissionAttribute"/>, with its full taxonomy.</summary>
+    public sealed record DiscoveredPermission(
+        PermissionCategoryCode Category,
+        PermissionGroupCode Group,
+        PermissionActionCode Action,
+        string Code,
+        string? Description);
+
     /// <summary>Permission codes declared as public string constants on <see cref="UnifiedPermissions"/>.</summary>
     public static IReadOnlyCollection<string> DeclaredCodes() =>
         typeof(UnifiedPermissions)
@@ -20,8 +28,8 @@ public static class PermissionCatalog
             .Select(f => (string)f.GetRawConstantValue()!)
             .ToArray();
 
-    /// <summary>Permission codes referenced by a <see cref="StandardPermissionAttribute"/> on a controller class or action.</summary>
-    public static IReadOnlyCollection<string> DiscoveredCodes(Assembly assembly) =>
+    /// <summary>Every <see cref="StandardPermissionAttribute"/> on a controller class or action, with its full taxonomy.</summary>
+    public static IReadOnlyCollection<DiscoveredPermission> DiscoveredPermissions(Assembly assembly) =>
         assembly
             .GetTypes()
             .Where(t => typeof(ControllerBase).IsAssignableFrom(t))
@@ -30,8 +38,14 @@ public static class PermissionCatalog
                 .Concat(controller
                     .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                     .SelectMany(m => m.GetCustomAttributes<StandardPermissionAttribute>(inherit: true))))
-            .Select(a => a.PermissionCode)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(a => new DiscoveredPermission(a.Category, a.Group, a.Action, a.PermissionCode, a.Description))
+            .DistinctBy(p => p.Code, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    /// <summary>Permission codes referenced by a <see cref="StandardPermissionAttribute"/> on a controller class or action.</summary>
+    public static IReadOnlyCollection<string> DiscoveredCodes(Assembly assembly) =>
+        DiscoveredPermissions(assembly)
+            .Select(p => p.Code)
             .ToArray();
 
     /// <summary>Union of declared and discovered codes — every code that needs a "HasPermission:{code}" policy.</summary>

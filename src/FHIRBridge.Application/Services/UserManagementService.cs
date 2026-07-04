@@ -307,7 +307,7 @@ public sealed class UserManagementService : IUserManagementService
                 role.Id,
                 role.Name,
                 role.Description,
-                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description, p.CategoryId)).ToArray(),
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.DisplayName, p.Description, p.GroupId, p.IsVisible)).ToArray(),
                 role.IsSystem));
         }
 
@@ -447,7 +447,7 @@ public sealed class UserManagementService : IUserManagementService
                 role.Id,
                 role.Name,
                 role.Description,
-                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description, p.CategoryId)).ToArray(),
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.DisplayName, p.Description, p.GroupId, p.IsVisible)).ToArray(),
                 role.IsSystem));
         }
 

@@ -44,6 +44,12 @@ public interface IUserAccessRepository
 
     Task AddPermissionCategoryAsync(PermissionCategory category, CancellationToken cancellationToken);
 
+    // ── Permission Groups ────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<PermissionGroup>> GetPermissionGroupsAsync(CancellationToken cancellationToken);
+
+    Task AddPermissionGroupAsync(PermissionGroup group, CancellationToken cancellationToken);
+
     // ── Permissions ──────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<Permission>> GetPermissionsAsync(CancellationToken cancellationToken);

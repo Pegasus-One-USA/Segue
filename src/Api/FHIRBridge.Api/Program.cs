@@ -220,30 +220,36 @@ static void SyncDiscoveredPermissions(WebApplication app)
 
 static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repository, ILogger logger)
 {
-    var discoveredCodes = PermissionCatalog.DiscoveredCodes(typeof(Program).Assembly);
+    var discoveredPermissions = PermissionCatalog.DiscoveredPermissions(typeof(Program).Assembly);
     var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);
     var existingCodes = new HashSet<string>(existingPermissions.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
 
     var superAdminRole = await repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, CancellationToken.None);
 
-    var categories = (await repository.GetPermissionCategoriesAsync(CancellationToken.None))
-        .ToDictionary(c => c.Name, c => c.Id, StringComparer.OrdinalIgnoreCase);
+    var categories = new Dictionary<PermissionCategoryCode, Guid>(RbacSeedData.CategoryIdsByCode);
+    var groups = new Dictionary<PermissionGroupCode, Guid>(RbacSeedData.GroupIdsByCode);
 
-    foreach (var code in discoveredCodes.Where(code => !existingCodes.Contains(code)))
+    foreach (var discovered in discoveredPermissions.Where(p => !existingCodes.Contains(p.Code)))
     {
-        var categoryId = await GetOrCreateCategoryIdAsync(repository, categories, code, CancellationToken.None);
+        var categoryId = await GetOrCreateCategoryIdAsync(repository, categories, discovered.Category, CancellationToken.None);
+        var groupId = await GetOrCreateGroupIdAsync(repository, groups, discovered.Group, categoryId, CancellationToken.None);
 
         var permission = new Permission(
             Guid.NewGuid(),
-            code,
-            $"Auto-registered permission for '{code}'.",
-            categoryId,
+            discovered.Code,
+            PermissionTaxonomy.BuildPermissionDisplayName(discovered.Group, discovered.Action),
+            discovered.Description ?? $"Auto-registered permission for '{discovered.Code}'.",
+            groupId,
             isSystem: false);
 
         await repository.AddPermissionAsync(permission, CancellationToken.None);
-        logger.LogWarning(
-            "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission]; review its category/description in the Permissions table.",
-            code);
+
+        if (discovered.Description is null)
+        {
+            logger.LogWarning(
+                "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission] with no description; add one to the attribute.",
+                discovered.Code);
+        }
 
         if (superAdminRole is not null)
         {
@@ -252,33 +258,50 @@ static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repositor
     }
 }
 
-// Derives a category from the permission code's prefix (e.g. "Epic.patient.view" -> "Epic"),
-// reusing an existing category case-insensitively so "Epic" and "epic" never both exist. The
-// in-flight `categories` dictionary is updated too, so multiple new codes sharing a fresh prefix
-// within the same sync run reuse the one category created for the first of them.
-static async Task<Guid?> GetOrCreateCategoryIdAsync(
+// Resolves the PermissionCategory row for a StandardPermissionAttribute's typed category, creating it if a
+// new PermissionCategoryCode member was added without a matching RbacSeedData.Categories entry. Keyed by the
+// enum itself, whose Name/DisplayName the created row mirrors exactly (see PermissionTaxonomy.GetDisplayName)
+// so it's indistinguishable from one RbacSeedData would have produced. The in-flight `categories` dictionary
+// is updated too, so multiple new permissions sharing a fresh category within the same sync run reuse the one
+// category created for the first of them.
+static async Task<Guid> GetOrCreateCategoryIdAsync(
     IUserAccessRepository repository,
-    Dictionary<string, Guid> categories,
-    string code,
+    Dictionary<PermissionCategoryCode, Guid> categories,
+    PermissionCategoryCode category,
     CancellationToken cancellationToken)
 {
-    var prefix = code.Split('.', 2)[0];
-    if (prefix.Length == 0)
-    {
-        return null;
-    }
-
-    var categoryName = char.ToUpperInvariant(prefix[0]) + prefix[1..];
-    if (categories.TryGetValue(categoryName, out var existingId))
+    if (categories.TryGetValue(category, out var existingId))
     {
         return existingId;
     }
 
-    var category = new PermissionCategory(Guid.NewGuid(), categoryName);
-    await repository.AddPermissionCategoryAsync(category, cancellationToken);
-    categories[categoryName] = category.Id;
+    var created = new PermissionCategory(Guid.NewGuid(), category.ToString(), category.GetDisplayName());
+    await repository.AddPermissionCategoryAsync(created, cancellationToken);
+    categories[category] = created.Id;
 
-    return category.Id;
+    return created.Id;
+}
+
+// Same idea as GetOrCreateCategoryIdAsync, one tier down: resolves the PermissionGroup row for a
+// StandardPermissionAttribute's typed group, creating it under the resolved category if a new
+// PermissionGroupCode member was added without a matching RbacSeedData.Groups entry.
+static async Task<Guid> GetOrCreateGroupIdAsync(
+    IUserAccessRepository repository,
+    Dictionary<PermissionGroupCode, Guid> groups,
+    PermissionGroupCode group,
+    Guid categoryId,
+    CancellationToken cancellationToken)
+{
+    if (groups.TryGetValue(group, out var existingId))
+    {
+        return existingId;
+    }
+
+    var created = new PermissionGroup(Guid.NewGuid(), group.ToString(), group.GetDisplayName(), categoryId);
+    await repository.AddPermissionGroupAsync(created, cancellationToken);
+    groups[group] = created.Id;
+
+    return created.Id;
 }
 
 static (int status, string message) MapException(Exception ex)

@@ -135,6 +135,19 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PermissionGroup>> GetPermissionGroupsAsync(CancellationToken cancellationToken)
+    {
+        return await _dbContext.PermissionGroups
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddPermissionGroupAsync(PermissionGroup group, CancellationToken cancellationToken)
+    {
+        await _dbContext.PermissionGroups.AddAsync(group, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Permission>> GetPermissionsAsync(CancellationToken cancellationToken)
     {
         return await _dbContext.Permissions
