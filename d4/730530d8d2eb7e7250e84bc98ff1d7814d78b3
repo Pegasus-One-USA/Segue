@@ -1,0 +1,222 @@
+portal/src/app/pages/user-management/user-management.component.scss
+  s_85ed0c66b06ea6::t_15b08276d339a6 2,21,54,57
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 8,12,14,17,20,23,34-35,38,42,50,53,56,61,225
+  s_85ed0c66b06ea6::t_85539ece90d5a7 68-70,72,75,79-81,85-87,90,94,99,102,113,124-125,127-128,139-140,149-151,157-158,162-163,170-174,180,191,196,207,210-211,213-214,218,223,230,233
+portal/.stylelintrc.json
+  s_85ed0c66b06ea6::t_7203a93dba3d62 9-10
+  s_85ed0c66b06ea6::t_f297d669b70db6 1-4,11-12
+  s_85ed0c66b06ea6::t_b3b853d02657b7 5-8
+.github/workflows/portal-ci.yml
+  s_85ed0c66b06ea6::t_72a43a670857a0 1-33,36-38
+  s_85ed0c66b06ea6::t_1c13256e8a2dd9 34-35
+portal/package.json
+  s_85ed0c66b06ea6::t_44b32fe25bc96f 46-48
+  s_85ed0c66b06ea6::t_482d2f8a3a5645 9,12-13,38-39,49-50
+  s_85ed0c66b06ea6::t_4d1b11dde5675b 10-11
+portal/src/app/components/nodes/merge-node/merge-node.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 12,89
+  s_85ed0c66b06ea6::t_9cc597de0ad6e1 26,39,43,63,71,100,121-122,127-128
+portal/scripts/token-baseline.json
+  s_85ed0c66b06ea6::t_f5c5500522edca 1-4
+portal/angular.json
+  s_85ed0c66b06ea6::t_482d2f8a3a5645 4-7,29-31,50-56,65-71,104-107,116-118,121-128
+  s_85ed0c66b06ea6::t_d8e9ca0a3b463f 129
+.claude/skills/ui-ux-expert/SKILL.md
+  s_85ed0c66b06ea6::t_adbd257c1220e5 4,7,9,11,13-17,19,21-32,36-39,42-70,72,76-102,106,108,110-127,131-221,223-231,233,235-373,379-385,387,389-397
+  s_85ed0c66b06ea6::t_c6ecbe8ffe127c 18,20,40-41,109,375,377
+  s_6fe72b0759281b::t_e31fd72ee1f0e4 374
+.githooks/pre-push
+  s_85ed0c66b06ea6::t_54b1e34a46d8ec 1-9
+  s_85ed0c66b06ea6::t_4a7bd79198603c 10-15
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 28,41,49,56,77-79,87,94,111,114,121,130,140,151,167-168,261,270,335,344,426,433,439,465,471,508,538,555,578,580,597,599-600,616,621,671-672,703-704,721,729,753,763,777-778,797,823,861,872,880,891
+  s_85ed0c66b06ea6::t_82789d4c5ba368 143,157,181-183,203,208,211,228-229,256,262,281,297,300-301,352,357,371,373,377,418,447,458,526,528,535,540,568-570,579,582,587,608,627,645,654,658-659,664-665,673,680,736,769,783,801,804-805,810,820,827,842,855-856,871,890,892,895,899,903
+portal/scripts/lint-ratchet.mjs
+  s_85ed0c66b06ea6::t_482b3db83794c7 1-22,28-32,35-73
+  s_85ed0c66b06ea6::t_5b1f2c7ee24b32 23-27
+  s_85ed0c66b06ea6::t_ff1b11eaba0569 33-34
+portal/src/app/components/wizard/steps/wizard-step3/wizard-step3.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 2,5
+  s_85ed0c66b06ea6::t_f205b255e16e38 7,10,14,16
+portal/src/app/user/pages/preferences/preferences.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 8,11,14,16,25
+  s_85ed0c66b06ea6::t_130c3856e25d73 37,39,46-47,51-52,55,60,62,66,73,75,86,90-91,93,105,111,115,124,126
+portal/src/app/services/theme.service.ts
+  s_85ed0c66b06ea6::t_8037f9ad12dc5d 3-4,6-8
+  s_85ed0c66b06ea6::t_2c1de89303909d 25
+  s_85ed0c66b06ea6::t_8bc2949323b74c 1-2,5,9-24,26-56,62,66-77
+  s_85ed0c66b06ea6::t_597ee9a3fbf2a4 57-61,63-65
+portal/src/app/components/epic-source-wizard/steps/epic-step-data/epic-step-data.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 3,5-6,10-13,15
+  s_85ed0c66b06ea6::t_15b08276d339a6 4
+  s_85ed0c66b06ea6::t_4392afa4ec2d34 16-18,20,24-25
+portal/eslint.config.js
+  s_85ed0c66b06ea6::t_482d2f8a3a5645 1-43
+portal/scripts/lint-baseline.json
+  s_85ed0c66b06ea6::t_aa7d4580166833 1-4
+portal/src/styles.scss
+  s_85ed0c66b06ea6::t_93b1301673ae15 58-61
+  s_85ed0c66b06ea6::t_a2dac02176ee1b 121-135,149,163-164
+  s_85ed0c66b06ea6::t_4df54ac4da8ef7 34-39,41,52-57,62-91,99-120
+  s_85ed0c66b06ea6::t_d1c1cb2fcd402c 15-33,40
+  s_85ed0c66b06ea6::t_d6c65aafccd2a3 9-14
+  s_85ed0c66b06ea6::t_cfae4317a12b22 92-98
+  s_85ed0c66b06ea6::t_f845aa6ce918a3 212-262,274,520,572,599,612,625,638,689,707,716,727,736,745,795
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 16,30-31,151,226,262,279
+  s_85ed0c66b06ea6::t_bc8d572c48aae8 60,66,105,112,132,143,169,179-181,185,195,198,201,206-207,221,231,243,261,272,278,286,290,300,302,305
+portal/src/app/app.component.ts
+  s_85ed0c66b06ea6::t_e66b9844077935 1,3
+  s_85ed0c66b06ea6::t_b75638884a26fe 11-14
+portal/scripts/check-tokens.mjs
+  s_85ed0c66b06ea6::t_ece0dd534438be 1-84
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 3,5-6,10-15,17
+  s_85ed0c66b06ea6::t_15b08276d339a6 4,16
+  s_85ed0c66b06ea6::t_034a20e9c25f76 19-24
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.scss
+  s_85ed0c66b06ea6::t_15b08276d339a6 4,17
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 5-7,11-14,16,18-19,21-23
+  s_85ed0c66b06ea6::t_660d316dd0b66c 24,26-28,32-35
+portal/src/app/components/epic-source-wizard/steps/epic-step-test/epic-step-test.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 3-5,7-8,10-13
+  s_85ed0c66b06ea6::t_45e20352b14fec 17,23-25
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 6,13
+  s_85ed0c66b06ea6::t_6ababf685c14d8 15-16,53-54,58-59,101,111,132-133,178-179
+portal/src/app/components/modals/transform-picker/transform-picker.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 5
+  s_85ed0c66b06ea6::t_15b08276d339a6 1
+  s_85ed0c66b06ea6::t_77ebbaf5da8dcd 14,17,27
+portal/src/app/components/topbar/topbar.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 4
+  s_85ed0c66b06ea6::t_6fde896aed115d 14,21,24,27
+portal/src/app/user/components/user-settings-nav/user-settings-nav.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 3
+  s_85ed0c66b06ea6::t_7ca80a0aabd122 12,23,27-28,39
+docs/design-token-architecture.md
+  s_85ed0c66b06ea6::t_df07f64b3c8dee 43-44,46-47,49-58
+  s_85ed0c66b06ea6::t_df7f0e785e46a5 1-42,45,48,59-68,70,80-81
+  s_85ed0c66b06ea6::t_39829e981040b9 69
+  s_85ed0c66b06ea6::t_de0d03bd87e2a4 71-79,82-85
+portal/src/app/user/pages/help/help.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 8,11,14,16
+  s_85ed0c66b06ea6::t_c04265e8e85506 23,28,30,39,44,60,63,73,76,78,82,84
+portal/src/app/components/wizard/steps/wizard-step2/wizard-step2.component.scss
+  s_85ed0c66b06ea6::t_a4b3ab830b52d1 5
+  s_85ed0c66b06ea6::t_e60eb36e420931 8,11,13,26
+portal/package-lock.json
+  s_85ed0c66b06ea6::t_7916f0608b9930 32-33,40-44,327-480,2872-2915,2926-3087,3523-3526,3529-3531,3533-3539,3542-3545,3548-3557,3559-3561,3564,3567-3570,3572,3574,3577-3777,4718-4741,6345-6357,6489-6495,6664-6667,6670-6680,6682-6686,6689-6691,6694-6697,6701-6713,6716-6719,6723-6731,6734-6737,6740-6748,6751-6754,6757-6762,6765-6768,6770,6772-7593,7741-7750,7790-7806,7862-7884,7955-7976,7978,7988-7997,8036-8045,8462-8485,8783-8789,9107-9116,9170-9183,9245-9251,9754-9826,9838-9985,10199-10212,10230-10239,10281-10293,10356-10372,10383-10396,10652-10727,10748-10754,10801-10813,10827-10833,10907-10919,11102-11111,11202-11212,11412-11424,11721-11743,11757-11763,11774-11787,11990-11999,12010-12016,12107-12120,12308-12323,12338-12351,12627-12644,12685-12697,13109-13115,13556-13573,13667-13683,14130-14190,14212-14221,14292-14311,15329-15341,15739-16009,16015-16018,16022-16023,16026-16029,16032-16035,16038-16039,16041-16050,16052-16055,16071-16135,16436-16448,16470-16482,16518-16722,16801-16813,16891-16910,17360-17369,17414-17426
+portal/src/app/activity/pages/activity-list/activity-list.component.scss
+  s_85ed0c66b06ea6::t_9e65170e1c1dc1 56,127-128,130
+portal/src/app/auth/components/auth-card/auth-card.component.scss
+  s_85ed0c66b06ea6::t_9f92b080d1dfb5 6,11-12,26,33
+portal/src/app/auth/components/sso-buttons/sso-buttons.component.scss
+  s_85ed0c66b06ea6::t_f7ea0c57f535fa 30,57,66
+portal/src/app/auth/mock/mock-db.ts
+  s_85ed0c66b06ea6::t_1688d7044150b4 101
+portal/src/app/auth/pages/forgot-password/forgot-password.component.scss
+  s_85ed0c66b06ea6::t_b380d976d01cc8 143-144,149-151,169-170,262-263,278-279,284-285
+portal/src/app/auth/pages/login/login.component.scss
+  s_85ed0c66b06ea6::t_14a404866790c7 36,104,189,228,246,256,270,274,278,283,288,292,297,299,302,308,315,327-328,334,339,346-350,354,422-423,439,442-443,465
+portal/src/app/auth/pages/set-password/set-password.component.scss
+  s_85ed0c66b06ea6::t_549eea141d8c31 23,83,120,122,183,281,284,296,302,318,328-329,331,341-342,344,438,450
+portal/src/app/auth/pages/signup/signup.component.scss
+  s_85ed0c66b06ea6::t_94caedc9774082 33,101,219,237,247,252-254,257-259,263,265-266,271,277,286-287,293,295,302-307,355-356,370,373-374,397
+portal/src/app/auth/services/invitation.service.ts
+  s_85ed0c66b06ea6::t_ef4f3d7656a8b2 35
+portal/src/app/components/canvas/canvas.component.scss
+  s_85ed0c66b06ea6::t_a85adff0c0723a 10,38,45,51,74
+portal/src/app/components/canvas/hint-card/hint-card.component.scss
+  s_85ed0c66b06ea6::t_318769a600b085 4,19
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.scss
+  s_85ed0c66b06ea6::t_fb2addf73eddb4 7-8
+portal/src/app/components/modals/payload-preview/payload-preview.component.scss
+  s_85ed0c66b06ea6::t_bee6b4551b1ae7 5,13
+portal/src/app/components/modals/source-picker/source-picker.component.scss
+  s_85ed0c66b06ea6::t_08899f99f97c03 6,26-27
+portal/src/app/components/nodes/node-tools/node-tools.component.scss
+  s_85ed0c66b06ea6::t_c79f0e685564c6 9-10
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_85ed0c66b06ea6::t_50bd6c5eaaaaea 42-43,47-48,90,100,149-150
+portal/src/app/components/shared/callout/callout.component.scss
+  s_85ed0c66b06ea6::t_b31e9ea70d9167 11
+portal/src/app/components/shared/env-toggle/env-toggle.component.scss
+  s_85ed0c66b06ea6::t_b7ea5ffbf5c1bf 14
+portal/src/app/components/shared/mode-config/mode-config.component.scss
+  s_85ed0c66b06ea6::t_9179d186248347 4,51,90
+portal/src/app/components/shared/resource-scope-grid/resource-scope-grid.component.scss
+  s_85ed0c66b06ea6::t_7371d9b5e891dd 18
+portal/src/app/components/shared/toast/toast.component.scss
+  s_85ed0c66b06ea6::t_ec26e40dd54012 35-38,62-65,78,86,97,104
+portal/src/app/components/shared/wizard-rail/wizard-rail.component.scss
+  s_85ed0c66b06ea6::t_c00dfa766ef6ab 24,52-53
+portal/src/app/components/wizard/connection-wizard/connection-wizard.component.scss
+  s_85ed0c66b06ea6::t_8762f686a715c4 3,39
+portal/src/app/components/wizard/steps/wizard-step1/wizard-step1.component.scss
+  s_85ed0c66b06ea6::t_aff796804dcac9 13,18,22,35
+portal/src/app/dashboard/components/activity-feed/activity-feed.component.scss
+  s_85ed0c66b06ea6::t_e70dd8ac9b69bf 47,53,60
+portal/src/app/dashboard/components/execution-status/execution-status.component.scss
+  s_85ed0c66b06ea6::t_260bb49c94cd62 83
+portal/src/app/dashboard/components/kpi-card/kpi-card.component.scss
+  s_85ed0c66b06ea6::t_5944b29827f6d1 75
+portal/src/app/dashboard/components/quick-actions/quick-actions.component.scss
+  s_85ed0c66b06ea6::t_716c2d4e2aa342 17-18,25,29-32,44
+portal/src/app/dashboard/components/system-health/system-health.component.scss
+  s_85ed0c66b06ea6::t_3304159284374c 36-38,41-42
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.scss
+  s_85ed0c66b06ea6::t_d07eb427bfa5ae 22,82,116,142,192,195,221,224,236,242,258,268-269,271,281-282,284,366,378
+portal/src/app/pages/configuration/configuration.component.scss
+  s_85ed0c66b06ea6::t_eda6ef2e6277e1 6,12,19,31,39
+portal/src/app/pages/execution-logs/execution-logs.component.scss
+  s_85ed0c66b06ea6::t_46c9488a585722 6,12,19,31,39
+portal/src/app/pages/reports/reports.component.scss
+  s_85ed0c66b06ea6::t_50e7acb340aa98 6,12,19,31,39
+portal/src/app/pages/schedules/schedules.component.scss
+  s_85ed0c66b06ea6::t_0c26ef9e624312 6,12,19,31,39
+portal/src/app/pipelines/pages/pipeline-list/pipeline-list.component.scss
+  s_85ed0c66b06ea6::t_3f2bc0abc0dfed 72,160,174-176,178
+portal/src/app/services/applicability.service.ts
+  s_85ed0c66b06ea6::t_dd8a36c47edb98 143
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.scss
+  s_85ed0c66b06ea6::t_4d27390be3b963 37
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.scss
+  s_85ed0c66b06ea6::t_d65046bea30293 19-20,30,56,67
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.scss
+  s_85ed0c66b06ea6::t_6e9eaf24df3ade 118
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_85ed0c66b06ea6::t_fae64088adec14 123
+portal/src/app/user-management/pages/user-list/tabs/role-tab.component.scss
+  s_85ed0c66b06ea6::t_31281e57170729 174,385
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.scss
+  s_85ed0c66b06ea6::t_45d8209c6961e7 345
+portal/src/app/user/components/user-menu/user-menu.component.scss
+  s_85ed0c66b06ea6::t_664bc5094367ac 40,44,57-58,93,103,121,129,136,157,161,163-164,190-191
+portal/src/app/user/services/user-profile.service.ts
+  s_85ed0c66b06ea6::t_aaef498ff51e26 11,111,129-132,168-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d4730530d8d2eb7e7250e84bc98ff1d7814d78b3",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_85ed0c66b06ea6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1cf89ebd-10f3-42a8-a4d0-cf75a1db560a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
