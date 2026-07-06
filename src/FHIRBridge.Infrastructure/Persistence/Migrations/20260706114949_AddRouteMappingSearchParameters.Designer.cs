@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260704095031_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260706114949_AddRouteMappingSearchParameters")]
+    partial class AddRouteMappingSearchParameters
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -1233,6 +1233,48 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("WebhookConfigurationId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("FHIRBridge.Domain.Entities.ResourcePipelineRouteMapping", "ResourceMappings", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<int>("ExecutionOrder")
+                                .HasColumnType("int");
+
+                            b1.Property<bool>("IsEnabled")
+                                .HasColumnType("bit");
+
+                            b1.Property<Guid>("MappingProfileId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<Guid>("ResourcePipelineRouteId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("SearchParameters")
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("MappingProfileId");
+
+                            b1.HasIndex("ResourcePipelineRouteId", "MappingProfileId")
+                                .IsUnique();
+
+                            b1.ToTable("ResourcePipelineRouteMappings", (string)null);
+
+                            b1.HasOne("FHIRBridge.Domain.Entities.MappingProfile", null)
+                                .WithMany()
+                                .HasForeignKey("MappingProfileId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("ResourcePipelineRouteId");
+                        });
+
+                    b.Navigation("ResourceMappings");
                 });
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.SourceConnection", b =>

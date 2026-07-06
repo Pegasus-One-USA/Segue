@@ -520,6 +520,33 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "ResourcePipelineRouteMappings",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ResourcePipelineRouteId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    MappingProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    ExecutionOrder = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ResourcePipelineRouteMappings", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ResourcePipelineRouteMappings_MappingProfiles_MappingProfileId",
+                        column: x => x.MappingProfileId,
+                        principalTable: "MappingProfiles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_ResourcePipelineRouteMappings_ResourcePipelineRoutes_ResourcePipelineRouteId",
+                        column: x => x.ResourcePipelineRouteId,
+                        principalTable: "ResourcePipelineRoutes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_ConfiguredPipelineRuns_StartedOnUtc",
                 table: "ConfiguredPipelineRuns",
@@ -595,6 +622,17 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "IX_ResourceLineageEntries_SourceResourceId",
                 table: "ResourceLineageEntries",
                 column: "SourceResourceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ResourcePipelineRouteMappings_MappingProfileId",
+                table: "ResourcePipelineRouteMappings",
+                column: "MappingProfileId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ResourcePipelineRouteMappings_ResourcePipelineRouteId_MappingProfileId",
+                table: "ResourcePipelineRouteMappings",
+                columns: new[] { "ResourcePipelineRouteId", "MappingProfileId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_ResourcePipelineRoutes_MappingProfileId",
@@ -688,7 +726,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "ResourceLineageEntries");
 
             migrationBuilder.DropTable(
-                name: "ResourcePipelineRoutes");
+                name: "ResourcePipelineRouteMappings");
 
             migrationBuilder.DropTable(
                 name: "SourceCapabilityProfiles");
@@ -703,10 +741,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "Permissions");
 
             migrationBuilder.DropTable(
-                name: "MappingProfiles");
-
-            migrationBuilder.DropTable(
-                name: "WebhookConfigurations");
+                name: "ResourcePipelineRoutes");
 
             migrationBuilder.DropTable(
                 name: "Roles");
@@ -716,6 +751,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "PermissionCategories");
+
+            migrationBuilder.DropTable(
+                name: "MappingProfiles");
+
+            migrationBuilder.DropTable(
+                name: "WebhookConfigurations");
 
             migrationBuilder.DropTable(
                 name: "SourceConnections");

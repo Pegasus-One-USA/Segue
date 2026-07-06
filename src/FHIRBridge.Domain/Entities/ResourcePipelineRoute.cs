@@ -5,6 +5,8 @@ namespace FHIRBridge.Domain.Entities;
 
 public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
 {
+    private readonly List<ResourcePipelineRouteMapping> _resourceMappings = new();
+
     private ResourcePipelineRoute()
     {
     }
@@ -41,6 +43,7 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
     public string? SearchParameters { get; private set; }
     public bool IsEnabled { get; private set; }
     public int Priority { get; private set; }
+    public IReadOnlyCollection<ResourcePipelineRouteMapping> ResourceMappings => _resourceMappings;
 
     /// <summary>
     /// Last time the scheduler claimed this route for a run. Used by catch-up scheduling to detect missed slots
@@ -66,6 +69,12 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         Priority = priority;
     }
 
+    public void ReplaceResourceMappings(IEnumerable<ResourcePipelineRouteMapping> resourceMappings)
+    {
+        _resourceMappings.Clear();
+        _resourceMappings.AddRange(resourceMappings.OrderBy(x => x.ExecutionOrder).ThenBy(x => x.MappingProfileId));
+    }
+
     public void SetEnabled(bool isEnabled)
     {
         IsEnabled = isEnabled;
@@ -76,4 +85,37 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
     {
         LastTriggeredOnUtc = triggeredOnUtc;
     }
+}
+
+public sealed class ResourcePipelineRouteMapping
+{
+    private ResourcePipelineRouteMapping()
+    {
+    }
+
+    public ResourcePipelineRouteMapping(
+        Guid mappingProfileId,
+        bool isEnabled,
+        int executionOrder,
+        string? searchParameters = null)
+    {
+        Id = Guid.NewGuid();
+        MappingProfileId = mappingProfileId;
+        IsEnabled = isEnabled;
+        ExecutionOrder = executionOrder;
+        SearchParameters = searchParameters;
+    }
+
+    public Guid Id { get; private set; }
+    public Guid ResourcePipelineRouteId { get; private set; }
+    public Guid MappingProfileId { get; private set; }
+    public bool IsEnabled { get; private set; }
+    public int ExecutionOrder { get; private set; }
+
+    /// <summary>
+    /// Optional FHIR search parameters for this specific resource mapping, overriding the route's search parameters.
+    /// Lets one composite route give each resource type its own query (e.g. Observation requires
+    /// <c>category=laboratory</c> on Epic while Patient/Encounter need none). Null falls back to the route's value.
+    /// </summary>
+    public string? SearchParameters { get; private set; }
 }

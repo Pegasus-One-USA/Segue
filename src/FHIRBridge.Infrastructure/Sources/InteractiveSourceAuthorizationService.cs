@@ -264,25 +264,35 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         return new InteractiveAuthorizationResult(pending.SourceConnectionId, pending.SourceName);
     }
 
-    // After a route-scoped launch completes, run just that pipeline route. The stored token is patient-scoped, so the
-    // run flows the launched patient's data through Source → Mapping → Destination. A run failure does not fail the
-    // sign-in (the token is already stored and the run can be retried) — it is logged and audited.
-    private async Task TriggerRouteRunAsync(Guid sourceConnectionId, Guid routeId, CancellationToken cancellationToken)
+    // After a launch completes, run every enabled pipeline route bound to the launched source — the launch establishes
+    // the patient context once, so all configured resource types (Patient, Encounter, Observation, …) are pulled for
+    // that patient in a single run. The stored token is patient-scoped, so each route flows the launched patient's
+    // data through Source → Mapping → Destination. A run failure does not fail the sign-in (the token is already
+    // stored and the run can be retried) — it is logged and audited.
+    private async Task TriggerRouteRunAsync(Guid sourceConnectionId, Guid launchedRouteId, CancellationToken cancellationToken)
     {
         try
         {
-            var request = new StartConfiguredPipelineRunRequest(null, "epic-ehr-launch", null) { RouteIds = [routeId] };
+            var routeIds = await ResolveEnabledRouteIdsForSourceAsync(sourceConnectionId, cancellationToken);
+            if (routeIds.Length == 0)
+            {
+                // Fall back to the launched route so a launch always runs something even if resolution finds nothing.
+                routeIds = [launchedRouteId];
+            }
+
+            var request = new StartConfiguredPipelineRunRequest(null, "epic-ehr-launch", null) { RouteIds = routeIds };
             await _pipelineService.StartAsync(request, cancellationToken);
 
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchPipelineTriggered", "Started",
-                $"Pipeline route {routeId} triggered by EHR launch.", cancellationToken);
+                $"{routeIds.Length} pipeline route(s) triggered by EHR launch for source {sourceConnectionId}.", cancellationToken);
         }
         catch (Exception exception)
         {
             _logger.LogWarning(
                 exception,
-                "EHR-launch pipeline trigger failed for route {RouteId}.",
-                routeId);
+                "EHR-launch pipeline trigger failed for source {SourceConnectionId} (launched route {RouteId}).",
+                sourceConnectionId,
+                launchedRouteId);
 
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchPipelineTriggerFailed", "Failed",
                 exception.Message, cancellationToken);
@@ -330,6 +340,25 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             ?? throw new NotFoundException("SourceConnection", mapping.SourceConnectionId);
 
         return (source, routeId);
+    }
+
+    // Resolves the ids of every enabled pipeline route whose mapping profile is bound to the given source connection.
+    // Used to fan a single launch out across all resource types the source is configured for.
+    private async Task<Guid[]> ResolveEnabledRouteIdsForSourceAsync(
+        Guid sourceConnectionId,
+        CancellationToken cancellationToken)
+    {
+        var routes = await _configurationRepository.GetRoutesAsync(cancellationToken);
+        var mappings = await _configurationRepository.GetMappingProfilesAsync(cancellationToken);
+        var sourceMappingIds = mappings
+            .Where(mapping => mapping.SourceConnectionId == sourceConnectionId)
+            .Select(mapping => mapping.Id)
+            .ToHashSet();
+
+        return routes
+            .Where(route => route.IsEnabled && sourceMappingIds.Contains(route.MappingProfileId))
+            .Select(route => route.Id)
+            .ToArray();
     }
 
     // Resolves the source's confidential-client credentials (from the secret store) for the token exchange. Returns

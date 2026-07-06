@@ -9,4 +9,11 @@ public sealed record CreateResourceRouteRequest(
     string? ScheduleExpression,
     string? SearchParameters,
     bool IsEnabled,
-    int Priority);
+    int Priority,
+    IReadOnlyList<ResourceRouteMappingRequest>? ResourceMappings = null);
+
+public sealed record ResourceRouteMappingRequest(
+    Guid MappingProfileId,
+    bool IsEnabled,
+    int ExecutionOrder,
+    string? SearchParameters = null);
