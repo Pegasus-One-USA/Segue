@@ -1,0 +1,189 @@
+src/Api/FHIRBridge.Api/Controllers/V1/WebhookIngestionController.cs
+  s_28900a82a540d4::t_1cf28cb13004d6 10,17,24-26,36
+  s_28900a82a540d4::t_d4fc7c58c1119c 37-40,45,50-74,113,115,118,121,125,127,131,133
+  s_28900a82a540d4::t_375849873d5e74 110-112
+  s_28900a82a540d4::t_df81ddbef408ed 114
+  s_28900a82a540d4::t_fe7afdb933f293 116-117
+  s_28900a82a540d4::t_c0f27a8724c508 119-120
+  s_28900a82a540d4::t_55ff87efab7e71 122-124
+  s_28900a82a540d4::t_f8c75df7e68830 126
+  s_28900a82a540d4::t_d96e25c431f55c 128-130
+  s_28900a82a540d4::t_a97259723686d5 132
+  s_28900a82a540d4::t_b70653bc178c12 134-136
+  s_28900a82a540d4::t_4c69f23c3ebaab 104-109,137-145
+src/FHIRBridge.Application/Abstractions/Security/ITotpService.cs
+  s_28900a82a540d4::t_0ac1d33e6a2855 1-17
+docs/compliance/policies/02-assigned-security-responsibility.md
+  s_28900a82a540d4::t_146b9ed7f7a630 1-70
+docs/compliance/policies/04-information-access-management.md
+  s_28900a82a540d4::t_60227cb00389de 1-81
+docs/compliance/baa/README.md
+  s_28900a82a540d4::t_08bd6f82c8d658 1-77
+docs/compliance/policies/05-security-awareness-training.md
+  s_28900a82a540d4::t_2020288215cbf2 1-72
+docs/compliance/baa/subprocessor-register.md
+  s_28900a82a540d4::t_7b7e9b1a509c26 1-60
+docs/compliance/pen-test/test-plan-checklist.md
+  s_28900a82a540d4::t_d61930eeed5d8b 1-174
+src/FHIRBridge.Domain/Entities/User.cs
+  s_28900a82a540d4::t_b5badcf917b8e4 58-66
+  s_28900a82a540d4::t_e156cb308d351a 106-164
+docs/compliance/pen-test/rfp-vendor-selection.md
+  s_28900a82a540d4::t_c207112ccb9042 1-114
+docs/compliance/risk-assessment/asset-inventory.md
+  s_28900a82a540d4::t_03d875bda96b76 1-41
+docs/compliance/policies/06-security-incident-procedures.md
+  s_28900a82a540d4::t_bb8518dfcbafe0 1-84
+docs/compliance/policies/01-security-management-process.md
+  s_28900a82a540d4::t_08fa463afc5bc8 1-72
+docs/compliance/soc2/audit-prep-checklist.md
+  s_28900a82a540d4::t_60433b3905e02c 1-97
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_28900a82a540d4::t_7c0337cc431ec2 33
+  s_28900a82a540d4::t_98c2f415aac144 22
+  s_28900a82a540d4::t_aea4cbef946a65 43,54-55
+  s_28900a82a540d4::t_2b79e59abbdb11 56-58
+  s_28900a82a540d4::t_f4a5a80e573b03 59-69,71-78,85-96,414-429
+docs/compliance/policies/13-data-retention-and-disposal.md
+  s_28900a82a540d4::t_5c2a968891a107 1-81
+docs/compliance/policies/07-contingency-plan.md
+  s_28900a82a540d4::t_acfec3bf547340 1-72
+docs/compliance/policies/README.md
+  s_28900a82a540d4::t_6401170675b578 17
+  s_28900a82a540d4::t_520b7281d2307f 45,50-51
+  s_28900a82a540d4::t_48e88c1b2b5c9d 1-16,18-44,46-49,52-92
+docs/compliance/README.md
+  s_28900a82a540d4::t_e9c649bfb5729a 2,4,8,10,20,22
+  s_28900a82a540d4::t_904c076eb4a9be 1,3,5-7,9,11-19,21,23-47
+docs/compliance/policies/08-evaluation.md
+  s_28900a82a540d4::t_e1dbdbf472c4d4 1-68
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  s_28900a82a540d4::t_b0ff4c061b53c0 5
+  s_28900a82a540d4::t_6e82c975eb8214 73,150,174,191,204
+.github/dependabot.yml
+  s_28900a82a540d4::t_10e371453dc0c7 1-29
+src/FHIRBridge.Application/Security/LocalAuthOptions.cs
+  s_28900a82a540d4::t_350f2df6caef4e 10-12
+  s_28900a82a540d4::t_abe1826343e1fc 13-15
+  s_28900a82a540d4::t_ffaa697162643f 16-21
+.github/workflows/backend-ci.yml
+  s_28900a82a540d4::t_1fe01de26133eb 1-85
+src/FHIRBridge.Infrastructure/Health/SqlServerTdeHealthCheck.cs
+  s_28900a82a540d4::t_993b84b22b9034 1-33,36-65
+  s_28900a82a540d4::t_02323ceb165a33 34-35
+docs/compliance/pen-test/README.md
+  s_28900a82a540d4::t_d4279773b9f07f 1-66
+src/FHIRBridge.Domain/Entities/SourceConnection.cs
+  s_28900a82a540d4::t_76ab8ceefabade 25,58
+  s_28900a82a540d4::t_5d0b9023d25190 68-98
+docs/compliance/policies/11-integrity-and-transmission-security.md
+  s_28900a82a540d4::t_f66a4aa990403c 1-75
+docs/compliance/backup-disaster-recovery.md
+  s_28900a82a540d4::t_b2127478f9bad6 1-104
+src/FHIRBridge.Application/Security/MfaOptions.cs
+  s_28900a82a540d4::t_94424683df1c18 1-10
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_28900a82a540d4::t_eec6ab84fde8d5 814-817,821-826
+  s_28900a82a540d4::t_9e7ab743ba2062 827
+docs/compliance/policies/09-access-control-and-authentication.md
+  s_28900a82a540d4::t_47ce084102ee16 1-75
+docs/compliance/risk-assessment/threat-vulnerability-register.md
+  s_28900a82a540d4::t_fd4337d8576967 54-55,57,59
+  s_28900a82a540d4::t_bd8e213f75073c 1-53,56,58
+src/Api/FHIRBridge.Api/Program.cs
+  s_28900a82a540d4::t_c52226653b06cf 2
+  s_28900a82a540d4::t_4847c1f9471b04 5
+  s_28900a82a540d4::t_3a6c93c6243348 37-56,140,206,221,225,265,267
+  s_28900a82a540d4::t_cd62c37f6d12c6 137-139
+  s_28900a82a540d4::t_81a75158ef4fb6 141-143
+  s_28900a82a540d4::t_09390acb374a16 203-205
+  s_28900a82a540d4::t_3da81f2e9d8bb9 207-209,218-220
+  s_28900a82a540d4::t_7ce0c59bc10e6f 222-224
+  s_28900a82a540d4::t_402248f894effd 226
+  s_28900a82a540d4::t_5d28867ccee826 262-264
+  s_28900a82a540d4::t_eb90692329fe56 266
+  s_28900a82a540d4::t_7cf27e58f35735 126-127,130-131,136,144-171,202,210-217
+docs/compliance/soc2/readiness-assessment.md
+  s_28900a82a540d4::t_154b5f18918386 1-260
+docs/compliance/baa/baa-template.md
+  s_28900a82a540d4::t_428bac96cf4592 1-170
+docs/compliance/policies/03-workforce-security.md
+  s_28900a82a540d4::t_761e96a6b38986 1-72
+src/Api/FHIRBridge.Api/Controllers/V1/MfaController.cs
+  s_28900a82a540d4::t_22a52e6bc59ba5 1-55
+docs/compliance/hipaa-soc2-control-matrix.md
+  s_28900a82a540d4::t_7e47eba440667b 1-51
+docs/compliance/soc2/evidence-matrix.md
+  s_28900a82a540d4::t_0f67680845b868 1-136
+src/FHIRBridge.Application/Services/IMfaService.cs
+  s_28900a82a540d4::t_1199a58d22f531 1-21
+docs/compliance/soc2/auditor-rfp-and-selection.md
+  s_28900a82a540d4::t_a8b83a91d46e09 1-182
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260704095031_InitialCreate.cs
+  s_28900a82a540d4::t_eec6ab84fde8d5 1-724
+docs/compliance/risk-assessment/README.md
+  s_28900a82a540d4::t_7c4c08561375a6 1-99
+docs/compliance/pen-test/remediation-tracker.md
+  s_28900a82a540d4::t_ce4ae583d90c17 1-74
+docs/compliance/pen-test/scope-and-rules-of-engagement.md
+  s_28900a82a540d4::t_649817e616cdbd 1-169
+src/FHIRBridge.Application/Security/MfaBackupCodes.cs
+  s_28900a82a540d4::t_0496d831a72b91 1-61
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260704095031_InitialCreate.Designer.cs
+  s_28900a82a540d4::t_eec6ab84fde8d5 1-1392
+src/FHIRBridge.Application/Services/MfaService.cs
+  s_28900a82a540d4::t_26dcdcf00802df 2-149
+  s_28900a82a540d4::t_c30181e57ee98f 1
+docs/compliance/soc2/README.md
+  s_28900a82a540d4::t_0d467af1bc66a6 1-89
+docs/compliance/policies/12-facility-and-device-security.md
+  s_28900a82a540d4::t_aec177e6390d76 1-70
+docs/compliance/risk-assessment/risk-treatment-plan.md
+  s_28900a82a540d4::t_fda8b906fcba9d 1-84
+docs/compliance/policies/10-audit-controls.md
+  s_28900a82a540d4::t_4eedbf45c036b3 1-73
+src/FHIRBridge.Application/DTOs/MfaDtos.cs
+  s_28900a82a540d4::t_f0cd8ddd491dca 1-13
+docs/compliance/policies/14-breach-notification.md
+  s_28900a82a540d4::t_97af8eddf6c3da 1-99
+src/Api/FHIRBridge.Api/appsettings.json
+  s_28900a82a540d4::t_c9ba3908aa4f16 25
+  s_28900a82a540d4::t_327cbb20e1f488 26-28
+  s_28900a82a540d4::t_ac916ddc60ff2b 29-48,80
+src/FHIRBridge.Infrastructure/Security/TotpService.cs
+  s_28900a82a540d4::t_a9454171229be5 1-133
+docs/compliance/baa/baa-tracking-checklist.md
+  s_28900a82a540d4::t_22b091682570ea 1-58
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  s_28900a82a540d4::t_be08eda4a2b335 35
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_28900a82a540d4::t_31e41bb15bfacc 15-17,38-39
+src/FHIRBridge.Application/DTOs/LocalLoginRequest.cs
+  s_28900a82a540d4::t_d7181c15be1be5 5-8
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_28900a82a540d4::t_5bd17bce55a3f0 24
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_28900a82a540d4::t_6c30ff9cebdbe2 137-138,298
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserConfiguration.cs
+  s_28900a82a540d4::t_36ea66d978b017 51-57
+src/Worker/FHIRBridge.Worker/RetentionPurgeWorker.cs
+  s_28900a82a540d4::t_083640f4150919 69-71
+tests/FHIRBridge.Api.IntegrationTests/ApiFactory.cs
+  s_28900a82a540d4::t_54f6f251edc713 53-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "51a11182242c5e7fbb41dd75860666f32c2f2441",
+  "prompts": {},
+  "sessions": {
+    "s_28900a82a540d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3f973b24-0688-466d-a114-28bf8de56e74",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
