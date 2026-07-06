@@ -7,6 +7,7 @@ using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Application.Services;
@@ -514,27 +515,53 @@ public sealed class ConfigurationService : IConfigurationService
 
     private static void ValidateEpicSourceConnection(CreateSourceConnectionRequest request)
     {
-        if (request.Authentication.AuthenticationType != AuthenticationType.SmartBackendServices)
-        {
-            throw new InvalidOperationException("Epic Phase 1 source connections must use SMART Backend Services authentication.");
-        }
-
         ValidateHttpsUrl(request.BaseUrl, "Epic FHIR base URL");
-        ValidateHttpsUrl(request.Authentication.TokenEndpoint, "Epic token endpoint");
 
         if (string.IsNullOrWhiteSpace(request.Authentication.ClientId))
         {
             throw new InvalidOperationException("Epic client id is required.");
         }
 
+        if (request.Authentication.Scopes is null || request.Authentication.Scopes.Length == 0)
+        {
+            throw new InvalidOperationException("Epic scopes are required.");
+        }
+
+        // Interactive provider flows (EHR launch / provider standalone / patient) authenticate via
+        // authorization_code + PKCE, selected by ApplicationType. Their authorize/token endpoints are discovered
+        // from the source's .well-known/smart-configuration at runtime, so no token endpoint / KeyId / private key
+        // is required at configuration time (the client may be public PKCE or confidential).
+        var isInteractive = request.ApplicationType is ApplicationType.EhrLaunch
+            or ApplicationType.Standalone
+            or ApplicationType.Patient;
+
+        if (isInteractive)
+        {
+            if (request.Interactive is null || request.Interactive.RedirectUris.Length == 0)
+            {
+                throw new InvalidOperationException("An interactive Epic source connection requires at least one redirect URI.");
+            }
+
+            if (request.ApplicationType == ApplicationType.EhrLaunch &&
+                (request.Interactive.TrustedIssuers is null || request.Interactive.TrustedIssuers.Length == 0))
+            {
+                throw new InvalidOperationException("An Epic EHR-launch source connection requires at least one trusted issuer.");
+            }
+
+            return;
+        }
+
+        // Backend Services (machine-to-machine): client_credentials + private_key_jwt.
+        if (request.Authentication.AuthenticationType != AuthenticationType.SmartBackendServices)
+        {
+            throw new InvalidOperationException("A Backend Services Epic source connection must use SMART Backend Services authentication.");
+        }
+
+        ValidateHttpsUrl(request.Authentication.TokenEndpoint, "Epic token endpoint");
+
         if (string.IsNullOrWhiteSpace(request.Authentication.KeyId))
         {
             throw new InvalidOperationException("Epic public key id is required.");
-        }
-
-        if (request.Authentication.Scopes is null || request.Authentication.Scopes.Length == 0)
-        {
-            throw new InvalidOperationException("Epic SMART Backend Services scopes are required.");
         }
 
         if (string.IsNullOrWhiteSpace(request.Authentication.PrivateKeyKeyVaultName) ||
