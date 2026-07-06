@@ -1,0 +1,46 @@
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  s_6fe72b0759281b::t_a6de61b15ac91a 1-99
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_6fe72b0759281b::t_e3fe2e581dde2a 19
+  s_6fe72b0759281b::t_505a3d703937df 45,47,58-61,73-91,230-231
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirPatientContextProvider.cs
+  s_6fe72b0759281b::t_e153631dec35e9 1-14
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_6fe72b0759281b::t_de584392b7bef9 1-82
+tests/FHIRBridge.Runtime.UnitTests/Auth/SmartInteractiveCachedTokenTests.cs
+  s_6fe72b0759281b::t_6b1000c0c8d200 1-95
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_6fe72b0759281b::t_e4263e923b1cdb 480-491
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategy.cs
+  s_6fe72b0759281b::t_8bc7a59eca0136 30-36
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/StoredOAuthToken.cs
+  s_6fe72b0759281b::t_281a92e696b4df 13-17
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_6fe72b0759281b::t_c46d16522bef7b 39-41
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_6fe72b0759281b::t_a5378c9331697d 40-42
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_6fe72b0759281b::t_11f6badb73c9e4 21-24
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_6fe72b0759281b::t_9782144a10b42f 39-41
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_6fe72b0759281b::t_3ee798286a4de5 23,74-87
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_6fe72b0759281b::t_d4d8841c6f9b5d 59,61,242-278
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "03697edbfdc92fe4a8ece0b7b21c70e857b777ef",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
