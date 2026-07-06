@@ -1,19 +1,16 @@
 import {
-  Component, inject, computed, signal, ElementRef, viewChild,
-  output, HostListener,
+  Component, inject, computed, signal, ElementRef, viewChild, output,
 } from '@angular/core';
 import { PipelineStore } from '../../services/pipeline.store';
 import { CanvasService } from '../../services/canvas.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { CanvasNode, isTransformNode, isMergeNode } from '../../models/node.model';
-import { TRANSFORMS } from '../../data/transforms.data';
+import { CanvasNode } from '../../models/node.model';
 import { SourceNodeComponent } from '../nodes/source-node/source-node.component';
 import { TransformNodeComponent } from '../nodes/transform-node/transform-node.component';
 import { MergeNodeComponent } from '../nodes/merge-node/merge-node.component';
 import { CanvasConnectorsComponent } from './canvas-connectors/canvas-connectors.component';
 import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
-import { HintCardComponent } from './hint-card/hint-card.component';
 
 @Component({
   selector: 'app-canvas',
@@ -24,7 +21,6 @@ import { HintCardComponent } from './hint-card/hint-card.component';
     MergeNodeComponent,
     CanvasConnectorsComponent,
     ZoomDockComponent,
-    HintCardComponent,
   ],
   templateUrl: './canvas.component.html',
   styleUrl: './canvas.component.scss',
@@ -49,20 +45,16 @@ export class CanvasComponent {
   protected readonly transformStyle = this.canvas.transformStyle;
   protected readonly zoomPercent    = this.canvas.zoomPercent;
 
-  protected isSourceNode(n: CanvasNode): boolean  { return !n.kind; }
+  protected isSourceNode(n: CanvasNode): boolean    { return !n.kind; }
   protected isTransformNode(n: CanvasNode): boolean { return n.kind === 'transform'; }
-  protected isMergeNode(n: CanvasNode): boolean   { return n.kind === 'merge'; }
-
-  protected plusEnabled(n: CanvasNode): boolean {
-    return this.store.plusEnabled(n);
-  }
+  protected isMergeNode(n: CanvasNode): boolean     { return n.kind === 'merge'; }
 
   // ── pan ───────────────────────────────────────────────────────────────────
   private panning: { px: number; py: number; x: number; y: number } | null = null;
 
   onShellPointerDown(e: PointerEvent): void {
     const el = e.target as HTMLElement;
-    if (el.closest('.node,.mega-add,.add-module-fab,.zoom-dock,.hint-card,.scenario-meta')) return;
+    if (el.closest('.node,.add-module-fab,.ctx-menu,.ctx-backdrop,.zoom-dock,.confirm-backdrop,.confirm-dialog')) return;
     const { x, y } = this.canvas.pan();
     this.panning = { px: e.clientX, py: e.clientY, x, y };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -78,13 +70,12 @@ export class CanvasComponent {
 
   onShellPointerUp(e: PointerEvent): void {
     if (this.panning) {
-      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* pointer already released */ }
     }
     this.panning = null;
   }
 
   onWheel(e: WheelEvent): void {
-    if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const shell = (e.currentTarget as HTMLElement).getBoundingClientRect();
     this.canvas.setZoom(
@@ -150,10 +141,27 @@ export class CanvasComponent {
     this.connectingFrom = null;
   }
 
-  // ── node delete ───────────────────────────────────────────────────────────
+  // ── node delete (with confirmation) ──────────────────────────────────────
+  protected readonly pendingDeleteId = signal<string | null>(null);
+
   onNodeDelete(nodeId: string): void {
-    this.store.removeNode(nodeId);
+    this.pendingDeleteId.set(nodeId);
+  }
+
+  confirmDelete(): void {
+    const id = this.pendingDeleteId();
+    if (!id) return;
+    this.store.removeNode(id);
     this.toast.show('Node removed', 'Node and its connections deleted.');
+    this.pendingDeleteId.set(null);
+  }
+
+  cancelDelete(): void {
+    this.pendingDeleteId.set(null);
+  }
+
+  onConfirmBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelDelete();
   }
 
   // ── configure (opens wizard) ──────────────────────────────────────────────
@@ -164,5 +172,69 @@ export class CanvasComponent {
   // ── add transform picker ──────────────────────────────────────────────────
   onAddNext(nodeId: string): void {
     this.openTransformPicker.emit(nodeId);
+  }
+
+  // ── clipboard ─────────────────────────────────────────────────────────────
+  private readonly clipboard = signal<CanvasNode | null>(null);
+  protected readonly hasClipboard = computed(() => !!this.clipboard());
+
+  // ── context menu ──────────────────────────────────────────────────────────
+  protected readonly ctxMenu = signal<{
+    type: 'canvas' | 'node';
+    x: number; y: number;
+    flowX: number; flowY: number;
+    nodeId?: string;
+  } | null>(null);
+
+  onContextMenu(e: MouseEvent): void {
+    e.preventDefault();
+    const el = e.target as HTMLElement;
+    if (el.closest('.ctx-menu,.confirm-backdrop,.confirm-dialog')) return;
+
+    const shell = this.shellEl()?.nativeElement;
+    const rect  = shell?.getBoundingClientRect();
+    const flow  = rect ? this.canvas.clientToFlow(e.clientX, e.clientY, rect) : { x: 400, y: 300 };
+
+    const nodeEl = el.closest('[data-node-id]') as HTMLElement | null;
+    if (nodeEl?.dataset['nodeId']) {
+      this.ctxMenu.set({ type: 'node', x: e.clientX, y: e.clientY, flowX: flow.x, flowY: flow.y, nodeId: nodeEl.dataset['nodeId'] });
+    } else {
+      this.ctxMenu.set({ type: 'canvas', x: e.clientX, y: e.clientY, flowX: flow.x, flowY: flow.y });
+    }
+  }
+
+  closeCtx(): void { this.ctxMenu.set(null); }
+
+  ctxCopy(): void {
+    const id   = this.ctxMenu()?.nodeId;
+    const node = id ? this.store.byId(id) : null;
+    if (node) {
+      this.clipboard.set(node);
+      this.toast.show('Copied', 'Node copied to clipboard.');
+    }
+    this.ctxMenu.set(null);
+  }
+
+  ctxPaste(): void {
+    const node = this.clipboard();
+    const menu = this.ctxMenu();
+    if (!node || !menu) return;
+    const newId = node.kind === 'transform' ? this.store.nextTransformId()
+                : node.kind === 'merge'     ? this.store.nextMergeId()
+                : this.store.nextNodeId();
+    this.store.addNode({ ...node, id: newId, x: menu.flowX, y: menu.flowY } as CanvasNode);
+    this.toast.show('Pasted', 'Node pasted onto canvas.');
+    this.ctxMenu.set(null);
+  }
+
+  ctxAddModule(): void {
+    this.openSourcePicker.emit();
+    this.ctxMenu.set(null);
+  }
+
+  ctxDelete(): void {
+    const id = this.ctxMenu()?.nodeId;
+    if (id) this.onNodeDelete(id);
+    this.ctxMenu.set(null);
   }
 }

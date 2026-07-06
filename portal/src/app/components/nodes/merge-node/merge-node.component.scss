@@ -1,8 +1,32 @@
-/* ── Merge Node ─────────────────────────────────────────────────────────────── */
-
+/* ── Merge Node ──────────────────────────────────────────────────────────────── */
 :host {
+  --node-color: var(--color-success);
+
   position: absolute;
+  width: 88px;
+  height: 88px;
+  transform: translate(-50%, -50%);
   z-index: 2;
+  touch-action: none;
+
+  &:hover .sn-circle { transform: scale(1.06); }
+}
+
+.sn-circle { animation: nodeIn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.sn-labels { animation: labelsIn 0.28s ease 0.14s both; }
+
+@keyframes nodeIn {
+  from { opacity: 0; transform: scale(0.25); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes labelsIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.sn-circle {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,15 +34,13 @@
   height: 52px;
   border-radius: 10px;
   border: 2px solid var(--color-muted-2, var(--color-muted-2));
-  background: var(--color-surface, #fff);
+  background: var(--color-surface);
   box-shadow: var(--shadow-sm, 0 2px 12px rgba(0, 0, 0, 0.06));
   transform: translate(-50%, -50%);
   touch-action: none;
   cursor: pointer;
   overflow: visible;
   transition: box-shadow 0.18s, border-color 0.18s;
-
-  &:hover .node-tools { display: flex; }
 
   /* ── States ── */
   &:hover {
@@ -52,8 +74,9 @@
 /* ── Label (centered, with ⊕ symbol) ───────────────────────────────────────── */
 .node-label {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
   pointer-events: none;
   text-align: center;
   user-select: none;
@@ -77,18 +100,76 @@
   }
 }
 
-/* ── Connection handles (ports) ─────────────────────────────────────────────── */
+/* ── Attached + button ───────────────────────────────────────────────────────── */
+.sn-add-btn {
+  position: absolute;
+  right: -15px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.65);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 8;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.15s ease;
+  box-shadow: 0 2px 10px rgba(0, 168, 157, 0.35);
+
+  svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    fill: none;
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-50%) scale(1.18);
+    box-shadow: 0 4px 16px rgba(0, 168, 157, 0.55);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.96);
+  }
+}
+
+:host:hover .sn-add-btn,
+:host.selected .sn-add-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
+:host:hover .sn-add-btn:hover {
+  transform: translateY(-50%) scale(1.18);
+}
+
 .port {
   position: absolute;
   top: 50%;
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
   transform: translateY(-50%);
   border-radius: 50%;
-  background: var(--color-surface, #fff);
+  background: var(--color-surface);
   border: 2px solid var(--color-muted-2, var(--color-muted-2));
   z-index: 6;
-  transition: background 0.12s, transform 0.12s;
+  transition: background 0.14s, transform 0.14s, box-shadow 0.14s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 
 .port-in  { left: -5px; }
@@ -112,8 +193,8 @@
   padding: 0 5px;
   display: grid;
   place-items: center;
-  color: #fff;
-  border: 2px solid var(--color-surface, #fff);
+  color: var(--color-on-primary);
+  border: 2px solid var(--color-surface);
   border-radius: var(--radius-pill, 999px);
   font-size: 10px;
   font-weight: 800;
@@ -127,3 +208,4 @@
   0%, 100% { border-color: var(--color-muted-2, var(--color-muted-2)); }
   50%       { border-color: var(--color-primary, var(--color-primary)); }
 }
+:host.running .sn-circle { animation: node-pulse 1.4s ease-in-out infinite; }

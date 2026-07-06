@@ -1,0 +1,339 @@
+<div class="dw">
+
+  <!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+  <div class="dw-topbar">
+    <div class="dw-topbar-left">
+      <div class="dw-icon-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity=".15"/>
+          <path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
+    </div>
+    <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+  </div>
+
+  <!-- ── Step indicator ───────────────────────────────────────────────────── -->
+  <div class="dw-stepper">
+    @for (label of STEP_LABELS; track $index) {
+      <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
+        <div class="dw-step-num">
+          @if (isStepDone($index + 1)) { ✓ } @else { {{ $index + 1 }} }
+        </div>
+        <span class="dw-step-label">{{ label }}</span>
+      </div>
+      @if ($index < STEP_LABELS.length - 1) {
+        <div class="dw-step-line" [class.done]="isStepDone($index + 1)"></div>
+      }
+    }
+  </div>
+
+  <!-- ── Body ─────────────────────────────────────────────────────────────── -->
+  <div class="dw-body">
+
+    <!-- ═══ STEP 1: Configure ═══════════════════════════════════════════════ -->
+    @if (isStepActive(1)) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">1</span>
+        <span class="dw-section-title">Configure {{ destLabel() }}</span>
+      </div>
+
+      @if (isSql()) {
+        <form [formGroup]="sqlForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched">
+              <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-name" class="dw-input" formControlName="name" placeholder="e.g. SQL Production" />
+              @if (sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched">
+              <label class="dw-label" for="dw-server">SQL Server <span class="dw-req">*</span></label>
+              <input id="dw-server" class="dw-input" formControlName="server" placeholder="tcp:sql-prod.company.com,1433" />
+              @if (sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched) {
+                <span class="dw-error">SQL Server host is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
+              <label class="dw-label" for="dw-database">Database <span class="dw-req">*</span></label>
+              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
+              @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
+                <span class="dw-error">Database name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-auth">Authentication <span class="dw-req">*</span></label>
+              <div class="dw-select-wrap">
+                <select id="dw-auth" class="dw-select" formControlName="auth">
+                  <option value="managed-identity">Managed Identity</option>
+                  <option value="sql-auth">SQL Username / Password</option>
+                  <option value="azure-ad">Azure AD</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-schema">Schema</label>
+              <input id="dw-schema" class="dw-input" formControlName="schema" placeholder="dbo" />
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="upsert">Upsert by source id</option>
+                  <option value="insert">Insert only</option>
+                  <option value="update">Update only</option>
+                </select>
+              </div>
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
+      } @else {
+        <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="csvForm.get('name')!.invalid && csvForm.get('name')!.touched">
+              <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-name" class="dw-input" formControlName="name" placeholder="e.g. CSV Export - SFTP" />
+              @if (csvForm.get('name')!.invalid && csvForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-storageType">Storage type <span class="dw-req">*</span></label>
+              <div class="dw-select-wrap">
+                <select id="dw-storageType" class="dw-select" formControlName="storageType">
+                  <option value="sftp">SFTP</option>
+                  <option value="azure-blob">Azure Blob Storage</option>
+                  <option value="aws-s3">AWS S3</option>
+                  <option value="local">Local / Network Folder</option>
+                  <option value="gcs">Google Cloud Storage</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched">
+              <label class="dw-label" for="dw-folder">Base folder / container <span class="dw-req">*</span></label>
+              <input id="dw-folder" class="dw-input" formControlName="folder" placeholder="/exports/fhirbridge" />
+              @if (csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched) {
+                <span class="dw-error">Base folder is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('filePattern')!.invalid && csvForm.get('filePattern')!.touched">
+              <label class="dw-label" for="dw-filePattern">File name pattern <span class="dw-req">*</span></label>
+              <input id="dw-filePattern" class="dw-input" formControlName="filePattern" placeholder="{resource}_{yyyyMMdd_HHmmss}.csv" />
+              @if (csvForm.get('filePattern')!.invalid && csvForm.get('filePattern')!.touched) {
+                <span class="dw-error">File name pattern is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-delimiter">Delimiter</label>
+              <div class="dw-select-wrap">
+                <select id="dw-delimiter" class="dw-select" formControlName="delimiter">
+                  <option value="comma">Comma (,)</option>
+                  <option value="pipe">Pipe (|)</option>
+                  <option value="tab">Tab</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-encoding">Encoding</label>
+              <div class="dw-select-wrap">
+                <select id="dw-encoding" class="dw-select" formControlName="encoding">
+                  <option value="utf-8">UTF-8</option>
+                  <option value="utf-8-bom">UTF-8 with BOM</option>
+                </select>
+              </div>
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
+      }
+    }
+
+    <!-- ═══ STEP 2: Data groups ═══════════════════════════════════════════ -->
+    @if (isStepActive(2)) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">2</span>
+        <span class="dw-section-title">Select data groups</span>
+        <span class="dw-section-hint">Choose which FHIR resources to include in this destination.</span>
+      </div>
+      <div class="dw-resources">
+        @for (r of ALL_RESOURCES; track r) {
+          <button
+            type="button"
+            class="dw-resource-card"
+            [class.selected]="isResourceSelected(r)"
+            (click)="toggleResource(r)"
+          >
+            <div class="dw-rc-check">
+              @if (isResourceSelected(r)) { ✓ }
+            </div>
+            <div class="dw-rc-body">
+              <strong class="dw-rc-name">{{ r }}</strong>
+              <span class="dw-rc-scope">{{ 'user/' + r + '.read' }}</span>
+            </div>
+          </button>
+        }
+      </div>
+      @if (selectedResources().length === 0) {
+        <div class="dw-callout dw-callout--warn">
+          Select at least one data group to continue.
+        </div>
+      }
+    }
+
+    <!-- ═══ STEP 3: Map fields ════════════════════════════════════════════ -->
+    @if (isStepActive(3)) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">3</span>
+        <span class="dw-section-title">Map fields</span>
+        <span class="dw-section-hint">
+          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : 'Map FHIR paths to CSV file columns.' }}
+        </span>
+      </div>
+
+      @for (r of resourceKeys(); track r) {
+        <div class="dw-mapping-group">
+          <div class="dw-mapping-group-head">
+            <strong>{{ r }}</strong>
+            @if (isSql()) {
+              <span class="dw-mapping-target-label">→ {{ rowsForResource(r)[0]?.tableName }}</span>
+            } @else {
+              <span class="dw-mapping-target-label">→ {{ rowsForResource(r)[0]?.tableName }}</span>
+            }
+          </div>
+          <table class="dw-map-table">
+            <thead>
+              <tr>
+                <th>Business field</th>
+                <th>FHIR path</th>
+                <th>{{ isSql() ? 'Table' : 'File name' }}</th>
+                <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rowsForResource(r); track row.fhirPath) {
+                <tr>
+                  <td>{{ row.fieldLabel }}</td>
+                  <td class="dw-mono">{{ row.fhirPath }}</td>
+                  <td>
+                    <input
+                      class="dw-map-input"
+                      [value]="row.tableName"
+                      (input)="updateRow(mappingRows().indexOf(row), 'tableName', $any($event.target).value)"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      class="dw-map-input"
+                      [value]="row.targetName"
+                      (input)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)"
+                    />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ═══ STEP 4: Review ═══════════════════════════════════════════════ -->
+    @if (isStepActive(4)) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">4</span>
+        <span class="dw-section-title">Review &amp; add to pipeline</span>
+      </div>
+
+      <div class="dw-review-grid">
+        <div class="dw-review-card">
+          <span class="dw-review-key">Destination type</span>
+          <span class="dw-review-val">{{ destLabel() }}</span>
+        </div>
+        @if (isSql()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ sqlForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">SQL Server</span>
+            <span class="dw-review-val dw-mono">{{ sqlForm.value.server || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Database</span>
+            <span class="dw-review-val">{{ sqlForm.value.database || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auth</span>
+            <span class="dw-review-val">{{ sqlForm.value.auth }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ sqlForm.value.writeMode }}</span>
+          </div>
+        } @else {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ csvForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Storage</span>
+            <span class="dw-review-val">{{ csvForm.value.storageType }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Folder</span>
+            <span class="dw-review-val dw-mono">{{ csvForm.value.folder || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">File pattern</span>
+            <span class="dw-review-val dw-mono">{{ csvForm.value.filePattern }}</span>
+          </div>
+        }
+        <div class="dw-review-card">
+          <span class="dw-review-key">Data groups</span>
+          <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
+        </div>
+        <div class="dw-review-card">
+          <span class="dw-review-key">Mapped fields</span>
+          <span class="dw-review-val">{{ mappingRows().length }} fields</span>
+        </div>
+      </div>
+
+      <div class="dw-callout dw-callout--info">
+        After adding to the pipeline, the {{ destLabel() }} node will be connected automatically to the selected source.
+      </div>
+    }
+
+  </div><!-- /dw-body -->
+
+  <!-- ── Footer ───────────────────────────────────────────────────────────── -->
+  <div class="dw-footer">
+    <button class="dw-btn" type="button" (click)="cancel()">Cancel</button>
+    <div class="dw-footer-right">
+      <span class="dw-step-info">Step {{ step() }} of {{ TOTAL_STEPS }}</span>
+      <button class="dw-btn" type="button" [disabled]="step() === 1" (click)="back()">Back</button>
+      <button
+        class="dw-btn dw-btn--primary"
+        type="button"
+        [disabled]="isNextDisabled()"
+        (click)="next()"
+      >
+        {{ step() === TOTAL_STEPS ? '✓ Add to Pipeline' : 'Next' }}
+      </button>
+    </div>
+  </div>
+
+</div>
