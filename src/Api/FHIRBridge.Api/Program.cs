@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Security;
+using Microsoft.AspNetCore.DataProtection;
 using FHIRBridge.Application;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -32,9 +34,26 @@ builder.Services
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
-// Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector). In production,
-// persist the key ring to shared storage (Key Vault / blob) so tokens survive restarts and work across instances.
-builder.Services.AddDataProtection();
+// Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector).
+// In production the key ring MUST be persisted to shared storage so tokens survive restarts and work
+// across instances (otherwise each node/restart mints a new key and can't decrypt the others' tokens).
+// Set DataProtection:KeyRingPath to a shared, backed-up volume (Azure Files, K8s PVC, etc.). Without a
+// path we keep the default (machine-local) ring, which is fine only for single-instance dev.
+var dataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName(builder.Configuration["DataProtection:ApplicationName"] ?? "FHIRBridge");
+
+var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
+if (!string.IsNullOrWhiteSpace(keyRingPath))
+{
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+}
+else if (!builder.Environment.IsDevelopment())
+{
+    // Surface the misconfiguration loudly instead of silently issuing un-shareable keys in production.
+    Console.Error.WriteLine(
+        "[WARN] DataProtection:KeyRingPath is not set. In a multi-instance deployment, OAuth/launch " +
+        "tokens will not be decryptable across instances or restarts. Configure a shared key-ring path.");
+}
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -104,12 +123,50 @@ builder.Services.AddCors(options =>
             .GetSection("Portal:AllowedOrigins")
             .Get<string[]>() ?? ["http://localhost:4200", "https://localhost:4200"];
 
+        // Narrowed from AllowAnyHeader/AllowAnyMethod (HIPAA/SOC2 CC6.1): a credentialed
+        // CORS policy should expose only the verbs and headers the portal actually uses.
         policy
             .WithOrigins(origins)
-            .AllowAnyHeader()
-            .AllowAnyMethod()
+            .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            .WithHeaders("Authorization", "Content-Type", "Accept", "X-Correlation-Id")
             .AllowCredentials();
     });
+});
+
+// Rate limiting (HIPAA/SOC2 CC6.2): throttle unauthenticated credential + ingestion endpoints
+// to blunt brute-force and abuse. Partitioned per client IP; sensitive endpoints opt in via
+// [EnableRateLimiting("auth")] / ("webhook"). Limits are configurable under "RateLimiting:*".
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    var authPermit = builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10;
+    var authWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5;
+    var webhookPermit = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120;
+    var webhookWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1;
+
+    options.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = authPermit,
+                Window = TimeSpan.FromMinutes(authWindowMinutes),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("webhook", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = webhookPermit,
+                Window = TimeSpan.FromMinutes(webhookWindowMinutes),
+                QueueLimit = 0
+            }));
+
+    static string ClientPartitionKey(HttpContext context) =>
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 });
 
 var app = builder.Build();
@@ -141,6 +198,31 @@ app.UseExceptionHandler(errorApp =>
         await context.Response.WriteAsJsonAsync(new { error = message });
     });
 });
+
+// Security response headers (HIPAA/SOC2 CC6.1): defense-in-depth on every response.
+// The strict Content-Security-Policy is applied only outside Development so the dev-only
+// Swagger UI (which needs inline scripts/styles) still renders locally.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers["X-Permitted-Cross-Domain-Policies"] = "none";
+    if (!app.Environment.IsDevelopment())
+    {
+        headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+    }
+
+    await next();
+});
+
+if (!app.Environment.IsDevelopment())
+{
+    // Enforce HTTPS at the application layer instead of relying solely on an upstream proxy.
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -177,6 +259,12 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseAuthorization();
+// Enabled by default; can be turned off for hermetic tests or single-tenant deployments that
+// throttle upstream. Policies are always registered so [EnableRateLimiting] metadata resolves.
+if (app.Configuration.GetValue("RateLimiting:Enabled", true))
+{
+    app.UseRateLimiter();
+}
 app.MapControllers();
 app.MapWorkflowEndpoints();
 

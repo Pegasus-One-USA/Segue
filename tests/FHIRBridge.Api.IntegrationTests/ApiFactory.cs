@@ -50,7 +50,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 // SuperAdmin via POST /api/v1/auth/setup-superadmin, then authenticates as that user.
                 // Enable Google SSO in config so GET /config reports it; Entra stays disabled.
                 ["Authentication:Google:Enabled"]           = "true",
-                ["Authentication:Google:ClientId"]          = "test-google-client-id"
+                ["Authentication:Google:ClientId"]          = "test-google-client-id",
+                // Disable rate limiting so the hermetic test suite (many requests from one client)
+                // isn't throttled; enforcement is validated in production config, not here.
+                ["RateLimiting:Enabled"]                    = "false"
             });
         });
 

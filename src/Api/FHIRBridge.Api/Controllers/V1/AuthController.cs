@@ -2,6 +2,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FHIRBridge.Api.Controllers.V1;
 
@@ -69,6 +70,7 @@ public sealed class AuthController : ControllerBase
     /// </summary>
     [HttpPost("sso/login")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> SsoLogin(
@@ -145,6 +147,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("internal/login")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> LocalLogin(
         [FromBody] LocalLoginRequest request,
@@ -168,6 +171,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("internal/forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(ForgotPasswordResponse), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> ForgotPassword(
         [FromBody] ForgotPasswordRequest request,
@@ -184,6 +188,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("internal/reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> ResetPassword(
         [FromBody] ResetPasswordRequest request,
@@ -196,6 +201,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> Refresh(
         [FromBody] RefreshTokenRequest request,

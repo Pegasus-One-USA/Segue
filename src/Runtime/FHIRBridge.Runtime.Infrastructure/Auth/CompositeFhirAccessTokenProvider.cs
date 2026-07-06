@@ -20,7 +20,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// (RS384 JWT) and a client secret implies OAuth 2.0 client-credentials. Sources with neither are unauthenticated.
 /// </para>
 /// </summary>
-public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider
+public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider
 {
     private readonly ISourceApplicationStrategyRegistry _applicationStrategies;
     private readonly EpicAccessTokenProvider _smartBackendServices;
@@ -70,5 +70,19 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider
         }
 
         return Task.FromResult(string.Empty);
+    }
+
+    /// <summary>
+    /// Resolves the launched patient context via the same registry dispatch as token acquisition: interactive
+    /// application-type strategies expose the launch <c>patient</c> id; all other grants return null.
+    /// </summary>
+    public Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        if (source.ApplicationType is { } applicationType)
+        {
+            return _applicationStrategies.Resolve(applicationType).GetPatientContextAsync(source, cancellationToken);
+        }
+
+        return Task.FromResult<string?>(null);
     }
 }

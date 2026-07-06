@@ -36,6 +36,9 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
     public override Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.GetAccessTokenAsync(source, cancellationToken);
 
+    public override Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        _interactive.GetPatientContextAsync(source, cancellationToken);
+
     protected override void ValidateCore(FhirSourceConfiguration source, List<string> errors)
     {
         RequireClientId(source, errors);

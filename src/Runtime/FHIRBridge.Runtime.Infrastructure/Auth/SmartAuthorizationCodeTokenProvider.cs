@@ -16,7 +16,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// back, silently refreshing it with the refresh token when it nears expiry. Vendor subclasses (Epic, Healow, …)
 /// need only override <see cref="ProviderName"/>.
 /// </summary>
-public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IInteractiveAuthorizationFlow
+public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IInteractiveAuthorizationFlow, IFhirPatientContextProvider
 {
     private const int DefaultExpiresInSeconds = 300;
 
@@ -42,9 +42,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     public async Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(source.TokenEndpoint) || string.IsNullOrWhiteSpace(source.ClientId))
+        if (string.IsNullOrWhiteSpace(source.ClientId))
         {
-            throw new InvalidOperationException($"{ProviderName} requires a token endpoint and client id.");
+            throw new InvalidOperationException($"{ProviderName} requires a client id.");
         }
 
         var key = BuildStoreKey(source);
@@ -55,6 +55,10 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 $"{ProviderName} source '{source.Name}' has no authorized token. Complete the interactive OAuth sign-in callback before running this pipeline.");
         }
 
+        // A still-valid cached token is returned as-is: interactive sources discover their token endpoint at sign-in
+        // and do not persist it on the source connection, so requiring one here would needlessly break the common
+        // case (a pipeline run right after an EHR launch, when the token is fresh). The endpoint is only needed to
+        // refresh an expired token below.
         if (stored.ExpiresOnUtc > DateTimeOffset.UtcNow.AddMinutes(1))
         {
             return stored.AccessToken;
@@ -66,7 +70,25 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 $"{ProviderName} token for source '{source.Name}' has expired and no refresh token is available. Re-authorize the source.");
         }
 
-        return await RefreshAsync(source, key, stored.RefreshToken!, cancellationToken);
+        // Prefer a token endpoint configured on the source; fall back to the one discovered and stashed at sign-in.
+        var tokenEndpoint = string.IsNullOrWhiteSpace(source.TokenEndpoint) ? stored.TokenEndpoint : source.TokenEndpoint;
+        if (string.IsNullOrWhiteSpace(tokenEndpoint))
+        {
+            throw new InvalidOperationException(
+                $"{ProviderName} token for source '{source.Name}' has expired and no token endpoint is available to refresh it. Re-authorize the source.");
+        }
+
+        return await RefreshAsync(source with { TokenEndpoint = tokenEndpoint }, key, stored.RefreshToken!, cancellationToken);
+    }
+
+    /// <summary>
+    /// Returns the patient id established by the launch (the <c>patient</c> field the token endpoint returns for a
+    /// <c>launch/patient</c> or patient-standalone flow), or null when the stored token carries no patient context.
+    /// </summary>
+    public async Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        var stored = await _tokenStore.GetAsync(BuildStoreKey(source), cancellationToken);
+        return stored?.Patient;
     }
 
     /// <summary>
@@ -205,7 +227,8 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 string.IsNullOrWhiteSpace(token.RefreshToken) ? fallbackRefreshToken : token.RefreshToken,
                 DateTimeOffset.UtcNow.AddSeconds(expiresIn),
                 token.Scope,
-                token.Patient);
+                token.Patient,
+                source.TokenEndpoint);
 
             await _tokenStore.SaveAsync(BuildStoreKey(source), stored, cancellationToken);
             await _auditSink.RecordAsync(source, $"{action}Succeeded", "Completed", $"{ProviderName} access token acquired.", cancellationToken);

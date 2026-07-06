@@ -48,6 +48,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.MfaEnabled)
             .IsRequired();
 
+        // MFA (TOTP) enrollment state. Secret is Base32; backup codes are stored as newline-joined hashes.
+        builder.Property(x => x.MfaSecret)
+            .HasMaxLength(200);
+
+        builder.Property(x => x.MfaBackupCodeHashes)
+            .HasMaxLength(4000);
+
         builder.Property(x => x.CreatedOnUtc)
             .IsRequired();
 

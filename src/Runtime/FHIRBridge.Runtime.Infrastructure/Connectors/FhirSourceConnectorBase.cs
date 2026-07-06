@@ -56,8 +56,9 @@ public abstract class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        var searchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
         var resources = new List<ResourceEnvelope>();
-        var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, source.SearchParameters);
+        var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, searchParameters);
         var maxPages = source.MaxPages <= 0 ? 1 : source.MaxPages;
 
         for (var page = 0; page < maxPages && nextUrl is not null; page++)
@@ -236,6 +237,43 @@ public abstract class FhirSourceConnectorBase : IFhirSourceClient
         return response.StatusCode == HttpStatusCode.RequestTimeout ||
                response.StatusCode == (HttpStatusCode)429 ||
                statusCode >= 500;
+    }
+
+    /// <summary>
+    /// <summary>
+    /// Scopes the search to the launched patient when the token grant carries a patient context (interactive SMART
+    /// launches). Without this, a provider such as Epic rejects an unscoped <c>Patient</c> search. The launched
+    /// patient targets its own resource by <c>_id</c>; every other resource type is filtered by <c>patient</c>.
+    /// Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left
+    /// untouched.
+    /// </summary>
+    private async Task<string?> ApplyPatientScopeAsync(
+        string resourceType,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
+        {
+            return source.SearchParameters;
+        }
+
+        var patientId = await patientContextProvider.GetPatientContextAsync(source, cancellationToken);
+        if (string.IsNullOrWhiteSpace(patientId))
+        {
+            return source.SearchParameters;
+        }
+
+        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        if (ContainsQueryParameter(query, "patient") ||
+            ContainsQueryParameter(query, "subject") ||
+            ContainsQueryParameter(query, "_id"))
+        {
+            return source.SearchParameters;
+        }
+
+        var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
+        var scope = isPatientResource ? $"_id={patientId}" : $"patient={patientId}";
+        return string.IsNullOrWhiteSpace(query) ? scope : $"{query}&{scope}";
     }
 
     /// <summary>
