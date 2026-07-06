@@ -88,6 +88,13 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _configurationRepository
             .Setup(x => x.GetRouteAsync(route.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(route);
+        // A launch fans out across every enabled route bound to the source, resolved from these collection getters.
+        _configurationRepository
+            .Setup(x => x.GetRoutesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { route });
+        _configurationRepository
+            .Setup(x => x.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { mapping });
         return (route.Id, source);
     }
 
@@ -233,6 +240,61 @@ public sealed class InteractiveSourceAuthorizationServiceTests
 
         runRequest.Should().NotBeNull();
         runRequest!.RouteIds.Should().Contain(routeId);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_fans_the_launch_out_across_every_enabled_route_for_the_source()
+    {
+        // One source with three resource-type routes (Patient, Encounter, Observation); a fourth route is disabled and
+        // a fifth belongs to a different source. A launch on any one route must run exactly the three enabled routes
+        // of the launched source — the launch establishes the patient context once for all configured resource types.
+        var auth = new SourceAuthenticationConfiguration(
+            AuthenticationType.OAuthClientCredentials, "client-1", null, ["user/Patient.read"], null, null, null);
+        var source = new SourceConnection("Epic EHR Launch", SourceSystemType.Epic, "https://fhir.example.com", auth);
+        var other = new SourceConnection("Other", SourceSystemType.Epic, "https://other.example.com", auth);
+
+        MappingProfile Map(string rt, Guid sourceId) => new(rt, rt, sourceId, Guid.NewGuid(), rt, Array.Empty<MappingField>());
+        var patient = Map("Patient", source.Id);
+        var encounter = Map("Encounter", source.Id);
+        var observation = Map("Observation", source.Id);
+        var condition = Map("Condition", source.Id);
+        var otherMap = Map("Patient", other.Id);
+
+        ResourcePipelineRoute Route(Guid mappingId, bool enabled) =>
+            new(null, mappingId, IngestionMode.ScheduledPull, null, null, enabled, 1);
+        var patientRoute = Route(patient.Id, enabled: true);
+        var encounterRoute = Route(encounter.Id, enabled: true);
+        var observationRoute = Route(observation.Id, enabled: true);
+        var conditionRoute = Route(condition.Id, enabled: false);   // disabled → excluded
+        var otherRoute = Route(otherMap.Id, enabled: true);         // different source → excluded
+
+        _configurationRepository.Setup(x => x.GetSourceConnectionAsync(source.Id, It.IsAny<CancellationToken>())).ReturnsAsync(source);
+        _configurationRepository.Setup(x => x.GetMappingProfileAsync(patient.Id, It.IsAny<CancellationToken>())).ReturnsAsync(patient);
+        _configurationRepository.Setup(x => x.GetRouteAsync(patientRoute.Id, It.IsAny<CancellationToken>())).ReturnsAsync(patientRoute);
+        _configurationRepository.Setup(x => x.GetRoutesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { patientRoute, encounterRoute, observationRoute, conditionRoute, otherRoute });
+        _configurationRepository.Setup(x => x.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { patient, encounter, observation, condition, otherMap });
+
+        const string nonce = "nonce-fanout";
+        await _stateStore.SaveAsync(nonce, new PendingAuthorization(
+            source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic EHR Launch",
+            "verifier-1", "https://app/cb", "https://auth.example.com/token", "client-1", patientRoute.Id),
+            CancellationToken.None);
+        _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
+                It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("access-token");
+
+        StartConfiguredPipelineRunRequest? runRequest = null;
+        _pipeline.Setup(x => x.StartAsync(It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
+            .Callback((StartConfiguredPipelineRunRequest r, CancellationToken _) => runRequest = r)
+            .Returns(Task.FromResult<ConfiguredPipelineRunDto>(null!));
+
+        await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
+
+        runRequest.Should().NotBeNull();
+        runRequest!.RouteIds.Should().BeEquivalentTo(new[] { patientRoute.Id, encounterRoute.Id, observationRoute.Id });
+        runRequest.RouteIds.Should().NotContain(conditionRoute.Id).And.NotContain(otherRoute.Id);
     }
 
     [Fact]

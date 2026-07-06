@@ -152,15 +152,17 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             processedResourceTypes.Add(resourceType);
 
             var enabledRoutes = routesForType
+                .Where(route => route.Route.IsEnabled)
                 .Where(route => route.IsEnabled)
                 .Where(route => RouteDependenciesAreEnabled(config, route))
-                .Where(route => IsScheduledPullMode(route.IngestionMode))
+                .Where(route => IsScheduledPullMode(route.Route.IngestionMode))
                 .Where(route => request.RouteIds is not null
-                    ? request.RouteIds.Contains(route.Id)
+                    ? request.RouteIds.Contains(route.Route.Id)
                     : !request.RunDueSchedulesOnly ||
-                      ScheduleExpressionMatcher.IsDue(route.ScheduleExpression, scheduledAtUtc))
-                .OrderBy(route => route.Priority)
-                .ThenBy(route => route.Id)
+                      ScheduleExpressionMatcher.IsDue(route.Route.ScheduleExpression, scheduledAtUtc))
+                .OrderBy(route => route.Route.Priority)
+                .ThenBy(route => route.Route.Id)
+                .ThenBy(route => route.ExecutionOrder)
                 .ToList();
 
             if (enabledRoutes.Count == 0)
@@ -382,14 +384,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             processedResourceTypes.Add(resourceType);
 
             // Match routes whose mapping resolves to the incoming resource type (single source of truth).
-            var webhookRoutes = config.Routes
-                .Where(route => string.Equals(ResolveResourceType(config, route), resourceType, StringComparison.OrdinalIgnoreCase))
+            var webhookRoutes = ExpandRouteMappingWorkItems(config)
+                .Where(route => string.Equals(route.MappingProfile.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
+                .Where(route => route.Route.IsEnabled)
                 .Where(route => route.IsEnabled)
                 .Where(route => RouteDependenciesAreEnabled(config, route))
-                .Where(route => route.WebhookConfigurationId == webhookConfigurationId)
-                .Where(route => IsWebhookMode(route.IngestionMode))
-                .OrderBy(route => route.Priority)
-                .ThenBy(route => route.Id)
+                .Where(route => route.Route.WebhookConfigurationId == webhookConfigurationId)
+                .Where(route => IsWebhookMode(route.Route.IngestionMode))
+                .OrderBy(route => route.Route.Priority)
+                .ThenBy(route => route.Route.Id)
+                .ThenBy(route => route.ExecutionOrder)
                 .ToList();
 
             if (webhookRoutes.Count == 0)
@@ -433,7 +437,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         ConfigurationSnapshot config,
         Guid pipelineRunId,
         string resourceType,
-        ResourcePipelineRoute route,
+        RouteMappingWorkItem route,
         IReadOnlyCollection<ResourceEnvelope> resources,
         string? triggeredBy,
         string? correlationId,
@@ -441,10 +445,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         CancellationToken cancellationToken)
     {
         // Source, destination, and resource type are all owned by the route's mapping profile.
-        var mappingProfile = GetRequired(
-            config.MappingProfiles,
-            route.MappingProfileId,
-            "MappingProfile");
+        var mappingProfile = route.MappingProfile;
 
         try
         {
@@ -452,10 +453,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             {
                 await RecordAuditAsync(
                     pipelineRunId,
-                    route.Id,
+                    route.Route.Id,
                     mappingProfile.SourceConnectionId,
                     mappingProfile.DestinationId,
-                    route.MappingProfileId,
+                    mappingProfile.Id,
                     resourceType,
                     "RouteExecutionSkipped",
                     "Skipped",
@@ -475,7 +476,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             await RecordAuditAsync(
                 pipelineRunId,
-                route.Id,
+                route.Route.Id,
                 mappingProfile.SourceConnectionId,
                 destination.Id,
                 mappingProfile.Id,
@@ -490,7 +491,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             var governedResources = await PrepareResourcesForRouteAsync(
                 pipelineRunId,
-                route,
+                route.Route,
                 destination,
                 mappingProfile,
                 resourceType,
@@ -516,7 +517,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             await RecordAuditAsync(
                 pipelineRunId,
-                route.Id,
+                route.Route.Id,
                 mappingProfile.SourceConnectionId,
                 destination.Id,
                 mappingProfile.Id,
@@ -537,16 +538,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 exception,
                 "Configured pipeline route failed for resource {ResourceType}, route {RouteId}.",
                 resourceType,
-                route.Id);
+                route.Route.Id);
 
-            errors.Add($"{resourceType}/route/{route.Id}: {exception.Message}");
+            errors.Add($"{resourceType}/route/{route.Route.Id}: {exception.Message}");
 
             await RecordAuditAsync(
                 pipelineRunId,
-                route.Id,
+                route.Route.Id,
                 mappingProfile.SourceConnectionId,
                 mappingProfile.DestinationId,
-                route.MappingProfileId,
+                mappingProfile.Id,
                 resourceType,
                 "RouteExecutionFailed",
                 "Failed",
@@ -873,15 +874,22 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return new ResourceEnvelope(resourceType, id, json, null, null);
     }
 
-    private RouteSourceKey CreateRouteSourceKey(ConfigurationSnapshot config, ResourcePipelineRoute route)
+    private RouteSourceKey CreateRouteSourceKey(ConfigurationSnapshot config, RouteMappingWorkItem route)
     {
         return new RouteSourceKey(
-            ResolveSourceConnectionId(config, route) ?? Guid.Empty,
+            route.MappingProfile.SourceConnectionId,
             route.SearchParameters);
     }
 
     private sealed record RouteSourceKey(
         Guid SourceConnectionId,
+        string? SearchParameters);
+
+    private sealed record RouteMappingWorkItem(
+        ResourcePipelineRoute Route,
+        MappingProfile MappingProfile,
+        bool IsEnabled,
+        int ExecutionOrder,
         string? SearchParameters);
 
     private sealed record RouteExecutionResult(int MappedCount, int WrittenCount);
@@ -906,26 +914,57 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return ingestionMode is IngestionMode.Webhook or IngestionMode.WebhookAndScheduledPull;
     }
 
-    private static bool RouteDependenciesAreEnabled(ConfigurationSnapshot config, ResourcePipelineRoute route)
+    private static bool RouteDependenciesAreEnabled(ConfigurationSnapshot config, RouteMappingWorkItem route)
     {
         // A route's source and destination are owned by its mapping profile, so resolve them through the mapping.
-        if (!config.MappingProfilesById.TryGetValue(route.MappingProfileId, out var mapping))
-        {
-            return false;
-        }
+        var mapping = route.MappingProfile;
 
         config.SourceConnectionsById.TryGetValue(mapping.SourceConnectionId, out var source);
         config.DestinationsById.TryGetValue(mapping.DestinationId, out var destination);
         WebhookConfiguration? webhook = null;
-        if (route.WebhookConfigurationId.HasValue)
+        if (route.Route.WebhookConfigurationId.HasValue)
         {
-            config.WebhooksById.TryGetValue(route.WebhookConfigurationId.Value, out webhook);
+            config.WebhooksById.TryGetValue(route.Route.WebhookConfigurationId.Value, out webhook);
         }
 
         return source?.IsEnabled == true &&
                destination?.IsEnabled == true &&
                mapping.IsEnabled &&
-               (!route.WebhookConfigurationId.HasValue || webhook?.IsEnabled == true);
+               (!route.Route.WebhookConfigurationId.HasValue || webhook?.IsEnabled == true);
+    }
+
+    private static IReadOnlyList<RouteMappingWorkItem> ExpandRouteMappingWorkItems(ConfigurationSnapshot config)
+    {
+        var workItems = new List<RouteMappingWorkItem>();
+        foreach (var route in config.Routes)
+        {
+            if (route.ResourceMappings.Count == 0)
+            {
+                if (config.MappingProfilesById.TryGetValue(route.MappingProfileId, out var mappingProfile))
+                {
+                    workItems.Add(new RouteMappingWorkItem(
+                        route, mappingProfile, IsEnabled: true, ExecutionOrder: 0, route.SearchParameters));
+                }
+
+                continue;
+            }
+
+            foreach (var routeMapping in route.ResourceMappings.OrderBy(x => x.ExecutionOrder).ThenBy(x => x.MappingProfileId))
+            {
+                if (config.MappingProfilesById.TryGetValue(routeMapping.MappingProfileId, out var mappingProfile))
+                {
+                    workItems.Add(new RouteMappingWorkItem(
+                        route,
+                        mappingProfile,
+                        routeMapping.IsEnabled,
+                        routeMapping.ExecutionOrder,
+                        // A per-mapping search parameter overrides the route's; null falls back to the route's value.
+                        routeMapping.SearchParameters ?? route.SearchParameters));
+                }
+            }
+        }
+
+        return workItems;
     }
 
     // Resolves a route's resource type through its mapping profile (single source of truth).
@@ -936,7 +975,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private static Guid? ResolveSourceConnectionId(ConfigurationSnapshot config, ResourcePipelineRoute route) =>
         config.MappingProfilesById.TryGetValue(route.MappingProfileId, out var mapping) ? mapping.SourceConnectionId : null;
 
-    private IReadOnlyList<(string ResourceType, List<ResourcePipelineRoute> Routes)> ResolveRoutesByResourceType(
+    private IReadOnlyList<(string ResourceType, List<RouteMappingWorkItem> Routes)> ResolveRoutesByResourceType(
         ConfigurationSnapshot config,
         IReadOnlyCollection<string>? requestedResourceTypes)
     {
@@ -947,13 +986,12 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Resource type is resolved from each route's mapping profile — the single source of truth for what to pull.
-        var groups = config.Routes
-            .Select(route => (Route: route, ResourceType: ResolveResourceType(config, route)))
-            .Where(x => !string.IsNullOrWhiteSpace(x.ResourceType))
-            .Where(x => requested is null || requested.Contains(x.ResourceType!))
-            .GroupBy(x => x.ResourceType!, StringComparer.OrdinalIgnoreCase)
+        var groups = ExpandRouteMappingWorkItems(config)
+            .Where(x => !string.IsNullOrWhiteSpace(x.MappingProfile.ResourceType))
+            .Where(x => requested is null || requested.Contains(x.MappingProfile.ResourceType))
+            .GroupBy(x => x.MappingProfile.ResourceType, StringComparer.OrdinalIgnoreCase)
             .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(group => (ResourceType: group.Key, Routes: group.Select(x => x.Route).ToList()))
+            .Select(group => (ResourceType: group.Key, Routes: group.ToList()))
             .ToList();
 
         if (groups.Count == 0)

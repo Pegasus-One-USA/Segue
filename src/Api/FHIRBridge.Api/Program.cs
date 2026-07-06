@@ -14,6 +14,7 @@ using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
@@ -133,15 +134,32 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto |
+        ForwardedHeaders.XForwardedHost;
+    options.ForwardLimit = builder.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 2;
+
+    if (builder.Configuration.GetValue("ForwardedHeaders:TrustAllProxies", false))
+    {
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    }
+});
+
 // Rate limiting (HIPAA/SOC2 CC6.2): throttle unauthenticated credential + ingestion endpoints
 // to blunt brute-force and abuse. Partitioned per client IP; sensitive endpoints opt in via
-// [EnableRateLimiting("auth")] / ("webhook"). Limits are configurable under "RateLimiting:*".
+// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*".
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     var authPermit = builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10;
     var authWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5;
+    var oauthPermit = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:PermitPerWindow") ?? 30;
+    var oauthWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:WindowMinutes") ?? 5;
     var webhookPermit = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120;
     var webhookWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1;
 
@@ -152,6 +170,16 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = authPermit,
                 Window = TimeSpan.FromMinutes(authWindowMinutes),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("oauth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = oauthPermit,
+                Window = TimeSpan.FromMinutes(oauthWindowMinutes),
                 QueueLimit = 0
             }));
 
@@ -170,6 +198,8 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // A [StandardPermission("some.code")] whose code doesn't match a UnifiedPermissions
 // constant still gets a policy (see PermissionCatalog.AllPermissionCodes above), but

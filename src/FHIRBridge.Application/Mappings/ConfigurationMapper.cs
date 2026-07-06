@@ -120,7 +120,22 @@ public static class ConfigurationMapper
             route.ScheduleExpression,
             route.SearchParameters,
             route.IsEnabled,
-            route.Priority);
+            route.Priority,
+            route.ResourceMappings
+                .OrderBy(x => x.ExecutionOrder)
+                .ThenBy(x => x.MappingProfileId)
+                .Select(ToDto)
+                .ToList());
+    }
+
+    private static ResourcePipelineRouteMappingDto ToDto(ResourcePipelineRouteMapping mapping)
+    {
+        return new ResourcePipelineRouteMappingDto(
+            mapping.Id,
+            mapping.MappingProfileId,
+            mapping.IsEnabled,
+            mapping.ExecutionOrder,
+            mapping.SearchParameters);
     }
 
     public static MappingField ToDomain(MappingFieldDto dto)

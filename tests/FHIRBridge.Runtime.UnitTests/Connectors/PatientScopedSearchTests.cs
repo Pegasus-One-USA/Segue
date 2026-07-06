@@ -43,6 +43,19 @@ public sealed class PatientScopedSearchTests
     }
 
     [Fact]
+    public async Task Failed_patient_scoped_request_redacts_patient_identifier_from_exception()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.BadRequest);
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
+
+        var act = () => client.SearchAsync("Observation", Source, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Message.Should().Contain("/Observation?[redacted]");
+        exception.Which.Message.Should().NotContain(PatientId);
+    }
+
+    [Fact]
     public async Task No_patient_context_leaves_the_query_unscoped()
     {
         var handler = new CapturingHandler();
@@ -68,14 +81,23 @@ public sealed class PatientScopedSearchTests
 
     private sealed class CapturingHandler : HttpMessageHandler
     {
+        private readonly HttpStatusCode _statusCode;
+
+        public CapturingHandler(HttpStatusCode statusCode = HttpStatusCode.OK)
+        {
+            _statusCode = statusCode;
+        }
+
         public string? RequestUri { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             RequestUri = request.RequestUri?.ToString();
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            return Task.FromResult(new HttpResponseMessage(_statusCode)
             {
-                Content = new StringContent("""{ "resourceType": "Bundle", "type": "searchset", "entry": [] }""")
+                Content = new StringContent(_statusCode == HttpStatusCode.OK
+                    ? """{ "resourceType": "Bundle", "type": "searchset", "entry": [] }"""
+                    : $$"""{ "issue": [{ "diagnostics": "patient={{PatientId}} was rejected" }] }""")
             });
         }
     }

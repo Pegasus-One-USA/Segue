@@ -331,6 +331,7 @@ public sealed class ConfigurationService : IConfigurationService
             request.SearchParameters,
             request.IsEnabled,
             request.Priority);
+        await ApplyResourceMappingsAsync(route, request, cancellationToken);
 
         await _repository.AddRouteAsync(route, cancellationToken);
         await RecordConfigurationAuditAsync(
@@ -357,6 +358,7 @@ public sealed class ConfigurationService : IConfigurationService
             request.SearchParameters,
             request.IsEnabled,
             request.Priority);
+        await ApplyResourceMappingsAsync(route, request, cancellationToken);
 
         await _repository.UpdateRouteAsync(route, cancellationToken);
         await RecordConfigurationAuditAsync(
@@ -388,6 +390,54 @@ public sealed class ConfigurationService : IConfigurationService
     }
 
     // ── Route resource-type resolution (via mapping profile) ───────────────────
+
+    private async Task ApplyResourceMappingsAsync(
+        ResourcePipelineRoute route,
+        CreateResourceRouteRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.ResourceMappings is not { Count: > 0 })
+        {
+            route.ReplaceResourceMappings([]);
+            return;
+        }
+
+        var primaryMapping = await GetMappingProfileRequiredAsync(request.MappingProfileId, cancellationToken);
+        var normalizedMappings = new List<ResourcePipelineRouteMapping>();
+        var seen = new HashSet<Guid>();
+
+        foreach (var mappingRequest in request.ResourceMappings)
+        {
+            if (!seen.Add(mappingRequest.MappingProfileId))
+            {
+                throw new InvalidOperationException(
+                    $"Route resource mapping '{mappingRequest.MappingProfileId}' is duplicated.");
+            }
+
+            var mapping = await GetMappingProfileRequiredAsync(mappingRequest.MappingProfileId, cancellationToken);
+            if (mapping.SourceConnectionId != primaryMapping.SourceConnectionId)
+            {
+                throw new InvalidOperationException(
+                    "All resource mappings on a route must use mapping profiles from the same source connection.");
+            }
+
+            normalizedMappings.Add(new ResourcePipelineRouteMapping(
+                mappingRequest.MappingProfileId,
+                mappingRequest.IsEnabled,
+                mappingRequest.ExecutionOrder,
+                mappingRequest.SearchParameters));
+        }
+
+        if (!seen.Contains(request.MappingProfileId))
+        {
+            normalizedMappings.Add(new ResourcePipelineRouteMapping(
+                request.MappingProfileId,
+                isEnabled: true,
+                executionOrder: 0));
+        }
+
+        route.ReplaceResourceMappings(normalizedMappings);
+    }
 
     private async Task<string?> ResolveResourceTypeAsync(ResourcePipelineRoute route, CancellationToken cancellationToken)
     {
