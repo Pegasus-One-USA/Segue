@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # .NET backend NuGet dependencies
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      dotnet-dependencies:
+        patterns:
+          - "*"
+
+  # Angular portal npm dependencies
+  - package-ecosystem: npm
+    directory: "/portal"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
+
+  # GitHub Actions workflow dependencies
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

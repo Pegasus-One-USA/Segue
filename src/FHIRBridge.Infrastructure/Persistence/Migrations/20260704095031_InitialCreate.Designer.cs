@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260703131317_InitialCreate")]
+    [Migration("20260704095031_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -814,8 +814,19 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("MfaBackupCodeHashes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<bool>("MfaEnabled")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("MfaEnrolledOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MfaSecret")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");

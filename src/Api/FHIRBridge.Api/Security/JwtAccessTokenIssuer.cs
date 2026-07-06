@@ -32,7 +32,7 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
         var expiresOnUtc = DateTime.UtcNow.AddMinutes(
             int.TryParse(_configuration["Authentication:TokenLifetimeMinutes"], out var minutes)
                 ? minutes
-                : 480);
+                : 60);
 
         var claims = new List<Claim>
         {
