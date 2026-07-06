@@ -1,0 +1,126 @@
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_62affcfc9947ba::t_dcc410c14900aa 35-51,122,124-129,131,133-140,250,307,331
+  s_62affcfc9947ba::t_9859d7b46ae29e 72,74,76-82,84-96,98,100-101,103-107
+  s_62affcfc9947ba::t_5d0e5b4dd8b8c3 102
+portal/src/app/components/canvas/canvas.component.ts
+  s_62affcfc9947ba::t_b0e50585e47cf5 9,49,51,58,145-147,149-155,157-161,173-236
+portal/src/app/components/nodes/merge-node/merge-node.component.scss
+  s_62affcfc9947ba::t_3a0216164c2ec9 1,3-4,6-8,10-31,79,81,105-162,166-167,173-174,213
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_62affcfc9947ba::t_b44f83c5c474cb 303,325-327,334-335,345,354
+  s_62affcfc9947ba::t_f24a8f511c008b 440
+  s_62affcfc9947ba::t_1ab683806309e0 31,37,52-62,65-70,74,76-80,83-106,108-114,116,130,139,146,155,179,182-183,185,187-192,194,208-218,220-236,239-251,253,255-258,260-268,270-278,280-281,283,386-387,389-391,393-411,413-415,417-419,421,423-425,427-428,430-433
+  s_62affcfc9947ba::t_e601e59ccd5d0f 252
+  s_62affcfc9947ba::t_fc30177a7d483e 426,429
+  s_62affcfc9947ba::t_1707e7e28f350b 385,388
+  s_62affcfc9947ba::t_c40ecd99019bf8 2-30,32-36,38-51,63-64,71-73,75,81-82,107,115,117-129,131-138,140-145,147-154,156-168,170,175-178,180-181,184,186,193,195-207,219,237-238,254,259,269,279,282,284-290,372,381-382,384,392,412,416,420,422,434-439,441-445
+  s_62affcfc9947ba::t_2fe877211d192c 291-302,304-324,328-333,336-344,346-353,355-371,373-380,383
+  s_62affcfc9947ba::t_1e503bd2b8d578 1
+  s_62affcfc9947ba::t_caf69a78d5d265 169,171-174
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_62affcfc9947ba::t_dbda6d352981e3 1,12-13,21-22,109-110,124,136-169,310-324,328-330,332,335-336,339-341,344-352,354-363,366-369,372-376,379,386,412-418
+portal/src/app/components/nodes/merge-node/merge-node.component.html
+  s_62affcfc9947ba::t_dd447f225f2641 4-14,20-21,23-27
+portal/src/app/services/wizard.service.ts
+  s_62affcfc9947ba::t_76922dcbd3d858 74-81,116-120
+  s_62affcfc9947ba::t_16b446473fa698 121
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_62affcfc9947ba::t_9fa40dde8c9f42 237,242-244
+  s_62affcfc9947ba::t_4c40b079e5e7a1 64-65
+  s_62affcfc9947ba::t_08222acea556ff 35,38-42,47-50
+  s_62affcfc9947ba::t_2c158a05e6fe70 91,93-98,114
+  s_62affcfc9947ba::t_caa3bfafc06d44 364-372
+  s_62affcfc9947ba::t_a1605d43ea9ac3 373-398
+  s_62affcfc9947ba::t_96657e30aea61b 5,25,33-34,36-37,43-46,51
+  s_62affcfc9947ba::t_f462fa28a2144e 348-357
+  s_62affcfc9947ba::t_c3d17947015662 70
+  s_62affcfc9947ba::t_26afecc3ce17ab 245-246
+  s_62affcfc9947ba::t_a98bd57c523e39 26-32
+  s_62affcfc9947ba::t_8171f7867f0907 204-212
+  s_62affcfc9947ba::t_749753b11e88a6 4
+  s_62affcfc9947ba::t_73157079512c41 113,115-117
+  s_62affcfc9947ba::t_fd4f7de82b0bf6 131
+  s_62affcfc9947ba::t_c40ecd99019bf8 1,3,6-24,52-63,66-69,71-90,92,99-100,109,118-119,121-125,127-130,132-172,247-308,314-315,317-347,358-363,399
+  s_62affcfc9947ba::t_b0028931bf67e4 2
+  s_62affcfc9947ba::t_a15b76d35af175 203,213-214,241
+  s_62affcfc9947ba::t_8472c14cdf433e 101-108,110-112,120,126
+  s_62affcfc9947ba::t_118859657cf87e 173-202,215-236,238-240
+  s_62affcfc9947ba::t_ad39a6c340e649 309-310,316
+  s_62affcfc9947ba::t_119560d452d1ce 311-313
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_62affcfc9947ba::t_98ce657ebeaf15 5-40,44,50,52-56,61-72,74-75,86-117,121,127-132,138-140,144
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-505
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_62affcfc9947ba::t_73cd14832f7cf8 1,6-7,9,14-15,17-18,20-27,29-44,62-64,66,68-69,72-96,98,100-102,105-150,152-165,168-172,174-188,195-196,199-200,202-203,213-214,243
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_62affcfc9947ba::t_81c3f7b96a2a99 3
+  s_62affcfc9947ba::t_14af60d2e654cf 22-23,36-49
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-282
+portal/src/app/components/canvas/canvas.component.html
+  s_62affcfc9947ba::t_6b8c55df412531 97-98
+  s_62affcfc9947ba::t_b1223607a090e5 4,36,60-96,99-103
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_62affcfc9947ba::t_99e686b80a17be 13,44-52
+  s_62affcfc9947ba::t_611b1512fbbde7 53-55
+  s_62affcfc9947ba::t_e2cc9fe46e6e74 56-94
+portal/src/app/components/nodes/merge-node/merge-node.component.ts
+  s_62affcfc9947ba::t_bf578ca93d420c 1,9,15-16,18,20-22,28,39-44,64
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_62affcfc9947ba::t_ecd44ff2c0fc69 1,18-19,21,24-25,27-28,30-37,39-54,72-74,76,78-79,82-86,88,90,92,123-125,135-192,196-197,200-201,203-204,243
+portal/src/app/components/nodes/source-node/source-node.component.ts
+  s_62affcfc9947ba::t_9d6f8fda8869e8 1,10,16,18-20,51-66
+  s_62affcfc9947ba::t_34dbafda73f72f 67
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_62affcfc9947ba::t_9d7de9b635ee82 4-18,24-25,27-30,32,34
+portal/src/app/components/canvas/canvas.component.scss
+  s_62affcfc9947ba::t_1b2de0c8a147e1 85-111,124,135,144,149,156,160,164,166,169,175,182,189,192-193,195
+  s_62affcfc9947ba::t_6f84412ff35886 112-114,121-123
+  s_62affcfc9947ba::t_bbfef9757c0473 125-127,132-134
+  s_62affcfc9947ba::t_5666feed911b6f 136-138,141-143
+  s_62affcfc9947ba::t_4c4a42ea0d40a9 145-148
+  s_62affcfc9947ba::t_d9c802f8c6d749 150-155
+  s_62affcfc9947ba::t_270d69530f5163 157-159
+  s_62affcfc9947ba::t_413c897f08ac30 161-163
+  s_62affcfc9947ba::t_7bea3c14d3c6c3 165
+  s_62affcfc9947ba::t_aa7fa4e16af743 167-168
+  s_62affcfc9947ba::t_d185ec2a6763d7 170-174
+  s_62affcfc9947ba::t_a1ee546cd59a8f 176-181
+  s_62affcfc9947ba::t_8a29bf6de2d9bf 183-188
+  s_62affcfc9947ba::t_3c829d76132760 190-191
+  s_62affcfc9947ba::t_0e5f96af013e7d 194
+  s_62affcfc9947ba::t_5aa6046350a4c4 115-120,128-131,139-140
+portal/src/app/components/nodes/source-node/source-node.component.html
+  s_62affcfc9947ba::t_30a207aefccf6d 4-14,16,22-25,27-31
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_62affcfc9947ba::t_757a01d930a726 130-132
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-129,133-317,329-543
+  s_62affcfc9947ba::t_43083373db2b6b 318-328
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-339
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_62affcfc9947ba::t_34c32f47895555 116-173,235-236,630,632-638
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_62affcfc9947ba::t_d22127b5b1d480 49,52-54,60,90-99,109,151-182
+portal/src/app/services/phase-config.service.ts
+  s_62affcfc9947ba::t_8dc4aa8fd073dc 26,40
+portal/src/environments/environment.ts
+  s_62affcfc9947ba::t_e28b3df82ac140 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "54a22ca2631c168baa30d616cfbddb578acfcd63",
+  "prompts": {},
+  "sessions": {
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
