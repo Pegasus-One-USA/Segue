@@ -477,6 +477,18 @@ public sealed class ConfigurationService : IConfigurationService
                 return;
             }
 
+            // Capability discovery calls /metadata with a SMART Backend Services token (client_credentials +
+            // private_key_jwt). Interactive sources (EHR launch / provider standalone / patient) authenticate as a
+            // user via authorization_code and have no private key at configuration time, so discovery cannot run
+            // until a user completes a launch. Fail open for them rather than block authoring the mapping.
+            var isInteractive = sourceConnection.ApplicationType is ApplicationType.EhrLaunch
+                or ApplicationType.Standalone
+                or ApplicationType.Patient;
+            if (isInteractive)
+            {
+                return;
+            }
+
             await _capabilityDiscoveryService.DiscoverAsync(sourceConnectionId, cancellationToken);
             capability = await _capabilityRepository.GetBySourceConnectionIdAsync(sourceConnectionId, cancellationToken);
 

@@ -18,6 +18,10 @@ public abstract class SourceApplicationStrategyBase : ISourceApplicationStrategy
 
     public abstract Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
 
+    /// <summary>No patient context by default; interactive strategies override to expose the launched patient id.</summary>
+    public virtual Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        Task.FromResult<string?>(null);
+
     public SourceApplicationValidationResult Validate(FhirSourceConfiguration source)
     {
         ArgumentNullException.ThrowIfNull(source);

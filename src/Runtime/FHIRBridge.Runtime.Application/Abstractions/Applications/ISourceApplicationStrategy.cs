@@ -27,4 +27,11 @@ public interface ISourceApplicationStrategy
 
     /// <summary>Acquires an access token for a source configured as this application type.</summary>
     Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the launched patient id for interactive types that establish a patient context (EHR launch,
+    /// standalone, patient), or null for types that do not (Backend Services). Source connectors use it to scope a
+    /// fetch to the launched patient.
+    /// </summary>
+    Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
 }
