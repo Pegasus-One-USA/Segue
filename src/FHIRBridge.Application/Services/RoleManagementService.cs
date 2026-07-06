@@ -65,7 +65,7 @@ public sealed class RoleManagementService : IRoleManagementService
         var permissions = await _repository.GetPermissionsAsync(cancellationToken);
 
         var permissionsByGroupId = permissions
-            .Where(p => p.IsVisible && p.GroupId.HasValue)
+            .Where(p => p.IsVisible && p.IsActive && p.GroupId.HasValue)
             .GroupBy(p => p.GroupId!.Value)
             .ToDictionary(g => g.Key, g => g.Select(ToDto).ToArray());
 
@@ -89,7 +89,7 @@ public sealed class RoleManagementService : IRoleManagementService
     {
         var permissions = await _repository.GetRolePermissionsAsync(roleId, cancellationToken);
 
-        return permissions.Select(ToDto).ToArray();
+        return permissions.Where(p => p.IsActive).Select(ToDto).ToArray();
     }
 
     public async Task<RoleDto> CreateRoleAsync(CreateRoleRequest request, CancellationToken cancellationToken)
@@ -211,7 +211,7 @@ public sealed class RoleManagementService : IRoleManagementService
             role.Id,
             role.Name,
             role.Description,
-            permissions.Select(ToDto).ToArray(),
+            permissions.Where(p => p.IsActive).Select(ToDto).ToArray(),
             SystemRoleIds.Contains(role.Id) || role.IsSystem);
     }
 

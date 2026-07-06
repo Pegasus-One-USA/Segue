@@ -24,7 +24,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 
     private readonly ConcurrentDictionary<Guid, PermissionGroup> _permissionGroups = new(
         RbacSeedData.Groups
-            .Select(g => new PermissionGroup(g.Id, g.Name, g.DisplayName, RbacSeedData.CategoryIdsByCode[PermissionTaxonomy.GroupCategory[g.Group]]))
+            .Select(g => new PermissionGroup(g.Id, g.Name, g.DisplayName, RbacSeedData.CategoryIdsByCode[g.Group.GetCategory()]))
             .ToDictionary(g => g.Id));
 
     private readonly ConcurrentDictionary<Guid, Permission> _permissions = new(
@@ -38,7 +38,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 
     public InMemoryUserAccessRepository()
     {
-        foreach (var (roleId, permissionIds) in UnifiedRolePermissionSeed.Grants)
+        foreach (var (roleId, permissionIds) in RbacSeedData.RolePermissions)
         {
             foreach (var permissionId in permissionIds)
             {
@@ -257,6 +257,13 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     }
 
     public Task AddPermissionAsync(Permission permission, CancellationToken cancellationToken)
+    {
+        _permissions[permission.Id] = permission;
+
+        return Task.CompletedTask;
+    }
+
+    public Task UpdatePermissionAsync(Permission permission, CancellationToken cancellationToken)
     {
         _permissions[permission.Id] = permission;
 

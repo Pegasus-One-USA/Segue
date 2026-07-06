@@ -37,6 +37,13 @@ public sealed class PermissionGroup : AuditableChildEntity<Guid>
         DisplayName = displayName;
     }
 
+    /// <summary>Re-parents this group under a different <see cref="PermissionCategory"/>. The group keeps its own
+    /// Id, so every Permission/PermissionAllocation referencing it is unaffected.</summary>
+    public void UpdateCategory(Guid categoryId)
+    {
+        CategoryId = categoryId;
+    }
+
     public void Update(string name, string? description)
     {
         Name = name;

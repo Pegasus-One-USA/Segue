@@ -17,63 +17,88 @@ public static class RbacSeedData
     /// </summary>
     public sealed record PermissionSeed(string Description, PermissionGroupCode Group, PermissionActionCode Action)
     {
-        public Guid Id => PermissionTaxonomy.BuildPermissionId(Group, Action);
-        public string Name => PermissionTaxonomy.BuildPermissionCode(Group, Action);
-        public string DisplayName => PermissionTaxonomy.BuildPermissionDisplayName(Group, Action);
+        public Guid Id
+        {
+            get { return PermissionTaxonomy.BuildPermissionId(Group, Action); }
+        }
+
+        public string Name
+        {
+            get { return PermissionTaxonomy.BuildPermissionCode(Group, Action); }
+        }
+
+        public string DisplayName
+        {
+            get { return PermissionTaxonomy.BuildPermissionDisplayName(Group, Action); }
+        }
     }
 
     /// <summary>A built-in role row.</summary>
     public sealed record RoleSeed(Guid Id, string Name, string Description);
 
     /// <summary>
-    /// A built-in permission category row (top tier, above groups). Name/DisplayName are derived from the
-    /// enum itself so the database can never drift from what <see cref="PermissionCategoryCode"/> declares.
+    /// A built-in permission category row (top tier, above groups). Id/Name/DisplayName are all derived from
+    /// the enum member's <see cref="PermissionCategoryAttribute"/>, so the database can never drift from what
+    /// <see cref="PermissionCategoryCode"/> declares.
     /// </summary>
-    public sealed record CategorySeed(Guid Id, PermissionCategoryCode Category)
+    public sealed record CategorySeed(PermissionCategoryCode Category)
     {
-        public string Name => Category.ToString();
-        public string DisplayName => Category.GetDisplayName();
+        public Guid Id
+        {
+            get { return Category.GetId(); }
+        }
+
+        public string Name
+        {
+            get { return Category.ToString(); }
+        }
+
+        public string DisplayName
+        {
+            get { return Category.GetDisplayName(); }
+        }
     }
 
     /// <summary>
-    /// A built-in permission group row (middle tier, between categories and permissions). Name/DisplayName
-    /// are derived from the enum itself so the database can never drift from what <see cref="PermissionGroupCode"/>
-    /// declares.
+    /// A built-in permission group row (middle tier, between categories and permissions). Id/Name/DisplayName
+    /// are all derived from the enum member's <see cref="PermissionGroupAttribute"/>, so the database can
+    /// never drift from what <see cref="PermissionGroupCode"/> declares.
     /// </summary>
-    public sealed record GroupSeed(Guid Id, PermissionGroupCode Group)
+    public sealed record GroupSeed(PermissionGroupCode Group)
     {
-        public string Name => Group.ToString();
-        public string DisplayName => Group.GetDisplayName();
+        public Guid Id
+        {
+            get { return Group.GetId(); }
+        }
+
+        public string Name
+        {
+            get { return Group.ToString(); }
+        }
+
+        public string DisplayName
+        {
+            get { return Group.GetDisplayName(); }
+        }
     }
 
     /// <summary>
-    /// The distinct top-level permission categories, with stable GUIDs so bootstrap is idempotent across restarts.
+    /// The distinct top-level permission categories — every <see cref="PermissionCategoryCode"/> member, in
+    /// declaration order. Adding a new category is purely an enum-file change; it appears here automatically.
     /// </summary>
     public static IReadOnlyList<CategorySeed> Categories { get; } =
-    [
-        new(SeededSecurityIds.AccessControlCategoryId, PermissionCategoryCode.AccessControl),
-        new(SeededSecurityIds.PlatformCategoryId, PermissionCategoryCode.Platform),
-    ];
+        Enum.GetValues<PermissionCategoryCode>().Select(c => new CategorySeed(c)).ToArray();
 
     /// <summary>Looks up a category's seeded id by its <see cref="PermissionCategoryCode"/>.</summary>
     public static IReadOnlyDictionary<PermissionCategoryCode, Guid> CategoryIdsByCode { get; } =
         Categories.ToDictionary(c => c.Category, c => c.Id);
 
     /// <summary>
-    /// The distinct permission groups, with stable GUIDs so bootstrap is idempotent across restarts.
+    /// The distinct permission groups — every <see cref="PermissionGroupCode"/> member, in declaration order.
+    /// Adding a new group is purely an enum-file change; it appears here automatically.
     /// </summary>
     public static IReadOnlyList<GroupSeed> Groups { get; } =
-    [
-        new(SeededSecurityIds.ConfigurationGroupId, PermissionGroupCode.Configuration),
-        new(SeededSecurityIds.PipelineGroupId, PermissionGroupCode.Pipeline),
-        new(SeededSecurityIds.AuditLogsGroupId, PermissionGroupCode.AuditLogs),
-        new(SeededSecurityIds.SourceConnectionsGroupId, PermissionGroupCode.SourceConnections),
-        new(SeededSecurityIds.UserGroupId, PermissionGroupCode.User),
-        new(SeededSecurityIds.RoleGroupId, PermissionGroupCode.Role),
-        new(SeededSecurityIds.WorkflowGroupId, PermissionGroupCode.Workflow),
-        new(SeededSecurityIds.ReportGroupId, PermissionGroupCode.Report),
-        new(SeededSecurityIds.PayloadGroupId, PermissionGroupCode.Payload),
-    ];
+        Enum.GetValues<PermissionGroupCode>().Select(g => new GroupSeed(g)).ToArray();
 
     /// <summary>Looks up a group's seeded id by its <see cref="PermissionGroupCode"/> (used to resolve <see cref="PermissionSeed.Group"/>).</summary>
     public static IReadOnlyDictionary<PermissionGroupCode, Guid> GroupIdsByCode { get; } =
@@ -117,6 +142,14 @@ public static class RbacSeedData
     ];
 
     /// <summary>
+    /// Looks up a built-in permission's seeded id by its (Group, Action) pair — the type-safe, typo-proof way
+    /// to reference a specific permission (e.g. from <see cref="SystemRoleDefaultPermissions"/>) without needing
+    /// a hand-maintained string constant for every permission.
+    /// </summary>
+    public static IReadOnlyDictionary<(PermissionGroupCode Group, PermissionActionCode Action), Guid> PermissionIdsByGroupAction { get; } =
+        Permissions.ToDictionary(p => (p.Group, p.Action), p => p.Id);
+
+    /// <summary>
     /// The 4 built-in system roles, in seed order. Descriptions are preserved verbatim from the former
     /// <c>RoleConfiguration.HasData</c> block.
     /// </summary>
@@ -129,8 +162,11 @@ public static class RbacSeedData
     ];
 
     /// <summary>
-    /// Built-in role id → granted permission ids. Delegates to <see cref="UnifiedRolePermissionSeed.Grants"/>
+    /// Built-in role id → granted permission ids. Delegates to <see cref="SystemRoleDefaultPermissions.Grants"/>
     /// so the runtime bootstrap and the in-memory repository never drift.
     /// </summary>
-    public static IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> RolePermissions => UnifiedRolePermissionSeed.Grants;
+    public static IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> RolePermissions
+    {
+        get { return SystemRoleDefaultPermissions.Grants; }
+    }
 }

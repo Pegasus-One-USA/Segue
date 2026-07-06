@@ -6,33 +6,25 @@ namespace FHIRBridge.Api.Security;
 /// <summary>
 /// Typed replacement for <c>[Authorize(Policy = "HasPermission:code")]</c>. Ties an action/controller to a
 /// permission built from standardized enums — never a free-typed string — so <see cref="PermissionCatalog"/>
-/// can discover it via reflection and <see cref="PermissionTaxonomy"/> guarantees the group actually belongs
-/// to the given category.
+/// can discover it via reflection. A group belongs to exactly one category (declared on the group's own
+/// <see cref="PermissionGroupAttribute"/>), so category is never a separate argument here — that would just
+/// be a second way to say something the group's own attribute already decides, and the two could disagree.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public sealed class StandardPermissionAttribute : AuthorizeAttribute
 {
     public StandardPermissionAttribute(
-        PermissionCategoryCode category,
         PermissionGroupCode group,
         PermissionActionCode action,
         string? description = null)
         : base(AuthorizationPolicies.HasPermission(PermissionTaxonomy.BuildPermissionCode(group, action)))
     {
-        if (PermissionTaxonomy.GroupCategory[group] != category)
-        {
-            throw new ArgumentException(
-                $"Permission group '{group}' does not belong to category '{category}'.", nameof(category));
-        }
-
-        Category = category;
         Group = group;
         Action = action;
         Description = description;
         PermissionCode = PermissionTaxonomy.BuildPermissionCode(group, action);
     }
 
-    public PermissionCategoryCode Category { get; }
     public PermissionGroupCode Group { get; }
     public PermissionActionCode Action { get; }
     public string PermissionCode { get; }

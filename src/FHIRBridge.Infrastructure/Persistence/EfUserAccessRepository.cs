@@ -166,6 +166,12 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task UpdatePermissionAsync(Permission permission, CancellationToken cancellationToken)
+    {
+        _dbContext.Permissions.Update(permission);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Permission>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
         return await _dbContext.PermissionAllocations

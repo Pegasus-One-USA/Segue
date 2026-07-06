@@ -58,6 +58,8 @@ public interface IUserAccessRepository
 
     Task AddPermissionAsync(Permission permission, CancellationToken cancellationToken);
 
+    Task UpdatePermissionAsync(Permission permission, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<Permission>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken);
 
     Task SetRolePermissionsAsync(Guid roleId, IReadOnlyCollection<Guid> permissionIds, CancellationToken cancellationToken);
