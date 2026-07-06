@@ -1,0 +1,90 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260706113727_InitialCreate.cs
+  s_6fe72b0759281b::t_8679ec7838e8b5 1-765
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_ad933ae65e44dd::t_4a2b1506361e45 4,23
+  s_ad933ae65e44dd::t_8b0438df3468e1 311,318,327-345,364-372
+src/Api/FHIRBridge.Api/Program.cs
+  s_ad933ae65e44dd::t_0b78a36742ce80 17
+  s_ad933ae65e44dd::t_ca054cac42a821 137-151,154,161-162,176-185,202-203
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/DistributedFhirAuthorizationCodeTokenStore.cs
+  s_ad933ae65e44dd::t_a3a17691bc8f57 1,5,25,27-29,32-33,39-40,45,49
+  s_ad933ae65e44dd::t_dab37068b92897 41-44
+  s_ad933ae65e44dd::t_4c26f7428b70c5 46-48
+  s_ad933ae65e44dd::t_37c700f0b58975 50-52
+  s_ad933ae65e44dd::t_919b13c25b378c 53,69
+src/FHIRBridge.Application/DTOs/ResourcePipelineRouteDto.cs
+  s_6fe72b0759281b::t_fd20e1abd4a8ac 20-21
+  s_ad933ae65e44dd::t_eac7bb486812ca 13-18
+  s_6fe72b0759281b::t_81d9b8407fd245 19
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_ad933ae65e44dd::t_795cde6c5a6371 1,8-10
+  s_ad933ae65e44dd::t_dcf79e6cb07d96 228-232,277-320,359-361
+src/FHIRBridge.Domain/Entities/ResourcePipelineRoute.cs
+  s_ad933ae65e44dd::t_ec7b9740ae01a5 9
+  s_6fe72b0759281b::t_39c9a5b044bb4b 8
+  s_6fe72b0759281b::t_5d41fd80b37692 46,72-77,89-121
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  s_6fe72b0759281b::t_eb545161d16616 58-78
+  s_6fe72b0759281b::t_caee2861ce30ab 1-57,79-109
+src/FHIRBridge.Application/DTOs/CreateResourceRouteRequest.cs
+  s_6fe72b0759281b::t_4d1ec7f176ed2d 18-19
+  s_ad933ae65e44dd::t_6ba3bd274c404b 12-16
+  s_6fe72b0759281b::t_276615fdcf5547 17
+tests/FHIRBridge.Runtime.UnitTests/Auth/DistributedFhirAuthorizationCodeTokenStoreTests.cs
+  s_ad933ae65e44dd::t_5d63f14b155b61 1-30,32-64
+  s_ad933ae65e44dd::t_0009a9241ac40e 31
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260706113727_InitialCreate.Designer.cs
+  s_6fe72b0759281b::t_8679ec7838e8b5 1-1430
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_ad933ae65e44dd::t_ae14c91778918c 46-57,84-90,96,98-100
+  s_ad933ae65e44dd::t_5d85518658fb00 45
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_ad933ae65e44dd::t_9b0f9d3437560e 4
+  s_6fe72b0759281b::t_fc3f60b337131e 46,87,113
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260706114949_AddRouteMappingSearchParameters.Designer.cs
+  s_6fe72b0759281b::t_00dcb99c78955d 1-1434
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260706114949_AddRouteMappingSearchParameters.cs
+  s_6fe72b0759281b::t_00dcb99c78955d 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6fe72b0759281b::t_e51bcd214a8ded 1233-1274
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_6fe72b0759281b::t_84c3e80680382f 123-138
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_6fe72b0759281b::t_a9773838fa9510 334,361,394-441
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ResourcePipelineRouteConfiguration.cs
+  s_6fe72b0759281b::t_01e1f7cbda5e10 23-25,44-62
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_ad933ae65e44dd::t_f2c11534457656 71-75,78-80
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_6fe72b0759281b::t_54a3ed53fb25ec 155,158,160,162-165,387-389,392-396,440,448,456,459,479,494,520,541,543,547,550,877,880,888-894,917,920,925,927,933-967,978,989-992,994
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_6fe72b0759281b::t_f6c694362868c1 267-272,276-283,287,293-295,345-363
+src/Runtime/FHIRBridge.Runtime.Infrastructure/FHIRBridge.Runtime.Infrastructure.csproj
+  s_ad933ae65e44dd::t_941fac6bfe5392 14,26-27
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_6fe72b0759281b::t_63c92c49a53d99 91-97,245-299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b8ba59245b91d9a7e385a511b852d04f13685427",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_ad933ae65e44dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3722-9e13-7001-8466-fe985acca471",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
