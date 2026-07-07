@@ -46,3 +46,15 @@ export const DESTINATION_ENDPOINTS = {
   schemaPreview: `${API_V1_BASE}/destinations/schema-preview`,
   schema:        (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
 };
+
+// ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────
+export const WORKFLOW_ENDPOINTS = {
+  catalog:  `${API_V1_BASE}/workflow-catalog`,
+  validate: `${API_V1_BASE}/workflows/validate`,
+  list:     `${API_V1_BASE}/workflows`,
+  create:   `${API_V1_BASE}/workflows`,
+  byId:     (id: string) => `${API_V1_BASE}/workflows/${id}`,
+  run:      (id: string) => `${API_V1_BASE}/workflows/${id}/run`,
+  runs:     (id: string) => `${API_V1_BASE}/workflows/${id}/runs`,
+  activate: (id: string) => `${API_V1_BASE}/workflows/${id}/activate`,
+};

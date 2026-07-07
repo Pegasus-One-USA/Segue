@@ -49,9 +49,9 @@ public sealed class WorkflowGraphValidatorTests
     }
 
     [Fact]
-    public void Validate_rejects_incompatible_contract_edges()
+    public void Validate_allows_raw_source_to_mapping_contract_edges()
     {
-        var workflow = new WorkflowDefinition(Guid.NewGuid(), "bad-contract", 1);
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "raw-source-mapping", 1);
         var source = workflow.AddNode(WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, rank: 0);
         var mapping = workflow.AddNode(WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, rank: 60);
 
@@ -59,7 +59,23 @@ public sealed class WorkflowGraphValidatorTests
 
         var result = new WorkflowGraphValidator().Validate(workflow);
 
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_rejects_destination_without_mapped_contract()
+    {
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "bad-contract", 1);
+        var source = workflow.AddNode(WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, rank: 0);
+        var destination = workflow.AddNode(WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination, rank: 70);
+
+        workflow.AddEdge(source.Id, destination.Id);
+
+        var result = new WorkflowGraphValidator().Validate(workflow);
+
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(error => error.Contains("cannot accept output contract", StringComparison.Ordinal));
+        result.Errors.Should().Contain(error =>
+            error.Contains("cannot accept output contract", StringComparison.Ordinal)
+            || error.Contains("requires mapped records", StringComparison.Ordinal));
     }
 }

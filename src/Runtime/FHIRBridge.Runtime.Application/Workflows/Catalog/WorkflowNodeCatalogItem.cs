@@ -9,4 +9,7 @@ public sealed record WorkflowNodeCatalogItem(
     IReadOnlyCollection<string> RequiredConfigurationFields,
     IReadOnlyCollection<WorkflowDataContract> InputContracts,
     WorkflowDataContract OutputContract,
-    string ExecutorKey);
+    string ExecutorKey,
+    string DisplayName,
+    string TransformId,
+    string Description);

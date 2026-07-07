@@ -17,20 +17,27 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         // Source(WorkflowNodeTypes.GenericFhirSource),
         // Source(WorkflowNodeTypes.Hl7v2MllpSource),
         Source(WorkflowNodeTypes.SampleSource),
-        Compliance(WorkflowNodeTypes.Consent, 10, WorkflowDataContract.ResourceBatch, WorkflowDataContract.ResourceBatch),
-        Compliance(WorkflowNodeTypes.UsCoreValidation, 20, WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.Normalization, 30, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.FlattenExtensions, 31, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.DataQualityScoring, 32, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.PatientMatching, 33, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.Terminology, 40, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.TerminologyValidate, 41, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.TerminologyLookup, 42, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.TerminologyTranslate, 43, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Transform(WorkflowNodeTypes.TerminologyExpand, 44, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Compliance(WorkflowNodeTypes.DeIdentification, 50, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.DeIdentifiedBatch),
-        Transform(WorkflowNodeTypes.Mapping, 60, WorkflowDataContract.DeIdentifiedBatch, WorkflowDataContract.MappedRecordBatch),
-        Transform(WorkflowNodeTypes.RepeatingArrayMapping, 61, WorkflowDataContract.MappedRecordBatch, WorkflowDataContract.MappedRecordBatch),
+        Compliance(WorkflowNodeTypes.Consent, "consent", "Consent", "Apply configured consent policy.", 10, WorkflowDataContract.ResourceBatch, WorkflowDataContract.ResourceBatch),
+        Compliance(WorkflowNodeTypes.UsCoreValidation, "fhir-validation", "FHIR Validation", "Validate resources against US Core / base R4 profiles.", 20, WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.Normalization, "normalize", "Normalize Data", "Normalize FHIR resources for downstream transforms.", 30, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.FlattenExtensions, "flatten-extensions", "Flatten Extensions", "Flatten FHIR extensions into mappable fields.", 31, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.DataQualityScoring, "data-quality", "Data Quality Scoring", "Score resource completeness and data quality.", 32, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.PatientMatching, "patient-matching", "Patient Matching (MPI)", "Match patients against a master patient index.", 33, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.Terminology, "terminology", "Terminology Mapping", "Validate / translate ICD, SNOMED, LOINC, RxNorm codes.", 40, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.TerminologyValidate, "terminology-validate", "Terminology Validate", "Validate coded values against configured terminology services.", 41, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.TerminologyLookup, "terminology-lookup", "Terminology Lookup", "Lookup display and metadata for coded values.", 42, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.TerminologyTranslate, "terminology-translate", "Terminology Translate", "Translate coded values between code systems.", 43, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.TerminologyExpand, "terminology-expand", "Terminology Expand", "Expand value sets for downstream validation.", 44, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Compliance(WorkflowNodeTypes.DeIdentification, "deid-safeharbor", "De-identification", "Apply HIPAA de-identification policy when required.", 50, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.DeIdentifiedBatch),
+        Transform(
+            WorkflowNodeTypes.Mapping,
+            "field-mapping",
+            "Field Mapping",
+            "Map FHIR paths to destination fields.",
+            60,
+            [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.DeIdentifiedBatch],
+            WorkflowDataContract.MappedRecordBatch),
+        Transform(WorkflowNodeTypes.RepeatingArrayMapping, "repeating-array-mapping", "Repeating Array Mapping", "Expand repeating mapped values.", 61, WorkflowDataContract.MappedRecordBatch, WorkflowDataContract.MappedRecordBatch),
         Destination(WorkflowNodeTypes.SqlServerDestination),
         Destination(WorkflowNodeTypes.CsvDestination),
         // GATED (SQL/CSV phase): only SqlServer + CSV destinations are exposed in the palette. The writers below
@@ -61,7 +68,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             [],
             [WorkflowDataContract.DestinationWriteResult],
             WorkflowDataContract.AuditResult,
-            WorkflowNodeTypes.AuditLineage),
+            WorkflowNodeTypes.AuditLineage,
+            "Audit & Lineage",
+            "audit-lineage",
+            "Hash-chained audit and record-level lineage."),
         Analytics(WorkflowNodeTypes.HedisMeasureReport),
         Analytics(WorkflowNodeTypes.AnomalyDetection),
         Analytics(WorkflowNodeTypes.PatientAggregation)
@@ -80,12 +90,29 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             [],
             [],
             WorkflowDataContract.ResourceBatch,
-            nodeType);
+            nodeType,
+            DisplayNameFor(nodeType),
+            TransformIdFor(nodeType),
+            DescriptionFor(nodeType));
 
     private static WorkflowNodeCatalogItem Transform(
         string nodeType,
+        string transformId,
+        string displayName,
+        string description,
         int rank,
         WorkflowDataContract inputContract,
+        WorkflowDataContract outputContract,
+        IReadOnlyCollection<string>? requiredConfigurationFields = null)
+        => Transform(nodeType, transformId, displayName, description, rank, [inputContract], outputContract, requiredConfigurationFields);
+
+    private static WorkflowNodeCatalogItem Transform(
+        string nodeType,
+        string transformId,
+        string displayName,
+        string description,
+        int rank,
+        IReadOnlyCollection<WorkflowDataContract> inputContracts,
         WorkflowDataContract outputContract,
         IReadOnlyCollection<string>? requiredConfigurationFields = null)
         => new(
@@ -93,12 +120,18 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeCategory.Transform,
             rank,
             requiredConfigurationFields ?? [],
-            [inputContract],
+            inputContracts,
             outputContract,
-            nodeType);
+            nodeType,
+            displayName,
+            transformId,
+            description);
 
     private static WorkflowNodeCatalogItem Compliance(
         string nodeType,
+        string transformId,
+        string displayName,
+        string description,
         int rank,
         WorkflowDataContract inputContract,
         WorkflowDataContract outputContract)
@@ -109,7 +142,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             [],
             [inputContract],
             outputContract,
-            nodeType);
+            nodeType,
+            displayName,
+            transformId,
+            description);
 
     private static WorkflowNodeCatalogItem Destination(string nodeType)
         => new(
@@ -119,7 +155,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             [],
             [WorkflowDataContract.MappedRecordBatch],
             WorkflowDataContract.DestinationWriteResult,
-            nodeType);
+            nodeType,
+            DisplayNameFor(nodeType),
+            TransformIdFor(nodeType),
+            DescriptionFor(nodeType));
 
     private static WorkflowNodeCatalogItem Analytics(string nodeType)
         => new(
@@ -129,5 +168,50 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             [],
             [WorkflowDataContract.DestinationWriteResult, WorkflowDataContract.MappedRecordBatch],
             WorkflowDataContract.AuditResult,
-            nodeType);
+            nodeType,
+            DisplayNameFor(nodeType),
+            TransformIdFor(nodeType),
+            DescriptionFor(nodeType));
+
+    private static string TransformIdFor(string nodeType)
+        => nodeType switch
+        {
+            WorkflowNodeTypes.EpicSource => "epic",
+            WorkflowNodeTypes.SampleSource => "sample",
+            WorkflowNodeTypes.SqlServerDestination => "dest-sqlserver",
+            WorkflowNodeTypes.CsvDestination => "dest-csv",
+            WorkflowNodeTypes.AuditLineage => "audit-lineage",
+            WorkflowNodeTypes.HedisMeasureReport => "hedis",
+            WorkflowNodeTypes.AnomalyDetection => "anomaly",
+            WorkflowNodeTypes.PatientAggregation => "patient-agg",
+            _ => nodeType
+        };
+
+    private static string DisplayNameFor(string nodeType)
+        => nodeType switch
+        {
+            WorkflowNodeTypes.EpicSource => "Epic",
+            WorkflowNodeTypes.SampleSource => "Sample FHIR",
+            WorkflowNodeTypes.SqlServerDestination => "SQL Server",
+            WorkflowNodeTypes.CsvDestination => "CSV",
+            WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
+            WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
+            WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
+            WorkflowNodeTypes.PatientAggregation => "Patient Aggregation",
+            _ => nodeType
+        };
+
+    private static string DescriptionFor(string nodeType)
+        => nodeType switch
+        {
+            WorkflowNodeTypes.EpicSource => "Read FHIR R4 data from Epic.",
+            WorkflowNodeTypes.SampleSource => "Use bundled sample FHIR resources.",
+            WorkflowNodeTypes.SqlServerDestination => "Write mapped records to Microsoft SQL Server.",
+            WorkflowNodeTypes.CsvDestination => "Emit mapped records as CSV files.",
+            WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
+            WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
+            WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",
+            WorkflowNodeTypes.PatientAggregation => "Aggregate a patient-360 view.",
+            _ => nodeType
+        };
 }

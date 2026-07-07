@@ -26,6 +26,15 @@ public static class WorkflowEndpoints
             return Results.Created($"/api/v1/workflows/{workflow.Id}", workflow);
         });
 
+        group.MapPost("/workflows/validate", (
+            WorkflowDefinitionRequest request,
+            IWorkflowGraphValidator validator) =>
+        {
+            var workflow = BuildWorkflow(Guid.NewGuid(), request);
+            var result = validator.Validate(workflow);
+            return Results.Ok(result);
+        });
+
         group.MapGet("/workflows", async (
             IWorkflowDefinitionStore store,
             CancellationToken cancellationToken) =>
