@@ -68,13 +68,13 @@ public static class PermissionCatalog
             }
         }
 
-        var permissions = new List<DiscoveredPermission>();
+        var discoveredPermissions = new List<DiscoveredPermission>();
 
-        foreach (var group in occurrences.GroupBy(o => o.Attribute.PermissionCode, StringComparer.OrdinalIgnoreCase))
+        foreach (var occurrencesForCode in occurrences.GroupBy(o => o.Attribute.PermissionCode, StringComparer.OrdinalIgnoreCase))
         {
-            var first = group.First().Attribute;
+            var firstOccurrence = occurrencesForCode.First().Attribute;
 
-            var descriptions = group
+            var descriptions = occurrencesForCode
                 .Select(o => o.Attribute.Description)
                 .Where(d => !string.IsNullOrWhiteSpace(d))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -84,12 +84,17 @@ public static class PermissionCatalog
 
             var instances = string.Join(
                 ", ",
-                group.Select(o => o.Location).Distinct(StringComparer.OrdinalIgnoreCase));
+                occurrencesForCode.Select(o => o.Location).Distinct(StringComparer.OrdinalIgnoreCase));
 
-            permissions.Add(new DiscoveredPermission(first.Group, first.Action, first.PermissionCode, combinedDescription, instances));
+            discoveredPermissions.Add(new DiscoveredPermission(
+                firstOccurrence.Group,
+                firstOccurrence.Action,
+                firstOccurrence.PermissionCode,
+                combinedDescription,
+                instances));
         }
 
-        return permissions;
+        return discoveredPermissions;
     }
 
     /// <summary>Permission codes referenced by a <see cref="StandardPermissionAttribute"/> on a controller class or action.</summary>

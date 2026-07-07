@@ -219,314 +219,123 @@ static void SyncDiscoveredPermissions(WebApplication app)
     SyncDiscoveredPermissionsAsync(repository, app.Logger).GetAwaiter().GetResult();
 }
 
-static async Task SyncDiscoveredPermissionsAsync_Old(IUserAccessRepository repository, ILogger logger)
-{
-    var discoveredPermissions = PermissionCatalog.DiscoveredPermissions(typeof(Program).Assembly);
-    var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);
-
-    var existingById = existingPermissions.ToDictionary(p => p.Id);
-
-    // Name is no longer a database-enforced unique key (Id, the primary key, already is the deterministic
-    // encoding of Group+Action — see PermissionTaxonomy.BuildPermissionId), so this is built by indexer
-    // assignment rather than ToDictionary: more than one active row sharing a Name would otherwise throw
-    // here instead of just picking one. Only active rows are considered — a deactivated permission can
-    // share a Name with a newer active one, and the active row is always the real one to check
-    // "is this Name still taken" against below.
-    var existingByName = new Dictionary<Guid, Permission>();
-    foreach (var permission in existingPermissions)
-    {
-        if (permission.IsActive)
-        {
-            existingByName[permission.Id] = permission;
-        }
-    }
-
-    // A permission declared in RbacSeedData.Permissions is owned end-to-end by RbacBootstrapper, including
-    // self-healing its Id if the derivation formula ever changes — this method only manages permissions
-    // that exist solely because a [StandardPermission] attribute references them.
-    var declaredIds = new HashSet<Guid>(RbacSeedData.Permissions.Select(p => p.Id));
-
-    var superAdminRole = await repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, CancellationToken.None);
-
-    var discoveredIds = new HashSet<Guid>();
-
-    foreach (var discovered in discoveredPermissions)
-    {
-        var permissionId = PermissionTaxonomy.BuildPermissionId(discovered.Group, discovered.Action);
-
-        //if (declaredIds.Contains(permissionId))
-        //{
-        //    continue;
-        //}
-
-        discoveredIds.Add(permissionId);
-
-        if (existingById.TryGetValue(permissionId, out var existing))
-        {
-            // Instances/description can change as attributes are added, removed, or reworded on
-            // controllers over time — keep both current on every boot instead of only ever setting them
-            // once at creation.
-            var changed = false;
-
-            if (existing.Instances != discovered.Instances)
-            {
-                existing.UpdateInstances(discovered.Instances);
-                changed = true;
-            }
-
-            if (discovered.Description is not null
-                && !existing.Description.Contains(discovered.Description, StringComparison.OrdinalIgnoreCase))
-            {
-                existing.UpdateDescription($"{existing.Description} | {discovered.Description}");
-                changed = true;
-            }
-
-            if (!existing.IsActive)
-            {
-                existing.Activate();
-                changed = true;
-            }
-
-            if (changed)
-            {
-                await repository.UpdatePermissionAsync(existing, CancellationToken.None);
-            }
-
-            continue;
-        }
-
-        // No row has today's Id for this permission. An active row may still occupy the same Name under an
-        // older Id (e.g. the Id-derivation formula changed since this permission was first discovered) —
-        // deactivate that one so it's clear which single row is the current, active permission for this
-        // Name; the new row below is free to take the same Name since Name is no longer a unique key.
-        if (existingByName.TryGetValue(permissionId, out var stale))
-        {
-            stale.Deactivate();
-            await repository.UpdatePermissionAsync(stale, CancellationToken.None);
-        }
-
-        // Every PermissionGroupCode member always has a RbacSeedData.Groups entry (see
-        // PermissionTaxonomyCompletenessTests), so this lookup can never fail.
-        var groupId = RbacSeedData.GroupIdsByCode[discovered.Group];
-
-        var permission = new Permission(
-            permissionId,
-            discovered.Code,
-            PermissionTaxonomy.BuildPermissionDisplayName(discovered.Group, discovered.Action),
-            discovered.Description ?? $"Auto-registered permission for '{discovered.Code}'.",
-            groupId,
-            isSystem: false,
-            instances: discovered.Instances);
-
-        await repository.AddPermissionAsync(permission, CancellationToken.None);
-
-        if (discovered.Description is null)
-        {
-            logger.LogWarning(
-                "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission] with no description; add one to the attribute.",
-                discovered.Code);
-        }
-
-        if (superAdminRole is not null)
-        {
-            await repository.AddRolePermissionAsync(superAdminRole.Id, permission.Id, CancellationToken.None);
-        }
-    }
-
-    // A discovered-only permission no longer referenced by any [StandardPermission] attribute was removed
-    // from code — deactivate it rather than deleting it, so PermissionAllocations referencing it (role
-    // grants, audit history) stay intact.
-    foreach (var existing in existingPermissions)
-    {
-        if (!existing.IsSystem && existing.IsActive && !discoveredIds.Contains(existing.Id))
-        {
-            existing.Deactivate();
-            await repository.UpdatePermissionAsync(existing, CancellationToken.None);
-        }
-    }
-}
-
 static async Task SyncDiscoveredPermissionsAsync(
     IUserAccessRepository repository,
     ILogger logger)
 {
-    // Discover every permission referenced by [StandardPermission] attributes.
-    // The same permission can legitimately be discovered multiple times because
-    // different controllers/actions may reference it with different descriptions.
-    var discoveredPermissions =
-        PermissionCatalog.DiscoveredPermissions(typeof(Program).Assembly);
+    // Every permission referenced by a [StandardPermission] attribute. PermissionCatalog already
+    // deduplicates these by code and combines descriptions/instances, so each entry here is unique
+    // by Id — no further grouping needed.
+    var discoveredPermissions = PermissionCatalog.DiscoveredPermissions(typeof(Program).Assembly);
+    var discoveredPermissionsById = discoveredPermissions.ToDictionary(p => p.Id);
 
-    // Load every permission currently stored in the database.
-    var existingPermissions =
-        await repository.GetPermissionsAsync(CancellationToken.None);
+    var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);
+    var existingPermissionsById = existingPermissions.ToDictionary(p => p.Id);
 
-    // Index existing permissions by their deterministic Id.
-    var existingById = existingPermissions.ToDictionary(p => p.Id);
+    // Permissions declared in RbacSeedData are owned by RbacBootstrapper and must never be
+    // deactivated by this method.
+    var seedDeclaredPermissionIds = new HashSet<Guid>(RbacSeedData.Permissions.Select(p => p.Id));
 
-    // Group discovered permissions by Id so each permission is processed only once.
-    //
-    // For duplicate discoveries:
-    //  - The first discovered record supplies all metadata (Code, Group, Action, Instances, etc.).
-    //  - Every unique non-empty description is combined into a single string separated by " | ".
-    var discoveredById = discoveredPermissions
-        .GroupBy(p => PermissionTaxonomy.BuildPermissionId(p.Group, p.Action))
-        .ToDictionary(
-            g => g.Key,
-            g =>
-            {
-                var first = g.First();
+    var superAdminRole = await repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, CancellationToken.None);
 
-                return new
-                {
-                    Id = g.Key,
-                    First = first,
-
-                    Description = string.Join(
-                        " | ",
-                        g.Select(x => x.Description)
-                         .Where(x => !string.IsNullOrWhiteSpace(x))
-                         .Distinct(StringComparer.OrdinalIgnoreCase))
-                };
-            });
-
-    // Seeded permissions are owned by RbacSeedData and should not be
-    // deactivated by this synchronization process.
-    var declaredIds = new HashSet<Guid>(
-        RbacSeedData.Permissions.Select(x => x.Id));
-
-    var superAdminRole = await repository.GetRoleByNameAsync(
-        UnifiedRoles.SuperAdmin,
-        CancellationToken.None);
-
-    //----------------------------------------------------------------------
-    // 1. Deactivate permissions that no longer exist in code.
-    //----------------------------------------------------------------------
-    foreach (var existing in existingPermissions)
+    // 1. Deactivate a non-seeded permission that's active but no longer discovered in code.
+    foreach (var existingPermission in existingPermissions)
     {
-        //if (existing.IsSystem)
-        //{
-        //    continue;
-        //}
-
-        if (!existing.IsActive)
+        if (!existingPermission.IsActive)
         {
             continue;
         }
 
-        if (declaredIds.Contains(existing.Id))
+        if (seedDeclaredPermissionIds.Contains(existingPermission.Id))
         {
             continue;
         }
 
-        if (!discoveredById.ContainsKey(existing.Id))
+        if (!discoveredPermissionsById.ContainsKey(existingPermission.Id))
         {
-            existing.Deactivate();
-            await repository.UpdatePermissionAsync(
-                existing,
-                CancellationToken.None);
+            existingPermission.Deactivate();
+            await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
         }
     }
 
-    //----------------------------------------------------------------------
-    // 2 & 3. Update existing permissions or create new ones.
-    //----------------------------------------------------------------------
-    foreach (var discovered in discoveredById.Values)
+    // 2 & 3. Update an existing permission's fields, or create a new one.
+    foreach (var discoveredPermission in discoveredPermissions)
     {
-        var first = discovered.First;
-
-        var permissionId = discovered.Id;
-
         var displayName = PermissionTaxonomy.BuildPermissionDisplayName(
-            first.Group,
-            first.Action);
+            discoveredPermission.Group,
+            discoveredPermission.Action);
 
-        var description = string.IsNullOrWhiteSpace(discovered.Description)
-            ? $"Auto-registered permission for '{first.Code}'."
-            : discovered.Description;
+        var description = string.IsNullOrWhiteSpace(discoveredPermission.Description)
+            ? $"Auto-registered permission for '{discoveredPermission.Code}'."
+            : discoveredPermission.Description;
 
-        if (existingById.TryGetValue(permissionId, out var existing))
+        if (existingPermissionsById.TryGetValue(discoveredPermission.Id, out var existingPermission))
         {
-            // Existing permission found.
-            // Keep every mutable field synchronized with what is currently
-            // discovered from source code.
-
+            // Keep every mutable field synchronized with what's currently discovered from source code.
             var changed = false;
 
-            if (existing.Name != first.Code)
+            if (existingPermission.Name != discoveredPermission.Code)
             {
-                existing.UpdateName(first.Code);
+                existingPermission.UpdateName(discoveredPermission.Code);
                 changed = true;
             }
 
-            if (existing.DisplayName != displayName)
+            if (existingPermission.DisplayName != displayName)
             {
-                existing.UpdateDisplayName(displayName);
+                existingPermission.UpdateDisplayName(displayName);
                 changed = true;
             }
 
-            if (!string.Equals(
-                    existing.Description,
-                    description,
-                    StringComparison.Ordinal))
+            if (!string.Equals(existingPermission.Description, description, StringComparison.Ordinal))
             {
-                existing.UpdateDescription(description);
+                existingPermission.UpdateDescription(description);
                 changed = true;
             }
 
-            if (existing.Instances != first.Instances)
+            if (existingPermission.Instances != discoveredPermission.Instances)
             {
-                existing.UpdateInstances(first.Instances);
+                existingPermission.UpdateInstances(discoveredPermission.Instances);
                 changed = true;
             }
 
-            if (!existing.IsActive)
+            if (!existingPermission.IsActive)
             {
-                existing.Activate();
+                existingPermission.Activate();
                 changed = true;
             }
 
             if (changed)
             {
-                await repository.UpdatePermissionAsync(
-                    existing,
-                    CancellationToken.None);
+                await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
             }
 
             continue;
         }
 
-        //------------------------------------------------------------------
         // New permission.
-        //------------------------------------------------------------------
+        var groupId = RbacSeedData.GroupIdsByCode[discoveredPermission.Group];
 
-        var groupId = RbacSeedData.GroupIdsByCode[first.Group];
-
-        var permission = new Permission(
-            permissionId,
-            first.Code,
+        var newPermission = new Permission(
+            discoveredPermission.Id,
+            discoveredPermission.Code,
             displayName,
             description,
             groupId,
             isSystem: false,
-            instances: first.Instances);
+            instances: discoveredPermission.Instances);
 
-        await repository.AddPermissionAsync(
-            permission,
-            CancellationToken.None);
+        await repository.AddPermissionAsync(newPermission, CancellationToken.None);
 
-        if (string.IsNullOrWhiteSpace(discovered.Description))
+        if (string.IsNullOrWhiteSpace(discoveredPermission.Description))
         {
             logger.LogWarning(
                 "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission] with no description; add one to the attribute.",
-                first.Code);
+                discoveredPermission.Code);
         }
 
         if (superAdminRole is not null)
         {
-            await repository.AddRolePermissionAsync(
-                superAdminRole.Id,
-                permission.Id,
-                CancellationToken.None);
+            await repository.AddRolePermissionAsync(superAdminRole.Id, newPermission.Id, CancellationToken.None);
         }
     }
 }
