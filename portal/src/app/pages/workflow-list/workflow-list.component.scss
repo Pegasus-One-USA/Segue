@@ -208,12 +208,12 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 .btn-danger {
   display: inline-flex; align-items: center; gap: 6px;
   height: 40px; padding: 0 18px;
-  border: none; border-radius: var(--radius-base);
-  background: #DC2626; color: #fff;
+  border: 1.5px solid var(--color-error); border-radius: var(--radius-base);
+  background: var(--color-error-soft); color: var(--color-error);
   font-size: 13.5px; font-weight: 600; cursor: pointer;
   transition: filter var(--transition-base);
 
-  &:hover:not(:disabled) { filter: brightness(0.93); }
+  &:hover:not(:disabled) { filter: brightness(0.97); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
