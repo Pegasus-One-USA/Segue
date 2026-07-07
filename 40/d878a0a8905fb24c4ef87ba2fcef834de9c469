@@ -1,0 +1,99 @@
+portal/src/app/app.config.ts
+  s_6fe72b0759281b::t_e45902017e3285 9
+  s_6fe72b0759281b::t_155e47c89e20cc 22-25,27-31
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260706182817_AddWorkflowPersistence.Designer.cs
+  s_9fb76ea04158d3::t_ff8e64d151a5eb 1-1688
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_9fb76ea04158d3::t_e6cd1f457c8fe2 3
+  s_9fb76ea04158d3::t_5a1894f03b3002 247-250,254,268-273,280
+src/FHIRBridge.Infrastructure/Persistence/Workflows/WorkflowPersistenceServiceCollectionExtensions.cs
+  s_9fb76ea04158d3::t_f9c330e9859979 1,3,15-18,20-22,27-34
+  s_9fb76ea04158d3::t_d3175bc4a544d6 2,4-14,19,23-26,35-38
+src/FHIRBridge.Infrastructure/Workflows/RouteToWorkflowGraphProjection.cs
+  s_9fb76ea04158d3::t_905725bcee4460 1-54,57-170,174-175,179,184-249
+  s_9fb76ea04158d3::t_a3daadb8c0f416 171-173,176-178
+  s_9fb76ea04158d3::t_b0376fd66af128 180-183
+  s_9fb76ea04158d3::t_8833542180e9cf 55-56
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260706182817_AddWorkflowPersistence.cs
+  s_9fb76ea04158d3::t_ff8e64d151a5eb 1-192
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowRunStore.cs
+  s_9fb76ea04158d3::t_1c78b42425f20f 1-19
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowRunStore.cs
+  s_9fb76ea04158d3::t_2982e2e8cf26e4 1-36
+src/FHIRBridge.Infrastructure/Workflows/LaunchWorkflowResolver.cs
+  s_9fb76ea04158d3::t_ecafe5ff17d203 1-22,26-39,42-43
+  s_9fb76ea04158d3::t_fa5ed46db93592 23-25,40-41
+src/FHIRBridge.Infrastructure/Workflows/LaunchWorkflowNaming.cs
+  s_9fb76ea04158d3::t_0d10f4b0fbb59a 1-10
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_9fb76ea04158d3::t_20f8678f4cf0d9 3
+  s_9fb76ea04158d3::t_57498dbed1fb0f 13
+  s_9fb76ea04158d3::t_272107aa9d43b1 18-19,24,133-134,151-154,161-165
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_9fb76ea04158d3::t_3f79431fe05007 3
+  s_9fb76ea04158d3::t_0013b0f201e561 140-206
+src/FHIRBridge.Infrastructure/Workflows/WorkflowGraphExecutionOptions.cs
+  s_9fb76ea04158d3::t_7a8f785940fb95 1-24
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_9fb76ea04158d3::t_8fcebee58a4be7 1-57
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowDefinitionStore.cs
+  s_9fb76ea04158d3::t_fd2c53ba3fa0e2 1-78
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_9fb76ea04158d3::t_2c163dc9d1663e 1-240
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_9fb76ea04158d3::t_91d3b0a857c3b2 3
+  s_9fb76ea04158d3::t_54ddbe483c8c3c 34-41
+src/FHIRBridge.Infrastructure/Workflows/ILaunchWorkflowProjection.cs
+  s_9fb76ea04158d3::t_f43d895a350db5 1-17
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_9fb76ea04158d3::t_f0a90753a43668 1-147
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_9fb76ea04158d3::t_36733862d9e761 10,13
+  s_9fb76ea04158d3::t_b84f41d346b346 41-46
+  s_9fb76ea04158d3::t_338225d9e023a7 17
+  s_9fb76ea04158d3::t_90524928a29304 57-60,72-74,291-298,325-356
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_9fb76ea04158d3::t_b31313b5c6d898 1-152
+src/FHIRBridge.Infrastructure/Workflows/ILaunchWorkflowResolver.cs
+  s_9fb76ea04158d3::t_51cdf6fdb540f9 1-12
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_9fb76ea04158d3::t_cc94dafbe691e3 1069-1269,1629-1681
+portal/src/app/auth/services/auth.service.ts
+  s_6fe72b0759281b::t_68018a5e339ab4 153-161
+portal/src/environments/environment.ts
+  s_6fe72b0759281b::t_c8a5c3505494d5 3
+src/Api/FHIRBridge.Api/Program.cs
+  s_9fb76ea04158d3::t_207a9b17a74326 14,96-99
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_9fb76ea04158d3::t_4475e3ee9f14f3 91-106
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowServiceCollectionExtensions.cs
+  s_9fb76ea04158d3::t_262618325f47b6 17
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_9fb76ea04158d3::t_9f9f507fe2f27a 142-148,150-166
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/WorkflowNodeExecutorBase.cs
+  s_9fb76ea04158d3::t_6bc52405259905 76-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "40d878a0a8905fb24c4ef87ba2fcef834de9c469",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_9fb76ea04158d3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a815e52d-43de-4657-b874-38457f476efe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
