@@ -1,0 +1,66 @@
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_d1e34340689bf8::t_107500ff7edf41 6-7
+  s_d1e34340689bf8::t_0458cda13ff2c5 37,42-43,58-69,82-100
+  s_d1e34340689bf8::t_6e4ca4ad071ecd 1,103,109,117-147,273-274,277,316-317,319-322
+  s_d1e34340689bf8::t_e5886597b3d54c 101-102
+  s_d1e34340689bf8::t_c5fb4cdd5422ef 104-108
+  s_d1e34340689bf8::t_ac1fb3dda9de89 110-112,114-116
+  s_d1e34340689bf8::t_da5a2656100300 270-272
+  s_d1e34340689bf8::t_1e97c6e6b3f3ed 275-276
+  s_d1e34340689bf8::t_240c2e694309d0 278-280,313-315
+  s_d1e34340689bf8::t_4ce7dfa1ce3661 318
+  s_d1e34340689bf8::t_ac72db32c4c123 323
+  s_d1e34340689bf8::t_adca6b2dcc35a3 113,281-312
+portal/src/app/services/workflow-api.service.ts
+  s_d1e34340689bf8::t_0c116286197b98 1-132
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_d1e34340689bf8::t_d096b3d33ba1d1 17,36-66,73,75,79-80
+  s_d1e34340689bf8::t_0bda5957c44940 67-72
+  s_d1e34340689bf8::t_31917639d580b7 74
+  s_d1e34340689bf8::t_b051ba06dad2cb 76-78
+  s_d1e34340689bf8::t_cdca675e72efc1 81-83
+  s_d1e34340689bf8::t_a7b6253f31a4c3 13-14,84-86
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_d1e34340689bf8::t_89881726047994 1-218,220-235,237-266
+  s_d1e34340689bf8::t_9959968ae31abd 219,236
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_d1e34340689bf8::t_7918bf0a5454d1 20-40,71-74,93-96,100-102,107-117,123,125-128,132-134,145-148,158-161,171-174
+  s_d1e34340689bf8::t_ac9138579cbe2f 175-177
+  s_d1e34340689bf8::t_48002aaa71f216 178-216
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_d1e34340689bf8::t_e0b3712dfd4e37 3-23
+portal/src/app/core/api-endpoints.ts
+  s_9fb76ea04158d3::t_bd29a0f2f74d22 49-60
+portal/src/app/services/pipeline.store.ts
+  s_d1e34340689bf8::t_767c197a127aee 57-63
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1e34340689bf8::t_6f6e97c3018748 29-37
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeCatalogItem.cs
+  s_d1e34340689bf8::t_54a0fe9f6e90d4 12-15
+tests/FHIRBridge.Runtime.UnitTests/Workflows/WorkflowGraphValidatorTests.cs
+  s_d1e34340689bf8::t_a0cca512ced281 52,54,62-75,77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "830f687d04f8cec3eae3cd6f909f51f09580ac41",
+  "prompts": {},
+  "sessions": {
+    "s_9fb76ea04158d3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a815e52d-43de-4657-b874-38457f476efe",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d1e34340689bf8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3b20-4c0f-72e3-a213-8e7ce59daac2",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
