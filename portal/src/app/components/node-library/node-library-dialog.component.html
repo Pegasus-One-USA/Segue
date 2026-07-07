@@ -135,6 +135,7 @@
             [destType]="destWizardType()!"
             [attachNode]="destWizardAttach()!"
             [editNode]="destEditNode()"
+            [sourceResources]="sourceResources()"
             (saved)="onDestWizardSaved($event)"
             (cancelled)="onDestWizardCancelled()"
             (stepChange)="destWizardStep.set($event)"

@@ -7,7 +7,7 @@ import { WizardService } from '../../services/wizard.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
-import { CanvasNode, TransformNode } from '../../models/node.model';
+import { CanvasNode, TransformNode, isSourceNode } from '../../models/node.model';
 import { MergeNodeOption } from '../../models/wizard-state.model';
 import { EpicAudienceFormComponent } from '../epic-source-wizard/epic-audience-form/epic-audience-form.component';
 import { DestinationWizardComponent } from './destination-wizard/destination-wizard.component';
@@ -149,6 +149,15 @@ export class NodeLibraryDialogComponent {
   readonly destWizardType   = signal<'sql' | 'csv' | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
+
+  // FHIR resource types the pipeline's source(s) pull — union of every source node's saved "Resources" field plus the
+  // active wizard selection. Passed to the destination wizard so its data groups mirror the source's Resource Type.
+  readonly sourceResources = computed(() => {
+    const fromNodes = this.store.nodes()
+      .filter(isSourceNode)
+      .flatMap(n => (n.fields?.['Resources'] ?? '').split(',').map(s => s.trim()).filter(Boolean));
+    return Array.from(new Set([...fromNodes, ...this.wiz.resources()]));
+  });
 
   // Mirrors the open destination wizard's own step/progress so the sidebar can
   // lock the other destination type out mid-wizard and warn before discarding.

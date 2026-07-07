@@ -11,6 +11,8 @@ import { ToastService } from '../../services/toast.service';
 interface LaunchModal {
   name: string;
   url: string;
+  opensDirectly: boolean;
+  mode: 'ehr-launch' | 'standalone' | 'patient';
 }
 
 interface DataModal {
@@ -89,7 +91,12 @@ export class WorkflowListComponent implements OnInit {
       this.api.launchUrl(row.workflowId).subscribe({
         next: result => {
           this.busyId.set(null);
-          this.launchModal.set({ name: row.name, url: result.launchUrl });
+          this.launchModal.set({
+            name: row.name,
+            url: result.launchUrl,
+            opensDirectly: result.opensDirectly ?? false,
+            mode: result.mode ?? 'ehr-launch',
+          });
         },
         error: err => {
           this.busyId.set(null);
