@@ -142,7 +142,7 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
     /// Parses the standard SMART discovery fields from the <c>.well-known/smart-configuration</c> document. Uses raw
     /// JSON to stay consistent with the rest of the runtime (no Firely SDK dependency).
     /// </summary>
-    private static SmartConfigurationDto ParseSmartConfiguration(string json)
+    internal static SmartConfigurationDto ParseSmartConfiguration(string json)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
@@ -210,7 +210,7 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
     /// (<c>rest[].resource[].{type,interaction[].code}</c>). Parsed with raw JSON to match the rest of the
     /// runtime, which does not take a dependency on the Firely SDK.
     /// </summary>
-    private static (string FhirVersion, IReadOnlyList<CapabilityResource> Resources) ParseCapabilityStatement(string json)
+    internal static (string FhirVersion, IReadOnlyList<CapabilityResource> Resources) ParseCapabilityStatement(string json)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;

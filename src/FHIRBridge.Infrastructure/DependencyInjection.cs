@@ -196,6 +196,12 @@ public static class DependencyInjection
 
         services.AddScoped<IConfiguredDestinationWriterFactory, ConfiguredDestinationWriterFactory>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
+        // Read-back of a capped row sample from a relational destination table ("View destination data").
+        services.AddScoped<IDestinationDataService, SqlDestinationDataService>();
+        // Option A: workflow source nodes reference a real SourceConnection by id; this resolves it to the runtime
+        // FHIR source config (base URL + auth + token) at run time so a graph run matches a route run.
+        services.AddScoped<Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver,
+            Sources.SourceConnectionRuntimeResolver>();
         // Phase 2: distributed-cache decorators over the local→FHIR terminology composites. Lookups/translations are
         // stable per code-system/map version and repeated across a run, so positive results are cached for this TTL.
         var terminologyCacheTtl = TimeSpan.FromMinutes(
@@ -278,6 +284,9 @@ public static class DependencyInjection
 
         services.AddSingleton<ConfigurationSecretProvider>();
         services.AddSingleton<AzureKeyVaultSecretProvider>();
+        // B1: app-provisioned secrets stored encrypted in the control-plane DB (scoped — uses the DbContext).
+        services.AddScoped<DbSecretStore>();
+        services.AddScoped<ISecretWriter>(sp => sp.GetRequiredService<DbSecretStore>());
         services.AddScoped<ISecretProvider, CompositeSecretProvider>();
         services.AddScoped<IConfiguredPipelineService, ConfiguredPipelineService>();
 
@@ -291,6 +300,7 @@ public static class DependencyInjection
         services.AddSingleton<ILaunchTokenProtector, DataProtectionLaunchTokenProtector>();
         services.AddScoped<IInteractiveSourceAuthorizationService, InteractiveSourceAuthorizationService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
+        services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ILineageTracker, OperationalAuditLineageTracker>();
         services.AddHealthChecks()

@@ -1,10 +1,12 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { PipelineStore } from '../../services/pipeline.store';
 import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { WorkflowApiService } from '../../services/workflow-api.service';
+import { WorkflowApiService, WorkflowBuildRequest } from '../../services/workflow-api.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
+import { WorkflowBuildAssemblerService } from '../../services/workflow-build-assembler.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { Source } from '../../models/source.model';
@@ -41,6 +43,8 @@ export class WorkflowBuilderComponent implements OnInit {
   private readonly appSvc = inject(ApplicabilityService);
   private readonly workflowApi = inject(WorkflowApiService);
   private readonly graphMapper = inject(WorkflowGraphMapperService);
+  private readonly buildAssembler = inject(WorkflowBuildAssemblerService);
+  private readonly route = inject(ActivatedRoute);
 
   // ── page state ─────────────────────────────────────────────────────────────
   protected readonly scenarioName = signal('Grouped-node pipeline (Normalize group + merge)');
@@ -56,14 +60,24 @@ export class WorkflowBuilderComponent implements OnInit {
   protected readonly wizardOpen   = this.wiz.isOpen;
   protected readonly confirmReset = signal(false);
   protected readonly currentWorkflowId = signal<string | null>(null);
-  protected readonly workflowName = signal('Pipeline Builder Workflow');
+  protected readonly workflowName = signal('');
   protected readonly workflowIdInput = signal('');
   protected readonly workflowBusy = signal(false);
   protected readonly workflowStatus = signal('Catalog loading...');
 
   ngOnInit(): void {
+    // Deep-link from the Workflow List "Edit" action: ?id=<workflowId> loads that graph onto the canvas after the
+    // catalog resolves (the mapper needs node metadata), so Save issues a PUT update of the same workflow.
+    const editId = this.route.snapshot.queryParamMap.get('id');
+
     this.workflowApi.loadCatalog().subscribe({
-      next: items => this.workflowStatus.set(`Catalog loaded (${items.length} nodes).`),
+      next: items => {
+        this.workflowStatus.set(`Catalog loaded (${items.length} nodes).`);
+        if (editId) {
+          this.workflowIdInput.set(editId);
+          this.onLoadWorkflow();
+        }
+      },
       error: () => this.workflowStatus.set('Catalog could not be loaded. Save is disabled.'),
     });
   }
@@ -83,23 +97,66 @@ export class WorkflowBuilderComponent implements OnInit {
     this.workflowName.set(value);
   }
 
-  onWorkflowIdInput(value: string): void {
-    this.workflowIdInput.set(value.trim());
-  }
-
-  onSaveWorkflow(): void {
-    this.saveWorkflow(this.workflowName().trim() || 'Pipeline Builder Workflow', this.currentWorkflowId());
-  }
-
-  onSaveLaunchWorkflow(): void {
-    const sourceId = this.graphMapper.findLaunchSourceId();
-    if (!sourceId) {
-      this.workflowStatus.set('Add a source connection id on the source node before saving for launch.');
-      this.toast.show('Launch binding needs a source id', 'Source node is missing Source connection id.');
+  /**
+   * Single "Save". Behaves by context:
+   * - Editing an existing workflow (id already set) → update it in place (PUT); never re-creates config records.
+   * - New canvas with wizard-drawn source/destination specs → create those records + save (POST /workflows/build).
+   * - New canvas referencing existing configs by id (or empty) → plain design save.
+   * Interactive/launch workflows are saved enabled with their source binding (build enables by default; the plain-save
+   * path activates when a launch source id is present).
+   */
+  onSave(): void {
+    if (this.workflowApi.catalog().length === 0) {
+      this.workflowStatus.set('Catalog is not loaded yet.');
       return;
     }
 
-    this.saveWorkflow(this.graphMapper.launchWorkflowName(sourceId), this.currentWorkflowId(), true);
+    const name = this.workflowName().trim() || 'Untitled workflow';
+    const existingId = this.currentWorkflowId();
+    const isLaunch = !!this.graphMapper.findLaunchSourceId();
+
+    // Editing an existing workflow → update in place. Re-provisioning configs here would create duplicates.
+    if (existingId) {
+      this.saveWorkflow(name, existingId, isLaunch);
+      return;
+    }
+
+    // New workflow: create-on-save when the canvas carries wizard-drawn source/destination specs.
+    const request = this.buildAssembler.assemble(name);
+    const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
+    if (hasSpecs) {
+      this.buildWorkflow(request);
+      return;
+    }
+
+    // Otherwise the canvas references existing configs by id (or is empty) → plain design save.
+    this.saveWorkflow(name, null, isLaunch);
+  }
+
+  private buildWorkflow(request: WorkflowBuildRequest): void {
+    this.workflowBusy.set(true);
+    this.workflowStatus.set('Creating configs + saving workflow...');
+    this.workflowApi.build(request).subscribe({
+      next: result => {
+        this.currentWorkflowId.set(result.workflowId);
+        this.workflowIdInput.set(result.workflowId);
+        const created =
+          Object.keys(result.sourceConnectionIds).length +
+          Object.keys(result.destinationIds).length +
+          Object.keys(result.mappingProfileIds).length;
+        const unmapped = this.buildAssembler.lastUnmappedResources;
+        const caveat = unmapped.length ? ` (not wired: ${unmapped.join(', ')})` : '';
+        this.workflowStatus.set(`Created ${created} config(s) + saved workflow.${caveat}`);
+        this.toast.show('Workflow created', `Provisioned configs and saved. You can Run it now.${caveat}`);
+        this.workflowBusy.set(false);
+      },
+      error: err => {
+        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Create-on-save failed.';
+        this.workflowStatus.set(typeof msg === 'string' ? msg : 'Create-on-save failed.');
+        this.toast.show('Create-on-save failed', typeof msg === 'string' ? msg : 'See status for details.');
+        this.workflowBusy.set(false);
+      },
+    });
   }
 
   onLoadWorkflow(): void {
@@ -118,28 +175,6 @@ export class WorkflowBuilderComponent implements OnInit {
       },
       error: () => {
         this.workflowStatus.set('Workflow load failed.');
-        this.workflowBusy.set(false);
-      },
-    });
-  }
-
-  onRunWorkflow(): void {
-    const id = this.currentWorkflowId();
-    if (!id) {
-      this.workflowStatus.set('Save or load a workflow before running.');
-      return;
-    }
-
-    this.workflowBusy.set(true);
-    this.workflowStatus.set('Running workflow...');
-    this.workflowApi.run(id).subscribe({
-      next: result => {
-        const run = result.workflowRun ?? result.run;
-        this.workflowStatus.set(run?.id ? `Run started: ${run.id}` : 'Workflow run completed.');
-        this.workflowBusy.set(false);
-      },
-      error: () => {
-        this.workflowStatus.set('Workflow run failed.');
         this.workflowBusy.set(false);
       },
     });

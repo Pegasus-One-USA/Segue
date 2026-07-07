@@ -1,13 +1,24 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using FHIRBridge.Api.Workflows;
+using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Security;
+using FHIRBridge.Application.Services;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Api.Workflows;
 
 public static class WorkflowEndpoints
 {
+    // Node executors read config with JsonSerializerDefaults.Web (camelCase); serialize embedded fields the same way.
+    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
+
     public static IEndpointRouteBuilder MapWorkflowEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints
@@ -26,6 +37,118 @@ public static class WorkflowEndpoints
             return Results.Created($"/api/v1/workflows/{workflow.Id}", workflow);
         });
 
+        // Option B create-on-save: provision secrets + create Source/Destination/Mapping records, inject their ids into
+        // the referencing nodes, then persist the graph. One call turns a builder canvas into a launchable workflow that
+        // resolves real, RBAC-scoped configuration by id at run time. Gated to admins because it provisions secrets.
+        group.MapPost("/workflows/build", async (
+            WorkflowBuildRequest request,
+            IConfigurationService configurationService,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
+            // saved graph. Node order is preserved from the original request when the definition is rebuilt.
+            var nodes = request.Nodes.ToDictionary(node => node.Id, node => node, StringComparer.OrdinalIgnoreCase);
+            var sourceIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            var destinationIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            var mappingIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Destinations first — self-contained, and they provision the inline secret whose reference the node needs.
+            foreach (var spec in request.Destinations ?? [])
+            {
+                if (!nodes.TryGetValue(spec.NodeId, out var node))
+                {
+                    return Results.BadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
+                }
+
+                var destination = await configurationService.AddDestinationConfigurationAsync(spec.Destination, cancellationToken);
+                destinationIds[spec.NodeId] = destination.Id;
+                nodes[spec.NodeId] = WithConfiguration(node, config =>
+                {
+                    config["destinationId"] = destination.Id.ToString();
+                    config["secretKeyVaultName"] = destination.KeyVaultName;
+                    config["secretName"] = destination.SecretName;
+                    if (!string.IsNullOrWhiteSpace(destination.Target))
+                    {
+                        config["target"] = destination.Target;
+                    }
+                });
+            }
+
+            // 2. Sources — the executor resolves base URL + auth + token live from the id at run time.
+            foreach (var spec in request.Sources ?? [])
+            {
+                if (!nodes.TryGetValue(spec.NodeId, out var node))
+                {
+                    return Results.BadRequest($"Source spec references unknown node '{spec.NodeId}'.");
+                }
+
+                var source = await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
+                sourceIds[spec.NodeId] = source.Id;
+                nodes[spec.NodeId] = WithConfiguration(node, config => config["sourceConnectionId"] = source.Id.ToString());
+            }
+
+            // 3. Mappings — bound to a source + destination created above (or already referenced on the picked node).
+            foreach (var spec in request.Mappings ?? [])
+            {
+                if (!nodes.TryGetValue(spec.NodeId, out var node))
+                {
+                    return Results.BadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
+                }
+
+                if (!TryResolveEntityId(spec.SourceNodeId, sourceIds, nodes, "sourceConnectionId", out var sourceConnectionId))
+                {
+                    return Results.BadRequest(
+                        $"Mapping spec '{spec.NodeId}' references source node '{spec.SourceNodeId}' with no created or referenced source connection.");
+                }
+
+                if (!TryResolveEntityId(spec.DestinationNodeId, destinationIds, nodes, "destinationId", out var destinationId))
+                {
+                    return Results.BadRequest(
+                        $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
+                }
+
+                var mapping = await configurationService.AddMappingProfileAsync(
+                    new CreateMappingProfileRequest(
+                        spec.Name,
+                        spec.ResourceType,
+                        sourceConnectionId,
+                        destinationId,
+                        spec.DestinationObject,
+                        spec.Fields),
+                    cancellationToken);
+                mappingIds[spec.NodeId] = mapping.Id;
+                nodes[spec.NodeId] = WithConfiguration(node, config => config["mappingProfileId"] = mapping.Id.ToString());
+
+                // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
+                // from its OWN node config rather than resolving the mapping by id, so mirror the mapping's target and
+                // fields onto the destination node — the same shape the route→graph projection embeds. Without this the
+                // writer defaults the target table to the resource type and creates no data columns.
+                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
+                {
+                    nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
+                    {
+                        config["resourceType"] = spec.ResourceType;
+                        config["destinationObject"] = spec.DestinationObject;
+                        config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
+                    });
+                }
+            }
+
+            // 4. Persist the graph carrying the injected references (original node order preserved).
+            var definitionRequest = new WorkflowDefinitionRequest(
+                request.Name,
+                request.IsEnabled,
+                request.Nodes.Select(node => nodes[node.Id]).ToArray(),
+                request.Edges);
+
+            var workflow = BuildWorkflow(Guid.NewGuid(), definitionRequest);
+            await store.SaveAsync(workflow, cancellationToken);
+
+            var result = new WorkflowBuildResult(workflow.Id, sourceIds, destinationIds, mappingIds);
+            return Results.Created($"/api/v1/workflows/{workflow.Id}", result);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         group.MapPost("/workflows/validate", (
             WorkflowDefinitionRequest request,
             IWorkflowGraphValidator validator) =>
@@ -39,6 +162,138 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             CancellationToken cancellationToken) =>
             Results.Ok(await store.ListAsync(cancellationToken)));
+
+        // Workflow-list screen: one summary row per workflow — shape, enabled state, last run, and the derived
+        // action. The source node's referenced connection decides Launch (interactive SMART) vs Run (backend), so the
+        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration).
+        group.MapGet("/workflows/summary", async (
+            IWorkflowDefinitionStore store,
+            IWorkflowRunStore runStore,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var workflows = await store.ListAsync(cancellationToken);
+            var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+            var applicationTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.ApplicationType);
+            var systemTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.SourceSystemType);
+
+            var summaries = new List<WorkflowSummaryDto>(workflows.Count);
+            foreach (var workflow in workflows)
+            {
+                // Walk the source nodes → their referenced connections. Mirror the SQL's MAX(ApplicationType): the
+                // highest-precedence interactive type wins, so a workflow with any EHR-launch/standalone/patient
+                // source is launched rather than run.
+                Guid? firstSourceId = null;
+                Guid? launchSourceId = null;
+                ApplicationType? applicationType = null;
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Source))
+                {
+                    if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId))
+                    {
+                        continue;
+                    }
+
+                    firstSourceId ??= sourceId;
+                    if (applicationTypeBySourceId.TryGetValue(sourceId, out var type) && type is not null
+                        && (applicationType is null || type.Value > applicationType.Value))
+                    {
+                        applicationType = type;
+                        launchSourceId = sourceId;
+                    }
+                }
+
+                var isLaunch = applicationType is ApplicationType.EhrLaunch
+                    or ApplicationType.Standalone
+                    or ApplicationType.Patient;
+
+                var hasDestination = workflow.Nodes.Any(node =>
+                    node.Category == WorkflowNodeCategory.Destination
+                    && TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out _));
+
+                var runs = await runStore.ListByDefinitionAsync(workflow.Id, cancellationToken);
+                var lastRun = runs.OrderByDescending(run => run.StartedAt).FirstOrDefault();
+
+                var resolvedSourceId = launchSourceId ?? firstSourceId;
+                var sourceSystemType = resolvedSourceId is { } id && systemTypeBySourceId.TryGetValue(id, out var systemType)
+                    ? systemType.ToString()
+                    : null;
+
+                summaries.Add(new WorkflowSummaryDto(
+                    workflow.Id,
+                    workflow.Name,
+                    workflow.IsEnabled ? "Enabled" : "Disabled",
+                    workflow.Nodes.Count,
+                    workflow.Edges.Count,
+                    lastRun?.Status.ToString(),
+                    lastRun?.StartedAt,
+                    isLaunch ? "Launch" : "Run",
+                    isLaunch
+                        ? $"/api/v1/workflows/{workflow.Id}/launch-url"
+                        : $"/api/v1/workflows/{workflow.Id}/run",
+                    resolvedSourceId,
+                    sourceSystemType,
+                    applicationType?.ToString(),
+                    hasDestination));
+            }
+
+            return Results.Ok(summaries
+                .OrderBy(summary => summary.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray());
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // "View destination data": resolve the workflow's destination node → its created destination + target table
+        // and read back a capped row sample so the UI can show what the pipeline wrote. Admin-only.
+        group.MapGet("/workflows/{workflowId:guid}/destination-data", async (
+            Guid workflowId,
+            int? top,
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            IDestinationDataService destinationDataService,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            var destinationId = Guid.Empty;
+            var destinationObject = string.Empty;
+            foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out destinationId))
+                {
+                    destinationObject = GetConfigurationString(node.ConfigurationJson, "destinationObject")
+                        ?? GetConfigurationString(node.ConfigurationJson, "target")
+                        ?? string.Empty;
+                    break;
+                }
+            }
+
+            if (destinationId == Guid.Empty)
+            {
+                return Results.Ok(new DestinationDataDto(
+                    string.Empty, [], [], 0,
+                    "This workflow has no saved destination to preview. Save or build the destination first."));
+            }
+
+            // The destination node often doesn't carry the table name (the writer derives it from the bound mapping).
+            // Fall back to the mapping profile targeting this destination — the same DestinationObject that picked the
+            // write-time table — so the read hits the table the pipeline actually wrote to.
+            if (string.IsNullOrWhiteSpace(destinationObject))
+            {
+                var mappings = await configurationRepository.GetMappingProfilesAsync(cancellationToken);
+                destinationObject = mappings
+                    .Where(mapping => mapping.DestinationId == destinationId
+                        && !string.IsNullOrWhiteSpace(mapping.DestinationObject))
+                    .Select(mapping => mapping.DestinationObject)
+                    .FirstOrDefault() ?? string.Empty;
+            }
+
+            var result = await destinationDataService.ReadSampleAsync(
+                destinationId, destinationObject, top ?? 50, cancellationToken);
+            return Results.Ok(result);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapGet("/workflows/{workflowId:guid}", async (
             Guid workflowId,
@@ -145,7 +400,84 @@ public static class WorkflowEndpoints
             return Results.Ok(workflow);
         });
 
+        // Permanently delete a workflow definition (and its nodes/edges/config). The referenced source/destination/
+        // mapping records are NOT deleted — they may be shared with other workflows/routes. Admin-only.
+        group.MapDelete("/workflows/{workflowId:guid}", async (
+            Guid workflowId,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            await store.DeleteAsync(workflowId, cancellationToken);
+            return Results.NoContent();
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         return endpoints;
+    }
+
+    private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)
+    {
+        var config = TryParseConfiguration(node.ConfigurationJson) ?? new JsonObject();
+        mutate(config);
+        return node with { ConfigurationJson = config.ToJsonString() };
+    }
+
+    private static bool TryResolveEntityId(
+        string nodeId,
+        IReadOnlyDictionary<string, Guid> createdIds,
+        IReadOnlyDictionary<string, WorkflowNodeRequest> nodes,
+        string configurationKey,
+        out Guid entityId)
+    {
+        if (createdIds.TryGetValue(nodeId, out entityId))
+        {
+            return true;
+        }
+
+        // Picker flow: the referenced node already carries the entity id in its configuration.
+        if (nodes.TryGetValue(nodeId, out var node)
+            && TryParseConfiguration(node.ConfigurationJson) is { } config
+            && config[configurationKey]?.ToString() is { } raw
+            && Guid.TryParse(raw, out entityId))
+        {
+            return true;
+        }
+
+        entityId = Guid.Empty;
+        return false;
+    }
+
+    private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)
+    {
+        value = Guid.Empty;
+        return TryParseConfiguration(configurationJson) is { } config
+            && config[key]?.ToString() is { } raw
+            && Guid.TryParse(raw, out value);
+    }
+
+    private static string? GetConfigurationString(string? configurationJson, string key)
+        => TryParseConfiguration(configurationJson) is { } config ? config[key]?.ToString() : null;
+
+    private static JsonObject? TryParseConfiguration(string? configurationJson)
+    {
+        if (string.IsNullOrWhiteSpace(configurationJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(configurationJson) as JsonObject;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request)

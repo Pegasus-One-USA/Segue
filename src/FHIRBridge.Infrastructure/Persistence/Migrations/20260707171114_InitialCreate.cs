@@ -116,6 +116,22 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ProvisionedSecrets",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    KeyVaultName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    SecretName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    ProtectedValue = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ModifiedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ProvisionedSecrets", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ResourceLineageEntries",
                 columns: table => new
                 {
@@ -322,6 +338,36 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "WorkflowDefinitions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(400)", maxLength: 400, nullable: false),
+                    Version = table.Column<int>(type: "int", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowDefinitions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "WorkflowRuns",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowDefinitionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    StartedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    CompletedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowRuns", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Permissions",
                 columns: table => new
                 {
@@ -402,6 +448,80 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         name: "FK_UserRoles_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "WorkflowEdges",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowDefinitionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    FromNodeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ToNodeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowEdges", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_WorkflowEdges_WorkflowDefinitions_WorkflowDefinitionId",
+                        column: x => x.WorkflowDefinitionId,
+                        principalTable: "WorkflowDefinitions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "WorkflowNodes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowDefinitionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    NodeType = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Category = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Rank = table.Column<int>(type: "int", nullable: false),
+                    SubRank = table.Column<int>(type: "int", nullable: false),
+                    DisplayName = table.Column<string>(type: "nvarchar(400)", maxLength: 400, nullable: false),
+                    ConfigurationJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PositionX = table.Column<double>(type: "float", nullable: false),
+                    PositionY = table.Column<double>(type: "float", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowNodes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_WorkflowNodes_WorkflowDefinitions_WorkflowDefinitionId",
+                        column: x => x.WorkflowDefinitionId,
+                        principalTable: "WorkflowDefinitions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "WorkflowNodeRuns",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowRunId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowNodeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    NodeType = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Rank = table.Column<int>(type: "int", nullable: false),
+                    SubRank = table.Column<int>(type: "int", nullable: false),
+                    StartedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    CompletedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    LineageJson = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowNodeRuns", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_WorkflowNodeRuns_WorkflowRuns_WorkflowRunId",
+                        column: x => x.WorkflowRunId,
+                        principalTable: "WorkflowRuns",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -521,6 +641,27 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "WorkflowNodeConfigurations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowNodeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Key = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Value = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsSecret = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowNodeConfigurations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_WorkflowNodeConfigurations_WorkflowNodes_WorkflowNodeId",
+                        column: x => x.WorkflowNodeId,
+                        principalTable: "WorkflowNodes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ResourcePipelineRouteMappings",
                 columns: table => new
                 {
@@ -528,7 +669,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     ResourcePipelineRouteId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     MappingProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsEnabled = table.Column<bool>(type: "bit", nullable: false),
-                    ExecutionOrder = table.Column<int>(type: "int", nullable: false)
+                    ExecutionOrder = table.Column<int>(type: "int", nullable: false),
+                    SearchParameters = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -606,6 +748,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "IX_Permissions_Name",
                 table: "Permissions",
                 column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ProvisionedSecrets_KeyVaultName_SecretName",
+                table: "ProvisionedSecrets",
+                columns: new[] { "KeyVaultName", "SecretName" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -699,6 +847,36 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 table: "WebhookConfigurations",
                 columns: new[] { "SourceConnectionId", "ResourceType" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowEdges_WorkflowDefinitionId",
+                table: "WorkflowEdges",
+                column: "WorkflowDefinitionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowNodeConfigurations_WorkflowNodeId",
+                table: "WorkflowNodeConfigurations",
+                column: "WorkflowNodeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowNodeRuns_WorkflowRunId",
+                table: "WorkflowNodeRuns",
+                column: "WorkflowRunId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowNodes_WorkflowDefinitionId",
+                table: "WorkflowNodes",
+                column: "WorkflowDefinitionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowRuns_StartedAt",
+                table: "WorkflowRuns",
+                column: "StartedAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowRuns_WorkflowDefinitionId",
+                table: "WorkflowRuns",
+                column: "WorkflowDefinitionId");
         }
 
         /// <inheritdoc />
@@ -723,6 +901,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "ProcessedMessages");
 
             migrationBuilder.DropTable(
+                name: "ProvisionedSecrets");
+
+            migrationBuilder.DropTable(
                 name: "ResourceLineageEntries");
 
             migrationBuilder.DropTable(
@@ -738,6 +919,15 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "UserRoles");
 
             migrationBuilder.DropTable(
+                name: "WorkflowEdges");
+
+            migrationBuilder.DropTable(
+                name: "WorkflowNodeConfigurations");
+
+            migrationBuilder.DropTable(
+                name: "WorkflowNodeRuns");
+
+            migrationBuilder.DropTable(
                 name: "Permissions");
 
             migrationBuilder.DropTable(
@@ -750,6 +940,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "Users");
 
             migrationBuilder.DropTable(
+                name: "WorkflowNodes");
+
+            migrationBuilder.DropTable(
+                name: "WorkflowRuns");
+
+            migrationBuilder.DropTable(
                 name: "PermissionCategories");
 
             migrationBuilder.DropTable(
@@ -757,6 +953,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "WebhookConfigurations");
+
+            migrationBuilder.DropTable(
+                name: "WorkflowDefinitions");
 
             migrationBuilder.DropTable(
                 name: "SourceConnections");

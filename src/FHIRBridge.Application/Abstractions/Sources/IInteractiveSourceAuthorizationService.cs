@@ -41,6 +41,9 @@ public interface IInteractiveSourceAuthorizationService
 
     /// <summary>Builds the opaque, encrypted launch-context token to embed in the launch URL registered with the EHR for a given pipeline route.</summary>
     string BuildLaunchContextToken(Guid routeId);
+
+    /// <summary>Builds the opaque, encrypted launch token for a workflow graph: launching it runs that workflow (its source node's connection drives the OAuth + trusted-issuer validation).</summary>
+    string BuildWorkflowLaunchContextToken(Guid workflowId);
 }
 
 /// <summary>Which source connection was authorized once the callback completes.</summary>

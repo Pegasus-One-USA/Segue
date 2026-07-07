@@ -31,7 +31,8 @@ public sealed class MappingProfileCapabilityGatingTests
         _currentUser.SetupGet(x => x.CurrentUser)
             .Returns(new CurrentUserInfo("admin", "admin@example.com", "Admin", ["Administrator"], true));
         _sut = new ConfigurationService(
-            _repository, _capabilityRepository, _discovery.Object, _audit.Object, _currentUser.Object);
+            _repository, _capabilityRepository, _discovery.Object, _audit.Object, _currentUser.Object,
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>());
     }
 
     [Fact]

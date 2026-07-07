@@ -1,0 +1,265 @@
+<div class="list-page">
+
+  <!-- Header -->
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Workflows</h1>
+      <p class="page-sub">Launch interactive (EHR / patient) workflows, run backend workflows, and inspect what they wrote.</p>
+    </div>
+    <button class="btn-secondary" type="button" (click)="reload()" [disabled]="loading()">
+      <span class="ico-refresh" [class.spin]="loading()">&#8635;</span>
+      Refresh
+    </button>
+  </div>
+
+  <!-- Filter -->
+  <div class="filter-card">
+    <div class="search-wrap">
+      <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input
+        type="search"
+        class="search-input"
+        placeholder="Search by name or application type..."
+        [value]="searchQuery()"
+        (input)="onSearch($any($event.target).value)"
+      />
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-card">
+    <div class="table-meta">
+      <span class="entries-info">
+        @if (filtered().length > 0) {
+          {{ filtered().length }} {{ filtered().length === 1 ? 'workflow' : 'workflows' }}
+        } @else {
+          No workflows
+        }
+      </span>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="col-index">#</th>
+            <th>Workflow</th>
+            <th>Source</th>
+            <th>Audience</th>
+            <th>Status</th>
+            <th class="col-num">Nodes</th>
+            <th class="col-num">Edges</th>
+            <th>Last Run</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (w of filtered(); track w.workflowId; let i = $index) {
+            <tr class="data-row">
+              <td class="col-index">{{ i + 1 }}</td>
+              <td>
+                <div class="cell-name">
+                  <div class="pipe-avatar" [class.launch]="w.action === 'Launch'">
+                    <span>{{ w.action === 'Launch' ? '⚡' : '▶' }}</span>
+                  </div>
+                  <div class="name-block">
+                    <span class="cell-primary">{{ w.name }}</span>
+                    <span class="cell-meta">{{ w.action === 'Launch' ? 'Interactive launch' : 'Backend / on-demand' }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>
+                @if (w.sourceSystemType) {
+                  <span class="tag">{{ w.sourceSystemType }}</span>
+                } @else {
+                  <span class="cell-muted">—</span>
+                }
+              </td>
+              <td><span class="cell-muted">{{ audienceLabel(w.applicationType) }}</span></td>
+              <td>
+                <span class="pill" [class.pill-on]="w.status === 'Enabled'" [class.pill-off]="w.status === 'Disabled'">
+                  {{ w.status }}
+                </span>
+              </td>
+              <td class="col-num">{{ w.nodes }}</td>
+              <td class="col-num">{{ w.edges }}</td>
+              <td>
+                @if (w.lastRun) {
+                  <div class="lastrun">
+                    <span class="status-badge" [class]="runStatusClass(w.lastRun)">{{ w.lastRun }}</span>
+                    <span class="cell-meta">{{ w.lastRunAt | date:'MMM d, h:mm a' }}</span>
+                  </div>
+                } @else {
+                  <span class="cell-muted">Never run</span>
+                }
+              </td>
+              <td class="col-actions">
+                <div class="row-actions">
+                  <button
+                    class="btn-primary"
+                    type="button"
+                    [class.is-launch]="w.action === 'Launch'"
+                    [disabled]="busyId() === w.workflowId"
+                    (click)="onAction(w)"
+                  >
+                    @if (busyId() === w.workflowId) {
+                      <span class="spinner-sm"></span>
+                    } @else {
+                      <span class="btn-ico">{{ w.action === 'Launch' ? '🔗' : '▶' }}</span>
+                    }
+                    {{ w.action === 'Launch' ? 'Get Launch URL' : 'Run' }}
+                  </button>
+
+                  <button
+                    class="btn-ghost"
+                    type="button"
+                    [disabled]="!w.hasDestination"
+                    [title]="w.hasDestination ? 'View destination data' : 'No saved destination to preview'"
+                    (click)="onViewData(w)"
+                  >
+                    <span class="btn-ico">&#128202;</span>
+                    View Data
+                  </button>
+
+                  <span class="action-divider"></span>
+
+                  <button class="btn-icon" type="button" title="Edit in Pipeline Builder" (click)="onEdit(w)">&#9998;</button>
+
+                  <button
+                    class="btn-icon"
+                    type="button"
+                    [disabled]="rowBusyId() === w.workflowId"
+                    [title]="w.status === 'Enabled' ? 'Disable' : 'Enable'"
+                    (click)="onToggleEnabled(w)"
+                  >{{ w.status === 'Enabled' ? '⏸' : '▶' }}</button>
+
+                  <button
+                    class="btn-icon btn-icon--danger"
+                    type="button"
+                    [disabled]="rowBusyId() === w.workflowId"
+                    title="Delete workflow"
+                    (click)="askDelete(w)"
+                  >&#128465;</button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- States -->
+    @if (loading()) {
+      <div class="state-block">
+        <span class="spinner"></span>
+        <p>Loading workflows…</p>
+      </div>
+    } @else if (loadError()) {
+      <div class="state-block error">
+        <p>{{ loadError() }}</p>
+        <button class="btn-secondary" type="button" (click)="reload()">Retry</button>
+      </div>
+    } @else if (filtered().length === 0) {
+      <div class="state-block">
+        <div class="empty-icon">&#9889;</div>
+        <h3>{{ searchQuery() ? 'No workflows matched your search' : 'No workflows yet' }}</h3>
+        <p>{{ searchQuery() ? 'Try a different search term.' : 'Build a workflow in the Pipeline Builder to see it here.' }}</p>
+      </div>
+    }
+  </div>
+</div>
+
+<!-- ── Launch URL modal ─────────────────────────────────────────────────────── -->
+@if (launchModal(); as m) {
+  <div class="modal-overlay" (click)="closeLaunchModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>Launch URL</h2>
+        <button class="modal-close" type="button" (click)="closeLaunchModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">Register this URL with the EHR / identity provider to launch <strong>{{ m.name }}</strong>.</p>
+        <div class="url-box">
+          <code>{{ m.url }}</code>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" (click)="copy(m.url)">Copy URL</button>
+          <a class="btn-primary is-launch" [href]="m.url" target="_blank" rel="noopener">Open</a>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Delete confirmation ──────────────────────────────────────────────────── -->
+@if (confirmDelete(); as w) {
+  <div class="modal-overlay" (click)="cancelDelete()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>Delete workflow</h2>
+        <button class="modal-close" type="button" (click)="cancelDelete()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">
+          Delete <strong>{{ w.name }}</strong>? This removes the workflow graph permanently.
+          The source, destination and mapping records it references are <strong>not</strong> deleted.
+        </p>
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" (click)="cancelDelete()">Cancel</button>
+          <button class="btn-danger" type="button" [disabled]="rowBusyId() === w.workflowId" (click)="confirmDeleteWorkflow()">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Destination data modal ───────────────────────────────────────────────── -->
+@if (dataModal(); as m) {
+  <div class="modal-overlay" (click)="closeDataModal()">
+    <div class="modal modal-wide" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>Destination data — {{ m.name }}</h2>
+        <button class="modal-close" type="button" (click)="closeDataModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        @if (m.loading) {
+          <div class="state-block"><span class="spinner"></span><p>Reading rows…</p></div>
+        } @else if (m.error) {
+          <div class="notice notice-warn">{{ m.error }}</div>
+        } @else if (m.data) {
+          <div class="data-meta">
+            <span class="mono">{{ m.data.table }}</span>
+            <span class="cell-muted">{{ m.data.rowCount }} {{ m.data.rowCount === 1 ? 'row' : 'rows' }} (sample)</span>
+          </div>
+          @if (m.data.rowCount === 0) {
+            <div class="notice">No rows have been written to this table yet.</div>
+          } @else {
+            <div class="data-scroll">
+              <table class="data-table compact">
+                <thead>
+                  <tr>
+                    @for (col of m.data.columns; track col) { <th>{{ col }}</th> }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of m.data.rows; track $index) {
+                    <tr>
+                      @for (cell of row; track $index) {
+                        <td>{{ cell === null ? '' : cell }}</td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}

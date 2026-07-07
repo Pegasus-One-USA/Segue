@@ -24,19 +24,22 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly IOperationalAuditService _auditService;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ISecretWriter _secretWriter;
 
     public ConfigurationService(
         IConfigurationRepository repository,
         ISourceCapabilityRepository capabilityRepository,
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
         IOperationalAuditService auditService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ISecretWriter secretWriter)
     {
         _repository = repository;
         _capabilityRepository = capabilityRepository;
         _capabilityDiscoveryService = capabilityDiscoveryService;
         _auditService = auditService;
         _currentUserService = currentUserService;
+        _secretWriter = secretWriter;
     }
 
     public async Task<SourceConnectionDto> AddSourceConnectionAsync(
@@ -148,10 +151,16 @@ public sealed class ConfigurationService : IConfigurationService
         CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
+        if (!string.IsNullOrWhiteSpace(request.InlineSecret))
+        {
+            await _secretWriter.WriteSecretAsync(secretReference, request.InlineSecret!, cancellationToken);
+        }
+
         var destinationConfiguration = new DestinationConfiguration(
             request.Name,
             request.DestinationType,
-            new SecretReference(request.KeyVaultName, request.SecretName),
+            secretReference,
             request.Target);
 
         await _repository.AddDestinationAsync(destinationConfiguration, cancellationToken);
@@ -170,10 +179,16 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
+        if (!string.IsNullOrWhiteSpace(request.InlineSecret))
+        {
+            await _secretWriter.WriteSecretAsync(secretReference, request.InlineSecret!, cancellationToken);
+        }
+
         destinationConfiguration.Update(
             request.Name,
             request.DestinationType,
-            new SecretReference(request.KeyVaultName, request.SecretName),
+            secretReference,
             request.Target);
 
         await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);

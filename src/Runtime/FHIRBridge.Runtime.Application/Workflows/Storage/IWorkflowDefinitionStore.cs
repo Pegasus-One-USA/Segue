@@ -9,4 +9,7 @@ public interface IWorkflowDefinitionStore
     Task<IReadOnlyCollection<WorkflowDefinition>> ListAsync(CancellationToken cancellationToken);
 
     Task<WorkflowDefinition?> GetAsync(Guid workflowId, CancellationToken cancellationToken);
+
+    /// <summary>Permanently removes a workflow definition (and its nodes/edges/configuration). No-op if it does not exist.</summary>
+    Task DeleteAsync(Guid workflowId, CancellationToken cancellationToken);
 }

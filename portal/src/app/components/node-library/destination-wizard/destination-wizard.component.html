@@ -238,8 +238,8 @@
                           [attr.id]="'dw-target-' + r"
                           [value]="targetFor(r)"
                           (change)="updateTarget(r, $any($event.target).value)">
-                    <option value="" disabled>Select a table…</option>
-                    @for (t of sqlTableOptions(); track t) { <option [value]="t">{{ t }}</option> }
+                    <option value="" disabled [selected]="!targetFor(r)">Select a table…</option>
+                    @for (t of sqlTableOptions(); track t) { <option [value]="t" [selected]="t === targetFor(r)">{{ t }}</option> }
                   </select>
                 </div>
               } @else {
@@ -272,7 +272,7 @@
                         (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
                       >
                         @for (f of availableFields(r); track f.path) {
-                          <option [value]="f.label">{{ f.label }}</option>
+                          <option [value]="f.label" [selected]="f.label === row.fieldLabel">{{ f.label }}</option>
                         }
                       </select>
                     </div>
@@ -284,8 +284,8 @@
                         <select class="dw-select"
                                 [value]="row.targetName"
                                 (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
-                          <option value="" disabled>Select a column…</option>
-                          @for (c of columnsForResourceTarget(r); track c) { <option [value]="c">{{ c }}</option> }
+                          <option value="" disabled [selected]="!row.targetName">Select a column…</option>
+                          @for (c of columnsForResourceTarget(r); track c) { <option [value]="c" [selected]="c === row.targetName">{{ c }}</option> }
                         </select>
                       </div>
                     } @else {

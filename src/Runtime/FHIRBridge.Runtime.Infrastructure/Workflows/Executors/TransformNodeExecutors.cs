@@ -1,7 +1,9 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Mappings;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
@@ -44,22 +46,40 @@ public sealed class PatientMatchingNodeExecutor : PassThroughNodeExecutor
 public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 {
     private readonly IJsonMappingEngine? _mappingEngine;
+    private readonly IConfigurationRepository? _configurationRepository;
 
-    public MappingNodeExecutor(IJsonMappingEngine? mappingEngine = null)
+    public MappingNodeExecutor(
+        IJsonMappingEngine? mappingEngine = null,
+        IConfigurationRepository? configurationRepository = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
     {
         _mappingEngine = mappingEngine;
+        _configurationRepository = configurationRepository;
     }
 
-    public override Task<WorkflowNodeOutput> ExecuteAsync(
+    public override async Task<WorkflowNodeOutput> ExecuteAsync(
         WorkflowExecutionContext context,
         WorkflowNode node,
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        var fields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
+        IReadOnlyCollection<MappingFieldDto> fields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
         var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
         var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
+
+        // Option A: prefer a real MappingProfile referenced by id (fields + resource type + destination object).
+        var mappingProfileId = ReadStringConfiguration(node, "mappingProfileId");
+        if (_configurationRepository is not null && Guid.TryParse(mappingProfileId, out var profileId))
+        {
+            var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
+            if (profile is not null)
+            {
+                fields = profile.Fields.Select(ConfigurationMapper.ToDto).ToArray();
+                resourceType = profile.ResourceType;
+                destinationObject = profile.DestinationObject;
+            }
+        }
+
         var records = new List<MappedDestinationRecord>();
 
         foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
@@ -75,7 +95,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 sourceJson));
         }
 
-        return Task.FromResult(new WorkflowNodeOutput(
+        return new WorkflowNodeOutput(
             node.Id,
             node.NodeType,
             new MappedRecordBatch(records),
@@ -84,7 +104,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             {
                 ["executor"] = GetType().Name,
                 ["count"] = records.Count
-            }));
+            });
     }
 
     protected override object CreatePayload(

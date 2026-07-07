@@ -427,6 +427,40 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("PermissionCategories", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.ProvisionedSecret", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("KeyVaultName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("ModifiedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ProtectedValue")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SecretName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeyVaultName", "SecretName")
+                        .IsUnique();
+
+                    b.ToTable("ProvisionedSecrets", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.ResourceLineageEntry", b =>
                 {
                     b.Property<Guid>("Id")

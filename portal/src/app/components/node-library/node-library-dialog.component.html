@@ -137,6 +137,8 @@
             [editNode]="destEditNode()"
             (saved)="onDestWizardSaved($event)"
             (cancelled)="onDestWizardCancelled()"
+            (stepChange)="destWizardStep.set($event)"
+            (progressChange)="destWizardHasProgressed.set($event)"
           />
 
         } @else {
@@ -332,5 +334,25 @@
 
       </section>
     </div><!-- /nld-body -->
+
+    <!-- Confirm before discarding an in-progress destination config -->
+    @if (pendingDestSwitch(); as switchType) {
+      <div class="nld-confirm-backdrop" tabindex="0"
+           (click)="onConfirmSwitchBackdropClick($event)"
+           (keydown.escape)="cancelDestSwitch()">
+        <div class="nld-confirm-dialog">
+          <div class="nld-confirm-icon">⚠</div>
+          <h3 class="nld-confirm-title">Switch to {{ switchType === 'sql' ? 'SQL Server' : 'CSV' }}?</h3>
+          <p class="nld-confirm-body">
+            Your {{ destWizardType() === 'sql' ? 'SQL Server' : 'CSV' }} configuration hasn't been saved yet.
+            Switching destination type now will discard it.
+          </p>
+          <div class="nld-confirm-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelDestSwitch()">Keep editing</button>
+            <button type="button" class="btn btn-danger" (click)="confirmDestSwitch()">Discard &amp; switch</button>
+          </div>
+        </div>
+      </div>
+    }
   </div><!-- /nld -->
 </app-modal-overlay>

@@ -8,8 +8,7 @@ import {
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
-import { MOCK_USERS, ALL_ROLES, DEFAULT_PASSWORD } from '../mock/mock-db';
-import { ALL_PERMISSIONS } from '../mock/mock-db';
+import { MOCK_USERS, ALL_ROLES } from '../mock/mock-db';
 
 // ─── Fake JWT helpers ──────────────────────────────────────────────────────────
 function fakeJWT(user: User, expiresIn = 3600): string {
@@ -32,7 +31,8 @@ function fakeRefresh(userId: string): string {
 }
 
 function sanitise(u: User): User {
-  const { passwordHash: _pw, ...safe } = u;
+  const safe = { ...u };
+  delete (safe as Partial<User>).passwordHash;
   return safe as User;
 }
 
