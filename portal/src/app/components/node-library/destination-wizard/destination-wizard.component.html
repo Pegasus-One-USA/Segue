@@ -230,11 +230,12 @@
         <div class="dw-mapping-group">
           <div class="dw-mapping-group-head">
             <strong>{{ r }}</strong>
-            <span class="dw-mapping-target-inline" style="display:inline-flex;align-items:center;gap:8px;margin-left:12px;">
-              <label class="dw-mapping-target-label">{{ isSql() ? 'Table' : 'File name' }}</label>
+            <span class="dw-mapping-target-inline">
+              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : 'File name' }}</label>
               @if (hasSqlTables()) {
                 <div class="dw-select-wrap">
-                  <select class="dw-select" style="min-width:220px;"
+                  <select class="dw-select dw-target-select"
+                          [attr.id]="'dw-target-' + r"
                           [value]="targetFor(r)"
                           (change)="updateTarget(r, $any($event.target).value)">
                     <option value="" disabled>Select a table…</option>
@@ -243,8 +244,8 @@
                 </div>
               } @else {
                 <input
-                  class="dw-map-input"
-                  style="max-width:240px;"
+                  class="dw-map-input dw-target-input"
+                  [attr.id]="'dw-target-' + r"
                   [value]="targetFor(r)"
                   (input)="updateTarget(r, $any($event.target).value)"
                   [placeholder]="isSql() ? 'dbo.Patient' : 'patients.csv'"

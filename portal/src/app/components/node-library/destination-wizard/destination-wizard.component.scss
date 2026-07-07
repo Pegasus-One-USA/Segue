@@ -349,6 +349,21 @@
   font-family: ui-monospace, Consolas, monospace;
 }
 
+.dw-mapping-target-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.dw-target-select {
+  min-width: 220px;
+}
+
+.dw-target-input {
+  max-width: 240px;
+}
+
 .dw-map-table {
   width: 100%;
   border-collapse: collapse;

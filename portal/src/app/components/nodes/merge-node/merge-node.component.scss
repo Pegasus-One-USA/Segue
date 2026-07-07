@@ -108,9 +108,9 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--color-surface, #fff);
-  border: 2px solid #EF4444;
-  color: #EF4444;
+  background: var(--color-surface);
+  border: 2px solid var(--color-error);
+  color: var(--color-error);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -124,7 +124,7 @@
 }
 :host:hover .sn-del-btn,
 :host.selected .sn-del-btn { opacity: 1; pointer-events: auto; }
-:host:hover .sn-del-btn:hover { transform: scale(1.18); background: #EF4444; color: #fff; }
+:host:hover .sn-del-btn:hover { transform: scale(1.18); background: var(--color-error); color: var(--color-on-primary); }
 
 /* ── Attached + button ───────────────────────────────────────────────────────── */
 .sn-add-btn {
