@@ -10,4 +10,12 @@ public sealed record ResourcePipelineRouteDto(
     string? ScheduleExpression,
     string? SearchParameters,
     bool IsEnabled,
-    int Priority);
+    int Priority,
+    IReadOnlyList<ResourcePipelineRouteMappingDto> ResourceMappings);
+
+public sealed record ResourcePipelineRouteMappingDto(
+    Guid Id,
+    Guid MappingProfileId,
+    bool IsEnabled,
+    int ExecutionOrder,
+    string? SearchParameters);

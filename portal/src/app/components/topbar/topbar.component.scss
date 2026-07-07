@@ -1,7 +1,7 @@
 .topbar {
   padding: 0 22px;
   display: flex; align-items: center; justify-content: space-between;
-  background: #fff;
+  background: var(--color-surface);
   border-bottom: 1px solid #e9edf4;
   box-shadow: 0 1px 3px rgba(18,20,27,.04);
   z-index: 30;
@@ -11,18 +11,18 @@
   width: 34px; height: 34px;
   display: grid; place-items: center;
   color: #fff;
-  background: linear-gradient(135deg, #00A89D, #007A72);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   border-radius: 10px; font-size: 13px; font-weight: 900;
 }
 .scenario-name {
   border: 1px solid transparent; border-radius: 8px; padding: 6px 10px;
   font-size: 15px; font-weight: 800; color: var(--ink); background: transparent; min-width: 280px;
   &:hover { background: #f4f6f9; }
-  &:focus { outline: 0; border-color: var(--purple); background: #fff; }
+  &:focus { outline: 0; border-color: var(--purple); background: var(--color-surface); }
 }
 .top-actions { display: flex; align-items: center; gap: 9px; }
-.top-pill { min-height: 36px; padding: 8px 12px; display: inline-flex; align-items: center; color: #323741; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; font-size: 13px; font-weight: 750; }
+.top-pill { min-height: 36px; padding: 8px 12px; display: inline-flex; align-items: center; color: #323741; background: var(--color-side); border: 1px solid var(--color-border); border-radius: 999px; font-size: 13px; font-weight: 750; }
 .btn {
   min-height: 36px; padding: 8px 15px; color: #fff; background: var(--purple); border: 0; border-radius: 10px; font-weight: 800; cursor: pointer;
-  &.secondary { color: #242936; background: #fff; border: 1px solid #d8dee8; }
+  &.secondary { color: #242936; background: var(--color-surface); border: 1px solid #d8dee8; }
 }

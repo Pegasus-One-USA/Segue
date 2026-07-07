@@ -55,6 +55,15 @@ public sealed class User : AuditableChildEntity<Guid>
     public DateTime? PasswordExpiresOnUtc { get; private set; }
     public bool MfaEnabled { get; private set; }
 
+    /// <summary>Base32 TOTP shared secret. Staged during enrollment, active once <see cref="MfaEnabled"/> is true.</summary>
+    public string? MfaSecret { get; private set; }
+
+    /// <summary>Newline-separated hashes of the user's remaining one-time MFA backup codes.</summary>
+    public string? MfaBackupCodeHashes { get; private set; }
+
+    /// <summary>When the user last completed MFA enrollment (confirmed a code against the staged secret).</summary>
+    public DateTime? MfaEnrolledOnUtc { get; private set; }
+
     // Invitation flow fields.
     public string? InvitationTokenHash { get; private set; }
     public DateTime? InvitationTokenExpiresOnUtc { get; private set; }
@@ -92,6 +101,65 @@ public sealed class User : AuditableChildEntity<Guid>
     public void SetMfaEnabled(bool mfaEnabled)
     {
         MfaEnabled = mfaEnabled;
+    }
+
+    /// <summary>Stages a TOTP secret for enrollment. MFA is not enforced until <see cref="ConfirmMfaEnrollment"/>.</summary>
+    public void BeginMfaEnrollment(string secret)
+    {
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            throw new InvalidOperationException("An MFA secret is required to begin enrollment.");
+        }
+
+        MfaSecret = secret;
+        MfaEnabled = false;
+        MfaEnrolledOnUtc = null;
+    }
+
+    /// <summary>Activates MFA after the user proves possession of the staged secret; stores the backup-code hashes.</summary>
+    public void ConfirmMfaEnrollment(IEnumerable<string> backupCodeHashes)
+    {
+        if (string.IsNullOrWhiteSpace(MfaSecret))
+        {
+            throw new InvalidOperationException("MFA enrollment has not been started.");
+        }
+
+        MfaEnabled = true;
+        MfaEnrolledOnUtc = DateTime.UtcNow;
+        MfaBackupCodeHashes = string.Join('\n', backupCodeHashes);
+    }
+
+    /// <summary>Fully disables MFA and clears the secret and backup codes.</summary>
+    public void DisableMfa()
+    {
+        MfaEnabled = false;
+        MfaSecret = null;
+        MfaBackupCodeHashes = null;
+        MfaEnrolledOnUtc = null;
+    }
+
+    /// <summary>
+    /// Consumes a one-time backup code if its hash is present, removing it so it cannot be reused.
+    /// Returns true when a matching unused code was found and consumed.
+    /// </summary>
+    public bool TryConsumeBackupCode(string backupCodeHash)
+    {
+        if (string.IsNullOrEmpty(MfaBackupCodeHashes) || string.IsNullOrEmpty(backupCodeHash))
+        {
+            return false;
+        }
+
+        var remaining = MfaBackupCodeHashes
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        if (!remaining.Remove(backupCodeHash))
+        {
+            return false;
+        }
+
+        MfaBackupCodeHashes = remaining.Count == 0 ? null : string.Join('\n', remaining);
+        return true;
     }
 
     public void EnableLocalLogin(string passwordHash, bool mustChangePassword)

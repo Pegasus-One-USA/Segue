@@ -1,0 +1,12 @@
+{
+  "extends": "stylelint-config-recommended-scss",
+  "ignoreFiles": ["dist/**", "node_modules/**", "coverage/**"],
+  "rules": {
+    "no-descending-specificity": null,
+    "no-empty-source": null,
+    "scss/at-extend-no-missing-placeholder": null,
+    "selector-pseudo-element-no-unknown": [true, { "ignorePseudoElements": ["ng-deep"] }],
+    "selector-pseudo-class-no-unknown": [true, { "ignorePseudoClasses": ["ng-deep"] }],
+    "scss/load-no-partial-leading-underscore": null
+  }
+}

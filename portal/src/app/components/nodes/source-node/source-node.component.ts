@@ -1,7 +1,5 @@
-import { Component, input, output, ElementRef, inject, OnInit, OnDestroy } from '@angular/core';
-import { NodeToolsComponent } from '../node-tools/node-tools.component';
-import { CanvasNode } from '../../../models/node.model';
-import { INGESTION_MODES } from '../../../data/ingestion-modes.data';
+import { Component, input, output } from '@angular/core';
+import { CanvasNode, SourceNode } from '../../../models/node.model';
 
 export interface DragEvent { nodeId: string; x: number; y: number; }
 export interface PortConnectStart { nodeId: string; fromX: number; fromY: number; }
@@ -9,28 +7,22 @@ export interface PortConnectStart { nodeId: string; fromX: number; fromY: number
 @Component({
   selector: 'app-source-node',
   standalone: true,
-  imports: [NodeToolsComponent],
+  imports: [],
   templateUrl: './source-node.component.html',
   styleUrl: './source-node.component.scss',
   host: { class: 'node', '[style.left.px]': 'node().x', '[style.top.px]': 'node().y' },
 })
 export class SourceNodeComponent {
-  readonly node        = input.required<CanvasNode>();
-  readonly plusEnabled = input(true);
+  readonly node = input.required<CanvasNode>();
 
-  readonly configure   = output<string>();
-  readonly addNext     = output<string>();
-  readonly delete      = output<string>();
+  readonly configure = output<string>();
+  readonly delete    = output<string>();
+  readonly addNext   = output<string>();
   readonly dragMove    = output<DragEvent>();
   readonly dragEnd     = output<DragEvent>();
   readonly portStart   = output<PortConnectStart>();
   readonly portEnd     = output<{ nodeId: string; clientX: number; clientY: number }>();
   readonly portMove    = output<{ clientX: number; clientY: number }>();
-
-  protected modeName(): string {
-    const m = this.node().fields?.['Ingestion mode'];
-    return INGESTION_MODES.find(x => x.id === m)?.name ?? '—';
-  }
 
   protected envLabel(): string {
     return this.node().fields?.['Environment'] === 'production' ? 'PROD' : 'SBX';
@@ -41,11 +33,11 @@ export class SourceNodeComponent {
   }
 
   protected nodeColor(): string {
-    return (this.node() as any).color ?? 'var(--epic)';
+    return (this.node() as SourceNode).color ?? 'var(--epic)';
   }
 
   protected abbr(): string {
-    return (this.node() as any).abbr ?? 'EP';
+    return (this.node() as SourceNode).abbr ?? 'EP';
   }
 
   protected name(): string {
@@ -54,6 +46,28 @@ export class SourceNodeComponent {
 
   protected context(): string {
     return this.node().fields?.['App context'] ?? '';
+  }
+
+  protected contextLabel(): string {
+    const key = this.node().fields?.['Epic audience'] ?? this.node().fields?.['App key'] ?? '';
+    const map: Record<string, string> = {
+      'provider-ehr-launch': 'Provider EHR Launch',
+      'provider-standalone': 'Provider Standalone',
+      'backend-system':      'Backend Systems',
+      'patient-standalone':  'Patient',
+      'patient':             'Patient',
+    };
+    return map[key] ?? (this.context() || 'FHIR Source');
+  }
+
+  onAddNextClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.addNext.emit(this.node().id);
+  }
+
+  onDeleteClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.delete.emit(this.node().id);
   }
 
   // ── drag on circle ────────────────────────────────────────────────────────
@@ -87,7 +101,7 @@ export class SourceNodeComponent {
 
   onCirclePointerUp(e: PointerEvent): void {
     if (!this.drag) return;
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* pointer already released */ }
     const wasDrag = this.dragged;
     this.drag = null; this.dragged = false;
     if (!wasDrag) this.configure.emit(this.node().id);

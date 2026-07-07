@@ -10,4 +10,8 @@ public sealed record StoredOAuthToken(
     string? RefreshToken,
     DateTimeOffset ExpiresOnUtc,
     string? Scope = null,
-    string? Patient = null);
+    string? Patient = null,
+    // The token endpoint the token was minted at. Interactive sources discover this from the source's
+    // .well-known/smart-configuration at sign-in time rather than persisting it on the source connection, so it is
+    // stashed with the token to make a later silent refresh possible without re-discovery.
+    string? TokenEndpoint = null);

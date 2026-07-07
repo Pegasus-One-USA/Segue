@@ -1,5 +1,6 @@
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure.Messaging;
+using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.SharedKernel.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,6 +31,14 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<PermissionGroup> PermissionGroups => Set<PermissionGroup>();
     public DbSet<PermissionAllocation> PermissionAllocations => Set<PermissionAllocation>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+
+    // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
+    public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
+    public DbSet<WorkflowNode> WorkflowNodes => Set<WorkflowNode>();
+    public DbSet<WorkflowNodeConfiguration> WorkflowNodeConfigurations => Set<WorkflowNodeConfiguration>();
+    public DbSet<WorkflowEdge> WorkflowEdges => Set<WorkflowEdge>();
+    public DbSet<WorkflowRun> WorkflowRuns => Set<WorkflowRun>();
+    public DbSet<WorkflowNodeRun> WorkflowNodeRuns => Set<WorkflowNodeRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

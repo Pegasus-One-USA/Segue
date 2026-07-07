@@ -54,6 +54,13 @@ export class PipelineStore {
     this.edges.update(es => [...es, edge]);
   }
 
+  loadGraph(nodes: CN[], edges: CE[]): void {
+    this.nodes.set(nodes);
+    this.edges.set(edges);
+    this.editingNodeId.set(null);
+    this.tempConnectorPath.set(null);
+  }
+
   removeEdge(id: string): void {
     this.edges.update(es => es.filter(e => e.id !== id));
   }

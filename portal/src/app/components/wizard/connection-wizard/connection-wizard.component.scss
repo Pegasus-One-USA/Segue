@@ -1,6 +1,6 @@
 .wiz-panel {
   width: min(680px, calc(100vw - 28px));
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 16px;
   box-shadow: 0 22px 55px rgba(18,20,27,.18);
   display: grid;
@@ -36,7 +36,7 @@
 
 .wiz-back {
   min-height: 42px; padding: 8px 18px;
-  color: #475569; background: #fff; border: 1px solid #d6dce7; border-radius: 8px;
+  color: #475569; background: var(--color-surface); border: 1px solid #d6dce7; border-radius: 8px;
   font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;
   &:hover { background: #f4f6f9; }
 }

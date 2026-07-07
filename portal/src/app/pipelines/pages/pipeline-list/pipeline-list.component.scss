@@ -69,7 +69,7 @@
     padding: 0 32px 0 12px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-base);
-    background: #fff;
+    background: var(--color-surface);
     font-size: 13.5px;
     color: var(--color-ink);
     outline: none;
@@ -157,7 +157,7 @@
 
 .pipe-avatar {
   width: 36px; height: 36px; border-radius: 8px;
-  background: #ECFDF5; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: var(--color-success-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 
   mat-icon { font-size: 18px; height: 18px; width: 18px; color: #059669; }
 }
@@ -171,11 +171,11 @@
   padding: 3px 10px; border-radius: var(--radius-pill);
   font-size: 12px; font-weight: 600; white-space: nowrap;
 
-  &.status-completed { background: #ECFDF5; color: #059669; }
-  &.status-running   { background: #EFF6FF; color: #2563EB; }
-  &.status-failed    { background: #FEF2F2; color: #DC2626; }
+  &.status-completed { background: var(--color-success-soft); color: #059669; }
+  &.status-running   { background: var(--color-info-soft); color: #2563EB; }
+  &.status-failed    { background: var(--color-error-soft); color: #DC2626; }
   &.status-queued    { background: #FFF7ED; color: #D97706; }
-  &.status-cancelled { background: #F1F5F9; color: #64748B; }
+  &.status-cancelled { background: #F1F5F9; color: var(--color-muted); }
 }
 
 // Trigger badges

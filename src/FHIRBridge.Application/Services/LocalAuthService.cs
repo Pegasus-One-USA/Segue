@@ -19,6 +19,7 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly IOperationalAuditService _auditService;
     private readonly IUserActivityAuditService _activityAuditService;
     private readonly IEmailSender _emailSender;
+    private readonly ITotpService _totpService;
     private readonly LocalAuthOptions _localAuthOptions;
 
     public LocalAuthService(
@@ -29,6 +30,7 @@ public sealed class LocalAuthService : ILocalAuthService
         IOperationalAuditService auditService,
         IUserActivityAuditService activityAuditService,
         IEmailSender emailSender,
+        ITotpService totpService,
         IOptions<LocalAuthOptions> localAuthOptions)
     {
         _repository = repository;
@@ -38,6 +40,7 @@ public sealed class LocalAuthService : ILocalAuthService
         _auditService = auditService;
         _activityAuditService = activityAuditService;
         _emailSender = emailSender;
+        _totpService = totpService;
         _localAuthOptions = localAuthOptions.Value;
     }
 
@@ -48,16 +51,47 @@ public sealed class LocalAuthService : ILocalAuthService
         var email = NormalizeEmail(request.Email);
         var user = await _repository.GetUserByEmailAsync(email, cancellationToken);
 
-        if (user is null ||
-            !user.IsEnabled ||
-            !user.IsLocalLoginEnabled ||
-            string.IsNullOrWhiteSpace(user.PasswordHash) ||
-            !_passwordHasher.Verify(request.Password, user.PasswordHash))
+        // Reject a locked-out account before touching the password so lockout can't be bypassed and
+        // repeated attempts don't extend the window silently.
+        if (user is not null && user.IsLockedOut(DateTime.UtcNow))
         {
+            await AuditAsync("LocalLogin", "Locked", $"Local login blocked (account locked) for {email}.", email, cancellationToken);
+            await RecordActivityAsync("LoginLocked", UserActivityStatuses.Denied, email, user.Id,
+                UserActivitySeverities.Warning, "Account is temporarily locked due to failed login attempts.", cancellationToken);
+            throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
+        }
+
+        var accountUsable = user is not null &&
+                            user.IsEnabled &&
+                            user.IsLocalLoginEnabled &&
+                            !string.IsNullOrWhiteSpace(user.PasswordHash);
+
+        if (!accountUsable || !_passwordHasher.Verify(request.Password, user!.PasswordHash!))
+        {
+            // Count the failed attempt against a real, local-login account so the lockout threshold engages.
+            if (user is not null && accountUsable)
+            {
+                user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
+                    TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
+                await _repository.UpdateUserAsync(user, cancellationToken);
+            }
+
             await AuditAsync("LocalLogin", "Failed", $"Local login failed for {email}.", email, cancellationToken);
             await RecordActivityAsync("LoginFailed", UserActivityStatuses.Failed, email, user?.Id,
                 UserActivitySeverities.Warning, "Invalid email or password.", cancellationToken);
             throw new InvalidOperationException("Invalid email or password.");
+        }
+
+        // Second factor: when the account has MFA enabled, a valid TOTP or backup code is mandatory.
+        if (user.MfaEnabled && !IsMfaSatisfied(user, request.MfaCode))
+        {
+            user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
+                TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
+            await _repository.UpdateUserAsync(user, cancellationToken);
+            await AuditAsync("LocalLogin", "MfaFailed", $"MFA challenge failed for {email}.", email, cancellationToken);
+            await RecordActivityAsync("LoginMfaFailed", UserActivityStatuses.Failed, email, user.Id,
+                UserActivitySeverities.Warning, "Missing or invalid MFA code.", cancellationToken);
+            throw new InvalidOperationException("A valid MFA code is required.");
         }
 
         user.RecordLogin();
@@ -376,6 +410,22 @@ public sealed class LocalAuthService : ILocalAuthService
     private static string ComputeTokenHash(string rawToken) => rawToken;
 
     private static string BuildRawRefreshToken(string tokenHash) => tokenHash;
+
+    // A valid current TOTP, or an unused backup code (which is then consumed), satisfies the second factor.
+    private bool IsMfaSatisfied(User user, string? mfaCode)
+    {
+        if (string.IsNullOrWhiteSpace(mfaCode))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.MfaSecret) && _totpService.ValidateCode(user.MfaSecret, mfaCode))
+        {
+            return true;
+        }
+
+        return MfaBackupCodes.TryConsume(user, mfaCode, _passwordHasher);
+    }
 
     private static void ValidatePassword(string password)
     {

@@ -134,6 +134,8 @@ public static class DependencyInjection
         services.AddScoped<IScheduleEvaluationService, ScheduleEvaluationService>();
         services.AddScoped<IScheduleDispatcher, ScheduleDispatcher>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddSingleton<ITotpService, TotpService>();
+        services.Configure<MfaOptions>(configuration.GetSection("Mfa"));
 
         // SSO token exchange (validate an external IdP token -> mint a FHIRBridge JWT). Providers are OFF
         // by default; the composite validator throws when a disabled provider is requested.
@@ -293,6 +295,7 @@ public static class DependencyInjection
         services.AddScoped<ILineageTracker, OperationalAuditLineageTracker>();
         services.AddHealthChecks()
             .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
+            .AddCheck<SqlServerTdeHealthCheck>("sqlserver-tde")
             .AddCheck<KeyVaultConfigurationHealthCheck>("keyvault");
 
         return services;

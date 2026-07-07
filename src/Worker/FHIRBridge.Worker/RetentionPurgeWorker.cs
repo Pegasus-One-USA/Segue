@@ -66,6 +66,8 @@ public sealed class RetentionPurgeWorker : BackgroundService
 
 public sealed class RetentionPurgeOptions
 {
-    public bool Enabled { get; set; }
+    // Enabled by default so retention limits are actually enforced (HIPAA minimum-necessary /
+    // data-disposal). The HIPAA audit log is immutable and is never purged regardless of this setting.
+    public bool Enabled { get; set; } = true;
     public int IntervalHours { get; set; } = 24;
 }

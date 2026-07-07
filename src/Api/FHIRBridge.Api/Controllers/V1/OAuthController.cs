@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Sources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FHIRBridge.Api.Controllers.V1;
 
@@ -42,6 +43,7 @@ public sealed class OAuthController : ControllerBase
     /// no FHIRBridge session; security comes from the trusted-issuer check.
     /// </summary>
     [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
     [HttpGet("source-connections/{sourceConnectionId:guid}/oauth/launch")]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -82,6 +84,7 @@ public sealed class OAuthController : ControllerBase
     /// patient. Anonymous — the launching user has no FHIRBridge session; security comes from the trusted-issuer check.
     /// </summary>
     [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
     [HttpGet("oauth/launch/{context}")]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -107,6 +110,7 @@ public sealed class OAuthController : ControllerBase
     /// <c>state</c> value rather than the caller's session. Completes the sign-in and persists the token.
     /// </summary>
     [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
     [HttpGet("oauth/callback")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

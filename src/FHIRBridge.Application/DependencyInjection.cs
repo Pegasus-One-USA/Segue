@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<ILocalAuthService, LocalAuthService>();
+        services.AddScoped<IMfaService, MfaService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<ISsoAuthService, SsoAuthService>();

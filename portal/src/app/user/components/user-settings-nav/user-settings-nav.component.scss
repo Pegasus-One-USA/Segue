@@ -1,6 +1,6 @@
 .usn {
   width: 220px; flex-shrink: 0;
-  background: #fff; border: 1px solid #E2E8F0;
+  background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: 14px; padding: 12px 8px;
   display: flex; flex-direction: column; gap: 2px;
   align-self: flex-start;
@@ -9,7 +9,7 @@
 
 .usn-heading {
   font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .08em; color: #94A3B8;
+  letter-spacing: .08em; color: var(--color-muted-2);
   padding: 4px 10px 8px; margin: 0;
 }
 
@@ -20,12 +20,12 @@
   transition: background .12s, color .12s;
   color: inherit;
 
-  &:hover { background: #F8FAFC; }
+  &:hover { background: var(--color-side); }
 
   &.active {
     background: rgba(0,168,157,.08);
-    .usn-item-label { color: #00A89D; }
-    .usn-item-arrow { color: #00A89D; opacity: 1; }
+    .usn-item-label { color: var(--color-primary); }
+    .usn-item-arrow { color: var(--color-primary); opacity: 1; }
   }
 }
 
@@ -36,7 +36,7 @@
   font-size: 13.5px; font-weight: 600; color: #1E293B;
 }
 .usn-item-sub {
-  font-size: 11px; color: #94A3B8;
+  font-size: 11px; color: var(--color-muted-2);
 }
 
 .usn-item-arrow {

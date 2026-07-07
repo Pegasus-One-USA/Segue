@@ -10,15 +10,16 @@ public sealed class PermissionTests(ApiFixture f)
     // ── GET /api/v1/permissions ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task GET_permissions__admin__returns_200_list_of_20()
+    public async Task GET_permissions__admin__returns_200_list_of_27()
     {
         var resp = await f.AdminClient.GetAsync("/api/v1/permissions");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
 
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(JsonValueKind.Array, doc.ValueKind);
-        // 20 seeded platform permissions (the 4 tenant.* permissions were removed with multi-tenancy).
-        Assert.Equal(20, doc.GetArrayLength());
+        // 20 original platform permissions (the 4 tenant.* permissions were removed with
+        // multi-tenancy) + 7 Epic/Athena source-connector permissions.
+        Assert.Equal(27, doc.GetArrayLength());
     }
 
     [Fact]
@@ -46,19 +47,20 @@ public sealed class PermissionTests(ApiFixture f)
     // ── GET /api/v1/permissions/catalog ──────────────────────────────────────────
 
     [Fact]
-    public async Task GET_permissions_catalog__admin__returns_200_with_2_categories()
+    public async Task GET_permissions_catalog__admin__returns_200_with_3_categories()
     {
         var resp = await f.AdminClient.GetAsync("/api/v1/permissions/catalog");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
 
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(JsonValueKind.Array, doc.ValueKind);
-        // AccessControl + Platform — the 2 seeded top-level categories.
-        Assert.Equal(2, doc.GetArrayLength());
+        // AccessControl + Platform + Pipelines (Epic/Athena) — the 3 categories with visible,
+        // active permissions.
+        Assert.Equal(3, doc.GetArrayLength());
     }
 
     [Fact]
-    public async Task GET_permissions_catalog__categories_contain_groups_and_all_20_permissions()
+    public async Task GET_permissions_catalog__categories_contain_groups_and_all_27_permissions()
     {
         var resp = await f.AdminClient.GetAsync("/api/v1/permissions/catalog");
         resp.EnsureSuccessStatusCode();
@@ -90,7 +92,7 @@ public sealed class PermissionTests(ApiFixture f)
             }
         }
 
-        Assert.Equal(20, totalPermissions);
+        Assert.Equal(27, totalPermissions);
     }
 
     [Fact]

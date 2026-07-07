@@ -20,6 +20,9 @@ public sealed class ResourcePipelineRouteConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.Priority).IsRequired();
         builder.Property(x => x.LastTriggeredOnUtc);
 
+        builder.Metadata.FindNavigation(nameof(ResourcePipelineRoute.ResourceMappings))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasIndex(x => new
             {
                 x.WebhookConfigurationId,
@@ -38,5 +41,24 @@ public sealed class ResourcePipelineRouteConfiguration : IEntityTypeConfiguratio
             .WithMany()
             .HasForeignKey(x => x.MappingProfileId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.OwnsMany(x => x.ResourceMappings, mapping =>
+        {
+            mapping.ToTable("ResourcePipelineRouteMappings");
+            mapping.HasKey(x => x.Id);
+            mapping.Property(x => x.Id).ValueGeneratedNever();
+            mapping.Property(x => x.ResourcePipelineRouteId).IsRequired();
+            mapping.Property(x => x.MappingProfileId).IsRequired();
+            mapping.Property(x => x.IsEnabled).IsRequired();
+            mapping.Property(x => x.ExecutionOrder).IsRequired();
+            mapping.Property(x => x.SearchParameters).HasMaxLength(1000);
+            mapping.WithOwner().HasForeignKey(x => x.ResourcePipelineRouteId);
+            mapping.HasIndex(x => new { x.ResourcePipelineRouteId, x.MappingProfileId }).IsUnique();
+            mapping.HasIndex(x => x.MappingProfileId);
+            mapping.HasOne<MappingProfile>()
+                .WithMany()
+                .HasForeignKey(x => x.MappingProfileId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 }

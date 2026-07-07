@@ -26,6 +26,15 @@ public static class WorkflowEndpoints
             return Results.Created($"/api/v1/workflows/{workflow.Id}", workflow);
         });
 
+        group.MapPost("/workflows/validate", (
+            WorkflowDefinitionRequest request,
+            IWorkflowGraphValidator validator) =>
+        {
+            var workflow = BuildWorkflow(Guid.NewGuid(), request);
+            var result = validator.Validate(workflow);
+            return Results.Ok(result);
+        });
+
         group.MapGet("/workflows", async (
             IWorkflowDefinitionStore store,
             CancellationToken cancellationToken) =>
@@ -86,6 +95,22 @@ public static class WorkflowEndpoints
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             return Results.Ok(result);
+        });
+
+        // Persisted run history (Scenario A): node-by-node execution timeline for the builder UI.
+        group.MapGet("/workflows/{workflowId:guid}/runs", async (
+            Guid workflowId,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await runStore.ListByDefinitionAsync(workflowId, cancellationToken)));
+
+        group.MapGet("/workflow-runs/{runId:guid}", async (
+            Guid runId,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            return run is null ? Results.NotFound() : Results.Ok(run);
         });
 
         group.MapPost("/workflows/{workflowId:guid}/activate", async (

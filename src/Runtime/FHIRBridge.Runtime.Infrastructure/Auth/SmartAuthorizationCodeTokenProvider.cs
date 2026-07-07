@@ -1,9 +1,13 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Web;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
 
@@ -16,7 +20,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// back, silently refreshing it with the refresh token when it nears expiry. Vendor subclasses (Epic, Healow, …)
 /// need only override <see cref="ProviderName"/>.
 /// </summary>
-public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IInteractiveAuthorizationFlow
+public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IInteractiveAuthorizationFlow, IFhirPatientContextProvider
 {
     private const int DefaultExpiresInSeconds = 300;
 
@@ -42,9 +46,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     public async Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(source.TokenEndpoint) || string.IsNullOrWhiteSpace(source.ClientId))
+        if (string.IsNullOrWhiteSpace(source.ClientId))
         {
-            throw new InvalidOperationException($"{ProviderName} requires a token endpoint and client id.");
+            throw new InvalidOperationException($"{ProviderName} requires a client id.");
         }
 
         var key = BuildStoreKey(source);
@@ -55,6 +59,10 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 $"{ProviderName} source '{source.Name}' has no authorized token. Complete the interactive OAuth sign-in callback before running this pipeline.");
         }
 
+        // A still-valid cached token is returned as-is: interactive sources discover their token endpoint at sign-in
+        // and do not persist it on the source connection, so requiring one here would needlessly break the common
+        // case (a pipeline run right after an EHR launch, when the token is fresh). The endpoint is only needed to
+        // refresh an expired token below.
         if (stored.ExpiresOnUtc > DateTimeOffset.UtcNow.AddMinutes(1))
         {
             return stored.AccessToken;
@@ -66,7 +74,25 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 $"{ProviderName} token for source '{source.Name}' has expired and no refresh token is available. Re-authorize the source.");
         }
 
-        return await RefreshAsync(source, key, stored.RefreshToken!, cancellationToken);
+        // Prefer a token endpoint configured on the source; fall back to the one discovered and stashed at sign-in.
+        var tokenEndpoint = string.IsNullOrWhiteSpace(source.TokenEndpoint) ? stored.TokenEndpoint : source.TokenEndpoint;
+        if (string.IsNullOrWhiteSpace(tokenEndpoint))
+        {
+            throw new InvalidOperationException(
+                $"{ProviderName} token for source '{source.Name}' has expired and no token endpoint is available to refresh it. Re-authorize the source.");
+        }
+
+        return await RefreshAsync(source with { TokenEndpoint = tokenEndpoint }, key, stored.RefreshToken!, cancellationToken);
+    }
+
+    /// <summary>
+    /// Returns the patient id established by the launch (the <c>patient</c> field the token endpoint returns for a
+    /// <c>launch/patient</c> or patient-standalone flow), or null when the stored token carries no patient context.
+    /// </summary>
+    public async Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        var stored = await _tokenStore.GetAsync(BuildStoreKey(source), cancellationToken);
+        return stored?.Patient;
     }
 
     /// <summary>
@@ -199,13 +225,19 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 throw new InvalidOperationException($"{ProviderName} token endpoint did not return an access_token.");
             }
 
+            if (!string.IsNullOrWhiteSpace(token.IdToken))
+            {
+                await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
+            }
+
             var expiresIn = token.ExpiresInSeconds > 0 ? token.ExpiresInSeconds : DefaultExpiresInSeconds;
             var stored = new StoredOAuthToken(
                 token.AccessToken!,
                 string.IsNullOrWhiteSpace(token.RefreshToken) ? fallbackRefreshToken : token.RefreshToken,
                 DateTimeOffset.UtcNow.AddSeconds(expiresIn),
                 token.Scope,
-                token.Patient);
+                token.Patient,
+                source.TokenEndpoint);
 
             await _tokenStore.SaveAsync(BuildStoreKey(source), stored, cancellationToken);
             await _auditSink.RecordAsync(source, $"{action}Succeeded", "Completed", $"{ProviderName} access token acquired.", cancellationToken);
@@ -241,6 +273,50 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             form["client_secret"] = source.ClientSecret!;
         }
     }
+
+    private async Task ValidateIdTokenAsync(
+        FhirSourceConfiguration source,
+        string idToken,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(source.ClientId))
+        {
+            throw new InvalidOperationException($"{ProviderName} id_token validation requires a client id.");
+        }
+
+        var handler = new JwtSecurityTokenHandler();
+        var unvalidated = handler.ReadJwtToken(idToken);
+        if (string.IsNullOrWhiteSpace(unvalidated.Issuer))
+        {
+            throw new InvalidOperationException($"{ProviderName} token endpoint returned an id_token with no issuer.");
+        }
+
+        var metadataAddress = $"{unvalidated.Issuer.TrimEnd('/')}/.well-known/openid-configuration";
+        var configurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+            metadataAddress,
+            new OpenIdConnectConfigurationRetriever(),
+            new HttpDocumentRetriever(_httpClient) { RequireHttps = !IsLocalHttp(metadataAddress) });
+        var configuration = await configurationManager.GetConfigurationAsync(cancellationToken);
+
+        handler.ValidateToken(idToken, new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = configuration.Issuer,
+            ValidateAudience = true,
+            ValidAudience = source.ClientId,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKeys = configuration.SigningKeys,
+            ClockSkew = TimeSpan.FromMinutes(2)
+        }, out _);
+    }
+
+    private static bool IsLocalHttp(string metadataAddress) =>
+        Uri.TryCreate(metadataAddress, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttp &&
+        (string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(uri.Host, "::1", StringComparison.OrdinalIgnoreCase));
 
     private static string ResolveScopes(FhirSourceConfiguration source, bool isEhrLaunch = false)
     {
@@ -280,5 +356,8 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         // SMART returns the launch/selected patient id in the token response when a patient context is established.
         [JsonPropertyName("patient")]
         public string? Patient { get; set; }
+
+        [JsonPropertyName("id_token")]
+        public string? IdToken { get; set; }
     }
 }

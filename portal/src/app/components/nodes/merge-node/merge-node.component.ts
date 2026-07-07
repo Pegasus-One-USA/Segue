@@ -1,34 +1,31 @@
-import { Component, input, output, computed, inject } from '@angular/core';
-import { NodeToolsComponent } from '../node-tools/node-tools.component';
-import { CanvasNode } from '../../../models/node.model';
+import { Component, input, output, inject } from '@angular/core';
+import { CanvasNode, MergeNode } from '../../../models/node.model';
 import { PipelineStore } from '../../../services/pipeline.store';
 import { ApplicabilityService } from '../../../services/applicability.service';
 
 @Component({
   selector: 'app-merge-node',
   standalone: true,
-  imports: [NodeToolsComponent],
+  imports: [],
   templateUrl: './merge-node.component.html',
   styleUrl: './merge-node.component.scss',
   host: { class: 'node', '[style.left.px]': 'node().x', '[style.top.px]': 'node().y' },
 })
 export class MergeNodeComponent {
-  private readonly store   = inject(PipelineStore);
-  private readonly appSvc  = inject(ApplicabilityService);
+  private readonly store  = inject(PipelineStore);
+  private readonly appSvc = inject(ApplicabilityService);
 
-  readonly node        = input.required<CanvasNode>();
-  readonly plusEnabled = input(true);
+  readonly node = input.required<CanvasNode>();
 
-  readonly addNext  = output<string>();
-  readonly delete   = output<string>();
-  readonly dragMove = output<{ nodeId: string; x: number; y: number }>();
+  readonly delete  = output<string>();
+  readonly addNext = output<string>();
+  readonly dragMove  = output<{ nodeId: string; x: number; y: number }>();
   readonly portStart = output<{ nodeId: string; fromX: number; fromY: number }>();
   readonly portMove  = output<{ clientX: number; clientY: number }>();
   readonly portEnd   = output<{ nodeId: string; clientX: number; clientY: number }>();
 
   protected mergeLabel(): string {
-    const g = (this.node() as any).group ?? '';
-    return this.appSvc.groupLabel(g);
+    return this.appSvc.groupLabel((this.node() as MergeNode).group ?? '');
   }
 
   protected inCount(): number {
@@ -39,6 +36,17 @@ export class MergeNodeComponent {
     return this.node().fields?.['__name'] ?? 'Merge';
   }
 
+  onAddNextClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.addNext.emit(this.node().id);
+  }
+
+  onDeleteClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.delete.emit(this.node().id);
+  }
+
+  // ── drag ──────────────────────────────────────────────────────────────────
   private drag: { sX: number; sY: number; nX: number; nY: number } | null = null;
 
   onCirclePointerDown(e: PointerEvent): void {
@@ -54,10 +62,11 @@ export class MergeNodeComponent {
 
   onCirclePointerUp(e: PointerEvent): void {
     if (!this.drag) return;
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* pointer already released */ }
     this.drag = null;
   }
 
+  // ── port ──────────────────────────────────────────────────────────────────
   onPortPointerDown(e: PointerEvent): void {
     e.stopPropagation(); e.preventDefault();
     this.portStart.emit({ nodeId: this.node().id, fromX: this.node().x, fromY: this.node().y });

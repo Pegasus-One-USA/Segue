@@ -1,0 +1,38 @@
+name: Portal CI
+
+# Compulsory PR gate for the Angular portal. Pair with a branch-protection rule
+# on `main` that requires the "build" check (see docs/design-token-architecture.md).
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'portal/**'
+      - '.github/workflows/portal-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'portal/**'
+      - '.github/workflows/portal-ci.yml'
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: portal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+      - run: npm ci
+      - name: Design-token compliance (ratchet)
+        run: node scripts/check-tokens.mjs
+      - name: Lint ratchet (ESLint + stylelint)
+        run: node scripts/lint-ratchet.mjs
+      - name: Build
+        # development config verifies compilation without production budget noise
+        run: npm run build -- --configuration development

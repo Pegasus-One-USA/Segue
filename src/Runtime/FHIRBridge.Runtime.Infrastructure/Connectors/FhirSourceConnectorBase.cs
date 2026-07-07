@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
@@ -19,7 +20,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Connectors;
 /// This is the "vendor inherits" axis of the Bridge model; the access-token grant (Backend / EHR-launch /
 /// Standalone / Patient) is composed by the injected <see cref="IFhirAccessTokenProvider"/>.
 /// </summary>
-public abstract class FhirSourceConnectorBase : IFhirSourceClient
+public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
 {
     private static readonly ConcurrentDictionary<string, SourceThrottle> SourceThrottles = new(StringComparer.Ordinal);
     private static readonly Random RetryJitter = new();
@@ -56,8 +57,9 @@ public abstract class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        var searchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
         var resources = new List<ResourceEnvelope>();
-        var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, source.SearchParameters);
+        var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, searchParameters);
         var maxPages = source.MaxPages <= 0 ? 1 : source.MaxPages;
 
         for (var page = 0; page < maxPages && nextUrl is not null; page++)
@@ -239,6 +241,43 @@ public abstract class FhirSourceConnectorBase : IFhirSourceClient
     }
 
     /// <summary>
+    /// <summary>
+    /// Scopes the search to the launched patient when the token grant carries a patient context (interactive SMART
+    /// launches). Without this, a provider such as Epic rejects an unscoped <c>Patient</c> search. The launched
+    /// patient targets its own resource by <c>_id</c>; every other resource type is filtered by <c>patient</c>.
+    /// Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left
+    /// untouched.
+    /// </summary>
+    private async Task<string?> ApplyPatientScopeAsync(
+        string resourceType,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
+        {
+            return source.SearchParameters;
+        }
+
+        var patientId = await patientContextProvider.GetPatientContextAsync(source, cancellationToken);
+        if (string.IsNullOrWhiteSpace(patientId))
+        {
+            return source.SearchParameters;
+        }
+
+        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        if (ContainsQueryParameter(query, "patient") ||
+            ContainsQueryParameter(query, "subject") ||
+            ContainsQueryParameter(query, "_id"))
+        {
+            return source.SearchParameters;
+        }
+
+        var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
+        var scope = isPatientResource ? $"_id={patientId}" : $"patient={patientId}";
+        return string.IsNullOrWhiteSpace(query) ? scope : $"{query}&{scope}";
+    }
+
+    /// <summary>
     /// Builds the paginated search URL. The base honors caller-supplied search parameters and injects a
     /// <c>_count</c> when absent; vendor connectors may override for proprietary URL shapes.
     /// </summary>
@@ -269,20 +308,39 @@ public abstract class FhirSourceConnectorBase : IFhirSourceClient
         CancellationToken cancellationToken)
     {
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        var message = $"{SourceDisplayName} request returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {requestUrl}.";
+        var message = $"{SourceDisplayName} request returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {RedactRequestUrl(requestUrl)}.";
 
         if (string.IsNullOrWhiteSpace(body))
         {
             return message;
         }
 
-        body = body.ReplaceLineEndings(" ").Trim();
+        body = RedactFailureBody(body.ReplaceLineEndings(" ").Trim());
         if (body.Length > 1000)
         {
             body = body[..1000] + "...";
         }
 
         return $"{message} Response body: {body}";
+    }
+
+    private static string RedactRequestUrl(string requestUrl)
+    {
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri))
+        {
+            return RedactFailureBody(requestUrl);
+        }
+
+        return string.IsNullOrWhiteSpace(uri.Query)
+            ? requestUrl
+            : $"{uri.GetLeftPart(UriPartial.Path)}?[redacted]";
+    }
+
+    private static string RedactFailureBody(string value)
+    {
+        var redacted = PatientQueryParameterRegex().Replace(value, "$1=[redacted]");
+        redacted = PatientJsonPropertyRegex().Replace(redacted, "$1\"[redacted]\"");
+        return IdJsonPropertyRegex().Replace(redacted, "$1\"[redacted]\"");
     }
 
     private static bool ContainsQueryParameter(string query, string parameterName)
@@ -303,4 +361,13 @@ public abstract class FhirSourceConnectorBase : IFhirSourceClient
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public DateTimeOffset LastRequestOnUtc { get; set; } = DateTimeOffset.MinValue;
     }
+
+    [GeneratedRegex(@"(?i)\b(patient|subject|_id)=([^&\s""'}]+)")]
+    private static partial Regex PatientQueryParameterRegex();
+
+    [GeneratedRegex(@"(?i)(""patient""\s*:\s*)""[^""]+""")]
+    private static partial Regex PatientJsonPropertyRegex();
+
+    [GeneratedRegex(@"(?i)(""id""\s*:\s*)""[^""]+""")]
+    private static partial Regex IdJsonPropertyRegex();
 }

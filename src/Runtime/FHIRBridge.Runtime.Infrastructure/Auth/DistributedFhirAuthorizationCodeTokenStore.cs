@@ -1,6 +1,8 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
@@ -20,16 +22,35 @@ public sealed class DistributedFhirAuthorizationCodeTokenStore : IFhirAuthorizat
     private const string KeyPrefix = "oauth-token:";
 
     private readonly IDistributedCache _cache;
+    private readonly IDataProtector _protector;
 
-    public DistributedFhirAuthorizationCodeTokenStore(IDistributedCache cache)
+    public DistributedFhirAuthorizationCodeTokenStore(
+        IDistributedCache cache,
+        IDataProtectionProvider dataProtectionProvider)
     {
         _cache = cache;
+        _protector = dataProtectionProvider.CreateProtector(
+            "FHIRBridge.Runtime.Infrastructure.Auth.DistributedFhirAuthorizationCodeTokenStore.v1");
     }
 
     public async Task<StoredOAuthToken?> GetAsync(string key, CancellationToken cancellationToken)
     {
         var payload = await _cache.GetStringAsync(KeyPrefix + key, cancellationToken);
-        return payload is null ? null : JsonSerializer.Deserialize<StoredOAuthToken>(payload);
+        if (payload is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<StoredOAuthToken>(_protector.Unprotect(payload));
+        }
+        catch (CryptographicException)
+        {
+            // Backward-compatible rollout: pre-hardening cache entries were plaintext JSON. Do not write plaintext
+            // again; the next SaveAsync for this key will replace it with a protected payload.
+            return JsonSerializer.Deserialize<StoredOAuthToken>(payload);
+        }
     }
 
     public Task SaveAsync(string key, StoredOAuthToken token, CancellationToken cancellationToken)
@@ -45,7 +66,7 @@ public sealed class DistributedFhirAuthorizationCodeTokenStore : IFhirAuthorizat
             return Task.CompletedTask;
         }
 
-        var payload = JsonSerializer.Serialize(token);
+        var payload = _protector.Protect(JsonSerializer.Serialize(token));
         return _cache.SetStringAsync(
             KeyPrefix + key,
             payload,

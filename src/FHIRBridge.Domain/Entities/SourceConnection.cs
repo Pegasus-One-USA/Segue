@@ -22,7 +22,7 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         Id = Guid.NewGuid();
         Name = name;
         SourceSystemType = sourceSystemType;
-        BaseUrl = baseUrl;
+        BaseUrl = ValidateBaseUrl(baseUrl);
         Authentication = authentication;
         ApplicationType = applicationType;
         Interactive = interactive;
@@ -55,7 +55,7 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
     {
         Name = name;
         SourceSystemType = sourceSystemType;
-        BaseUrl = baseUrl;
+        BaseUrl = ValidateBaseUrl(baseUrl);
         Authentication = authentication;
         ApplicationType = applicationType;
         Interactive = interactive;
@@ -64,5 +64,36 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
     public void SetEnabled(bool isEnabled)
     {
         IsEnabled = isEnabled;
+    }
+
+    /// <summary>
+    /// PHI travels over this connection, so the endpoint must be encrypted in transit (HIPAA
+    /// §164.312(e)). HTTPS is required; plain HTTP is permitted only for loopback addresses to
+    /// support local development and integration tests.
+    /// </summary>
+    private static string ValidateBaseUrl(string baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            throw new InvalidOperationException("Source connection BaseUrl is required.");
+        }
+
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException($"Source connection BaseUrl '{baseUrl}' is not a valid absolute URL.");
+        }
+
+        if (uri.Scheme == Uri.UriSchemeHttps)
+        {
+            return baseUrl;
+        }
+
+        if (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)
+        {
+            return baseUrl;
+        }
+
+        throw new InvalidOperationException(
+            $"Source connection BaseUrl must use HTTPS (got '{uri.Scheme}'). Plain HTTP is allowed only for loopback addresses.");
     }
 }

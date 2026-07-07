@@ -1,0 +1,85 @@
+name: Backend CI
+
+# PR gate for the .NET backend: build, test, dependency-vulnerability scan, SAST (CodeQL),
+# and secret scanning. Pair with a branch-protection rule on `main` requiring these checks.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'FHIRBridge.sln'
+      - '.github/workflows/backend-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'FHIRBridge.sln'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+  security-events: write   # required for CodeQL to upload results
+
+jobs:
+  build-test:
+    name: build-test-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore FHIRBridge.sln
+
+      - name: Build
+        run: dotnet build FHIRBridge.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test FHIRBridge.sln --configuration Release --no-build --verbosity normal
+
+      # Fails the build when any package (direct or transitive) has a known CVE.
+      - name: Dependency vulnerability scan
+        run: |
+          echo "Scanning for vulnerable NuGet packages..."
+          dotnet list FHIRBridge.sln package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          if grep -q -E "Critical|High|Moderate|Low" vuln.txt; then
+            echo "::error::Vulnerable dependencies detected. See log above."
+            exit 1
+          fi
+          echo "No vulnerable dependencies found."
+
+  codeql:
+    name: codeql-sast
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+      - name: Build for analysis
+        run: dotnet build FHIRBridge.sln --configuration Release
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
