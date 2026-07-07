@@ -45,8 +45,9 @@ interface AudienceFieldConfig {
 }
 
 const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {
-  'provider-ehr-launch': { showConfig: true,  showLaunchUrl: true,  showCdsHooks: true,  redirectMode: 'readonly', redirectLabel: 'Redirect URI',  scopePrefix: 'user' },
-  'provider-standalone': { showConfig: true,  showLaunchUrl: true,  showCdsHooks: true,  redirectMode: 'readonly', redirectLabel: 'Redirect URI',  scopePrefix: 'user' },
+  // CDS Hooks removed from the UI (not required) — flag kept for future use but disabled everywhere.
+  'provider-ehr-launch': { showConfig: true,  showLaunchUrl: true,  showCdsHooks: false, redirectMode: 'readonly', redirectLabel: 'Redirect URI',  scopePrefix: 'user' },
+  'provider-standalone': { showConfig: true,  showLaunchUrl: true,  showCdsHooks: false, redirectMode: 'readonly', redirectLabel: 'Redirect URI',  scopePrefix: 'user' },
   'patient':             { showConfig: true,  showLaunchUrl: false, showCdsHooks: false, redirectMode: 'editable', redirectLabel: 'Callback URL',  scopePrefix: 'patient' },
   'backend-system':      { showConfig: false, showLaunchUrl: false, showCdsHooks: false, redirectMode: 'readonly', redirectLabel: '',              scopePrefix: 'system' },
 };

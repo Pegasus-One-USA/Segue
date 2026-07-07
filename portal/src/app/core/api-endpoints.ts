@@ -40,3 +40,9 @@ export const ROLES_ENDPOINTS = {
 export const PERMISSIONS_ENDPOINTS = {
   list: `${API_V1_BASE}/permissions`,
 };
+
+// ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
+export const DESTINATION_ENDPOINTS = {
+  schemaPreview: `${API_V1_BASE}/destinations/schema-preview`,
+  schema:        (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
+};

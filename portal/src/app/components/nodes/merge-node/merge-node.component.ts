@@ -41,6 +41,11 @@ export class MergeNodeComponent {
     this.addNext.emit(this.node().id);
   }
 
+  onDeleteClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.delete.emit(this.node().id);
+  }
+
   // ── drag ──────────────────────────────────────────────────────────────────
   private drag: { sX: number; sY: number; nX: number; nY: number } | null = null;
 

@@ -50,17 +50,104 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         }
 
         var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+        var tables = await ReadSchemaAsync(destination.DestinationType, connectionString, cancellationToken);
 
-        await using var connection = await OpenConnectionAsync(destination.DestinationType, connectionString, cancellationToken);
+        return new DestinationSchemaDto(destinationId, tables);
+    }
+
+    public async Task<DestinationSchemaProbeDto> ProbeSchemaAsync(
+        DestinationConnectionProbeRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsRelational(request.DestinationType))
+        {
+            return new DestinationSchemaProbeDto(
+                false, $"Destination type '{request.DestinationType}' is not a relational database.", []);
+        }
+
+        string connectionString;
+        try
+        {
+            connectionString = BuildConnectionString(request);
+        }
+        catch (Exception exception)
+        {
+            return new DestinationSchemaProbeDto(false, exception.Message, []);
+        }
+
+        try
+        {
+            var tables = await ReadSchemaAsync(request.DestinationType, connectionString, cancellationToken);
+            return new DestinationSchemaProbeDto(true, null, tables);
+        }
+        catch (Exception exception)
+        {
+            // Connection/auth failures are an expected UI outcome, not a server error.
+            return new DestinationSchemaProbeDto(false, exception.Message, []);
+        }
+    }
+
+    private async Task<List<DestinationTableSchemaDto>> ReadSchemaAsync(
+        DestinationType type,
+        string connectionString,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = destination.DestinationType is DestinationType.SqlServer or DestinationType.AzureSql
+        command.CommandText = type is DestinationType.SqlServer or DestinationType.AzureSql
             ? SqlServerColumnsSql
             : InformationSchemaSql;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var tables = await ReadColumnsAsync(reader, MapType(destination.DestinationType), cancellationToken);
+        return await ReadColumnsAsync(reader, MapType(type), cancellationToken);
+    }
 
-        return new DestinationSchemaDto(destinationId, tables);
+    private static string BuildConnectionString(DestinationConnectionProbeRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ConnectionString))
+        {
+            return request.ConnectionString!;
+        }
+
+        return request.DestinationType switch
+        {
+            DestinationType.SqlServer or DestinationType.AzureSql => BuildSqlServerConnectionString(request),
+            _ => throw new InvalidOperationException(
+                $"Provide a ConnectionString to probe destination type '{request.DestinationType}'."),
+        };
+    }
+
+    private static string BuildSqlServerConnectionString(DestinationConnectionProbeRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Server) || string.IsNullOrWhiteSpace(request.Database))
+        {
+            throw new InvalidOperationException("Server and Database are required to test a SQL Server connection.");
+        }
+
+        var builder = new SqlConnectionStringBuilder
+        {
+            DataSource = request.Server,
+            InitialCatalog = request.Database,
+            TrustServerCertificate = request.TrustServerCertificate,
+            Encrypt = request.Encrypt,
+            ConnectTimeout = 10,
+        };
+
+        switch ((request.Authentication ?? "sql-auth").Trim().ToLowerInvariant())
+        {
+            case "managed-identity":
+                builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryManagedIdentity;
+                break;
+            case "azure-ad":
+                builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryDefault;
+                break;
+            default: // sql-auth
+                builder.UserID = request.Username ?? string.Empty;
+                builder.Password = request.Password ?? string.Empty;
+                break;
+        }
+
+        return builder.ConnectionString;
     }
 
     private static bool IsRelational(DestinationType type)
