@@ -162,6 +162,47 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
     }
 
+    public async Task<Uri> StartStandaloneFromContextAsync(
+        string launchContext,
+        string redirectUri,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(redirectUri))
+        {
+            throw new ArgumentException("A redirect URI is required to start interactive authorization.", nameof(redirectUri));
+        }
+
+        var context = _launchTokenProtector.UnprotectContext(launchContext)
+            ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
+
+        var (sourceConnection, routeId) = await ResolveRouteSourceAsync(context.RouteId, cancellationToken);
+        var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken);
+        var clientId = RequireClientId(sourceConnection);
+
+        var source = new FhirSourceConfiguration(
+            SourceType: MapSourceType(sourceConnection.SourceSystemType),
+            Name: sourceConnection.Name,
+            // No launch issuer in a standalone sign-in — the configured FHIR base URL is the audience.
+            BaseUrl: sourceConnection.BaseUrl,
+            TokenEndpoint: smartConfiguration.TokenEndpoint,
+            ClientId: clientId,
+            KeyId: null,
+            PrivateKeyPem: null,
+            Scopes: ApplyPatientSelection(
+                sourceConnection.Authentication.Scopes,
+                sourceConnection.Interactive?.PatientSelectionMethod),
+            SourceConnectionId: sourceConnection.Id,
+            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
+
+        var authorizationUrl = await IssueAuthorizationAsync(
+            source, sourceConnection, launch: null, routeId, requestedRedirectUri: redirectUri, cancellationToken);
+
+        await RecordAuditAsync(sourceConnection.Id, "StandaloneAuthorizationStarted", "Started",
+            $"Provider-standalone sign-in started for {sourceConnection.Name}.", cancellationToken);
+
+        return authorizationUrl;
+    }
+
     private async Task<Uri> StartEhrLaunchCoreAsync(
         SourceConnection sourceConnection,
         string issuer,
@@ -299,7 +340,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         if (pending.RouteId is { } routeId)
         {
-            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, cancellationToken);
+            // Deliberately NOT the request token: the callback's caller is the provider's browser, which may
+            // disconnect (tab closed, redirect) while the run is still pulling from the EHR. The run must not
+            // die with the connection.
+            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None);
         }
         else if (pending.WorkflowId is { } workflowId)
         {
