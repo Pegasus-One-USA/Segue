@@ -1,0 +1,80 @@
+portal/src/app/services/destination-schema.service.ts
+  s_9fb76ea04158d3::t_521b3f778a7b59 1-51
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_9fb76ea04158d3::t_7fa4da2a9818c6 75
+  s_9fb76ea04158d3::t_3bf2603496daf0 81-91,110-119,233-253,264,267-277,279,281-296,383,386-388
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_9fb76ea04158d3::t_ded796ab77b9bc 10
+  s_9fb76ea04158d3::t_88d5b6b9ec9e50 103
+  s_9fb76ea04158d3::t_1cfc3bfadc398d 122-124
+  s_9fb76ea04158d3::t_3b264d3c8cd4aa 145-153,192-208,211-257,272,280-307,311,315-316,322,325,353-355,382,384-393
+portal/src/app/components/nodes/merge-node/merge-node.component.html
+  s_9fb76ea04158d3::t_3708487022ef8f 4-9
+  s_9fb76ea04158d3::t_6175880e1d4634 10-12
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_9fb76ea04158d3::t_7169ff09c3098a 4-9
+  s_9fb76ea04158d3::t_d06b830d2af657 10-12
+portal/src/app/components/nodes/source-node/source-node.component.html
+  s_9fb76ea04158d3::t_72e91a5d1b65af 4-9
+  s_9fb76ea04158d3::t_179029e3a56db0 10-12
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_9fb76ea04158d3::t_8a1969bc1734c2 1-41
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_9fb76ea04158d3::t_56de1876ff2de0 53,55-91,93-94,103,106,108,110,113,118,121,123,125,128,137,148
+  s_9fb76ea04158d3::t_086157b2c9b58c 92
+  s_9fb76ea04158d3::t_b963fe637022b3 95
+  s_9fb76ea04158d3::t_e803832906c2c2 102
+  s_9fb76ea04158d3::t_1a4cbab2e24fdb 105
+  s_9fb76ea04158d3::t_36c5df3ffa3e93 107
+  s_9fb76ea04158d3::t_7123b69c14a1e4 109
+  s_9fb76ea04158d3::t_518cfdd0310c64 111-112
+  s_9fb76ea04158d3::t_99dbad82c13104 114-117
+  s_9fb76ea04158d3::t_62e68170f05f66 119-120
+  s_9fb76ea04158d3::t_f5a4981e338cb0 122
+  s_9fb76ea04158d3::t_4d7fb27b819aa5 124
+  s_9fb76ea04158d3::t_786e77ade54edb 126-127
+  s_9fb76ea04158d3::t_284a35385a4a6d 129-131,134-136
+  s_9fb76ea04158d3::t_8713c1b1c4674b 138-140,145-147
+  s_9fb76ea04158d3::t_9f243675a95fc9 149-150
+  s_9fb76ea04158d3::t_12930f97f97cc2 97,132-133,141-144
+src/FHIRBridge.Application/Abstractions/Destinations/IDestinationSchemaService.cs
+  s_9fb76ea04158d3::t_ef79593960fbc1 8-9
+  s_9fb76ea04158d3::t_9076928fb5e9a9 10-12
+  s_9fb76ea04158d3::t_8830a6e7d40d6e 13-16
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_9fb76ea04158d3::t_0665560b57d7d6 1-2,9-24
+  s_9fb76ea04158d3::t_4c42bbd092b963 25-27
+  s_9fb76ea04158d3::t_24a8a144cb0d5f 28-30
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_9fb76ea04158d3::t_ec640829a1e706 48-50
+portal/src/app/components/nodes/merge-node/merge-node.component.scss
+  s_9fb76ea04158d3::t_b6676121a3ed84 103-128
+portal/src/app/components/nodes/merge-node/merge-node.component.ts
+  s_9fb76ea04158d3::t_119209078154ff 44-48
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_9fb76ea04158d3::t_6a7b6e59d18f36 133-158
+portal/src/app/components/nodes/source-node/source-node.component.ts
+  s_9fb76ea04158d3::t_74562b6853a35e 68-72
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_9fb76ea04158d3::t_5356be2a683f8f 122-147
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_9fb76ea04158d3::t_4dcf85f85beed6 114-118
+portal/src/app/core/api-endpoints.ts
+  s_9fb76ea04158d3::t_a03ec4b6b584d0 43-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5736904fa1cd509d4e2564580f2ac7ca97789c36",
+  "prompts": {},
+  "sessions": {
+    "s_9fb76ea04158d3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a815e52d-43de-4657-b874-38457f476efe",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
