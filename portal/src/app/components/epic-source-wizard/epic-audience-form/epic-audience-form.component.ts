@@ -24,6 +24,20 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
   try { new URL(ctrl.value); return null; } catch { return { url: true }; }
 }
 
+/**
+ * Determines the SMART scope version a source uses. Prefers the explicit permission-v1/permission-v2 capability
+ * tokens; when absent (Epic frequently omits them) it infers from scopes_supported — a granular v2 suffix like
+ * `.rs` / `.cruds` implies v2, coarse `.read` / `.write` implies v1. Returns null when nothing is conclusive.
+ */
+function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
+  if (capabilities.includes('permission-v2')) return 'v2';
+  if (capabilities.includes('permission-v1')) return 'v1';
+  const suffix = (s: string): string => (s.includes('.') ? s.slice(s.lastIndexOf('.') + 1) : '').toLowerCase();
+  if (scopesSupported.some(s => /^[cruds]+$/.test(suffix(s)))) return 'v2';
+  if (scopesSupported.some(s => suffix(s) === 'read' || suffix(s) === 'write')) return 'v1';
+  return null;
+}
+
 // ── Per-audience field visibility/requirement registry ─────────────────────────
 // Adding a new audience means adding one entry here — no template/validator edits.
 // All four audiences now show a connection form; only the redirect/launch/retrieval
@@ -225,6 +239,8 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly discStatus   = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
   protected readonly discValues   = signal<FullDiscoveredValues | null>(null);
   protected readonly discoveredScopes = signal<string[]>([]);
+  // True once discovery actually determined the SMART scope version (vs. leaving the default) — drives the badge.
+  protected readonly scopeVersionAuto = signal(false);
   protected readonly testStatus   = signal<'idle' | 'running' | 'ok' | 'fail'>('idle');
 
   protected readonly form = this.fb.nonNullable.group({
@@ -569,11 +585,15 @@ export class EpicAudienceFormComponent implements OnInit {
         this.discoveredScopes.set(result.scopesSupported);
         // Resource Type: Auto — from the source's /metadata.
         this.discoveredResourceTypes.set(result.resourceTypes);
-        // SMART Scope Version: Auto — Epic advertises permission-v1 / permission-v2 in its capabilities.
-        if (result.capabilities.includes('permission-v2')) {
-          this.form.controls.scopeVersion.setValue('v2');
-        } else if (result.capabilities.includes('permission-v1')) {
-          this.form.controls.scopeVersion.setValue('v1');
+        // SMART Scope Version: Auto — prefer Epic's advertised permission-v1/permission-v2 capabilities; if neither is
+        // present (Epic often omits them), infer from the shape of scopes_supported — granular v2 suffixes (.rs/.cruds/…)
+        // vs coarse v1 (.read/.write). Only badge it as auto-detected when we actually determined a version.
+        const detected = detectScopeVersion(result.capabilities, result.scopesSupported);
+        if (detected) {
+          this.form.controls.scopeVersion.setValue(detected);
+          this.scopeVersionAuto.set(true);
+        } else {
+          this.scopeVersionAuto.set(false);
         }
         this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
         this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);

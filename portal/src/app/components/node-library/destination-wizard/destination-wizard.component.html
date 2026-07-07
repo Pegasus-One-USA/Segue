@@ -192,7 +192,7 @@
         <span class="dw-section-hint">Choose which FHIR resources to include in this destination.</span>
       </div>
       <div class="dw-resources">
-        @for (r of ALL_RESOURCES; track r) {
+        @for (r of availableGroups(); track r) {
           <button
             type="button"
             class="dw-resource-card"
@@ -252,6 +252,7 @@
                 />
               }
             </span>
+            <button type="button" class="dw-btn dw-add-field" (click)="addRow(r)">+ Add field</button>
           </div>
           <table class="dw-map-table">
             <thead>
@@ -259,6 +260,7 @@
                 <th>Business field</th>
                 <th>FHIR path</th>
                 <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
+                <th class="dw-map-actions" aria-label="Actions"></th>
               </tr>
             </thead>
             <tbody>
@@ -296,6 +298,14 @@
                       />
                     }
                   </td>
+                  <td class="dw-map-actions">
+                    <button type="button" class="dw-row-remove" title="Remove field" (click)="removeRow(row)">✕</button>
+                  </td>
+                </tr>
+              }
+              @if (rowsForResource(r).length === 0) {
+                <tr class="dw-map-empty">
+                  <td [attr.colspan]="4">No fields mapped yet — click <strong>+ Add field</strong> to add one.</td>
                 </tr>
               }
             </tbody>

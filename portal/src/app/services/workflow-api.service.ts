@@ -189,6 +189,10 @@ export interface WorkflowSummary {
 
 export interface WorkflowLaunchUrl {
   launchUrl: string;
+  /** 'ehr-launch' → register in the EHR (invoked by it); 'standalone' | 'patient' → opened directly. */
+  mode?: 'ehr-launch' | 'standalone' | 'patient';
+  /** True when the URL is opened directly by a user; false when the EHR invokes it with iss + launch. */
+  opensDirectly?: boolean;
 }
 
 /** A capped sample of rows read back from a relational destination table ("View destination data"). */

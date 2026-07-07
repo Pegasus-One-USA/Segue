@@ -166,7 +166,8 @@
           <div class="eaf-field">
             <label class="eaf-label" for="eaf-scopeVersion">
               SMART Scope Version <span class="eaf-req">*</span>
-              @if (discStatus() === 'done') { <span class="eaf-tag-auto">auto-detected</span> }
+              @if (scopeVersionAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
+              @else if (discStatus() === 'done') { <span class="eaf-tag-fixed">default</span> }
             </label>
             <div class="eaf-select-wrap">
               <select id="eaf-scopeVersion" class="eaf-select" formControlName="scopeVersion">
@@ -247,48 +248,57 @@
             <span class="eaf-section-num">5</span>
             <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
             @if (resourcesAreAuto) { <span class="eaf-tag-auto">auto-detected from /metadata</span> }
-            <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
-          </div>
-          <p class="eaf-section-sub">
-            @if (resourcesAreAuto) {
-              Resource types this endpoint actually supports, discovered from its CapabilityStatement.
-            } @else {
-              Run Discover to auto-detect the resource types this endpoint supports.
+            @if (discStatus() === 'done') {
+              <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
             }
-          </p>
+          </div>
 
-          @if (form.controls.resources.touched && form.controls.resources.invalid) {
-            <div class="eaf-callout eaf-callout--err eaf-callout--sm">Select at least one FHIR resource type.</div>
-          }
+          <!-- Resource types are gated on discovery: the list reflects what the endpoint actually supports, so it is
+               not shown (and scopes are not previewed) until Discover has run. -->
+          @if (discStatus() === 'done') {
+            <p class="eaf-section-sub">
+              @if (resourcesAreAuto) {
+                Resource types this endpoint actually supports, discovered from its CapabilityStatement.
+              } @else {
+                Discovery did not return resource types — showing common defaults. Verify against the endpoint.
+              }
+            </p>
 
-          <div class="eaf-resources-grid" data-control="resources">
-            <label class="eaf-res-all">
-              <input type="checkbox"
-                     [checked]="selectedResources().length === resources.length"
-                     [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
-                     (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
-              <span>Select all</span>
-            </label>
-            @for (r of resources; track r) {
-              <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
+            @if (form.controls.resources.touched && form.controls.resources.invalid) {
+              <div class="eaf-callout eaf-callout--err eaf-callout--sm">Select at least one FHIR resource type.</div>
+            }
+
+            <div class="eaf-resources-grid" data-control="resources">
+              <label class="eaf-res-all">
                 <input type="checkbox"
-                       [checked]="selectedResources().includes(r)"
-                       (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
-                <span class="eaf-res-name">{{ r }}</span>
+                       [checked]="selectedResources().length === resources.length"
+                       [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
+                       (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
+                <span>Select all</span>
               </label>
-            }
-          </div>
-
-          <!-- Scopes — auto/fixed by app, exposed as readonly field -->
-          @if (selectedResources().length > 0) {
-            <div class="eaf-scope-wrap">
-              <div class="eaf-scope-head">
-                <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
-                <span class="eaf-tag-auto">auto · fixed by app</span>
-                <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
-              </div>
-              <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
+              @for (r of resources; track r) {
+                <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
+                  <input type="checkbox"
+                         [checked]="selectedResources().includes(r)"
+                         (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
+                  <span class="eaf-res-name">{{ r }}</span>
+                </label>
+              }
             </div>
+
+            <!-- Scopes — auto/fixed by app, exposed as readonly field -->
+            @if (selectedResources().length > 0) {
+              <div class="eaf-scope-wrap">
+                <div class="eaf-scope-head">
+                  <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
+                  <span class="eaf-tag-auto">auto · fixed by app</span>
+                  <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
+                </div>
+                <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
+              </div>
+            }
+          } @else {
+            <p class="eaf-hint">Run <strong>Discover</strong> above to detect the resource types this endpoint supports. Scopes are derived from your selection once resource types are available.</p>
           }
         </div>
       } @else {
