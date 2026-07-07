@@ -24,6 +24,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '🔐', label: 'Role',             route: '/user-management/roles', permissions: ['role.view'] },
   { type: 'item', icon: '👥', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
   { type: 'item', icon: '⚡', label: 'Pipeline Builder', route: '/workflow-builder' },
+  { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows' },
   { type: 'item', icon: '▶',  label: 'Pipelines',        route: '/pipelines' },
   { type: 'item', icon: '📋', label: 'Activity Feed',    route: '/activity' },
 ];

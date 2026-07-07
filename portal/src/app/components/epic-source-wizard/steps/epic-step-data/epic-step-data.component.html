@@ -160,7 +160,12 @@
 
       <!-- FHIR Resources checkboxes (always) -->
       <div class="form-field full">
-        <label>FHIR Resources</label>
+        <label>
+          FHIR Resources
+          @if (resourcesAreAuto) {
+            <span class="tag-auto">auto-detected from /metadata</span>
+          }
+        </label>
         <div class="resource-grid">
           @for (r of allResources; track r) {
             <label class="resource-item">

@@ -47,14 +47,24 @@ export const DESTINATION_ENDPOINTS = {
   schema:        (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
 };
 
+// ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
+export const SOURCE_DISCOVERY_ENDPOINTS = {
+  probe: `${API_V1_BASE}/source-discovery/probe`,
+};
+
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────
 export const WORKFLOW_ENDPOINTS = {
-  catalog:  `${API_V1_BASE}/workflow-catalog`,
-  validate: `${API_V1_BASE}/workflows/validate`,
-  list:     `${API_V1_BASE}/workflows`,
-  create:   `${API_V1_BASE}/workflows`,
-  byId:     (id: string) => `${API_V1_BASE}/workflows/${id}`,
-  run:      (id: string) => `${API_V1_BASE}/workflows/${id}/run`,
-  runs:     (id: string) => `${API_V1_BASE}/workflows/${id}/runs`,
-  activate: (id: string) => `${API_V1_BASE}/workflows/${id}/activate`,
+  catalog:         `${API_V1_BASE}/workflow-catalog`,
+  validate:        `${API_V1_BASE}/workflows/validate`,
+  build:           `${API_V1_BASE}/workflows/build`,
+  list:            `${API_V1_BASE}/workflows`,
+  summary:         `${API_V1_BASE}/workflows/summary`,
+  create:          `${API_V1_BASE}/workflows`,
+  byId:            (id: string) => `${API_V1_BASE}/workflows/${id}`,
+  run:             (id: string) => `${API_V1_BASE}/workflows/${id}/run`,
+  runs:            (id: string) => `${API_V1_BASE}/workflows/${id}/runs`,
+  activate:        (id: string) => `${API_V1_BASE}/workflows/${id}/activate`,
+  deactivate:      (id: string) => `${API_V1_BASE}/workflows/${id}/deactivate`,
+  launchUrl:       (id: string) => `${API_V1_BASE}/workflows/${id}/launch-url`,
+  destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,
 };

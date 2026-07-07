@@ -95,7 +95,6 @@ export class EpicStepConnectComponent implements OnInit {
 
     this.discovery.discover(baseUrl, envKey).subscribe({
       next: (result) => {
-        const env = EPIC_ENV[envKey];
         const dv: FullDiscoveredValues = {
           fhirBaseUrl:       baseUrl,
           fhirVersion:       'R4 (4.0.1)',
@@ -106,10 +105,10 @@ export class EpicStepConnectComponent implements OnInit {
           introspectEp:      result.token.replace('/token', '/introspect'),
           revokeEp:          result.token.replace('/token', '/revoke'),
           signingAlgs:       'RS384, ES384',
-          pkceSupport:       'S256',
+          pkceSupport:       result.codeChallengeMethods.length ? result.codeChallengeMethods.join(', ') : 'S256',
           clientAuthMethods: 'client_secret_basic, private_key_jwt',
-          smartCapabilities: 'launch-ehr, context-ehr-patient, sso-openid-connect, permission-user',
-          supportedScopes:   'openid fhirUser launch launch/patient patient/*.read user/*.read offline_access',
+          smartCapabilities: result.capabilities.length ? result.capabilities.join(', ') : '—',
+          supportedScopes:   result.scopesSupported.length ? result.scopesSupported.join(' ') : '—',
         };
         this.discoveredValues.set(dv);
         this.fhirBaseUrl.set(dv.fhirBaseUrl);
@@ -118,11 +117,20 @@ export class EpicStepConnectComponent implements OnInit {
         this.authzEndpoint.set(dv.authzEndpoint);
 
         this.wiz.setDiscovered(true);
+        this.wiz.baseUrl.set(baseUrl);
         this.wiz.token.set(dv.tokenEndpoint);
         this.wiz.authorize.set(dv.authzEndpoint);
+        // Feed the Data step: auto resource types + advertised scopes, and default the trusted issuer to this base URL.
+        this.wiz.discoveredResourceTypes.set(result.resourceTypes);
+        this.wiz.discoveredScopes.set(result.scopesSupported);
+        if (!this.wiz.trustedIssuers().trim()) this.wiz.trustedIssuers.set(baseUrl);
 
         this.discoveryStatus.set('done');
-        this.toast.show('Discovery complete', 'SMART endpoints resolved successfully.');
+        if (result.resourceTypesError) {
+          this.toast.show('Discovery complete (partial)', `Endpoints resolved. Resource types unavailable: ${result.resourceTypesError}`);
+        } else {
+          this.toast.show('Discovery complete', `Resolved endpoints + ${result.resourceTypes.length} resource types.`);
+        }
       },
       error: () => {
         this.discoveryStatus.set('error');

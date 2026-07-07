@@ -164,14 +164,17 @@
 
           <!-- SMART scope version — v1 (coarse) vs v2 (granular) -->
           <div class="eaf-field">
-            <label class="eaf-label" for="eaf-scopeVersion">SMART Scope Version <span class="eaf-req">*</span></label>
+            <label class="eaf-label" for="eaf-scopeVersion">
+              SMART Scope Version <span class="eaf-req">*</span>
+              @if (discStatus() === 'done') { <span class="eaf-tag-auto">auto-detected</span> }
+            </label>
             <div class="eaf-select-wrap">
               <select id="eaf-scopeVersion" class="eaf-select" formControlName="scopeVersion">
                 <option value="v1">v1 — coarse scopes</option>
                 <option value="v2">v2 — granular scopes</option>
               </select>
             </div>
-            <p class="eaf-hint">Granular (v2) scopes request per-resource access; coarse (v1) requests broader category access.</p>
+            <p class="eaf-hint">Auto-detected from the source's advertised SMART capabilities (permission-v1 / permission-v2); override if needed. Granular (v2) requests per-resource access; coarse (v1) requests broader category access.</p>
           </div>
         </div>
       </div>
@@ -198,11 +201,12 @@
             <label class="eaf-label" for="eaf-authMethod">Client Auth Method</label>
             <div class="eaf-select-wrap">
               <select id="eaf-authMethod" class="eaf-select" formControlName="authMethod">
+                <option value="public">Public Client + PKCE (no secret)</option>
                 <option value="secret">Client Secret</option>
                 <option value="jwt">JWT / Private Key (JWKS)</option>
               </select>
             </div>
-            <p class="eaf-hint">Depends on which auth method your app implements in Epic — show only the relevant one.</p>
+            <p class="eaf-hint">Provider EHR launch is normally a public client (PKCE) — no client secret required. Choose Client Secret or JWT only if your Epic app is registered as confidential.</p>
           </div>
 
           @if (showSecret()) {
@@ -242,9 +246,16 @@
           <div class="eaf-section-head">
             <span class="eaf-section-num">5</span>
             <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
+            @if (resourcesAreAuto) { <span class="eaf-tag-auto">auto-detected from /metadata</span> }
             <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
           </div>
-          <p class="eaf-section-sub">The FHIR resource types to fetch from Epic as configured by FHIRBridge.</p>
+          <p class="eaf-section-sub">
+            @if (resourcesAreAuto) {
+              Resource types this endpoint actually supports, discovered from its CapabilityStatement.
+            } @else {
+              Run Discover to auto-detect the resource types this endpoint supports.
+            }
+          </p>
 
           @if (form.controls.resources.touched && form.controls.resources.invalid) {
             <div class="eaf-callout eaf-callout--err eaf-callout--sm">Select at least one FHIR resource type.</div>
@@ -274,7 +285,7 @@
               <div class="eaf-scope-head">
                 <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
                 <span class="eaf-tag-auto">auto · fixed by app</span>
-                <span class="eaf-scope-note">Hardcoded to match the APIs registered in Epic.</span>
+                <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
               </div>
               <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
             </div>
@@ -295,7 +306,7 @@
               <div class="eaf-scope-head">
                 <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
                 <span class="eaf-tag-auto">auto · fixed by app</span>
-                <span class="eaf-scope-note">Hardcoded to match the APIs registered in Epic.</span>
+                <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
               </div>
               <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
             </div>
@@ -340,13 +351,16 @@
               } @else {
                 <div class="eaf-field eaf-field--full"
                      [class.eaf-field--error]="form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid">
-                  <label class="eaf-label" for="eaf-callbackUrl">Callback URL <span class="eaf-req">*</span></label>
-                  <input id="eaf-callbackUrl" class="eaf-input" type="url" formControlName="callbackUrl"
-                         placeholder="https://fhirbridge.com/oauth/callback" />
+                  <label class="eaf-label" for="eaf-callbackUrl">{{ audienceConfig().redirectLabel || 'Redirect URI' }} <span class="eaf-req">*</span></label>
+                  <div class="eaf-input-row">
+                    <input id="eaf-callbackUrl" class="eaf-input" type="url" formControlName="callbackUrl"
+                           placeholder="https://fhirbridge.com/oauth/callback" />
+                    <button class="eaf-discover-btn" type="button" (click)="copyRedirectUri()">⧉ Copy</button>
+                  </div>
                   @if (form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid) {
-                    <p class="eaf-error-msg">Enter a valid Callback URL.</p>
+                    <p class="eaf-error-msg">Enter a valid URL.</p>
                   }
-                  <p class="eaf-hint">URL where Epic redirects after patient login / consent. <strong>Must be registered in Epic.</strong></p>
+                  <p class="eaf-hint">Where the authorization server redirects after login/consent. Editable — <strong>must match what's registered in Epic.</strong></p>
                 </div>
               }
             }

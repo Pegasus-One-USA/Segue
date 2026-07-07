@@ -54,6 +54,15 @@ export const routes: Routes = [
           ),
       },
 
+      // Workflows list (launch / run / view destination data)
+      {
+        path: 'workflows',
+        loadComponent: () =>
+          import('./pages/workflow-list/workflow-list.component').then(
+            m => m.WorkflowListComponent
+          ),
+      },
+
       // User Management (permission-gated; SuperAdmin / GlobalAdmin fall through)
       {
         path: 'user-management',

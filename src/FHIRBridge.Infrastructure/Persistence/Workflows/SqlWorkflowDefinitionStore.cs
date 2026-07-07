@@ -75,4 +75,22 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             .Include(definition => definition.Edges)
             .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);
     }
+
+    public async Task DeleteAsync(Guid workflowId, CancellationToken cancellationToken)
+    {
+        var existing = await _dbContext.WorkflowDefinitions
+            .Include(definition => definition.Nodes)
+                .ThenInclude(node => node.Configuration)
+            .Include(definition => definition.Edges)
+            .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);
+
+        if (existing is null)
+        {
+            return;
+        }
+
+        // Cascade delete removes the tracked nodes/edges/configurations with the parent.
+        _dbContext.WorkflowDefinitions.Remove(existing);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

@@ -48,8 +48,8 @@ interface AudienceFieldConfig {
 
 const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {
   // CDS Hooks removed from the UI (not required) — flag kept for future use but disabled everywhere.
-  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'readonly', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
-  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'readonly', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
+  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
+  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
   'patient':             { showLaunchUrl: false, showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Callback URL', scopePrefix: 'patient', includeInteractiveScopes: true },
   'backend-system':      { showLaunchUrl: false, showRedirect: false, showCdsHooks: false, showRetrieval: true,  showResourcePicker: false, redirectMode: 'readonly', redirectLabel: '',             scopePrefix: 'system',  includeInteractiveScopes: false },
 };
@@ -215,9 +215,16 @@ export class EpicAudienceFormComponent implements OnInit {
   private  readonly fb         = inject(FormBuilder);
   private  readonly destroyRef = inject(DestroyRef);
 
-  protected readonly resources    = FHIR_RESOURCES;
+  // Resource Type list: auto-detected from the source's /metadata after Discover; falls back to the static list.
+  protected readonly discoveredResourceTypes = signal<string[]>([]);
+  protected get resources(): string[] {
+    return this.discoveredResourceTypes().length ? this.discoveredResourceTypes() : FHIR_RESOURCES;
+  }
+  protected get resourcesAreAuto(): boolean { return this.discoveredResourceTypes().length > 0; }
+
   protected readonly discStatus   = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
   protected readonly discValues   = signal<FullDiscoveredValues | null>(null);
+  protected readonly discoveredScopes = signal<string[]>([]);
   protected readonly testStatus   = signal<'idle' | 'running' | 'ok' | 'fail'>('idle');
 
   protected readonly form = this.fb.nonNullable.group({
@@ -227,7 +234,8 @@ export class EpicAudienceFormComponent implements OnInit {
     tokenEndpoint:     ['', urlValidator],
     authzEndpoint:     ['', urlValidator],
     clientId:          ['', Validators.required],
-    authMethod:        ['secret'],
+    // Public + PKCE is the default for interactive apps (EHR launch / standalone / patient) → no client secret needed.
+    authMethod:        ['public'],
     clientSecret:      [''],
     jwksUrl:           ['', urlValidator],
     privateKeyRef:     [''],
@@ -273,6 +281,7 @@ export class EpicAudienceFormComponent implements OnInit {
   private readonly resourcesValue       = toSignal(this.form.controls.resources.valueChanges,       { initialValue: this.form.controls.resources.value });
   private readonly retrievalMethodValue = toSignal(this.form.controls.retrievalMethod.valueChanges, { initialValue: this.form.controls.retrievalMethod.value });
   private readonly exportScopeValue     = toSignal(this.form.controls.exportScope.valueChanges,     { initialValue: this.form.controls.exportScope.value });
+  private readonly scopeVersionValue    = toSignal(this.form.controls.scopeVersion.valueChanges,    { initialValue: this.form.controls.scopeVersion.value });
 
   // One bridge per retrieval method's own Resource Type control — never shared,
   // so each method keeps an independent selection instead of leaking into the others.
@@ -352,7 +361,9 @@ export class EpicAudienceFormComponent implements OnInit {
     const fixed = cfg.includeInteractiveScopes
       ? ['openid', 'fhirUser', 'offline_access', aud === 'provider-ehr-launch' ? 'launch' : 'launch/patient']
       : [];
-    return [...fixed, ...res.map(r => `${cfg.scopePrefix}/${r}.read`)].join('\n');
+    // v2 = granular per-resource read+search (SMART v2 uses .rs); v1 = coarse per-resource .read.
+    const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
+    return [...fixed, ...res.map(r => `${cfg.scopePrefix}/${r}.${suffix}`)].join('\n');
   });
 
   ngOnInit(): void {
@@ -548,35 +559,59 @@ export class EpicAudienceFormComponent implements OnInit {
           jwksUri: 'https://fhir.epic.com/interconnect-fhir-oauth/.well-known/jwks.json',
           introspectEp: result.token.replace('/token', '/introspect'),
           revokeEp: result.token.replace('/token', '/revoke'),
-          signingAlgs: 'RS384, ES384', pkceSupport: 'S256',
+          signingAlgs: 'RS384, ES384',
+          pkceSupport: result.codeChallengeMethods.length ? result.codeChallengeMethods.join(', ') : 'S256',
           clientAuthMethods: 'client_secret_basic, private_key_jwt',
-          smartCapabilities: 'launch-ehr, context-ehr-patient, sso-openid-connect, permission-user',
-          supportedScopes: 'openid fhirUser launch launch/patient patient/*.read user/*.read offline_access',
+          smartCapabilities: result.capabilities.length ? result.capabilities.join(', ') : '—',
+          supportedScopes: result.scopesSupported.length ? result.scopesSupported.join(' ') : '—',
         };
         this.discValues.set(dv);
+        this.discoveredScopes.set(result.scopesSupported);
+        // Resource Type: Auto — from the source's /metadata.
+        this.discoveredResourceTypes.set(result.resourceTypes);
+        // SMART Scope Version: Auto — Epic advertises permission-v1 / permission-v2 in its capabilities.
+        if (result.capabilities.includes('permission-v2')) {
+          this.form.controls.scopeVersion.setValue('v2');
+        } else if (result.capabilities.includes('permission-v1')) {
+          this.form.controls.scopeVersion.setValue('v1');
+        }
         this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
         this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
         this.wiz.token.set(dv.tokenEndpoint);
         this.wiz.authorize.set(dv.authzEndpoint);
+        this.wiz.baseUrl.set(url);
         this.wiz.setDiscovered(true);
         this.discStatus.set('done');
-        this.toast.show('Discovery complete', 'SMART endpoints resolved.');
+        if (result.resourceTypesError) {
+          this.toast.show('Discovery complete (partial)', `Endpoints resolved. Resource types unavailable: ${result.resourceTypesError}`);
+        } else {
+          this.toast.show('Discovery complete', `Resolved endpoints + ${result.resourceTypes.length} resource types.`);
+        }
       },
-      error: () => {
+      error: (err) => {
         this.discStatus.set('error');
-        this.toast.show('Discovery failed', 'Check the URL or enter endpoints manually.');
+        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Check the URL or enter endpoints manually.';
+        this.toast.show('Discovery failed', typeof msg === 'string' ? msg : 'Check the URL or enter endpoints manually.');
       },
     });
   }
 
   protected runTestConnection(): void {
-    const token = this.form.controls.tokenEndpoint.value.trim();
-    if (!token) { this.toast.show('Token endpoint required', 'Run discovery or enter the token endpoint first.'); return; }
+    const baseUrl = this.form.controls.epicBaseUrl.value.trim();
+    if (!baseUrl) { this.toast.show('Base URL required', 'Enter the Epic FHIR base URL first.'); return; }
     this.testStatus.set('running');
-    setTimeout(() => {
-      this.testStatus.set('ok');
-      this.toast.show('Test passed', 'Token endpoint reachable and responding (mock).');
-    }, 2000);
+    // Real reachability test: probe the source's public SMART/metadata endpoints via the backend.
+    this.discovery.discover(baseUrl).subscribe({
+      next: () => {
+        this.testStatus.set('ok');
+        this.toast.show('Test passed', 'Reached the source SMART configuration endpoint.');
+      },
+      error: (err) => {
+        this.testStatus.set('fail');
+        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Could not reach the source endpoint.';
+        this.toast.show('Test failed', typeof msg === 'string' ? msg : 'Could not reach the source endpoint.');
+      },
+    });
   }
 
   protected save(): void {
@@ -606,6 +641,11 @@ export class EpicAudienceFormComponent implements OnInit {
     this.wiz.baseUrl.set(v.epicBaseUrl ?? '');
     this.wiz.token.set(v.tokenEndpoint ?? '');
     this.wiz.authorize.set(v.authzEndpoint ?? '');
+    // EHR launch requires ≥1 trusted issuer server-side; default it to the FHIR base URL (the iss Epic sends) so
+    // create-on-save (build) passes validation. Only meaningful for the EHR-launch audience.
+    if (aud === 'provider-ehr-launch') {
+      this.wiz.trustedIssuers.set((v.epicBaseUrl ?? '').trim());
+    }
     // Backend System has no shared Resource Type picker — fall back to whichever
     // retrieval method's own Resource Type list is currently set.
     this.wiz.resources.set(cfg.showResourcePicker ? (v.resources ?? []) : this.activeRetrievalResourceTypes());

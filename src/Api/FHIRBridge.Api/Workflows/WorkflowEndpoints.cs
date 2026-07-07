@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Workflows;
+using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -8,6 +10,7 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Api.Workflows;
 
@@ -160,6 +163,138 @@ public static class WorkflowEndpoints
             CancellationToken cancellationToken) =>
             Results.Ok(await store.ListAsync(cancellationToken)));
 
+        // Workflow-list screen: one summary row per workflow — shape, enabled state, last run, and the derived
+        // action. The source node's referenced connection decides Launch (interactive SMART) vs Run (backend), so the
+        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration).
+        group.MapGet("/workflows/summary", async (
+            IWorkflowDefinitionStore store,
+            IWorkflowRunStore runStore,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var workflows = await store.ListAsync(cancellationToken);
+            var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+            var applicationTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.ApplicationType);
+            var systemTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.SourceSystemType);
+
+            var summaries = new List<WorkflowSummaryDto>(workflows.Count);
+            foreach (var workflow in workflows)
+            {
+                // Walk the source nodes → their referenced connections. Mirror the SQL's MAX(ApplicationType): the
+                // highest-precedence interactive type wins, so a workflow with any EHR-launch/standalone/patient
+                // source is launched rather than run.
+                Guid? firstSourceId = null;
+                Guid? launchSourceId = null;
+                ApplicationType? applicationType = null;
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Source))
+                {
+                    if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId))
+                    {
+                        continue;
+                    }
+
+                    firstSourceId ??= sourceId;
+                    if (applicationTypeBySourceId.TryGetValue(sourceId, out var type) && type is not null
+                        && (applicationType is null || type.Value > applicationType.Value))
+                    {
+                        applicationType = type;
+                        launchSourceId = sourceId;
+                    }
+                }
+
+                var isLaunch = applicationType is ApplicationType.EhrLaunch
+                    or ApplicationType.Standalone
+                    or ApplicationType.Patient;
+
+                var hasDestination = workflow.Nodes.Any(node =>
+                    node.Category == WorkflowNodeCategory.Destination
+                    && TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out _));
+
+                var runs = await runStore.ListByDefinitionAsync(workflow.Id, cancellationToken);
+                var lastRun = runs.OrderByDescending(run => run.StartedAt).FirstOrDefault();
+
+                var resolvedSourceId = launchSourceId ?? firstSourceId;
+                var sourceSystemType = resolvedSourceId is { } id && systemTypeBySourceId.TryGetValue(id, out var systemType)
+                    ? systemType.ToString()
+                    : null;
+
+                summaries.Add(new WorkflowSummaryDto(
+                    workflow.Id,
+                    workflow.Name,
+                    workflow.IsEnabled ? "Enabled" : "Disabled",
+                    workflow.Nodes.Count,
+                    workflow.Edges.Count,
+                    lastRun?.Status.ToString(),
+                    lastRun?.StartedAt,
+                    isLaunch ? "Launch" : "Run",
+                    isLaunch
+                        ? $"/api/v1/workflows/{workflow.Id}/launch-url"
+                        : $"/api/v1/workflows/{workflow.Id}/run",
+                    resolvedSourceId,
+                    sourceSystemType,
+                    applicationType?.ToString(),
+                    hasDestination));
+            }
+
+            return Results.Ok(summaries
+                .OrderBy(summary => summary.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray());
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // "View destination data": resolve the workflow's destination node → its created destination + target table
+        // and read back a capped row sample so the UI can show what the pipeline wrote. Admin-only.
+        group.MapGet("/workflows/{workflowId:guid}/destination-data", async (
+            Guid workflowId,
+            int? top,
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            IDestinationDataService destinationDataService,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            var destinationId = Guid.Empty;
+            var destinationObject = string.Empty;
+            foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out destinationId))
+                {
+                    destinationObject = GetConfigurationString(node.ConfigurationJson, "destinationObject")
+                        ?? GetConfigurationString(node.ConfigurationJson, "target")
+                        ?? string.Empty;
+                    break;
+                }
+            }
+
+            if (destinationId == Guid.Empty)
+            {
+                return Results.Ok(new DestinationDataDto(
+                    string.Empty, [], [], 0,
+                    "This workflow has no saved destination to preview. Save or build the destination first."));
+            }
+
+            // The destination node often doesn't carry the table name (the writer derives it from the bound mapping).
+            // Fall back to the mapping profile targeting this destination — the same DestinationObject that picked the
+            // write-time table — so the read hits the table the pipeline actually wrote to.
+            if (string.IsNullOrWhiteSpace(destinationObject))
+            {
+                var mappings = await configurationRepository.GetMappingProfilesAsync(cancellationToken);
+                destinationObject = mappings
+                    .Where(mapping => mapping.DestinationId == destinationId
+                        && !string.IsNullOrWhiteSpace(mapping.DestinationObject))
+                    .Select(mapping => mapping.DestinationObject)
+                    .FirstOrDefault() ?? string.Empty;
+            }
+
+            var result = await destinationDataService.ReadSampleAsync(
+                destinationId, destinationObject, top ?? 50, cancellationToken);
+            return Results.Ok(result);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         group.MapGet("/workflows/{workflowId:guid}", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
@@ -265,6 +400,23 @@ public static class WorkflowEndpoints
             return Results.Ok(workflow);
         });
 
+        // Permanently delete a workflow definition (and its nodes/edges/config). The referenced source/destination/
+        // mapping records are NOT deleted — they may be shared with other workflows/routes. Admin-only.
+        group.MapDelete("/workflows/{workflowId:guid}", async (
+            Guid workflowId,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            await store.DeleteAsync(workflowId, cancellationToken);
+            return Results.NoContent();
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         return endpoints;
     }
 
@@ -299,6 +451,17 @@ public static class WorkflowEndpoints
         entityId = Guid.Empty;
         return false;
     }
+
+    private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)
+    {
+        value = Guid.Empty;
+        return TryParseConfiguration(configurationJson) is { } config
+            && config[key]?.ToString() is { } raw
+            && Guid.TryParse(raw, out value);
+    }
+
+    private static string? GetConfigurationString(string? configurationJson, string key)
+        => TryParseConfiguration(configurationJson) is { } config ? config[key]?.ToString() : null;
 
     private static JsonObject? TryParseConfiguration(string? configurationJson)
     {

@@ -401,6 +401,8 @@ export class DestinationWizardComponent implements OnInit {
         server:    f['dest_server']    || '',
         database:  f['dest_database']  || '',
         auth:      f['dest_auth']      || 'managed-identity',
+        username:  f['dest_username']  || '',
+        password:  f['dest_password']  || '',
         schema:    f['dest_schema']    || 'dbo',
         writeMode: f['dest_writeMode'] || 'upsert',
       });
@@ -455,6 +457,12 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_auth']      = v.auth      ?? '';
       config['dest_schema']    = v.schema    ?? 'dbo';
       config['dest_writeMode'] = v.writeMode ?? 'upsert';
+      // Persisted so create-on-save can assemble the connection string (server-side it is encrypted at rest via
+      // ProvisionedSecrets; the entity only ever stores the secret reference). Only kept for SQL username/password auth.
+      if ((v.auth ?? 'sql-auth') === 'sql-auth') {
+        config['dest_username'] = v.username ?? '';
+        config['dest_password'] = v.password ?? '';
+      }
     } else {
       const v = this.csvForm.value;
       config['dest_name']        = v.name        ?? '';

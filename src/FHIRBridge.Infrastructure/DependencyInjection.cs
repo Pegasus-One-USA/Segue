@@ -196,6 +196,8 @@ public static class DependencyInjection
 
         services.AddScoped<IConfiguredDestinationWriterFactory, ConfiguredDestinationWriterFactory>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
+        // Read-back of a capped row sample from a relational destination table ("View destination data").
+        services.AddScoped<IDestinationDataService, SqlDestinationDataService>();
         // Option A: workflow source nodes reference a real SourceConnection by id; this resolves it to the runtime
         // FHIR source config (base URL + auth + token) at run time so a graph run matches a route run.
         services.AddScoped<Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver,
@@ -298,6 +300,7 @@ public static class DependencyInjection
         services.AddSingleton<ILaunchTokenProtector, DataProtectionLaunchTokenProtector>();
         services.AddScoped<IInteractiveSourceAuthorizationService, InteractiveSourceAuthorizationService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
+        services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ILineageTracker, OperationalAuditLineageTracker>();
         services.AddHealthChecks()

@@ -7,8 +7,7 @@
     (input)="onWorkflowNameInput($any($event.target).value)"
     aria-label="Workflow name"
   />
-  <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSaveWorkflow()">Save</button>
-  <button class="builder-btn" type="button" [disabled]="workflowBusy()" (click)="onSaveLaunchWorkflow()">Save for launch</button>
+  <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSave()" title="Creates any wizard-drawn source/destination/mapping records, then saves the workflow (updates in place when editing an existing one)">Save</button>
   <input
     class="builder-input"
     type="text"
