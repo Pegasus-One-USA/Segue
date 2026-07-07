@@ -60,7 +60,7 @@ export class WorkflowBuilderComponent implements OnInit {
   protected readonly wizardOpen   = this.wiz.isOpen;
   protected readonly confirmReset = signal(false);
   protected readonly currentWorkflowId = signal<string | null>(null);
-  protected readonly workflowName = signal('Pipeline Builder Workflow');
+  protected readonly workflowName = signal('');
   protected readonly workflowIdInput = signal('');
   protected readonly workflowBusy = signal(false);
   protected readonly workflowStatus = signal('Catalog loading...');
@@ -97,10 +97,6 @@ export class WorkflowBuilderComponent implements OnInit {
     this.workflowName.set(value);
   }
 
-  onWorkflowIdInput(value: string): void {
-    this.workflowIdInput.set(value.trim());
-  }
-
   /**
    * Single "Save". Behaves by context:
    * - Editing an existing workflow (id already set) → update it in place (PUT); never re-creates config records.
@@ -115,7 +111,7 @@ export class WorkflowBuilderComponent implements OnInit {
       return;
     }
 
-    const name = this.workflowName().trim() || 'Pipeline Builder Workflow';
+    const name = this.workflowName().trim() || 'Untitled workflow';
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
 
@@ -179,28 +175,6 @@ export class WorkflowBuilderComponent implements OnInit {
       },
       error: () => {
         this.workflowStatus.set('Workflow load failed.');
-        this.workflowBusy.set(false);
-      },
-    });
-  }
-
-  onRunWorkflow(): void {
-    const id = this.currentWorkflowId();
-    if (!id) {
-      this.workflowStatus.set('Save or load a workflow before running.');
-      return;
-    }
-
-    this.workflowBusy.set(true);
-    this.workflowStatus.set('Running workflow...');
-    this.workflowApi.run(id).subscribe({
-      next: result => {
-        const run = result.workflowRun ?? result.run;
-        this.workflowStatus.set(run?.id ? `Run started: ${run.id}` : 'Workflow run completed.');
-        this.workflowBusy.set(false);
-      },
-      error: () => {
-        this.workflowStatus.set('Workflow run failed.');
         this.workflowBusy.set(false);
       },
     });
