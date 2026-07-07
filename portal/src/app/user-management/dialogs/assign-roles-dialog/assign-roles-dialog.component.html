@@ -120,7 +120,7 @@
                         [class.perm-action-chip--denied]="!perm.allowed"
                         [matTooltip]="perm.description"
                       >
-                        {{ perm.displayName }}
+                        {{ perm.action | titlecase }}
                       </span>
                     }
                   </div>
