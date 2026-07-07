@@ -1,42 +1,47 @@
-/* ── Source Node ────────────────────────────────────────────────────────────── */
-
-/* Node-type color tokens (set via host binding in the component) */
+/* ── Source Node ─────────────────────────────────────────────────────────────── */
 :host {
-  /* Epic source uses its own accent; all others default to --color-info */
-  --node-color: var(--epic, #FF5A4F);
+  --node-color: var(--epic);
 
   position: absolute;
-  z-index: 2;
-  display: flex;
-  align-items: stretch;
-  width: clamp(150px, 168px, 180px);
-  height: clamp(54px, 60px, 64px);
-  border-radius: var(--radius-card, 12px);
-  border: 2px solid var(--node-color);
-  background: var(--color-surface, #fff);
-  box-shadow: var(--shadow-sm, 0 2px 12px rgba(0, 0, 0, 0.06));
+  width: 88px;
+  height: 88px;
   transform: translate(-50%, -50%);
+  z-index: 2;
   touch-action: none;
   cursor: pointer;
-  overflow: hidden;
   transition: box-shadow 0.18s, border-color 0.18s;
 
-  &:hover .node-tools { display: flex; }
+  &:hover .sn-circle { transform: scale(1.06); }
+}
 
-  /* ── States ── */
-  &:hover {
-    box-shadow: var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.10));
-    border-color: color-mix(in srgb, var(--node-color) 80%, #fff);
-  }
+.sn-circle { animation: nodeIn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.sn-labels { animation: labelsIn 0.28s ease 0.14s both; }
 
-  &.selected {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--node-color) 30%, transparent),
-                var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.10));
-  }
+@keyframes nodeIn {
+  from { opacity: 0; transform: scale(0.25); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes labelsIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 
-  &.running {
-    animation: node-pulse-border 1.4s ease-in-out infinite;
-  }
+.sn-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  box-shadow:
+    inset 0 2px 5px rgba(255,255,255,0.28),
+    0 0 0 4px rgba(255,255,255,0.85),
+    0 0 0 14px color-mix(in srgb, var(--node-color) 14%, transparent),
+    0 8px 28px color-mix(in srgb, var(--node-color) 40%, rgba(0,0,0,0.08));
+
+  &:active { cursor: grabbing; }
 
   &.completed {
     border-color: var(--color-success, var(--color-success));
@@ -54,69 +59,148 @@
   }
 }
 
-/* ── Left abbreviation area ─────────────────────────────────────────────────── */
-.node-abbr {
-  width: 44px;
-  flex-shrink: 0;
-  background: var(--node-color);
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
+.sn-abbr {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--color-on-primary);
+  letter-spacing: 0.4px;
   user-select: none;
+  pointer-events: none;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.22);
 }
 
-/* ── Main body ──────────────────────────────────────────────────────────────── */
-.node-body {
-  flex: 1;
-  min-width: 0;
+/* ── Environment badge ───────────────────────────────────────────────────────── */
+.sn-env-badge {
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--color-on-primary);
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  z-index: 4;
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  text-transform: uppercase;
+}
+
+/* ── Labels ──────────────────────────────────────────────────────────────────── */
+.sn-labels {
+  position: absolute;
+  top: calc(100% + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  text-align: center;
+}
+
+.sn-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-ink);
+  white-space: nowrap;
+  line-height: 1.25;
+  letter-spacing: -0.1px;
+}
+
+.sn-context {
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.sn-type-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  padding: 2px 10px;
+  border-radius: 999px;
+  margin-top: 2px;
+  letter-spacing: 0.2px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+/* ── Attached + button ───────────────────────────────────────────────────────── */
+.sn-add-btn {
+  position: absolute;
+  right: -15px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.65);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  color: var(--color-primary);
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 8;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.15s ease;
+  box-shadow: 0 2px 10px rgba(0, 168, 157, 0.35);
+
+  svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    fill: none;
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-50%) scale(1.18);
+    box-shadow: 0 4px 16px rgba(0, 168, 157, 0.55);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.96);
+  }
 }
 
-/* ── Label ──────────────────────────────────────────────────────────────────── */
-.node-label {
-  display: grid;
-  gap: 2px;
-  pointer-events: none;
-  overflow: hidden;
+:host:hover .sn-add-btn,
+:host.selected .sn-add-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
 
-  strong {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--color-ink, var(--color-ink));
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  span {
-    font-size: 10.5px;
-    font-weight: 500;
-    color: var(--color-muted, var(--color-muted));
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+:host:hover .sn-add-btn:hover {
+  transform: translateY(-50%) scale(1.18);
 }
 
 /* ── Connection handle (port) ───────────────────────────────────────────────── */
 .port {
   position: absolute;
   top: 50%;
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
   transform: translateY(-50%);
   border-radius: 50%;
-  background: var(--color-surface, #fff);
-  border: 2px solid var(--node-color);
+  background: var(--color-surface);
+  border: 2.5px solid var(--node-color);
   z-index: 6;
-  transition: background 0.12s, transform 0.12s;
+  transition: background 0.14s, transform 0.14s, box-shadow 0.14s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 
 .port-in  { left: -5px; }
@@ -126,7 +210,8 @@
 
   &:hover {
     background: var(--node-color);
-    transform: translateY(-50%) scale(1.25);
+    transform: translateY(-50%) scale(1.4);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--node-color) 20%, transparent);
   }
 }
 
@@ -140,8 +225,8 @@
   padding: 0 5px;
   display: grid;
   place-items: center;
-  color: #fff;
-  border: 2px solid var(--color-surface, #fff);
+  color: var(--color-on-primary);
+  border: 2px solid var(--color-surface);
   border-radius: var(--radius-pill, 999px);
   font-size: 10px;
   font-weight: 800;
@@ -155,3 +240,4 @@
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--node-color) 40%, transparent); }
   50%       { box-shadow: 0 0 0 5px color-mix(in srgb, var(--node-color) 0%, transparent); }
 }
+:host.running .sn-circle { animation: node-pulse 1.4s ease-in-out infinite; }

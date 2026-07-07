@@ -1,4 +1,4 @@
-import { Component, input, output, inject, computed, signal, viewChild } from '@angular/core';
+import { Component, input, output, inject, computed, signal, effect, untracked } from '@angular/core';
 import { ModalOverlayComponent } from '../shared/modal-overlay/modal-overlay.component';
 import { PipelineStore } from '../../services/pipeline.store';
 import { ApplicabilityService } from '../../services/applicability.service';
@@ -7,13 +7,10 @@ import { WizardService } from '../../services/wizard.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
-import { CanvasNode } from '../../models/node.model';
+import { CanvasNode, TransformNode } from '../../models/node.model';
 import { MergeNodeOption } from '../../models/wizard-state.model';
-import { EnvKey } from '../../models/epic-env.model';
-import { EpicStepConnectComponent } from '../epic-source-wizard/steps/epic-step-connect/epic-step-connect.component';
-import { EpicStepAuthenticateComponent } from '../epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component';
-import { EpicStepDataComponent } from '../epic-source-wizard/steps/epic-step-data/epic-step-data.component';
-import { EpicStepTestComponent } from '../epic-source-wizard/steps/epic-step-test/epic-step-test.component';
+import { EpicAudienceFormComponent } from '../epic-source-wizard/epic-audience-form/epic-audience-form.component';
+import { DestinationWizardComponent } from './destination-wizard/destination-wizard.component';
 
 export type LibraryMode = 'source' | 'transform';
 
@@ -21,6 +18,8 @@ export interface AddTransformEvent {
   attachNode: CanvasNode;
   transformId: string;
   status: string;
+  config?: Record<string, string>;
+  editNodeId?: string;
 }
 
 export interface MergeEvent {
@@ -107,10 +106,8 @@ const RANK_META: Record<number, { icon: string; catColor: string }> = {
   standalone: true,
   imports: [
     ModalOverlayComponent,
-    EpicStepConnectComponent,
-    EpicStepAuthenticateComponent,
-    EpicStepDataComponent,
-    EpicStepTestComponent,
+    EpicAudienceFormComponent,
+    DestinationWizardComponent,
   ],
   templateUrl: './node-library-dialog.component.html',
   styleUrl: './node-library-dialog.component.scss',
@@ -124,6 +121,7 @@ export class NodeLibraryDialogComponent {
   readonly open         = input(false);
   readonly mode         = input<LibraryMode>('source');
   readonly originNodeId = input<string | null>(null);
+  readonly editNodeId   = input<string | null>(null);
 
   readonly closed            = output<void>();
   readonly sourceSelected    = output<string>();
@@ -133,27 +131,42 @@ export class NodeLibraryDialogComponent {
   // ── local UI state ────────────────────────────────────────────────────────
   readonly searchQuery   = signal('');
   readonly selectedId    = signal<string | null>(null);
-  readonly expandedRanks = signal<Set<number>>(new Set([0, 2, 3, 4, 5, 6, 7]));
   readonly showHidden    = signal(false);
 
-  // ── inline wizard state ───────────────────────────────────────────────────
-  readonly showInlineWizard = computed(() => this.wiz.isOpen() && this.wiz.openedInline());
-  readonly wizStep          = signal(1);
-  readonly wizShowAdvanced  = signal(false);
+  // ── inline Epic form state ────────────────────────────────────────────────
+  readonly showEpicForm = signal(false);
 
-  protected readonly stepConnect      = viewChild(EpicStepConnectComponent);
-  protected readonly stepAuthenticate = viewChild(EpicStepAuthenticateComponent);
-  protected readonly stepData         = viewChild(EpicStepDataComponent);
-  protected readonly stepTest         = viewChild(EpicStepTestComponent);
+  // ── sidebar collapsed state (auto when a form opens, user-toggleable) ─────
+  readonly sidebarPinned = signal(false);
+  readonly isSidebarMini = computed(() =>
+    (this.showEpicForm() || this.showDestWizard()) && !this.sidebarPinned()
+  );
 
-  readonly WIZARD_STEPS = [
-    { n: 1, label: 'Connect' },
-    { n: 2, label: 'Authenticate' },
-    { n: 3, label: 'Data' },
-    { n: 4, label: 'Test' },
-    { n: 5, label: 'Transform' },
-    { n: 6, label: 'Destination' },
-  ];
+  toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
+
+  // ── destination wizard state ──────────────────────────────────────────────
+  readonly showDestWizard   = signal(false);
+  readonly destWizardType   = signal<'sql' | 'csv' | null>(null);
+  readonly destWizardAttach = signal<CanvasNode | null>(null);
+  readonly destEditNode     = signal<CanvasNode | null>(null);
+
+  constructor() {
+    // When the dialog opens with an editNodeId, jump straight into the right form.
+    effect(() => {
+      const id = this.editNodeId();
+      if (this.open() && id) {
+        const node = untracked(() => this.store.byId(id));
+        if (node?.kind === 'transform') {
+          const tId = (node as TransformNode).transformId;
+          if (tId === 'dest-sqlserver' || tId === 'dest-csv') {
+            untracked(() => this._openDestWizardEdit(node));
+          }
+          return;
+        }
+        untracked(() => this.openEpicForm(id));
+      }
+    });
+  }
 
   // ── picker model (transform mode only) ───────────────────────────────────
   private readonly pickerModel = computed(() => {
@@ -288,105 +301,89 @@ export class NodeLibraryDialogComponent {
   readonly rankLabel = RANK_LABEL;
 
   // ── template helpers ──────────────────────────────────────────────────────
-  isCatExpanded(rank: number): boolean {
-    if (this.searchQuery().trim()) return true;
-    return this.expandedRanks().has(rank);
-  }
-
-  hasCatSelected(cat: LibraryCategory): boolean {
-    return cat.items.some(i => i.id === this.selectedId());
-  }
-
   getRankColor(rank: number): string {
     return RANK_META[rank]?.catColor ?? '#64748B';
   }
 
-  toggleCat(rank: number): void {
-    this.expandedRanks.update(s => {
-      const next = new Set(s);
-      next.has(rank) ? next.delete(rank) : next.add(rank);
-      return next;
-    });
-  }
-
   selectItem(item: LibraryItem): void {
     if (item.status === 'disabled' || item.status === 'hide') return;
+
+    // Epic and the destination connectors jump straight into their config form.
+    if (item.id === 'epic') {
+      this.openEpicForm();
+      return;
+    }
+    if (item.id === 'dest-sqlserver') {
+      this._openDestWizard('sql');
+      return;
+    }
+    if (item.id === 'dest-csv') {
+      this._openDestWizard('csv');
+      return;
+    }
+
     this.selectedId.set(item.id);
   }
 
-  // ── inline wizard methods ─────────────────────────────────────────────────
-  openEpicWizard(): void {
-    this.wizStep.set(1);
-    this.wizShowAdvanced.set(false);
-    this.wiz.open();
+  // ── inline Epic form ──────────────────────────────────────────────────────
+  openEpicForm(nodeId?: string | null): void {
+    this.wiz.open(nodeId ?? undefined);
     this.wiz.openedInline.set(true);
+    this.showEpicForm.set(true);
   }
 
-  wizGoToStep(n: number): void {
-    this.wizStep.set(Math.max(1, Math.min(6, n)));
-  }
-
-  wizGoBack(): void { this.wizGoToStep(this.wizStep() - 1); }
-
-  wizGoNext(): void {
-    const step = this.wizStep();
-    if (step === 1 && !this.stepConnect()?.validate()) return;
-    if (step === 2 && !this.stepAuthenticate()?.validate()) return;
-    if (step === 3 && !this.stepData()?.validate()) return;
-    if (step === 6) { this.wizFinish(); return; }
-    this.wizGoToStep(step + 1);
-  }
-
-  wizFinish(): void {
-    const connect = this.stepConnect();
-    const auth    = this.stepAuthenticate();
-    if (!connect || !auth) return;
-
-    const cv = connect.getConnectValues();
-    const av = auth.getAuthValues();
-    const envKey: EnvKey = cv.environment === 'production' ? 'production' : 'sandbox';
-
-    this.wiz.setAppKey('provider-ehr-launch');
-    this.wiz.setEnv(envKey);
-    this.wiz.stepName.set(cv.appName);
-    this.wiz.baseUrl.set(cv.fhirBaseUrl || cv.epicBaseUrl);
-    this.wiz.token.set(cv.tokenEndpoint);
-    this.wiz.authorize.set(cv.authzEndpoint);
-    this.wiz.setDiscovered(connect.discoveryStatus() === 'done');
-
-    this.wiz.save({
-      stepName:    cv.appName,
-      baseUrl:     cv.fhirBaseUrl || cv.epicBaseUrl,
-      token:       cv.tokenEndpoint,
-      authorize:   cv.authzEndpoint,
-      algorithm:   av.signingAlgorithm,
-      jwksMethod:  av.keySource === 'gen' ? 'hosted' : 'external',
-      jwksUrl:     av.jwksUrl,
-      kid:         av.keyId,
-      kvRef:       av.keyVaultRef,
-      redirectUri: cv.redirectUri,
-      launchUrl:   cv.launchUrl,
-    }, {});
-
+  onEpicFormSaved(): void {
     this._close();
   }
 
-  wizClose(): void {
+  onEpicFormCancelled(): void {
     this.wiz.close();
+    this.showEpicForm.set(false);
   }
 
-  wizToggleAdvanced(): void {
-    this.wizShowAdvanced.update(v => !v);
+  // ── destination wizard ────────────────────────────────────────────────────
+  private _openDestWizard(type: 'sql' | 'csv'): void {
+    const pm = this.pickerModel();
+    if (!pm) return;
+    this.destWizardType.set(type);
+    this.destWizardAttach.set(pm.attachTo);
+    this.destEditNode.set(null);
+    this.showDestWizard.set(true);
   }
 
-  // ── add to pipeline ───────────────────────────────────────────────────────
+  private _openDestWizardEdit(node: CanvasNode): void {
+    const tId = (node as TransformNode).transformId;
+    const type: 'sql' | 'csv' = tId === 'dest-sqlserver' ? 'sql' : 'csv';
+    const inbound = this.store.inboundEdges(node.id);
+    const parentId = inbound[0]?.from ?? '';
+    const parentNode = parentId ? this.store.byId(parentId) : null;
+    this.destWizardType.set(type);
+    this.destWizardAttach.set(parentNode ?? node);
+    this.destEditNode.set(node);
+    this.showDestWizard.set(true);
+  }
+
+  onDestWizardSaved(e: AddTransformEvent): void {
+    const editNode = this.destEditNode();
+    this.transformSelected.emit(editNode ? { ...e, editNodeId: editNode.id } : e);
+    this._close();
+  }
+
+  onDestWizardCancelled(): void {
+    this.showDestWizard.set(false);
+    this.destWizardType.set(null);
+    this.destWizardAttach.set(null);
+    this.destEditNode.set(null);
+  }
+
+  // ── add to pipeline (fallback for items without an auto-open form) ───────
   addSelected(): void {
     const item = this.selectedItem();
     if (!item) return;
 
     if (item.isSource) {
       if (item.id === 'epic') {
-        this.openEpicWizard();
+        this.openEpicForm();
         return;
       }
       this._close();
@@ -412,5 +409,12 @@ export class NodeLibraryDialogComponent {
     this.closed.emit();
     this.selectedId.set(null);
     this.searchQuery.set('');
+    this.sidebarPinned.set(false);
+    this.showEpicForm.set(false);
+    this.showDestWizard.set(false);
+    this.destWizardType.set(null);
+    this.destWizardAttach.set(null);
+    this.destEditNode.set(null);
+    this.wiz.close();
   }
 }

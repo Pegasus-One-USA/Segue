@@ -1,5 +1,4 @@
 import { Component, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { PipelineStore } from '../../services/pipeline.store';
 import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
@@ -25,7 +24,6 @@ import {
   selector: 'app-workflow-builder',
   standalone: true,
   imports: [
-    FormsModule,
     CanvasComponent,
     EpicSourceWizardComponent,
     PayloadPreviewComponent,
@@ -48,16 +46,22 @@ export class WorkflowBuilderComponent {
   protected readonly libraryOpen      = signal(false);
   protected readonly libraryMode      = signal<LibraryMode>('source');
   protected readonly libraryOriginId  = signal<string | null>(null);
+  protected readonly editingNodeId    = signal<string | null>(null);
 
   // ── other modals ───────────────────────────────────────────────────────────
-  protected readonly payloadOpen = signal(false);
-  protected readonly wizardOpen  = this.wiz.isOpen;
+  protected readonly payloadOpen  = signal(false);
+  protected readonly wizardOpen   = this.wiz.isOpen;
+  protected readonly confirmReset = signal(false);
 
   // ── topbar ─────────────────────────────────────────────────────────────────
-  onPreview(): void { this.payloadOpen.set(true); }
   onReset(): void {
     this.store.reset();
     this.toast.show('Canvas reset', 'All nodes removed.');
+    this.confirmReset.set(false);
+  }
+
+  onResetBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.confirmReset.set(false);
   }
 
   // ── canvas events (unchanged API — canvas.component stays untouched) ───────
@@ -87,6 +91,16 @@ export class WorkflowBuilderComponent {
   onTransformSelected(e: AddTransformEvent): void {
     const t = TRANSFORMS.find(x => x.id === e.transformId);
     if (!t) return;
+
+    // Editing an existing destination node's configuration (dest wizard edit flow).
+    if (e.editNodeId) {
+      this.store.updateNode(e.editNodeId, {
+        fields: { '__name': t.name, ...(e.config ?? {}) },
+      });
+      this.toast.show('Updated', `${t.name} configuration updated.`);
+      return;
+    }
+
     const siblings = this.store.outboundEdges(e.attachNode.id).length;
     const node: TransformNode = {
       id:          this.store.nextTransformId(),
@@ -96,7 +110,7 @@ export class WorkflowBuilderComponent {
       statusAtAdd: e.status,
       x:           e.attachNode.x + 300,
       y:           e.attachNode.y + siblings * 170,
-      fields:      { '__name': t.name },
+      fields:      { '__name': t.name, ...(e.config ?? {}) },
     };
     this.store.addNode(node);
     this.store.addEdge({ id: this.store.nextEdgeId(), from: e.attachNode.id, to: node.id });
@@ -138,8 +152,38 @@ export class WorkflowBuilderComponent {
     this.toast.show('Merged', `${members.length} "${this.appSvc.groupLabel(opt.group)}" members merged.`);
   }
 
-  // ── wizard (node-circle click on source node) ──────────────────────────────
-  onOpenWizard(nodeId?: string): void { this.wiz.open(nodeId); }
+  // ── wizard (node-circle click on source or transform node) ──────────────────
+  onOpenWizard(nodeId?: string): void {
+    if (nodeId) {
+      const node = this.store.byId(nodeId);
+      if (node?.kind === 'transform') {
+        const tId = (node as TransformNode).transformId;
+        if (tId === 'dest-sqlserver' || tId === 'dest-csv') {
+          // Edit destination node — open library in transform mode with parent as origin.
+          const parent = this.store.parentOf(nodeId);
+          this.editingNodeId.set(nodeId);
+          this.libraryMode.set('transform');
+          this.libraryOriginId.set(parent?.id ?? null);
+          this.libraryOpen.set(true);
+        } else {
+          this.toast.show('Nothing to configure', "This module type doesn't have a configuration screen yet.");
+        }
+        return;
+      }
+      // Edit Epic source node → open Node Library with Epic form pre-populated.
+      this.editingNodeId.set(nodeId);
+      this.libraryMode.set('source');
+      this.libraryOriginId.set(null);
+      this.libraryOpen.set(true);
+    } else {
+      this.wiz.open();
+    }
+  }
+
+  onLibraryClosed(): void {
+    this.libraryOpen.set(false);
+    this.editingNodeId.set(null);
+  }
 
   // ── private helpers ────────────────────────────────────────────────────────
   private addStubSource(s: Source): void {
