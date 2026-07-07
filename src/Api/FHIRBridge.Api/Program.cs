@@ -11,6 +11,7 @@ using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Persistence;
+using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using Microsoft.AspNetCore.Authorization;
@@ -92,7 +93,10 @@ builder.Services
     .AddFHIRBridgeApplication()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
     .AddWorkflowCore()
-    .AddWorkflowInfrastructure();
+    .AddWorkflowInfrastructure()
+    // Scenario A: back the graph engine's stores with SQL (must follow AddWorkflowCore to win the registration).
+    // Scenario B: also wires the launch-graph projection/resolver + feature flag (default OFF).
+    .AddWorkflowSqlPersistence(builder.Configuration);
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>

@@ -7,6 +7,7 @@ import {
 } from '@angular/forms';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
+import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -99,6 +100,7 @@ export interface MappingRow {
 })
 export class DestinationWizardComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
+  private readonly schemaSvc = inject(DestinationSchemaService);
 
   readonly destType   = input.required<'sql' | 'csv'>();
   readonly attachNode = input.required<CanvasNode>();
@@ -117,7 +119,9 @@ export class DestinationWizardComponent implements OnInit {
     name:      ['SQL Production', [Validators.required]],
     server:    ['', [Validators.required]],
     database:  ['', [Validators.required]],
-    auth:      ['managed-identity', [Validators.required]],
+    auth:      ['sql-auth', [Validators.required]],
+    username:  [''],
+    password:  [''],
     schema:    ['dbo', []],
     writeMode: ['upsert', []],
   });
@@ -137,6 +141,15 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
+
+  // Per-resource destination target (CSV file name / SQL table), entered once in the group header
+  // rather than repeated on every mapping row.
+  readonly targetByResource = signal<Record<string, string>>({});
+
+  // ── SQL connection probe (test connection → load tables/columns) ────────────
+  readonly sqlTables  = signal<DestinationTable[]>([]);
+  readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  readonly probeError = signal<string | null>(null);
 
   // ── computed helpers ──────────────────────────────────────────────────────
   readonly isSql        = computed(() => this.destType() === 'sql');
@@ -176,9 +189,71 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── navigation ────────────────────────────────────────────────────────────
-  next():   void { if (this.step() < this.TOTAL_STEPS) this.step.update(x => x + 1); else this._save(); }
-  back():   void { if (this.step() > 1) this.step.update(x => x - 1); }
+  next(): void {
+    // SQL: leaving Configure auto-tests the connection and loads tables before advancing.
+    if (this.step() === 1 && this.isSql() && this.probeState() !== 'ok') {
+      this.testConnection();
+      return;
+    }
+    if (this.step() < this.TOTAL_STEPS) this.step.update(x => x + 1); else this._save();
+  }
+
+  back(): void {
+    if (this.step() > 1) {
+      this.step.update(x => x - 1);
+      // Returning to Configure invalidates a prior probe — force a re-test on the next advance.
+      if (this.step() === 1 && this.isSql()) { this.probeState.set('idle'); this.sqlTables.set([]); }
+    }
+  }
+
   cancel(): void { this.cancelled.emit(); }
+
+  // ── SQL connection test + table/column loading ──────────────────────────────
+  testConnection(): void {
+    const v = this.sqlForm.value;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+    this.schemaSvc.probe({
+      destinationType: 'SqlServer',
+      server:   v.server   ?? '',
+      database: v.database ?? '',
+      authentication: v.auth ?? 'sql-auth',
+      username: v.username ?? undefined,
+      password: v.password ?? undefined,
+      trustServerCertificate: true,
+      encrypt: true,
+    }).subscribe({
+      next: res => {
+        if (res.connected) {
+          this.sqlTables.set(res.tables);
+          this.probeState.set('ok');
+          if (this.step() < this.TOTAL_STEPS) this.step.update(x => x + 1);
+        } else {
+          this.probeState.set('error');
+          this.probeError.set(res.error ?? 'Connection failed.');
+        }
+      },
+      error: err => {
+        this.probeState.set('error');
+        this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
+      },
+    });
+  }
+
+  hasSqlTables(): boolean {
+    return this.isSql() && this.probeState() === 'ok' && this.sqlTables().length > 0;
+  }
+
+  sqlTableOptions(): string[] {
+    return this.sqlTables().map(t => t.fullName);
+  }
+
+  // Columns of the table currently chosen for a resource (drives the per-row column dropdown).
+  columnsForResourceTarget(r: string): string[] {
+    const target = this.targetFor(r);
+    const table = this.sqlTables().find(t => t.fullName === target || t.tableName === target);
+    return table ? table.columns.map(c => c.name) : [];
+  }
 
   // ── data groups ───────────────────────────────────────────────────────────
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
@@ -194,7 +269,7 @@ export class DestinationWizardComponent implements OnInit {
     return this.mappingRows().filter(row => row.resource === r);
   }
 
-  updateRow(i: number, field: 'targetName' | 'tableName', val: string): void {
+  updateRow(i: number, field: 'targetName', val: string): void {
     this.mappingRows.update(rows => {
       const next = [...rows];
       next[i] = { ...next[i], [field]: val };
@@ -202,20 +277,52 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  // ── per-resource target (file name / table) ────────────────────────────────
+  targetFor(r: string): string { return this.targetByResource()[r] ?? ''; }
+
+  updateTarget(r: string, val: string): void {
+    this.targetByResource.update(m => ({ ...m, [r]: val }));
+  }
+
+  // ── business-field selection ───────────────────────────────────────────────
+  availableFields(r: string): ResourceFieldDef[] {
+    return DEST_RESOURCE_DEFS[r]?.fields ?? [];
+  }
+
+  changeBusinessField(i: number, label: string): void {
+    this.mappingRows.update(rows => {
+      const next = [...rows];
+      const row  = next[i];
+      const def  = DEST_RESOURCE_DEFS[row.resource];
+      const f    = def?.fields.find(x => x.label === label);
+      next[i] = {
+        ...row,
+        fieldLabel: label,
+        fhirPath:   f?.path ?? row.fhirPath,
+        targetName: f ? (this.destType() === 'sql' ? f.sqlColumn : f.csvColumn) : row.targetName,
+      };
+      return next;
+    });
+  }
+
   // ── private ───────────────────────────────────────────────────────────────
   private _rebuildRows(resources: string[], type: 'sql' | 'csv'): void {
     const rows: MappingRow[] = [];
+    const targets = { ...this.targetByResource() };
     for (const r of resources) {
       const def = DEST_RESOURCE_DEFS[r];
       if (!def) continue;
+      // Seed the per-resource target once; preserve any value the user has already typed.
+      if (!targets[r]) targets[r] = type === 'sql' ? def.sqlTable : def.csvFile;
       def.fields.forEach(f => rows.push({
         resource:   r,
         fieldLabel: f.label,
         fhirPath:   f.path,
         targetName: type === 'sql' ? f.sqlColumn : f.csvColumn,
-        tableName:  type === 'sql' ? def.sqlTable : def.csvFile,
+        tableName:  targets[r],
       }));
     }
+    this.targetByResource.set(targets);
     this.mappingRows.set(rows);
   }
 
@@ -243,6 +350,9 @@ export class DestinationWizardComponent implements OnInit {
     if (f['dest_resources']) {
       this.selectedResources.set(f['dest_resources'].split(',').filter(Boolean));
     }
+    if (f['dest_targets']) {
+      try { this.targetByResource.set(JSON.parse(f['dest_targets'])); } catch { /* ignore malformed */ }
+    }
   }
 
   private _save(): void {
@@ -269,8 +379,18 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_encoding']    = v.encoding    ?? 'utf-8';
     }
 
-    // Store mapping row overrides as JSON
+    // Persist per-resource targets + the actual field mappings (previously discarded).
     config['dest_mappingCount'] = String(this.mappingRows().length);
+    config['dest_targets']  = JSON.stringify(this.targetByResource());
+    config['dest_mappings'] = JSON.stringify(
+      this.mappingRows().map(r => ({
+        resource: r.resource,
+        field:    r.fieldLabel,
+        path:     r.fhirPath,
+        target:   this.targetByResource()[r.resource] ?? r.tableName,
+        column:   r.targetName,
+      })),
+    );
 
     this.saved.emit({
       attachNode:  this.attachNode(),

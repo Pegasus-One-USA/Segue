@@ -2,6 +2,15 @@
 <span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
 
 <button
+  class="sn-del-btn"
+  (click)="onDeleteClick($event)"
+  (pointerdown)="$event.stopPropagation()"
+  title="Delete this module"
+>
+  <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+</button>
+
+<button
   class="sn-add-btn"
   (click)="onAddNextClick($event)"
   (pointerdown)="$event.stopPropagation()"

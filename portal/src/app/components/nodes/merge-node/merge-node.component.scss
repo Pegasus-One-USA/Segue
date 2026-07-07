@@ -100,6 +100,32 @@
   }
 }
 
+/* ── Delete button (top-right, appears on hover/selected) ───────────────────── */
+.sn-del-btn {
+  position: absolute;
+  right: -14px;
+  top: -14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-error);
+  color: var(--color-error);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 9;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+
+  svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; fill: none; }
+}
+:host:hover .sn-del-btn,
+:host.selected .sn-del-btn { opacity: 1; pointer-events: auto; }
+:host:hover .sn-del-btn:hover { transform: scale(1.18); background: var(--color-error); color: var(--color-on-primary); }
+
 /* ── Attached + button ───────────────────────────────────────────────────────── */
 .sn-add-btn {
   position: absolute;

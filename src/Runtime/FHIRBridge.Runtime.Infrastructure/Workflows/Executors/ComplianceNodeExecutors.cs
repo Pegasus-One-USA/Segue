@@ -139,9 +139,31 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
     {
         var resourceInputs = PassThroughNodeExecutor.ReadResourceEnvelopes(inputs).ToArray();
         var records = PassThroughNodeExecutor.ReadMappedRecords(inputs).ToArray();
-        if (_deIdentificationService is null && _dataSetDeIdentificationService is null)
+
+        // Opt-out flag: a graph can carry raw (non-de-identified) data through this node while still satisfying the
+        // DeIdentifiedBatch output contract. Defaults to true so existing behaviour is unchanged. The route→graph
+        // projection sets it false so a launch mirrors the route path (which de-identifies only when governance asks).
+        var deIdentifyEnabled = ReadBoolConfiguration(node, "deIdentify") ?? true;
+
+        if (!deIdentifyEnabled || (_deIdentificationService is null && _dataSetDeIdentificationService is null))
         {
-            return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+            // Pass through unchanged (preserving resource envelopes when present) rather than the base placeholder,
+            // so downstream mapping receives the real payloads.
+            var passThroughRecords = resourceInputs.Length > 0
+                ? (IReadOnlyCollection<object>)resourceInputs
+                : records;
+
+            return new WorkflowNodeOutput(
+                node.Id,
+                node.NodeType,
+                new DeIdentifiedBatch(passThroughRecords),
+                WorkflowDataContract.DeIdentifiedBatch,
+                new Dictionary<string, object?>
+                {
+                    ["executor"] = GetType().Name,
+                    ["deIdentified"] = false,
+                    ["count"] = passThroughRecords.Count
+                });
         }
 
         if (resourceInputs.Length > 0)

@@ -65,6 +65,11 @@ export class SourceNodeComponent {
     this.addNext.emit(this.node().id);
   }
 
+  onDeleteClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.delete.emit(this.node().id);
+  }
+
   // ── drag on circle ────────────────────────────────────────────────────────
   private drag: { startClientX: number; startClientY: number; startNodeX: number; startNodeY: number } | null = null;
   private dragged = false;

@@ -71,12 +71,23 @@
               <label class="dw-label" for="dw-auth">Authentication <span class="dw-req">*</span></label>
               <div class="dw-select-wrap">
                 <select id="dw-auth" class="dw-select" formControlName="auth">
-                  <option value="managed-identity">Managed Identity</option>
                   <option value="sql-auth">SQL Username / Password</option>
+                  <option value="managed-identity">Managed Identity</option>
                   <option value="azure-ad">Azure AD</option>
                 </select>
               </div>
             </div>
+
+            @if (sqlForm.get('auth')!.value === 'sql-auth') {
+              <div class="dw-field">
+                <label class="dw-label" for="dw-username">Username</label>
+                <input id="dw-username" class="dw-input" formControlName="username" placeholder="e.g. sa" autocomplete="off" />
+              </div>
+              <div class="dw-field">
+                <label class="dw-label" for="dw-password">Password</label>
+                <input id="dw-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+              </div>
+            }
 
             <div class="dw-field">
               <label class="dw-label" for="dw-schema">Schema</label>
@@ -96,6 +107,16 @@
 
           </div><!-- /dw-grid-2 -->
         </form>
+
+        @if (probeState() === 'testing') {
+          <div class="dw-callout dw-callout--info">Testing connection…</div>
+        }
+        @if (probeState() === 'error') {
+          <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+        }
+        @if (probeState() === 'ok') {
+          <div class="dw-callout dw-callout--info">Connected — {{ sqlTables().length }} table(s) loaded. Choose tables &amp; columns in Map fields.</div>
+        }
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -209,39 +230,71 @@
         <div class="dw-mapping-group">
           <div class="dw-mapping-group-head">
             <strong>{{ r }}</strong>
-            @if (isSql()) {
-              <span class="dw-mapping-target-label">→ {{ rowsForResource(r)[0]?.tableName }}</span>
-            } @else {
-              <span class="dw-mapping-target-label">→ {{ rowsForResource(r)[0]?.tableName }}</span>
-            }
+            <span class="dw-mapping-target-inline">
+              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : 'File name' }}</label>
+              @if (hasSqlTables()) {
+                <div class="dw-select-wrap">
+                  <select class="dw-select dw-target-select"
+                          [attr.id]="'dw-target-' + r"
+                          [value]="targetFor(r)"
+                          (change)="updateTarget(r, $any($event.target).value)">
+                    <option value="" disabled>Select a table…</option>
+                    @for (t of sqlTableOptions(); track t) { <option [value]="t">{{ t }}</option> }
+                  </select>
+                </div>
+              } @else {
+                <input
+                  class="dw-map-input dw-target-input"
+                  [attr.id]="'dw-target-' + r"
+                  [value]="targetFor(r)"
+                  (input)="updateTarget(r, $any($event.target).value)"
+                  [placeholder]="isSql() ? 'dbo.Patient' : 'patients.csv'"
+                />
+              }
+            </span>
           </div>
           <table class="dw-map-table">
             <thead>
               <tr>
                 <th>Business field</th>
                 <th>FHIR path</th>
-                <th>{{ isSql() ? 'Table' : 'File name' }}</th>
                 <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
               </tr>
             </thead>
             <tbody>
-              @for (row of rowsForResource(r); track row.fhirPath) {
+              @for (row of rowsForResource(r); track $index) {
                 <tr>
-                  <td>{{ row.fieldLabel }}</td>
+                  <td>
+                    <div class="dw-select-wrap">
+                      <select
+                        class="dw-select"
+                        [value]="row.fieldLabel"
+                        (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
+                      >
+                        @for (f of availableFields(r); track f.path) {
+                          <option [value]="f.label">{{ f.label }}</option>
+                        }
+                      </select>
+                    </div>
+                  </td>
                   <td class="dw-mono">{{ row.fhirPath }}</td>
                   <td>
-                    <input
-                      class="dw-map-input"
-                      [value]="row.tableName"
-                      (input)="updateRow(mappingRows().indexOf(row), 'tableName', $any($event.target).value)"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      class="dw-map-input"
-                      [value]="row.targetName"
-                      (input)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)"
-                    />
+                    @if (hasSqlTables() && columnsForResourceTarget(r).length) {
+                      <div class="dw-select-wrap">
+                        <select class="dw-select"
+                                [value]="row.targetName"
+                                (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
+                          <option value="" disabled>Select a column…</option>
+                          @for (c of columnsForResourceTarget(r); track c) { <option [value]="c">{{ c }}</option> }
+                        </select>
+                      </div>
+                    } @else {
+                      <input
+                        class="dw-map-input"
+                        [value]="row.targetName"
+                        (input)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)"
+                      />
+                    }
                   </td>
                 </tr>
               }
@@ -328,10 +381,12 @@
       <button
         class="dw-btn dw-btn--primary"
         type="button"
-        [disabled]="isNextDisabled()"
+        [disabled]="isNextDisabled() || probeState() === 'testing'"
         (click)="next()"
       >
-        {{ step() === TOTAL_STEPS ? '✓ Add to Pipeline' : 'Next' }}
+        @if (step() === TOTAL_STEPS) { ✓ Add to Pipeline }
+        @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
+        @else { Next }
       </button>
     </div>
   </div>

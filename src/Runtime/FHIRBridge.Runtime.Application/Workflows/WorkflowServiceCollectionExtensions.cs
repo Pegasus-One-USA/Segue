@@ -14,6 +14,7 @@ public static class WorkflowServiceCollectionExtensions
         services.AddScoped<IWorkflowNodeExecutorRegistry, WorkflowNodeExecutorRegistry>();
         services.AddScoped<IRankedWorkflowOrchestrator, RankedWorkflowOrchestrator>();
         services.AddSingleton<IWorkflowDefinitionStore, InMemoryWorkflowDefinitionStore>();
+        services.AddSingleton<IWorkflowRunStore, InMemoryWorkflowRunStore>();
         services.AddScoped<IWorkflowAuditRecorder, InMemoryWorkflowAuditRecorder>();
 
         return services;

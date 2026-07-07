@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -243,10 +244,14 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     private DestinationConfiguration CreateDestinationConfiguration(WorkflowExecutionContext context, WorkflowNode node)
     {
         var target = ReadStringConfiguration(node, "target");
+        // Rebuild the secret reference the projection embedded (vault + name only). The writer resolves the actual
+        // connection secret via ISecretProvider, so a graph-driven run can write to a secret-backed destination.
+        var keyVaultName = ReadStringConfiguration(node, "secretKeyVaultName") ?? string.Empty;
+        var secretName = ReadStringConfiguration(node, "secretName") ?? string.Empty;
         return new DestinationConfiguration(
             node.DisplayName,
             _destinationType,
-            new SecretReference(string.Empty, string.Empty),
+            new SecretReference(keyVaultName, secretName),
             target);
     }
 
@@ -260,12 +265,18 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             ?? "Patient";
         var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
 
+        // The writer creates/aligns the target table's columns from these fields, so carry them from node config
+        // (the projection embeds the same fields the mapping node used) rather than defaulting to none.
+        var fields = (ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [])
+            .Select(ConfigurationMapper.ToDomain)
+            .ToList();
+
         return new MappingProfile(
             node.DisplayName,
             resourceType,
             Guid.Empty,
             Guid.Empty,
             destinationObject,
-            []);
+            fields);
     }
 }

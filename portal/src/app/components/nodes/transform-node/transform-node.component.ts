@@ -113,6 +113,11 @@ export class TransformNodeComponent {
     this.addNext.emit(this.node().id);
   }
 
+  onDeleteClick(e: MouseEvent): void {
+    e.stopPropagation();
+    this.delete.emit(this.node().id);
+  }
+
   // ── drag (tracks distance to distinguish click from drag) ────────────────
   private drag: { sX: number; sY: number; nX: number; nY: number; dragged: boolean } | null = null;
 

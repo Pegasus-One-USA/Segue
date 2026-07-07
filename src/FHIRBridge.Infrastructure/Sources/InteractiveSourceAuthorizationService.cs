@@ -7,11 +7,14 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Infrastructure.Workflows;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Infrastructure.Sources;
 
@@ -35,6 +38,12 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<InteractiveSourceAuthorizationService> _logger;
 
+    // Scenario B (optional): when the graph-execution flag is on for a source, the launch runs its persisted
+    // workflow graph instead of the flat route path. Left null (flag off / not composed) => route path only.
+    private readonly IRankedWorkflowOrchestrator? _workflowOrchestrator;
+    private readonly ILaunchWorkflowResolver? _launchWorkflowResolver;
+    private readonly WorkflowGraphExecutionOptions _graphExecutionOptions;
+
     public InteractiveSourceAuthorizationService(
         IConfigurationRepository configurationRepository,
         ISourceCapabilityDiscoveryService discoveryService,
@@ -45,7 +54,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         IConfiguredPipelineService pipelineService,
         IOperationalAuditService auditService,
         ICurrentUserService currentUserService,
-        ILogger<InteractiveSourceAuthorizationService> logger)
+        ILogger<InteractiveSourceAuthorizationService> logger,
+        IRankedWorkflowOrchestrator? workflowOrchestrator = null,
+        ILaunchWorkflowResolver? launchWorkflowResolver = null,
+        IOptions<WorkflowGraphExecutionOptions>? graphExecutionOptions = null)
     {
         _configurationRepository = configurationRepository;
         _discoveryService = discoveryService;
@@ -57,6 +69,9 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _auditService = auditService;
         _currentUserService = currentUserService;
         _logger = logger;
+        _workflowOrchestrator = workflowOrchestrator;
+        _launchWorkflowResolver = launchWorkflowResolver;
+        _graphExecutionOptions = graphExecutionOptions?.Value ?? new WorkflowGraphExecutionOptions();
     }
 
     public string BuildLaunchContextToken(Guid routeId) =>
@@ -273,6 +288,14 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     {
         try
         {
+            // Scenario B: when the graph-execution flag is on for this source and a persisted graph resolves, the
+            // launch runs that graph (make.com-style) instead of the flat route path. Falls back to the route path
+            // if the flag is off, the graph engine isn't composed, or no graph could be projected for the source.
+            if (await TryTriggerGraphRunAsync(sourceConnectionId, cancellationToken))
+            {
+                return;
+            }
+
             var routeIds = await ResolveEnabledRouteIdsForSourceAsync(sourceConnectionId, cancellationToken);
             if (routeIds.Length == 0)
             {
@@ -297,6 +320,38 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchPipelineTriggerFailed", "Failed",
                 exception.Message, cancellationToken);
         }
+    }
+
+    // Scenario B graph path. Returns true when the launch was handled by running the source's persisted workflow
+    // graph. Returns false to defer to the route path when the flag is off, the graph engine isn't composed, or no
+    // graph could be projected. A graph run that throws propagates to TriggerRouteRunAsync's catch (audited, and the
+    // sign-in still succeeds since the token is already stored).
+    private async Task<bool> TryTriggerGraphRunAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+    {
+        if (_workflowOrchestrator is null
+            || _launchWorkflowResolver is null
+            || !_graphExecutionOptions.IsEnabledForSource(sourceConnectionId))
+        {
+            return false;
+        }
+
+        var workflow = await _launchWorkflowResolver.ResolveForSourceAsync(sourceConnectionId, cancellationToken);
+        if (workflow is null)
+        {
+            return false;
+        }
+
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), $"ehr-launch:{sourceConnectionId:N}");
+        var result = await _workflowOrchestrator.ExecuteAsync(workflow, context, cancellationToken);
+
+        await RecordAuditAsync(
+            sourceConnectionId,
+            "EhrLaunchGraphTriggered",
+            "Started",
+            $"Workflow graph '{workflow.Name}' ({result.WorkflowRun.NodeRuns.Count} node run(s)) triggered by EHR launch for source {sourceConnectionId}.",
+            cancellationToken);
+
+        return true;
     }
 
     private async Task<SmartConfigurationDto> DiscoverEndpointsAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
