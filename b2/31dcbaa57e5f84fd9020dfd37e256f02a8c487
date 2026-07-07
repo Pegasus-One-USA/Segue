@@ -1,0 +1,35 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_9fb76ea04158d3::t_953cfde4fa7658 233-234,237-238,247-248
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_d1e34340689bf8::t_45ff682ccba568 352-366
+portal/src/app/components/nodes/merge-node/merge-node.component.scss
+  s_d1e34340689bf8::t_4c8537f8ae030f 111-113,127
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_9fb76ea04158d3::t_f30459797d8505 141-143,157
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_9fb76ea04158d3::t_3bfe90740db665 130-132,146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b231dcbaa57e5f84fd9020dfd37e256f02a8c487",
+  "prompts": {},
+  "sessions": {
+    "s_9fb76ea04158d3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a815e52d-43de-4657-b874-38457f476efe",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d1e34340689bf8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3b20-4c0f-72e3-a213-8e7ce59daac2",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
