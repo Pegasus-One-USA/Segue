@@ -73,5 +73,20 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
                 : null;
     }
 
+    protected static bool? ReadBoolConfiguration(WorkflowNode node, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(node.ConfigurationJson))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(node.ConfigurationJson);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty(propertyName, out var property)
+            && property.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? property.GetBoolean()
+                : null;
+    }
+
     protected static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 }

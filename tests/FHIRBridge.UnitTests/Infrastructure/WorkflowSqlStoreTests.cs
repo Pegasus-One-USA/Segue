@@ -1,0 +1,147 @@
+using FHIRBridge.Infrastructure.Persistence;
+using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Runtime.Domain.Workflows;
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+
+namespace FHIRBridge.UnitTests.Infrastructure;
+
+// Scenario A: proves designed graphs and run history durably round-trip through the control-plane
+// database via the SQL stores. Uses the EF in-memory provider with a shared root so a fresh context
+// (a new "request") reads back what a previous context wrote.
+public sealed class WorkflowSqlStoreTests
+{
+    private readonly InMemoryDatabaseRoot _root = new();
+    private readonly string _databaseName = Guid.NewGuid().ToString();
+
+    private FHIRBridgeDbContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
+            .UseInMemoryDatabase(_databaseName, _root)
+            .Options;
+
+        return new FHIRBridgeDbContext(options);
+    }
+
+    [Fact]
+    public async Task Definition_store_round_trips_nodes_edges_and_configuration()
+    {
+        var definitionId = Guid.NewGuid();
+        var workflow = new WorkflowDefinition(definitionId, "Epic -> SQL", 1);
+        var source = workflow.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+        var destination = workflow.AddNode("SqlServerDestinationNode", WorkflowNodeCategory.Destination, 30);
+        workflow.AddEdge(source.Id, destination.Id);
+        workflow.AddNodeConfiguration(destination.Id, "table", "dbo.Patient");
+
+        await using (var context = CreateContext())
+        {
+            await new SqlWorkflowDefinitionStore(context).SaveAsync(workflow, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            var reloaded = await new SqlWorkflowDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
+
+            reloaded.Should().NotBeNull();
+            reloaded!.Name.Should().Be("Epic -> SQL");
+            reloaded.Nodes.Should().HaveCount(2);
+            reloaded.Edges.Should().ContainSingle();
+            reloaded.Nodes.Single(node => node.NodeType == "SqlServerDestinationNode")
+                .Configuration.Should().ContainSingle(configuration =>
+                    configuration.Key == "table" && configuration.Value == "dbo.Patient");
+        }
+    }
+
+    [Fact]
+    public async Task Definition_store_save_replaces_the_existing_graph()
+    {
+        var definitionId = Guid.NewGuid();
+
+        var version1 = new WorkflowDefinition(definitionId, "v1", 1);
+        var v1Source = version1.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+        var v1Destination = version1.AddNode("CsvDestinationNode", WorkflowNodeCategory.Destination, 30);
+        version1.AddEdge(v1Source.Id, v1Destination.Id);
+
+        await using (var context = CreateContext())
+        {
+            await new SqlWorkflowDefinitionStore(context).SaveAsync(version1, CancellationToken.None);
+        }
+
+        // Same id, an entirely new graph with fresh node ids — mirrors a PUT rebuilding the definition.
+        var version2 = new WorkflowDefinition(definitionId, "v2", 1);
+        var v2Source = version2.AddNode("SampleSourceNode", WorkflowNodeCategory.Source, 0);
+        var v2Destination = version2.AddNode("SqlServerDestinationNode", WorkflowNodeCategory.Destination, 30);
+        version2.AddEdge(v2Source.Id, v2Destination.Id);
+
+        await using (var context = CreateContext())
+        {
+            await new SqlWorkflowDefinitionStore(context).SaveAsync(version2, CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var reloaded = await new SqlWorkflowDefinitionStore(assertContext).GetAsync(definitionId, CancellationToken.None);
+
+            reloaded!.Name.Should().Be("v2");
+            reloaded.Nodes.Select(node => node.NodeType)
+                .Should().BeEquivalentTo("SampleSourceNode", "SqlServerDestinationNode");
+
+            // The v1 graph must be fully gone, not merged.
+            assertContext.WorkflowNodes.Count().Should().Be(2);
+            assertContext.WorkflowEdges.Count().Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task Run_store_round_trips_run_with_its_node_timeline()
+    {
+        var runId = Guid.NewGuid();
+        var definitionId = Guid.NewGuid();
+        var run = new WorkflowRun(runId, definitionId, DateTimeOffset.UtcNow);
+        var nodeRun = new WorkflowNodeRun(
+            Guid.NewGuid(), runId, Guid.NewGuid(), "SqlServerDestinationNode", 30, 0, DateTimeOffset.UtcNow);
+        nodeRun.Succeed("{\"table\":\"dbo.Observation\",\"written\":14}", DateTimeOffset.UtcNow);
+        run.AddNodeRun(nodeRun);
+        run.Succeed(DateTimeOffset.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            await new SqlWorkflowRunStore(context).SaveAsync(run, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(context);
+
+            var reloaded = await store.GetAsync(runId, CancellationToken.None);
+            reloaded.Should().NotBeNull();
+            reloaded!.Status.Should().Be(WorkflowRunStatus.Succeeded);
+            reloaded.NodeRuns.Should().ContainSingle();
+            reloaded.NodeRuns.Single().LineageJson.Should().Contain("written");
+
+            var byDefinition = await store.ListByDefinitionAsync(definitionId, CancellationToken.None);
+            byDefinition.Should().ContainSingle(persisted => persisted.Id == runId);
+        }
+    }
+
+    [Fact]
+    public async Task Run_store_save_is_idempotent()
+    {
+        var runId = Guid.NewGuid();
+        var run = new WorkflowRun(runId, Guid.NewGuid(), DateTimeOffset.UtcNow);
+        run.Succeed(DateTimeOffset.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(context);
+            await store.SaveAsync(run, CancellationToken.None);
+            await store.SaveAsync(run, CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            assertContext.WorkflowRuns.Count(persisted => persisted.Id == runId).Should().Be(1);
+        }
+    }
+}

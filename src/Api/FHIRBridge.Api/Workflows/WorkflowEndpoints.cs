@@ -88,6 +88,22 @@ public static class WorkflowEndpoints
             return Results.Ok(result);
         });
 
+        // Persisted run history (Scenario A): node-by-node execution timeline for the builder UI.
+        group.MapGet("/workflows/{workflowId:guid}/runs", async (
+            Guid workflowId,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await runStore.ListByDefinitionAsync(workflowId, cancellationToken)));
+
+        group.MapGet("/workflow-runs/{runId:guid}", async (
+            Guid runId,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            return run is null ? Results.NotFound() : Results.Ok(run);
+        });
+
         group.MapPost("/workflows/{workflowId:guid}/activate", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,

@@ -150,4 +150,13 @@ export class AuthService {
     }
     return of(undefined);
   }
+
+  // ─── Discard any stored session (called at boot when the backend requires first-run setup) ──
+  // An un-provisioned deployment (no users) cannot have a valid session, so a lingering JWT from a
+  // previous deployment is stale and must be cleared — otherwise authGuard would treat the old
+  // token as authenticated and skip the first-run /setup screen.
+  discardSession(): void {
+    this.tokens.clearTokens();
+    this.store.clear();
+  }
 }

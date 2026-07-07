@@ -1,5 +1,6 @@
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 
@@ -134,6 +135,73 @@ public sealed class RankedWorkflowOrchestratorTests
         result.WorkflowRun.NodeRuns.Should().OnlyContain(nodeRun =>
             nodeRun.Status == WorkflowRunStatus.Succeeded
             && !string.IsNullOrWhiteSpace(nodeRun.LineageJson));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_persists_succeeded_run_to_the_run_store()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("persisted-success");
+        var runStore = new InMemoryWorkflowRunStore();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle"),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload)
+            }),
+            auditRecorder: null,
+            runStore: runStore);
+        var context = CreateContext();
+
+        await orchestrator.ExecuteAsync(workflow, context);
+
+        var persisted = await runStore.GetAsync(context.WorkflowRunId, CancellationToken.None);
+        persisted.Should().NotBeNull();
+        persisted!.Status.Should().Be(WorkflowRunStatus.Succeeded);
+        persisted.WorkflowDefinitionId.Should().Be(workflow.Id);
+        persisted.NodeRuns.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_persists_failed_run_to_the_run_store_before_rethrowing()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("persisted-failure");
+        var runStore = new InMemoryWorkflowRunStore();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle"),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, _ => throw new InvalidOperationException("write failed"))
+            }),
+            auditRecorder: null,
+            runStore: runStore);
+        var context = CreateContext();
+
+        var act = async () => await orchestrator.ExecuteAsync(workflow, context);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        var persisted = await runStore.GetAsync(context.WorkflowRunId, CancellationToken.None);
+        persisted.Should().NotBeNull();
+        persisted!.Status.Should().Be(WorkflowRunStatus.Failed);
+        persisted.ErrorMessage.Should().Be("write failed");
+    }
+
+    private static WorkflowDefinition BuildValidSourceToSqlWorkflow(string name)
+    {
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), name, 1);
+        var source = AddNode(workflow, WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, 0);
+        var deIdentification = AddNode(workflow, WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance, 50);
+        var mapping = AddNode(workflow, WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, 60);
+        var destination = AddNode(workflow, WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination, 70);
+        workflow.AddEdge(source.Id, deIdentification.Id);
+        workflow.AddEdge(deIdentification.Id, mapping.Id);
+        workflow.AddEdge(mapping.Id, destination.Id);
+        return workflow;
     }
 
     private static RankedWorkflowOrchestrator CreateOrchestrator(params IWorkflowNodeExecutor[] executors)

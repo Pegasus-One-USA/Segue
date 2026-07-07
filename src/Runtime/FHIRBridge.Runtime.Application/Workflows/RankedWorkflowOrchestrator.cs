@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FHIRBridge.Runtime.Application.Workflows.Audit;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 
 namespace FHIRBridge.Runtime.Application.Workflows;
@@ -9,15 +10,18 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IWorkflowGraphValidator _graphValidator;
     private readonly IWorkflowNodeExecutorRegistry _executorRegistry;
     private readonly IWorkflowAuditRecorder _auditRecorder;
+    private readonly IWorkflowRunStore? _runStore;
 
     public RankedWorkflowOrchestrator(
         IWorkflowGraphValidator graphValidator,
         IWorkflowNodeExecutorRegistry executorRegistry,
-        IWorkflowAuditRecorder? auditRecorder = null)
+        IWorkflowAuditRecorder? auditRecorder = null,
+        IWorkflowRunStore? runStore = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
         _auditRecorder = auditRecorder ?? new InMemoryWorkflowAuditRecorder();
+        _runStore = runStore;
     }
 
     public async Task<WorkflowRunResult> ExecuteAsync(
@@ -126,6 +130,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 WorkflowDataContract.None,
                 WorkflowDataContract.None,
                 DateTimeOffset.UtcNow), cancellationToken);
+
+            await PersistRunAsync(workflowRun, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -142,11 +148,20 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 WorkflowDataContract.None,
                 DateTimeOffset.UtcNow,
                 exception.Message), cancellationToken);
+
+            // Persist the failed run with its partial node-run timeline. Use None so the history is captured
+            // even when the caller's token is the reason the run aborted.
+            await PersistRunAsync(workflowRun, CancellationToken.None);
             throw;
         }
 
         return new WorkflowRunResult(workflowRun, outputsByNodeId);
     }
+
+    private Task PersistRunAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
+        => _runStore is null
+            ? Task.CompletedTask
+            : _runStore.SaveAsync(workflowRun, cancellationToken);
 
     private static IReadOnlyCollection<WorkflowNodeOutput> GetIncomingOutputs(
         WorkflowDefinition workflowDefinition,

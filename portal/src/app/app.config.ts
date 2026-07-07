@@ -6,6 +6,7 @@ import {
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { tap } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { IAuthService } from './auth/services/i-auth.service';
@@ -18,13 +19,16 @@ import { IRoleService } from './user-management/services/i-role.service';
 import { ApiRoleService } from './user-management/services/api-role.service';
 
 function initApp(auth: AuthService, appInit: AppInitService) {
-  // Restore any stored session, then resolve the first-run setup flag before routing starts.
+  // Resolve the first-run setup flag FIRST, then decide what to do with any stored session:
+  //  • requiresSetup === true  → the backend has no users, so a lingering JWT is stale: discard it
+  //    (otherwise authGuard would trust the old token and skip the first-run /setup screen).
+  //  • requiresSetup === false → restore the stored session normally.
   // checkSetup() is self-resilient (defaults requiresSetup=false if the API is unreachable),
-  // so returning its Observable keeps the app booting even when the backend is down.
-  return () => {
-    auth.initFromToken();
-    return appInit.checkSetup();
-  };
+  // so the app still boots into the normal login flow when the backend is down.
+  return () =>
+    appInit.checkSetup().pipe(
+      tap(requiresSetup => (requiresSetup ? auth.discardSession() : auth.initFromToken())),
+    );
 }
 
 export const appConfig: ApplicationConfig = {
