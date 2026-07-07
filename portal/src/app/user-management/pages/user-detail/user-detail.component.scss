@@ -305,8 +305,8 @@
   padding: 2px 8px;
   border-radius: var(--radius-pill);
 
-  &--allowed { color: #16A34A; background: #DCFCE7; }
-  &--denied  { color: #DC2626; background: #FEE2E2; }
+  &--allowed { color: var(--color-success-strong); background: var(--color-success-soft); }
+  &--denied  { color: var(--color-error-strong); background: var(--color-error-soft); }
 }
 
 // ─── Tab group ────────────────────────────────────────────────────────────────
@@ -552,8 +552,8 @@
   text-transform: uppercase;
   cursor: default;
 
-  &--allowed { background: #DCFCE7; color: #16A34A; }
-  &--denied  { background: #FEE2E2; color: #DC2626; }
+  &--allowed { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &--denied  { background: var(--color-error-soft); color: var(--color-error-strong); }
 }
 
 // ─── Security list ────────────────────────────────────────────────────────────
@@ -574,7 +574,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #F1F5F9;
+    background: var(--color-bg);
     flex-shrink: 0;
 
     mat-icon { font-size: 20px; height: 20px; width: 20px; color: var(--color-muted); }

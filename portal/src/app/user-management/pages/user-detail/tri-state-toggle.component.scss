@@ -35,9 +35,9 @@
   }
 
   &--deny {
-    background: #FEE2E2;
-    border-color: #FCA5A5;
-    color: #DC2626;
+    background: var(--color-error-soft);
+    border-color: var(--color-error);
+    color: var(--color-error-strong);
   }
 
   &--inherit {
@@ -47,8 +47,8 @@
   }
 
   &--grant {
-    background: #DCFCE7;
-    border-color: #86EFAC;
-    color: #16A34A;
+    background: var(--color-success-soft);
+    border-color: var(--color-success);
+    color: var(--color-success-strong);
   }
 }

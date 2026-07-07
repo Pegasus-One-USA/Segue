@@ -76,13 +76,13 @@
   width: 48px;
   height: 48px;
   border-radius: 10px;
-  background: #EDE9FE;
+  background: var(--color-primary-soft);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 
-  mat-icon { font-size: 24px; height: 24px; width: 24px; color: #5B21B6; }
+  mat-icon { font-size: 24px; height: 24px; width: 24px; color: var(--color-primary); }
 }
 
 .hero-name {
@@ -134,16 +134,16 @@
   border: 1px solid var(--color-warning);
   border-radius: var(--radius-base);
   font-size: 13px;
-  color: #92400E;
+  color: var(--color-warning-strong);
 
   mat-icon { font-size: 18px; height: 18px; width: 18px; flex-shrink: 0; color: var(--color-warning); }
 
   &.error-notice {
-    background: #FEE2E2;
-    border-color: #FCA5A5;
-    color: #991B1B;
+    background: var(--color-error-soft);
+    border-color: var(--color-error);
+    color: var(--color-error-strong);
 
-    mat-icon { color: #DC2626; }
+    mat-icon { color: var(--color-error); }
   }
 }
 
@@ -243,29 +243,28 @@
 }
 
 // Tri-state select-all checkbox, shared by the toolbar (regular size) and each group
-// header (smaller, --sm modifier). No visible label — colored to match the role-avatar
-// icon (#5B21B6) so it reads as visually distinct from the regular permission checkboxes.
+// header (smaller, --sm modifier). No visible label.
 // Overrides the MDC internals directly (::ng-deep + !important) rather than the
 // --mdc-checkbox-* custom properties, since the app's global theme sets those with
 // equal specificity and wins the cascade.
 .select-all-checkbox {
   ::ng-deep {
     .mdc-checkbox__native-control:enabled ~ .mdc-checkbox__background {
-      border-color: #C4B5FD !important;
+      border-color: var(--color-primary-mid) !important;
     }
 
     .mdc-checkbox__native-control:enabled:checked ~ .mdc-checkbox__background,
     .mdc-checkbox__native-control:enabled:indeterminate ~ .mdc-checkbox__background {
-      background-color: #5B21B6 !important;
-      border-color: #5B21B6 !important;
+      background-color: var(--color-primary) !important;
+      border-color: var(--color-primary) !important;
     }
 
-    .mdc-checkbox__checkmark { color: #fff !important; }
-    .mdc-checkbox__mixedmark { border-color: #fff !important; }
+    .mdc-checkbox__checkmark { color: var(--color-on-primary) !important; }
+    .mdc-checkbox__mixedmark { border-color: var(--color-on-primary) !important; }
 
     .mdc-checkbox__native-control:enabled:checked ~ .mat-mdc-checkbox-ripple .mat-ripple-element,
     .mdc-checkbox__native-control:enabled:indeterminate ~ .mat-mdc-checkbox-ripple .mat-ripple-element {
-      background-color: #5B21B6 !important;
+      background-color: var(--color-primary) !important;
     }
   }
 }
@@ -460,7 +459,7 @@
 
 .btn-save {
   background: var(--color-primary) !important;
-  color: #fff !important;
+  color: var(--color-on-primary) !important;
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;
