@@ -150,6 +150,16 @@ export class NodeLibraryDialogComponent {
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
 
+  // Mirrors the open destination wizard's own step/progress so the sidebar can
+  // lock the other destination type out mid-wizard and warn before discarding.
+  readonly destWizardStep         = signal(1);
+  readonly destWizardHasProgressed = signal(false);
+  readonly pendingDestSwitch      = signal<'sql' | 'csv' | null>(null);
+
+  private readonly destTypeLocked = computed(() =>
+    this.showDestWizard() && this.destWizardStep() > 1
+  );
+
   constructor() {
     // When the dialog opens with an editNodeId, jump straight into the right form.
     effect(() => {
@@ -227,6 +237,13 @@ export class NodeLibraryDialogComponent {
           const pi = pickerMap.get(t.id);
           status = pi ? (pi.status as ItemStatus) : 'disabled';
           reason = pi?.reason ?? null;
+        }
+
+        // Lock the other destination type while mid-way through configuring one —
+        // switching would silently discard the in-progress form.
+        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv') && this.destTypeLocked()) {
+          status = 'disabled';
+          reason = 'Finish or go back to Configure before switching destination type.';
         }
       }
 
@@ -313,16 +330,33 @@ export class NodeLibraryDialogComponent {
       this.openEpicForm();
       return;
     }
-    if (item.id === 'dest-sqlserver') {
-      this._openDestWizard('sql');
-      return;
-    }
-    if (item.id === 'dest-csv') {
-      this._openDestWizard('csv');
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv') {
+      const type: 'sql' | 'csv' = item.id === 'dest-sqlserver' ? 'sql' : 'csv';
+      // Switching type after the user has already filled in later steps would
+      // silently discard that progress — confirm first.
+      if (this.showDestWizard() && this.destWizardType() !== type && this.destWizardHasProgressed()) {
+        this.pendingDestSwitch.set(type);
+        return;
+      }
+      this._openDestWizard(type);
       return;
     }
 
     this.selectedId.set(item.id);
+  }
+
+  confirmDestSwitch(): void {
+    const type = this.pendingDestSwitch();
+    if (type) this._openDestWizard(type);
+    this.pendingDestSwitch.set(null);
+  }
+
+  cancelDestSwitch(): void {
+    this.pendingDestSwitch.set(null);
+  }
+
+  onConfirmSwitchBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelDestSwitch();
   }
 
   // ── inline Epic form ──────────────────────────────────────────────────────
@@ -348,6 +382,8 @@ export class NodeLibraryDialogComponent {
     this.destWizardType.set(type);
     this.destWizardAttach.set(pm.attachTo);
     this.destEditNode.set(null);
+    this.destWizardStep.set(1);
+    this.destWizardHasProgressed.set(false);
     this.showDestWizard.set(true);
   }
 
@@ -360,6 +396,8 @@ export class NodeLibraryDialogComponent {
     this.destWizardType.set(type);
     this.destWizardAttach.set(parentNode ?? node);
     this.destEditNode.set(node);
+    this.destWizardStep.set(1);
+    this.destWizardHasProgressed.set(false);
     this.showDestWizard.set(true);
   }
 
@@ -374,6 +412,8 @@ export class NodeLibraryDialogComponent {
     this.destWizardType.set(null);
     this.destWizardAttach.set(null);
     this.destEditNode.set(null);
+    this.destWizardStep.set(1);
+    this.destWizardHasProgressed.set(false);
   }
 
   // ── add to pipeline (fallback for items without an auto-open form) ───────
@@ -415,6 +455,9 @@ export class NodeLibraryDialogComponent {
     this.destWizardType.set(null);
     this.destWizardAttach.set(null);
     this.destEditNode.set(null);
+    this.destWizardStep.set(1);
+    this.destWizardHasProgressed.set(false);
+    this.pendingDestSwitch.set(null);
     this.wiz.close();
   }
 }

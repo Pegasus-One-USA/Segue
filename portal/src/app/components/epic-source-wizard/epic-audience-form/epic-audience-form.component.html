@@ -49,29 +49,25 @@
           }
         </div>
 
-        @if (audienceConfig().showConfig) {
-          <div class="eaf-field" [class.eaf-field--error]="form.controls.environment.touched && form.controls.environment.invalid">
-            <label class="eaf-label" for="eaf-environment">Environment <span class="eaf-req">*</span></label>
-            <div class="eaf-select-wrap">
-              <select id="eaf-environment" class="eaf-select" formControlName="environment">
-                <option value="sandbox">Epic Sandbox</option>
-                <option value="non-production">Customer Non-Production</option>
-                <option value="production">Customer Production</option>
-              </select>
-            </div>
-            <p class="eaf-hint">Decides which Client ID set applies. Epic issues separate IDs per environment.</p>
+        <div class="eaf-field" [class.eaf-field--error]="form.controls.environment.touched && form.controls.environment.invalid">
+          <label class="eaf-label" for="eaf-environment">Environment <span class="eaf-req">*</span></label>
+          <div class="eaf-select-wrap">
+            <select id="eaf-environment" class="eaf-select" formControlName="environment">
+              <option value="sandbox">Epic Sandbox</option>
+              <option value="non-production">Customer Non-Production</option>
+              <option value="production">Customer Production</option>
+            </select>
           </div>
+          <p class="eaf-hint">Decides which Client ID set applies. Epic issues separate IDs per environment.</p>
+        </div>
 
-          <div class="eaf-field eaf-field--full">
-            <label class="eaf-label" for="eaf-appName">App Name</label>
-            <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
-                   placeholder="e.g. FHIRBridge Provider Launch" />
-          </div>
-        }
+        <div class="eaf-field eaf-field--full">
+          <label class="eaf-label" for="eaf-appName">App Name</label>
+          <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
+                 placeholder="e.g. FHIRBridge Provider Launch" />
+        </div>
       </div>
     </div>
-
-    @if (audienceConfig().showConfig) {
 
       <!-- ═══════════ SECTION 2: FHIR Base URL & Discovery ════════════════════ -->
       <div class="eaf-section">
@@ -166,12 +162,16 @@
             <p class="eaf-hint">Fixed to R4 — not configurable.</p>
           </div>
 
-          <!-- SMART scope version — fixed to whatever FHIRBridge implements -->
+          <!-- SMART scope version — v1 (coarse) vs v2 (granular) -->
           <div class="eaf-field">
-            <label class="eaf-label" for="eaf-scopeVersion">SMART Scope Version <span class="eaf-tag-auto">auto</span></label>
-            <input id="eaf-scopeVersion" class="eaf-input eaf-input--readonly" type="text" readonly
-                   value="v2 — granular scopes" />
-            <p class="eaf-hint">Fixed to whatever FHIRBridge has implemented — not configurable.</p>
+            <label class="eaf-label" for="eaf-scopeVersion">SMART Scope Version <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-scopeVersion" class="eaf-select" formControlName="scopeVersion">
+                <option value="v1">v1 — coarse scopes</option>
+                <option value="v2">v2 — granular scopes</option>
+              </select>
+            </div>
+            <p class="eaf-hint">Granular (v2) scopes request per-resource access; coarse (v1) requests broader category access.</p>
           </div>
         </div>
       </div>
@@ -237,99 +237,128 @@
       </div>
 
       <!-- ═══════════ SECTION 5: Resource Type & Scopes ════════════════════════ -->
-      <div class="eaf-section">
-        <div class="eaf-section-head">
-          <span class="eaf-section-num">5</span>
-          <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
-          <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
-        </div>
-        <p class="eaf-section-sub">The FHIR resource types to fetch from Epic as configured by FHIRBridge.</p>
-
-        @if (form.controls.resources.touched && form.controls.resources.invalid) {
-          <div class="eaf-callout eaf-callout--err eaf-callout--sm">Select at least one FHIR resource type.</div>
-        }
-
-        <div class="eaf-resources-grid" data-control="resources">
-          <label class="eaf-res-all">
-            <input type="checkbox"
-                   [checked]="selectedResources().length === resources.length"
-                   [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
-                   (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
-            <span>Select all</span>
-          </label>
-          @for (r of resources; track r) {
-            <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
-              <input type="checkbox"
-                     [checked]="selectedResources().includes(r)"
-                     (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
-              <span class="eaf-res-name">{{ r }}</span>
-            </label>
-          }
-        </div>
-
-        <!-- Scopes — auto/fixed by app, exposed as readonly field -->
-        @if (selectedResources().length > 0) {
-          <div class="eaf-scope-wrap">
-            <div class="eaf-scope-head">
-              <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
-              <span class="eaf-tag-auto">auto · fixed by app</span>
-              <span class="eaf-scope-note">Hardcoded to match the APIs registered in Epic.</span>
-            </div>
-            <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
-          </div>
-        }
-      </div>
-
-      <!-- ═══════════ SECTION 6: Application URLs ══════════════════════════════ -->
-      <div class="eaf-section">
-        <div class="eaf-section-head">
-          <span class="eaf-section-num">6</span>
-          <span class="eaf-section-title">Application URLs</span>
-        </div>
-
-        <div class="eaf-grid">
-          @if (audienceConfig().showLaunchUrl) {
-            <div class="eaf-field eaf-field--full"
-                 [class.eaf-field--error]="form.controls.launchUrl.touched && form.controls.launchUrl.invalid">
-              <label class="eaf-label" for="eaf-launchUrl">Launch URL <span class="eaf-req">*</span></label>
-              <input id="eaf-launchUrl" class="eaf-input" type="url" formControlName="launchUrl"
-                     placeholder="https://fhirbridge.com/launch" />
-              @if (form.controls.launchUrl.touched && form.controls.launchUrl.invalid) {
-                <p class="eaf-error-msg">Enter a valid Launch URL.</p>
-              }
-              <p class="eaf-hint">Must be registered in Epic as a valid launch URI.</p>
-            </div>
-          }
-
-          @if (audienceConfig().redirectMode === 'readonly') {
-            <div class="eaf-field eaf-field--full">
-              <label class="eaf-label" for="eaf-callbackUrl">Redirect URI <span class="eaf-tag-auto">auto</span></label>
-              <div class="eaf-input-row">
-                <input id="eaf-callbackUrl" class="eaf-input eaf-input--readonly" type="text" formControlName="callbackUrl" readonly />
-                <button class="eaf-discover-btn" type="button" (click)="copyRedirectUri()">⧉ Copy</button>
-              </div>
-              <p class="eaf-hint">Your app's redirect URI — copy this into Epic's app registration. Not editable here.</p>
-            </div>
-          } @else {
-            <div class="eaf-field eaf-field--full"
-                 [class.eaf-field--error]="form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid">
-              <label class="eaf-label" for="eaf-callbackUrl">Callback URL <span class="eaf-req">*</span></label>
-              <input id="eaf-callbackUrl" class="eaf-input" type="url" formControlName="callbackUrl"
-                     placeholder="https://fhirbridge.com/oauth/callback" />
-              @if (form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid) {
-                <p class="eaf-error-msg">Enter a valid Callback URL.</p>
-              }
-              <p class="eaf-hint">URL where Epic redirects after patient login / consent. <strong>Must be registered in Epic.</strong></p>
-            </div>
-          }
-        </div>
-      </div>
-
-      @if (audienceConfig().showCdsHooks) {
-        <!-- ═══════════ SECTION 7: CDS Hooks ════════════════════════════════════ -->
+      @if (audienceConfig().showResourcePicker) {
         <div class="eaf-section">
           <div class="eaf-section-head">
-            <span class="eaf-section-num">7</span>
+            <span class="eaf-section-num">5</span>
+            <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
+            <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
+          </div>
+          <p class="eaf-section-sub">The FHIR resource types to fetch from Epic as configured by FHIRBridge.</p>
+
+          @if (form.controls.resources.touched && form.controls.resources.invalid) {
+            <div class="eaf-callout eaf-callout--err eaf-callout--sm">Select at least one FHIR resource type.</div>
+          }
+
+          <div class="eaf-resources-grid" data-control="resources">
+            <label class="eaf-res-all">
+              <input type="checkbox"
+                     [checked]="selectedResources().length === resources.length"
+                     [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
+                     (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
+              <span>Select all</span>
+            </label>
+            @for (r of resources; track r) {
+              <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
+                <input type="checkbox"
+                       [checked]="selectedResources().includes(r)"
+                       (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
+                <span class="eaf-res-name">{{ r }}</span>
+              </label>
+            }
+          </div>
+
+          <!-- Scopes — auto/fixed by app, exposed as readonly field -->
+          @if (selectedResources().length > 0) {
+            <div class="eaf-scope-wrap">
+              <div class="eaf-scope-head">
+                <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
+                <span class="eaf-tag-auto">auto · fixed by app</span>
+                <span class="eaf-scope-note">Hardcoded to match the APIs registered in Epic.</span>
+              </div>
+              <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
+            </div>
+          }
+        </div>
+      } @else {
+        <!-- Backend System: no shared picker here — Resource Type lives inside the
+             selected Data Retrieval Method below; this just previews the resulting scopes. -->
+        <div class="eaf-section">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">5</span>
+            <span class="eaf-section-title">Scopes</span>
+          </div>
+          <p class="eaf-section-sub">Derived automatically from the Resource Type selected in Data Retrieval Method, below.</p>
+
+          @if (activeRetrievalResourceTypes().length > 0) {
+            <div class="eaf-scope-wrap">
+              <div class="eaf-scope-head">
+                <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
+                <span class="eaf-tag-auto">auto · fixed by app</span>
+                <span class="eaf-scope-note">Hardcoded to match the APIs registered in Epic.</span>
+              </div>
+              <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
+            </div>
+          } @else {
+            <p class="eaf-hint">Select a Data Retrieval Method and at least one Resource Type below to preview scopes.</p>
+          }
+        </div>
+      }
+
+      @if (audienceConfig().showLaunchUrl || audienceConfig().showRedirect) {
+        <!-- ═══════════ SECTION: Application URLs ═══════════════════════════════ -->
+        <div class="eaf-section">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">{{ sectionNumbers().urls }}</span>
+            <span class="eaf-section-title">Application URLs</span>
+          </div>
+
+          <div class="eaf-grid">
+            @if (audienceConfig().showLaunchUrl) {
+              <div class="eaf-field eaf-field--full"
+                   [class.eaf-field--error]="form.controls.launchUrl.touched && form.controls.launchUrl.invalid">
+                <label class="eaf-label" for="eaf-launchUrl">Launch URL <span class="eaf-req">*</span></label>
+                <input id="eaf-launchUrl" class="eaf-input" type="url" formControlName="launchUrl"
+                       placeholder="https://fhirbridge.com/launch" />
+                @if (form.controls.launchUrl.touched && form.controls.launchUrl.invalid) {
+                  <p class="eaf-error-msg">Enter a valid Launch URL.</p>
+                }
+                <p class="eaf-hint">Must be registered in Epic as a valid launch URI.</p>
+              </div>
+            }
+
+            @if (audienceConfig().showRedirect) {
+              @if (audienceConfig().redirectMode === 'readonly') {
+                <div class="eaf-field eaf-field--full">
+                  <label class="eaf-label" for="eaf-callbackUrl">Redirect URI <span class="eaf-tag-auto">auto</span></label>
+                  <div class="eaf-input-row">
+                    <input id="eaf-callbackUrl" class="eaf-input eaf-input--readonly" type="text" formControlName="callbackUrl" readonly />
+                    <button class="eaf-discover-btn" type="button" (click)="copyRedirectUri()">⧉ Copy</button>
+                  </div>
+                  <p class="eaf-hint">Your app's redirect URI — copy this into Epic's app registration. Not editable here.</p>
+                </div>
+              } @else {
+                <div class="eaf-field eaf-field--full"
+                     [class.eaf-field--error]="form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid">
+                  <label class="eaf-label" for="eaf-callbackUrl">Callback URL <span class="eaf-req">*</span></label>
+                  <input id="eaf-callbackUrl" class="eaf-input" type="url" formControlName="callbackUrl"
+                         placeholder="https://fhirbridge.com/oauth/callback" />
+                  @if (form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid) {
+                    <p class="eaf-error-msg">Enter a valid Callback URL.</p>
+                  }
+                  <p class="eaf-hint">URL where Epic redirects after patient login / consent. <strong>Must be registered in Epic.</strong></p>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+
+      @if (audienceConfig().showCdsHooks) {
+        <!-- ═══════════ SECTION: CDS Hooks ═══════════════════════════════════════ -->
+        <div class="eaf-section">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">{{ sectionNumbers().cds }}</span>
             <span class="eaf-section-title">CDS Hooks</span>
           </div>
 
@@ -383,9 +412,9 @@
       }
 
       <!-- ═══════════ Connection Test ═══════════════════════════════════════════ -->
-      <div class="eaf-section eaf-section--last">
+      <div class="eaf-section" [class.eaf-section--last]="!audienceConfig().showRetrieval">
         <div class="eaf-section-head">
-          <span class="eaf-section-num">{{ audienceConfig().showCdsHooks ? '8' : '7' }}</span>
+          <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
           <span class="eaf-section-title">Connection Test</span>
           <span class="eaf-hint-inline">n/a — action, not a field</span>
         </div>
@@ -421,15 +450,115 @@
         </div>
       </div>
 
-    } @else {
+    @if (audienceConfig().showRetrieval) {
+      <!-- ═══════════ Data Retrieval Method ═══════════════════════════════════ -->
+      <div class="eaf-section" [class.eaf-section--last]="!retrievalConfig()">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">{{ sectionNumbers().retrievalMethod }}</span>
+          <span class="eaf-section-title">Data Retrieval Method</span>
+        </div>
+        <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this Backend System connection.</p>
 
-      <!-- ═══════════ No configuration needed for this audience ═══════════════ -->
-      <div class="eaf-section eaf-section--last">
-        <div class="eaf-callout eaf-callout--info">
-          No additional configuration is required for the {{ audienceLabel() }} audience.
+        <div class="eaf-grid">
+          <div class="eaf-field eaf-field--full"
+               [class.eaf-field--error]="form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid">
+            <label class="eaf-label" for="eaf-retrievalMethod">Data Retrieval Method <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-retrievalMethod" class="eaf-select" formControlName="retrievalMethod">
+                <option value="" disabled>— Select a method —</option>
+                @for (m of retrievalMethodOptions; track m.value) {
+                  <option [value]="m.value">{{ m.label }}</option>
+                }
+              </select>
+            </div>
+            @if (form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid) {
+              <p class="eaf-error-msg">Select a data retrieval method.</p>
+            }
+            @if (retrievalConfig(); as method) {
+              <p class="eaf-hint">{{ method.description }}</p>
+            }
+          </div>
         </div>
       </div>
 
+      @if (retrievalConfig(); as method) {
+        <!-- ═══════════ Retrieval Configuration ════════════════════════════════ -->
+        <div class="eaf-section eaf-section--last">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">{{ sectionNumbers().retrievalConfig }}</span>
+            <span class="eaf-section-title">Retrieval Configuration</span>
+            <span class="eaf-badge-neutral">{{ method.label }}</span>
+          </div>
+
+          <div class="eaf-grid">
+            @for (field of visibleRetrievalFields(); track field.key) {
+              <div class="eaf-field"
+                   [class.eaf-field--full]="field.type === 'textarea' || field.type === 'multiselect'"
+                   [class.eaf-field--error]="isRetrievalFieldInvalid(field)">
+
+                @if (field.type === 'checkbox') {
+                  <label class="eaf-checkbox-row">
+                    <input type="checkbox" [formControlName]="field.key" />
+                    <span>{{ field.label }}</span>
+                  </label>
+                } @else {
+                  <label class="eaf-label" [attr.for]="'eaf-' + field.key">
+                    {{ field.label }}
+                    @if (field.required) { <span class="eaf-req">*</span> }
+                  </label>
+
+                  @switch (field.type) {
+                    @case ('select') {
+                      <div class="eaf-select-wrap">
+                        <select [id]="'eaf-' + field.key" class="eaf-select" [formControlName]="field.key">
+                          <option value="" disabled>— Select —</option>
+                          @for (opt of field.options; track opt.value) {
+                            <option [value]="opt.value">{{ opt.label }}</option>
+                          }
+                        </select>
+                      </div>
+                    }
+                    @case ('textarea') {
+                      <textarea [id]="'eaf-' + field.key" class="eaf-input eaf-textarea" rows="3"
+                                [formControlName]="field.key" [placeholder]="field.placeholder ?? ''"></textarea>
+                    }
+                    @case ('multiselect') {
+                      <div class="eaf-resources-grid" [attr.data-control]="field.key">
+                        <label class="eaf-res-all">
+                          <input type="checkbox"
+                                 [checked]="selectedRetrievalResourceTypes(field.key).length === resources.length"
+                                 [indeterminate]="selectedRetrievalResourceTypes(field.key).length > 0 && selectedRetrievalResourceTypes(field.key).length < resources.length"
+                                 (change)="toggleAllRetrievalResources(field.key, resources); form.get(field.key)?.markAsTouched()" />
+                          <span>Select all</span>
+                        </label>
+                        @for (r of resources; track r) {
+                          <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedRetrievalResourceTypes(field.key).includes(r)">
+                            <input type="checkbox"
+                                   [checked]="selectedRetrievalResourceTypes(field.key).includes(r)"
+                                   (change)="toggleRetrievalResource(field.key, r); form.get(field.key)?.markAsTouched()" />
+                            <span class="eaf-res-name">{{ r }}</span>
+                          </label>
+                        }
+                      </div>
+                    }
+                    @default {
+                      <input [id]="'eaf-' + field.key" class="eaf-input" type="text"
+                             [formControlName]="field.key" [placeholder]="field.placeholder ?? ''" />
+                    }
+                  }
+                }
+
+                @if (isRetrievalFieldInvalid(field)) {
+                  <p class="eaf-error-msg">{{ field.label }} is required.</p>
+                }
+                @if (field.hint && field.type !== 'checkbox') {
+                  <p class="eaf-hint">{{ field.hint }}</p>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
     }
 
   </div><!-- /eaf-body -->
