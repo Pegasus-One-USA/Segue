@@ -1,0 +1,26 @@
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_114d5c731b1d0a::t_cb4d16684b5269 5
+  s_114d5c731b1d0a::t_1ee2bbf0bfda11 6-9
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_114d5c731b1d0a::t_a79748669209c1 121-154,198-200
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_114d5c731b1d0a::t_942108f17b3aa4 38-48
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_114d5c731b1d0a::t_93f7ac0eb76ac1 165-205,343-346
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1ad23d80fe49e4c659fd76aedc9a3369612cdea3",
+  "prompts": {},
+  "sessions": {
+    "s_114d5c731b1d0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61e95b00-534f-4458-8fba-1ecf45efb8b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}
