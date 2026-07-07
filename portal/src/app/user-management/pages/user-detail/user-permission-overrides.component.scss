@@ -36,6 +36,114 @@
   }
 }
 
+// ─── "Inherit from role" master switch ─────────────────────────────────────
+.inherit-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+
+  &__hint {
+    font-size: 12.5px;
+    color: var(--color-muted);
+    flex: 1 1 260px;
+  }
+}
+
+// ─── Toolbar: search + reset ────────────────────────────────────────────────
+.permissions-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.search-wrap {
+  flex: 1 1 260px;
+  min-width: 200px;
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .search-ico {
+    position: absolute;
+    left: 12px;
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: var(--color-muted);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    height: 40px;
+    padding: 0 14px 0 38px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    background: var(--color-bg);
+    font-size: 14px;
+    color: var(--color-ink);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+    &::placeholder { color: var(--color-muted); }
+
+    &:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
+    }
+  }
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.permissions-count {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.check-all-label {
+  font-size: 12.5px;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.btn-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-muted);
+    background: var(--color-bg);
+    color: var(--color-ink);
+  }
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
 .no-results {
   padding: 32px 0;
   text-align: center;
@@ -43,14 +151,15 @@
   color: var(--color-muted);
 }
 
-// ─── Permission list ────────────────────────────────────────────────────────
 .permissions-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-.permission-group {
+// ─── Permission grid: one .permission-category (table) per Permission Category ─
+// Same structure/classes as role-permissions.component.scss so both screens read identically.
+.permission-category {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -62,6 +171,25 @@
   &__header {
     display: flex;
     align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  &__chevron {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: var(--color-muted);
+    transition: transform var(--transition-base);
+
+    &--collapsed {
+      transform: rotate(-90deg);
+    }
   }
 
   &__title {
@@ -74,43 +202,139 @@
     background: var(--color-primary-soft);
     padding: 4px 10px;
     border-radius: var(--radius-pill);
-  }
-
-  &__items {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    margin: 0;
   }
 }
 
-.permission-row {
+.permission-grid {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: var(--radius-base);
+
+  th, td {
+    padding: 4px 10px;
+    text-align: left;
+    font-size: 12.5px;
+    line-height: 1.2;
+  }
+
+  &__cell {
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
+  thead th {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-primary-dark);
+    background: var(--color-primary-soft);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  &__group-col, &__group-name {
+    white-space: nowrap;
+    background: var(--color-primary-soft);
+  }
+
+  &__group-name {
+    font-weight: 600;
+    color: var(--color-primary-dark);
+  }
+
+  &__action-col, &__cell {
+    text-align: center;
+  }
+
+  &__all-col, &__cell--all {
+    text-align: center;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--color-border);
+
+    &:last-child { border-bottom: none; }
+
+    &:nth-child(even) td.permission-grid__cell:not(.permission-grid__cell--all) {
+      background: var(--color-bg);
+    }
+
+    &:hover td.permission-grid__cell:not(.permission-grid__cell--all) {
+      background: var(--color-primary-soft);
+    }
+  }
+
+  // Angular Material reserves a 40px invisible touch target around every checkbox regardless of
+  // visual size — shrink it via the supported CSS custom properties and hide the touch-target
+  // element outright, so the checkbox's own ~18px box drives row height (same approach as the
+  // role-permissions grid, for a matching look).
+  mat-checkbox {
+    display: inline-flex;
+    --mdc-checkbox-state-layer-size: 22px;
+
+    ::ng-deep {
+      .mdc-checkbox {
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        flex: 0 0 22px;
+      }
+
+      .mdc-checkbox__background {
+        top: 2px;
+        left: 2px;
+      }
+
+      .mat-mdc-checkbox-touch-target {
+        display: none;
+      }
+    }
+  }
+}
+
+// ─── Actions ───────────────────────────────────────────────────────────────────
+.page-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.btn-cancel {
+  border-color: var(--color-border) !important;
+  color: var(--color-ink-2) !important;
+  border-radius: var(--radius-base);
+  font-weight: 500;
+  height: 40px;
+
+  &:hover {
+    background: var(--color-bg) !important;
+    border-color: var(--color-muted) !important;
+  }
+}
+
+.btn-save {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 160px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--color-border);
+  gap: 6px;
 
-  &:last-child { border-bottom: none; }
+  --mat-flat-button-hover-state-layer-opacity: 0;
+  --mat-flat-button-focus-state-layer-opacity: 0;
 
-  &__info {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-}
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
 
-.permission-name {
-  font-size: 14px;
-  color: var(--color-ink);
-}
+  &:hover:not([disabled]) { background: var(--color-primary-dark) !important; }
+  &[disabled] { background: var(--color-muted) !important; opacity: 0.7; }
 
-.permission-desc {
-  display: block;
-  font-size: 11px;
-  color: var(--color-muted);
-}
-
-.override-toggle {
-  flex-shrink: 0;
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0 !important; }
 }

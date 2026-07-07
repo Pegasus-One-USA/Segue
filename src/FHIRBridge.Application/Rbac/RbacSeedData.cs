@@ -105,8 +105,11 @@ public static class RbacSeedData
         Groups.ToDictionary(g => g.Group, g => g.Id);
 
     /// <summary>
-    /// The 20 built-in platform permissions, in seed order. Group/Action/description are preserved verbatim
-    /// from the former <c>PermissionConfiguration.HasData</c> block (Group+Action replace the former flat Category).
+    /// The built-in platform permissions, in seed order. The first 20 (through Payload.View) are preserved
+    /// verbatim from the former <c>PermissionConfiguration.HasData</c> block (Group+Action replace the former
+    /// flat Category); the Epic/Athena entries were added later so those source-connector permissions stay
+    /// seed-declared (never auto-deactivated) even before real connector-management endpoints exist to
+    /// discover them via <c>[StandardPermission]</c>.
     /// </summary>
     public static IReadOnlyList<PermissionSeed> Permissions { get; } =
     [
@@ -139,6 +142,17 @@ public static class RbacSeedData
         // Report / payload permissions.
         new("View reports and analytics.", PermissionGroupCode.Report, PermissionActionCode.View),
         new("View data payloads from workflow runs.", PermissionGroupCode.Payload, PermissionActionCode.View),
+
+        // Epic source connector permissions.
+        new("View Epic source connection configuration.", PermissionGroupCode.Epic, PermissionActionCode.Read),
+        new("Edit Epic source connection configuration.", PermissionGroupCode.Epic, PermissionActionCode.Edit),
+        new("Assign an Epic source connection to a tenant.", PermissionGroupCode.Epic, PermissionActionCode.Assign),
+        new("Trigger a pipeline run against an Epic source connection.", PermissionGroupCode.Epic, PermissionActionCode.Execute),
+
+        // Athena source connector permissions.
+        new("View Athena source connection configuration.", PermissionGroupCode.Athena, PermissionActionCode.Read),
+        new("Assign an Athena source connection to a tenant.", PermissionGroupCode.Athena, PermissionActionCode.Assign),
+        new("Trigger a pipeline run against an Athena source connection.", PermissionGroupCode.Athena, PermissionActionCode.Execute),
     ];
 
     /// <summary>

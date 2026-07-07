@@ -249,36 +249,46 @@
             </div>
           </div>
 
-          <!-- Permissions grouped by resource -->
+          <!-- Effective permissions — same Category > Group > Action design as the role
+               selection popup, colored by allowed/denied for this user's assigned role. -->
           <div class="section-card">
             <div class="section-card__header">
               <div class="section-card__title">
                 <mat-icon>security</mat-icon>
                 <h3>Effective Permissions</h3>
               </div>
-              <span class="perm-count-badge">
-                {{ user()!.permissions.length }} permissions
+              <span class="perm-summary">
+                <span class="perm-count perm-count--allowed">{{ allowedCount() }} allowed</span>
+                <span class="perm-count perm-count--denied">{{ deniedCount() }} denied</span>
               </span>
             </div>
-            <div class="permissions-grid">
-              @for (group of getPermissionsGrouped(user()!); track group.resource) {
-                <div class="perm-group">
-                  <div class="perm-group__header">
-                    <mat-icon>folder_open</mat-icon>
-                    <span>{{ group.resource | titlecase }}</span>
-                  </div>
-                  <div class="perm-group__items">
-                    @for (perm of group.permissions; track perm.id) {
-                      <div class="perm-item" [matTooltip]="perm.description">
-                        <span class="perm-action">{{ perm.action }}</span>
-                        <span class="perm-name">{{ perm.name }}</span>
+            <div class="perms-catalog">
+              @for (cat of catalogWithStatus(); track cat.id) {
+                <div class="perm-category">
+                  <div class="perm-category__title">{{ cat.displayName }}</div>
+                  <div class="perm-category__groups">
+                    @for (group of cat.groups; track group.id) {
+                      <div class="perm-group">
+                        <div class="perm-group__resource">
+                          <mat-icon>folder_open</mat-icon>
+                          {{ group.displayName }}
+                        </div>
+                        <div class="perm-group__actions">
+                          @for (perm of group.permissions; track perm.id) {
+                            <span
+                              class="perm-action-chip"
+                              [class.perm-action-chip--allowed]="perm.allowed"
+                              [class.perm-action-chip--denied]="!perm.allowed"
+                              [matTooltip]="perm.description"
+                            >
+                              {{ perm.displayName }}
+                            </span>
+                          }
+                        </div>
                       </div>
                     }
                   </div>
                 </div>
-              }
-              @if (user()!.permissions.length === 0) {
-                <p class="empty-text">No permissions via assigned roles.</p>
               }
             </div>
           </div>
@@ -289,9 +299,12 @@
       <!-- ── Tab: Direct Permission Overrides ─────────────────────── -->
       <mat-tab label="Direct Permission Overrides">
         <div class="tab-content">
+
           <app-user-permission-overrides
             [userId]="user()!.id"
             [userDisplayName]="user()!.fullName"
+            [rolePermissions]="user()!.permissions"
+            (overridesChanged)="loadUser(id)"
           ></app-user-permission-overrides>
         </div>
       </mat-tab>

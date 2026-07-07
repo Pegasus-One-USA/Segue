@@ -50,6 +50,9 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     role: roles.length ? roles[0].name : 'Audit',
     roles,
     permissions,
+    // The JWT's permissions claim is already the backend's merged (role ∪ overrides) set — there's
+    // no separate override list to carry here.
+    directPermissionAllocations: [],
     orgId: 'org',
     status: 'active',
     loginType: 'local',

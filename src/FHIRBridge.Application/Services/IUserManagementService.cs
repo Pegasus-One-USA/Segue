@@ -42,4 +42,8 @@ public interface IUserManagementService
         Guid userId, Guid permissionId, UpsertUserPermissionAllocationRequest request, CancellationToken cancellationToken);
 
     Task RemoveUserPermissionAllocationAsync(Guid userId, Guid permissionId, CancellationToken cancellationToken);
+
+    /// <summary>Replaces a user's entire set of direct permission overrides in one call.</summary>
+    Task<UserDetailDto> SetUserPermissionAllocationsAsync(
+        Guid userId, SetUserPermissionAllocationsRequest request, CancellationToken cancellationToken);
 }

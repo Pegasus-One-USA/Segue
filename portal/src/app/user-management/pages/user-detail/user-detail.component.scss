@@ -292,13 +292,21 @@
   mat-icon { font-size: 16px; height: 16px; width: 16px; }
 }
 
-.perm-count-badge {
-  font-size: 12px;
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
-  padding: 2px 10px;
-  border-radius: var(--radius-pill);
+// ─── Allowed/denied summary, shown in the "Effective Permissions" header ──────
+.perm-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.perm-count {
+  font-size: 11px;
   font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+
+  &--allowed { color: #16A34A; background: #DCFCE7; }
+  &--denied  { color: #DC2626; background: #FEE2E2; }
 }
 
 // ─── Tab group ────────────────────────────────────────────────────────────────
@@ -465,69 +473,87 @@
   margin: 0 0 0 4px;
 }
 
-// ─── Permissions grid ─────────────────────────────────────────────────────────
-.permissions-grid {
+// ─── Effective permissions: Category > Group > Action, colored allowed/denied ──
+// Same design as AssignRolesDialogComponent's role-allocation preview.
+.perms-catalog {
   padding: 16px 20px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+}
+
+.perm-category {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &__title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-primary-dark);
+    background: var(--color-primary-soft);
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+  }
+
+  // Responsive 1-4 columns of Permission Groups — column count follows available width, not a
+  // fixed breakpoint list, so it keeps working at any viewport/panel size.
+  &__groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+
+    // minmax(260px, 1fr) alone would let a very wide screen stretch past 4 columns — cap it there.
+    @media (min-width: 1400px) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
 }
 
 .perm-group {
   border: 1px solid var(--color-border);
   border-radius: 10px;
   overflow: hidden;
+  height: fit-content;
 
-  &__header {
+  &__resource {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 10px 14px;
+    padding: 8px 12px;
     background: var(--color-bg);
     border-bottom: 1px solid var(--color-border);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--color-ink-2);
 
-    mat-icon { font-size: 16px; height: 16px; width: 16px; color: var(--color-primary); }
+    mat-icon { font-size: 14px; height: 14px; width: 14px; color: var(--color-primary); }
   }
 
-  &__items {
-    padding: 8px;
+  &__actions {
+    padding: 8px 12px;
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 
-.perm-item {
-  display: flex;
+.perm-action-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: default;
-  transition: background var(--transition-base);
-
-  &:hover { background: var(--color-bg); }
-}
-
-.perm-action {
+  padding: 2px 8px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
-  padding: 2px 6px;
-  border-radius: 4px;
   text-transform: uppercase;
-  flex-shrink: 0;
-  min-width: 44px;
-  text-align: center;
-}
+  cursor: default;
 
-.perm-name {
-  font-size: 12px;
-  color: var(--color-ink-2);
+  &--allowed { background: #DCFCE7; color: #16A34A; }
+  &--denied  { background: #FEE2E2; color: #DC2626; }
 }
 
 // ─── Security list ────────────────────────────────────────────────────────────

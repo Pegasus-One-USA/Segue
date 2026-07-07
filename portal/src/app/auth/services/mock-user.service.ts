@@ -339,6 +339,20 @@ export class MockUserService extends IUserService {
     );
   }
 
+  override setUserPermissionAllocations(userId: string, permissionIdToIsEnabled: Record<string, boolean>): Observable<User> {
+    return of(null).pipe(
+      delay(300),
+      switchMap(() => {
+        const user = MOCK_USERS.find(u => u.id === userId);
+        if (!user) return throwError(() => ({ code: 'NOT_FOUND', message: 'User not found.' }));
+
+        this.mockAllocations.set(userId, new Map(Object.entries(permissionIdToIsEnabled)));
+
+        return of(this.sanitise(user));
+      })
+    );
+  }
+
   // ─── Sanitise (remove password hash) ─────────────────────────────────────
   private sanitise(u: User): User {
     const { passwordHash: _, ...safe } = u;

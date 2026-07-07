@@ -28,6 +28,13 @@
           Available Roles
         </div>
 
+        @if (isEditingOwnSuperAdmin()) {
+          <div class="notice">
+            <mat-icon>lock</mat-icon>
+            <span>You're editing your own account — your Super Admin role can't be changed here.</span>
+          </div>
+        }
+
         @if (loading()) {
           <div class="panel-loading">
             <mat-spinner diameter="32" color="primary"></mat-spinner>
@@ -42,18 +49,22 @@
                 class="role-item"
                 [class.role-item--assigned]="isAssigned(role.id)"
                 [class.role-item--loading]="actionLoading() === role.id"
-                (click)="toggleRole(role)"
+                [class.role-item--disabled]="isRoleDisabled(role.id)"
+                (click)="selectRole(role)"
               >
                 <div class="role-item__check">
                   @if (actionLoading() === role.id) {
                     <mat-spinner diameter="18" color="primary"></mat-spinner>
                   } @else {
-                    <mat-checkbox
+                    <mat-radio-button
+                      name="assigned-role"
+                      [value]="role.id"
                       [checked]="isAssigned(role.id)"
+                      [disabled]="isRoleDisabled(role.id)"
                       color="primary"
                       (click)="$event.stopPropagation()"
-                      (change)="toggleRole(role)"
-                    ></mat-checkbox>
+                      (change)="onRoleRadioChange($event)"
+                    ></mat-radio-button>
                   }
                 </div>
                 <div class="role-item__body">
@@ -80,43 +91,44 @@
         }
       </div>
 
-      <!-- Right panel: Permission preview -->
+      <!-- Right panel: Role allocation preview — every permission, colored by allowed/denied -->
       <div class="perms-panel">
         <div class="panel-title">
           <mat-icon>security</mat-icon>
-          Effective Permissions
-          <span class="perm-count">{{ effectivePermissions().length }}</span>
+          Role Allocations
+          <span class="perm-summary">
+            <span class="perm-count perm-count--allowed">{{ allowedCount() }} allowed</span>
+            <span class="perm-count perm-count--denied">{{ deniedCount() }} denied</span>
+          </span>
         </div>
 
-        @if (permissionGroups().length === 0) {
-          <div class="perms-empty">
-            <mat-icon>lock_open</mat-icon>
-            <span>No permissions yet — assign a role to see permissions here.</span>
-          </div>
-        }
-
-        @if (permissionGroups().length > 0) {
-          <div class="perms-groups">
-            @for (group of permissionGroups(); track group.resource) {
-              <div class="perm-group">
-                <div class="perm-group__resource">
-                  <mat-icon>folder_open</mat-icon>
-                  {{ group.resource | titlecase }}
+        <div class="perms-catalog">
+          @for (cat of catalogWithStatus(); track cat.id) {
+            <div class="perm-category">
+              <div class="perm-category__title">{{ cat.displayName }}</div>
+              @for (group of cat.groups; track group.id) {
+                <div class="perm-group">
+                  <div class="perm-group__resource">
+                    <mat-icon>folder_open</mat-icon>
+                    {{ group.displayName }}
+                  </div>
+                  <div class="perm-group__actions">
+                    @for (perm of group.permissions; track perm.id) {
+                      <span
+                        class="perm-action-chip"
+                        [class.perm-action-chip--allowed]="perm.allowed"
+                        [class.perm-action-chip--denied]="!perm.allowed"
+                        [matTooltip]="perm.description"
+                      >
+                        {{ perm.displayName }}
+                      </span>
+                    }
+                  </div>
                 </div>
-                <div class="perm-group__actions">
-                  @for (perm of group.permissions; track perm.id) {
-                    <span
-                      class="perm-action-chip"
-                      [matTooltip]="perm.description"
-                    >
-                      {{ perm.action }}
-                    </span>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
+              }
+            </div>
+          }
+        </div>
       </div>
 
     </div>

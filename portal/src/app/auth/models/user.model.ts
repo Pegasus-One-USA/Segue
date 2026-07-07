@@ -59,6 +59,8 @@ export interface User {
   role:               UserRole;
   roles:              Role[];
   permissions:        Permission[];
+  /** Direct overrides on top of role-derived permissions — grant/deny, keyed by permission id. */
+  directPermissionAllocations: PermissionAllocationDto[];
   orgId:              string;
   department?:        string;
   jobTitle?:          string;

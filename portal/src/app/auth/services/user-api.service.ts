@@ -102,4 +102,8 @@ export class UserApiService extends IUserService {
   override removeUserPermissionAllocation(userId: string, permissionId: string): Observable<void> {
     return this.http.delete<void>(`${BASE}/${userId}/permission-allocations/${permissionId}`);
   }
+
+  override setUserPermissionAllocations(userId: string, permissionIdToIsEnabled: Record<string, boolean>): Observable<User> {
+    return this.http.put<User>(`${BASE}/${userId}/permission-allocations`, { permissionIdToIsEnabled });
+  }
 }

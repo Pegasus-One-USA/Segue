@@ -1,0 +1,14 @@
+<!-- user-management/pages/user-detail/tri-state-toggle.component.html -->
+<button
+  type="button"
+  class="tri-toggle"
+  [class]="stateClass"
+  [class.tri-toggle--disabled]="disabled"
+  [disabled]="disabled"
+  [attr.aria-label]="ariaLabel + ': ' + value"
+  [matTooltip]="tooltip"
+  matTooltipPosition="above"
+  (click)="onClick()"
+>
+  <mat-icon>{{ icon }}</mat-icon>
+</button>

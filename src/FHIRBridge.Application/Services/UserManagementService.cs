@@ -405,6 +405,26 @@ public sealed class UserManagementService : IUserManagementService
         await ForceReauthenticationAsync(user, cancellationToken);
     }
 
+    public async Task<UserDetailDto> SetUserPermissionAllocationsAsync(
+        Guid userId,
+        SetUserPermissionAllocationsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        await _repository.SetUserPermissionAllocationsAsync(userId, request.PermissionIdToIsEnabled, cancellationToken);
+        await AuditAsync(
+            "UserPermissionAllocationsReplaced",
+            request.PermissionIdToIsEnabled.Count == 0
+                ? $"All direct permission overrides cleared for user {user.Email ?? user.ExternalUserId}; now fully inherits role grants."
+                : $"Direct permission overrides replaced for user {user.Email ?? user.ExternalUserId} ({request.PermissionIdToIsEnabled.Count} override(s)).",
+            cancellationToken);
+        await ForceReauthenticationAsync(user, cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
     /// <summary>
     /// Clears the user's refresh token so their next silent-refresh attempt fails and they're forced
     /// through a real login, picking up the newly resolved permission set. The access token already in

@@ -26,4 +26,6 @@ export abstract class IUserService {
   abstract getUserPermissionAllocations(userId: string): Observable<PermissionAllocationDto[]>;
   abstract setUserPermissionAllocation(userId: string, permissionId: string, isEnabled: boolean): Observable<User>;
   abstract removeUserPermissionAllocation(userId: string, permissionId: string): Observable<void>;
+  /** Replaces every direct override at once. An empty map clears all overrides (full role inheritance). */
+  abstract setUserPermissionAllocations(userId: string, permissionIdToIsEnabled: Record<string, boolean>): Observable<User>;
 }

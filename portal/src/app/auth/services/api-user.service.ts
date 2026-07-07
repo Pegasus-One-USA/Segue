@@ -119,6 +119,7 @@ function mapDetailDto(dto: UserDetailDto): User {
     role:               roles[0]?.name ?? 'Audit',
     roles,
     permissions:        [...new Map(roles.flatMap(r => r.permissions).map(p => [p.id, p])).values()],
+    directPermissionAllocations: dto.directPermissionAllocations ?? [],
     orgId:              '',
     status:             toStatus(dto.status, dto.isEnabled),
     loginType:          'local',
@@ -328,6 +329,15 @@ export class ApiUserService extends IUserService {
     return this.http.delete<void>(USERS_ENDPOINTS.permissionAllocationById(userId, permissionId)).pipe(
       catchError(err => throwError(() => err))
     );
+  }
+
+  setUserPermissionAllocations(userId: string, permissionIdToIsEnabled: Record<string, boolean>): Observable<User> {
+    return this.http
+      .put<UserDetailDto>(USERS_ENDPOINTS.permissionAllocations(userId), { permissionIdToIsEnabled })
+      .pipe(
+        map(mapDetailDto),
+        catchError(err => throwError(() => err))
+      );
   }
 
   // ─── Not backed by an endpoint yet ───────────────────────────────────────

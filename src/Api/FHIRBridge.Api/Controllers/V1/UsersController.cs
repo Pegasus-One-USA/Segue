@@ -182,6 +182,19 @@ public sealed class UsersController : ControllerBase
         return Ok(allocations);
     }
 
+    [HttpPut("{userId:guid}/permission-allocations")]
+    [StandardPermission(PermissionGroupCode.User, PermissionActionCode.Edit, description: "Update a user's profile information.")]
+    [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetUserPermissionAllocations(
+        Guid userId,
+        [FromBody] SetUserPermissionAllocationsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManagementService.SetUserPermissionAllocationsAsync(userId, request, cancellationToken);
+
+        return Ok(user);
+    }
+
     [HttpPut("{userId:guid}/permission-allocations/{permissionId:guid}")]
     [StandardPermission(PermissionGroupCode.User, PermissionActionCode.Edit, description: "Update a user's profile information.")]
     [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
@@ -200,109 +213,6 @@ public sealed class UsersController : ControllerBase
     [StandardPermission(PermissionGroupCode.User, PermissionActionCode.Edit, description: "Update a user's profile information.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemoveUserPermissionAllocation(
-        Guid userId,
-        Guid permissionId,
-        CancellationToken cancellationToken)
-    {
-        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-
-        return NoContent();
-    }
-
-
-
-
-
-    [HttpDelete("{userId:guid}/permission-allocations1/{permissionId:guid}")]
-    [StandardPermission(PermissionGroupCode.Epic, PermissionActionCode.Assign, description: "Update a user's profile information.")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveUserPermissionAllocation1(
-        Guid userId,
-        Guid permissionId,
-        CancellationToken cancellationToken)
-    {
-        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-
-        return NoContent();
-    }
-
-
-    [HttpDelete("{userId:guid}/permission-allocations2/{permissionId:guid}")]
-    [StandardPermission(PermissionGroupCode.Epic, PermissionActionCode.Read, description: "Update a user's profile information.")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveUserPermissionAllocation2(
-        Guid userId,
-        Guid permissionId,
-        CancellationToken cancellationToken)
-    {
-        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-
-        return NoContent();
-    }
-
-
-    [HttpDelete("{userId:guid}/permission-allocations3/{permissionId:guid}")]
-    [StandardPermission(PermissionGroupCode.Athena, PermissionActionCode.Assign, description: "Update a user's profile information.")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveUserPermissionAllocation3(
-        Guid userId,
-        Guid permissionId,
-        CancellationToken cancellationToken)
-    {
-        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-
-        return NoContent();
-    }
-
-
-
-    [HttpDelete("{userId:guid}/permission-allocations31/{permissionId:guid}")]
-    [StandardPermission(PermissionGroupCode.Athena, PermissionActionCode.Assign, description: "Update a user's profile information 1.")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveUserPermissionAllocation31(
-        Guid userId,
-        Guid permissionId,
-        CancellationToken cancellationToken)
-    {
-        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-
-        return NoContent();
-    }
-
-
-
-    [HttpDelete("{userId:guid}/permission-allocations4/{permissionId:guid}")]
-    [StandardPermission(PermissionGroupCode.Athena, PermissionActionCode.Read, description: "Update a user's profile information.")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveUserPermissionAllocation4(
-        Guid userId,
-        Guid permissionId,
-        CancellationToken cancellationToken)
-    {
-        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-
-        return NoContent();
-    }
-
-
-    [HttpDelete("{userId:guid}/permission-allocations41/{permissionId:guid}")]
-    [StandardPermission(PermissionGroupCode.Athena, PermissionActionCode.Read, description: "Update a user's profile information.")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveUserPermissionAllocation41(
-        Guid userId,
-        Guid permissionId,
-        CancellationToken cancellationToken)
-    {
-        await _userManagementService.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-
-        return NoContent();
-    }
-
-
-    [HttpDelete("{userId:guid}/permission-allocations42/{permissionId:guid}")]
-    [StandardPermission(PermissionGroupCode.Athena, PermissionActionCode.Read, description: "Update a user's profile information.")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveUserPermissionAllocation42(
         Guid userId,
         Guid permissionId,
         CancellationToken cancellationToken)

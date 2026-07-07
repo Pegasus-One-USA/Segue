@@ -15,45 +15,134 @@
       </div>
     }
 
-    <div class="notice">
-      <mat-icon>info</mat-icon>
-      <span>
-        Direct overrides always win over role-derived permissions. Leave a permission on
-        "Inherit" to use whatever the user's roles already grant.
+    <div class="inherit-row">
+      <mat-checkbox
+        [checked]="inheritFromRole()"
+        [disabled]="clearing() || saving()"
+        (change)="onInheritFromRoleToggle($event)"
+      >
+        Inherit permissions from role
+      </mat-checkbox>
+      <span class="inherit-row__hint">
+        @if (clearing()) {
+          Removing direct overrides…
+        } @else if (inheritFromRole()) {
+          This user has no direct overrides — the grid below shows exactly what their role(s) grant. Uncheck to set direct overrides.
+        } @else {
+          {{ overriddenCount() }} direct override(s) in place — these take precedence over role permissions. Check this box to remove them all and fully inherit from role.
+        }
       </span>
     </div>
 
+    <div class="permissions-toolbar">
+      <div class="search-wrap">
+        <mat-icon class="search-ico">search</mat-icon>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search permissions or groups..."
+          [value]="searchQuery()"
+          (input)="onSearch($any($event.target).value)"
+        />
+      </div>
+
+      <div class="toolbar-right">
+        @if (!inheritFromRole()) {
+          <span class="permissions-count">{{ overriddenCount() }} override(s)</span>
+          <button type="button" class="btn-reset" [disabled]="!isDirty() || saving()" (click)="reset()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 .49-3.5"></path>
+            </svg>
+            Reset
+          </button>
+          <span class="check-all-label">Set all:</span>
+          <app-tri-state-toggle
+            [value]="globalState()"
+            [disabled]="saving()"
+            ariaLabel="Set every permission"
+            tooltip="Set every permission below to Deny, Inherit, or Grant"
+            (valueChange)="setGlobalState($event)"
+          ></app-tri-state-toggle>
+        }
+      </div>
+    </div>
+
     <div class="permissions-list">
-      @for (group of permissionGroups(); track group.resource) {
-        <div class="permission-group">
-          <div class="permission-group__header">
-            <span class="permission-group__title">{{ group.resource }}</span>
-          </div>
-          <div class="permission-group__items">
-            @for (perm of group.permissions; track perm.id) {
-              <div class="permission-row">
-                <div class="permission-row__info">
-                  <span class="permission-name">{{ perm.name }}</span>
-                  <span class="permission-desc">{{ perm.description }}</span>
-                </div>
-                <mat-button-toggle-group
-                  class="override-toggle"
-                  [value]="stateFor(perm.id) === null ? 'inherit' : (stateFor(perm.id) ? 'grant' : 'deny')"
-                  [disabled]="isSaving(perm.id)"
-                  (change)="onToggle(perm.id, $event)"
-                >
-                  <mat-button-toggle value="deny">Deny</mat-button-toggle>
-                  <mat-button-toggle value="inherit">Inherit</mat-button-toggle>
-                  <mat-button-toggle value="grant">Grant</mat-button-toggle>
-                </mat-button-toggle-group>
-              </div>
-            }
-          </div>
+      @for (cat of permissionGrid(); track cat.id) {
+        <div class="permission-category">
+          <button
+            type="button"
+            class="permission-category__header"
+            [attr.aria-expanded]="!isCategoryCollapsed(cat.id)"
+            (click)="toggleCategoryCollapsed(cat.id)"
+          >
+            <mat-icon class="permission-category__chevron" [class.permission-category__chevron--collapsed]="isCategoryCollapsed(cat.id)">
+              expand_more
+            </mat-icon>
+            <h3 class="permission-category__title">{{ cat.displayName }}</h3>
+          </button>
+          @if (!isCategoryCollapsed(cat.id)) {
+          <table class="permission-grid">
+            <thead>
+              <tr>
+                <th class="permission-grid__group-col">Group</th>
+                @for (action of cat.actions; track action) {
+                  <th class="permission-grid__action-col">{{ action }}</th>
+                }
+                <th class="permission-grid__all-col">All</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of cat.rows; track row.id) {
+                <tr>
+                  <td class="permission-grid__group-name">{{ row.displayName }}</td>
+                  @for (action of cat.actions; track action) {
+                    <td class="permission-grid__cell">
+                      @if (row.cells.get(action); as perm) {
+                        <mat-checkbox
+                          [attr.aria-label]="perm.displayName"
+                          [matTooltip]="perm.displayName + ': ' + perm.description"
+                          matTooltipPosition="above"
+                          [checked]="isCellGranted(perm.id)"
+                          [disabled]="inheritFromRole() || saving()"
+                          (change)="setCellGranted(perm.id, $event.checked)"
+                        ></mat-checkbox>
+                      }
+                    </td>
+                  }
+                  <td class="permission-grid__cell permission-grid__cell--all">
+                    <app-tri-state-toggle
+                      [value]="rowState(row)"
+                      [disabled]="inheritFromRole() || saving()"
+                      [ariaLabel]="'Set all ' + row.displayName + ' permissions'"
+                      (valueChange)="setRowState(row, $event)"
+                    ></app-tri-state-toggle>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          }
         </div>
       } @empty {
-        <div class="no-results">No permissions available.</div>
+        <div class="no-results">No permissions matched "{{ searchQuery() }}".</div>
       }
     </div>
+
+    @if (!inheritFromRole()) {
+      <div class="page-actions">
+        <button mat-stroked-button class="btn-cancel" [disabled]="saving() || !isDirty()" (click)="cancel()">Cancel</button>
+        <button mat-flat-button class="btn-save" [disabled]="saving() || !isDirty()" (click)="save()">
+          @if (saving()) {
+            <mat-spinner diameter="16"></mat-spinner>
+          } @else {
+            <mat-icon>save</mat-icon>
+          }
+          Save Permissions
+        </button>
+      </div>
+    }
   }
 
 </div>
