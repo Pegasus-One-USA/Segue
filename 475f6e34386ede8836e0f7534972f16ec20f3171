@@ -1,0 +1,191 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_62affcfc9947ba::t_abb4e9c4cc7061 339-340
+  s_62affcfc9947ba::t_d37e1c8292c183 198,200
+  s_62affcfc9947ba::t_b44f83c5c474cb 303,325-327,334-335,345,354
+  s_62affcfc9947ba::t_2867b137e6c8b6 375-376
+  s_62affcfc9947ba::t_774b4e7fa186df 131,136
+  s_62affcfc9947ba::t_cbacd098dbad23 306,308
+  s_62affcfc9947ba::t_2fe877211d192c 291-293,296-302,304-305,307,309-315,318-324,328-333,336-338,341-344,346-347,350-353,355-356,359-365,368-371,373-374,377-380,383
+  s_62affcfc9947ba::t_1ab683806309e0 31,37,52-53,55,57-62,65,68-70,74,76-80,83-85,87,89-106,108-114,116,130,139,146,155,179,182-183,185,187,190-192,194,208-209,212-218,220-221,224-230,233-236,239-251,253,255-258,260-268,270-278,280-281,283,386-387,389-391,393-411,413-415,417-419,421,423-425,427-428,430-433
+  s_62affcfc9947ba::t_1707e7e28f350b 385,388
+  s_62affcfc9947ba::t_f0a01c7937282c 210-211
+  s_62affcfc9947ba::t_5afb4656e3ac07 294-295
+  s_62affcfc9947ba::t_768710a69568fe 348-349
+  s_62affcfc9947ba::t_fc30177a7d483e 426,429
+  s_62affcfc9947ba::t_03696225e6c10c 357-358
+  s_62affcfc9947ba::t_351f81273ff379 147,152
+  s_62affcfc9947ba::t_c40ecd99019bf8 2-30,33,35-36,38-51,63-64,71-73,75,81-82,107,115,117-129,132-135,137-138,140-145,148-151,153-154,156-162,165-168,170,175-178,180-181,184,186,193,195-197,199,201-207,219,237-238,254,259,269,279,282,284-290,372,381-382,384,392,412,416,420,422,434-439,441-445
+  s_62affcfc9947ba::t_581199876ee8b2 231-232
+  s_62affcfc9947ba::t_66aa404f2f59de 32,34
+  s_62affcfc9947ba::t_6600f247d42fd8 188-189
+  s_62affcfc9947ba::t_8e50faa6108a2f 54,56
+  s_62affcfc9947ba::t_caf69a78d5d265 169,173-174
+  s_62affcfc9947ba::t_1db64ea4da2ad8 222-223
+  s_62affcfc9947ba::t_1e503bd2b8d578 1
+  s_62affcfc9947ba::t_ff3a7e8214f88b 316-317
+  s_62affcfc9947ba::t_0a39cb478cd70e 171-172
+  s_62affcfc9947ba::t_e601e59ccd5d0f 252
+  s_62affcfc9947ba::t_fb98213892da0c 366-367
+  s_62affcfc9947ba::t_f24a8f511c008b 440
+  s_62affcfc9947ba::t_5d897dde8fc910 66-67
+  s_62affcfc9947ba::t_9f5c06b2f28af0 86,88
+  s_62affcfc9947ba::t_571974023679fd 163-164
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_62affcfc9947ba::t_4c40b079e5e7a1 65-66
+  s_62affcfc9947ba::t_a98bd57c523e39 27-33
+  s_62affcfc9947ba::t_749753b11e88a6 4
+  s_62affcfc9947ba::t_a7c199f115c088 321,328
+  s_62affcfc9947ba::t_caa3bfafc06d44 365-373
+  s_62affcfc9947ba::t_8171f7867f0907 205-213
+  s_62affcfc9947ba::t_c3d17947015662 71
+  s_62affcfc9947ba::t_a1605d43ea9ac3 374-399
+  s_62affcfc9947ba::t_a15b76d35af175 204,214-215,242
+  s_62affcfc9947ba::t_96657e30aea61b 5,26,34-35,37-38,44-47,52
+  s_62affcfc9947ba::t_08222acea556ff 36,39-43,48-51
+  s_62affcfc9947ba::t_9fa40dde8c9f42 238,243-245
+  s_62affcfc9947ba::t_26afecc3ce17ab 246-247
+  s_62affcfc9947ba::t_8472c14cdf433e 102-109,111-113,121,127
+  s_62affcfc9947ba::t_c40ecd99019bf8 1,3,6-10,12-25,53-64,67-70,72-91,93,100-101,110,119-120,122-126,128-131,133-173,248-309,315-316,318-320,322-327,329-348,359-364,400
+  s_62affcfc9947ba::t_b0028931bf67e4 2
+  s_62affcfc9947ba::t_73157079512c41 114,116-118
+  s_62affcfc9947ba::t_fd4f7de82b0bf6 132
+  s_62affcfc9947ba::t_119560d452d1ce 312-314
+  s_62affcfc9947ba::t_2c158a05e6fe70 92,94-99,115
+  s_62affcfc9947ba::t_bea2651b251323 11
+  s_62affcfc9947ba::t_f462fa28a2144e 349-358
+  s_62affcfc9947ba::t_ad39a6c340e649 310-311,317
+  s_62affcfc9947ba::t_118859657cf87e 174-203,216-237,239-241
+portal/src/app/components/nodes/merge-node/merge-node.component.scss
+  s_62affcfc9947ba::t_096d40e930b3f0 1,3-4,6-8,10-29,37,77,79,105,112,148,155,159,168
+  s_62affcfc9947ba::t_bbfee7342d62c9 103-104
+  s_62affcfc9947ba::t_02edc2f628a356 106-111
+  s_62affcfc9947ba::t_04b52562b0bfda 113-115,145-147
+  s_62affcfc9947ba::t_c1f54a62547514 149-154
+  s_62affcfc9947ba::t_ab6f2b2544b9c5 156-158
+  s_62affcfc9947ba::t_bec38ae7f3ecce 160
+  s_62affcfc9947ba::t_1ebce3284813e4 116-144,164-165,171-172,196-197,211
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_62affcfc9947ba::t_0e4d333e837432 52
+  s_62affcfc9947ba::t_096d40e930b3f0 13,44-51
+  s_62affcfc9947ba::t_2a7f1705c7ddb7 53-94
+portal/src/app/components/canvas/canvas.component.scss
+  s_62affcfc9947ba::t_fa70c399bfe2f3 112
+  s_62affcfc9947ba::t_096d40e930b3f0 73,85-111,124,135,144,149,156,160,164,166,169,175,182,189,192-193,195
+  s_62affcfc9947ba::t_0274e75dcdd673 113-123,125-134,136-143,145-148,150-155,157-159,161-163,165,167-168,170-174,176-181,183-188,190-191,194
+portal/src/app/components/nodes/source-node/source-node.component.html
+  s_62affcfc9947ba::t_096d40e930b3f0 4-14,16
+  s_62affcfc9947ba::t_ac5c37d93bad75 22-25,27-31
+portal/src/app/components/nodes/source-node/source-node.component.ts
+  s_62affcfc9947ba::t_545c90232c9882 1-2,10,16,18-20,36,40,51-67,99
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_62affcfc9947ba::t_096d40e930b3f0 4-10,12-18
+  s_62affcfc9947ba::t_fa70c399bfe2f3 11
+  s_62affcfc9947ba::t_51b40b010aebec 24-25,27-30,32,34
+portal/src/app/components/nodes/merge-node/merge-node.component.html
+  s_62affcfc9947ba::t_fa70c399bfe2f3 9
+  s_62affcfc9947ba::t_096d40e930b3f0 4-8,10-14
+  s_62affcfc9947ba::t_6ef4b333e9bfce 20-21,23-27
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_62affcfc9947ba::t_85d4da39b59379 129-132,134-135
+  s_62affcfc9947ba::t_757a01d930a726 133
+  s_62affcfc9947ba::t_8ab4ad1c4f0af1 44-45,48,179-181,285-287,293-294,297,305-306,309,321,415,425-426,433,439,449-450,494-495,542
+  s_62affcfc9947ba::t_f29d0b59abd62c 239,255,541
+  s_62affcfc9947ba::t_43083373db2b6b 322-323,327-331
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-11,14-29,31-37,39-43,46-47,49-53,55-60,62-74,76-90,93-102,104-108,110-128,136-140,142-148,150-152,154-155,158-160,162,164-167,170-178,182-197,199-205,207-208,211-216,218-237,240-246,248-254,256-265,267-272,274-284,288-292,295-296,298-304,307-308,310-320,332-347,349-351,353-354,356-365,367-368,370,372-373,376-383,385-389,391-396,398-406,410-414,416-424,427-432,434-438,440-448,451-474,478-483,485-493,496-499,501-505,507-515,518-532,537-539,543-545
+  s_62affcfc9947ba::t_4a058c9d874f1f 12-13,30,38,54,61,75,91-92,103,109,141,149,153,156-157,161,163,168-169,198,206,209-210,217,238,247,266,273,324-326,348,352,355,366,369,371,374-375,384,390,397,407-409,475-477,484,500,506,516-517,533-536,540
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-104,106-221,223-282
+  s_62affcfc9947ba::t_87146a77fa5694 105,222
+portal/scripts/lint-baseline.json
+  s_62affcfc9947ba::t_98e7fc9ef67edd 2
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_62affcfc9947ba::t_096d40e930b3f0 3
+  s_62affcfc9947ba::t_943353f13938dd 22-23,36-51
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_62affcfc9947ba::t_096d40e930b3f0 35-51
+  s_62affcfc9947ba::t_a73cc9cd3ad296 72,74,76-82,84-96,98,100-107,122,124-129,131,133-140,250,307,331
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_62affcfc9947ba::t_fa70c399bfe2f3 138
+  s_62affcfc9947ba::t_096d40e930b3f0 1,3,6-7,9,14-15,17-18,20-27,29-44,62-66,68-88,91-96,98,100-102,105-137,139-150,152-160,178,185,199,228-229
+  s_62affcfc9947ba::t_6d264917cf6a4d 161-165,168-172,174-177,179-184,186-188,195-196,200,202-203,213-214,243
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-14,17-32,34,36-41,43-47,49-56,58-64,67-71,73-90,93-95,98-99,102-107,109,112-117,119-121,123-135,137-155,158-163,165-168,170-189,191-195,197-201,203-206,208-210,213-217,220-221,223-233,235-242,244-246,249-255,258-262,264-278,280,282-285,287,290-296,298-300,302-305,308-314,316-320,322-327,329-337,339-340,343-347,349-357,359-360,362,364-369,372-380,382-387,389-391,394-396,398-411,413,415-421,423-427,429-445,449-450,454-462,465-476,478-486,490-492,494-496,499-501,503-505
+  s_62affcfc9947ba::t_f29d0b59abd62c 97,101,212,248,281,301,393,498
+  s_62affcfc9947ba::t_8ab4ad1c4f0af1 100,111,122,190,202,263,446-448,451-453,502
+  s_62affcfc9947ba::t_4a058c9d874f1f 15-16,33,35,42,48,57,65-66,72,91-92,96,108,110,118,136,156-157,164,169,196,207,211,218-219,222,234,243,247,256-257,279,286,288-289,297,306-307,315,321,328,338,341-342,348,358,361,363,370-371,381,388,392,397,412,414,422,428,463-464,477,487-489,493,497
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_62affcfc9947ba::t_096d40e930b3f0 5,30,183,236,337
+  s_62affcfc9947ba::t_d8debd76e665d0 116-173,235,265,443,473-475,514-515,528,592,611,630,632-638,686,760-761,778,851,854
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_62affcfc9947ba::t_f5753575d6d542 1,10,12-13,21-22,109-110,124,136-169,310-324,328-330,332,335-336,339-341,344-352,354-363,366-369,372-376,379,386,412-418
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_62affcfc9947ba::t_2cb9e80503fc74 104-105
+  s_62affcfc9947ba::t_cc42fa2fd7d77d 125-126
+  s_62affcfc9947ba::t_ac1239b053ad4c 133-134
+  s_62affcfc9947ba::t_e88246b9e08333 112,114
+  s_62affcfc9947ba::t_da44a9d4970bc5 141,143
+  s_62affcfc9947ba::t_cf7f7ef250780d 152,154
+  s_62affcfc9947ba::t_c292f6cf56b70d 87,89
+  s_62affcfc9947ba::t_7befb924331d8c 55-56
+  s_62affcfc9947ba::t_97d0e71f116c71 82-83
+  s_62affcfc9947ba::t_c40ecd99019bf8 1-46,49-54,57-62,65-70,72,74-81,84-86,88,90-103,106-111,113,115-124,127-132,135-140,142,144-151,153,155-339
+  s_62affcfc9947ba::t_e104b11a2c6ebc 47-48
+  s_62affcfc9947ba::t_315db5022f94c9 71,73
+  s_62affcfc9947ba::t_cf30283ee08421 63-64
+portal/src/app/components/nodes/merge-node/merge-node.component.ts
+  s_62affcfc9947ba::t_b96d557a27b612 28
+  s_62affcfc9947ba::t_3396a96a75159e 2
+  s_62affcfc9947ba::t_545c90232c9882 1,9,15-16,18,20-22,39-44,60,64
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_62affcfc9947ba::t_096d40e930b3f0 49,52
+  s_62affcfc9947ba::t_1396ad0160f20f 53-54
+  s_62affcfc9947ba::t_1a4f637dc44b3f 60-64,94-103,113,155-186
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_62affcfc9947ba::t_096d40e930b3f0 1,3-4,7-8,10,13-14,16-17,19-26,28-43,61-65,67-68,71-75,77,79,81,111-112,124,130,134-136,140,167,174,178,215
+  s_62affcfc9947ba::t_fa70c399bfe2f3 110
+  s_62affcfc9947ba::t_444427d6c10b72 122-123
+  s_62affcfc9947ba::t_8009ee6dd43410 125-129
+  s_62affcfc9947ba::t_e8dcb2d3f3bbc8 131-133
+  s_62affcfc9947ba::t_ff2e5b222ef51a 137-139
+  s_62affcfc9947ba::t_05c185e2efcd74 141-143,164-166
+  s_62affcfc9947ba::t_d050922531fb66 168-173
+  s_62affcfc9947ba::t_0d0c3a8c5ac2e9 175-177
+  s_62affcfc9947ba::t_9dc90855f651e9 179
+  s_62affcfc9947ba::t_aedc0b5f7e3996 216
+  s_62affcfc9947ba::t_075b1f018efeb6 144-163,183-184,187-188,190-191,230
+portal/src/app/components/canvas/canvas.component.ts
+  s_62affcfc9947ba::t_096d40e930b3f0 2,8,48,50,57,73
+  s_62affcfc9947ba::t_193d71fcb085ea 144-146,148-154,156-164,176-239
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_62affcfc9947ba::t_115828e96406fc 62
+  s_62affcfc9947ba::t_545c90232c9882 5-40,44,50,52-56,61,63-72,74-75,84-113,116-117,121,127-132,137-140,144
+  s_62affcfc9947ba::t_9101b510f2698c 79,83
+  s_62affcfc9947ba::t_38ed07ac6fd976 2
+portal/src/app/components/canvas/canvas.component.html
+  s_62affcfc9947ba::t_096d40e930b3f0 4,36
+  s_62affcfc9947ba::t_78e3a9d787af39 60-109
+portal/scripts/token-baseline.json
+  s_62affcfc9947ba::t_808c99d410e356 2
+portal/src/app/services/phase-config.service.ts
+  s_62affcfc9947ba::t_19a3ae2cbf4deb 26,40
+portal/src/app/services/wizard.service.ts
+  s_62affcfc9947ba::t_037691fefe19ca 74-81,116-121
+portal/src/environments/environment.ts
+  s_62affcfc9947ba::t_4def3665939247 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "475f6e34386ede8836e0f7534972f16ec20f3171",
+  "prompts": {},
+  "sessions": {
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
