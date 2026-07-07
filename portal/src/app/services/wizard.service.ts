@@ -5,11 +5,9 @@ import { ToastService } from './toast.service';
 import { EPIC_APPS } from '../data/epic-apps.data';
 import { EPIC_ENV } from '../data/epic-environments.data';
 import { EPIC_INGESTION } from '../data/ingestion-modes.data';
-import { EPIC_MODE_CONFIG } from '../data/mode-configs.data';
 import { DEFAULT_RESOURCES } from '../data/scope-constants.data';
 import { AppKey, EpicApp } from '../models/epic-app.model';
 import { EnvKey } from '../models/epic-env.model';
-import { WizardState } from '../models/wizard-state.model';
 import { SourceNode } from '../models/node.model';
 
 export type WizardStep = 1 | 2 | 3;
@@ -116,11 +114,11 @@ export class WizardService {
     );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.mode.set(f['Ingestion mode'] || gate?.default || 'search');
-    this.connected.set(!!(node as any)?.connected);
+    this.connected.set(!!(node as { connected?: boolean } | null)?.connected);
     this.modeValues.set({});
 
     this.clientId.set(f['Client ID'] ?? '');
-    this.authMethod.set(((f['Auth method'] as any) || 'secret') as 'secret' | 'jwt');
+    this.authMethod.set(((f['Auth method'] as string) || 'secret') as 'secret' | 'jwt');
     this.epicAudience.set(f['Epic audience'] || f['App key'] || 'provider-ehr-launch');
     this.redirectUri.set(f['Redirect URI'] ?? 'https://fhirbridge.com/oauth/callback');
     this.launchUrlWiz.set(f['Launch URL'] ?? 'https://fhirbridge.com/launch');
@@ -172,7 +170,6 @@ export class WizardService {
   }
 
   validateStep2(): boolean {
-    const app = this.currentApp();
     if (this.resources().length === 0) {
       this.toast.show('Pick resources', 'Select at least one resource for the scope string.');
       return false;
