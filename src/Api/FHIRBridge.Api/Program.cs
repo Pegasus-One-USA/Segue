@@ -36,6 +36,13 @@ builder.Services
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
+// Minimal-API endpoints (WorkflowEndpoints) use a separate JSON options bag from MVC. Register the same string-enum
+// converter so the workflow/build DTOs accept enum names (e.g. "Sample", "SqlServer") like the MVC controllers do;
+// numeric enum values still deserialize, so the existing category-as-int graph serializer keeps working.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 // Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector).
 // In production the key ring MUST be persisted to shared storage so tokens survive restarts and work
 // across instances (otherwise each node/restart mints a new key and can't decrypt the others' tokens).

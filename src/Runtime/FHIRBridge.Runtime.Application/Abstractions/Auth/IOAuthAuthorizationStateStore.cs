@@ -28,4 +28,5 @@ public sealed record PendingAuthorization(
     string RedirectUri,
     string TokenEndpoint,
     string ClientId,
-    Guid? RouteId = null);
+    Guid? RouteId = null,
+    Guid? WorkflowId = null);

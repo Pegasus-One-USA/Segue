@@ -78,6 +78,19 @@ public sealed class OAuthController : ControllerBase
     }
 
     /// <summary>
+    /// Returns the opaque, encrypted launch URL for a workflow graph. On launch, the workflow's source node's
+    /// connection drives OAuth + trusted-issuer validation; on callback the workflow is run. Admin-only.
+    /// </summary>
+    [Authorize]
+    [HttpGet("workflows/{workflowId:guid}/launch-url")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetWorkflowLaunchUrl(Guid workflowId)
+    {
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId);
+        return Ok(new { launchUrl = BuildLaunchUri(context) });
+    }
+
+    /// <summary>
     /// The SMART EHR-launch entry point registered with the EHR for a specific pipeline route. The route is
     /// carried in the encrypted <paramref name="context"/> segment — no raw GUIDs in the URL. The EHR appends the
     /// issuer (<c>iss</c>) + opaque <c>launch</c> token; on callback the resolved route is run for the launched

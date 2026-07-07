@@ -142,65 +142,6 @@
               </div>
             </div>
 
-            @if (csvForm.get('storageType')!.value === 'sftp') {
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched">
-                <label class="dw-label" for="dw-sftpHost">Host <span class="dw-req">*</span></label>
-                <input id="dw-sftpHost" class="dw-input" formControlName="sftpHost" placeholder="sftp.example.com" />
-                @if (csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched) {
-                  <span class="dw-error">Host is required.</span>
-                }
-              </div>
-
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPort')!.invalid && csvForm.get('sftpPort')!.touched">
-                <label class="dw-label" for="dw-sftpPort">Port <span class="dw-req">*</span></label>
-                <input id="dw-sftpPort" class="dw-input" type="number" formControlName="sftpPort" placeholder="22" />
-                @if (csvForm.get('sftpPort')!.invalid && csvForm.get('sftpPort')!.touched) {
-                  <span class="dw-error">Enter a valid port (1–65535).</span>
-                }
-              </div>
-
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched">
-                <label class="dw-label" for="dw-sftpUsername">Username <span class="dw-req">*</span></label>
-                <input id="dw-sftpUsername" class="dw-input" formControlName="sftpUsername" placeholder="fhirbridge" />
-                @if (csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched) {
-                  <span class="dw-error">Username is required.</span>
-                }
-              </div>
-
-              <div class="dw-field">
-                <label class="dw-label" for="dw-sftpAuthType">Auth Type <span class="dw-req">*</span></label>
-                <div class="dw-select-wrap">
-                  <select id="dw-sftpAuthType" class="dw-select" formControlName="sftpAuthType">
-                    <option value="password">Password</option>
-                    <option value="ssh-key">SSH Private Key</option>
-                  </select>
-                </div>
-              </div>
-
-              @if (csvForm.get('sftpAuthType')!.value === 'password') {
-                <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched">
-                  <label class="dw-label" for="dw-sftpPassword">Password <span class="dw-req">*</span></label>
-                  <input id="dw-sftpPassword" class="dw-input" type="password" formControlName="sftpPassword" placeholder="Stored securely" autocomplete="new-password" />
-                  @if (csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched) {
-                    <span class="dw-error">Password is required.</span>
-                  }
-                </div>
-              } @else {
-                <div class="dw-field">
-                  <label class="dw-label" for="dw-sftpPassword">Private Key</label>
-                  <input id="dw-sftpPassword" class="dw-input" type="password" formControlName="sftpPassword" placeholder="Paste PEM key or key vault reference" autocomplete="new-password" />
-                </div>
-              }
-
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
-                <label class="dw-label" for="dw-sftpRemoteFolder">Remote Folder <span class="dw-req">*</span></label>
-                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/uploads" />
-                @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
-                  <span class="dw-error">Remote folder is required.</span>
-                }
-              </div>
-            }
-
             <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched">
               <label class="dw-label" for="dw-folder">Base folder / container <span class="dw-req">*</span></label>
               <input id="dw-folder" class="dw-input" formControlName="folder" placeholder="/exports/fhirbridge" />
@@ -297,8 +238,8 @@
                           [attr.id]="'dw-target-' + r"
                           [value]="targetFor(r)"
                           (change)="updateTarget(r, $any($event.target).value)">
-                    <option value="" disabled>Select a table…</option>
-                    @for (t of sqlTableOptions(); track t) { <option [value]="t">{{ t }}</option> }
+                    <option value="" disabled [selected]="!targetFor(r)">Select a table…</option>
+                    @for (t of sqlTableOptions(); track t) { <option [value]="t" [selected]="t === targetFor(r)">{{ t }}</option> }
                   </select>
                 </div>
               } @else {
@@ -311,70 +252,54 @@
                 />
               }
             </span>
-            <button
-              type="button"
-              class="dw-row-add dw-row-add--inline"
-              [disabled]="rowsForResource(r).length >= availableFields(r).length"
-              (click)="addRow(r)"
-            >
-              + Add field
-            </button>
           </div>
-          @if (rowsForResource(r).length) {
-            <table class="dw-map-table">
-              <thead>
+          <table class="dw-map-table">
+            <thead>
+              <tr>
+                <th>Business field</th>
+                <th>FHIR path</th>
+                <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rowsForResource(r); track $index) {
                 <tr>
-                  <th>Business field</th>
-                  <th>FHIR path</th>
-                  <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
-                  <th class="dw-map-col-actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (row of rowsForResource(r); track $index) {
-                  <tr>
-                    <td>
+                  <td>
+                    <div class="dw-select-wrap">
+                      <select
+                        class="dw-select"
+                        [value]="row.fieldLabel"
+                        (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
+                      >
+                        @for (f of availableFields(r); track f.path) {
+                          <option [value]="f.label" [selected]="f.label === row.fieldLabel">{{ f.label }}</option>
+                        }
+                      </select>
+                    </div>
+                  </td>
+                  <td class="dw-mono">{{ row.fhirPath }}</td>
+                  <td>
+                    @if (hasSqlTables() && columnsForResourceTarget(r).length) {
                       <div class="dw-select-wrap">
-                        <select
-                          class="dw-select"
-                          [value]="row.fieldLabel"
-                          (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
-                        >
-                          @for (f of availableFields(r); track f.path) {
-                            <option [value]="f.label">{{ f.label }}</option>
-                          }
+                        <select class="dw-select"
+                                [value]="row.targetName"
+                                (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
+                          <option value="" disabled [selected]="!row.targetName">Select a column…</option>
+                          @for (c of columnsForResourceTarget(r); track c) { <option [value]="c" [selected]="c === row.targetName">{{ c }}</option> }
                         </select>
                       </div>
-                    </td>
-                    <td class="dw-mono">{{ row.fhirPath }}</td>
-                    <td>
-                      @if (hasSqlTables() && columnsForResourceTarget(r).length) {
-                        <div class="dw-select-wrap">
-                          <select class="dw-select"
-                                  [value]="row.targetName"
-                                  (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
-                            <option value="" disabled>Select a column…</option>
-                            @for (c of columnsForResourceTarget(r); track c) { <option [value]="c">{{ c }}</option> }
-                          </select>
-                        </div>
-                      } @else {
-                        <input
-                          class="dw-map-input"
-                          [value]="row.targetName"
-                          (input)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)"
-                        />
-                      }
-                    </td>
-                    <td class="dw-map-col-actions">
-                      <button type="button" class="dw-row-remove" title="Remove field" (click)="removeRow(row)">×</button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          } @else {
-            <p class="dw-map-empty">No fields mapped yet — click "Add field" to map your first one.</p>
-          }
+                    } @else {
+                      <input
+                        class="dw-map-input"
+                        [value]="row.targetName"
+                        (input)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)"
+                      />
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
       }
     }

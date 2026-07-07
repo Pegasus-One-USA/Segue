@@ -1,4 +1,9 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using FHIRBridge.Api.Workflows;
+using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Security;
+using FHIRBridge.Application.Services;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -8,6 +13,9 @@ namespace FHIRBridge.Api.Workflows;
 
 public static class WorkflowEndpoints
 {
+    // Node executors read config with JsonSerializerDefaults.Web (camelCase); serialize embedded fields the same way.
+    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
+
     public static IEndpointRouteBuilder MapWorkflowEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints
@@ -25,6 +33,118 @@ public static class WorkflowEndpoints
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Created($"/api/v1/workflows/{workflow.Id}", workflow);
         });
+
+        // Option B create-on-save: provision secrets + create Source/Destination/Mapping records, inject their ids into
+        // the referencing nodes, then persist the graph. One call turns a builder canvas into a launchable workflow that
+        // resolves real, RBAC-scoped configuration by id at run time. Gated to admins because it provisions secrets.
+        group.MapPost("/workflows/build", async (
+            WorkflowBuildRequest request,
+            IConfigurationService configurationService,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
+            // saved graph. Node order is preserved from the original request when the definition is rebuilt.
+            var nodes = request.Nodes.ToDictionary(node => node.Id, node => node, StringComparer.OrdinalIgnoreCase);
+            var sourceIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            var destinationIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            var mappingIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Destinations first — self-contained, and they provision the inline secret whose reference the node needs.
+            foreach (var spec in request.Destinations ?? [])
+            {
+                if (!nodes.TryGetValue(spec.NodeId, out var node))
+                {
+                    return Results.BadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
+                }
+
+                var destination = await configurationService.AddDestinationConfigurationAsync(spec.Destination, cancellationToken);
+                destinationIds[spec.NodeId] = destination.Id;
+                nodes[spec.NodeId] = WithConfiguration(node, config =>
+                {
+                    config["destinationId"] = destination.Id.ToString();
+                    config["secretKeyVaultName"] = destination.KeyVaultName;
+                    config["secretName"] = destination.SecretName;
+                    if (!string.IsNullOrWhiteSpace(destination.Target))
+                    {
+                        config["target"] = destination.Target;
+                    }
+                });
+            }
+
+            // 2. Sources — the executor resolves base URL + auth + token live from the id at run time.
+            foreach (var spec in request.Sources ?? [])
+            {
+                if (!nodes.TryGetValue(spec.NodeId, out var node))
+                {
+                    return Results.BadRequest($"Source spec references unknown node '{spec.NodeId}'.");
+                }
+
+                var source = await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
+                sourceIds[spec.NodeId] = source.Id;
+                nodes[spec.NodeId] = WithConfiguration(node, config => config["sourceConnectionId"] = source.Id.ToString());
+            }
+
+            // 3. Mappings — bound to a source + destination created above (or already referenced on the picked node).
+            foreach (var spec in request.Mappings ?? [])
+            {
+                if (!nodes.TryGetValue(spec.NodeId, out var node))
+                {
+                    return Results.BadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
+                }
+
+                if (!TryResolveEntityId(spec.SourceNodeId, sourceIds, nodes, "sourceConnectionId", out var sourceConnectionId))
+                {
+                    return Results.BadRequest(
+                        $"Mapping spec '{spec.NodeId}' references source node '{spec.SourceNodeId}' with no created or referenced source connection.");
+                }
+
+                if (!TryResolveEntityId(spec.DestinationNodeId, destinationIds, nodes, "destinationId", out var destinationId))
+                {
+                    return Results.BadRequest(
+                        $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
+                }
+
+                var mapping = await configurationService.AddMappingProfileAsync(
+                    new CreateMappingProfileRequest(
+                        spec.Name,
+                        spec.ResourceType,
+                        sourceConnectionId,
+                        destinationId,
+                        spec.DestinationObject,
+                        spec.Fields),
+                    cancellationToken);
+                mappingIds[spec.NodeId] = mapping.Id;
+                nodes[spec.NodeId] = WithConfiguration(node, config => config["mappingProfileId"] = mapping.Id.ToString());
+
+                // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
+                // from its OWN node config rather than resolving the mapping by id, so mirror the mapping's target and
+                // fields onto the destination node — the same shape the route→graph projection embeds. Without this the
+                // writer defaults the target table to the resource type and creates no data columns.
+                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
+                {
+                    nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
+                    {
+                        config["resourceType"] = spec.ResourceType;
+                        config["destinationObject"] = spec.DestinationObject;
+                        config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
+                    });
+                }
+            }
+
+            // 4. Persist the graph carrying the injected references (original node order preserved).
+            var definitionRequest = new WorkflowDefinitionRequest(
+                request.Name,
+                request.IsEnabled,
+                request.Nodes.Select(node => nodes[node.Id]).ToArray(),
+                request.Edges);
+
+            var workflow = BuildWorkflow(Guid.NewGuid(), definitionRequest);
+            await store.SaveAsync(workflow, cancellationToken);
+
+            var result = new WorkflowBuildResult(workflow.Id, sourceIds, destinationIds, mappingIds);
+            return Results.Created($"/api/v1/workflows/{workflow.Id}", result);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapPost("/workflows/validate", (
             WorkflowDefinitionRequest request,
@@ -146,6 +266,55 @@ public static class WorkflowEndpoints
         });
 
         return endpoints;
+    }
+
+    private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)
+    {
+        var config = TryParseConfiguration(node.ConfigurationJson) ?? new JsonObject();
+        mutate(config);
+        return node with { ConfigurationJson = config.ToJsonString() };
+    }
+
+    private static bool TryResolveEntityId(
+        string nodeId,
+        IReadOnlyDictionary<string, Guid> createdIds,
+        IReadOnlyDictionary<string, WorkflowNodeRequest> nodes,
+        string configurationKey,
+        out Guid entityId)
+    {
+        if (createdIds.TryGetValue(nodeId, out entityId))
+        {
+            return true;
+        }
+
+        // Picker flow: the referenced node already carries the entity id in its configuration.
+        if (nodes.TryGetValue(nodeId, out var node)
+            && TryParseConfiguration(node.ConfigurationJson) is { } config
+            && config[configurationKey]?.ToString() is { } raw
+            && Guid.TryParse(raw, out entityId))
+        {
+            return true;
+        }
+
+        entityId = Guid.Empty;
+        return false;
+    }
+
+    private static JsonObject? TryParseConfiguration(string? configurationJson)
+    {
+        if (string.IsNullOrWhiteSpace(configurationJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(configurationJson) as JsonObject;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request)
