@@ -71,6 +71,14 @@ export class WizardService {
   // ── connection ────────────────────────────────────────────────────────────
   readonly connected = signal(false);
 
+  // ── audience-form extra fields ────────────────────────────────────────────
+  readonly clientId     = signal('');
+  readonly authMethod   = signal<'secret' | 'jwt'>('secret');
+  readonly epicAudience = signal('provider-ehr-launch');
+  readonly redirectUri  = signal('https://fhirbridge.com/oauth/callback');
+  readonly launchUrlWiz = signal('https://fhirbridge.com/launch');
+  readonly isEditing    = computed(() => !!this.store.editingNodeId());
+
   // ── derived ingestion gate ─────────────────────────────────────────────────
   readonly allowedModes = computed(() => {
     const gate = EPIC_INGESTION[this.currentApp().context];
@@ -104,6 +112,12 @@ export class WizardService {
     this.mode.set(f['Ingestion mode'] || gate?.default || 'search');
     this.connected.set(!!(node as any)?.connected);
     this.modeValues.set({});
+
+    this.clientId.set(f['Client ID'] ?? '');
+    this.authMethod.set(((f['Auth method'] as any) || 'secret') as 'secret' | 'jwt');
+    this.epicAudience.set(f['Epic audience'] || f['App key'] || 'provider-ehr-launch');
+    this.redirectUri.set(f['Redirect URI'] ?? 'https://fhirbridge.com/oauth/callback');
+    this.launchUrlWiz.set(f['Launch URL'] ?? 'https://fhirbridge.com/launch');
 
     this.store.editingNodeId.set(existingNodeId ?? null);
     this.step.set(1);

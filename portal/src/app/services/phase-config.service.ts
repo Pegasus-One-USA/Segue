@@ -23,7 +23,7 @@ export interface PhaseConfig {
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
 // Sources:      Epic only
-// Categories:   Field Mapping + Destination visible; Validation/Normalize/
+// Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
 // Destinations: SQL Server + CSV only
 const PHASE_1_CONFIG: PhaseConfig = {
@@ -34,13 +34,10 @@ const PHASE_1_CONFIG: PhaseConfig = {
   ],
 
   enabledTransformIds: [
-    'field-mapping',
     // Destinations — Phase 1
     'dest-sqlserver',
     'dest-csv',
-    // Audit always visible
-    'audit-lineage',
-    // Phase 2+: 'fhir-validation', 'normalize', 'patient-matching',
+    // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql', 'dest-postgres', 'dest-mysql',
     //   'dest-snowflake', 'dest-powerbi', 'dest-tableau', 'dest-databricks',

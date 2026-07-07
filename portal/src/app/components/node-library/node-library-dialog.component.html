@@ -32,7 +32,23 @@
     <div class="nld-body">
 
       <!-- LEFT: Node Library sidebar -->
-      <nav class="nld-sidebar" aria-label="Node library">
+      <nav class="nld-sidebar" [class.nld-sidebar--mini]="isSidebarMini()" aria-label="Node library">
+
+        <!-- Collapse / expand toggle (visible only when a form is active) -->
+        @if (showEpicForm() || showDestWizard()) {
+          <button
+            class="nld-sidebar-toggle"
+            type="button"
+            (click)="toggleSidebar()"
+            [title]="isSidebarMini() ? 'Expand sidebar' : 'Collapse sidebar'"
+          >
+            <svg class="nld-sidebar-toggle-ico" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect y="0"  width="18" height="2" rx="1" fill="currentColor"/>
+              <rect y="6"  width="18" height="2" rx="1" fill="currentColor"/>
+              <rect y="12" width="18" height="2" rx="1" fill="currentColor"/>
+            </svg>
+          </button>
+        }
 
         <!-- Search -->
         <div class="nld-search-wrap">
@@ -50,77 +66,45 @@
           }
         </div>
 
-        <!-- Mode legend -->
-        @if (mode() === 'transform') {
-          <div class="nld-legend">
-            <span class="nld-leg-dot show"></span> Applicable
-            <span class="nld-leg-dot caveat"></span> Caveat
-            <span class="nld-leg-dot hide"></span> N/A
-            <label class="nld-leg-toggle">
-              <input type="checkbox" [checked]="showHidden()" (change)="showHidden.set($any($event.target).checked)" />
-              Show hidden
-            </label>
-          </div>
-        }
-
         <!-- Categories -->
         <div class="nld-cats">
           @for (cat of filteredCategories(); track cat.rank) {
-            <div class="nld-cat" [class.cat-has-selected]="hasCatSelected(cat)">
-
-              <!-- Category header -->
+            @for (item of cat.items; track item.id) {
               <button
-                class="nld-cat-head"
+                class="nld-item"
                 type="button"
-                [class.expanded]="isCatExpanded(cat.rank)"
-                (click)="toggleCat(cat.rank)"
+                [class.is-selected]="selectedId() === item.id"
+                [class.status-show]="item.status === 'show' || item.status === 'enabled'"
+                [class.status-caveat]="item.status === 'caveat'"
+                [class.status-disabled]="item.status === 'disabled' || item.status === 'hide'"
+                [disabled]="item.status === 'disabled' || item.status === 'hide'"
+                [title]="item.reason ?? ''"
+                (click)="selectItem(item)"
               >
-                <span class="nld-cat-icon" [style.color]="cat.catColor">{{ cat.icon }}</span>
-                <span class="nld-cat-label">{{ cat.label }}</span>
-                <span class="nld-cat-count">{{ cat.items.length }}</span>
-                <span class="nld-chevron" [class.open]="isCatExpanded(cat.rank)">›</span>
-              </button>
+                <span
+                  class="nld-item-avatar"
+                  [style.background]="item.color"
+                >{{ item.abbr }}</span>
 
-              <!-- Items (collapsible) -->
-              @if (isCatExpanded(cat.rank)) {
-                <div class="nld-cat-items">
-                  @for (item of cat.items; track item.id) {
-                    <button
-                      class="nld-item"
-                      type="button"
-                      [class.is-selected]="selectedId() === item.id"
-                      [class.status-show]="item.status === 'show' || item.status === 'enabled'"
-                      [class.status-caveat]="item.status === 'caveat'"
-                      [class.status-disabled]="item.status === 'disabled' || item.status === 'hide'"
-                      [disabled]="item.status === 'disabled' || item.status === 'hide'"
-                      (click)="selectItem(item)"
-                    >
-                      <span
-                        class="nld-item-avatar"
-                        [style.background]="item.color"
-                      >{{ item.abbr }}</span>
-
-                      <span class="nld-item-body">
-                        <span class="nld-item-name">{{ item.name }}</span>
-                        @if (item.category) {
-                          <span class="nld-item-meta">{{ item.category }}</span>
-                        } @else if (item.isMerge) {
-                          <span class="nld-item-meta">Merge node</span>
-                        }
-                      </span>
-
-                      @if (item.status === 'caveat') {
-                        <span class="nld-item-indicator caveat" title="Works with caveat">⚠</span>
-                      }
-                      @if (item.isMerge) {
-                        <span class="nld-merge-tag">⊕</span>
-                      }
-                    </button>
+                <span class="nld-item-body">
+                  <span class="nld-item-name">{{ item.name }}</span>
+                  @if (item.reason) {
+                    <span class="nld-item-meta">{{ item.reason }}</span>
+                  } @else if (item.category && item.category !== item.name) {
+                    <span class="nld-item-meta">{{ item.category }}</span>
+                  } @else if (item.isMerge) {
+                    <span class="nld-item-meta">Merge node</span>
                   }
-                </div>
-              }
+                </span>
 
-            </div>
+                @if (item.status === 'caveat') {
+                  <span class="nld-item-indicator caveat" title="Works with caveat">⚠</span>
+                }
+                @if (item.isMerge) {
+                  <span class="nld-merge-tag">⊕</span>
+                }
+              </button>
+            }
           }
 
           @if (filteredCategories().length === 0) {
@@ -135,93 +119,25 @@
       </nav>
 
       <!-- RIGHT: Detail / config panel -->
-      <section class="nld-detail" [class.nld-detail--wiz]="showInlineWizard()">
+      <section class="nld-detail" [class.nld-detail--form]="showEpicForm() || showDestWizard()">
 
-        <!-- ── Inline Epic Wizard ────────────────────────────────────────── -->
-        @if (showInlineWizard()) {
-          <div class="nld-wiz">
+        <!-- ── Inline Epic Audience Form ─────────────────────────────────── -->
+        @if (showEpicForm()) {
+          <app-epic-audience-form
+            (saved)="onEpicFormSaved()"
+            (cancelled)="onEpicFormCancelled()"
+          />
 
-            <!-- Header -->
-            <div class="nld-wiz-head">
-              <div class="nld-wiz-head-left">
-                <div class="nld-wiz-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="11" fill="#00A89D" opacity=".15"/>
-                    <path d="M7 12h10M12 7v10" stroke="#00A89D" stroke-width="2" stroke-linecap="round"/>
-                  </svg>
-                </div>
-                <span class="nld-wiz-title">Epic Source Wizard</span>
-                @if (wiz.connected()) {
-                  <span class="nld-wiz-verified">&#10003; Connected</span>
-                }
-              </div>
-              <div class="nld-wiz-head-right">
-                <label class="nld-wiz-adv">
-                  <input type="checkbox" [checked]="wizShowAdvanced()" (change)="wizToggleAdvanced()" />
-                  <span>Advanced</span>
-                </label>
-                <button class="nld-wiz-close" type="button" (click)="wizClose()" title="Close wizard">&#10005;</button>
-              </div>
-            </div>
+        } @else if (showDestWizard() && destWizardType() && destWizardAttach()) {
 
-            <!-- Stepper -->
-            <nav class="nld-wiz-stepper">
-              @for (s of WIZARD_STEPS; track s.n) {
-                <button
-                  class="nld-wiz-step"
-                  type="button"
-                  [class.active]="wizStep() === s.n"
-                  [class.done]="wizStep() > s.n"
-                  (click)="wizGoToStep(s.n)">
-                  <span class="nld-wiz-step-num">{{ wizStep() > s.n ? '✓' : s.n }}</span>
-                  <span class="nld-wiz-step-lbl">{{ s.label }}</span>
-                </button>
-              }
-            </nav>
-
-            <!-- Body -->
-            <div class="nld-wiz-body">
-              <app-epic-step-connect
-                [style.display]="wizStep() === 1 ? '' : 'none'"
-                [showAdvanced]="wizShowAdvanced()"
-              />
-              <app-epic-step-authenticate
-                [style.display]="wizStep() === 2 ? '' : 'none'"
-                [showAdvanced]="wizShowAdvanced()"
-              />
-              <app-epic-step-data
-                [style.display]="wizStep() === 3 ? '' : 'none'"
-                [showAdvanced]="wizShowAdvanced()"
-              />
-              <app-epic-step-test
-                [style.display]="wizStep() === 4 ? '' : 'none'"
-              />
-              @if (wizStep() === 5) {
-                <div class="nld-wiz-placeholder">
-                  <div class="nld-wiz-ph-icon">&#8680;</div>
-                  <h3>Transform</h3>
-                  <p>Data transformation rules will be configured here in a future release. Click <strong>Next</strong> to continue.</p>
-                </div>
-              }
-              @if (wizStep() === 6) {
-                <div class="nld-wiz-placeholder">
-                  <div class="nld-wiz-ph-icon">&#9679;</div>
-                  <h3>Destination</h3>
-                  <p>Configure your data destination. Click <strong>Finish</strong> to save this Epic source to the pipeline canvas.</p>
-                </div>
-              }
-            </div>
-
-            <!-- Footer -->
-            <div class="nld-wiz-footer">
-              <button class="nld-wiz-btn" type="button" [disabled]="wizStep() === 1" (click)="wizGoBack()">&#8592; Back</button>
-              <span class="nld-wiz-step-info">Step {{ wizStep() }} of {{ WIZARD_STEPS.length }}</span>
-              <button class="nld-wiz-btn nld-wiz-btn--primary" type="button" (click)="wizGoNext()">
-                {{ wizStep() === 6 ? '✓ Finish' : 'Next →' }}
-              </button>
-            </div>
-
-          </div>
+          <!-- ── Destination wizard (SQL Server or CSV) ──────────────────── -->
+          <app-destination-wizard
+            [destType]="destWizardType()!"
+            [attachNode]="destWizardAttach()!"
+            [editNode]="destEditNode()"
+            (saved)="onDestWizardSaved($event)"
+            (cancelled)="onDestWizardCancelled()"
+          />
 
         } @else {
 
@@ -331,7 +247,7 @@
                   </div>
                   <div class="nld-field-row">
                     <span class="nld-fk">Setup</span>
-                    <span class="nld-fv">3-step wizard required</span>
+                    <span class="nld-fv">Guided form required</span>
                   </div>
                 } @else if (selectedItem()!.id === 'hl7v2') {
                   <div class="nld-field-row">
@@ -388,7 +304,7 @@
             <div class="nld-actions">
               @if (selectedItem()!.id === 'epic') {
                 <button class="nld-cta wizard" type="button" (click)="addSelected()">
-                  ⚙&nbsp; Open Configuration Wizard
+                  ⚙&nbsp; Configure Epic Connection
                 </button>
               } @else if (selectedItem()!.status === 'disabled') {
                 <button class="nld-cta" type="button" disabled>
@@ -412,7 +328,7 @@
           </div><!-- /nld-config -->
         }
 
-        }<!-- /else showInlineWizard -->
+        }<!-- /else showEpicForm/showDestWizard -->
 
       </section>
     </div><!-- /nld-body -->

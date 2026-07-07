@@ -1,0 +1,445 @@
+<div class="eaf" [formGroup]="form" #formRoot>
+
+  <!-- ── Sticky header ─────────────────────────────────────────────────────── -->
+  <div class="eaf-topbar">
+    <div class="eaf-topbar-left">
+      <div class="eaf-icon-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="11" fill="#00A89D" opacity=".18"/>
+          <path d="M8 12h8M12 8v8" stroke="#00A89D" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="eaf-topbar-title">Epic Configuration</span>
+      @if (discStatus() === 'done') {
+        <span class="eaf-connected-badge">✓ Endpoints resolved</span>
+      }
+    </div>
+    <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+  </div>
+
+  <!-- ── Scrollable form body ───────────────────────────────────────────────── -->
+  <div class="eaf-body">
+
+    <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
+    <div class="eaf-section">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">1</span>
+        <span class="eaf-section-title">Audience &amp; Environment</span>
+      </div>
+
+      <div class="eaf-grid">
+        <div class="eaf-field" [class.eaf-field--error]="form.controls.audience.touched && form.controls.audience.invalid">
+          <label class="eaf-label" for="eaf-audience">Epic Audience <span class="eaf-req">*</span></label>
+          <div class="eaf-select-wrap">
+            <select id="eaf-audience" class="eaf-select" formControlName="audience">
+              <option value="provider-ehr-launch">Provider EHR Launch</option>
+              <option value="provider-standalone">Provider Standalone</option>
+              <option value="backend-system">Backend System</option>
+              <option value="patient">Patient</option>
+            </select>
+          </div>
+          @if (audience() === 'provider-ehr-launch') {
+            <p class="eaf-hint">EHR-initiated launch. Requires Launch URL + EHR registration.</p>
+          } @else if (audience() === 'provider-standalone') {
+            <p class="eaf-hint">Provider-context app launched standalone — no EHR launch sequence.</p>
+          } @else if (audience() === 'backend-system') {
+            <p class="eaf-hint">Server-to-server via JWT client credentials. No user context.</p>
+          } @else {
+            <p class="eaf-hint">Patient-facing app with patient-context scopes.</p>
+          }
+        </div>
+
+        @if (audienceConfig().showConfig) {
+          <div class="eaf-field" [class.eaf-field--error]="form.controls.environment.touched && form.controls.environment.invalid">
+            <label class="eaf-label" for="eaf-environment">Environment <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-environment" class="eaf-select" formControlName="environment">
+                <option value="sandbox">Epic Sandbox</option>
+                <option value="non-production">Customer Non-Production</option>
+                <option value="production">Customer Production</option>
+              </select>
+            </div>
+            <p class="eaf-hint">Decides which Client ID set applies. Epic issues separate IDs per environment.</p>
+          </div>
+
+          <div class="eaf-field eaf-field--full">
+            <label class="eaf-label" for="eaf-appName">App Name</label>
+            <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
+                   placeholder="e.g. FHIRBridge Provider Launch" />
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (audienceConfig().showConfig) {
+
+      <!-- ═══════════ SECTION 2: FHIR Base URL & Discovery ════════════════════ -->
+      <div class="eaf-section">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">2</span>
+          <span class="eaf-section-title">FHIR Base URL</span>
+        </div>
+
+        <div class="eaf-grid">
+          <div class="eaf-field eaf-field--full"
+               [class.eaf-field--error]="form.controls.epicBaseUrl.touched && form.controls.epicBaseUrl.invalid">
+            <label class="eaf-label" for="eaf-epicBaseUrl">FHIR Base URL <span class="eaf-req">*</span></label>
+            <div class="eaf-input-row">
+              <input id="eaf-epicBaseUrl" class="eaf-input" type="url" formControlName="epicBaseUrl"
+                     placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4" />
+              <button class="eaf-discover-btn" type="button"
+                      [disabled]="discStatus() === 'loading'"
+                      (click)="runDiscover()">
+                @if (discStatus() === 'loading') {
+                  <span class="eaf-spin"></span>&nbsp;Discovering…
+                } @else {
+                  ⚙ Discover
+                }
+              </button>
+            </div>
+            @if (form.controls.epicBaseUrl.touched && form.controls.epicBaseUrl.invalid) {
+              <p class="eaf-error-msg">
+                {{ form.controls.epicBaseUrl.errors?.['required'] ? 'FHIR Base URL is required.' : 'Enter a valid URL.' }}
+              </p>
+            }
+            <p class="eaf-hint">The per-customer value; also used as the <code>aud</code> in token requests. Calls <code>/.well-known/smart-configuration</code> to auto-resolve endpoints.</p>
+          </div>
+        </div>
+
+        @if (discStatus() === 'error') {
+          <div class="eaf-callout eaf-callout--err eaf-callout--sm">
+            Discovery failed. Check the URL and try again, or enter the endpoints manually below.
+          </div>
+        }
+      </div>
+
+      <!-- ═══════════ SECTION 3: OAuth Endpoints & SMART Settings ═════════════ -->
+      <div class="eaf-section">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">3</span>
+          <span class="eaf-section-title">OAuth Endpoints</span>
+          @if (discStatus() === 'done') {
+            <span class="eaf-badge eaf-badge--ok">✓ Auto-populated</span>
+          } @else {
+            <span class="eaf-badge-neutral">Manual entry</span>
+          }
+        </div>
+
+        <div class="eaf-grid">
+          <div class="eaf-field"
+               [class.eaf-field--error]="form.controls.tokenEndpoint.touched && form.controls.tokenEndpoint.invalid">
+            <label class="eaf-label" for="eaf-tokenEndpoint">
+              Token Endpoint URL
+              @if (discStatus() === 'done') { <span class="eaf-tag-auto">auto</span> }
+              <span class="eaf-req">*</span>
+            </label>
+            <input id="eaf-tokenEndpoint" class="eaf-input" type="url" formControlName="tokenEndpoint"
+                   placeholder="https://fhir.epic.com/…/oauth2/token"
+                   [class.eaf-input--autofilled]="discStatus() === 'done' && form.controls.tokenEndpoint.value" />
+            @if (form.controls.tokenEndpoint.touched && form.controls.tokenEndpoint.invalid) {
+              <p class="eaf-error-msg">Token Endpoint is required.</p>
+            }
+            <p class="eaf-hint">Auto-populated from <code>/.well-known/smart-configuration</code>. Keep manual box as fallback.</p>
+          </div>
+
+          <div class="eaf-field"
+               [class.eaf-field--error]="form.controls.authzEndpoint.touched && form.controls.authzEndpoint.invalid">
+            <label class="eaf-label" for="eaf-authzEndpoint">
+              Authorization Endpoint URL
+              @if (discStatus() === 'done') { <span class="eaf-tag-auto">auto</span> }
+              <span class="eaf-req">*</span>
+            </label>
+            <input id="eaf-authzEndpoint" class="eaf-input" type="url" formControlName="authzEndpoint"
+                   placeholder="https://fhir.epic.com/…/oauth2/authorize"
+                   [class.eaf-input--autofilled]="discStatus() === 'done' && form.controls.authzEndpoint.value" />
+            @if (form.controls.authzEndpoint.touched && form.controls.authzEndpoint.invalid) {
+              <p class="eaf-error-msg">Authorization Endpoint is required.</p>
+            }
+            <p class="eaf-hint">Pull from <code>/.well-known/smart-configuration</code>; same discovery source.</p>
+          </div>
+
+          <!-- SMART on FHIR version — fixed to R4 -->
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-smartVersion">SMART on FHIR Version <span class="eaf-tag-auto">auto</span></label>
+            <input id="eaf-smartVersion" class="eaf-input eaf-input--readonly" type="text" readonly
+                   value="SMART App Launch 2.0 — R4" />
+            <p class="eaf-hint">Fixed to R4 — not configurable.</p>
+          </div>
+
+          <!-- SMART scope version — fixed to whatever FHIRBridge implements -->
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-scopeVersion">SMART Scope Version <span class="eaf-tag-auto">auto</span></label>
+            <input id="eaf-scopeVersion" class="eaf-input eaf-input--readonly" type="text" readonly
+                   value="v2 — granular scopes" />
+            <p class="eaf-hint">Fixed to whatever FHIRBridge has implemented — not configurable.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ SECTION 4: Credentials ══════════════════════════════════ -->
+      <div class="eaf-section">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">4</span>
+          <span class="eaf-section-title">Credentials</span>
+        </div>
+
+        <div class="eaf-grid">
+          <div class="eaf-field" [class.eaf-field--error]="form.controls.clientId.touched && form.controls.clientId.invalid">
+            <label class="eaf-label" for="eaf-clientId">{{ clientIdLabel() }} <span class="eaf-req">*</span></label>
+            <input id="eaf-clientId" class="eaf-input" type="text" formControlName="clientId"
+                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            @if (form.controls.clientId.touched && form.controls.clientId.invalid) {
+              <p class="eaf-error-msg">Client ID is required.</p>
+            }
+            <p class="eaf-hint">From the customer's own Epic app registration (Production/Non-Production based on Environment).</p>
+          </div>
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-authMethod">Client Auth Method</label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-authMethod" class="eaf-select" formControlName="authMethod">
+                <option value="secret">Client Secret</option>
+                <option value="jwt">JWT / Private Key (JWKS)</option>
+              </select>
+            </div>
+            <p class="eaf-hint">Depends on which auth method your app implements in Epic — show only the relevant one.</p>
+          </div>
+
+          @if (showSecret()) {
+            <div class="eaf-field eaf-field--full" [class.eaf-field--error]="form.controls.clientSecret.touched && form.controls.clientSecret.invalid">
+              <label class="eaf-label" for="eaf-clientSecret">Client Secret <span class="eaf-req">*</span></label>
+              <input id="eaf-clientSecret" class="eaf-input" type="password" formControlName="clientSecret"
+                     placeholder="Stored securely — never logged" autocomplete="new-password" />
+              @if (form.controls.clientSecret.touched && form.controls.clientSecret.invalid) {
+                <p class="eaf-error-msg">Client Secret is required.</p>
+              }
+              <p class="eaf-hint">Store in a Key Vault in production. Encrypted at rest.</p>
+            </div>
+          }
+
+          @if (showJwt()) {
+            <div class="eaf-field" [class.eaf-field--error]="form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid">
+              <label class="eaf-label" for="eaf-jwksUrl">Private Key / JWKS URL <span class="eaf-req">*</span></label>
+              <input id="eaf-jwksUrl" class="eaf-input" type="url" formControlName="jwksUrl"
+                     placeholder="https://fhirbridge.com/.well-known/jwks.json" />
+              @if (form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid) {
+                <p class="eaf-error-msg">Enter a valid JWKS URL.</p>
+              }
+              <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in Epic APP).</p>
+            </div>
+            <div class="eaf-field">
+              <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Reference</label>
+              <input id="eaf-privateKeyRef" class="eaf-input" type="text" formControlName="privateKeyRef"
+                     placeholder="e.g. azure-kv://epic-private-key" />
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- ═══════════ SECTION 5: Resource Type & Scopes ════════════════════════ -->
+      <div class="eaf-section">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">5</span>
+          <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
+          <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
+        </div>
+        <p class="eaf-section-sub">The FHIR resource types to fetch from Epic as configured by FHIRBridge.</p>
+
+        @if (form.controls.resources.touched && form.controls.resources.invalid) {
+          <div class="eaf-callout eaf-callout--err eaf-callout--sm">Select at least one FHIR resource type.</div>
+        }
+
+        <div class="eaf-resources-grid" data-control="resources">
+          <label class="eaf-res-all">
+            <input type="checkbox"
+                   [checked]="selectedResources().length === resources.length"
+                   [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
+                   (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
+            <span>Select all</span>
+          </label>
+          @for (r of resources; track r) {
+            <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
+              <input type="checkbox"
+                     [checked]="selectedResources().includes(r)"
+                     (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
+              <span class="eaf-res-name">{{ r }}</span>
+            </label>
+          }
+        </div>
+
+        <!-- Scopes — auto/fixed by app, exposed as readonly field -->
+        @if (selectedResources().length > 0) {
+          <div class="eaf-scope-wrap">
+            <div class="eaf-scope-head">
+              <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
+              <span class="eaf-tag-auto">auto · fixed by app</span>
+              <span class="eaf-scope-note">Hardcoded to match the APIs registered in Epic.</span>
+            </div>
+            <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
+          </div>
+        }
+      </div>
+
+      <!-- ═══════════ SECTION 6: Application URLs ══════════════════════════════ -->
+      <div class="eaf-section">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">6</span>
+          <span class="eaf-section-title">Application URLs</span>
+        </div>
+
+        <div class="eaf-grid">
+          @if (audienceConfig().showLaunchUrl) {
+            <div class="eaf-field eaf-field--full"
+                 [class.eaf-field--error]="form.controls.launchUrl.touched && form.controls.launchUrl.invalid">
+              <label class="eaf-label" for="eaf-launchUrl">Launch URL <span class="eaf-req">*</span></label>
+              <input id="eaf-launchUrl" class="eaf-input" type="url" formControlName="launchUrl"
+                     placeholder="https://fhirbridge.com/launch" />
+              @if (form.controls.launchUrl.touched && form.controls.launchUrl.invalid) {
+                <p class="eaf-error-msg">Enter a valid Launch URL.</p>
+              }
+              <p class="eaf-hint">Must be registered in Epic as a valid launch URI.</p>
+            </div>
+          }
+
+          @if (audienceConfig().redirectMode === 'readonly') {
+            <div class="eaf-field eaf-field--full">
+              <label class="eaf-label" for="eaf-callbackUrl">Redirect URI <span class="eaf-tag-auto">auto</span></label>
+              <div class="eaf-input-row">
+                <input id="eaf-callbackUrl" class="eaf-input eaf-input--readonly" type="text" formControlName="callbackUrl" readonly />
+                <button class="eaf-discover-btn" type="button" (click)="copyRedirectUri()">⧉ Copy</button>
+              </div>
+              <p class="eaf-hint">Your app's redirect URI — copy this into Epic's app registration. Not editable here.</p>
+            </div>
+          } @else {
+            <div class="eaf-field eaf-field--full"
+                 [class.eaf-field--error]="form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid">
+              <label class="eaf-label" for="eaf-callbackUrl">Callback URL <span class="eaf-req">*</span></label>
+              <input id="eaf-callbackUrl" class="eaf-input" type="url" formControlName="callbackUrl"
+                     placeholder="https://fhirbridge.com/oauth/callback" />
+              @if (form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid) {
+                <p class="eaf-error-msg">Enter a valid Callback URL.</p>
+              }
+              <p class="eaf-hint">URL where Epic redirects after patient login / consent. <strong>Must be registered in Epic.</strong></p>
+            </div>
+          }
+        </div>
+      </div>
+
+      @if (audienceConfig().showCdsHooks) {
+        <!-- ═══════════ SECTION 7: CDS Hooks ════════════════════════════════════ -->
+        <div class="eaf-section">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">7</span>
+            <span class="eaf-section-title">CDS Hooks</span>
+          </div>
+
+          <div class="eaf-grid">
+            <div class="eaf-field"
+                 [class.eaf-field--error]="form.controls.cdsDiscoveryUrl.touched && form.controls.cdsDiscoveryUrl.invalid">
+              <label class="eaf-label" for="eaf-cdsDiscoveryUrl">CDS Discovery URL <span class="eaf-req">*</span></label>
+              <input id="eaf-cdsDiscoveryUrl" class="eaf-input" type="text" formControlName="cdsDiscoveryUrl" placeholder="/cds-services" />
+              @if (form.controls.cdsDiscoveryUrl.touched && form.controls.cdsDiscoveryUrl.invalid) {
+                <p class="eaf-error-msg">CDS Discovery URL is required.</p>
+              }
+            </div>
+
+            <div class="eaf-field"
+                 [class.eaf-field--error]="form.controls.cdsServiceEndpoint.touched && form.controls.cdsServiceEndpoint.invalid">
+              <label class="eaf-label" for="eaf-cdsServiceEndpoint">Service Endpoint <span class="eaf-req">*</span></label>
+              <input id="eaf-cdsServiceEndpoint" class="eaf-input" type="text" formControlName="cdsServiceEndpoint" placeholder="/cds-services/[id]" />
+              @if (form.controls.cdsServiceEndpoint.touched && form.controls.cdsServiceEndpoint.invalid) {
+                <p class="eaf-error-msg">Service Endpoint is required.</p>
+              }
+            </div>
+
+            <div class="eaf-field"
+                 [class.eaf-field--error]="form.controls.cdsTriggerHook.touched && form.controls.cdsTriggerHook.invalid">
+              <label class="eaf-label" for="eaf-cdsTriggerHook">Trigger Hook <span class="eaf-req">*</span></label>
+              <input id="eaf-cdsTriggerHook" class="eaf-input" type="text" formControlName="cdsTriggerHook" placeholder="order-sign/…" />
+              @if (form.controls.cdsTriggerHook.touched && form.controls.cdsTriggerHook.invalid) {
+                <p class="eaf-error-msg">Trigger Hook is required.</p>
+              }
+            </div>
+
+            <div class="eaf-field"
+                 [class.eaf-field--error]="form.controls.cdsReturnCard.touched && form.controls.cdsReturnCard.invalid">
+              <label class="eaf-label" for="eaf-cdsReturnCard">Return Card + EHR Launch <span class="eaf-req">*</span></label>
+              <input id="eaf-cdsReturnCard" class="eaf-input" type="text" formControlName="cdsReturnCard" placeholder="Return card launch link" />
+              @if (form.controls.cdsReturnCard.touched && form.controls.cdsReturnCard.invalid) {
+                <p class="eaf-error-msg">Return Card + EHR Launch is required.</p>
+              }
+            </div>
+
+            <div class="eaf-field eaf-field--full"
+                 [class.eaf-field--error]="form.controls.cdsDtrQuestionnaire.touched && form.controls.cdsDtrQuestionnaire.invalid">
+              <label class="eaf-label" for="eaf-cdsDtrQuestionnaire">DTR Questionnaire <span class="eaf-req">*</span></label>
+              <input id="eaf-cdsDtrQuestionnaire" class="eaf-input" type="text" formControlName="cdsDtrQuestionnaire" placeholder="Questionnaire identifier or URL" />
+              @if (form.controls.cdsDtrQuestionnaire.touched && form.controls.cdsDtrQuestionnaire.invalid) {
+                <p class="eaf-error-msg">DTR Questionnaire is required.</p>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ═══════════ Connection Test ═══════════════════════════════════════════ -->
+      <div class="eaf-section eaf-section--last">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">{{ audienceConfig().showCdsHooks ? '8' : '7' }}</span>
+          <span class="eaf-section-title">Connection Test</span>
+          <span class="eaf-hint-inline">n/a — action, not a field</span>
+        </div>
+
+        <div class="eaf-test-row">
+          <button class="eaf-test-btn" type="button"
+                  [disabled]="testStatus() === 'running'"
+                  (click)="runTestConnection()">
+            @if (testStatus() === 'running') {
+              <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
+            } @else if (testStatus() === 'ok') {
+              ✓ Test passed — run again
+            } @else if (testStatus() === 'fail') {
+              ✗ Test failed — retry
+            } @else {
+              ⚡ Test Connection
+            }
+          </button>
+
+          @if (testStatus() === 'ok') {
+            <span class="eaf-test-result eaf-test-result--ok">
+              Token endpoint reachable and responding.
+            </span>
+          } @else if (testStatus() === 'fail') {
+            <span class="eaf-test-result eaf-test-result--fail">
+              Connection failed. Check the token endpoint URL and credentials.
+            </span>
+          } @else {
+            <span class="eaf-test-note">
+              Validates before save — checks token endpoint is reachable and credentials are accepted.
+            </span>
+          }
+        </div>
+      </div>
+
+    } @else {
+
+      <!-- ═══════════ No configuration needed for this audience ═══════════════ -->
+      <div class="eaf-section eaf-section--last">
+        <div class="eaf-callout eaf-callout--info">
+          No additional configuration is required for the {{ audienceLabel() }} audience.
+        </div>
+      </div>
+
+    }
+
+  </div><!-- /eaf-body -->
+
+  <!-- ── Sticky footer ─────────────────────────────────────────────────────── -->
+  <div class="eaf-footer">
+    <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">Cancel</button>
+    <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
+      ✓ Add to Pipeline
+    </button>
+  </div>
+
+</div>
