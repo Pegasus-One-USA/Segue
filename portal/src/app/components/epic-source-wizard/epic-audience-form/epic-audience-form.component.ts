@@ -24,6 +24,38 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
   try { new URL(ctrl.value); return null; } catch { return { url: true }; }
 }
 
+/**
+ * Determines the SMART scope version a source uses. Prefers the explicit permission-v1/permission-v2 capability
+ * tokens; when absent (Epic frequently omits them) it infers from scopes_supported — a granular v2 suffix like
+ * `.rs` / `.cruds` implies v2, coarse `.read` / `.write` implies v1. Returns null when nothing is conclusive.
+ */
+// True when an advertised scope (possibly with '*' wildcards in the resource/action segment) covers a concrete scope —
+// e.g. advertised "user/*.rs" covers "user/Patient.rs". Mirrors the backend ScopeGeneratorService matcher.
+function scopeWildcardCovers(advertised: string, scope: string): boolean {
+  const split = (s: string): [string, string, string] => {
+    const slash = s.indexOf('/');
+    if (slash < 0) return [s, '', ''];
+    const prefix = s.slice(0, slash);
+    const rest = s.slice(slash + 1);
+    const dot = rest.lastIndexOf('.');
+    return dot < 0 ? [prefix, rest, ''] : [prefix, rest.slice(0, dot), rest.slice(dot + 1)];
+  };
+  const [ap, ar, aa] = split(advertised);
+  const [sp, sr, sa] = split(scope);
+  return ap.toLowerCase() === sp.toLowerCase()
+    && (ar === '*' || ar.toLowerCase() === sr.toLowerCase())
+    && (aa === '*' || aa.toLowerCase() === sa.toLowerCase());
+}
+
+function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
+  if (capabilities.includes('permission-v2')) return 'v2';
+  if (capabilities.includes('permission-v1')) return 'v1';
+  const suffix = (s: string): string => (s.includes('.') ? s.slice(s.lastIndexOf('.') + 1) : '').toLowerCase();
+  if (scopesSupported.some(s => /^[cruds]+$/.test(suffix(s)))) return 'v2';
+  if (scopesSupported.some(s => suffix(s) === 'read' || suffix(s) === 'write')) return 'v1';
+  return null;
+}
+
 // ── Per-audience field visibility/requirement registry ─────────────────────────
 // Adding a new audience means adding one entry here — no template/validator edits.
 // All four audiences now show a connection form; only the redirect/launch/retrieval
@@ -222,9 +254,14 @@ export class EpicAudienceFormComponent implements OnInit {
   }
   protected get resourcesAreAuto(): boolean { return this.discoveredResourceTypes().length > 0; }
 
+  /** Editing an existing source: resource types are locked (identity-defining) — shown prepopulated but disabled. */
+  protected get isEditing(): boolean { return this.wiz.isEditing(); }
+
   protected readonly discStatus   = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
   protected readonly discValues   = signal<FullDiscoveredValues | null>(null);
   protected readonly discoveredScopes = signal<string[]>([]);
+  // True once discovery actually determined the SMART scope version (vs. leaving the default) — drives the badge.
+  protected readonly scopeVersionAuto = signal(false);
   protected readonly testStatus   = signal<'idle' | 'running' | 'ok' | 'fail'>('idle');
 
   protected readonly form = this.fb.nonNullable.group({
@@ -366,6 +403,26 @@ export class EpicAudienceFormComponent implements OnInit {
     return [...fixed, ...res.map(r => `${cfg.scopePrefix}/${r}.${suffix}`)].join('\n');
   });
 
+  /** True once Discover has fetched the endpoint's advertised scopes — lets the panel say "validated against Epic". */
+  protected get scopesValidatedByDiscovery(): boolean { return this.discoveredScopes().length > 0; }
+
+  /**
+   * Resource scopes the generated set requests that the source did NOT advertise in its SMART discovery document —
+   * mirrors the backend ScopeGeneratorService validation (exact or wildcard match). Base scopes (openid/launch/…) are
+   * not validated because servers rarely enumerate them in scopes_supported. Empty until Discover has run.
+   */
+  protected readonly unsupportedScopes = computed(() => {
+    const advertised = this.discoveredScopes();
+    if (advertised.length === 0) {
+      return [] as string[];
+    }
+    return this.scopeString()
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter(s => /^[^/]+\/[^.]+\.[^.]+$/.test(s)) // resource-shaped scopes only
+      .filter(s => !advertised.some(a => a === s || scopeWildcardCovers(a, s)));
+  });
+
   ngOnInit(): void {
     if (this.wiz.isEditing()) {
       // Pre-populate all fields from saved node data
@@ -397,6 +454,15 @@ export class EpicAudienceFormComponent implements OnInit {
     }
     if (this.wiz.resources().length) {
       this.form.controls.resources.setValue(this.wiz.resources());
+      // Editing: the saved resource types define the source's identity, so render them prepopulated (and disabled in
+      // the template) instead of the pre-discovery empty-state. Seed the discovered list + mark discovery done so the
+      // picker shows exactly the saved set.
+      if (this.wiz.isEditing()) {
+        this.discoveredResourceTypes.set(this.wiz.resources());
+        if (this.discStatus() !== 'done') {
+          this.discStatus.set('done');
+        }
+      }
     }
     if (this.wiz.stepName()) {
       this.form.controls.appName.setValue(this.wiz.stepName());
@@ -569,11 +635,15 @@ export class EpicAudienceFormComponent implements OnInit {
         this.discoveredScopes.set(result.scopesSupported);
         // Resource Type: Auto — from the source's /metadata.
         this.discoveredResourceTypes.set(result.resourceTypes);
-        // SMART Scope Version: Auto — Epic advertises permission-v1 / permission-v2 in its capabilities.
-        if (result.capabilities.includes('permission-v2')) {
-          this.form.controls.scopeVersion.setValue('v2');
-        } else if (result.capabilities.includes('permission-v1')) {
-          this.form.controls.scopeVersion.setValue('v1');
+        // SMART Scope Version: Auto — prefer Epic's advertised permission-v1/permission-v2 capabilities; if neither is
+        // present (Epic often omits them), infer from the shape of scopes_supported — granular v2 suffixes (.rs/.cruds/…)
+        // vs coarse v1 (.read/.write). Only badge it as auto-detected when we actually determined a version.
+        const detected = detectScopeVersion(result.capabilities, result.scopesSupported);
+        if (detected) {
+          this.form.controls.scopeVersion.setValue(detected);
+          this.scopeVersionAuto.set(true);
+        } else {
+          this.scopeVersionAuto.set(false);
         }
         this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
         this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);

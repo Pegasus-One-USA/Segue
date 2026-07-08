@@ -50,6 +50,15 @@ export interface WorkflowDefinitionRequest {
   isEnabled: boolean;
   nodes: WorkflowNodeRequest[];
   edges: WorkflowEdgeRequest[];
+  trigger?: WorkflowTriggerRequest | null;
+}
+
+/** Workflow-level schedule (Backend-Systems workflows). Omit / Manual = run on demand. Matches the backend DTO. */
+export interface WorkflowTriggerRequest {
+  type: 'Manual' | 'Schedule' | 'Poll';
+  scheduleExpression?: string | null;
+  intervalMinutes?: number | null;
+  backfillOnFirstRun?: boolean;
 }
 
 export interface WorkflowNodeDto extends WorkflowNodeRequest {
@@ -159,6 +168,7 @@ export interface WorkflowBuildRequest {
   sources?: SourceBuildSpec[];
   destinations?: DestinationBuildSpec[];
   mappings?: MappingBuildSpec[];
+  trigger?: WorkflowTriggerRequest | null;
 }
 
 export interface WorkflowBuildResult {
@@ -189,6 +199,10 @@ export interface WorkflowSummary {
 
 export interface WorkflowLaunchUrl {
   launchUrl: string;
+  /** 'ehr-launch' → register in the EHR (invoked by it); 'standalone' | 'patient' → opened directly. */
+  mode?: 'ehr-launch' | 'standalone' | 'patient';
+  /** True when the URL is opened directly by a user; false when the EHR invokes it with iss + launch. */
+  opensDirectly?: boolean;
 }
 
 /** A capped sample of rows read back from a relational destination table ("View destination data"). */

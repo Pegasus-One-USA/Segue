@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(dotnet run *)",
+      "Bash(tee /tmp/fhirbridge-api.log)",
+      "Bash(npm start *)",
+      "Bash(tee /tmp/fhirbridge-portal.log)",
+      "Read(//tmp/**)",
+      "Bash(netstat -ano)",
+      "Bash(rm -f /tmp/fhirbridge-api.log)",
+      "Bash(curl -sk -o /dev/null -w \"%{http_code}\\\\n\" https://localhost:5000/swagger/index.html)",
+      "Bash(curl -sk -o /dev/null -w \"%{http_code}\\\\n\" https://localhost:5000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:4200/)",
+      "Bash(curl -sk -o /dev/null -w \"API swagger: %{http_code}\\\\n\" https://localhost:5000/swagger/index.html)",
+      "Bash(powershell -Command \"Get-Process -Id 7832 | Select-Object Id,ProcessName,StartTime\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/swagger/index.html)",
+      "Bash(powershell -Command \"Stop-Process -Id 7832 -Force; Start-Sleep -Seconds 2; if \\(Get-Process -Id 7832 -ErrorAction SilentlyContinue\\) { 'still running' } else { 'stopped' }\")",
+      "Bash(curl -sk -o /dev/null -w '%{http_code}' https://localhost:5000/swagger/index.html)",
+      "Bash(echo \"API https swagger: $\\(curl -sk -o /dev/null -w '%{http_code}' https://localhost:5000/swagger/index.html\\)\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200/)",
+      "Bash(echo \"Portal: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200/\\)\")"
+    ]
+  }
+}

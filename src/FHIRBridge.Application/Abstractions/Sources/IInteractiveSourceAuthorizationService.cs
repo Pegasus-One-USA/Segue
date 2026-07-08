@@ -1,3 +1,5 @@
+using FHIRBridge.SharedKernel.Enums;
+
 namespace FHIRBridge.Application.Abstractions.Sources;
 
 /// <summary>
@@ -55,6 +57,20 @@ public interface IInteractiveSourceAuthorizationService
 
     /// <summary>Builds the opaque, encrypted launch token for a workflow graph: launching it runs that workflow (its source node's connection drives the OAuth + trusted-issuer validation).</summary>
     string BuildWorkflowLaunchContextToken(Guid workflowId);
+
+    /// <summary>
+    /// Starts a standalone / patient interactive sign-in directly from an encrypted launch-context token — no EHR
+    /// <c>iss</c>/<c>launch</c> required (the app is opened directly by a clinician or patient). Resolves the source
+    /// from the workflow/route in the context; on callback the launched workflow/route is run. Throws if the resolved
+    /// source is configured for EHR launch (which must go through the iss/launch entry point instead).
+    /// </summary>
+    Task<Uri> StartInteractiveFromContextAsync(string launchContext, string redirectUri, CancellationToken cancellationToken);
+
+    /// <summary>Resolves the SMART application type of the source behind a workflow (via its source node) — lets callers pick the right launch-URL shape.</summary>
+    Task<ApplicationType?> GetWorkflowApplicationTypeAsync(Guid workflowId, CancellationToken cancellationToken);
+
+    /// <summary>Resolves the SMART application type of the source behind a pipeline route (via its mapping profile).</summary>
+    Task<ApplicationType?> GetRouteApplicationTypeAsync(Guid routeId, CancellationToken cancellationToken);
 }
 
 /// <summary>Which source connection was authorized once the callback completes.</summary>

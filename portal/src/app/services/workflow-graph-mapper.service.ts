@@ -9,6 +9,7 @@ import {
   WorkflowCatalogItem,
   WorkflowDefinitionDto,
   WorkflowDefinitionRequest,
+  WorkflowTriggerRequest,
   WorkflowEdgeRequest,
   WorkflowNodeCategory,
   WorkflowNodeRequest,
@@ -46,7 +47,7 @@ export class WorkflowGraphMapperService {
   private readonly store = inject(PipelineStore);
   private readonly workflowApi = inject(WorkflowApiService);
 
-  toRequest(name: string): WorkflowDefinitionRequest {
+  toRequest(name: string, trigger?: WorkflowTriggerRequest | null): WorkflowDefinitionRequest {
     const catalog = this.workflowApi.catalog();
     const nodes = this.store.nodes();
     const edges = this.store.edges();
@@ -101,6 +102,7 @@ export class WorkflowGraphMapperService {
       isEnabled: true,
       nodes: requests,
       edges: emittedEdges,
+      trigger: trigger ?? null,
     };
   }
 

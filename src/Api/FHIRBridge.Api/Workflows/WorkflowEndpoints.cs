@@ -140,7 +140,8 @@ public static class WorkflowEndpoints
                 request.Name,
                 request.IsEnabled,
                 request.Nodes.Select(node => nodes[node.Id]).ToArray(),
-                request.Edges);
+                request.Edges,
+                request.Trigger);
 
             var workflow = BuildWorkflow(Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(workflow, cancellationToken);
@@ -510,6 +511,38 @@ public static class WorkflowEndpoints
             }
         }
 
+        workflow.SetTrigger(MapTrigger(request.Trigger));
         return workflow;
+    }
+
+    // Validates + maps the optional trigger. Manual (or absent) → null (run on demand). Schedule requires a cron with
+    // 5 or 6 fields; Poll requires a positive interval. Throws (→ 400) on malformed input.
+    private static WorkflowTrigger? MapTrigger(WorkflowTriggerRequest? request)
+    {
+        if (request is null || request.Type == WorkflowTriggerType.Manual)
+        {
+            return null;
+        }
+
+        if (request.Type == WorkflowTriggerType.Schedule)
+        {
+            var fieldCount = (request.ScheduleExpression ?? string.Empty)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+            if (fieldCount is not (5 or 6))
+            {
+                throw new InvalidOperationException("A Schedule trigger requires a 5- or 6-field cron expression.");
+            }
+        }
+
+        if (request.Type == WorkflowTriggerType.Poll && request.IntervalMinutes is not > 0)
+        {
+            throw new InvalidOperationException("A Poll trigger requires a positive interval in minutes.");
+        }
+
+        return new WorkflowTrigger(
+            request.Type,
+            request.ScheduleExpression,
+            request.IntervalMinutes,
+            request.BackfillOnFirstRun);
     }
 }

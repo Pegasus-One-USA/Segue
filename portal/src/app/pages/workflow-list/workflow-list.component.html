@@ -181,13 +181,27 @@
         <button class="modal-close" type="button" (click)="closeLaunchModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-sub">Register this URL with the EHR / identity provider to launch <strong>{{ m.name }}</strong>.</p>
+        @if (m.opensDirectly) {
+          <p class="modal-sub">
+            Share this link to launch <strong>{{ m.name }}</strong>. The
+            {{ m.mode === 'patient' ? 'patient' : 'clinician' }} opens it directly and signs in —
+            no EHR launch needed.
+          </p>
+        } @else {
+          <p class="modal-sub">
+            Register this URL as the <strong>Launch URL</strong> of your Epic app for <strong>{{ m.name }}</strong>.
+            It is invoked <strong>by Epic</strong> (which appends <code>iss</code> + <code>launch</code>) — opening it
+            directly will return “Missing iss or launch”.
+          </p>
+        }
         <div class="url-box">
           <code>{{ m.url }}</code>
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" type="button" (click)="copy(m.url)">Copy URL</button>
-          <a class="btn-primary is-launch" [href]="m.url" target="_blank" rel="noopener">Open</a>
+          @if (m.opensDirectly) {
+            <a class="btn-primary is-launch" [href]="m.url" target="_blank" rel="noopener">Open</a>
+          }
         </div>
       </div>
     </div>

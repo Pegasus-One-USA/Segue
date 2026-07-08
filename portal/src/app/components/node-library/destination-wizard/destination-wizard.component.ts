@@ -89,6 +89,20 @@ export interface MappingRow {
   tableName:  string;
 }
 
+/** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
+function genericResourceDef(r: string): ResourceDef {
+  return {
+    scope: `user/${r}.read`,
+    sqlTable: `dbo.${r}`,
+    csvFile: `${r.toLowerCase()}.csv`,
+    fields: [
+      { label: `${r} ID`, path: `${r}.id`,                sqlColumn: `Source${r}Id`,     csvColumn: `${r}Id` },
+      { label: 'Status',  path: `${r}.status`,            sqlColumn: 'Status',           csvColumn: 'Status' },
+      { label: 'Subject', path: `${r}.subject.reference`, sqlColumn: 'SubjectReference', csvColumn: 'SubjectReference' },
+    ],
+  };
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 @Component({
@@ -105,6 +119,8 @@ export class DestinationWizardComponent implements OnInit {
   readonly destType   = input.required<'sql' | 'csv'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
+  /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
+  readonly sourceResources = input<string[]>([]);
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
@@ -152,7 +168,12 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   // ── data groups ───────────────────────────────────────────────────────────
-  readonly ALL_RESOURCES   = Object.keys(DEST_RESOURCE_DEFS);
+  // The groups offered come from the upstream source's selected resource types when available; otherwise the
+  // built-in catalog is the fallback (e.g. a destination added before any source is configured).
+  readonly availableGroups = computed(() => {
+    const src = this.sourceResources();
+    return src.length ? src : Object.keys(DEST_RESOURCE_DEFS);
+  });
   readonly selectedResources = signal<string[]>(['Patient', 'Observation', 'Encounter']);
 
   // ── mapping rows ──────────────────────────────────────────────────────────
@@ -170,7 +191,12 @@ export class DestinationWizardComponent implements OnInit {
   // ── computed helpers ──────────────────────────────────────────────────────
   readonly isSql        = computed(() => this.destType() === 'sql');
   readonly destLabel    = computed(() => this.destType() === 'sql' ? 'SQL Server' : 'CSV');
-  readonly resourceKeys = computed(() => this.selectedResources().filter(r => DEST_RESOURCE_DEFS[r]));
+  readonly resourceKeys = computed(() => this.selectedResources());
+
+  /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
+  private defFor(r: string): ResourceDef {
+    return DEST_RESOURCE_DEFS[r] ?? genericResourceDef(r);
+  }
 
   readonly reviewSummary = computed(() => {
     const fv = this.isSql() ? this.sqlForm.value : this.csvForm.value;
@@ -209,7 +235,14 @@ export class DestinationWizardComponent implements OnInit {
 
   ngOnInit(): void {
     const edit = this.editNode();
-    if (edit) this._populateFromNode(edit);
+    if (edit) {
+      this._populateFromNode(edit);
+      return;
+    }
+    // New destination: default the selected data groups to whatever the upstream source pulls, so the destination
+    // mirrors the source's Resource Type selection instead of a hardcoded set.
+    const src = this.sourceResources();
+    if (src.length) this.selectedResources.set([...src]);
   }
 
   // ── step helpers ──────────────────────────────────────────────────────────
@@ -354,15 +387,15 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── business-field selection ───────────────────────────────────────────────
   availableFields(r: string): ResourceFieldDef[] {
-    return DEST_RESOURCE_DEFS[r]?.fields ?? [];
+    return this.defFor(r).fields;
   }
 
   changeBusinessField(i: number, label: string): void {
     this.mappingRows.update(rows => {
       const next = [...rows];
       const row  = next[i];
-      const def  = DEST_RESOURCE_DEFS[row.resource];
-      const f    = def?.fields.find(x => x.label === label);
+      const def  = this.defFor(row.resource);
+      const f    = def.fields.find(x => x.label === label);
       next[i] = {
         ...row,
         fieldLabel: label,
@@ -380,9 +413,9 @@ export class DestinationWizardComponent implements OnInit {
   private _rebuildRows(resources: string[], type: 'sql' | 'csv'): void {
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
-      const def = DEST_RESOURCE_DEFS[r];
-      if (!def || targets[r]) continue;
+      if (targets[r]) continue;
       // Seed the per-resource target once; preserve any value the user has already typed.
+      const def = this.defFor(r);
       targets[r] = type === 'sql' ? def.sqlTable : def.csvFile;
     }
     this.targetByResource.set(targets);

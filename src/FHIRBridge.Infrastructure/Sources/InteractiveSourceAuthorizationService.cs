@@ -14,6 +14,7 @@ using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Enums;
+using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
@@ -162,6 +163,65 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
     }
 
+
+    public async Task<Uri> StartInteractiveFromContextAsync(
+      string launchContext,
+      string redirectUri,
+      CancellationToken cancellationToken)
+    {
+        var context = _launchTokenProtector.UnprotectContext(launchContext)
+            ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
+
+        SourceConnection sourceConnection;
+        Guid? routeId = null;
+        Guid? workflowId = null;
+        if (context.WorkflowId is { } wf)
+        {
+            sourceConnection = await ResolveWorkflowSourceAsync(wf, cancellationToken);
+            workflowId = wf;
+        }
+        else if (context.RouteId is { } rt)
+        {
+            (sourceConnection, routeId) = await ResolveRouteSourceAsync(rt, cancellationToken);
+        }
+        else
+        {
+            throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
+        }
+
+        // This entry point is for the directly-opened flows (provider standalone / patient). An EHR-launch source has
+        // no patient context without an iss/launch token, so it must use the /oauth/launch entry instead.
+        if (sourceConnection.ApplicationType is ApplicationType.EhrLaunch)
+        {
+            throw new InvalidOperationException(
+                "This source is configured for EHR launch; open it from the EHR (which supplies iss + launch) rather than directly.");
+        }
+
+        var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken);
+        var clientId = RequireClientId(sourceConnection);
+
+        var source = new FhirSourceConfiguration(
+            SourceType: MapSourceType(sourceConnection.SourceSystemType),
+            Name: sourceConnection.Name,
+            BaseUrl: sourceConnection.BaseUrl,
+            TokenEndpoint: smartConfiguration.TokenEndpoint,
+            ClientId: clientId,
+            KeyId: null,
+            PrivateKeyPem: null,
+            Scopes: ApplyPatientSelection(
+                sourceConnection.Authentication.Scopes,
+                sourceConnection.Interactive?.PatientSelectionMethod),
+            SourceConnectionId: sourceConnection.Id,
+            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
+
+        var authorizationUrl = await IssueAuthorizationAsync(
+            source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
+
+        await RecordAuditAsync(sourceConnection.Id, "InteractiveAuthorizationStarted", "Started",
+            $"Standalone/patient OAuth sign-in started for {sourceConnection.Name}.", cancellationToken);
+
+        return authorizationUrl;
+    }
     public async Task<Uri> StartStandaloneFromContextAsync(
         string launchContext,
         string redirectUri,
@@ -224,6 +284,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         return authorizationUrl;
     }
+
+
+    public async Task<ApplicationType?> GetWorkflowApplicationTypeAsync(Guid workflowId, CancellationToken cancellationToken) =>
+    (await ResolveWorkflowSourceAsync(workflowId, cancellationToken)).ApplicationType;
+
+    public async Task<ApplicationType?> GetRouteApplicationTypeAsync(Guid routeId, CancellationToken cancellationToken) =>
+        (await ResolveRouteSourceAsync(routeId, cancellationToken)).Source.ApplicationType;
 
     private async Task<Uri> StartEhrLaunchCoreAsync(
         SourceConnection sourceConnection,

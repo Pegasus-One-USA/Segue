@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Sources;
+using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -71,10 +72,11 @@ public sealed class OAuthController : ControllerBase
     [Authorize]
     [HttpGet("pipelines/{routeId:guid}/launch-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetLaunchUrl(Guid routeId)
+    public async Task<IActionResult> GetLaunchUrl(Guid routeId, CancellationToken cancellationToken)
     {
+        var applicationType = await _authorizationService.GetRouteApplicationTypeAsync(routeId, cancellationToken);
         var context = _authorizationService.BuildLaunchContextToken(routeId);
-        return Ok(new { launchUrl = BuildLaunchUri(context) });
+        return Ok(BuildLaunchResponse(applicationType, context));
     }
 
     /// <summary>
@@ -84,10 +86,11 @@ public sealed class OAuthController : ControllerBase
     [Authorize]
     [HttpGet("workflows/{workflowId:guid}/launch-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetWorkflowLaunchUrl(Guid workflowId)
+    public async Task<IActionResult> GetWorkflowLaunchUrl(Guid workflowId, CancellationToken cancellationToken)
     {
+        var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
         var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId);
-        return Ok(new { launchUrl = BuildLaunchUri(context) });
+        return Ok(BuildLaunchResponse(applicationType, context));
     }
 
     /// <summary>
@@ -153,6 +156,25 @@ public sealed class OAuthController : ControllerBase
     }
 
     /// <summary>
+    /// The directly-opened entry point for provider-standalone / patient workflows: no EHR <c>iss</c>/<c>launch</c> is
+    /// needed (a clinician or patient opens this link themselves). The workflow/route is carried in the encrypted
+    /// <paramref name="context"/>; this starts the authorization-code + PKCE flow and, on callback, runs it. Anonymous —
+    /// the launching user has no FHIRBridge session; security comes from PKCE + the single-use OAuth state.
+    /// </summary>
+    [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
+    [HttpGet("oauth/authorize/{context}")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AuthorizeFromContext(string context, CancellationToken cancellationToken)
+    {
+        var authorizationUrl = await _authorizationService.StartInteractiveFromContextAsync(
+            context, BuildCallbackUri(), cancellationToken);
+
+        return Redirect(authorizationUrl.ToString());
+    }
+
+    /// <summary>
     /// The OAuth redirect target registered with the EHR. Anonymous — it is secured by the single-use, unguessable
     /// <c>state</c> value rather than the caller's session. Completes the sign-in and persists the token.
     /// </summary>
@@ -196,6 +218,29 @@ public sealed class OAuthController : ControllerBase
     private string BuildLaunchUri(string context) =>
         $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/launch/{context}";
 
+    private string BuildAuthorizeUri(string context) =>
+        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/authorize/{context}";
+
     private string BuildStandaloneUri(string context) =>
         $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/standalone/{context}";
+
+    /// <summary>
+    /// Shapes the launch-URL response by application type. EHR-launch sources get the <c>/oauth/launch</c> entry (the
+    /// EHR appends iss + launch and invokes it — it is not opened directly); standalone / patient sources get the
+    /// directly-openable <c>/oauth/authorize</c> entry. <c>opensDirectly</c> + <c>mode</c> let the portal label it.
+    /// </summary>
+    private object BuildLaunchResponse(ApplicationType? applicationType, string context)
+    {
+        var opensDirectly = applicationType is ApplicationType.Standalone or ApplicationType.Patient;
+        var mode = "ehr-launch";
+        if (applicationType is ApplicationType.Standalone) mode = "standalone";
+        else if (applicationType is ApplicationType.Patient) mode = "patient";
+        return new
+        {
+            launchUrl = opensDirectly ? BuildAuthorizeUri(context) : BuildLaunchUri(context),
+            mode,
+            opensDirectly,
+            applicationType = applicationType?.ToString(),
+        };
+    }
 }
