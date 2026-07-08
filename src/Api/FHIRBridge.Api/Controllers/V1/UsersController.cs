@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+[Authorize]
 [Route("api/v1/users")]
 public sealed class UsersController : ControllerBase
 {

@@ -10,16 +10,22 @@ public sealed class PermissionTests(ApiFixture f)
     // ── GET /api/v1/permissions ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task GET_permissions__admin__returns_200_list_of_27()
+    public async Task GET_permissions__admin__returns_200_nonempty_list_including_known_permissions()
     {
         var resp = await f.AdminClient.GetAsync("/api/v1/permissions");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
 
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(JsonValueKind.Array, doc.ValueKind);
-        // 20 original platform permissions (the 4 tenant.* permissions were removed with
-        // multi-tenancy) + 7 Epic/Athena source-connector permissions.
-        Assert.Equal(27, doc.GetArrayLength());
+        Assert.True(doc.GetArrayLength() > 0, "no permissions returned");
+
+        // Not an exact count: dynamically-discovered vendor permissions (see
+        // SourceSystemPermissionGroups) grow this list every time a new source-system enum value
+        // gets a matching PermissionGroupCode member, with no code change here. Spot-check a
+        // permanent platform permission and a dynamically-discovered one instead.
+        var names = doc.EnumerateArray().Select(p => p.GetProperty("name").GetString()).ToArray();
+        Assert.Contains("user.view", names);
+        Assert.Contains("epic.edit", names);
     }
 
     [Fact]
@@ -54,13 +60,13 @@ public sealed class PermissionTests(ApiFixture f)
 
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(JsonValueKind.Array, doc.ValueKind);
-        // AccessControl + Platform + Pipelines (Epic/Athena) — the 3 categories with visible,
+        // AccessControl + Platform + Pipelines (Epic/Athenahealth/Cerner) — the 3 categories with visible,
         // active permissions.
         Assert.Equal(3, doc.GetArrayLength());
     }
 
     [Fact]
-    public async Task GET_permissions_catalog__categories_contain_groups_and_all_27_permissions()
+    public async Task GET_permissions_catalog__categories_contain_groups_and_permissions_matching_the_flat_list()
     {
         var resp = await f.AdminClient.GetAsync("/api/v1/permissions/catalog");
         resp.EnsureSuccessStatusCode();
@@ -92,7 +98,15 @@ public sealed class PermissionTests(ApiFixture f)
             }
         }
 
-        Assert.Equal(27, totalPermissions);
+        Assert.True(totalPermissions > 0, "catalog has no permissions");
+
+        // Not an exact count (see GET_permissions__admin__returns_200_nonempty_list_including_known_permissions)
+        // — instead assert the catalog tree and the flat list always agree on the total, whatever it
+        // currently is. Catches a permission missing from (or duplicated in) the catalog grouping.
+        var flatResp = await f.AdminClient.GetAsync("/api/v1/permissions");
+        flatResp.EnsureSuccessStatusCode();
+        var flatDoc = JsonDocument.Parse(await flatResp.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(flatDoc.GetArrayLength(), totalPermissions);
     }
 
     [Fact]

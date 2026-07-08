@@ -54,6 +54,72 @@ public sealed class ApiFixture : IAsyncLifetime
         return client;
     }
 
+    // ── Shared helpers for permission-enforcement tests ──────────────────────────
+    public const string TestUserPassword = "LowPriv@Test123!";
+
+    public async Task<Guid> GetPermissionIdByNameAsync(string name)
+    {
+        var resp = await AdminClient.GetAsync("/api/v1/permissions");
+        resp.EnsureSuccessStatusCode();
+        var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+
+        foreach (var permission in doc.EnumerateArray())
+        {
+            if (string.Equals(permission.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase))
+                return permission.GetProperty("id").GetGuid();
+        }
+
+        throw new InvalidOperationException($"Permission '{name}' not found in the seeded catalog.");
+    }
+
+    public async Task<string> LoginAsync(string email, string password = TestUserPassword)
+    {
+        var resp = await AnonClient.PostAsJsonAsync("/api/v1/auth/internal/login", new
+        {
+            Email    = email,
+            Password = password
+        });
+        resp.EnsureSuccessStatusCode();
+        return JsonDocument.Parse(await resp.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("accessToken").GetString()!;
+    }
+
+    /// <summary>Creates a user whose only role grants exactly the given permissions, and logs them in.</summary>
+    public async Task<(Guid UserId, string Email, string Jwt)> CreateUserWithPermissionsAndLoginAsync(params string[] permissionNames)
+    {
+        var permissionIds = new Guid[permissionNames.Length];
+        for (var i = 0; i < permissionNames.Length; i++)
+        {
+            permissionIds[i] = await GetPermissionIdByNameAsync(permissionNames[i]);
+        }
+
+        var roleResp = await AdminClient.PostAsJsonAsync("/api/v1/roles", new
+        {
+            Name          = $"TestRole-{Guid.NewGuid():N}",
+            Description   = "Role created by an integration test",
+            PermissionIds = permissionIds
+        });
+        roleResp.EnsureSuccessStatusCode();
+        var roleName = JsonDocument.Parse(await roleResp.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("name").GetString()!;
+
+        var email = $"test-{Guid.NewGuid():N}@testhospital.test";
+        var userResp = await AdminClient.PostAsJsonAsync("/api/v1/users", new
+        {
+            Email                 = email,
+            DisplayName           = "Integration Test User",
+            Password              = TestUserPassword,
+            RoleNames             = new[] { roleName },
+            RequirePasswordChange = false
+        });
+        userResp.EnsureSuccessStatusCode();
+        var userId = JsonDocument.Parse(await userResp.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("id").GetGuid();
+
+        var jwt = await LoginAsync(email);
+        return (userId, email, jwt);
+    }
+
     // ── Setup ───────────────────────────────────────────────────────────────────
     public async Task InitializeAsync()
     {

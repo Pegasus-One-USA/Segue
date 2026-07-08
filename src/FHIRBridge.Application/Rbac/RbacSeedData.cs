@@ -107,9 +107,17 @@ public static class RbacSeedData
     /// <summary>
     /// The built-in platform permissions, in seed order. The first 20 (through Payload.View) are preserved
     /// verbatim from the former <c>PermissionConfiguration.HasData</c> block (Group+Action replace the former
-    /// flat Category); the Epic/Athena entries were added later so those source-connector permissions stay
-    /// seed-declared (never auto-deactivated) even before real connector-management endpoints exist to
-    /// discover them via <c>[StandardPermission]</c>.
+    /// flat Category). The Epic/Athenahealth/Cerner Read/Assign/Execute entries were added later so those
+    /// source-connector permissions stay seed-declared (never auto-deactivated) even though no endpoint
+    /// declares them via <c>[StandardPermission]</c> yet. Their Edit permission is deliberately not seeded
+    /// here — it's auto-discovered instead, via <c>[DynamicSourceSystemPermission]</c> on
+    /// ConfigurationsController crossed with every group <see cref="SourceSystemPermissionGroups.AllGroupsFor"/>
+    /// resolves to (see PermissionCatalog.DiscoveredPermissions) — adding a same-named
+    /// <see cref="PermissionGroupCode"/> member for a new vendor is the only step needed for its own Edit
+    /// permission to appear too, no edit here required. <see cref="PermissionGroupCode.SourceConnections"/>'s
+    /// own Edit permission (below, for vendors with no dedicated group) is the one exception, seeded by
+    /// hand on purpose: <see cref="SourceSystemPermissionGroups.AllGroupsFor"/> deliberately excludes that
+    /// generic fallback group from the per-vendor auto-discovery loop.
     /// </summary>
     public static IReadOnlyList<PermissionSeed> Permissions { get; } =
     [
@@ -118,6 +126,10 @@ public static class RbacSeedData
         new("Execute configured pipeline routes.", PermissionGroupCode.Pipeline, PermissionActionCode.Execute),
         new("Read operational audit logs.", PermissionGroupCode.AuditLogs, PermissionActionCode.Read),
         new("Test source system connectivity.", PermissionGroupCode.SourceConnections, PermissionActionCode.Test),
+        new(
+            "Add or edit a source connection for a vendor with no dedicated permission group of its own.",
+            PermissionGroupCode.SourceConnections,
+            PermissionActionCode.Edit),
 
         // User module permissions.
         new("Invite a new user to the organization.", PermissionGroupCode.User, PermissionActionCode.Invite),
@@ -143,16 +155,23 @@ public static class RbacSeedData
         new("View reports and analytics.", PermissionGroupCode.Report, PermissionActionCode.View),
         new("View data payloads from workflow runs.", PermissionGroupCode.Payload, PermissionActionCode.View),
 
-        // Epic source connector permissions.
+        // Epic source connector permissions. "Edit" is deliberately not seeded here — it's
+        // auto-discovered via [DynamicSourceSystemPermission] on ConfigurationsController's
+        // AddSourceConnection/UpdateSourceConnection, crossed with every group in
+        // SourceSystemPermissionGroups.AllGroupsFor (see PermissionCatalog.DiscoveredPermissions).
         new("View Epic source connection configuration.", PermissionGroupCode.Epic, PermissionActionCode.Read),
-        new("Edit Epic source connection configuration.", PermissionGroupCode.Epic, PermissionActionCode.Edit),
         new("Assign an Epic source connection to a tenant.", PermissionGroupCode.Epic, PermissionActionCode.Assign),
         new("Trigger a pipeline run against an Epic source connection.", PermissionGroupCode.Epic, PermissionActionCode.Execute),
 
-        // Athena source connector permissions.
-        new("View Athena source connection configuration.", PermissionGroupCode.Athena, PermissionActionCode.Read),
-        new("Assign an Athena source connection to a tenant.", PermissionGroupCode.Athena, PermissionActionCode.Assign),
-        new("Trigger a pipeline run against an Athena source connection.", PermissionGroupCode.Athena, PermissionActionCode.Execute),
+        // Athenahealth source connector permissions. Edit auto-discovered — see the Epic comment above.
+        new("View Athenahealth source connection configuration.", PermissionGroupCode.Athenahealth, PermissionActionCode.Read),
+        new("Assign an Athenahealth source connection to a tenant.", PermissionGroupCode.Athenahealth, PermissionActionCode.Assign),
+        new("Trigger a pipeline run against an Athenahealth source connection.", PermissionGroupCode.Athenahealth, PermissionActionCode.Execute),
+
+        // Cerner source connector permissions. Edit auto-discovered — see the Epic comment above.
+        new("View Cerner source connection configuration.", PermissionGroupCode.Cerner, PermissionActionCode.Read),
+        new("Assign a Cerner source connection to a tenant.", PermissionGroupCode.Cerner, PermissionActionCode.Assign),
+        new("Trigger a pipeline run against a Cerner source connection.", PermissionGroupCode.Cerner, PermissionActionCode.Execute),
     ];
 
     /// <summary>

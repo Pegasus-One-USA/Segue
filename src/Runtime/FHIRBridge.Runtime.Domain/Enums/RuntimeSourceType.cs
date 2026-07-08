@@ -8,5 +8,7 @@ public enum RuntimeSourceType
     Allscripts = 4,
     GenericFhir = 5,
     Healow = 6,
-    MeditechGreenfield = 7
+    MeditechGreenfield = 7,
+    NewEHR = 8,
+    NewEHRTwo = 9
 }

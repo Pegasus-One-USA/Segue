@@ -64,6 +64,14 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
 
             if (existingGroups.TryGetValue(seed.Id, out var existing))
             {
+                // A PermissionGroupCode member can be renamed (its Id, from PermissionGroupAttribute, stays
+                // the same) — re-sync Name too, same reason as the Permission-level sync below: it's the
+                // stable code identifier other things match on, not just a label.
+                if (existing.Name != seed.Name)
+                {
+                    existing.Update(seed.Name, existing.Description);
+                }
+
                 if (existing.DisplayName != seed.DisplayName)
                 {
                     existing.UpdateDisplayName(seed.DisplayName);
@@ -123,6 +131,15 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
 
             if (existing is not null)
             {
+                // A Group/Action enum member can be renamed (its int value, and therefore the permission's
+                // Id, stays the same) — re-sync Name too, or the stored wire-format code silently goes
+                // stale forever: the authorization policy registered at startup is always freshly computed
+                // from the current enum name, so a stale stored Name here would stop matching it.
+                if (existing.Name != seed.Name)
+                {
+                    existing.UpdateName(seed.Name);
+                }
+
                 if (existing.DisplayName != seed.DisplayName)
                 {
                     existing.UpdateDisplayName(seed.DisplayName);

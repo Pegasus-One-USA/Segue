@@ -10,5 +10,7 @@ public enum SourceSystemType
     Allscripts = 5,
     Hl7v2 = 6,
     Healow = 7,
-    MeditechGreenfield = 8
+    MeditechGreenfield = 8,
+    NewEHR = 9,
+    NewEHRTwo = 10
 }
