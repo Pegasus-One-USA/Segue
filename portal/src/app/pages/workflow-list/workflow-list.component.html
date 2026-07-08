@@ -1,3 +1,5 @@
+<app-toast />
+
 <div class="list-page">
 
   <!-- Header -->
@@ -50,8 +52,8 @@
             <th>Source</th>
             <th>Audience</th>
             <th>Status</th>
-            <th class="col-num">Nodes</th>
-            <th class="col-num">Edges</th>
+            <!-- <th class="col-num">Nodes</th> -->
+            <!-- <th class="col-num">Edges</th> -->
             <th>Last Run</th>
             <th class="col-actions">Actions</th>
           </tr>
@@ -84,8 +86,8 @@
                   {{ w.status }}
                 </span>
               </td>
-              <td class="col-num">{{ w.nodes }}</td>
-              <td class="col-num">{{ w.edges }}</td>
+              <!-- <td class="col-num">{{ w.nodes }}</td> -->
+              <!-- <td class="col-num">{{ w.edges }}</td> -->
               <td>
                 @if (w.lastRun) {
                   <div class="lastrun">

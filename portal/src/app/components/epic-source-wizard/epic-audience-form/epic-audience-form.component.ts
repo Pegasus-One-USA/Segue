@@ -47,6 +47,22 @@ function scopeWildcardCovers(advertised: string, scope: string): boolean {
     && (aa === '*' || aa.toLowerCase() === sa.toLowerCase());
 }
 
+/**
+ * `token_endpoint_auth_methods_supported` is a server-wide list (every method the FHIR server accepts from any
+ * client), not a statement about how *this* app is registered — Epic's discovery document lists
+ * client_secret_basic/post and private_key_jwt for essentially every environment regardless of whether a given app
+ * is public or confidential. So it can only drive an auto-selection where the SMART flow itself mandates one method:
+ * Backend Services (system/backend-system) is JWT-only per spec, so that's the one case we can safely auto-select.
+ * Interactive audiences (EHR launch / standalone / patient) are ordinarily public + PKCE and the actual choice
+ * depends on how the customer registered their app in Epic — something no discovery document can reveal — so we
+ * leave the user's selection alone there rather than force it toward whatever the server merely *can* accept.
+ */
+function detectAuthMethod(audience: EpicAudience, authMethodsSupported: string[]): 'public' | 'secret' | 'jwt' | null {
+  if (audience !== 'backend-system') return null;
+  const methods = authMethodsSupported.map(m => m.toLowerCase());
+  return methods.includes('private_key_jwt') ? 'jwt' : null;
+}
+
 function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
   if (capabilities.includes('permission-v2')) return 'v2';
   if (capabilities.includes('permission-v1')) return 'v1';
@@ -262,6 +278,8 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly discoveredScopes = signal<string[]>([]);
   // True once discovery actually determined the SMART scope version (vs. leaving the default) — drives the badge.
   protected readonly scopeVersionAuto = signal(false);
+  // True once discovery actually determined the Client Auth Method (vs. leaving the default) — drives the badge.
+  protected readonly authMethodAuto = signal(false);
   protected readonly testStatus   = signal<'idle' | 'running' | 'ok' | 'fail'>('idle');
 
   protected readonly form = this.fb.nonNullable.group({
@@ -443,7 +461,7 @@ export class EpicAudienceFormComponent implements OnInit {
         authzEndpoint: this.wiz.authorize() || env.authorize,
         issuer: '', jwksUri: '', introspectEp: '', revokeEp: '',
         signingAlgs: 'RS384, ES384', pkceSupport: 'S256',
-        clientAuthMethods: 'client_secret_basic, private_key_jwt',
+        clientAuthMethods: '—',
         smartCapabilities: '', supportedScopes: '',
       };
       this.discValues.set(dv);
@@ -627,7 +645,7 @@ export class EpicAudienceFormComponent implements OnInit {
           revokeEp: result.token.replace('/token', '/revoke'),
           signingAlgs: 'RS384, ES384',
           pkceSupport: result.codeChallengeMethods.length ? result.codeChallengeMethods.join(', ') : 'S256',
-          clientAuthMethods: 'client_secret_basic, private_key_jwt',
+          clientAuthMethods: result.tokenEndpointAuthMethods.length ? result.tokenEndpointAuthMethods.join(', ') : '—',
           smartCapabilities: result.capabilities.length ? result.capabilities.join(', ') : '—',
           supportedScopes: result.scopesSupported.length ? result.scopesSupported.join(' ') : '—',
         };
@@ -644,6 +662,15 @@ export class EpicAudienceFormComponent implements OnInit {
           this.scopeVersionAuto.set(true);
         } else {
           this.scopeVersionAuto.set(false);
+        }
+        // Client Auth Method: Auto only for Backend System, where SMART Backend Services mandates JWT
+        // (private_key_jwt) — interactive audiences keep whatever the user picked (see detectAuthMethod for why).
+        const detectedAuthMethod = detectAuthMethod(this.audience(), result.tokenEndpointAuthMethods);
+        if (detectedAuthMethod) {
+          this.form.controls.authMethod.setValue(detectedAuthMethod);
+          this.authMethodAuto.set(true);
+        } else {
+          this.authMethodAuto.set(false);
         }
         this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
         this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
@@ -738,6 +765,10 @@ export class EpicAudienceFormComponent implements OnInit {
       'Epic audience':         aud,
       'SMART version':         'SMART App Launch 2.0 (R4)',
       'Scope version':         v.scopeVersion === 'v1' ? 'v1 (coarse)' : 'v2 (granular)',
+      // The actual, discovery-validated scope string this form built and showed the user — takes priority over
+      // WizardService.save()'s own ScopeBuilderService-derived default (which knows nothing about the selected
+      // resources, scope version, or audience-specific scopes this form computed).
+      'Scopes':                this.scopeString().split(/\s+/).filter(Boolean).join(' '),
       'CDS discovery URL':     v.cdsDiscoveryUrl ?? '',
       'CDS service endpoint':  v.cdsServiceEndpoint ?? '',
       'CDS trigger hook':      v.cdsTriggerHook ?? '',

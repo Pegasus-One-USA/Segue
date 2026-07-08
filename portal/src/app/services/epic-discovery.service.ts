@@ -11,6 +11,7 @@ export interface DiscoveredEndpoints {
   resourceTypes: string[];
   codeChallengeMethods: string[];
   capabilities: string[];
+  tokenEndpointAuthMethods: string[];
   resourceTypesError: string | null;
 }
 
@@ -20,6 +21,7 @@ interface ProbeSmartConfiguration {
   scopesSupported: string[];
   codeChallengeMethodsSupported: string[];
   capabilities: string[];
+  tokenEndpointAuthMethodsSupported: string[];
 }
 
 interface ProbeResponse {
@@ -46,6 +48,7 @@ export class EpicDiscoveryService {
         resourceTypes: response.resourceTypes ?? [],
         codeChallengeMethods: response.smartConfiguration.codeChallengeMethodsSupported ?? [],
         capabilities: response.smartConfiguration.capabilities ?? [],
+        tokenEndpointAuthMethods: response.smartConfiguration.tokenEndpointAuthMethodsSupported ?? [],
         resourceTypesError: response.resourceTypesError ?? null,
       })),
     );
