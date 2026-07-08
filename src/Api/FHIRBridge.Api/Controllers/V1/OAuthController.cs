@@ -195,12 +195,9 @@ public sealed class OAuthController : ControllerBase
     private object BuildLaunchResponse(ApplicationType? applicationType, string context)
     {
         var opensDirectly = applicationType is ApplicationType.Standalone or ApplicationType.Patient;
-        var mode = applicationType switch
-        {
-            ApplicationType.Standalone => "standalone",
-            ApplicationType.Patient => "patient",
-            _ => "ehr-launch",
-        };
+        var mode = "ehr-launch";
+        if (applicationType is ApplicationType.Standalone) mode = "standalone";
+        else if (applicationType is ApplicationType.Patient) mode = "patient";
         return new
         {
             launchUrl = opensDirectly ? BuildAuthorizeUri(context) : BuildLaunchUri(context),

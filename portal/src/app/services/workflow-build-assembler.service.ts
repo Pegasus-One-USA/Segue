@@ -10,6 +10,7 @@ import {
   SourceBuildSpec,
   WorkflowBuildRequest,
   WorkflowNodeRequest,
+  WorkflowTriggerRequest,
 } from './workflow-api.service';
 
 interface DestMappingRow {
@@ -41,10 +42,10 @@ export class WorkflowBuildAssemblerService {
   /** Resources selected on a destination but NOT wired into the build (surfaced to the user as a caveat). */
   readonly lastUnmappedResources: string[] = [];
 
-  assemble(name: string): WorkflowBuildRequest {
+  assemble(name: string, trigger?: WorkflowTriggerRequest | null): WorkflowBuildRequest {
     this.lastUnmappedResources.length = 0;
 
-    const graph = this.mapper.toRequest(name);
+    const graph = this.mapper.toRequest(name, trigger);
     const nodesById = new Map(graph.nodes.map(node => [node.id, node]));
 
     const sourceNodeIds = new Set(

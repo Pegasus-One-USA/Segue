@@ -17,7 +17,8 @@ public sealed record WorkflowBuildRequest(
     IReadOnlyCollection<WorkflowEdgeRequest> Edges,
     IReadOnlyCollection<SourceBuildSpec>? Sources = null,
     IReadOnlyCollection<DestinationBuildSpec>? Destinations = null,
-    IReadOnlyCollection<MappingBuildSpec>? Mappings = null);
+    IReadOnlyCollection<MappingBuildSpec>? Mappings = null,
+    WorkflowTriggerRequest? Trigger = null);
 
 /// <summary>Create a source connection and inject its id into the node identified by <see cref="NodeId"/>.</summary>
 public sealed record SourceBuildSpec(string NodeId, CreateSourceConnectionRequest Source);

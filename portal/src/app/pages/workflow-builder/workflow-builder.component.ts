@@ -1,16 +1,16 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { PipelineStore } from '../../services/pipeline.store';
 import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { WorkflowApiService, WorkflowBuildRequest } from '../../services/workflow-api.service';
+import { WorkflowApiService, WorkflowBuildRequest, WorkflowTriggerRequest } from '../../services/workflow-api.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { WorkflowBuildAssemblerService } from '../../services/workflow-build-assembler.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { Source } from '../../models/source.model';
-import { CanvasNode, SourceNode, TransformNode, MergeNode } from '../../models/node.model';
+import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node.model';
 
 import { CanvasComponent } from '../../components/canvas/canvas.component';
 import { EpicSourceWizardComponent } from '../../components/epic-source-wizard/epic-source-wizard.component';
@@ -64,6 +64,44 @@ export class WorkflowBuilderComponent implements OnInit {
   protected readonly workflowIdInput = signal('');
   protected readonly workflowBusy = signal(false);
   protected readonly workflowStatus = signal('Catalog loading...');
+
+  // ── Trigger / Scheduler (Backend-Systems workflows only) ────────────────────
+  // Shown when a source node is configured for the Backend Systems audience — those run headless on a schedule
+  // rather than being launched. Compiled into the workflow's trigger metadata (approach B) on save.
+  protected readonly triggerType = signal<'Manual' | 'Daily' | 'Weekly' | 'Monthly' | 'Cron' | 'Poll'>('Manual');
+  protected readonly cronExpression = signal('0 0 * * *');
+  protected readonly pollMinutes = signal(15);
+
+  /** True when any source node targets the Backend Systems audience — enables the Trigger control. */
+  protected readonly isBackendAudience = computed(() =>
+    this.store.nodes()
+      .filter(isSourceNode)
+      .some(node => {
+        const fields = node.fields ?? {};
+        const audience = (fields['Epic audience'] || fields['App key'] || '').toLowerCase();
+        return audience.includes('backend');
+      }));
+
+  onTriggerTypeInput(value: string): void {
+    this.triggerType.set(value as 'Manual' | 'Daily' | 'Weekly' | 'Monthly' | 'Cron' | 'Poll');
+  }
+  onCronInput(value: string): void { this.cronExpression.set(value); }
+  onPollMinutesInput(value: string): void { this.pollMinutes.set(Math.max(1, Number(value) || 1)); }
+
+  /** Compiles the Trigger control into the backend trigger DTO. Non-backend workflows never schedule → null. */
+  private buildTrigger(): WorkflowTriggerRequest | null {
+    if (!this.isBackendAudience()) {
+      return null;
+    }
+    switch (this.triggerType()) {
+      case 'Daily':   return { type: 'Schedule', scheduleExpression: '0 0 * * *' };
+      case 'Weekly':  return { type: 'Schedule', scheduleExpression: '0 0 * * 0' };
+      case 'Monthly': return { type: 'Schedule', scheduleExpression: '0 0 1 * *' };
+      case 'Cron':    return { type: 'Schedule', scheduleExpression: this.cronExpression().trim() };
+      case 'Poll':    return { type: 'Poll', intervalMinutes: this.pollMinutes() };
+      default:        return { type: 'Manual' };
+    }
+  }
 
   ngOnInit(): void {
     // Deep-link from the Workflow List "Edit" action: ?id=<workflowId> loads that graph onto the canvas after the
@@ -122,7 +160,7 @@ export class WorkflowBuilderComponent implements OnInit {
     }
 
     // New workflow: create-on-save when the canvas carries wizard-drawn source/destination specs.
-    const request = this.buildAssembler.assemble(name);
+    const request = this.buildAssembler.assemble(name, this.buildTrigger());
     const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
     if (hasSpecs) {
       this.buildWorkflow(request);
@@ -308,7 +346,7 @@ export class WorkflowBuilderComponent implements OnInit {
       return;
     }
 
-    const request = this.graphMapper.toRequest(name);
+    const request = this.graphMapper.toRequest(name, this.buildTrigger());
     this.workflowBusy.set(true);
     this.workflowStatus.set('Validating workflow...');
     this.workflowApi.validate(request).subscribe({
