@@ -38,6 +38,17 @@ public interface IInteractiveSourceAuthorizationService
         string redirectUri,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Prepares a provider-standalone sign-in from an encrypted launch-context token (which resolves to the pipeline
+    /// route). Unlike an EHR launch there is no issuer or launch token: the source's configured FHIR base URL is the
+    /// authorization audience, and the EHR presents its own patient picker (driven by the patient-selection scope).
+    /// On callback the resolved route is run for the selected patient.
+    /// </summary>
+    Task<Uri> StartStandaloneFromContextAsync(
+        string launchContext,
+        string redirectUri,
+        CancellationToken cancellationToken);
+
     /// <summary>Completes a sign-in from the OAuth callback, exchanging the code (with the retained PKCE verifier) for a token, and triggering the launched pipeline route when the launch was route-scoped.</summary>
     Task<InteractiveAuthorizationResult> CompleteAsync(string state, string authorizationCode, CancellationToken cancellationToken);
 

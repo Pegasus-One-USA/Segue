@@ -122,6 +122,40 @@ public sealed class OAuthController : ControllerBase
     }
 
     /// <summary>
+    /// Returns the opaque, encrypted provider-standalone URL to hand to a provider for a specific pipeline route.
+    /// Clicking it takes the provider straight to the EHR's login (no <c>iss</c>/<c>launch</c> handshake); after
+    /// sign-in and patient selection the callback runs the route for the selected patient. Admin-only.
+    /// </summary>
+    [Authorize]
+    [HttpGet("pipelines/{routeId:guid}/standalone-url")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetStandaloneUrl(Guid routeId)
+    {
+        var context = _authorizationService.BuildLaunchContextToken(routeId);
+        return Ok(new { standaloneUrl = BuildStandaloneUri(context) });
+    }
+
+    /// <summary>
+    /// The shareable provider-standalone entry point for a specific pipeline route. The route is carried in the
+    /// encrypted <paramref name="context"/> segment — no raw GUIDs in the URL, and no <c>iss</c>/<c>launch</c>
+    /// parameters: the browser is redirected straight to the source's authorization endpoint, where the provider
+    /// signs in and picks a patient. Anonymous — the provider has no FHIRBridge session; security comes from the
+    /// tamper-proof encrypted context.
+    /// </summary>
+    [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
+    [HttpGet("oauth/standalone/{context}")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> StandaloneLaunch(string context, CancellationToken cancellationToken)
+    {
+        var authorizationUrl = await _authorizationService.StartStandaloneFromContextAsync(
+            context, BuildCallbackUri(), cancellationToken);
+
+        return Redirect(authorizationUrl.ToString());
+    }
+
+    /// <summary>
     /// The directly-opened entry point for provider-standalone / patient workflows: no EHR <c>iss</c>/<c>launch</c> is
     /// needed (a clinician or patient opens this link themselves). The workflow/route is carried in the encrypted
     /// <paramref name="context"/>; this starts the authorization-code + PKCE flow and, on callback, runs it. Anonymous —
@@ -186,6 +220,9 @@ public sealed class OAuthController : ControllerBase
 
     private string BuildAuthorizeUri(string context) =>
         $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/authorize/{context}";
+
+    private string BuildStandaloneUri(string context) =>
+        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/standalone/{context}";
 
     /// <summary>
     /// Shapes the launch-URL response by application type. EHR-launch sources get the <c>/oauth/launch</c> entry (the
