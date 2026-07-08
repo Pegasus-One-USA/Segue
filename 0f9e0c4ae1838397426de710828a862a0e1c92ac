@@ -1,0 +1,161 @@
+portal/src/app/auth/components/auth-brand-header/auth-brand-header.component.html
+  s_62affcfc9947ba::t_2fbf125a87be46 1-2,5-19
+  s_62affcfc9947ba::t_68fa1e4349af57 3-4
+portal/src/app/settings/settings.routes.ts
+  s_62affcfc9947ba::t_9949b3f375035c 1-12
+portal/public/mock/branding/default.json
+  s_62affcfc9947ba::t_f8d4c8bd780b7d 1-24
+portal/public/mock/branding/acme.json
+  s_62affcfc9947ba::t_3d830fe6ca2f9f 1-24
+portal/src/app/layout/app-footer/app-footer.component.ts
+  s_62affcfc9947ba::t_44264c353ebc71 1-2,4-11,13-15,23
+  s_62affcfc9947ba::t_f815e7bf637ce4 3,12,16-22
+portal/src/app/auth/components/auth-brand-header/auth-brand-header.component.ts
+  s_62affcfc9947ba::t_3d0c9678c075c8 1-18
+portal/public/mock/branding/northwind.json
+  s_62affcfc9947ba::t_72da7153158adc 1-24
+portal/src/app/auth/pages/login/login.component.html
+  s_62affcfc9947ba::t_45e1c33561cd39 27-29
+  s_62affcfc9947ba::t_09c9bc272014cc 2-19,21-23,25-26
+  s_62affcfc9947ba::t_99ef3480db5573 133-139,141,143-144
+portal/src/app/layout/app-shell/app-shell.component.scss
+  s_62affcfc9947ba::t_fdd8693710fec2 2-4,6-14
+  s_62affcfc9947ba::t_92c2ed46af4440 15
+  s_62affcfc9947ba::t_b3fa45e2db5d5b 17
+portal/src/app/auth/pages/login/login.component.scss
+  s_62affcfc9947ba::t_deb6e52578914d 25-34,92-94,104
+  s_62affcfc9947ba::t_93ec54af4f35c5 89-91
+  s_62affcfc9947ba::t_bc8a9aafed496c 95-97,101-103
+  s_62affcfc9947ba::t_4e131a265a01f9 105-107
+  s_62affcfc9947ba::t_dc65c32f474db2 81-88,98-100,108-116,168,172,189-191,193
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  s_62affcfc9947ba::t_0796300be8e3cd 1-6,8-9,12-14,16-19,24-42,47-62,64-66,69,74-83,86-87,89,96-101,105-112,117-119,128-178
+  s_62affcfc9947ba::t_9218596d36809d 10-11
+  s_62affcfc9947ba::t_82984c2641ead9 7
+  s_62affcfc9947ba::t_1ba669511d13e9 63,67-68,70-73,84-85,88,90-95
+  s_62affcfc9947ba::t_f7567f3f5fce0a 102-104,113-116
+  s_62affcfc9947ba::t_105758f95c1313 120-127
+  s_62affcfc9947ba::t_ecfbeb56e02153 15
+  s_62affcfc9947ba::t_ebd453b2ae38c2 43-46
+  s_62affcfc9947ba::t_647474e9caa444 20-23
+portal/src/app/layout/app-footer/app-footer.component.html
+  s_62affcfc9947ba::t_c5ca40c680f288 1-18,23,33-34
+  s_62affcfc9947ba::t_9fabe2d4b0013c 24,29-32
+  s_62affcfc9947ba::t_d53b979051cecb 19-22,25-28
+portal/src/app/dashboard/layout/sidebar/sidebar.component.scss
+  s_62affcfc9947ba::t_17cddb4457b999 3-4
+  s_62affcfc9947ba::t_53cc76100273b1 34-41
+portal/src/app/settings/pages/branding/branding-settings.component.scss
+  s_62affcfc9947ba::t_0f0be585839ce3 155-162,164-170
+  s_62affcfc9947ba::t_fdd95bc03bc285 1-92,95-154,163,171-323
+  s_62affcfc9947ba::t_c8b47f1dac0eb9 93-94
+portal/src/app/services/branding.service.ts
+  s_62affcfc9947ba::t_629b85b442a632 23-25,29-38
+  s_62affcfc9947ba::t_cdd160245319bf 5
+  s_62affcfc9947ba::t_1eec4038a322db 1-4,6-22,26-28,39-139
+portal/src/app/layout/app-shell/app-shell.component.html
+  s_62affcfc9947ba::t_04d9e0aeaa18f8 3-38,40
+  s_62affcfc9947ba::t_8372419f3bc854 41-43
+portal/src/app/models/brand-configuration.model.ts
+  s_62affcfc9947ba::t_353de716983776 1-56
+portal/src/app/auth/components/auth-brand-header/auth-brand-header.component.scss
+  s_62affcfc9947ba::t_ae14832cffc38b 1-46
+portal/src/app/settings/components/brand-asset-field/brand-asset-field.component.ts
+  s_62affcfc9947ba::t_df9943fb29350d 1-20,23-24,28-31,34-52,54-64,67-73,76-77
+  s_62affcfc9947ba::t_564ae91b180c41 21-22,25-27,32-33,53,65-66,74-75
+portal/src/app/settings/components/brand-asset-field/brand-asset-field.component.html
+  s_62affcfc9947ba::t_27bbca702f14b2 2,13,20
+  s_62affcfc9947ba::t_574509a825ed9a 1,3-12,14-19,21-37
+portal/src/app/app.component.ts
+  s_62affcfc9947ba::t_00fde754183023 4
+  s_62affcfc9947ba::t_dc628d9fa1efb8 15-17
+portal/src/app/layout/app-footer/app-footer.component.scss
+  s_62affcfc9947ba::t_a255dd1aeb7063 11,17,34-37,48-50,57-84,86
+  s_62affcfc9947ba::t_da64a2396998cf 85
+  s_62affcfc9947ba::t_5f218d9c8b1c00 51-56
+  s_62affcfc9947ba::t_5151d827273472 1-10,12-16,18-33,38-47,87-88
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  s_62affcfc9947ba::t_d032708049c318 103-110,112-114
+  s_62affcfc9947ba::t_8737a7127b0a51 185
+  s_62affcfc9947ba::t_635059366512d8 28-33,51-56,74-79,97-102
+  s_62affcfc9947ba::t_1c6e8c527bb906 57-64,66-68
+  s_62affcfc9947ba::t_ae80d9e1f8a694 12
+  s_62affcfc9947ba::t_6583772fb08736 80-87,89-91
+  s_62affcfc9947ba::t_fa10c1f07053c5 1-11,13-20,23-25,27,42,46-48,50,65,69-71,73,88,92-94,96,111,115-140,143-144,147-148,151-152,155-156,159-169,172-177,180-184,186-199,202-226,228
+  s_62affcfc9947ba::t_140e1a893604e2 141-142,145-146,149-150,153-154,157-158,170-171,178-179
+  s_62affcfc9947ba::t_912d705da4c1c2 227
+  s_62affcfc9947ba::t_840d4cdb3314db 21-22,26,49,72,95
+  s_62affcfc9947ba::t_1431cc04844ad9 34-41,43-45
+  s_62affcfc9947ba::t_3f79d35b95e1dc 200-201
+portal/src/app/dashboard/layout/sidebar/sidebar.component.html
+  s_62affcfc9947ba::t_650b047bbc2bdb 3-6
+  s_62affcfc9947ba::t_ed68c1a1b79222 7
+  s_62affcfc9947ba::t_47137749f6225d 9
+portal/public/mock/branding/contoso.json
+  s_62affcfc9947ba::t_b51171211d2d92 1-24
+portal/src/app/settings/components/brand-asset-field/brand-asset-field.component.scss
+  s_62affcfc9947ba::t_48bee265abecc9 1-99
+portal/src/styles.scss
+  s_62affcfc9947ba::t_ca85ac694e588f 13,16,21-22,26-30,56
+  s_62affcfc9947ba::t_b979ccd2153b90 93-112,115-119,123-128,133-139,144-148,156-159,251-259,264,275-281,286-295,298-301,310
+portal/src/app/app.routes.ts
+  s_62affcfc9947ba::t_d9fd8d06518b58 68-76
+portal/src/app/auth/_auth-forms.scss
+  s_62affcfc9947ba::t_b0f75c4a24e69e 45,48,52,73,95-96,120,130
+portal/src/app/auth/components/sso-buttons/sso-buttons.component.scss
+  s_62affcfc9947ba::t_f6bd05546ef2a8 31-32,35
+portal/src/app/auth/pages/change-password/change-password.component.scss
+  s_62affcfc9947ba::t_d0ac50e7cbae08 77,81
+portal/src/app/auth/pages/forgot-password/forgot-password.component.html
+  s_62affcfc9947ba::t_00b5056542c653 6
+portal/src/app/auth/pages/forgot-password/forgot-password.component.scss
+  s_62affcfc9947ba::t_dacfd5b8c8a5b7 64,68
+portal/src/app/auth/pages/forgot-password/forgot-password.component.ts
+  s_62affcfc9947ba::t_aa4708b9b87f58 11,24
+portal/src/app/auth/pages/login/login.component.ts
+  s_62affcfc9947ba::t_e84d1dc90d8941 20-22,37-38,46
+portal/src/app/auth/pages/reset-password/reset-password.component.scss
+  s_62affcfc9947ba::t_30ecd0a6e15cef 88,92
+portal/src/app/auth/pages/set-password/set-password.component.html
+  s_62affcfc9947ba::t_1c55bf920e38e4 9
+portal/src/app/auth/pages/set-password/set-password.component.scss
+  s_62affcfc9947ba::t_923357c053a0de 170-171,174,179
+portal/src/app/auth/pages/set-password/set-password.component.ts
+  s_62affcfc9947ba::t_d431e0cf32e281 18,40
+portal/src/app/auth/pages/signup/signup.component.scss
+  s_62affcfc9947ba::t_3991dfe1434ee6 166,170
+portal/src/app/auth/pages/unauthorized/unauthorized.component.scss
+  s_62affcfc9947ba::t_9aa2f4fee6ff9b 38
+portal/src/app/dashboard/components/activity-feed/activity-feed.component.scss
+  s_62affcfc9947ba::t_78a79ed9de59f0 14,29-32
+portal/src/app/dashboard/components/kpi-card/kpi-card.component.scss
+  s_62affcfc9947ba::t_3f2053e1f942d6 50-51
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.scss
+  s_62affcfc9947ba::t_ffaefe82c2217b 54-57
+portal/src/app/dashboard/components/system-health/system-health.component.scss
+  s_62affcfc9947ba::t_a94f5e90c144bd 9-11,24,51-52
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_62affcfc9947ba::t_c946221dcbad3d 4,30,44
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_62affcfc9947ba::t_7f52f13c81c445 6,25-26,32
+portal/src/app/user/components/user-menu/user-menu.component.html
+  s_62affcfc9947ba::t_f1e31ffb211615 34
+portal/src/app/user/components/user-menu/user-menu.component.scss
+  s_62affcfc9947ba::t_ddab9ab89b6e22 22-23,37,74,82,89,99-100,109,127,136,138,145,162,171-173,180,191,195-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "0f9e0c4ae1838397426de710828a862a0e1c92ac",
+  "prompts": {},
+  "sessions": {
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
