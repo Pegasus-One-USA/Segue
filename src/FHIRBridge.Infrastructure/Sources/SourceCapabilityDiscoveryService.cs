@@ -175,7 +175,8 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
             GetStringArray("grant_types_supported"),
             GetStringArray("response_types_supported"),
             GetStringArray("code_challenge_methods_supported"),
-            GetStringArray("capabilities"));
+            GetStringArray("capabilities"),
+            GetStringArray("token_endpoint_auth_methods_supported"));
     }
 
     private async Task<FhirSourceConfiguration> BuildEpicSourceConfigurationAsync(

@@ -7,6 +7,7 @@ import {
   DestinationData,
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
+import { ToastComponent } from '../../components/shared/toast/toast.component';
 
 interface LaunchModal {
   name: string;
@@ -26,7 +27,7 @@ interface DataModal {
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe],
+  imports: [CommonModule, DatePipe, ToastComponent],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })

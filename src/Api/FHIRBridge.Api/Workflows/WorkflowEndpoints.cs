@@ -203,9 +203,7 @@ public static class WorkflowEndpoints
                     }
                 }
 
-                var isLaunch = applicationType is ApplicationType.EhrLaunch
-                    or ApplicationType.Standalone
-                    or ApplicationType.Patient;
+                var isLaunch = applicationType is ApplicationType.EhrLaunch or ApplicationType.Standalone or ApplicationType.Patient;
 
                 var hasDestination = workflow.Nodes.Any(node =>
                     node.Category == WorkflowNodeCategory.Destination
@@ -250,6 +248,7 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IConfigurationRepository configurationRepository,
             IDestinationDataService destinationDataService,
+            IWorkflowRunStore runStore,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -291,8 +290,11 @@ public static class WorkflowEndpoints
                     .FirstOrDefault() ?? string.Empty;
             }
 
+            var runs = await runStore.ListByDefinitionAsync(workflowId, cancellationToken);
+            var pipelineRunIds = runs.Select(run => run.Id).ToArray();
+
             var result = await destinationDataService.ReadSampleAsync(
-                destinationId, destinationObject, top ?? 50, cancellationToken);
+                destinationId, destinationObject, top ?? 50, pipelineRunIds, cancellationToken);
             return Results.Ok(result);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 

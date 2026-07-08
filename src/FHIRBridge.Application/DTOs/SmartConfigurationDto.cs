@@ -16,4 +16,5 @@ public sealed record SmartConfigurationDto(
     IReadOnlyList<string> GrantTypesSupported,
     IReadOnlyList<string> ResponseTypesSupported,
     IReadOnlyList<string> CodeChallengeMethodsSupported,
-    IReadOnlyList<string> Capabilities);
+    IReadOnlyList<string> Capabilities,
+    IReadOnlyList<string> TokenEndpointAuthMethodsSupported);

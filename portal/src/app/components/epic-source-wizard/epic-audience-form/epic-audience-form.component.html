@@ -163,7 +163,7 @@
           </div>
 
           <!-- SMART scope version — v1 (coarse) vs v2 (granular) -->
-          <div class="eaf-field">
+          <div *ngif="false" class="eaf-field">
             <label class="eaf-label" for="eaf-scopeVersion">
               SMART Scope Version <span class="eaf-req">*</span>
               @if (scopeVersionAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
@@ -199,7 +199,10 @@
           </div>
 
           <div class="eaf-field">
-            <label class="eaf-label" for="eaf-authMethod">Client Auth Method</label>
+            <label class="eaf-label" for="eaf-authMethod">
+              Client Auth Method
+              @if (authMethodAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
+            </label>
             <div class="eaf-select-wrap">
               <select id="eaf-authMethod" class="eaf-select" formControlName="authMethod">
                 <option value="public">Public Client + PKCE (no secret)</option>
@@ -207,7 +210,13 @@
                 <option value="jwt">JWT / Private Key (JWKS)</option>
               </select>
             </div>
-            <p class="eaf-hint">Provider EHR launch is normally a public client (PKCE) — no client secret required. Choose Client Secret or JWT only if your Epic app is registered as confidential.</p>
+            @if (authMethodAuto()) {
+              <p class="eaf-hint">SMART Backend Services requires JWT (<code>private_key_jwt</code>) client authentication — not user-editable via discovery for this audience. Override if needed.</p>
+            } @else if (audience() === 'backend-system') {
+              <p class="eaf-hint">Backend System apps authenticate with a signed JWT assertion (client credentials) — no interactive login.</p>
+            } @else {
+              <p class="eaf-hint">Provider EHR launch is normally a public client (PKCE) — no client secret required. Choose Client Secret or JWT only based on how your Epic app is actually registered — the server's discovery document lists everything it can accept, not what your specific app uses.</p>
+            }
           </div>
 
           @if (showSecret()) {
@@ -243,7 +252,7 @@
 
       <!-- ═══════════ SECTION 5: Resource Type & Scopes ════════════════════════ -->
       @if (audienceConfig().showResourcePicker) {
-        <div class="eaf-section">
+        <div *ngif="false" class="eaf-section">
           <div class="eaf-section-head">
             <span class="eaf-section-num">5</span>
             <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
@@ -318,7 +327,7 @@
       } @else {
         <!-- Backend System: no shared picker here — Resource Type lives inside the
              selected Data Retrieval Method below; this just previews the resulting scopes. -->
-        <div class="eaf-section">
+        <div *ngif="false" class="eaf-section">
           <div class="eaf-section-head">
             <span class="eaf-section-num">5</span>
             <span class="eaf-section-title">Scopes</span>

@@ -108,7 +108,7 @@ export class WorkflowBuildAssemblerService {
       baseUrl: fields['FHIR base URL'] || '',
       authentication: {
         authenticationType: appType === 'Backend' ? 'SmartBackendServices' : 'None',
-        clientId: fields['Active client ID'] || fields['Client ID'] || null,
+        clientId: fields['Client ID'] || fields['Active client ID'] || null,
         tokenEndpoint: fields['Token endpoint'] || null,
         scopes,
         keyId: fields['JWT kid'] || null,
