@@ -175,7 +175,29 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         var context = _launchTokenProtector.UnprotectContext(launchContext)
             ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
 
-        var (sourceConnection, routeId) = await ResolveRouteSourceAsync(context.RouteId, cancellationToken);
+        // Workflow launch: the graph's source node names the connection to OAuth against.
+        if (context.WorkflowId is { } workflowId)
+        {
+            var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
+            return await StartStandaloneCoreAsync(workflowSource, redirectUri, routeId: null, workflowId, cancellationToken);
+        }
+
+        if (context.RouteId is { } contextRouteId)
+        {
+            var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
+            return await StartStandaloneCoreAsync(sourceConnection, redirectUri, routeId, workflowId: null, cancellationToken);
+        }
+
+        throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
+    }
+
+    private async Task<Uri> StartStandaloneCoreAsync(
+        SourceConnection sourceConnection,
+        string redirectUri,
+        Guid? routeId,
+        Guid? workflowId,
+        CancellationToken cancellationToken)
+    {
         var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken);
         var clientId = RequireClientId(sourceConnection);
 
@@ -195,7 +217,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
         var authorizationUrl = await IssueAuthorizationAsync(
-            source, sourceConnection, launch: null, routeId, requestedRedirectUri: redirectUri, cancellationToken);
+            source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
 
         await RecordAuditAsync(sourceConnection.Id, "StandaloneAuthorizationStarted", "Started",
             $"Provider-standalone sign-in started for {sourceConnection.Name}.", cancellationToken);
