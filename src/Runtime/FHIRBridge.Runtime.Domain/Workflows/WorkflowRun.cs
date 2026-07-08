@@ -4,7 +4,12 @@ public sealed class WorkflowRun
 {
     private readonly List<WorkflowNodeRun> _nodeRuns = [];
 
-    public WorkflowRun(Guid id, Guid workflowDefinitionId, DateTimeOffset startedAt)
+    public WorkflowRun(
+        Guid id,
+        Guid workflowDefinitionId,
+        DateTimeOffset startedAt,
+        string? triggeredBy = null,
+        string? triggerType = null)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -15,6 +20,8 @@ public sealed class WorkflowRun
         WorkflowDefinitionId = workflowDefinitionId;
         StartedAt = startedAt;
         Status = WorkflowRunStatus.Running;
+        TriggeredBy = triggeredBy;
+        TriggerType = triggerType;
     }
 
     public Guid Id { get; }
@@ -28,6 +35,12 @@ public sealed class WorkflowRun
     public WorkflowRunStatus Status { get; private set; }
 
     public string? ErrorMessage { get; private set; }
+
+    /// <summary>Who/what launched the run (user audit name, scheduler, or interactive-launch source).</summary>
+    public string? TriggeredBy { get; }
+
+    /// <summary>How the run was launched: Manual, Scheduled, or InteractiveLaunch.</summary>
+    public string? TriggerType { get; }
 
     public IReadOnlyCollection<WorkflowNodeRun> NodeRuns => _nodeRuns;
 

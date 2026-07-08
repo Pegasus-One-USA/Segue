@@ -15,7 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/security':                     'Security',
   '/preferences':                  'Preferences',
   '/help':                         'Help & Support',
-  '/pipelines':                    'Pipelines',
+  '/execution-history':            'Execution History',
   '/activity':                     'Activity Feed',
   '/logs':                         'Execution Logs',
   '/schedules':                    'Schedules',

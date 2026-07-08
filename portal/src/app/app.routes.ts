@@ -105,13 +105,21 @@ export const routes: Routes = [
           import('./user/pages/help/help.component').then(m => m.HelpComponent),
       },
 
-      // Pipelines list
+      // Execution History (per-route pipeline run history: fetch/map/store detail)
       {
-        path: 'pipelines',
+        path: 'execution-history',
         canActivate: [authGuard],
         loadComponent: () =>
-          import('./pipelines/pages/pipeline-list/pipeline-list.component').then(
-            m => m.PipelineListComponent
+          import('./execution-history/pages/execution-history-list/execution-history-list.component').then(
+            m => m.ExecutionHistoryListComponent
+          ),
+      },
+      {
+        path: 'execution-history/:id',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./execution-history/pages/execution-history-detail/execution-history-detail.component').then(
+            m => m.ExecutionHistoryDetailComponent
           ),
       },
 

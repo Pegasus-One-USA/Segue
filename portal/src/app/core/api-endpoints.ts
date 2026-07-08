@@ -52,6 +52,16 @@ export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
 };
 
+// ─── Execution History (WorkflowEndpoints — api/v1/workflow-runs) ──────────────
+// Backs the Runtime Plane's execution history (the path "Run" and interactive EHR/standalone launches actually
+// take). The Configured Pipeline has its own parallel route-execution history under /pipeline-runs/route-executions,
+// used only by the route/schedule/webhook path — not currently surfaced in the portal since it has no UI trigger.
+export const EXECUTION_HISTORY_ENDPOINTS = {
+  list:      `${API_V1_BASE}/workflow-runs`,
+  byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
+  resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
+};
+
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────
 export const WORKFLOW_ENDPOINTS = {
   catalog:         `${API_V1_BASE}/workflow-catalog`,

@@ -1,5 +1,8 @@
+using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Messaging;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Application.Security;
@@ -16,15 +19,27 @@ public sealed class PipelineRunsController : ControllerBase
 {
     private readonly IConfiguredPipelineService _configuredPipelineService;
     private readonly IPipelineRunDispatcher _pipelineRunDispatcher;
+    private readonly IPipelineRunRouteExecutionRepository _routeExecutionRepository;
+    private readonly IExecutionResourceHistoryRecorder _resourceHistoryRecorder;
+    private readonly IOperationalAuditService _auditService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly bool _hasSharedTransport;
 
     public PipelineRunsController(
         IConfiguredPipelineService configuredPipelineService,
         IPipelineRunDispatcher pipelineRunDispatcher,
+        IPipelineRunRouteExecutionRepository routeExecutionRepository,
+        IExecutionResourceHistoryRecorder resourceHistoryRecorder,
+        IOperationalAuditService auditService,
+        ICurrentUserService currentUserService,
         IConfiguration configuration)
     {
         _configuredPipelineService = configuredPipelineService;
         _pipelineRunDispatcher = pipelineRunDispatcher;
+        _routeExecutionRepository = routeExecutionRepository;
+        _resourceHistoryRecorder = resourceHistoryRecorder;
+        _auditService = auditService;
+        _currentUserService = currentUserService;
 
         // A shared transport (RabbitMQ / Azure Service Bus) lets the Worker pick up long-running jobs; InMemory cannot
         // cross the API→Worker process boundary, so those fall back to synchronous execution.
@@ -95,5 +110,76 @@ public sealed class PipelineRunsController : ControllerBase
             cancellationToken);
 
         return NoContent();
+    }
+
+    // ── Execution History (per-route run detail) ────────────────────────────────
+
+    [HttpGet("route-executions")]
+    [ProducesResponseType(typeof(PagedResult<PipelineRunRouteExecutionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetRouteExecutions(
+        [FromQuery] string? status,
+        [FromQuery] string? source,
+        [FromQuery] string? triggeredBy,
+        [FromQuery] string? search,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _routeExecutionRepository.GetPagedAsync(
+            new PipelineRunRouteExecutionFilter(status, source, triggeredBy, search),
+            page <= 0 ? 1 : page,
+            pageSize <= 0 ? 25 : pageSize,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    [HttpGet("route-executions/{routeExecutionId:guid}")]
+    [ProducesResponseType(typeof(PipelineRunRouteExecutionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRouteExecution(
+        Guid routeExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var execution = await _routeExecutionRepository.GetByIdAsync(routeExecutionId, cancellationToken);
+        return execution is null ? NotFound() : Ok(execution);
+    }
+
+    /// <summary>
+    /// Drill-down into a route execution's per-resource fetch/normalize/map/store history. Returns decrypted PHI
+    /// payloads, so every call is itself audited (who viewed what run's detail, and when) per the HIPAA audit-controls
+    /// requirement for reading PHI — the same append-only <see cref="IOperationalAuditService"/> used elsewhere.
+    /// </summary>
+    [HttpGet("route-executions/{routeExecutionId:guid}/resources")]
+    [ProducesResponseType(typeof(PagedResult<PipelineRunResourceHistoryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetRouteExecutionResources(
+        Guid routeExecutionId,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _resourceHistoryRecorder.GetPagedAsync(
+            routeExecutionId,
+            page <= 0 ? 1 : page,
+            pageSize <= 0 ? 25 : pageSize,
+            cancellationToken);
+
+        await _auditService.RecordAsync(
+            new RecordOperationalAuditLogRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "ExecutionDetailViewed",
+                "Completed",
+                $"Execution history detail viewed for route execution {routeExecutionId}.",
+                result.Items.Count,
+                _currentUserService.CurrentUser.AuditName,
+                null),
+            cancellationToken);
+
+        return Ok(result);
     }
 }
