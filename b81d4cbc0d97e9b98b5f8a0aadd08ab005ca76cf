@@ -1,0 +1,21 @@
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_6fe72b0759281b::t_235d25a33d7d91 8,12-13,53,57
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_6fe72b0759281b::t_dfdccd67573724 63,114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b81d4cbc0d97e9b98b5f8a0aadd08ab005ca76cf",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

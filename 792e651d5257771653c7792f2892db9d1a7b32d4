@@ -1,0 +1,27 @@
+portal/src/app/activity/pages/activity-list/activity-list.component.ts
+  s_6fe72b0759281b::t_95497d6f96b40b 8
+portal/src/app/auth/pages/login/login.component.ts
+  s_6fe72b0759281b::t_32513d8d5e61cf 2
+portal/src/app/auth/services/invitation.service.ts
+  s_6fe72b0759281b::t_c54c9fa4c69b8f 3
+portal/src/app/auth/services/mock-auth.service.ts
+  s_6fe72b0759281b::t_daef1112af8336 11,34-35
+portal/src/app/services/wizard.service.ts
+  s_6fe72b0759281b::t_966300aa112eea 117,121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "792e651d5257771653c7792f2892db9d1a7b32d4",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,75 @@
+.claude/settings.json
+  s_9cb69e0cdd8b77::t_5bedf7f810afec 11
+  s_9cb69e0cdd8b77::t_8a1fee622fd4b6 18
+  s_9cb69e0cdd8b77::t_a03042ff560075 19-23
+  s_114d5c731b1d0a::t_9ed8c8411a5d36 1-4,24-26
+  s_a75aea47651416::t_1089aea25d2f4d 15
+  s_9cb69e0cdd8b77::t_b49ff1e01442fd 12-14
+  s_9cb69e0cdd8b77::t_0b12c32fab92dd 7-8
+  s_9cb69e0cdd8b77::t_12670563184aff 16-17
+  s_9cb69e0cdd8b77::t_facc4e74ee9f2b 5-6
+  s_9cb69e0cdd8b77::t_aded6b1cd983c1 10
+  s_9cb69e0cdd8b77::t_578d94052bb51a 9
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_114d5c731b1d0a::t_f42050b3e9526d 169-170,250-253,255,257-266,268-269,272-290,292-315,332-336,340-342
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_114d5c731b1d0a::t_1a2e299d2f6a1d 27-58,257-259,263-264,406-425,457-465,638-646
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_114d5c731b1d0a::t_ab19da41d1cb03 195,255,263,301-308
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_114d5c731b1d0a::t_cdf8f3c79079a6 92-105,122-123,171-176,194-199,238-245,390,397-398,416,418
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_114d5c731b1d0a::t_55d117a17d232f 184-196,202-204
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_114d5c731b1d0a::t_9638fad7ab3220 14-15,94-99
+portal/src/app/services/workflow-api.service.ts
+  s_114d5c731b1d0a::t_cd29c9517f7010 53-61,171,202-205
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_114d5c731b1d0a::t_5bcb76a58a215b 13,45,48
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_114d5c731b1d0a::t_b454162afe1f53 12,50,105
+src/Api/FHIRBridge.Api/Workflows/WorkflowBuildModels.cs
+  s_114d5c731b1d0a::t_d7ad55f5338e8f 20-21
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_114d5c731b1d0a::t_78cbd5c1d45051 27-39
+portal/src/environments/environment.ts
+  s_114d5c731b1d0a::t_8b30f148ffa612 3
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_9cb69e0cdd8b77::t_bb98dc3b2fb4a0 2,75,77,79,89,91,93,158-176,221-223,226-245
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_a75aea47651416::t_fb30a4a2a6e1af 1-2,60-73
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_a75aea47651416::t_84d19e2ff00a15 17,166-224,288-294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e99d3835089ad192f721b8a559269642ca75f2b1",
+  "prompts": {},
+  "sessions": {
+    "s_114d5c731b1d0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61e95b00-534f-4458-8fba-1ecf45efb8b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_9cb69e0cdd8b77": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "870ab4ec-a2eb-41c9-a988-bf4901ddb321",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_a75aea47651416": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fb7637f-7952-453c-aa96-4865084c50d6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}
