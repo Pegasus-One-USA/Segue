@@ -1,0 +1,82 @@
+portal/src/app/app.component.ts
+  s_62affcfc9947ba::t_025499223dfe77 4
+  s_62affcfc9947ba::t_a55dab5de570ea 15-17
+portal/src/app/app.component.spec.ts
+  s_62affcfc9947ba::t_bc463756b8fa0b 2,8-9,15,18,21
+portal/src/app/auth/models/permission.constants.ts
+  s_62affcfc9947ba::t_043b0a6ddfff63 1-48
+portal/src/app/auth/directives/permission-input.util.ts
+  s_62affcfc9947ba::t_84d2d79b5cbdb4 1-6
+portal/src/app/auth/directives/has-permission.directive.ts
+  s_62affcfc9947ba::t_9fe4e397071f28 1
+  s_62affcfc9947ba::t_015cf584f1b145 2-51,55-61,63,65-68
+  s_62affcfc9947ba::t_4164b7f8245b45 52-54,62,64
+portal/src/app/auth/services/token-refresh-coordinator.service.ts
+  s_62affcfc9947ba::t_a06851143c2ac4 1-31
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_62affcfc9947ba::t_02a6ceca023db1 15-20
+  s_62affcfc9947ba::t_3b8841063a4e3d 11
+  s_62affcfc9947ba::t_0743b88b0e74f3 12-14
+  s_62affcfc9947ba::t_8c18d5312351a5 217-226,231,244-245,251
+portal/src/app/auth/interceptors/auth.interceptor.ts
+  s_62affcfc9947ba::t_ae171defd99e3d 1,4,6-7,9-18,20-26,28-32,36-41,43-52
+portal/src/app/auth/directives/disable-without-permission.directive.ts
+  s_62affcfc9947ba::t_cb08fd797b999d 1,11-19,33-37,52,54-58
+  s_62affcfc9947ba::t_1283537b66117e 2-10,20-32,38-51,53,59
+portal/src/app/auth/services/permission.service.ts
+  s_62affcfc9947ba::t_152f49e2b50bca 1-106
+portal/src/app/auth/directives/disable-without-permission.directive.spec.ts
+  s_62affcfc9947ba::t_7bf4681e68c303 1-70
+portal/scripts/generate-permissions.mjs
+  s_62affcfc9947ba::t_cae2271bc59824 1-97
+portal/src/app/auth/directives/index.ts
+  s_62affcfc9947ba::t_cc6a376a7d2fc9 1-2
+portal/src/app/auth/models/permission-check.model.ts
+  s_62affcfc9947ba::t_a92cdb3af21ff3 1-13
+portal/src/app/auth/services/permission.service.spec.ts
+  s_62affcfc9947ba::t_3b01404df278ae 4
+  s_62affcfc9947ba::t_cfb30a77bd697b 1-3,5-114
+portal/src/app/auth/directives/has-permission.directive.spec.ts
+  s_62affcfc9947ba::t_931891d8da371c 1-96
+portal/src/app/auth/services/permission-action-guard.service.ts
+  s_62affcfc9947ba::t_c48c6c7f428014 1-34
+portal/src/app/auth/testing/auth-test-helpers.ts
+  s_62affcfc9947ba::t_2d92bfe2090bcb 1-23
+portal/src/app/auth/services/permission-action-guard.service.spec.ts
+  s_62affcfc9947ba::t_a1674ddd5ac0e7 1-70
+portal/src/app/auth/services/cross-tab-auth-sync.service.ts
+  s_62affcfc9947ba::t_d5bdec4655c198 1-47
+portal/src/app/auth/services/auth.service.ts
+  s_62affcfc9947ba::t_225f7460294cb1 9
+  s_62affcfc9947ba::t_207aedd1534fdc 24-28
+  s_62affcfc9947ba::t_d33ad679d1117a 29-31
+  s_62affcfc9947ba::t_be5c189f557b16 128-134,136,138-142,147-151,153
+portal/package-lock.json
+  s_62affcfc9947ba::t_52092433f12bb5 31,6547-6553
+.github/workflows/portal-ci.yml
+  s_62affcfc9947ba::t_ed18ed9250abf5 34-35
+portal/package.json
+  s_62affcfc9947ba::t_f0a0d37cd4cc4f 13-14,39
+portal/src/app/auth/services/token.service.ts
+  s_62affcfc9947ba::t_7efcf3cf9f26c7 4-6
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_62affcfc9947ba::t_d34b7a0b39b446 33-36,61-62,73,106-114,116,204,212,220,229,257,275
+portal/src/environments/environment.ts
+  s_62affcfc9947ba::t_ebeb4b75ab16cc 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "26e226b0dc3a4512c9e5e0940658f7f54dc019a8",
+  "prompts": {},
+  "sessions": {
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
