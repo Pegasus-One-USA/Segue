@@ -32,7 +32,9 @@
   gap: 4px;
 
   &__link {
-    color: var(--color-muted) !important;
+    // mat-button reads its label color from this custom property rather than a plain `color`
+    // declaration, so supplying it here always wins -- no specificity fight, no !important.
+    --mdc-text-button-label-text-color: var(--color-muted);
     font-size: 13px;
     font-weight: 500;
     padding: 0 8px;
@@ -41,7 +43,7 @@
 
     mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 4px; }
 
-    &:hover { color: var(--color-primary) !important; }
+    &:hover { --mdc-text-button-label-text-color: var(--color-primary); }
   }
 
   &__sep { color: var(--color-border); font-size: 18px; height: 18px; width: 18px; }
@@ -445,21 +447,24 @@
 }
 
 .btn-cancel {
-  border-color: var(--color-border) !important;
-  color: var(--color-ink-2) !important;
+  // mat-stroked-button reads its outline/label colors from these custom properties -- setting
+  // them directly avoids a specificity fight with Material's own theme rules (no !important).
+  --mdc-outlined-button-outline-color: var(--color-border);
+  --mdc-outlined-button-label-text-color: var(--color-ink-2);
   border-radius: var(--radius-base);
   font-weight: 500;
   height: 40px;
 
   &:hover {
-    background: var(--color-bg) !important;
-    border-color: var(--color-muted) !important;
+    background: var(--color-bg);
+    --mdc-outlined-button-outline-color: var(--color-muted);
   }
 }
 
 .btn-save {
-  background: var(--color-primary) !important;
-  color: var(--color-on-primary) !important;
+  // mat-flat-button reads its container/label colors from these custom properties.
+  --mdc-filled-button-container-color: var(--color-primary);
+  --mdc-filled-button-label-text-color: var(--color-on-primary);
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;
@@ -473,8 +478,8 @@
 
   mat-icon { font-size: 18px; height: 18px; width: 18px; }
 
-  &:hover:not([disabled]) { background: var(--color-primary-dark) !important; }
-  &[disabled] { background: var(--color-muted) !important; opacity: 0.7; }
+  &:hover:not([disabled]) { --mdc-filled-button-container-color: var(--color-primary-dark); }
+  &[disabled] { --mdc-filled-button-container-color: var(--color-muted); opacity: 0.7; }
 
   ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0 !important; }
 }

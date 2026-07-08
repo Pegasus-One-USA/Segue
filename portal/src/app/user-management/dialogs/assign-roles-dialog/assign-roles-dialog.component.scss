@@ -329,8 +329,10 @@ mat-dialog-actions {
 }
 
 .btn-done {
-  background: var(--color-primary) !important;
-  color: var(--color-on-primary) !important;
+  // mat-flat-button reads its container/label colors from these custom properties -- setting
+  // them directly avoids a specificity fight with Material's own theme rules (no !important).
+  --mdc-filled-button-container-color: var(--color-primary);
+  --mdc-filled-button-label-text-color: var(--color-on-primary);
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;
@@ -341,5 +343,5 @@ mat-dialog-actions {
 
   mat-icon { font-size: 18px; height: 18px; width: 18px; }
 
-  &:hover { background: var(--color-primary-dark) !important; }
+  &:hover { --mdc-filled-button-container-color: var(--color-primary-dark); }
 }
