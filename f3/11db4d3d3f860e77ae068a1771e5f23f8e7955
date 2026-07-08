@@ -1,0 +1,55 @@
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_6fe72b0759281b::t_d733452e4ce01f 1-2
+  s_c63226a097143f::t_962c08b5bb6d92 55-56,89-90
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_c63226a097143f::t_184dabc3d79a69 166,202-205,213-219,255,330
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_c63226a097143f::t_a0429f58dc533d 50-65,281-282,464,648,666-674,768-771
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_c63226a097143f::t_4d82dbd3fb0b36 10,30
+portal/src/app/services/epic-discovery.service.ts
+  s_c63226a097143f::t_50b68d6ac7774f 14,24,51
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_c63226a097143f::t_f187096fd03d6d 111
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_c63226a097143f::t_bb368240087899 206,251,293-295,297
+src/FHIRBridge.Application/Abstractions/Destinations/IDestinationDataService.cs
+  s_c63226a097143f::t_08b26308594ea1 16
+src/FHIRBridge.Application/DTOs/SmartConfigurationDto.cs
+  s_c63226a097143f::t_a5dd7cd0440eeb 19-20
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationDataService.cs
+  s_c63226a097143f::t_28ba830bca1a09 37,60-65,67,74-81,131,134-135,137-138,141,143-146,148-149
+src/FHIRBridge.Infrastructure/Sources/SourceCapabilityDiscoveryService.cs
+  s_c63226a097143f::t_ed59a63ff8c6ac 178-179
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_c63226a097143f::t_a302c105e70e00 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f311db4d3d3f860e77ae068a1771e5f23f8e7955",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_c63226a097143f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51f2fe2d-b4db-426e-b111-97e8ef1f5afc",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
