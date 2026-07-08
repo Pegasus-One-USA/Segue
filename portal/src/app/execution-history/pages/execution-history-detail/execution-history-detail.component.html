@@ -53,8 +53,16 @@
 
     <div class="resource-list">
       @for (entry of resources().items; track entry.id) {
-        <div class="resource-row" (click)="toggleExpanded(entry.id)">
-          <div class="resource-summary">
+        <div class="resource-row">
+          <div
+            class="resource-summary"
+            role="button"
+            tabindex="0"
+            [attr.aria-expanded]="expandedId() === entry.id"
+            (click)="toggleExpanded(entry.id)"
+            (keydown.enter)="toggleExpanded(entry.id)"
+            (keydown.space)="toggleExpanded(entry.id); $event.preventDefault()"
+          >
             <span class="cell-primary">{{ entry.nodeType }}</span>
             <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>
             <span class="cell-muted">{{ entry.itemCount !== null ? entry.itemCount + ' item(s)' : '' }}</span>
@@ -63,7 +71,7 @@
           </div>
 
           @if (expandedId() === entry.id) {
-            <div class="resource-detail" (click)="$event.stopPropagation()">
+            <div class="resource-detail">
               <pre>{{ formatJson(entry.payloadJson) }}</pre>
             </div>
           }
