@@ -17,6 +17,9 @@ import { AuthService } from '../../services/auth.service';
 import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.component';
 import { SsoAuthApiService } from '../../services/sso-auth-api.service';
 import { SsoResult } from '../../services/sso.service';
+import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
+import { AppFooterComponent } from '../../../layout/app-footer/app-footer.component';
+import { BrandingService } from '../../../services/branding.service';
 
 @Component({
   selector: 'app-login',
@@ -31,6 +34,8 @@ import { SsoResult } from '../../services/sso.service';
     MatProgressSpinnerModule,
     MatIconModule,
     SsoButtonsComponent,
+    AuthBrandHeaderComponent,
+    AppFooterComponent,
   ],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
@@ -38,6 +43,7 @@ import { SsoResult } from '../../services/sso.service';
 export class LoginComponent {
   private readonly fb       = inject(FormBuilder);
   private readonly route    = inject(ActivatedRoute);
+  protected readonly branding = inject(BrandingService);
   private readonly router   = inject(Router);
   private readonly ssoApi   = inject(SsoAuthApiService);
   private readonly snackBar = inject(MatSnackBar);

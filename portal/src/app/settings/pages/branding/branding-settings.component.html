@@ -1,0 +1,228 @@
+<div class="dash-content">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Branding</h1>
+      <p class="page-sub">Customize how {{ branding.current().companyName }} looks across the platform — changes preview live before you save.</p>
+    </div>
+    @if (saved()) {
+      <div class="save-toast">&#10003; Branding saved</div>
+    }
+  </div>
+
+  <form class="settings-body" [formGroup]="form" (ngSubmit)="save()">
+
+      <!-- Identity -->
+      <section class="settings-card">
+        <h2 class="card-title">Identity</h2>
+        <p class="card-sub">Your company name and brand colors — applied across every screen automatically.</p>
+
+        <div class="bs-grid">
+          <div class="form-field form-field--full">
+            <label for="bs-companyName">Company Name</label>
+            <input id="bs-companyName" type="text" formControlName="companyName" placeholder="e.g. Acme Health" />
+          </div>
+
+          <div class="form-field">
+            <label for="bs-primaryColor">Primary Color</label>
+            <div class="color-field">
+              <input
+                type="color"
+                [value]="form.controls.primaryColor.value"
+                (input)="form.controls.primaryColor.setValue($any($event.target).value)"
+                aria-label="Primary color picker"
+              />
+              <input
+                id="bs-primaryColor"
+                type="text"
+                class="color-hex"
+                [class.color-hex--error]="form.controls.primaryColor.touched && form.controls.primaryColor.invalid"
+                formControlName="primaryColor"
+                placeholder="#00A89D"
+              />
+            </div>
+            @if (form.controls.primaryColor.touched && form.controls.primaryColor.invalid) {
+              <p class="field-error">Enter a valid hex color, e.g. #00A89D</p>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="bs-secondaryColor">Secondary Color</label>
+            <div class="color-field">
+              <input
+                type="color"
+                [value]="form.controls.secondaryColor.value"
+                (input)="form.controls.secondaryColor.setValue($any($event.target).value)"
+                aria-label="Secondary color picker"
+              />
+              <input
+                id="bs-secondaryColor"
+                type="text"
+                class="color-hex"
+                [class.color-hex--error]="form.controls.secondaryColor.touched && form.controls.secondaryColor.invalid"
+                formControlName="secondaryColor"
+                placeholder="#0076A8"
+              />
+            </div>
+            @if (form.controls.secondaryColor.touched && form.controls.secondaryColor.invalid) {
+              <p class="field-error">Enter a valid hex color, e.g. #0076A8</p>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="bs-accentColor">Accent Color</label>
+            <div class="color-field">
+              <input
+                type="color"
+                [value]="form.controls.accentColor.value"
+                (input)="form.controls.accentColor.setValue($any($event.target).value)"
+                aria-label="Accent color picker"
+              />
+              <input
+                id="bs-accentColor"
+                type="text"
+                class="color-hex"
+                [class.color-hex--error]="form.controls.accentColor.touched && form.controls.accentColor.invalid"
+                formControlName="accentColor"
+                placeholder="#007A72"
+              />
+            </div>
+            @if (form.controls.accentColor.touched && form.controls.accentColor.invalid) {
+              <p class="field-error">Enter a valid hex color, e.g. #007A72</p>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="bs-backgroundColor">Background Color</label>
+            <div class="color-field">
+              <input
+                type="color"
+                [value]="form.controls.backgroundColor.value"
+                (input)="form.controls.backgroundColor.setValue($any($event.target).value)"
+                aria-label="Background color picker"
+              />
+              <input
+                id="bs-backgroundColor"
+                type="text"
+                class="color-hex"
+                [class.color-hex--error]="form.controls.backgroundColor.touched && form.controls.backgroundColor.invalid"
+                formControlName="backgroundColor"
+                placeholder="#F5F7FA"
+              />
+            </div>
+            @if (form.controls.backgroundColor.touched && form.controls.backgroundColor.invalid) {
+              <p class="field-error">Enter a valid hex color, e.g. #F5F7FA</p>
+            }
+          </div>
+        </div>
+      </section>
+
+      <!-- Images -->
+      <section class="settings-card">
+        <h2 class="card-title">Logos &amp; Images</h2>
+        <p class="card-sub">Paste a URL or upload a file. Leave blank to keep the FHIRBridge default.</p>
+
+        <div class="bs-asset-grid">
+          <app-brand-asset-field label="Company Logo" formControlName="logoUrl" hint="Sidebar, auth pages" />
+          <app-brand-asset-field label="Dark Logo" formControlName="darkLogoUrl" hint="Used when dark theme is active" />
+          <app-brand-asset-field label="Favicon" formControlName="faviconUrl" hint="Browser tab icon" />
+          <app-brand-asset-field label="Login Background" formControlName="loginBackgroundUrl" hint="Full-bleed image behind the sign-in card" />
+          <app-brand-asset-field label="Login Illustration" formControlName="loginIllustrationUrl" hint="Graphic beside the sign-in card" />
+          <app-brand-asset-field label="Email Logo" formControlName="emailLogoUrl" hint="Header of invitation / reset emails" />
+        </div>
+      </section>
+
+      <!-- Contact & Footer -->
+      <section class="settings-card">
+        <h2 class="card-title">Contact &amp; Footer</h2>
+        <p class="card-sub">Shown in the app footer and at the bottom of outgoing emails.</p>
+
+        <div class="bs-grid">
+          <div class="form-field">
+            <label for="bs-footerText">Footer Text</label>
+            <input id="bs-footerText" type="text" formControlName="footerText" placeholder="e.g. Acme Health Systems" />
+          </div>
+          <div class="form-field">
+            <label for="bs-supportEmail">Support Email</label>
+            <input id="bs-supportEmail" type="email" formControlName="supportEmail" placeholder="support@example.com" />
+          </div>
+          <div class="form-field">
+            <label for="bs-supportPhone">Support Phone</label>
+            <input id="bs-supportPhone" type="text" formControlName="supportPhone" placeholder="+1 (800) 555-0100" />
+          </div>
+          <div class="form-field">
+            <label for="bs-website">Website</label>
+            <input id="bs-website" type="text" formControlName="website" placeholder="https://example.com" />
+          </div>
+          <div class="form-field form-field--full">
+            <label for="bs-emailFooterText">Email Footer Text</label>
+            <input id="bs-emailFooterText" type="text" formControlName="emailFooterText" placeholder="e.g. Acme Health — a FHIRBridge customer" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Appearance -->
+      <section class="settings-card">
+        <h2 class="card-title">Appearance</h2>
+        <p class="card-sub">Optional font override and the theme new users start with.</p>
+
+        <div class="bs-grid">
+          <div class="form-field">
+            <label for="bs-fontFamily">Font Family</label>
+            <select id="bs-fontFamily" formControlName="fontFamily">
+              @for (opt of fontOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-field">
+            <span class="field-heading" id="bs-themeMode">Default Theme Mode</span>
+            <div class="mode-pills" role="group" aria-labelledby="bs-themeMode">
+              @for (opt of themeModeOptions; track opt.id) {
+                <button
+                  type="button"
+                  class="mode-pill"
+                  [class.active]="form.value.defaultThemeMode === opt.id"
+                  (click)="setThemeMode(opt.id)"
+                >{{ opt.label }}</button>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live preview -->
+      <section class="settings-card">
+        <h2 class="card-title">Live Preview</h2>
+        <p class="card-sub">The sidebar and header around this page are already updating live — here's how login, buttons and cards will look too.</p>
+
+        <div class="bs-preview">
+          <div class="bs-preview-topbar">
+            @if (previewLogoUrl()) {
+              <img class="bs-preview-logo" [src]="previewLogoUrl()" alt="" />
+            } @else {
+              <span class="bs-preview-logo-dot"></span>
+            }
+            <span class="bs-preview-brand">{{ form.value.companyName || 'Company Name' }}</span>
+          </div>
+          <div class="bs-preview-body">
+            <div class="bs-preview-card">
+              <h4>Sample Card Heading</h4>
+              <p>This is how body text and cards will look with your branding applied.</p>
+              <div class="bs-preview-actions">
+                <button type="button" class="bs-preview-btn bs-preview-btn--primary">Primary Button</button>
+                <button type="button" class="bs-preview-btn bs-preview-btn--ghost">Secondary</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="save-row">
+        <button type="submit" class="btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save Branding' }}
+        </button>
+        <button type="button" class="btn-secondary" (click)="resetToDefault()">Reset to Default</button>
+      </div>
+
+  </form>
+</div>

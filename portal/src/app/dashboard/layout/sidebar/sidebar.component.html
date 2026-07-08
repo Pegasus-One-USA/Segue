@@ -1,8 +1,12 @@
 <aside class="sidebar" [class.collapsed]="collapsed()">
   <div class="sidebar-logo">
-    <span class="logo-hex">&#11041;</span>
+    @if (branding.effectiveLogoUrl()) {
+      <img class="logo-image" [src]="branding.effectiveLogoUrl()" [alt]="branding.current().companyName" />
+    } @else {
+      <span class="logo-hex">&#11041;</span>
+    }
     @if (!collapsed()) {
-      <span class="logo-text">FHIRBridge</span>
+      <span class="logo-text">{{ branding.current().companyName }}</span>
     }
   </div>
 

@@ -8,6 +8,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../services/auth.service';
+import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
 
 @Component({
   selector: 'app-forgot-password',
@@ -20,6 +21,7 @@ import { AuthService } from '../../services/auth.service';
     MatButtonModule,
     MatProgressSpinnerModule,
     MatIconModule,
+    AuthBrandHeaderComponent,
   ],
   templateUrl: './forgot-password.component.html',
   styleUrl: './forgot-password.component.scss',

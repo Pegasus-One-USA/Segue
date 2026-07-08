@@ -1,0 +1,88 @@
+.app-footer {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  flex-wrap:       wrap;
+  gap:             8px;
+  padding:         10px 24px;
+  font-size:       12px;
+  color:           var(--color-muted);
+  border-top:      1px solid var(--color-border);
+  box-shadow:      0 -1px 4px rgba(0, 0, 0, 0.04);
+  background:      var(--color-surface);
+  flex-shrink:     0;
+
+  &--compact {
+    border-top: none;
+    box-shadow: none;
+    background: transparent;
+    padding:    16px 0 0;
+    font-size:  11.5px;
+    justify-content: center;
+  }
+}
+
+.af-company {
+  font-weight: 600;
+  color:       var(--color-ink-2);
+}
+
+.af-powered {
+  color: var(--color-muted);
+}
+
+.af-copyright {
+  color: var(--color-muted-2);
+}
+
+.af-sep {
+  color: var(--color-border);
+}
+
+.af-link {
+  color: var(--color-muted);
+
+  &:hover {
+    color:           var(--color-primary);
+    text-decoration: underline;
+  }
+}
+
+.af-hide-mobile {
+  display:     inline-flex;
+  align-items: center;
+  gap:         8px;
+}
+
+.af-env-badge {
+  padding:        2px 8px;
+  border-radius:  var(--radius-pill);
+  background:     var(--color-warning-soft);
+  color:          var(--color-warning-strong);
+  border:         1px solid color-mix(in srgb, var(--color-warning) 40%, white);
+  font-size:      10px;
+  font-weight:    700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+/* Tablet and below: tighten padding, the wrap already handles narrower widths. */
+@media (max-width: 900px) {
+  .app-footer {
+    padding: 8px 16px;
+  }
+}
+
+/* Mobile: keep only the essentials on screen — company, powered-by, version,
+   support, env badge — dropping the website link and copyright line so the
+   wrapped footer doesn't eat too much vertical space on a small screen. */
+@media (max-width: 560px) {
+  .app-footer {
+    font-size: 11px;
+  }
+
+  .af-hide-mobile {
+    display: none;
+  }
+}

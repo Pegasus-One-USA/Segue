@@ -1,0 +1,24 @@
+{
+  "tenantId": "acme",
+  "companyName": "Acme Health",
+  "primaryColor": "#2563EB",
+  "secondaryColor": "#0EA5E9",
+  "accentColor": "#1D4ED8",
+  "backgroundColor": "#F4F7FE",
+  "fontFamily": "",
+  "footerText": "Acme Health Systems",
+  "supportEmail": "support@acmehealth.example",
+  "supportPhone": "+1 (800) 555-0142",
+  "website": "https://acmehealth.example",
+  "emailFooterText": "Acme Health Systems — a FHIRBridge customer",
+  "defaultThemeMode": "light",
+  "assets": {
+    "logoUrl": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%232563EB'/%3E%3Ctext x='20' y='27' font-family='Arial' font-size='19' font-weight='700' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E",
+    "darkLogoUrl": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%2360A5FA'/%3E%3Ctext x='20' y='27' font-family='Arial' font-size='19' font-weight='700' fill='%230B1220' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E",
+    "faviconUrl": "",
+    "loginBackgroundUrl": "",
+    "loginIllustrationUrl": "",
+    "emailLogoUrl": ""
+  },
+  "updatedAt": "2026-02-14T00:00:00.000Z"
+}

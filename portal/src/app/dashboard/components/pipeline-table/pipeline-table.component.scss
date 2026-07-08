@@ -51,10 +51,10 @@
   font-weight: 600;
   letter-spacing: 0.3px;
 
-  &.status-running   { background: var(--color-info-soft);    color: #1D4ED8; }
-  &.status-completed { background: var(--color-success-soft); color: #065F46; }
-  &.status-failed    { background: var(--color-error-soft);   color: #991B1B; }
-  &.status-queued    { background: var(--color-warning-soft); color: #92400E; }
+  &.status-running   { background: var(--color-info-soft);    color: var(--color-info-strong); }
+  &.status-completed { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &.status-failed    { background: var(--color-error-soft);   color: var(--color-error-strong); }
+  &.status-queued    { background: var(--color-warning-soft); color: var(--color-warning-strong); }
   &.status-cancelled { background: var(--color-side);         color: var(--color-muted); }
 }
 

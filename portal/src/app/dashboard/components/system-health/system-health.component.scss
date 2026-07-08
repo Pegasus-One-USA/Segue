@@ -6,9 +6,9 @@
   padding: 3px 10px;
   border-radius: 20px;
 
-  &.badge-online   { background: #D1FAE5; color: #065F46; }
-  &.badge-degraded { background: #FEF3C7; color: #92400E; }
-  &.badge-offline  { background: #FEE2E2; color: #991B1B; }
+  &.badge-online   { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &.badge-degraded { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &.badge-offline  { background: var(--color-error-soft);   color: var(--color-error-strong); }
 }
 
 .health-list {
@@ -21,7 +21,7 @@
   align-items: center;
   gap: 10px;
   padding: 11px 0;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--color-border);
   font-size: 13px;
 
   &:last-child { border-bottom: none; }
@@ -48,6 +48,6 @@
   border-radius: 20px;
   font-variant-numeric: tabular-nums;
 
-  &.pill-green { background: #D1FAE5; color: #065F46; }
-  &.pill-amber { background: #FEF3C7; color: #92400E; }
+  &.pill-green { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &.pill-amber { background: var(--color-warning-soft); color: var(--color-warning-strong); }
 }

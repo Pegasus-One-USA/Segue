@@ -1,29 +1,32 @@
 <!-- auth/pages/login/login.component.html -->
-<div class="auth-page" role="main">
+<div
+  class="auth-page"
+  role="main"
+  [class.auth-page--custom-bg]="branding.current().assets.loginBackgroundUrl"
+  [style.background-image]="branding.current().assets.loginBackgroundUrl ? 'url(' + branding.current().assets.loginBackgroundUrl + ')' : null"
+>
 
-  <!-- Decorative background orbs -->
-  <div class="auth-orb auth-orb--primary" aria-hidden="true"></div>
-  <div class="auth-orb auth-orb--indigo"  aria-hidden="true"></div>
+  <!-- Decorative background orbs — only shown over the default gradient, not a tenant's photo background -->
+  @if (!branding.current().assets.loginBackgroundUrl) {
+    <div class="auth-orb auth-orb--primary" aria-hidden="true"></div>
+    <div class="auth-orb auth-orb--indigo"  aria-hidden="true"></div>
+  }
 
-  <div class="auth-card" role="region" aria-label="Sign in to FHIRBridge">
+  <div class="auth-layout">
 
-    <!-- ── Brand / Logo ──────────────────────────────────────────── -->
-    <header class="auth-logo">
-      <div class="logo-icon" aria-hidden="true">
-        <svg width="40" height="40" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="36" height="36" rx="10" fill="#00A89D"/>
-          <path d="M10 18h16M18 10v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="18" cy="18" r="5" stroke="#fff" stroke-width="2"/>
-        </svg>
+    @if (branding.current().assets.loginIllustrationUrl) {
+      <div class="auth-illustration" aria-hidden="true">
+        <img [src]="branding.current().assets.loginIllustrationUrl" alt="" />
       </div>
-      <div class="logo-text">
-        <span class="brand">FHIRBridge</span>
-        <span class="brand-tag">Healthcare Integration Platform</span>
-      </div>
-    </header>
+    }
 
-    <!-- ── Heading ───────────────────────────────────────────────── -->
-    <p class="auth-sub">Sign in to your account to continue</p>
+    <div class="auth-card" role="region" [attr.aria-label]="'Sign in to ' + branding.current().companyName">
+
+      <!-- ── Brand / Logo ──────────────────────────────────────────── -->
+      <app-auth-brand-header />
+
+      <!-- ── Heading ───────────────────────────────────────────────── -->
+      <p class="auth-sub">Sign in to your account to continue</p>
 
     <!-- ── Account activated banner ─────────────────────────────── -->
     @if (activated()) {
@@ -127,13 +130,16 @@
 
     </form>
 
-    <!-- ── SSO ─────────────────────────────────────────────────── -->
-    <app-sso-buttons
-      verb="Continue"
-      [disabled]="isLoading() || ssoBusy()"
-      (authenticated)="onSsoAuthenticated($event)"
-      (failed)="onSsoFailed($event)"
-    />
+      <!-- ── SSO ─────────────────────────────────────────────────── -->
+      <app-sso-buttons
+        verb="Continue"
+        [disabled]="isLoading() || ssoBusy()"
+        (authenticated)="onSsoAuthenticated($event)"
+        (failed)="onSsoFailed($event)"
+      />
 
+    </div>
   </div>
+
+  <app-footer variant="compact" />
 </div>

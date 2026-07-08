@@ -65,6 +65,15 @@ export const routes: Routes = [
           ),
       },
 
+      // Organization Settings — e.g. Branding (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      {
+        path: 'settings',
+        canActivate: [permissionGuard],
+        data: { permissions: ['configuration.write'] },
+        loadChildren: () =>
+          import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES),
+      },
+
       // User Account pages
       {
         path: 'profile',
