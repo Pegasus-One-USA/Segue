@@ -29,6 +29,24 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
  * tokens; when absent (Epic frequently omits them) it infers from scopes_supported — a granular v2 suffix like
  * `.rs` / `.cruds` implies v2, coarse `.read` / `.write` implies v1. Returns null when nothing is conclusive.
  */
+// True when an advertised scope (possibly with '*' wildcards in the resource/action segment) covers a concrete scope —
+// e.g. advertised "user/*.rs" covers "user/Patient.rs". Mirrors the backend ScopeGeneratorService matcher.
+function scopeWildcardCovers(advertised: string, scope: string): boolean {
+  const split = (s: string): [string, string, string] => {
+    const slash = s.indexOf('/');
+    if (slash < 0) return [s, '', ''];
+    const prefix = s.slice(0, slash);
+    const rest = s.slice(slash + 1);
+    const dot = rest.lastIndexOf('.');
+    return dot < 0 ? [prefix, rest, ''] : [prefix, rest.slice(0, dot), rest.slice(dot + 1)];
+  };
+  const [ap, ar, aa] = split(advertised);
+  const [sp, sr, sa] = split(scope);
+  return ap.toLowerCase() === sp.toLowerCase()
+    && (ar === '*' || ar.toLowerCase() === sr.toLowerCase())
+    && (aa === '*' || aa.toLowerCase() === sa.toLowerCase());
+}
+
 function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
   if (capabilities.includes('permission-v2')) return 'v2';
   if (capabilities.includes('permission-v1')) return 'v1';
@@ -236,6 +254,9 @@ export class EpicAudienceFormComponent implements OnInit {
   }
   protected get resourcesAreAuto(): boolean { return this.discoveredResourceTypes().length > 0; }
 
+  /** Editing an existing source: resource types are locked (identity-defining) — shown prepopulated but disabled. */
+  protected get isEditing(): boolean { return this.wiz.isEditing(); }
+
   protected readonly discStatus   = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
   protected readonly discValues   = signal<FullDiscoveredValues | null>(null);
   protected readonly discoveredScopes = signal<string[]>([]);
@@ -382,6 +403,26 @@ export class EpicAudienceFormComponent implements OnInit {
     return [...fixed, ...res.map(r => `${cfg.scopePrefix}/${r}.${suffix}`)].join('\n');
   });
 
+  /** True once Discover has fetched the endpoint's advertised scopes — lets the panel say "validated against Epic". */
+  protected get scopesValidatedByDiscovery(): boolean { return this.discoveredScopes().length > 0; }
+
+  /**
+   * Resource scopes the generated set requests that the source did NOT advertise in its SMART discovery document —
+   * mirrors the backend ScopeGeneratorService validation (exact or wildcard match). Base scopes (openid/launch/…) are
+   * not validated because servers rarely enumerate them in scopes_supported. Empty until Discover has run.
+   */
+  protected readonly unsupportedScopes = computed(() => {
+    const advertised = this.discoveredScopes();
+    if (advertised.length === 0) {
+      return [] as string[];
+    }
+    return this.scopeString()
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter(s => /^[^/]+\/[^.]+\.[^.]+$/.test(s)) // resource-shaped scopes only
+      .filter(s => !advertised.some(a => a === s || scopeWildcardCovers(a, s)));
+  });
+
   ngOnInit(): void {
     if (this.wiz.isEditing()) {
       // Pre-populate all fields from saved node data
@@ -413,6 +454,15 @@ export class EpicAudienceFormComponent implements OnInit {
     }
     if (this.wiz.resources().length) {
       this.form.controls.resources.setValue(this.wiz.resources());
+      // Editing: the saved resource types define the source's identity, so render them prepopulated (and disabled in
+      // the template) instead of the pre-discovery empty-state. Seed the discovered list + mark discovery done so the
+      // picker shows exactly the saved set.
+      if (this.wiz.isEditing()) {
+        this.discoveredResourceTypes.set(this.wiz.resources());
+        if (this.discStatus() !== 'done') {
+          this.discStatus.set('done');
+        }
+      }
     }
     if (this.wiz.stepName()) {
       this.form.controls.appName.setValue(this.wiz.stepName());

@@ -24,6 +24,19 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
         // Computed convenience alias over IsEnabled — not a stored column.
         builder.Ignore(x => x.IsActive);
 
+        builder.Property(x => x.LastTriggeredOnUtc);
+
+        // Workflow-level scheduling metadata (approach B) — flattened into the WorkflowDefinitions row. Optional:
+        // existing rows (and manual/launched workflows) simply have null trigger columns.
+        builder.OwnsOne(x => x.Trigger, trigger =>
+        {
+            trigger.Property(t => t.Type).HasConversion<string>().HasMaxLength(50).HasColumnName("TriggerType");
+            trigger.Property(t => t.ScheduleExpression).HasMaxLength(200).HasColumnName("TriggerScheduleExpression");
+            trigger.Property(t => t.IntervalMinutes).HasColumnName("TriggerIntervalMinutes");
+            trigger.Property(t => t.BackfillOnFirstRun).HasColumnName("TriggerBackfillOnFirstRun");
+        });
+        builder.Navigation(x => x.Trigger).IsRequired(false);
+
         builder.HasMany(x => x.Nodes)
             .WithOne()
             .HasForeignKey(node => node.WorkflowDefinitionId)

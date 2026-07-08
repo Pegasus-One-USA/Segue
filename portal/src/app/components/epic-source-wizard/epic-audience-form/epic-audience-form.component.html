@@ -247,7 +247,8 @@
           <div class="eaf-section-head">
             <span class="eaf-section-num">5</span>
             <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
-            @if (resourcesAreAuto) { <span class="eaf-tag-auto">auto-detected from /metadata</span> }
+            @if (isEditing) { <span class="eaf-tag-fixed">locked — editing</span> }
+            @else if (resourcesAreAuto) { <span class="eaf-tag-auto">auto-detected from /metadata</span> }
             @if (discStatus() === 'done') {
               <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
             }
@@ -269,32 +270,45 @@
             }
 
             <div class="eaf-resources-grid" data-control="resources">
-              <label class="eaf-res-all">
-                <input type="checkbox"
-                       [checked]="selectedResources().length === resources.length"
-                       [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
-                       (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
-                <span>Select all</span>
-              </label>
+              @if (!isEditing) {
+                <label class="eaf-res-all">
+                  <input type="checkbox"
+                         [checked]="selectedResources().length === resources.length"
+                         [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
+                         (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
+                  <span>Select all</span>
+                </label>
+              }
               @for (r of resources; track r) {
                 <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
                   <input type="checkbox"
                          [checked]="selectedResources().includes(r)"
+                         [disabled]="isEditing"
                          (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
                   <span class="eaf-res-name">{{ r }}</span>
                 </label>
               }
             </div>
+            @if (isEditing) {
+              <p class="eaf-hint">Resource types are locked while editing — create a new source to change them.</p>
+            }
 
             <!-- Scopes — auto/fixed by app, exposed as readonly field -->
             @if (selectedResources().length > 0) {
               <div class="eaf-scope-wrap">
                 <div class="eaf-scope-head">
                   <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
-                  <span class="eaf-tag-auto">auto · fixed by app</span>
+                  @if (scopesValidatedByDiscovery) {
+                    <span class="eaf-tag-auto">auto-generated · validated against Epic discovery</span>
+                  } @else {
+                    <span class="eaf-tag-auto">auto-generated</span>
+                  }
                   <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
                 </div>
                 <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
+                @if (unsupportedScopes().length) {
+                  <p class="eaf-hint">⚠ Not advertised by this endpoint's discovery: {{ unsupportedScopes().join(', ') }}</p>
+                }
               </div>
             }
           } @else {
@@ -315,10 +329,17 @@
             <div class="eaf-scope-wrap">
               <div class="eaf-scope-head">
                 <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
-                <span class="eaf-tag-auto">auto · fixed by app</span>
+                @if (scopesValidatedByDiscovery) {
+                  <span class="eaf-tag-auto">auto-generated · validated against Epic discovery</span>
+                } @else {
+                  <span class="eaf-tag-auto">auto-generated</span>
+                }
                 <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
               </div>
               <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
+              @if (unsupportedScopes().length) {
+                <p class="eaf-hint">⚠ Not advertised by this endpoint's discovery: {{ unsupportedScopes().join(', ') }}</p>
+              }
             </div>
           } @else {
             <p class="eaf-hint">Select a Data Retrieval Method and at least one Resource Type below to preview scopes.</p>

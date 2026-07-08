@@ -33,9 +33,21 @@ public sealed class WorkflowDefinition
 
     public bool IsActive => IsEnabled;
 
+    /// <summary>Workflow-level scheduling metadata (null ⇒ manual / launched). Read by the Worker to fire schedules.</summary>
+    public WorkflowTrigger? Trigger { get; private set; }
+
+    /// <summary>Last time the scheduler claimed this workflow for a run; null means never fired by the scheduler.</summary>
+    public DateTime? LastTriggeredOnUtc { get; private set; }
+
     public IReadOnlyCollection<WorkflowNode> Nodes => _nodes;
 
     public IReadOnlyCollection<WorkflowEdge> Edges => _edges;
+
+    /// <summary>Sets (or clears) the scheduling trigger. Manual/null means the workflow only runs on demand.</summary>
+    public void SetTrigger(WorkflowTrigger? trigger) => Trigger = trigger;
+
+    /// <summary>Records that the scheduler claimed this workflow for a run at <paramref name="triggeredOnUtc"/>.</summary>
+    public void MarkTriggered(DateTime triggeredOnUtc) => LastTriggeredOnUtc = triggeredOnUtc;
 
     public WorkflowNode AddNode(
         string nodeType,

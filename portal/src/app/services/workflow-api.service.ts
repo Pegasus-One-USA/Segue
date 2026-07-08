@@ -50,6 +50,15 @@ export interface WorkflowDefinitionRequest {
   isEnabled: boolean;
   nodes: WorkflowNodeRequest[];
   edges: WorkflowEdgeRequest[];
+  trigger?: WorkflowTriggerRequest | null;
+}
+
+/** Workflow-level schedule (Backend-Systems workflows). Omit / Manual = run on demand. Matches the backend DTO. */
+export interface WorkflowTriggerRequest {
+  type: 'Manual' | 'Schedule' | 'Poll';
+  scheduleExpression?: string | null;
+  intervalMinutes?: number | null;
+  backfillOnFirstRun?: boolean;
 }
 
 export interface WorkflowNodeDto extends WorkflowNodeRequest {
@@ -159,6 +168,7 @@ export interface WorkflowBuildRequest {
   sources?: SourceBuildSpec[];
   destinations?: DestinationBuildSpec[];
   mappings?: MappingBuildSpec[];
+  trigger?: WorkflowTriggerRequest | null;
 }
 
 export interface WorkflowBuildResult {

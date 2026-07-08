@@ -4,6 +4,9 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Pipeline;
+using FHIRBridge.Runtime.Application.Workflows;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
+using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Worker;
@@ -45,11 +48,18 @@ public sealed class Worker : BackgroundService
 
     private async Task RunOnceAsync(CancellationToken cancellationToken)
     {
-        var options = _options.Value;
-
         using var scope = _serviceScopeFactory.CreateScope();
-        var configurationRepository = scope.ServiceProvider.GetRequiredService<IConfigurationRepository>();
         var nowUtc = DateTime.UtcNow;
+
+        await RunDueRoutesAsync(scope, nowUtc, cancellationToken);
+        await RunDueWorkflowsAsync(scope, nowUtc, cancellationToken);
+    }
+
+    // Existing route-based scheduling (unchanged behaviour).
+    private async Task RunDueRoutesAsync(IServiceScope scope, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var options = _options.Value;
+        var configurationRepository = scope.ServiceProvider.GetRequiredService<IConfigurationRepository>();
         var dueResourceTypes = await GetDueResourceTypesAsync(
             configurationRepository,
             options.ResourceTypes,
@@ -83,6 +93,58 @@ public sealed class Worker : BackgroundService
             pipelineRun.Status,
             pipelineRun.ExtractedResourceCount,
             pipelineRun.WrittenRecordCount);
+    }
+
+    // Approach-B workflow scheduling: fire enabled workflow graphs whose trigger is due. Graceful when the graph
+    // engine isn't composed in this host (GetService → null), so route scheduling is unaffected.
+    private async Task RunDueWorkflowsAsync(IServiceScope scope, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var store = scope.ServiceProvider.GetService<IWorkflowDefinitionStore>();
+        var orchestrator = scope.ServiceProvider.GetService<IRankedWorkflowOrchestrator>();
+        if (store is null || orchestrator is null)
+        {
+            return;
+        }
+
+        var workflows = await store.ListAsync(cancellationToken);
+        foreach (var workflow in workflows)
+        {
+            if (!workflow.IsEnabled || workflow.Trigger is null || !IsWorkflowDue(workflow, nowUtc))
+            {
+                continue;
+            }
+
+            try
+            {
+                var context = new WorkflowExecutionContext(Guid.NewGuid(), Guid.NewGuid().ToString("N"));
+                var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
+                workflow.MarkTriggered(nowUtc);
+                await store.SaveAsync(workflow, cancellationToken);
+
+                _logger.LogInformation(
+                    "Scheduled workflow {WorkflowId} '{Name}' fired at {ScheduledAtUtc} → {Status}.",
+                    workflow.Id, workflow.Name, nowUtc, result.WorkflowRun.Status);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Scheduled workflow {WorkflowId} '{Name}' failed.", workflow.Id, workflow.Name);
+            }
+        }
+    }
+
+    private static bool IsWorkflowDue(WorkflowDefinition workflow, DateTime nowUtc)
+    {
+        var trigger = workflow.Trigger!;
+        return trigger.Type switch
+        {
+            WorkflowTriggerType.Schedule =>
+                ScheduleExpressionMatcher.IsDueSince(trigger.ScheduleExpression, workflow.LastTriggeredOnUtc, nowUtc),
+            WorkflowTriggerType.Poll =>
+                trigger.IntervalMinutes is int minutes && minutes > 0 &&
+                (workflow.LastTriggeredOnUtc is null ||
+                 nowUtc - workflow.LastTriggeredOnUtc.Value >= TimeSpan.FromMinutes(minutes)),
+            _ => false,
+        };
     }
 
     private static async Task<IReadOnlyList<string>> GetDueResourceTypesAsync(
