@@ -4,6 +4,7 @@ using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    partial class FHIRBridgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260708151542_AddExecutionHistoryTables")]
+    partial class AddExecutionHistoryTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1423,47 +1426,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkflowNodeRuns", (string)null);
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRunPayload", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Contract")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("ItemCount")
-                        .HasColumnType("int");
-
-                    b.Property<string>("NodeType")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("PayloadJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTimeOffset>("RecordedAtUtc")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("WorkflowNodeRunId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("WorkflowRunId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RecordedAtUtc");
-
-                    b.HasIndex("WorkflowRunId");
-
-                    b.ToTable("WorkflowNodeRunPayloads", (string)null);
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1483,14 +1445,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("TriggerType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("TriggeredBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
 
                     b.Property<Guid>("WorkflowDefinitionId")
                         .HasColumnType("uniqueidentifier");

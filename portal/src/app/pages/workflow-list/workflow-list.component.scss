@@ -18,6 +18,13 @@
   flex-wrap: wrap;
 }
 
+.page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .page-title { font-size: 22px; font-weight: 700; color: var(--color-ink); margin: 0; }
 .page-sub   { font-size: 14px; color: var(--color-muted); margin: 4px 0 0; max-width: 640px; }
 
@@ -230,6 +237,22 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
+// Page-level primary CTA ("New Workflow") — deliberately distinct from .btn-primary above, which is the row
+// action button (soft-info by default, teal only for its .is-launch modifier). This is the one true teal
+// primary per the design spec (§7.1): bg --color-primary, hover --color-primary-dark + lift.
+.btn-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 40px; padding: 0 18px;
+  border: none; border-radius: var(--radius-base);
+  background: var(--color-primary); color: var(--color-on-primary);
+  font-size: 13.5px; font-weight: 700; cursor: pointer; text-decoration: none;
+  transition: background var(--transition-base), transform var(--transition-fast);
+
+  &:hover:not(:disabled) { background: var(--color-primary-dark); transform: translateY(-1px); }
+  &:active:not(:disabled) { transform: translateY(0); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
 .btn-ghost {
   display: inline-flex; align-items: center; gap: 6px;
   height: 36px; padding: 0 14px;
@@ -286,7 +309,7 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 
 // ── Modal ───────────────────────────────────────────────────────────────────
 .modal-overlay {
-  position: fixed; inset: 0; z-index: 1000;
+  position: fixed; inset: 0; z-index: var(--z-modal, 200);
   background: rgba(15, 23, 42, 0.55);
   display: flex; align-items: center; justify-content: center;
   padding: 24px;

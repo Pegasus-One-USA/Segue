@@ -504,7 +504,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             return false;
         }
 
-        var context = new WorkflowExecutionContext(Guid.NewGuid(), $"ehr-launch:{sourceConnectionId:N}");
+        var context = new WorkflowExecutionContext(
+            Guid.NewGuid(),
+            $"ehr-launch:{sourceConnectionId:N}",
+            triggeredBy: $"source:{sourceConnectionId:N}",
+            triggerType: "InteractiveLaunch");
         var result = await _workflowOrchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
         await RecordAuditAsync(
@@ -531,7 +535,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken)
                 ?? throw new NotFoundException("WorkflowDefinition", workflowId);
 
-            var context = new WorkflowExecutionContext(Guid.NewGuid(), $"ehr-launch:workflow:{workflowId:N}");
+            var context = new WorkflowExecutionContext(
+                Guid.NewGuid(),
+                $"ehr-launch:workflow:{workflowId:N}",
+                triggeredBy: $"source:{sourceConnectionId:N}",
+                triggerType: "InteractiveLaunch");
             var result = await _workflowOrchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchWorkflowTriggered", "Started",

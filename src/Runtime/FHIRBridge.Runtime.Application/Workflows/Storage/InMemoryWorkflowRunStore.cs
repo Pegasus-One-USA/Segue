@@ -33,4 +33,16 @@ public sealed class InMemoryWorkflowRunStore : IWorkflowRunStore
 
         return Task.FromResult(runs);
     }
+
+    public Task<IReadOnlyCollection<WorkflowRun>> ListRecentAsync(
+        int count,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyCollection<WorkflowRun> runs = _runs.Values
+            .OrderByDescending(run => run.StartedAt)
+            .Take(Math.Clamp(count, 1, 1000))
+            .ToArray();
+
+        return Task.FromResult(runs);
+    }
 }

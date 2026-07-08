@@ -84,6 +84,11 @@ export class WorkflowListComponent implements OnInit {
     this.searchQuery.set(value);
   }
 
+  /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
+  onNewWorkflow(): void {
+    this.router.navigate(['/workflow-builder']);
+  }
+
   onAction(row: WorkflowSummary): void {
     if (this.busyId()) return;
     this.busyId.set(row.workflowId);

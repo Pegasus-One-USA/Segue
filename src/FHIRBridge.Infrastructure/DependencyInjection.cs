@@ -74,6 +74,10 @@ public static class DependencyInjection
             });
         }
 
+        // Field-level encryptor for the PHI-bearing execution-history columns (fetched/normalized/mapped payloads).
+        // Registered unconditionally — it has no DB dependency of its own.
+        services.AddSingleton<IPhiFieldEncryptor, AesGcmPhiFieldEncryptor>();
+
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -83,6 +87,8 @@ public static class DependencyInjection
             services.AddSingleton<IOperationalAuditService, InMemoryOperationalAuditService>();
             services.AddSingleton<IUserActivityAuditService, InMemoryUserActivityAuditService>();
             services.AddSingleton<IConfiguredPipelineRunRepository, InMemoryConfiguredPipelineRunRepository>();
+            services.AddSingleton<IPipelineRunRouteExecutionRepository, InMemoryPipelineRunRouteExecutionRepository>();
+            services.AddSingleton<IExecutionResourceHistoryRecorder, InMemoryExecutionResourceHistoryRecorder>();
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
@@ -117,6 +123,10 @@ public static class DependencyInjection
             services.AddScoped<IOperationalAuditService, EfOperationalAuditService>();
             services.AddScoped<IUserActivityAuditService, EfUserActivityAuditService>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
+            services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
+            services.AddScoped<EfExecutionResourceHistoryRecorder>();
+            services.AddScoped<IExecutionResourceHistoryRecorder>(sp => sp.GetRequiredService<EfExecutionResourceHistoryRecorder>());
+            services.AddScoped<IPurgeableStore>(sp => sp.GetRequiredService<EfExecutionResourceHistoryRecorder>());
             services.AddScoped<ISourceCapabilityRepository, EfSourceCapabilityRepository>();
 
             // Durable, multi-instance idempotency backed by the ProcessedMessages table.

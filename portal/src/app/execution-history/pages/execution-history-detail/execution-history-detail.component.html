@@ -1,0 +1,92 @@
+<div class="detail-page">
+
+  <button class="btn-back" type="button" (click)="back()">
+    <mat-icon>arrow_back</mat-icon>
+    Back to Execution History
+  </button>
+
+  @if (execution(); as ex) {
+    <div class="header-card">
+      <div class="header-top">
+        <div class="header-title">
+          <div class="pipe-avatar"><mat-icon>bolt</mat-icon></div>
+          <div>
+            <h2>{{ ex.pipelineName }}</h2>
+            <span class="cell-muted">{{ ex.sourceName ?? ex.sourceSystemType ?? 'Unknown source' }}</span>
+          </div>
+        </div>
+        <span class="status-badge" [class]="statusClass(ex.status)">{{ ex.status }}</span>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat">
+          <span class="stat-label">Started</span>
+          <span class="stat-value">{{ ex.startedAt | date:'MMM d, y, h:mm:ss a' }}</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Duration</span>
+          <span class="stat-value">{{ formatDuration(ex.durationMs) }}</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Triggered By</span>
+          <span class="stat-value">{{ ex.triggeredBy ?? '—' }} ({{ ex.triggerType ?? 'Manual' }})</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Node Runs</span>
+          <span class="stat-value">{{ ex.nodeRunCount }}</span>
+        </div>
+      </div>
+
+      @if (ex.errorMessage) {
+        <div class="error-banner">
+          <mat-icon>error_outline</mat-icon>
+          <span>{{ ex.errorMessage }}</span>
+        </div>
+      }
+    </div>
+  }
+
+  <div class="table-card">
+    <div class="table-meta">
+      <span class="entries-info">What each node fetched, transformed, and wrote for this run</span>
+    </div>
+
+    <div class="resource-list">
+      @for (entry of resources().items; track entry.id) {
+        <div class="resource-row" (click)="toggleExpanded(entry.id)">
+          <div class="resource-summary">
+            <span class="cell-primary">{{ entry.nodeType }}</span>
+            <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>
+            <span class="cell-muted">{{ entry.itemCount !== null ? entry.itemCount + ' item(s)' : '' }}</span>
+            <span class="cell-muted">{{ entry.recordedAtUtc | date:'MMM d, h:mm:ss a' }}</span>
+            <mat-icon class="chevron">{{ expandedId() === entry.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </div>
+
+          @if (expandedId() === entry.id) {
+            <div class="resource-detail" (click)="$event.stopPropagation()">
+              <pre>{{ formatJson(entry.payloadJson) }}</pre>
+            </div>
+          }
+        </div>
+      } @empty {
+        <div class="empty-state">
+          <mat-icon>bolt</mat-icon>
+          <p>No node output recorded for this run yet.</p>
+        </div>
+      }
+    </div>
+
+    @if (resources().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="resources().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+        class="table-paginator"
+      ></mat-paginator>
+    }
+  </div>
+
+</div>

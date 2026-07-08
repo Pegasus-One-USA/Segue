@@ -185,8 +185,9 @@ export class WorkflowBuilderComponent implements OnInit {
         const unmapped = this.buildAssembler.lastUnmappedResources;
         const caveat = unmapped.length ? ` (not wired: ${unmapped.join(', ')})` : '';
         this.workflowStatus.set(`Created ${created} config(s) + saved workflow.${caveat}`);
-        this.toast.show('Workflow created', `Provisioned configs and saved. You can Run it now.${caveat}`);
+        this.toast.success('Workflow saved', `Provisioned configs and saved. You can Run it now.${caveat}`);
         this.workflowBusy.set(false);
+        this.resetCanvasAndWorkflowState();
       },
       error: err => {
         const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Create-on-save failed.';
@@ -366,17 +367,22 @@ export class WorkflowBuilderComponent implements OnInit {
 
             if (!activate) {
               this.workflowStatus.set(`Saved ${saved.name}.`);
+              this.toast.success('Workflow saved', `"${saved.name}" was saved.`);
               this.workflowBusy.set(false);
+              this.resetCanvasAndWorkflowState();
               return;
             }
 
             this.workflowApi.activate(saved.id).subscribe({
               next: active => {
                 this.workflowStatus.set(`Saved and activated ${active.name}.`);
+                this.toast.success('Workflow saved', `"${active.name}" was saved and activated.`);
                 this.workflowBusy.set(false);
+                this.resetCanvasAndWorkflowState();
               },
               error: () => {
                 this.workflowStatus.set('Saved workflow, but activation failed.');
+                this.toast.warning('Activation failed', `"${saved.name}" was saved but could not be activated.`);
                 this.workflowBusy.set(false);
               },
             });
@@ -392,6 +398,17 @@ export class WorkflowBuilderComponent implements OnInit {
         this.workflowBusy.set(false);
       },
     });
+  }
+
+  /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */
+  private resetCanvasAndWorkflowState(): void {
+    this.store.reset();
+    this.currentWorkflowId.set(null);
+    this.workflowName.set('');
+    this.workflowIdInput.set('');
+    this.triggerType.set('Manual');
+    this.cronExpression.set('0 0 * * *');
+    this.pollMinutes.set(15);
   }
 
   private addStubSource(s: Source): void {

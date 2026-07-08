@@ -11,17 +11,20 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IWorkflowNodeExecutorRegistry _executorRegistry;
     private readonly IWorkflowAuditRecorder _auditRecorder;
     private readonly IWorkflowRunStore? _runStore;
+    private readonly IWorkflowNodeResourceHistoryRecorder? _resourceHistoryRecorder;
 
     public RankedWorkflowOrchestrator(
         IWorkflowGraphValidator graphValidator,
         IWorkflowNodeExecutorRegistry executorRegistry,
         IWorkflowAuditRecorder? auditRecorder = null,
-        IWorkflowRunStore? runStore = null)
+        IWorkflowRunStore? runStore = null,
+        IWorkflowNodeResourceHistoryRecorder? resourceHistoryRecorder = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
         _auditRecorder = auditRecorder ?? new InMemoryWorkflowAuditRecorder();
         _runStore = runStore;
+        _resourceHistoryRecorder = resourceHistoryRecorder;
     }
 
     public async Task<WorkflowRunResult> ExecuteAsync(
@@ -35,7 +38,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             throw new WorkflowGraphValidationException(validationResult.Errors);
         }
 
-        var workflowRun = new WorkflowRun(context.WorkflowRunId, workflowDefinition.Id, DateTimeOffset.UtcNow);
+        var workflowRun = new WorkflowRun(
+            context.WorkflowRunId,
+            workflowDefinition.Id,
+            DateTimeOffset.UtcNow,
+            context.TriggeredBy,
+            context.TriggerType);
         var orderedNodes = TopologicalSort(workflowDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
 
@@ -87,6 +95,18 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                     var output = await executor.ExecuteAsync(context, node, incomingOutputs, cancellationToken);
                     outputsByNodeId[node.Id] = output;
                     nodeRun.Succeed(CreateLineageJson(node, incomingOutputs, output), DateTimeOffset.UtcNow);
+
+                    if (_resourceHistoryRecorder is not null && output.Contract != WorkflowDataContract.None)
+                    {
+                        await _resourceHistoryRecorder.RecordNodeOutputAsync(
+                            workflowRun.Id,
+                            nodeRun.Id,
+                            node.NodeType,
+                            output.Contract.ToString(),
+                            output.Payload,
+                            cancellationToken);
+                    }
+
                     await _auditRecorder.RecordAsync(new(
                         WorkflowAuditEventType.NodeExecutionCompleted,
                         workflowDefinition.Id,

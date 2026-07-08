@@ -20,6 +20,8 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<ResourcePipelineRoute> ResourcePipelineRoutes => Set<ResourcePipelineRoute>();
     public DbSet<SourceCapabilityProfile> SourceCapabilityProfiles => Set<SourceCapabilityProfile>();
     public DbSet<ConfiguredPipelineRunRecord> ConfiguredPipelineRuns => Set<ConfiguredPipelineRunRecord>();
+    public DbSet<PipelineRunRouteExecution> PipelineRunRouteExecutions => Set<PipelineRunRouteExecution>();
+    public DbSet<PipelineRunResourceRecord> PipelineRunResourceRecords => Set<PipelineRunResourceRecord>();
     public DbSet<OperationalAuditLog> OperationalAuditLogs => Set<OperationalAuditLog>();
     public DbSet<ResourceLineageEntry> ResourceLineageEntries => Set<ResourceLineageEntry>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
@@ -39,6 +41,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<WorkflowEdge> WorkflowEdges => Set<WorkflowEdge>();
     public DbSet<WorkflowRun> WorkflowRuns => Set<WorkflowRun>();
     public DbSet<WorkflowNodeRun> WorkflowNodeRuns => Set<WorkflowNodeRun>();
+    public DbSet<WorkflowNodeRunPayload> WorkflowNodeRunPayloads => Set<WorkflowNodeRunPayload>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

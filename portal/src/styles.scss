@@ -205,8 +205,10 @@ html {
   --z-fab:      20;
   --z-dropdown: 30;
   --z-backdrop: 50;
-  --z-toast:    70;
   --z-modal:    200;
+  /* Toasts sit above every modal — a confirmation for an action taken inside a dialog (e.g. "Copied" on the
+     Launch URL modal) must stay visible, not be hidden behind the dialog it was triggered from. */
+  --z-toast:    300;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
