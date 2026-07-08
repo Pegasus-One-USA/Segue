@@ -10,6 +10,8 @@
     "lint:style": "stylelint \"src/**/*.scss\"",
     "lint:ratchet": "node scripts/lint-ratchet.mjs",
     "check:tokens": "node scripts/check-tokens.mjs",
+    "generate:permissions": "node scripts/generate-permissions.mjs",
+    "check:permissions": "node scripts/generate-permissions.mjs --check",
     "prepare": "git config --local core.hooksPath .githooks || true"
   },
   "private": true,
@@ -34,6 +36,7 @@
     "@angular-devkit/build-angular": "~20.0.0",
     "@angular/cli": "~20.0.0",
     "@angular/compiler-cli": "~20.0.0",
+    "@types/jasmine": "~5.1.0",
     "@types/node": "^22.0.0",
     "angular-eslint": "20.7.0",
     "eslint": "^9.39.1",
