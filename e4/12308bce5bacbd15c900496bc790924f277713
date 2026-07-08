@@ -1,0 +1,21 @@
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_b643a57d8d5dcd::t_94ca23e6ded3f2 56-65,74
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_b643a57d8d5dcd::t_d52504300985bb 124,160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e412308bce5bacbd15c900496bc790924f277713",
+  "prompts": {},
+  "sessions": {
+    "s_b643a57d8d5dcd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86504d7f-8c37-444a-8eed-81523ae4d5cd",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
