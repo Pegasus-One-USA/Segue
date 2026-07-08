@@ -1,0 +1,85 @@
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_6fe72b0759281b::t_ae5248603d99cc 11-20
+  s_6fe72b0759281b::t_23a60666cd66be 21-23
+  s_6fe72b0759281b::t_2f0ab2a0bac561 24-30
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_6fe72b0759281b::t_e62fa6a893cfba 1
+  s_6fe72b0759281b::t_819a4429c5e9ef 7,13
+  s_6fe72b0759281b::t_816a2bb930d6af 68-105,163,349
+src/Api/FHIRBridge.Api/Controllers/V1/SourceCapabilitiesController.cs
+  s_6fe72b0759281b::t_b71f4d6a6fa336 22-23,27-29,33-34
+  s_6fe72b0759281b::t_ae173696b4e27b 6
+  s_6fe72b0759281b::t_1a10a89a144526 2
+  s_6fe72b0759281b::t_f1f4f6990ec2fd 99-180
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_6fe72b0759281b::t_3c4a551b864f0f 7-9
+  s_6fe72b0759281b::t_30af12a5ced7ac 53-62,101,133,136,148
+  s_6fe72b0759281b::t_98229da214b1d3 98-100
+  s_6fe72b0759281b::t_90e22707380f10 102-104,130-132
+  s_6fe72b0759281b::t_faa790214f1ee5 134-135
+  s_6fe72b0759281b::t_0478c8c3f3b4e2 137-139,145-147
+  s_6fe72b0759281b::t_dadded10f6550c 149
+  s_6fe72b0759281b::t_5c2017ee59c875 105-129,140-144
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260708054021_AddWorkflowTrigger.Designer.cs
+  s_6fe72b0759281b::t_3614dfa9e89ef8 1-1762
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260708054021_AddWorkflowTrigger.cs
+  s_6fe72b0759281b::t_3614dfa9e89ef8 1-71
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_6fe72b0759281b::t_492c7d3aca65a5 9
+  s_6fe72b0759281b::t_b2fe4e14dbdd34 10-12
+  s_6fe72b0759281b::t_068f3520f82bf5 13-17
+src/FHIRBridge.Application/Services/ScopeGeneratorService.cs
+  s_6fe72b0759281b::t_f0a12df8020458 26-30
+  s_6fe72b0759281b::t_129a136ecb855b 1-25,31-116
+src/FHIRBridge.Application/DTOs/GeneratedScopesDto.cs
+  s_6fe72b0759281b::t_5c42e567a9957c 1-15
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_6fe72b0759281b::t_aa48c3b3cfa7e2 32-41
+  s_6fe72b0759281b::t_0e31dc619b72de 42-49
+  s_6fe72b0759281b::t_fb994cc2b2885f 257-259,406-425,457-465
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowTrigger.cs
+  s_6fe72b0759281b::t_1cd31f70353368 1-24
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_6fe72b0759281b::t_a0d37ebf74f7b7 13
+  s_6fe72b0759281b::t_dd3552ce554004 45,48
+tests/FHIRBridge.UnitTests/Scopes/ScopeGeneratorServiceTests.cs
+  s_6fe72b0759281b::t_f9dc23c3f5bcf6 1-71
+src/FHIRBridge.Application/Services/IScopeGeneratorService.cs
+  s_6fe72b0759281b::t_48fa44c680b2e0 1-19
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6fe72b0759281b::t_6fa38bafcec2c9 1112-1114,1667-1703
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_6fe72b0759281b::t_a7125a1d9f57e3 250-251,273-281,286,292-294,301-305,309-311,332-336,340-342
+portal/src/app/services/workflow-api.service.ts
+  s_6fe72b0759281b::t_2f1e4263081645 53-61,171
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_6fe72b0759281b::t_e66d66e11326f7 12,50,105
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_6fe72b0759281b::t_a843be6de45063 198-200
+src/Api/FHIRBridge.Api/Workflows/WorkflowBuildModels.cs
+  s_6fe72b0759281b::t_47b0aae0735591 20-21
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_6fe72b0759281b::t_0063ce3afb98a9 143-144,514,517-547
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_6fe72b0759281b::t_104de4f7cff879 22
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_6fe72b0759281b::t_b8bd97b2c98017 27-39
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowDefinition.cs
+  s_6fe72b0759281b::t_ab8b051db82ba4 36-41,46-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d0dfcb52d90dc4a14e640d6377eb80c0d90bd058",
+  "prompts": {},
+  "sessions": {
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
