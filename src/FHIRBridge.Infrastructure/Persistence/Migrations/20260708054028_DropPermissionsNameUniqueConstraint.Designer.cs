@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260706183001_AddPermissionCategoryGroupHierarchy")]
-    partial class AddPermissionCategoryGroupHierarchy
+    [Migration("20260708054028_DropPermissionsNameUniqueConstraint")]
+    partial class DropPermissionsNameUniqueConstraint
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -281,8 +281,20 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Instances")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -314,8 +326,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("GroupId");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+                    b.HasIndex("Name");
 
                     b.ToTable("Permissions", (string)null);
                 });
@@ -405,6 +416,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -460,6 +476,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");

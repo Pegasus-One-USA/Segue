@@ -26,4 +26,10 @@ public sealed class InMemoryWorkflowDefinitionStore : IWorkflowDefinitionStore
         _workflows.TryGetValue(workflowId, out var workflowDefinition);
         return Task.FromResult(workflowDefinition);
     }
+
+    public Task DeleteAsync(Guid workflowId, CancellationToken cancellationToken)
+    {
+        _workflows.Remove(workflowId);
+        return Task.CompletedTask;
+    }
 }

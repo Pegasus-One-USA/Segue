@@ -512,6 +512,40 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("PermissionGroups", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.ProvisionedSecret", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("KeyVaultName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("ModifiedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ProtectedValue")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SecretName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeyVaultName", "SecretName")
+                        .IsUnique();
+
+                    b.ToTable("ProvisionedSecrets", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.ResourceLineageEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1160,6 +1194,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("LastTriggeredOnUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(400)
@@ -1719,6 +1756,43 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition", b =>
+                {
+                    b.OwnsOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowTrigger", "Trigger", b1 =>
+                        {
+                            b1.Property<Guid>("WorkflowDefinitionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<bool>("BackfillOnFirstRun")
+                                .HasColumnType("bit")
+                                .HasColumnName("TriggerBackfillOnFirstRun");
+
+                            b1.Property<int?>("IntervalMinutes")
+                                .HasColumnType("int")
+                                .HasColumnName("TriggerIntervalMinutes");
+
+                            b1.Property<string>("ScheduleExpression")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)")
+                                .HasColumnName("TriggerScheduleExpression");
+
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("TriggerType");
+
+                            b1.HasKey("WorkflowDefinitionId");
+
+                            b1.ToTable("WorkflowDefinitions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("WorkflowDefinitionId");
+                        });
+
+                    b.Navigation("Trigger");
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowEdge", b =>

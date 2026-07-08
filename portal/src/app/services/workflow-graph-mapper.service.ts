@@ -9,6 +9,7 @@ import {
   WorkflowCatalogItem,
   WorkflowDefinitionDto,
   WorkflowDefinitionRequest,
+  WorkflowTriggerRequest,
   WorkflowEdgeRequest,
   WorkflowNodeCategory,
   WorkflowNodeRequest,
@@ -36,12 +37,17 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'patient-agg': 'PatientAggregationNode',
 };
 
+// Credential fields captured by the wizards for connection-secret assembly. They are redacted from the persisted
+// graph so plaintext secrets never land in WorkflowNodes.ConfigurationJson; create-on-save reads them straight from
+// the in-memory store to build the encrypted inlineSecret instead.
+const SECRET_FIELD_KEYS = new Set(['dest_password', 'dest_sftpPassword']);
+
 @Injectable({ providedIn: 'root' })
 export class WorkflowGraphMapperService {
   private readonly store = inject(PipelineStore);
   private readonly workflowApi = inject(WorkflowApiService);
 
-  toRequest(name: string): WorkflowDefinitionRequest {
+  toRequest(name: string, trigger?: WorkflowTriggerRequest | null): WorkflowDefinitionRequest {
     const catalog = this.workflowApi.catalog();
     const nodes = this.store.nodes();
     const edges = this.store.edges();
@@ -96,6 +102,7 @@ export class WorkflowGraphMapperService {
       isEnabled: true,
       nodes: requests,
       edges: emittedEdges,
+      trigger: trigger ?? null,
     };
   }
 
@@ -108,10 +115,6 @@ export class WorkflowGraphMapperService {
       to: edge.toNodeId,
     }));
     this.store.loadGraph(nodes, edges);
-  }
-
-  launchWorkflowName(sourceConnectionId: string): string {
-    return `launch:source:${sourceConnectionId.replaceAll('-', '').toLowerCase()}`;
   }
 
   findLaunchSourceId(): string | null {
@@ -139,7 +142,7 @@ export class WorkflowGraphMapperService {
       subRank: 0,
       displayName: this.displayNameFor(node, item),
       configurationJson: JSON.stringify({
-        ...node.fields,
+        ...this.redactSecrets(node.fields),
         __transformId: transformId,
         __name: node.fields['__name'] ?? item?.displayName ?? this.displayNameFor(node, item),
       }),
@@ -157,7 +160,7 @@ export class WorkflowGraphMapperService {
   ): WorkflowNodeRequest {
     const item = this.catalogForTransform('field-mapping', catalog);
     const config = {
-      ...destination.fields,
+      ...this.redactSecrets(destination.fields),
       __transformId: 'field-mapping',
       __name: item?.displayName ?? 'Field Mapping',
       destinationTransformId: this.transformIdForNode(destination),
@@ -235,6 +238,10 @@ export class WorkflowGraphMapperService {
     }
     if (node.kind === 'merge') return node.fields['__name'] ?? 'Merge';
     return node.connectorLabel ?? 'Epic';
+  }
+
+  private redactSecrets(fields: Record<string, string>): Record<string, string> {
+    return Object.fromEntries(Object.entries(fields).filter(([key]) => !SECRET_FIELD_KEYS.has(key)));
   }
 
   private parseConfig(json: string | null): Record<string, string> {

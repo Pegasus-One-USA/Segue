@@ -24,6 +24,11 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
     public string ProtectContext(Guid routeId) =>
         _contextProtector.Protect($"{routeId:N}");
 
+    // Workflow launch tokens carry a "wf:" discriminator so UnprotectContext can tell a workflow launch from a route
+    // launch. Route tokens stay the bare "{guid:N}" form (backward compatible with previously minted launch URLs).
+    public string ProtectWorkflowContext(Guid workflowId) =>
+        _contextProtector.Protect($"wf:{workflowId:N}");
+
     public LaunchContext? UnprotectContext(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -34,9 +39,16 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
         try
         {
             var value = _contextProtector.Unprotect(token);
+
+            if (value.StartsWith("wf:", StringComparison.Ordinal)
+                && Guid.TryParseExact(value["wf:".Length..], "N", out var workflowId))
+            {
+                return new LaunchContext(RouteId: null, WorkflowId: workflowId);
+            }
+
             if (Guid.TryParseExact(value, "N", out var routeId))
             {
-                return new LaunchContext(routeId);
+                return new LaunchContext(RouteId: routeId);
             }
 
             return null;

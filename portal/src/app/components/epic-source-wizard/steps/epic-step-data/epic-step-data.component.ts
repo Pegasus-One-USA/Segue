@@ -18,7 +18,25 @@ export class EpicStepDataComponent {
   private  readonly toast  = inject(ToastService);
   private  readonly fb     = inject(FormBuilder);
 
-  readonly allResources = WIZARD_RESOURCES;
+  /** Resource Type: Auto — use the resource types discovered from the source's /metadata; fall back to the static list. */
+  get allResources(): string[] {
+    const discovered = this.wiz.discoveredResourceTypes();
+    return discovered.length ? discovered : WIZARD_RESOURCES;
+  }
+
+  /** True when the list above came from live discovery (lets the template show an "auto-detected" hint). */
+  get resourcesAreAuto(): boolean {
+    return this.wiz.discoveredResourceTypes().length > 0;
+  }
+
+  constructor() {
+    // Trusted issuer is mandatory for EHR launch server-side; keep the wizard's value in sync with this field so
+    // create-on-save (build) receives it. Seed the field from the wizard when returning to this step.
+    const seeded = this.wiz.trustedIssuers().trim();
+    if (seeded) this.form.controls.trustedIss.setValue(seeded);
+    else this.wiz.trustedIssuers.set(this.form.controls.trustedIss.value);
+    this.form.controls.trustedIss.valueChanges.subscribe(v => this.wiz.trustedIssuers.set((v ?? '').trim()));
+  }
 
   readonly form = this.fb.nonNullable.group({
     trustedIss:         ['https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4'],

@@ -31,6 +31,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<PermissionGroup> PermissionGroups => Set<PermissionGroup>();
     public DbSet<PermissionAllocation> PermissionAllocations => Set<PermissionAllocation>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<ProvisionedSecret> ProvisionedSecrets => Set<ProvisionedSecret>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();

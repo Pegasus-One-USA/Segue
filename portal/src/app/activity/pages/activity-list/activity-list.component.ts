@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { DashboardService } from '../../../dashboard/services/dashboard.service';
-import { ActivityEvent, ActivitySeverity } from '../../../dashboard/models/activity-event.model';
+import { ActivitySeverity } from '../../../dashboard/models/activity-event.model';
 
 @Component({
   selector: 'app-activity-list',

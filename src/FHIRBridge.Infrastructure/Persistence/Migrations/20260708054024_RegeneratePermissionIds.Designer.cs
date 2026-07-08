@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260706183007_DropPermissionsNameUniqueConstraint")]
-    partial class DropPermissionsNameUniqueConstraint
+    [Migration("20260708054024_RegeneratePermissionIds")]
+    partial class RegeneratePermissionIds
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -289,13 +289,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Instances")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -326,7 +319,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("GroupId");
 
-                    b.HasIndex("Name");
+                    b.HasIndex("Name")
+                        .IsUnique();
 
                     b.ToTable("Permissions", (string)null);
                 });

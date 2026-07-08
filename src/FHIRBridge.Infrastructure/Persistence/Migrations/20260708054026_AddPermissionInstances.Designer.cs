@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260706183005_AddPermissionInstances")]
+    [Migration("20260708054026_AddPermissionInstances")]
     partial class AddPermissionInstances
     {
         /// <inheritdoc />

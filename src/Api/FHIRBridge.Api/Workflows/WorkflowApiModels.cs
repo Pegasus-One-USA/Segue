@@ -6,7 +6,15 @@ public sealed record WorkflowDefinitionRequest(
     string Name,
     bool IsEnabled,
     IReadOnlyCollection<WorkflowNodeRequest> Nodes,
-    IReadOnlyCollection<WorkflowEdgeRequest> Edges);
+    IReadOnlyCollection<WorkflowEdgeRequest> Edges,
+    WorkflowTriggerRequest? Trigger = null);
+
+/// <summary>Optional workflow-level scheduling metadata (Backend-Systems workflows). Omit / Manual = run on demand.</summary>
+public sealed record WorkflowTriggerRequest(
+    WorkflowTriggerType Type,
+    string? ScheduleExpression = null,
+    int? IntervalMinutes = null,
+    bool BackfillOnFirstRun = false);
 
 public sealed record WorkflowNodeRequest(
     string Id,

@@ -7,4 +7,8 @@ public sealed record CreateDestinationConfigurationRequest(
     DestinationType DestinationType,
     string KeyVaultName,
     string SecretName,
-    string? Target);
+    string? Target,
+    // Option B (B1): when set, the raw connection secret (SQL connection string, or an sftp://user:pass@host:port/path
+    // URI) is provisioned encrypted at (KeyVaultName, SecretName); the entity stores only the reference. When null,
+    // the reference is used as-is (operator provisioned the secret out-of-band).
+    string? InlineSecret = null);

@@ -89,6 +89,20 @@ export interface MappingRow {
   tableName:  string;
 }
 
+/** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
+function genericResourceDef(r: string): ResourceDef {
+  return {
+    scope: `user/${r}.read`,
+    sqlTable: `dbo.${r}`,
+    csvFile: `${r.toLowerCase()}.csv`,
+    fields: [
+      { label: `${r} ID`, path: `${r}.id`,                sqlColumn: `Source${r}Id`,     csvColumn: `${r}Id` },
+      { label: 'Status',  path: `${r}.status`,            sqlColumn: 'Status',           csvColumn: 'Status' },
+      { label: 'Subject', path: `${r}.subject.reference`, sqlColumn: 'SubjectReference', csvColumn: 'SubjectReference' },
+    ],
+  };
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 @Component({
@@ -105,14 +119,25 @@ export class DestinationWizardComponent implements OnInit {
   readonly destType   = input.required<'sql' | 'csv'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
+  /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
+  readonly sourceResources = input<string[]>([]);
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
+
+  // Lets the parent (Node Library sidebar) lock out the other destination type
+  // mid-wizard, and warn before discarding progress if the user switches anyway.
+  readonly stepChange     = output<number>();
+  readonly progressChange = output<boolean>();
 
   // ── step state ────────────────────────────────────────────────────────────
   readonly step        = signal(1);
   readonly TOTAL_STEPS = 4;
   readonly STEP_LABELS = ['Configure', 'Data groups', 'Map fields', 'Review'];
+
+  // True once the user has advanced past Configure at least once this session —
+  // stays true even after going back to step 1, so switching still warns.
+  private readonly _hasProgressed = signal(false);
 
   // ── forms ─────────────────────────────────────────────────────────────────
   readonly sqlForm = this.fb.group({
@@ -133,10 +158,22 @@ export class DestinationWizardComponent implements OnInit {
     filePattern: ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
     delimiter:   ['comma', []],
     encoding:    ['utf-8', []],
+    // ── SFTP-only connection details ─────────────────────────────────────────
+    sftpHost:         ['', []],
+    sftpPort:         [22, []],
+    sftpUsername:     ['', []],
+    sftpAuthType:     ['password', []],
+    sftpPassword:     ['', []],
+    sftpRemoteFolder: ['', []],
   });
 
   // ── data groups ───────────────────────────────────────────────────────────
-  readonly ALL_RESOURCES   = Object.keys(DEST_RESOURCE_DEFS);
+  // The groups offered come from the upstream source's selected resource types when available; otherwise the
+  // built-in catalog is the fallback (e.g. a destination added before any source is configured).
+  readonly availableGroups = computed(() => {
+    const src = this.sourceResources();
+    return src.length ? src : Object.keys(DEST_RESOURCE_DEFS);
+  });
   readonly selectedResources = signal<string[]>(['Patient', 'Observation', 'Encounter']);
 
   // ── mapping rows ──────────────────────────────────────────────────────────
@@ -154,7 +191,12 @@ export class DestinationWizardComponent implements OnInit {
   // ── computed helpers ──────────────────────────────────────────────────────
   readonly isSql        = computed(() => this.destType() === 'sql');
   readonly destLabel    = computed(() => this.destType() === 'sql' ? 'SQL Server' : 'CSV');
-  readonly resourceKeys = computed(() => this.selectedResources().filter(r => DEST_RESOURCE_DEFS[r]));
+  readonly resourceKeys = computed(() => this.selectedResources());
+
+  /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
+  private defFor(r: string): ResourceDef {
+    return DEST_RESOURCE_DEFS[r] ?? genericResourceDef(r);
+  }
 
   readonly reviewSummary = computed(() => {
     const fv = this.isSql() ? this.sqlForm.value : this.csvForm.value;
@@ -170,11 +212,37 @@ export class DestinationWizardComponent implements OnInit {
       const type      = this.destType();
       untracked(() => this._rebuildRows(resources, type));
     });
+
+    // SFTP connection fields are required only while Storage type = SFTP.
+    this._syncSftpValidators(this.csvForm.controls.storageType.value);
+    this.csvForm.controls.storageType.valueChanges.subscribe(v => this._syncSftpValidators(v));
+
+    effect(() => this.stepChange.emit(this.step()));
+    effect(() => this.progressChange.emit(this._hasProgressed()));
+  }
+
+  private _syncSftpValidators(storageType: string | null): void {
+    const isSftp = storageType === 'sftp';
+    (['sftpHost', 'sftpUsername', 'sftpPassword', 'sftpRemoteFolder'] as const).forEach(name => {
+      const ctrl = this.csvForm.get(name)!;
+      ctrl.setValidators(isSftp ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+    const port = this.csvForm.get('sftpPort')!;
+    port.setValidators(isSftp ? [Validators.required, Validators.min(1), Validators.max(65535)] : []);
+    port.updateValueAndValidity({ emitEvent: false });
   }
 
   ngOnInit(): void {
     const edit = this.editNode();
-    if (edit) this._populateFromNode(edit);
+    if (edit) {
+      this._populateFromNode(edit);
+      return;
+    }
+    // New destination: default the selected data groups to whatever the upstream source pulls, so the destination
+    // mirrors the source's Resource Type selection instead of a hardcoded set.
+    const src = this.sourceResources();
+    if (src.length) this.selectedResources.set([...src]);
   }
 
   // ── step helpers ──────────────────────────────────────────────────────────
@@ -195,7 +263,12 @@ export class DestinationWizardComponent implements OnInit {
       this.testConnection();
       return;
     }
-    if (this.step() < this.TOTAL_STEPS) this.step.update(x => x + 1); else this._save();
+    if (this.step() < this.TOTAL_STEPS) {
+      this.step.update(x => x + 1);
+      this._hasProgressed.set(true);
+    } else {
+      this._save();
+    }
   }
 
   back(): void {
@@ -227,7 +300,10 @@ export class DestinationWizardComponent implements OnInit {
         if (res.connected) {
           this.sqlTables.set(res.tables);
           this.probeState.set('ok');
-          if (this.step() < this.TOTAL_STEPS) this.step.update(x => x + 1);
+          if (this.step() < this.TOTAL_STEPS) {
+            this.step.update(x => x + 1);
+            this._hasProgressed.set(true);
+          }
         } else {
           this.probeState.set('error');
           this.probeError.set(res.error ?? 'Connection failed.');
@@ -277,6 +353,31 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  // Adds one empty mapping row for the resource — defaults to the first field
+  // not already mapped, so repeated clicks step through the catalog.
+  addRow(resource: string): void {
+    const fields = this.availableFields(resource);
+    if (!fields.length) return;
+    const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
+    const next = fields.find(f => !used.has(f.label)) ?? fields[0];
+    const row: MappingRow = {
+      resource,
+      fieldLabel: next.label,
+      fhirPath:   next.path,
+      targetName: this.destType() === 'sql' ? next.sqlColumn : next.csvColumn,
+      tableName:  this.targetFor(resource),
+    };
+    this.mappingRows.update(rows => [...rows, row]);
+  }
+
+  removeRow(row: MappingRow): void {
+    this.mappingRows.update(rows => {
+      const i = rows.indexOf(row);
+      if (i < 0) return rows;
+      return [...rows.slice(0, i), ...rows.slice(i + 1)];
+    });
+  }
+
   // ── per-resource target (file name / table) ────────────────────────────────
   targetFor(r: string): string { return this.targetByResource()[r] ?? ''; }
 
@@ -286,15 +387,15 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── business-field selection ───────────────────────────────────────────────
   availableFields(r: string): ResourceFieldDef[] {
-    return DEST_RESOURCE_DEFS[r]?.fields ?? [];
+    return this.defFor(r).fields;
   }
 
   changeBusinessField(i: number, label: string): void {
     this.mappingRows.update(rows => {
       const next = [...rows];
       const row  = next[i];
-      const def  = DEST_RESOURCE_DEFS[row.resource];
-      const f    = def?.fields.find(x => x.label === label);
+      const def  = this.defFor(row.resource);
+      const f    = def.fields.find(x => x.label === label);
       next[i] = {
         ...row,
         fieldLabel: label,
@@ -306,24 +407,23 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── private ───────────────────────────────────────────────────────────────
+  // Seeds the per-resource target (file name / table) for newly-selected resources
+  // and drops rows for resources the user has deselected. Deliberately does NOT
+  // auto-populate field rows — the user adds those one at a time via "+".
   private _rebuildRows(resources: string[], type: 'sql' | 'csv'): void {
-    const rows: MappingRow[] = [];
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
-      const def = DEST_RESOURCE_DEFS[r];
-      if (!def) continue;
+      if (targets[r]) continue;
       // Seed the per-resource target once; preserve any value the user has already typed.
-      if (!targets[r]) targets[r] = type === 'sql' ? def.sqlTable : def.csvFile;
-      def.fields.forEach(f => rows.push({
-        resource:   r,
-        fieldLabel: f.label,
-        fhirPath:   f.path,
-        targetName: type === 'sql' ? f.sqlColumn : f.csvColumn,
-        tableName:  targets[r],
-      }));
+      const def = this.defFor(r);
+      targets[r] = type === 'sql' ? def.sqlTable : def.csvFile;
     }
     this.targetByResource.set(targets);
-    this.mappingRows.set(rows);
+    this.mappingRows.update(rows =>
+      rows
+        .filter(row => resources.includes(row.resource))
+        .map(row => ({ ...row, tableName: targets[row.resource] ?? row.tableName }))
+    );
   }
 
   private _populateFromNode(node: CanvasNode): void {
@@ -334,6 +434,8 @@ export class DestinationWizardComponent implements OnInit {
         server:    f['dest_server']    || '',
         database:  f['dest_database']  || '',
         auth:      f['dest_auth']      || 'managed-identity',
+        username:  f['dest_username']  || '',
+        password:  f['dest_password']  || '',
         schema:    f['dest_schema']    || 'dbo',
         writeMode: f['dest_writeMode'] || 'upsert',
       });
@@ -345,6 +447,12 @@ export class DestinationWizardComponent implements OnInit {
         filePattern: f['dest_filePattern'] || '{resource}_{yyyyMMdd_HHmmss}.csv',
         delimiter:   f['dest_delimiter']   || 'comma',
         encoding:    f['dest_encoding']    || 'utf-8',
+        sftpHost:         f['dest_sftpHost']         || '',
+        sftpPort:         f['dest_sftpPort'] ? Number(f['dest_sftpPort']) : 22,
+        sftpUsername:     f['dest_sftpUsername']     || '',
+        sftpAuthType:     f['dest_sftpAuthType']     || 'password',
+        sftpPassword:     f['dest_sftpPassword']     || '',
+        sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
       });
     }
     if (f['dest_resources']) {
@@ -352,6 +460,19 @@ export class DestinationWizardComponent implements OnInit {
     }
     if (f['dest_targets']) {
       try { this.targetByResource.set(JSON.parse(f['dest_targets'])); } catch { /* ignore malformed */ }
+    }
+    if (f['dest_mappings']) {
+      try {
+        const saved = JSON.parse(f['dest_mappings']) as
+          { resource: string; field: string; path: string; target: string; column: string }[];
+        this.mappingRows.set(saved.map(m => ({
+          resource:   m.resource,
+          fieldLabel: m.field,
+          fhirPath:   m.path,
+          targetName: m.column,
+          tableName:  m.target,
+        })));
+      } catch { /* ignore malformed */ }
     }
   }
 
@@ -369,6 +490,12 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_auth']      = v.auth      ?? '';
       config['dest_schema']    = v.schema    ?? 'dbo';
       config['dest_writeMode'] = v.writeMode ?? 'upsert';
+      // Persisted so create-on-save can assemble the connection string (server-side it is encrypted at rest via
+      // ProvisionedSecrets; the entity only ever stores the secret reference). Only kept for SQL username/password auth.
+      if ((v.auth ?? 'sql-auth') === 'sql-auth') {
+        config['dest_username'] = v.username ?? '';
+        config['dest_password'] = v.password ?? '';
+      }
     } else {
       const v = this.csvForm.value;
       config['dest_name']        = v.name        ?? '';
@@ -377,6 +504,14 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_filePattern'] = v.filePattern ?? '';
       config['dest_delimiter']   = v.delimiter   ?? 'comma';
       config['dest_encoding']    = v.encoding    ?? 'utf-8';
+      if (v.storageType === 'sftp') {
+        config['dest_sftpHost']         = v.sftpHost         ?? '';
+        config['dest_sftpPort']         = String(v.sftpPort  ?? 22);
+        config['dest_sftpUsername']     = v.sftpUsername     ?? '';
+        config['dest_sftpAuthType']     = v.sftpAuthType     ?? 'password';
+        config['dest_sftpPassword']     = v.sftpPassword     ?? '';
+        config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
+      }
     }
 
     // Persist per-resource targets + the actual field mappings (previously discarded).

@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260706183002_AddPermissionDisplayNames")]
-    partial class AddPermissionDisplayNames
+    [Migration("20260708054025_AddPermissionIsActive")]
+    partial class AddPermissionIsActive
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -288,6 +288,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");

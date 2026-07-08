@@ -184,6 +184,33 @@
   }
 }
 
+/* ── Textarea ────────────────────────────────────────────────────────────────── */
+.eaf-textarea {
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.5;
+}
+
+/* ── Checkbox row (single boolean toggle field) ─────────────────────────────── */
+.eaf-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 9px;
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  transition: border-color 0.12s, background 0.12s;
+
+  &:hover { border-color: var(--color-muted-2); }
+
+  input { cursor: pointer; flex-shrink: 0; }
+}
+
 /* ── Select ──────────────────────────────────────────────────────────────────── */
 .eaf-select-wrap {
   position: relative;

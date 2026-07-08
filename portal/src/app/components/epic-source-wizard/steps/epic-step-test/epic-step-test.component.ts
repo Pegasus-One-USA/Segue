@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { WizardService } from '../../../../services/wizard.service';
 import { ToastService } from '../../../../services/toast.service';
+import { EpicDiscoveryService } from '../../../../services/epic-discovery.service';
 import { CheckItem, CONFIG_CHECKS, RUNTIME_CHECKS } from '../../models/epic-config.model';
 
 @Component({
@@ -11,8 +12,9 @@ import { CheckItem, CONFIG_CHECKS, RUNTIME_CHECKS } from '../../models/epic-conf
   styleUrl: './epic-step-test.component.scss',
 })
 export class EpicStepTestComponent {
-  protected readonly wiz   = inject(WizardService);
-  private  readonly toast  = inject(ToastService);
+  protected readonly wiz       = inject(WizardService);
+  private  readonly toast      = inject(ToastService);
+  private  readonly discovery  = inject(EpicDiscoveryService);
 
   readonly configValid  = signal(false);
   readonly testPassed   = signal(false);
@@ -41,15 +43,33 @@ export class EpicStepTestComponent {
       return;
     }
     if (this.testing()) return;
+
+    const baseUrl = this.wiz.baseUrl().trim();
+    if (!baseUrl) {
+      this.toast.show('No base URL', 'Run SMART discovery on the Connect step first.');
+      return;
+    }
+
     this.testing.set(true);
     this.runtimeChecks.set(RUNTIME_CHECKS.map(c => ({ ...c, status: 'pending' as const })));
 
-    setTimeout(() => {
-      this.runtimeChecks.set(RUNTIME_CHECKS.map(c => ({ ...c, status: 'ok' as const })));
-      this.testPassed.set(true);
-      this.testing.set(false);
-      this.wiz.markConnected();
-    }, 1200);
+    // Real connection test: re-probe the source's public SMART/metadata endpoints and reflect reachability.
+    this.discovery.discover(baseUrl).subscribe({
+      next: () => {
+        this.runtimeChecks.set(RUNTIME_CHECKS.map(c => ({ ...c, status: 'ok' as const })));
+        this.testPassed.set(true);
+        this.testing.set(false);
+        this.wiz.markConnected();
+        this.toast.show('Connection OK', 'Reached the source SMART configuration endpoint.');
+      },
+      error: (err) => {
+        this.runtimeChecks.set(RUNTIME_CHECKS.map(c => ({ ...c, status: 'error' as const })));
+        this.testPassed.set(false);
+        this.testing.set(false);
+        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Could not reach the source endpoint.';
+        this.toast.show('Connection failed', typeof msg === 'string' ? msg : 'Could not reach the source endpoint.');
+      },
+    });
   }
 
   checkIcon(status: string): string {

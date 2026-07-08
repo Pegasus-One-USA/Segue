@@ -1,5 +1,6 @@
 /* ── Dialog shell ──────────────────────────────────────────────────────────── */
 .nld {
+  position: relative;
   width: min(92vw, 1100px);
   height: min(88vh, 740px);
   background: var(--color-surface);
@@ -8,6 +9,59 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* ── Confirm before discarding an in-progress destination config ─────────────── */
+.nld-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  animation: fade-in var(--transition-base, 0.12s) ease;
+  border-radius: var(--radius-2xl, 18px);
+}
+
+.nld-confirm-dialog {
+  width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.nld-confirm-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--color-warning);
+}
+
+.nld-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.nld-confirm-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.nld-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 /* ── Backdrop override (soft white blur) ────────────────────────────────────── */
