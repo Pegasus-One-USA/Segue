@@ -1,0 +1,60 @@
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.json
+  s_a75aea47651416::t_602d308a6441ac 1-12772
+tools/MappingMetadataGenerator/Program.cs
+  s_a75aea47651416::t_22e3298eb05bac 3-5,24,66,80,170
+  s_a75aea47651416::t_7e077ee2e3f1a1 1-2,6-23,25-37,39-65,67-79,81-120,123-130,132-144,146-161,163-169,171-179
+  s_a75aea47651416::t_b76a7ff7cbec4b 38
+  s_a75aea47651416::t_11287a7cd2ee1c 121-122,131,145,162
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_a75aea47651416::t_505d88f4d7fb56 25
+  s_a75aea47651416::t_6479b28e9b8f58 26
+  s_a75aea47651416::t_b7de6549359532 22-24
+  s_9cb69e0cdd8b77::t_7c1d03f2e4c85c 203-221,253-257
+tools/MappingMetadataGenerator/MappingMetadataGenerator.csproj
+  s_a75aea47651416::t_f3e0688b976f7e 1-20
+.claude/settings.json
+  s_9cb69e0cdd8b77::t_cabd11e03f3c73 28
+  s_9cb69e0cdd8b77::t_499f750b83e343 29-30
+  s_9cb69e0cdd8b77::t_ba17e0d44991cd 26
+  s_9cb69e0cdd8b77::t_6654716e19d878 23-24
+  s_9cb69e0cdd8b77::t_c65985ba5927bb 25,27,31-32
+portal/src/app/services/mapping-catalog.service.ts
+  s_a75aea47651416::t_73898c30c4e8fe 1-54
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_a75aea47651416::t_52ff9439956aa4 11
+  s_a75aea47651416::t_21f02237f40d5d 20-23,98
+  s_9cb69e0cdd8b77::t_02869eb2f6f998 95-97,99,128-132,237-269,417-419,441-442,449,455-457,520-523,530-532,586-590
+portal/src/app/core/api-endpoints.ts
+  s_9cb69e0cdd8b77::t_6569a880b1c458 50-58
+portal/src/app/services/workflow-api.service.ts
+  s_9cb69e0cdd8b77::t_08392604843dc0 149-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "076d93d0551e20da8c80755216e3a1757f6ee82f",
+  "prompts": {},
+  "humans": {
+    "h_537f5ffdfa988f": {
+      "author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  },
+  "sessions": {
+    "s_9cb69e0cdd8b77": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "870ab4ec-a2eb-41c9-a988-bf4901ddb321",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_a75aea47651416": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fb7637f-7952-453c-aa96-4865084c50d6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}
