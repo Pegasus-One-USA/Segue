@@ -35,7 +35,7 @@
   justify-content: center;
   width: 88px;
   height: 88px;
-  background: linear-gradient(135deg, #FEE2E2, #FECACA); // no exact tokens — error gradient shades
+  background: linear-gradient(135deg, var(--color-error-soft), color-mix(in srgb, var(--color-error) 30%, transparent));
   border-radius: 50%;
   margin: 0 auto 28px;
 }

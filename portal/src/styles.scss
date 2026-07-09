@@ -10,16 +10,23 @@ html {
   --mat-sys-primary:              var(--color-primary);
   --mat-sys-on-primary:           var(--color-on-primary);
   --mat-sys-primary-container:    var(--color-primary-soft);
-  --mat-sys-on-primary-container: var(--ref-teal-900);
+  --mat-sys-on-primary-container: color-mix(in srgb, var(--brand-primary) 75%, black);
   --mat-sys-secondary:            var(--color-secondary);
   --mat-sys-on-secondary:         var(--color-on-primary);
-  --mat-sys-tertiary:             var(--ref-cyan-700);
+  --mat-sys-tertiary:             var(--brand-accent);
   --mat-sys-error:                var(--color-error);
   --mat-sys-on-error:             var(--color-on-primary);
   --mat-sys-background:           var(--color-bg);
   --mat-sys-surface:              var(--color-surface);
+  --mat-sys-on-surface:           var(--color-ink);
+  --mat-sys-on-surface-variant:   var(--color-ink-2);
   --mat-sys-outline:              var(--color-border);
   --mat-sys-outline-variant:      var(--color-border-input);
+
+  /* Checkbox/radio label text doesn't consistently key off --mat-sys-on-surface
+     across Material versions — bridge the MDC token directly too (e.g. the
+     "Remember me" checkbox was unreadably dim in dark mode without this). */
+  --mdc-form-field-label-text-color: var(--color-ink-2);
 
   /* Material typography — force Inter (prebuilt theme ships Roboto).
      Overrides all 15 M3 role font-family tokens so Material components
@@ -46,7 +53,7 @@ html {
   color-scheme: light;
 
   /* Font */
-  --font-family: Inter, 'Segoe UI', system-ui, Arial, sans-serif;
+  --font-family: var(--brand-font);
   --font-mono:   ui-monospace, 'SF Mono', Consolas, monospace;
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -84,34 +91,61 @@ html {
   --ref-neutral-900: #1A202C;
 
   /* ═══════════════════════════════════════════════════════════════════════
+     TIER 1.5 · BRAND — white-label tier. BrandingService applies a tenant's
+     BrandConfiguration by calling element.style.setProperty() on these at
+     runtime (see services/branding.service.ts) — nothing else needs to
+     change per tenant. Defaults below reproduce FHIRBridge's own look, so
+     an unconfigured tenant renders exactly as before this tier existed.
+     Only brand-identity concepts live here, never text/structural tokens —
+     see the TIER 2 comment below for why.
+     ═══════════════════════════════════════════════════════════════════════ */
+  --brand-primary:    var(--ref-teal-500);
+  --brand-secondary:  var(--ref-cyan-600);
+  --brand-accent:     var(--ref-teal-600);
+  --brand-background: var(--ref-neutral-100);
+  --brand-surface:    var(--ref-white);
+  --brand-border:     var(--ref-neutral-200);
+  --brand-success:    var(--ref-green-500);
+  --brand-warning:    var(--ref-amber-500);
+  --brand-error:      var(--ref-red-500);
+  --brand-font:       Inter, 'Segoe UI', system-ui, Arial, sans-serif;
+
+  /* ═══════════════════════════════════════════════════════════════════════
      TIER 2 · SEMANTIC — intent-named; the layer components consume.
+     Brand-identity tokens (primary/secondary/accent/background/surface/
+     border/success/warning/error) reference TIER 1.5 so a tenant's
+     branding reaches every component automatically. Text/ink/muted grays
+     and --color-info/--color-gold stay on raw primitives — those are core
+     readability tokens, not brand identity, and are never tenant-facing.
      Values here are the LIGHT theme; html[data-theme="dark"] overrides them.
      ═══════════════════════════════════════════════════════════════════════ */
   /* Brand */
-  --color-primary:      var(--ref-teal-500);
-  --color-primary-dark: var(--ref-teal-600);
-  --color-primary-soft: var(--ref-teal-50);
-  --color-primary-mid:  var(--ref-teal-100);
-  --color-secondary:    var(--ref-cyan-600);
+  --color-primary:      var(--brand-primary);
+  --color-primary-dark: var(--brand-accent);
+  --color-primary-soft: color-mix(in srgb, var(--brand-primary) 10%, white);
+  --color-primary-mid:  color-mix(in srgb, var(--brand-primary) 25%, white);
+  --color-secondary:    var(--brand-secondary);
+  --color-accent:       var(--brand-accent);
   --color-on-primary:   var(--ref-white);
   --color-gold:         var(--ref-amber-600);
   --color-gold-soft:    var(--ref-amber-100);
 
-  /* Status */
-  --color-success:      var(--ref-green-500);
-  --color-success-soft: var(--ref-green-50);
-  --color-warning:      var(--ref-amber-500);
-  --color-warning-soft: var(--ref-amber-50);
-  --color-error:        var(--ref-red-500);
-  --color-error-soft:   var(--ref-red-50);
+  /* Status — success/warning/error are brand-overridable; info is platform-defined */
+  --color-success:      var(--brand-success);
+  --color-success-soft: color-mix(in srgb, var(--brand-success) 12%, white);
+  --color-warning:      var(--brand-warning);
+  --color-warning-soft: color-mix(in srgb, var(--brand-warning) 12%, white);
+  --color-error:        var(--brand-error);
+  --color-error-soft:   color-mix(in srgb, var(--brand-error) 12%, white);
   --color-info:         var(--ref-blue-500);
   --color-info-soft:    var(--ref-blue-50);
 
   /* Strong foreground — text/icon on the matching *-soft background (badges,
-     table-action buttons). Flips in dark so these never go dark-on-dark. */
-  --color-success-strong: var(--ref-green-900);
-  --color-warning-strong: var(--ref-amber-900);
-  --color-error-strong:   var(--ref-red-900);
+     table-action buttons). Derived from the brand tone (not a fixed ref-*-900)
+     so a tenant's actual color choice carries through here too. */
+  --color-success-strong: color-mix(in srgb, var(--brand-success) 65%, black);
+  --color-warning-strong: color-mix(in srgb, var(--brand-warning) 65%, black);
+  --color-error-strong:   color-mix(in srgb, var(--brand-error) 65%, black);
   --color-info-strong:    var(--ref-blue-700);
 
   /* Neutral / surface */
@@ -119,10 +153,10 @@ html {
   --color-ink-2:        var(--ref-neutral-700);
   --color-muted:        var(--ref-neutral-500);
   --color-muted-2:      var(--ref-neutral-400);
-  --color-border:       var(--ref-neutral-200);
-  --color-border-input: var(--ref-neutral-250);
-  --color-bg:           var(--ref-neutral-100);
-  --color-surface:      var(--ref-white);
+  --color-border:       var(--brand-border);
+  --color-border-input: color-mix(in srgb, var(--brand-border) 60%, var(--ref-neutral-400));
+  --color-bg:           var(--brand-background);
+  --color-surface:      var(--brand-surface);
   --color-side:         var(--ref-neutral-75);
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -216,11 +250,20 @@ html {
    Overrides the SEMANTIC tier only — primitives, spacing, radius, motion and
    the Material bridge all cascade automatically. First-pass palette pending
    design review; promote raw values to dark primitives once finalized.
+
+   Brand-identity tokens (primary/secondary/accent/success/warning/error) are
+   DERIVED from the same TIER 1.5 --brand-* values a tenant configures, via
+   color-mix(), so a tenant's color choice carries correctly into dark mode
+   too — this is the "one palette, auto-derived" dark-mode strategy. Structural
+   surface tokens (bg/surface/side/border) intentionally stay fixed dark hex
+   values regardless of branding: a tenant's *light*-theme background color
+   has no sensible "dark version," so dark mode keeps its own fixed neutrals,
+   exactly as before branding existed.
    ═══════════════════════════════════════════════════════════════════════════ */
 html[data-theme='dark'] {
   color-scheme: dark;
 
-  /* Neutral / surface — inverted */
+  /* Neutral / surface — inverted, fixed regardless of tenant branding */
   --color-bg:           #0F172A;
   --color-surface:      #1E293B;
   --color-side:         #172033;
@@ -231,26 +274,33 @@ html[data-theme='dark'] {
   --color-muted:        #94A3B8;
   --color-muted-2:      #8493AA;  /* lifted from #64748B → AA (4.69:1) on dark surface */
 
-  /* Brand — lifted for contrast on dark surfaces */
-  --color-primary:      #19C3B6;
-  --color-primary-dark: #14B8A6;
-  --color-primary-soft: #0E3A37;
-  --color-primary-mid:  #155E58;
-  --color-secondary:    #38BDF8;
+  /* Brand — lightened from the tenant's TIER 1.5 value for contrast on dark surfaces */
+  --color-primary:      color-mix(in srgb, var(--brand-primary) 80%, white);
+  --color-primary-dark: color-mix(in srgb, var(--brand-accent) 80%, white);
+  --color-primary-soft: color-mix(in srgb, var(--brand-primary) 30%, black);
+  --color-primary-mid:  color-mix(in srgb, var(--brand-primary) 45%, black);
+  --color-secondary:    color-mix(in srgb, var(--brand-secondary) 80%, white);
+  --color-accent:       color-mix(in srgb, var(--brand-accent) 80%, white);
   --color-on-primary:   #04211F;
   --color-gold:         #FBBF24;
   --color-gold-soft:    #33270B;
 
-  /* Status — brighter foreground, dark-tinted soft background */
-  --color-success:      #34D399;  --color-success-soft: #0B2E22;
-  --color-warning:      #FBBF24;  --color-warning-soft: #33270B;
-  --color-error:        #F87171;  --color-error-soft:   #3B1418;
+  /* Status — success/warning/error lightened from brand tone; info stays fixed.
+     Soft backgrounds mix into the dark surface (not pure black) at a higher
+     ratio than the light theme — mixing into black read as muddy/low-contrast
+     once real components (badges, alerts, menu hovers) started consuming it. */
+  --color-success:      color-mix(in srgb, var(--brand-success) 78%, white);
+  --color-success-soft: color-mix(in srgb, var(--brand-success) 35%, var(--color-surface));
+  --color-warning:      color-mix(in srgb, var(--brand-warning) 78%, white);
+  --color-warning-soft: color-mix(in srgb, var(--brand-warning) 35%, var(--color-surface));
+  --color-error:        color-mix(in srgb, var(--brand-error) 78%, white);
+  --color-error-soft:   color-mix(in srgb, var(--brand-error) 35%, var(--color-surface));
   --color-info:         #60A5FA;  --color-info-soft:    #0E2A47;
 
-  /* Strong status foregrounds — lifted for AA on the dark soft backgrounds */
-  --color-success-strong: #6EE7B7;
-  --color-warning-strong: #FCD34D;
-  --color-error-strong:   #FCA5A5;
+  /* Strong status foregrounds — lifted further for AA on the dark soft backgrounds */
+  --color-success-strong: color-mix(in srgb, var(--brand-success) 55%, white);
+  --color-warning-strong: color-mix(in srgb, var(--brand-warning) 55%, white);
+  --color-error-strong:   color-mix(in srgb, var(--brand-error) 55%, white);
   --color-info-strong:    #93C5FD;
 
   /* Shadows read stronger on dark backgrounds */
@@ -259,7 +309,7 @@ html[data-theme='dark'] {
   --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.55);
 
   /* Material container foreground fix for dark */
-  --mat-sys-on-primary-container: #B2EAE6;
+  --mat-sys-on-primary-container: color-mix(in srgb, var(--brand-primary) 75%, white);
 }
 
 /* ─── Box Sizing Reset ────────────────────────────────────────────────────── */

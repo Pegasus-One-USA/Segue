@@ -1,6 +1,7 @@
 import { Component, input, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthStore } from '../../../auth/store/auth.store';
+import { BrandingService } from '../../../services/branding.service';
 
 interface NavItem {
   type: 'item';
@@ -26,6 +27,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows' },
   { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history' },
   { type: 'item', icon: '📋', label: 'Activity Feed',    route: '/activity' },
+  { type: 'item', icon: '⚙',  label: 'Settings',         route: '/settings/branding', permissions: ['configuration.write'] },
 ];
 
 @Component({
@@ -39,6 +41,7 @@ export class SidebarComponent {
   readonly collapsed = input(false);
 
   private readonly store = inject(AuthStore);
+  protected readonly branding = inject(BrandingService);
 
   // Same visibility rule as permissionGuard: admins always pass; otherwise the item needs at
   // least one of its required permissions (no `permissions` = visible to everyone logged in).

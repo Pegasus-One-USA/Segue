@@ -1,37 +1,44 @@
 <div class="shell">
 
-  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
-  <app-sidebar [collapsed]="sidebarCollapsed()" />
+  <div class="shell-body">
 
-  <!-- ── Main area ────────────────────────────────────────────────────────── -->
-  <div class="shell-main">
+    <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
+    <app-sidebar [collapsed]="sidebarCollapsed()" />
 
-    <!-- Topbar -->
-    <header class="shell-topbar">
+    <!-- ── Main area ─────────────────────────────────────────────────────── -->
+    <div class="shell-main">
 
-      <button
-        class="shell-hamburger"
-        type="button"
-        (click)="toggleSidebar()"
-        aria-label="Toggle sidebar"
-      >
-        <span class="h-line"></span>
-        <span class="h-line"></span>
-        <span class="h-line"></span>
-      </button>
+      <!-- Topbar -->
+      <header class="shell-topbar">
 
-      <span class="shell-page-title">{{ pageTitle() }}</span>
+        <button
+          class="shell-hamburger"
+          type="button"
+          (click)="toggleSidebar()"
+          aria-label="Toggle sidebar"
+        >
+          <span class="h-line"></span>
+          <span class="h-line"></span>
+          <span class="h-line"></span>
+        </button>
 
-      <div class="shell-actions">
-        <!-- User menu -->
-        <app-user-menu />
-      </div>
-    </header>
+        <span class="shell-page-title">{{ pageTitle() }}</span>
 
-    <!-- Page content (router outlet) -->
-    <main class="shell-content">
-      <router-outlet />
-    </main>
+        <div class="shell-actions">
+          <!-- User menu -->
+          <app-user-menu />
+        </div>
+      </header>
 
+      <!-- Page content (router outlet) -->
+      <main class="shell-content">
+        <router-outlet />
+      </main>
+
+    </div>
   </div>
+
+  <!-- ── Global footer — full browser width, spans beneath sidebar + content ── -->
+  <app-footer />
+
 </div>

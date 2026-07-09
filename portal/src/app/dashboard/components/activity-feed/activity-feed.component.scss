@@ -11,7 +11,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--color-border);
 
   &:last-child { border-bottom: none; }
 }
@@ -26,10 +26,10 @@
   flex-shrink: 0;
   margin-top: 1px;
 
-  &.icon-success { background: #D1FAE5; color: #059669; }
-  &.icon-info    { background: #DBEAFE; color: #1D4ED8; }
-  &.icon-warning { background: #FEF3C7; color: #B45309; }
-  &.icon-error   { background: #FEE2E2; color: #DC2626; }
+  &.icon-success { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &.icon-info    { background: var(--color-info-soft);    color: var(--color-info-strong); }
+  &.icon-warning { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &.icon-error   { background: var(--color-error-soft);   color: var(--color-error-strong); }
 }
 
 .feed-icon { font-size: 12px; font-weight: 700; }

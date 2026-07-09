@@ -1,0 +1,34 @@
+<footer class="app-footer" [class.app-footer--compact]="variant() === 'compact'">
+  @if (variant() === 'full') {
+    <span class="af-company">{{ branding.current().footerText }}</span>
+    <span class="af-sep" aria-hidden="true">&middot;</span>
+  }
+
+  <span class="af-powered">Powered by FHIRBridge</span>
+
+  @if (variant() === 'full') {
+    <span class="af-sep" aria-hidden="true">&middot;</span>
+    <span class="af-version">Version {{ appVersion }}</span>
+
+    @if (branding.current().supportEmail) {
+      <span class="af-sep" aria-hidden="true">&middot;</span>
+      <a class="af-link" [href]="'mailto:' + branding.current().supportEmail">{{ branding.current().supportEmail }}</a>
+    }
+
+    @if (branding.current().website) {
+      <span class="af-hide-mobile">
+        <span class="af-sep" aria-hidden="true">&middot;</span>
+        <a class="af-link" [href]="branding.current().website" target="_blank" rel="noopener">{{ branding.current().website }}</a>
+      </span>
+    }
+
+    <span class="af-hide-mobile">
+      <span class="af-sep" aria-hidden="true">&middot;</span>
+      <span class="af-copyright">&copy; {{ copyrightYear }} {{ branding.current().companyName }}</span>
+    </span>
+
+    @if (envLabel) {
+      <span class="af-env-badge">{{ envLabel }}</span>
+    }
+  }
+</footer>

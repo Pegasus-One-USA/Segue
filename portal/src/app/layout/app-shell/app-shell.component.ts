@@ -3,6 +3,7 @@ import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { SidebarComponent } from '../../dashboard/layout/sidebar/sidebar.component';
 import { UserMenuComponent } from '../../user/components/user-menu/user-menu.component';
+import { AppFooterComponent } from '../app-footer/app-footer.component';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':                    'Dashboard',
@@ -21,12 +22,14 @@ const PAGE_TITLES: Record<string, string> = {
   '/schedules':                    'Schedules',
   '/reports':                      'Reports',
   '/config':                       'Configuration',
+  '/settings':                     'Settings',
+  '/settings/branding':            'Branding',
 };
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, SidebarComponent, UserMenuComponent],
+  imports: [RouterOutlet, SidebarComponent, UserMenuComponent, AppFooterComponent],
   templateUrl: './app-shell.component.html',
   styleUrl: './app-shell.component.scss',
 })

@@ -1,9 +1,21 @@
 // ── Shell layout ───────────────────────────────────────────────────────────────
+// Column: [sidebar + content row] on top, global footer as a full-width row
+// beneath it — the footer is a sibling of shell-body, not nested inside the
+// content column, so it spans the entire browser width, sidebar included.
 .shell {
+  display:        flex;
+  flex-direction: column;
+  height:         100vh;
+  overflow:       hidden;
+  background:     var(--color-bg);
+}
+
+// ── Sidebar + content row ────────────────────────────────────────────────────────
+.shell-body {
+  flex:       1;
   display:    flex;
-  height:     100vh;
+  min-height: 0;
   overflow:   hidden;
-  background: var(--color-bg);
 }
 
 // ── Main column ────────────────────────────────────────────────────────────────

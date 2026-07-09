@@ -47,8 +47,8 @@
   border-radius: var(--radius-pill);
   white-space: nowrap;
 
-  &.trend-up   { color: #059669; background: #D1FAE5; }
-  &.trend-down { color: #DC2626; background: #FEE2E2; }
+  &.trend-up   { color: var(--color-success-strong); background: var(--color-success-soft); }
+  &.trend-down { color: var(--color-error-strong);   background: var(--color-error-soft); }
   &.trend-flat { color: var(--color-muted); background: var(--color-side); }
 }
 
