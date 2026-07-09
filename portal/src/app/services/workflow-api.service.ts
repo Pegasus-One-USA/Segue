@@ -146,6 +146,8 @@ export interface MappingFieldRequest {
   isRequired: boolean;
   defaultValue?: string | null;
   format?: string | null;
+  arrayPolicy?: string;                        // Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson | RejectIfMultiple
+  arrayAncestors?: string[] | null;            // array-ancestor fhir paths (child-table alignment)
 }
 
 export interface SourceBuildSpec { nodeId: string; source: CreateSourceConnectionRequest; }
