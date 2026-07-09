@@ -1,0 +1,131 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260709060843_AddSourceConnectionRetrievalConfiguration.Designer.cs
+  s_2b3e33386ac39d::t_e0cbf1d4fedcfe 1-2036
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_2b3e33386ac39d::t_29ab1310d5bfdb 151
+  s_2b3e33386ac39d::t_0ce2e9daa93247 142,147-150
+  s_2b3e33386ac39d::t_d73280140bca06 152
+  s_2b3e33386ac39d::t_9f021eec26e766 117-118,126,132-134,136-138
+  s_2b3e33386ac39d::t_f5eb9933aced16 258-259
+  s_2b3e33386ac39d::t_dcbdea7e160b9a 291-292
+  s_2b3e33386ac39d::t_e5ba80fcc1e491 260
+  s_2b3e33386ac39d::t_329011aa76f001 268-272
+  s_2b3e33386ac39d::t_804647710a0fc1 277
+  s_2b3e33386ac39d::t_6d19a59d40d7ee 257
+  s_2b3e33386ac39d::t_8a36a80c38362b 273-276
+  s_2b3e33386ac39d::t_17d7d78469dfda 261-267
+  s_2b3e33386ac39d::t_011ec45a02fffa 119,127,135
+  s_2b3e33386ac39d::t_d559f7e11dd0c0 191-216
+  s_2b3e33386ac39d::t_646b9a8df51125 352-354,385-397,410,412-415,441-446,450-492,495-507,589,649-751,782,790-792,819-826,854-858,881-885,936-944,948-954,972-973,975,977-982,1000-1002,1038,1040,1060-1062,1077-1092
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_2b3e33386ac39d::t_84d7999867587f 33-34
+  s_2b3e33386ac39d::t_9912a94bde5a74 55-88
+src/Worker/FHIRBridge.Worker/appsettings.Development.json
+  s_2b3e33386ac39d::t_db56b60e2a9176 1-14
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_2b3e33386ac39d::t_aeef054c5d8dc8 56-57,82-83
+  s_2b3e33386ac39d::t_de824613f3d0b4 593-628,669-677,698-700,703,707-722
+src/FHIRBridge.Domain/Entities/SourceConnection.cs
+  s_2b3e33386ac39d::t_f7e46b184eb0e5 20-21,60-61
+  s_2b3e33386ac39d::t_cc71208870b08c 30,48-51,69,77-87
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_2b3e33386ac39d::t_c28422d6817657 11
+  s_2b3e33386ac39d::t_aa4f3e80e6bfcc 116-119,123,135-165
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/ISourceConnectionSyncCursorStore.cs
+  s_2b3e33386ac39d::t_3fff5743e7346e 1-11
+src/FHIRBridge.Domain/ValueObjects/SourceRetrievalConfiguration.cs
+  s_2b3e33386ac39d::t_ea8064d077b6cf 1-63
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_2b3e33386ac39d::t_5f5d31cdd2360b 4
+  s_2b3e33386ac39d::t_6bf866a23e4939 53-60,62
+  s_2b3e33386ac39d::t_43ceafcdbe6906 68,73-75,85,88,90-139
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2b3e33386ac39d::t_f90ecd2d404f92 49,51,60,71,82,93,125
+  s_2b3e33386ac39d::t_d37a10b978fac2 16-18,29
+  s_2b3e33386ac39d::t_739d6bfbd29424 27-28
+  s_2b3e33386ac39d::t_f4623ec23243c1 38-40,50,61,72,83,94,126
+  s_2b3e33386ac39d::t_878de97523bbf6 62
+  s_2b3e33386ac39d::t_a5d4a0ce0c7c33 73
+  s_2b3e33386ac39d::t_087b3fb860e761 84
+  s_2b3e33386ac39d::t_d94ec3a1edaad5 95
+  s_2b3e33386ac39d::t_96dc0447c5ccd5 119,132,167-192,202
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260709060843_AddSourceConnectionRetrievalConfiguration.cs
+  s_2b3e33386ac39d::t_e0cbf1d4fedcfe 1-146
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionSyncCursorStore.cs
+  s_2b3e33386ac39d::t_4ed7bfa2d9f837 1-31
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_2b3e33386ac39d::t_d1924a19cfdf65 4
+  s_2b3e33386ac39d::t_e54ac87273dbb0 8
+  s_2b3e33386ac39d::t_58e23fbfdfb413 13-18
+  s_2b3e33386ac39d::t_bf4c8367882a53 7
+  s_2b3e33386ac39d::t_75913265b536fc 1-3,5-6,9-10,19-28,41-46
+  s_2b3e33386ac39d::t_516222052dd7af 29-38
+  s_2b3e33386ac39d::t_3b79cabe2e06c2 47
+src/FHIRBridge.Application/DTOs/SourceRetrievalConfigurationDto.cs
+  s_2b3e33386ac39d::t_32fd073c2e0591 1-19
+src/Worker/FHIRBridge.Worker/appsettings.json
+  s_2b3e33386ac39d::t_242be1b2c38e3c 1-12
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6fe72b0759281b::t_56964e3a28e8fb 1846-1917,1922-1923
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_2b3e33386ac39d::t_05b9e1c09cc685 244-271,573,577-578,581-583,606-620,650,655-711
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_2b3e33386ac39d::t_753d30ddfc09e8 212-220,358,371-465
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_2b3e33386ac39d::t_0e50e90ca31cba 11-15
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_2b3e33386ac39d::t_6206052abf4139 85-119,126-132,134-145
+portal/src/app/services/epic-discovery.service.ts
+  s_2b3e33386ac39d::t_f02b1c6e41bc26 16-18,34,44-46,59
+portal/src/app/services/wizard.service.ts
+  s_2b3e33386ac39d::t_98fbc5c65f2c8d 25-26,88-97,240
+portal/src/app/services/workflow-api.service.ts
+  s_2b3e33386ac39d::t_3f4e9e125b03d1 124-137,145
+src/Api/FHIRBridge.Api/Controllers/V1/SourceDiscoveryController.cs
+  s_2b3e33386ac39d::t_67371ad2bd3294 38-50,63
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_2b3e33386ac39d::t_d96190a348dfce 7-8
+src/FHIRBridge.Application/DTOs/CreateSourceConnectionRequest.cs
+  s_2b3e33386ac39d::t_726dd022f8af62 12-13
+src/FHIRBridge.Application/DTOs/SmartConfigurationDto.cs
+  s_2b3e33386ac39d::t_7e6f41518d1a01 20-26
+src/FHIRBridge.Application/DTOs/SourceConnectionDto.cs
+  s_2b3e33386ac39d::t_379c9400a67d80 14-15
+src/FHIRBridge.Application/DTOs/SourceDiscoveryProbeDtos.cs
+  s_2b3e33386ac39d::t_45d5294654b3b2 10-12,17-18
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_2b3e33386ac39d::t_effffa48d5d413 215-218
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_2b3e33386ac39d::t_068d5ab0c32652 110-167
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_2b3e33386ac39d::t_dcbd142b963579 1136-1141,1143,1151,1172
+src/FHIRBridge.Infrastructure/Sources/SourceCapabilityDiscoveryService.cs
+  s_2b3e33386ac39d::t_a9348314d248ba 62-73,78-81
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionTestService.cs
+  s_2b3e33386ac39d::t_06317cdc2ffcca 130-142,147-150,170-172
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_2b3e33386ac39d::t_8883d1942fb26b 24-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fc32f114ccc2cd2ef8ab288d6c71c74dfd410444",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
