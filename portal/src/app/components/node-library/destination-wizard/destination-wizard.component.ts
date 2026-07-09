@@ -8,6 +8,7 @@ import {
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
+import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -16,6 +17,10 @@ export interface ResourceFieldDef {
   path:  string;
   sqlColumn: string;
   csvColumn: string;
+  // Array-aware metadata from the backend FHIR catalog (absent for the built-in fallback defs).
+  jsonPath?: string;
+  valueType?: string;
+  arrays?: string[];
 }
 
 export interface ResourceDef {
@@ -87,6 +92,11 @@ export interface MappingRow {
   fhirPath:   string;
   targetName: string;
   tableName:  string;
+  // Catalog-derived metadata carried through to the build so the mapping engine gets correct,
+  // array-aware JSONPaths instead of a guessed conversion.
+  jsonPath?:  string;
+  valueType?: string;
+  arrays?:    string[];
 }
 
 /** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
@@ -115,6 +125,11 @@ function genericResourceDef(r: string): ResourceDef {
 export class DestinationWizardComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
+  private readonly catalogSvc = inject(MappingCatalogService);
+
+  // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
+  // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
+  private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
   readonly destType   = input.required<'sql' | 'csv'>();
   readonly attachNode = input.required<CanvasNode>();
@@ -219,6 +234,39 @@ export class DestinationWizardComponent implements OnInit {
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
+
+    // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
+    // over the built-in fallback once loaded. Deduped via _requested so this effect never re-fetches.
+    effect(() => {
+      for (const r of this.availableGroups()) this._ensureCatalog(r);
+    });
+  }
+
+  private readonly _requested = new Set<string>();
+
+  private _ensureCatalog(resource: string): void {
+    if (this._requested.has(resource)) return;
+    this._requested.add(resource);
+    this.catalogSvc.fields(resource).subscribe(fields => {
+      if (!fields.length) { this._requested.delete(resource); return; }
+      const defs = fields.map(f => this._toFieldDef(resource, f));
+      this.catalogByResource.update(m => ({ ...m, [resource]: defs }));
+    });
+  }
+
+  private _toFieldDef(resource: string, f: FhirElement): ResourceFieldDef {
+    const column = f.fhirPath.split('.')
+      .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+      .join('');
+    return {
+      label: f.label || f.fhirPath,
+      path: `${resource}.${f.fhirPath}`,
+      sqlColumn: column,
+      csvColumn: column,
+      jsonPath: f.jsonPath,
+      valueType: f.valueType,
+      arrays: f.arrays,
+    };
   }
 
   private _syncSftpValidators(storageType: string | null): void {
@@ -366,6 +414,9 @@ export class DestinationWizardComponent implements OnInit {
       fhirPath:   next.path,
       targetName: this.destType() === 'sql' ? next.sqlColumn : next.csvColumn,
       tableName:  this.targetFor(resource),
+      jsonPath:   next.jsonPath,
+      valueType:  next.valueType,
+      arrays:     next.arrays,
     };
     this.mappingRows.update(rows => [...rows, row]);
   }
@@ -387,20 +438,23 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── business-field selection ───────────────────────────────────────────────
   availableFields(r: string): ResourceFieldDef[] {
-    return this.defFor(r).fields;
+    // Prefer the array-aware backend catalog; fall back to the built-in defs until it loads (or if offline).
+    return this.catalogByResource()[r] ?? this.defFor(r).fields;
   }
 
   changeBusinessField(i: number, label: string): void {
     this.mappingRows.update(rows => {
       const next = [...rows];
       const row  = next[i];
-      const def  = this.defFor(row.resource);
-      const f    = def.fields.find(x => x.label === label);
+      const f    = this.availableFields(row.resource).find(x => x.label === label);
       next[i] = {
         ...row,
         fieldLabel: label,
         fhirPath:   f?.path ?? row.fhirPath,
         targetName: f ? (this.destType() === 'sql' ? f.sqlColumn : f.csvColumn) : row.targetName,
+        jsonPath:   f?.jsonPath,
+        valueType:  f?.valueType,
+        arrays:     f?.arrays,
       };
       return next;
     });
@@ -463,14 +517,19 @@ export class DestinationWizardComponent implements OnInit {
     }
     if (f['dest_mappings']) {
       try {
-        const saved = JSON.parse(f['dest_mappings']) as
-          { resource: string; field: string; path: string; target: string; column: string }[];
+        const saved = JSON.parse(f['dest_mappings']) as {
+          resource: string; field: string; path: string; target: string; column: string;
+          jsonPath?: string; valueType?: string; arrays?: string[];
+        }[];
         this.mappingRows.set(saved.map(m => ({
           resource:   m.resource,
           fieldLabel: m.field,
           fhirPath:   m.path,
           targetName: m.column,
           tableName:  m.target,
+          jsonPath:   m.jsonPath,
+          valueType:  m.valueType,
+          arrays:     m.arrays,
         })));
       } catch { /* ignore malformed */ }
     }
@@ -524,6 +583,11 @@ export class DestinationWizardComponent implements OnInit {
         path:     r.fhirPath,
         target:   this.targetByResource()[r.resource] ?? r.tableName,
         column:   r.targetName,
+        // Array-aware catalog metadata (present for catalog-picked fields) so the build gets the
+        // correct JSONPath instead of a guessed conversion.
+        jsonPath:  r.jsonPath,
+        valueType: r.valueType,
+        arrays:    r.arrays,
       })),
     );
 

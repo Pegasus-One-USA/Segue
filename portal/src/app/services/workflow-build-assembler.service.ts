@@ -20,6 +20,11 @@ interface DestMappingRow {
   path: string;    // FHIR element path captured by the wizard (e.g. "Patient.name.family")
   target: string;  // destination table / file (e.g. "dbo.Patient")
   column: string;  // destination column
+  // Array-aware metadata stamped by the wizard from the backend FHIR catalog. When present these are
+  // authoritative; when absent (offline/degraded) we fall back to the naive path conversion below.
+  jsonPath?: string;       // e.g. "$.name[*].given[*]"
+  valueType?: string;      // String | Integer | Decimal | Boolean | Date | DateTime | Json
+  arrays?: string[];       // array-ancestor fhir paths
 }
 
 /**
@@ -232,14 +237,25 @@ export class WorkflowBuildAssemblerService {
     const primaryRows = rows.filter(row => row.resource === primary);
     const destinationObject = primaryRows[0]?.target || this.targetForResource(destFields, primary) || primary;
 
-    const fields: MappingFieldRequest[] = primaryRows.map(row => ({
-      targetField: row.column,
-      jsonPath: this.toJsonPath(row.path, primary),
-      valueType: this.valueTypeFor(row.path),
-      isRequired: false,
-      defaultValue: null,
-      format: null,
-    }));
+    const fields: MappingFieldRequest[] = primaryRows.map(row => {
+      // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
+      // naive conversion only when the catalog was unavailable.
+      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, primary);
+      const arrays = row.arrays ?? [];
+      const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
+      return {
+        targetField: row.column,
+        jsonPath,
+        valueType: row.valueType ?? this.valueTypeFor(row.path),
+        isRequired: false,
+        defaultValue: null,
+        format: null,
+        // A flat destination column takes the first match when the path crosses an array; multi-value
+        // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
+        arrayPolicy: isArrayPath ? 'FirstItem' : 'Scalar',
+        arrayAncestors: arrays.length > 0 ? arrays : null,
+      };
+    });
 
     return {
       nodeId: mappingNodeId,
@@ -271,7 +287,11 @@ export class WorkflowBuildAssemblerService {
     }
   }
 
-  /** Best-effort FHIR element path → JSONPath: strip the leading "Resource." and prefix "$.". */
+  /**
+   * Fallback FHIR element path → JSONPath used only when the wizard could not stamp a catalog-derived
+   * path on the row (offline/degraded). Strips the leading "Resource." and prefixes "$."; it does NOT
+   * infer array-ness — the backend catalog is the source of truth for that (see DestMappingRow.jsonPath).
+   */
   private toJsonPath(path: string, resourceType: string): string {
     let p = path.trim();
     if (p.startsWith(`${resourceType}.`)) p = p.slice(resourceType.length + 1);

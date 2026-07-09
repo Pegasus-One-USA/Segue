@@ -47,6 +47,15 @@ export const DESTINATION_ENDPOINTS = {
   schema:        (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
 };
 
+// ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
+// Array-aware FHIR element metadata (correct JSONPaths, cardinality, array ancestors) generated from
+// the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
+export const MAPPING_ENDPOINTS = {
+  resources:     `${API_V1_BASE}/mapping/catalog/resources`,
+  resourceFields: (resourceType: string) =>
+    `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
