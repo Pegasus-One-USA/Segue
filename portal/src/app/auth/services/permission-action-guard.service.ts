@@ -6,7 +6,7 @@ import { normalizePermissionInput } from '../directives/permission-input.util';
 
 /**
  * Defense-in-depth check for the START of an action handler (click handler, submit
- * handler, etc.) — NOT a substitute for hiding (*appHasPermission) or disabling
+ * handler, etc.) — NOT a substitute for hiding (*appHideWithoutPermission) or disabling
  * ([appDisableWithoutPermission]) a control, and NOT a substitute for backend
  * authorization, which remains the real source of truth.
  *

@@ -12,7 +12,7 @@
         mat-button
         class="btn-add-user"
         (click)="openInviteDialog()"
-        [appDisableWithoutPermission]="'user.invite'"
+        [appDisableWithoutPermission]="permissionCode(PermissionGroup.User, PermissionAction.Invite)"
         appDisableWithoutPermissionReason="You need the Invite Users permission to add new users."
       >
         <mat-icon>person_add</mat-icon>
@@ -214,21 +214,21 @@
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #userMenu="matMenu" class="user-action-menu">
-                  <button mat-menu-item *appHasPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)" (click)="openEditDialog(user)">
+                  <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)" (click)="openEditDialog(user)">
                     <mat-icon>edit</mat-icon>
                     Edit User
                   </button>
-                  <button mat-menu-item *appHasPermission="'role.assign'" (click)="openAssignRolesDialog(user)">
+                  <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Assign)" (click)="openAssignRolesDialog(user)">
                     <mat-icon>manage_accounts</mat-icon>
                     Assign Roles
                   </button>
                   @if (user.status === 'pending') {
-                    <button mat-menu-item *appHasPermission="'user.invite'" (click)="resendInvitation(user)">
+                    <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Invite)" (click)="resendInvitation(user)">
                       <mat-icon>send</mat-icon>
                       Resend Invitation
                     </button>
                   }
-                  <ng-container *appHasPermission="'user.deactivate'">
+                  <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Deactivate)">
                     <mat-divider></mat-divider>
                     @if (user.status !== 'active') {
                       <button mat-menu-item (click)="toggleStatus(user, 'enable')">
@@ -242,7 +242,7 @@
                       </button>
                     }
                   </ng-container>
-                  <ng-container *appHasPermission="'user.delete'">
+                  <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)">
                     <mat-divider></mat-divider>
                     <button mat-menu-item class="menu-item-danger" (click)="deleteUser(user)">
                       <mat-icon>delete_outline</mat-icon>

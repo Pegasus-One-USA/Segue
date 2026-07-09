@@ -4,7 +4,7 @@ import { PermissionMode } from '../models/permission-check.model';
 
 /**
  * Centralized, fast permission evaluation. This is the ONLY place in the app that
- * should ever ask "does the current user have permission X" — HasPermissionDirective,
+ * should ever ask "does the current user have permission X" — HideWithoutPermissionDirective,
  * DisableWithoutPermissionDirective, and permissionGuard all funnel through here, and
  * AuthStore.hasPermission() delegates here too so there is exactly one implementation.
  *

@@ -1,25 +1,25 @@
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { HasPermissionDirective } from './has-permission.directive';
+import { HideWithoutPermissionDirective } from './hide-without-permission.directive';
 import { AuthStore } from '../store/auth.store';
 import { PermissionService } from '../services/permission.service';
 import { makeTestUser } from '../testing/auth-test-helpers';
 
 @Component({
   standalone: true,
-  imports: [HasPermissionDirective],
+  imports: [HideWithoutPermissionDirective],
   template: `
-    <div class="single" *appHasPermission="'epic.edit'">single</div>
-    <div class="any" *appHasPermission="['epic.edit', 'epic.admin']">any</div>
-    <div class="all" *appHasPermission="['epic.read', 'epic.edit']; mode: 'all'">all</div>
-    <div class="none" *appHasPermission="['epic.edit']; mode: 'none'">none</div>
-    <div class="withElse" *appHasPermission="'workflow.run'; else fallback">shown</div>
+    <div class="single" *appHideWithoutPermission="'epic.edit'">single</div>
+    <div class="any" *appHideWithoutPermission="['epic.edit', 'epic.admin']">any</div>
+    <div class="all" *appHideWithoutPermission="['epic.read', 'epic.edit']; mode: 'all'">all</div>
+    <div class="none" *appHideWithoutPermission="['epic.edit']; mode: 'none'">none</div>
+    <div class="withElse" *appHideWithoutPermission="'workflow.run'; else fallback">shown</div>
     <ng-template #fallback><div class="fallback">fallback shown</div></ng-template>
   `,
 })
 class HostComponent {}
 
-describe('HasPermissionDirective', () => {
+describe('HideWithoutPermissionDirective', () => {
   let fixture: ComponentFixture<HostComponent>;
   let authStore: AuthStore;
 

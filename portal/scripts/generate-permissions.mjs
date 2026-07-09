@@ -82,7 +82,11 @@ if (process.argv.includes('--check')) {
     /* file doesn't exist yet — treated as drift below */
   }
 
-  if (existing !== generated) {
+  // Compare ignoring line-ending style: this repo has core.autocrlf=true, so a Windows
+  // checkout of the committed (LF) file silently rewrites it to CRLF on disk — that's
+  // not real drift, just a checkout artifact, and must not fail the build.
+  const normalize = s => s.replace(/\r\n/g, '\n');
+  if (normalize(existing) !== normalize(generated)) {
     console.error(
       'generate-permissions: permission.constants.ts is stale relative to the backend enums.\n' +
       'Run `node scripts/generate-permissions.mjs` locally and commit the result.'

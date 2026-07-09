@@ -17,7 +17,7 @@ import { normalizePermissionInput } from './permission-input.util';
  * Angular's normal binding reconciliation (last-registered directive wins) instead of
  * an unpredictable imperative-vs-declarative race.
  *
- * Use this instead of *appHasPermission when the user should SEE the control exists
+ * Use this instead of *appHideWithoutPermission when the user should SEE the control exists
  * (so they understand the feature is there) but can't use it — e.g. a Save button on
  * a form they can view but not edit. Pair with a reason so a disabled control isn't a
  * silent dead end:

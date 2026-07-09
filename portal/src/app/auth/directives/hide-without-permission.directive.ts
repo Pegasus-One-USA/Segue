@@ -8,41 +8,45 @@ import { normalizePermissionInput } from './permission-input.util';
  * This is a UX convenience only; the backend re-validates every request regardless of
  * what this directive decided to render (see the architecture writeup, Section 1).
  *
+ * Permission codes should come from the generated `PermissionGroup`/`PermissionAction`
+ * constants (scripts/generate-permissions.mjs) via `permissionCode(...)`, not hand-typed
+ * 'group.action' string literals — see permission.constants.ts.
+ *
  * Single permission:
- *   <button *appHasPermission="'epic.edit'">Edit</button>
+ *   <button *appHideWithoutPermission="permissionCode(PermissionGroup.Epic, PermissionAction.Edit)">Edit</button>
  *
  * OR — default mode for a list ("has any of these"):
- *   <button *appHasPermission="['epic.edit', 'epic.admin']">Edit</button>
+ *   <button *appHideWithoutPermission="[permissionCode(PermissionGroup.Epic, PermissionAction.Edit), permissionCode(PermissionGroup.Epic, PermissionAction.Test)]">Edit</button>
  *
  * AND — explicit:
- *   <div *appHasPermission="['epic.read','epic.export']; mode: 'all'">…</div>
+ *   <div *appHideWithoutPermission="[...]; mode: 'all'">…</div>
  *
  * NONE — "show this only if the user holds none of these":
- *   <div *appHasPermission="['epic.edit']; mode: 'none'">Read-only mode.</div>
+ *   <div *appHideWithoutPermission="[permissionCode(PermissionGroup.Epic, PermissionAction.Edit)]; mode: 'none'">Read-only mode.</div>
  *
  * Fallback content instead of nothing:
- *   <div *appHasPermission="'workflow.run'; else noAccess">…</div>
+ *   <div *appHideWithoutPermission="permissionCode(PermissionGroup.Workflow, PermissionAction.Run); else noAccess">…</div>
  *   <ng-template #noAccess>You don't have permission to run pipelines.</ng-template>
  */
 @Directive({
-  selector: '[appHasPermission]',
+  selector: '[appHideWithoutPermission]',
   standalone: true,
 })
-export class HasPermissionDirective {
+export class HideWithoutPermissionDirective {
   private readonly templateRef   = inject(TemplateRef<unknown>);
   private readonly viewContainer = inject(ViewContainerRef);
   private readonly permissionSvc = inject(PermissionService);
 
-  readonly appHasPermission     = input.required<string | readonly string[]>();
-  readonly appHasPermissionMode = input<PermissionMode>('any');
-  readonly appHasPermissionElse = input<TemplateRef<unknown> | null>(null);
+  readonly appHideWithoutPermission     = input.required<string | readonly string[]>();
+  readonly appHideWithoutPermissionMode = input<PermissionMode>('any');
+  readonly appHideWithoutPermissionElse = input<TemplateRef<unknown> | null>(null);
 
   /** Fails closed while permissions aren't ready yet (see PermissionService.isReady) — render
    *  nothing rather than briefly flash content the user may not be entitled to. */
   private readonly satisfied = computed(() => {
     if (!this.permissionSvc.isReady()) return false;
-    const codes = normalizePermissionInput(this.appHasPermission());
-    return this.permissionSvc.matches(this.appHasPermissionMode(), codes);
+    const codes = normalizePermissionInput(this.appHideWithoutPermission());
+    return this.permissionSvc.matches(this.appHideWithoutPermissionMode(), codes);
   });
 
   constructor() {
@@ -54,7 +58,7 @@ export class HasPermissionDirective {
     // to between runs.
     effect(() => {
       const show = this.satisfied();
-      const elseTemplate = this.appHasPermissionElse();
+      const elseTemplate = this.appHideWithoutPermissionElse();
 
       this.viewContainer.clear();
 
