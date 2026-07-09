@@ -1,0 +1,35 @@
+portal/src/app/auth/directives/hide-without-permission.directive.spec.ts
+  s_62affcfc9947ba::t_96444bb0b4c5b9 1-96
+portal/src/app/auth/directives/index.ts
+  s_62affcfc9947ba::t_514f6f2b2c3543 1
+portal/src/app/auth/directives/hide-without-permission.directive.ts
+  s_62affcfc9947ba::t_58e245e147a655 1-72
+portal/scripts/generate-permissions.mjs
+  s_62affcfc9947ba::t_eb27f73c873b72 85-89
+portal/src/app/auth/directives/disable-without-permission.directive.ts
+  s_62affcfc9947ba::t_dc1fadee63d7e7 20
+portal/src/app/auth/services/permission-action-guard.service.ts
+  s_62affcfc9947ba::t_2d074fe0d9e1ac 9
+portal/src/app/auth/services/permission.service.ts
+  s_62affcfc9947ba::t_f59c11442a9d08 7
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_62affcfc9947ba::t_a35af7b6725124 15,217,221,226,231,245
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_62affcfc9947ba::t_68d1293c2527ca 33,61,108-109,115-119,203,211,219,228,256,274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "3f985b4412380945edf1a4893e6ecb1ad44d6558",
+  "prompts": {},
+  "sessions": {
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
