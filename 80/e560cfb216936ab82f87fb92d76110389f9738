@@ -1,0 +1,50 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowBuildModels.cs
+  s_2b3e33386ac39d::t_f998b43f88a56f 13-18
+  s_2b3e33386ac39d::t_888e00d8992627 27-28,30-35,40,42-45,51-52,61-62
+src/Api/FHIRBridge.Api/Program.cs
+  s_2b3e33386ac39d::t_bbe0106b38ac48 5
+  s_2b3e33386ac39d::t_2c04df266bbefd 22,26-28,355
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_2b3e33386ac39d::t_9b3f35b13c25eb 5
+  s_2b3e33386ac39d::t_52a23276203d5f 11,15-22
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_2b3e33386ac39d::t_de5bf47777c270 193-198,215,219-220,224,226,231,237-239,301-303,305,307
+portal/src/app/services/wizard.service.ts
+  s_2b3e33386ac39d::t_44bb15a1d9cb04 245-249
+portal/src/app/services/workflow-api.service.ts
+  s_2b3e33386ac39d::t_379ee40385ad15 168-171,180,192-194
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_2b3e33386ac39d::t_bcbcd8d20b5a60 64,72-76,82,84
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2b3e33386ac39d::t_cff152adf9e7d9 66-68,90-92,117-126,153
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_2b3e33386ac39d::t_b912cf0eb25478 24-26
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_2b3e33386ac39d::t_e631952431fba3 92-94,131-134,136,139,141
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_2b3e33386ac39d::t_dd302c71d89416 29-34
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_2b3e33386ac39d::t_e009ed6903b747 67-76
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2b3e33386ac39d::t_9f0eceefaf387f 175,207-250
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/WorkflowNodeExecutorBase.cs
+  s_2b3e33386ac39d::t_238926f535f9c7 58-69,73-91
+src/Worker/FHIRBridge.Worker/appsettings.Development.json
+  s_2b3e33386ac39d::t_6991ec11f342ce 13-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "80e560cfb216936ab82f87fb92d76110389f9738",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
