@@ -1133,8 +1133,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             _ => throw new NotSupportedException($"Source system '{sourceConnection.SourceSystemType}' is not supported by the configured pipeline.")
         };
 
+        // A loopback base URL has no real OAuth server — skip resolving credential secrets and clear ApplicationType
+        // so CompositeFhirAccessTokenProvider's legacy inference returns an empty token (no Authorization header)
+        // instead of routing into a real JWT/client-credentials exchange. Mirrors SourceConnectionRuntimeResolver;
+        // real (non-loopback) sources are completely unaffected.
+        var isLoopback = Uri.TryCreate(sourceConnection.BaseUrl, UriKind.Absolute, out var baseUri) && baseUri.IsLoopback;
+
         string? privateKeyPem = null;
-        if (sourceConnection.Authentication.PrivateKey is not null)
+        if (!isLoopback && sourceConnection.Authentication.PrivateKey is not null)
         {
             privateKeyPem = await _secretProvider.GetSecretAsync(
                 sourceConnection.Authentication.PrivateKey,
@@ -1142,7 +1148,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         }
 
         string? clientSecret = null;
-        if (sourceConnection.Authentication.ClientSecret is not null)
+        if (!isLoopback && sourceConnection.Authentication.ClientSecret is not null)
         {
             clientSecret = await _secretProvider.GetSecretAsync(
                 sourceConnection.Authentication.ClientSecret,
@@ -1163,7 +1169,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             sourceConnection.Id,
             searchParameters,
             clientSecret,
-            ApplicationType: sourceConnection.ApplicationType);
+            ApplicationType: isLoopback ? null : sourceConnection.ApplicationType);
     }
 
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(

@@ -209,6 +209,15 @@
   &:hover { border-color: var(--color-muted-2); }
 
   input { cursor: pointer; flex-shrink: 0; }
+
+  /* Forced on + non-interactive because Run Mode requires it (e.g. Incremental Sync). */
+  &--locked {
+    background: var(--color-side);
+    border-style: dashed;
+    cursor: default;
+
+    input { cursor: default; }
+  }
 }
 
 /* ── Select ──────────────────────────────────────────────────────────────────── */
@@ -346,6 +355,7 @@
   line-height: 1.55;
 
   &--err  { background: var(--color-error-soft); color: var(--color-error-strong); border: 1px solid color-mix(in srgb, var(--color-error) 35%, white); }
+  &--warn { background: var(--color-warning-soft); color: var(--color-warning-strong); border: 1px solid color-mix(in srgb, var(--color-warning) 45%, white); }
   &--sm   { margin-bottom: 10px; font-size: 12px; padding: 8px 12px; }
   &--info {
     background: var(--color-primary-soft);
@@ -356,6 +366,101 @@
     font-size: 13.5px;
     font-weight: 600;
   }
+}
+
+/* ── Advanced options disclosure (Search REST) ───────────────────────────────── */
+.eaf-advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-top: 2px;
+  border: 1px dashed var(--color-border);
+  border-radius: 9px;
+  background: none;
+  color: var(--color-primary-dark);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+
+  &:hover { background: var(--color-primary-soft); border-color: var(--color-primary-mid); }
+}
+
+.eaf-advanced-toggle__chevron {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.15s;
+  transform: rotate(0deg);
+
+  &--open { transform: rotate(90deg); }
+}
+
+.eaf-advanced-toggle__count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eaf-advanced-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+  padding: 14px;
+  margin-top: 2px;
+  border-radius: 9px;
+  background: var(--color-side);
+}
+
+/* ── Weekday picker (Full Refresh calendar recurrence) ───────────────────────── */
+.eaf-weekday-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.eaf-weekday-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  transition: border-color 0.12s, background 0.12s;
+
+  &:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
+
+  &--checked {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-dark);
+  }
+
+  input { cursor: pointer; flex-shrink: 0; }
+}
+
+/* ── Cron preview (Full Refresh calendar recurrence summary) ─────────────────── */
+.eaf-cron-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--color-border);
+  background: var(--color-side);
+  font-size: 12px;
+  color: var(--color-muted);
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
 }
 
 /* ── Resources grid ───────────────────────────────────────────────────────────── */

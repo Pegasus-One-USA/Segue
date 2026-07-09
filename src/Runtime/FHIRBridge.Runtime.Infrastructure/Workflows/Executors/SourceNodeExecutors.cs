@@ -13,8 +13,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
 {
     public EpicSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -23,8 +24,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
 {
     public CernerSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -33,8 +35,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
 {
     public EClinicalWorksSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -43,8 +46,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
 {
     public AthenahealthSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -53,8 +57,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
 {
     public AllscriptsSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -63,8 +68,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
 {
     public MeditechSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -73,8 +79,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
 {
     public GenericFhirSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -83,8 +90,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
 {
     public SampleSourceNodeExecutor(
         IFhirSourceClientFactory? sourceClientFactory = null,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore)
     {
     }
 }
@@ -108,17 +116,20 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly RuntimeSourceType _sourceType;
     private readonly IFhirSourceClientFactory? _sourceClientFactory;
     private readonly ISourceConnectionRuntimeResolver? _sourceResolver;
+    private readonly ISourceConnectionSyncCursorStore? _syncCursorStore;
 
     protected SourceNodeExecutor(
         string nodeType,
         RuntimeSourceType sourceType,
         IFhirSourceClientFactory? sourceClientFactory,
-        ISourceConnectionRuntimeResolver? sourceResolver = null)
+        ISourceConnectionRuntimeResolver? sourceResolver = null,
+        ISourceConnectionSyncCursorStore? syncCursorStore = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
         _sourceClientFactory = sourceClientFactory;
         _sourceResolver = sourceResolver;
+        _syncCursorStore = syncCursorStore;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -153,11 +164,32 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
 
         var client = _sourceClientFactory.Create(_sourceType);
-        var resources = await client.SearchAsync(resourceType, source, cancellationToken);
-        var payload = new ResourceBatch(resources.Select(resource => new ResourceEnvelope(
-            resource.ResourceType,
-            resource.ResourceId ?? string.Empty,
-            resource.RawJson)).ToArray());
+
+        // A Backend System Search REST retrieval config carries its own resource-type list (potentially several
+        // types under one connection); fall back to the single node-config resourceType otherwise — unchanged
+        // behavior for the route→graph projection and any hand-authored node config.
+        var resourceTypes = source.ResourceTypes is { Count: > 0 } configured ? configured : [resourceType];
+        var resources = new List<ResourceEnvelope>();
+        foreach (var type in resourceTypes)
+        {
+            var page = await client.SearchAsync(type, source, cancellationToken);
+            resources.AddRange(page.Select(resource => new ResourceEnvelope(
+                resource.ResourceType,
+                resource.ResourceId ?? string.Empty,
+                resource.RawJson)));
+        }
+
+        if (source.MaxRecords is { } maxRecords && resources.Count > maxRecords)
+        {
+            resources.RemoveRange(maxRecords, resources.Count - maxRecords);
+        }
+
+        if (source.SourceConnectionId is { } resolvedSourceConnectionId && _syncCursorStore is not null)
+        {
+            await _syncCursorStore.RecordSuccessfulSyncAsync(resolvedSourceConnectionId, DateTime.UtcNow, cancellationToken);
+        }
+
+        var payload = new ResourceBatch(resources.ToArray());
 
         return new WorkflowNodeOutput(
             node.Id,
@@ -167,7 +199,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             new Dictionary<string, object?>
             {
                 ["executor"] = GetType().Name,
-                ["resourceType"] = resourceType,
+                ["resourceType"] = string.Join(',', resourceTypes),
                 ["count"] = resources.Count
             });
     }

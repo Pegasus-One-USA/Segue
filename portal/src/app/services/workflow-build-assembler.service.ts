@@ -8,6 +8,7 @@ import {
   MappingBuildSpec,
   MappingFieldRequest,
   SourceBuildSpec,
+  SourceRetrievalConfigurationRequest,
   WorkflowBuildRequest,
   WorkflowNodeRequest,
   WorkflowTriggerRequest,
@@ -112,9 +113,14 @@ export class WorkflowBuildAssemblerService {
         tokenEndpoint: fields['Token endpoint'] || null,
         scopes,
         keyId: fields['JWT kid'] || null,
+        // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name) —
+        // required by ConfigurationService.ValidateEpicSourceConnection for any non-interactive Epic source.
+        privateKeyKeyVaultName: fields['Key vault reference'] || null,
+        privateKeySecretName: fields['Secret Name'] || null,
       },
       applicationType: appType,
       interactive,
+      retrieval: appType === 'Backend' ? this.buildRetrieval(fields) : null,
     };
   }
 
@@ -124,6 +130,37 @@ export class WorkflowBuildAssemblerService {
     if (ctx.includes('standalone')) return 'Standalone';
     if (ctx.includes('patient')) return 'Patient';
     return 'Backend';
+  }
+
+  /** Backend System only — maps the wizard's Retrieval Configuration fields onto the backend's retrieval DTO.
+   *  Returns null when no retrieval method was chosen (e.g. the connection is still being drafted). */
+  private buildRetrieval(fields: Record<string, string>): SourceRetrievalConfigurationRequest | null {
+    const retrievalMethod = fields['Retrieval method key'];
+    if (!retrievalMethod) return null;
+
+    const splitList = (raw: string | undefined): string[] =>
+      (raw ?? '').split(',').map(v => v.trim()).filter(Boolean);
+    const toPositiveNumber = (raw: string | undefined): number | null => {
+      const n = Number(raw);
+      return raw && Number.isFinite(n) && n > 0 ? n : null;
+    };
+
+    const includeParameters = splitList(fields['Include (_include)']);
+    const revIncludeParameters = splitList(fields['Reverse include (_revinclude)']);
+
+    return {
+      retrievalMethod,
+      resourceTypes: splitList(fields['Retrieval resource type']),
+      searchCriteria: fields['Search criteria'] || null,
+      incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
+      pageSize: toPositiveNumber(fields['Page size (_count)']),
+      sortOrder: fields['Sort (_sort)'] || null,
+      includeParameters: includeParameters.length ? includeParameters : null,
+      revIncludeParameters: revIncludeParameters.length ? revIncludeParameters : null,
+      retryPolicy: fields['Retry policy'] || null,
+      timeoutSeconds: toPositiveNumber(fields['Timeout (seconds)']),
+      maxRecordsPerRun: toPositiveNumber(fields['Max records per run']),
+    };
   }
 
   // ── destination ─────────────────────────────────────────────────────────────

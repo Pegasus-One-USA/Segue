@@ -17,7 +17,8 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         string baseUrl,
         SourceAuthenticationConfiguration authentication,
         ApplicationType? applicationType = null,
-        SourceInteractiveConfiguration? interactive = null)
+        SourceInteractiveConfiguration? interactive = null,
+        SourceRetrievalConfiguration? retrieval = null)
     {
         Id = Guid.NewGuid();
         Name = name;
@@ -26,6 +27,7 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         Authentication = authentication;
         ApplicationType = applicationType;
         Interactive = interactive;
+        Retrieval = retrieval;
         IsEnabled = true;
     }
 
@@ -43,6 +45,10 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
     /// <summary>Interactive (authorization-code) settings; null for non-interactive (Backend) sources.</summary>
     public SourceInteractiveConfiguration? Interactive { get; private set; }
 
+    /// <summary>How a Backend System source polls for resources; null for interactive sources and legacy Backend
+    /// connections configured before retrieval settings existed.</summary>
+    public SourceRetrievalConfiguration? Retrieval { get; private set; }
+
     public bool IsEnabled { get; private set; }
 
     public void Update(
@@ -51,7 +57,8 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         string baseUrl,
         SourceAuthenticationConfiguration authentication,
         ApplicationType? applicationType = null,
-        SourceInteractiveConfiguration? interactive = null)
+        SourceInteractiveConfiguration? interactive = null,
+        SourceRetrievalConfiguration? retrieval = null)
     {
         Name = name;
         SourceSystemType = sourceSystemType;
@@ -59,11 +66,23 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         Authentication = authentication;
         ApplicationType = applicationType;
         Interactive = interactive;
+        Retrieval = retrieval;
     }
 
     public void SetEnabled(bool isEnabled)
     {
         IsEnabled = isEnabled;
+    }
+
+    /// <summary>Advances the incremental-sync cursor after a workflow run completes successfully. No-op when this
+    /// connection has no retrieval configuration (interactive sources, or Backend sources created before this field
+    /// existed).</summary>
+    public void RecordRetrievalSync(DateTime syncedAtUtc)
+    {
+        if (Retrieval is not null)
+        {
+            Retrieval = Retrieval.WithLastSuccessfulSync(syncedAtUtc);
+        }
     }
 
     /// <summary>

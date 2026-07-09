@@ -107,5 +107,63 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
                     .HasColumnName("PrivateKeySecretName");
             });
         });
+
+        builder.OwnsOne(x => x.Retrieval, retrieval =>
+        {
+            retrieval.Property(x => x.RetrievalMethod)
+                .HasMaxLength(50)
+                .HasColumnName("RetrievalMethod");
+
+            var resourceTypes = retrieval.Property(x => x.ResourceTypes)
+                .HasConversion(
+                    value => string.Join(' ', value),
+                    value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .HasMaxLength(1000)
+                .HasColumnName("RetrievalResourceTypes");
+            resourceTypes.Metadata.SetValueComparer(StringArrayComparer);
+
+            retrieval.Property(x => x.SearchCriteria)
+                .HasMaxLength(1000)
+                .HasColumnName("RetrievalSearchCriteria");
+
+            retrieval.Property(x => x.IncrementalSyncEnabled)
+                .HasColumnName("RetrievalIncrementalSyncEnabled");
+
+            retrieval.Property(x => x.PageSize)
+                .HasColumnName("RetrievalPageSize");
+
+            retrieval.Property(x => x.SortOrder)
+                .HasMaxLength(50)
+                .HasColumnName("RetrievalSortOrder");
+
+            var includeParameters = retrieval.Property(x => x.IncludeParameters)
+                .HasConversion(
+                    value => string.Join(' ', value),
+                    value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .HasMaxLength(500)
+                .HasColumnName("RetrievalIncludeParameters");
+            includeParameters.Metadata.SetValueComparer(StringArrayComparer);
+
+            var revIncludeParameters = retrieval.Property(x => x.RevIncludeParameters)
+                .HasConversion(
+                    value => string.Join(' ', value),
+                    value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .HasMaxLength(500)
+                .HasColumnName("RetrievalRevIncludeParameters");
+            revIncludeParameters.Metadata.SetValueComparer(StringArrayComparer);
+
+            retrieval.Property(x => x.RetryPolicy)
+                .HasMaxLength(50)
+                .HasColumnName("RetrievalRetryPolicy");
+
+            retrieval.Property(x => x.TimeoutSeconds)
+                .HasColumnName("RetrievalTimeoutSeconds");
+
+            retrieval.Property(x => x.MaxRecordsPerRun)
+                .HasColumnName("RetrievalMaxRecordsPerRun");
+
+            retrieval.Property(x => x.LastSuccessfulSyncUtc)
+                .HasColumnName("RetrievalLastSuccessfulSyncUtc");
+        });
     }
 }

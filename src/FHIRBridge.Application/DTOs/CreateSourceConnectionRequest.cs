@@ -9,4 +9,5 @@ public sealed record CreateSourceConnectionRequest(
     string BaseUrl,
     SourceAuthenticationDto Authentication,
     ApplicationType? ApplicationType = null,
-    SourceInteractiveConfigurationDto? Interactive = null);
+    SourceInteractiveConfigurationDto? Interactive = null,
+    SourceRetrievalConfigurationDto? Retrieval = null);

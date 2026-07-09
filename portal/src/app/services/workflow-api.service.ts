@@ -121,6 +121,20 @@ export interface SourceInteractiveConfigurationRequest {
   patientSelectionMethod?: string | null;
 }
 
+export interface SourceRetrievalConfigurationRequest {
+  retrievalMethod: string;                    // search-rest | subscription | webhook | bulk-export
+  resourceTypes: string[];
+  searchCriteria?: string | null;
+  incrementalSyncEnabled?: boolean;
+  pageSize?: number | null;
+  sortOrder?: string | null;
+  includeParameters?: string[] | null;
+  revIncludeParameters?: string[] | null;
+  retryPolicy?: string | null;
+  timeoutSeconds?: number | null;
+  maxRecordsPerRun?: number | null;
+}
+
 export interface CreateSourceConnectionRequest {
   name: string;
   sourceSystemType: string;                   // Sample | Epic | ...
@@ -128,6 +142,7 @@ export interface CreateSourceConnectionRequest {
   authentication: SourceAuthenticationRequest;
   applicationType?: string | null;           // Backend | EhrLaunch | Standalone | Patient
   interactive?: SourceInteractiveConfigurationRequest | null;
+  retrieval?: SourceRetrievalConfigurationRequest | null;
 }
 
 export interface CreateDestinationConfigurationRequest {
