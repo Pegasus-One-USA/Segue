@@ -212,6 +212,10 @@ public static class DependencyInjection
         // FHIR source config (base URL + auth + token) at run time so a graph run matches a route run.
         services.AddScoped<Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver,
             Sources.SourceConnectionRuntimeResolver>();
+        // Records a Backend System source's incremental-sync cursor after a successful run — the write-back half
+        // of the resolver above.
+        services.AddScoped<Runtime.Application.Abstractions.Sources.ISourceConnectionSyncCursorStore,
+            Sources.SourceConnectionSyncCursorStore>();
         // Phase 2: distributed-cache decorators over the local→FHIR terminology composites. Lookups/translations are
         // stable per code-system/map version and repeated across a run, so positive results are cached for this TTL.
         var terminologyCacheTtl = TimeSpan.FromMinutes(

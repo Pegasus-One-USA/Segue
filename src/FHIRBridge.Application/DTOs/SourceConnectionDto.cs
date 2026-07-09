@@ -11,4 +11,5 @@ public sealed record SourceConnectionDto(
     SourceAuthenticationDto Authentication,
     bool IsEnabled,
     ApplicationType? ApplicationType = null,
-    SourceInteractiveConfigurationDto? Interactive = null);
+    SourceInteractiveConfigurationDto? Interactive = null,
+    SourceRetrievalConfigurationDto? Retrieval = null);

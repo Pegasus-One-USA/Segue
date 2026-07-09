@@ -22,6 +22,8 @@ export interface WizardFormValues {
   jwksUrl:     string;
   kid:         string;
   kvRef:       string;
+  /** Optional: only Backend System + JWT populates this (Key Vault secret name for the private key PEM). */
+  secretName?: string;
   redirectUri: string;
   launchUrl:   string;
 }
@@ -82,6 +84,16 @@ export class WizardService {
   readonly redirectUri  = signal('https://fhirbridge.com/oauth/callback');
   readonly launchUrlWiz = signal('https://fhirbridge.com/launch');
   readonly isEditing    = computed(() => !!this.store.editingNodeId());
+
+  /** Raw field bag of the node being edited (or null when creating new) — the source of truth for every persisted
+   *  value, since named signals above only ever cover a handful of fields. Long-tail fields (retrieval config,
+   *  advanced search options, JWT key material, CDS Hooks, ...) must be read back from here directly, using the
+   *  exact same string keys save() writes, rather than growing this list of named signals indefinitely. */
+  readonly editingFields = computed<Record<string, string> | null>(() => {
+    const id = this.store.editingNodeId();
+    if (!id) return null;
+    return (this.store.byId(id)?.fields ?? null) as Record<string, string> | null;
+  });
 
   // ── derived ingestion gate ─────────────────────────────────────────────────
   readonly allowedModes = computed(() => {
@@ -225,6 +237,7 @@ export class WizardService {
       if (formValues.jwksMethod === 'hosted') fields['JWKS URL'] = formValues.jwksUrl.trim();
       fields['JWT kid']          = formValues.kid.trim();
       fields['Key vault reference'] = formValues.kvRef.trim();
+      fields['Secret Name']     = (formValues.secretName ?? '').trim();
     }
 
     const editingId = this.store.editingNodeId();

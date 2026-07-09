@@ -114,27 +114,42 @@ type RetrievalFieldKey =
   | 'subscriptionResourceType' | 'webhookResourceType' | 'searchRestResourceType' | 'bulkExportResourceType'
   | 'eventType' | 'notificationPayload' | 'endpointType' | 'reconciliationSchedule'
   | 'payloadFormat' | 'searchCriteria' | 'incrementalCursor' | 'schedulePollFrequency' | 'runMode'
-  | 'exportScope' | 'groupId' | 'patientIdList' | 'fhirOutputFormat';
+  | 'exportScope' | 'groupId' | 'patientIdList' | 'fhirOutputFormat'
+  | 'pageSize' | 'sortOrder' | 'includeLinked' | 'revIncludeLinked' | 'retryPolicy' | 'timeoutSeconds' | 'maxRecordsPerRun'
+  | 'fullRefreshRecurrence' | 'fullRefreshDaysOfWeek' | 'fullRefreshDayOfMonth' | 'fullRefreshTime';
 
 const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'subscriptionResourceType', 'webhookResourceType', 'searchRestResourceType', 'bulkExportResourceType',
   'eventType', 'notificationPayload', 'endpointType', 'reconciliationSchedule',
   'payloadFormat', 'searchCriteria', 'incrementalCursor', 'schedulePollFrequency', 'runMode',
   'exportScope', 'groupId', 'patientIdList', 'fhirOutputFormat',
+  'pageSize', 'sortOrder', 'includeLinked', 'revIncludeLinked', 'retryPolicy', 'timeoutSeconds', 'maxRecordsPerRun',
+  'fullRefreshRecurrence', 'fullRefreshDaysOfWeek', 'fullRefreshDayOfMonth', 'fullRefreshTime',
 ];
 
 interface RetrievalFieldOption { value: string; label: string; }
 
+/** Snapshot of the values other fields' visibility can depend on — passed to {@link RetrievalFieldDef.visibleWhen}. */
+interface RetrievalFieldVisibilityContext {
+  exportScope: string;
+  runMode: string;
+  fullRefreshRecurrence: string;
+}
+
 interface RetrievalFieldDef {
   key: RetrievalFieldKey;
   label: string;
-  type: 'select' | 'text' | 'textarea' | 'checkbox' | 'multiselect';
+  type: 'select' | 'text' | 'textarea' | 'checkbox' | 'multiselect' | 'weekday-picker' | 'time';
   required: boolean;
   options?: readonly RetrievalFieldOption[];
   placeholder?: string;
   hint?: string;
-  /** Bulk Export only: Group ID / Patient ID appear only for the matching Export Scope. */
-  visibleWhen?: (exportScope: string) => boolean;
+  /** Governs whether this field renders at all, given the current export scope / run mode / recurrence choice. */
+  visibleWhen?: (ctx: RetrievalFieldVisibilityContext) => boolean;
+  /** Field is only required while another field does NOT hold the given value (e.g. schedule isn't required when Run Mode is Manual Only). */
+  requiredUnless?: { key: RetrievalFieldKey; value: string };
+  /** Rendered inside the collapsed "Advanced Search Options" disclosure instead of the main field grid. */
+  advanced?: boolean;
 }
 
 interface RetrievalMethodConfig {
@@ -171,6 +186,32 @@ const EVENT_TYPE_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: 'updated',            label: 'Record updated' },
   { value: 'created-or-updated', label: 'Created or updated' },
   { value: 'deleted',            label: 'Record deleted' },
+];
+
+const SORT_OPTIONS: readonly RetrievalFieldOption[] = [
+  { value: '_lastUpdated',  label: '_lastUpdated (oldest → newest)' },
+  { value: '-_lastUpdated', label: '_lastUpdated (newest → oldest)' },
+  { value: 'date',          label: 'date (ascending)' },
+  { value: '-date',         label: 'date (descending)' },
+];
+
+const RETRY_POLICY_OPTIONS: readonly RetrievalFieldOption[] = [
+  { value: 'none',        label: 'No retry' },
+  { value: 'fixed-3',     label: 'Fixed — 3 attempts' },
+  { value: 'exponential', label: 'Exponential backoff' },
+];
+
+// ── Full Refresh calendar recurrence (Google Calendar-style: anchored to a specific time, not an interval) ──────
+const FULL_REFRESH_RECURRENCE_OPTIONS: readonly RetrievalFieldOption[] = [
+  { value: 'daily',   label: 'Daily' },
+  { value: 'weekly',  label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
+// cron day-of-week: 0 = Sunday … 6 = Saturday.
+export const WEEKDAY_OPTIONS: readonly RetrievalFieldOption[] = [
+  { value: '0', label: 'Sun' }, { value: '1', label: 'Mon' }, { value: '2', label: 'Tue' },
+  { value: '3', label: 'Wed' }, { value: '4', label: 'Thu' }, { value: '5', label: 'Fri' }, { value: '6', label: 'Sat' },
 ];
 
 const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = {
@@ -212,13 +253,28 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     fields: [
       { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: true },
       { key: 'searchCriteria',        label: 'Search Criteria',                  type: 'text',         required: false, placeholder: 'status=active&category=vital-signs', hint: 'Optional FHIR search parameters appended to every request.' },
-      { key: 'incrementalCursor',     label: 'Incremental Cursor (_lastUpdated)', type: 'checkbox',    required: false, hint: 'Only fetch resources changed since the last successful run.' },
-      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS },
       { key: 'runMode',               label: 'Run Mode',                         type: 'select',       required: true, options: [
-        { value: 'incremental', label: 'Incremental sync' },
-        { value: 'full',        label: 'Full refresh' },
-        { value: 'manual',      label: 'Manual trigger only' },
-      ] },
+        { value: 'incremental', label: 'Incremental Sync' },
+        { value: 'full',        label: 'Full Refresh' },
+        { value: 'manual',      label: 'Manual Only' },
+      ], hint: 'Incremental Sync polls only changed records on a short interval; Full Refresh reloads everything on a calendar schedule; Manual Only runs on demand.' },
+      { key: 'incrementalCursor',     label: 'Incremental Sync (_lastUpdated)',  type: 'checkbox',    required: false, hint: 'Only fetch resources changed since the last successful run. Enabled automatically when Run Mode is Incremental Sync.' },
+      // Incremental Sync wants a tight polling interval; Full Refresh wants a calendar-anchored time (off-hours,
+      // low-traffic) — these are different backend trigger primitives (Poll+minutes vs Schedule+cron), so they get
+      // different controls rather than forcing one picker to do both jobs.
+      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS, requiredUnless: { key: 'runMode', value: 'manual' }, visibleWhen: ctx => ctx.runMode !== 'full', hint: 'Not required when Run Mode is Manual Only — the pipeline only runs when triggered.' },
+      { key: 'fullRefreshRecurrence',  label: 'Repeat',                           type: 'select',       required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.runMode === 'full', hint: 'Full Refresh reloads everything with no incremental filter — anchor it to a specific, low-traffic time rather than a tight interval.' },
+      { key: 'fullRefreshDaysOfWeek', label: 'On',                               type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'weekly' },
+      { key: 'fullRefreshDayOfMonth', label: 'Day of month',                     type: 'select',       required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
+      { key: 'fullRefreshTime',       label: 'At',                               type: 'time',          required: true, visibleWhen: ctx => ctx.runMode === 'full', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      // ── Advanced Search Options (collapsed by default) ──────────────────────
+      { key: 'pageSize',           label: 'Page Size (_count)',              type: 'text',   required: false, placeholder: '100', hint: 'Resources requested per page. The server may cap this lower than requested.', advanced: true },
+      { key: 'sortOrder',          label: 'Sort (_sort)',                    type: 'select', required: false, options: SORT_OPTIONS, hint: 'Sort order applied to each search request.', advanced: true },
+      { key: 'includeLinked',     label: 'Include Linked Resources (_include)', type: 'text', required: false, placeholder: 'Encounter:patient', hint: 'Comma-separated _include parameters to pull referenced resources in the same response.', advanced: true },
+      { key: 'revIncludeLinked', label: 'Reverse Include (_revinclude)',    type: 'text',   required: false, placeholder: 'Observation:patient', hint: 'Comma-separated _revinclude parameters to pull resources that reference the selected type.', advanced: true },
+      { key: 'retryPolicy',       label: 'Retry Policy',                     type: 'select', required: false, options: RETRY_POLICY_OPTIONS, hint: 'How failed requests are retried before the run is marked failed.', advanced: true },
+      { key: 'timeoutSeconds',    label: 'Timeout (seconds)',                type: 'text',   required: false, placeholder: '30', hint: 'Per-request timeout before the connector aborts and retries.', advanced: true },
+      { key: 'maxRecordsPerRun',  label: 'Max Records Per Run',              type: 'text',   required: false, placeholder: 'e.g. 50000', hint: 'Safety cap — stops pulling once this many records are fetched in a single run.', advanced: true },
     ],
   },
   'bulk-export': {
@@ -232,8 +288,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
         { value: 'group',   label: 'Group ($export)' },
         { value: 'patient', label: 'Patient ($export)' },
       ] },
-      { key: 'groupId',               label: 'Group ID',                     type: 'text',         required: true, placeholder: 'e.g. 4diBHMQR-nurOSMS8UbGqQB', hint: 'Epic Group FHIR ID to export.', visibleWhen: scope => scope === 'group' },
-      { key: 'patientIdList',         label: 'Patient ID / Patient List',    type: 'textarea',     required: true, placeholder: 'Comma-separated Patient FHIR IDs', hint: 'One or more Patient FHIR IDs to export.', visibleWhen: scope => scope === 'patient' },
+      { key: 'groupId',               label: 'Group ID',                     type: 'text',         required: true, placeholder: 'e.g. 4diBHMQR-nurOSMS8UbGqQB', hint: 'Epic Group FHIR ID to export.', visibleWhen: ctx => ctx.exportScope === 'group' },
+      { key: 'patientIdList',         label: 'Patient ID / Patient List',    type: 'textarea',     required: true, placeholder: 'Comma-separated Patient FHIR IDs', hint: 'One or more Patient FHIR IDs to export.', visibleWhen: ctx => ctx.exportScope === 'patient' },
       { key: 'incrementalCursor',     label: 'Incremental Cursor (_since)',  type: 'checkbox',     required: false, hint: 'Only export resources changed since the last successful export.' },
       { key: 'fhirOutputFormat',      label: 'FHIR Output Format',           type: 'select',       required: true, options: [
         { value: 'ndjson',      label: 'NDJSON (application/fhir+ndjson)' },
@@ -293,7 +349,9 @@ export class EpicAudienceFormComponent implements OnInit {
     authMethod:        ['public'],
     clientSecret:      [''],
     jwksUrl:           ['', urlValidator],
-    privateKeyRef:     [''],
+    jwtKid:              [''],
+    privateKeyRef:       [''],
+    privateKeySecretName: [''],
     launchUrl:         ['https://fhirbridge.com/launch', urlValidator],
     callbackUrl:       ['https://fhirbridge.com/oauth/callback', [Validators.required, urlValidator]],
     resources:         [[] as string[], Validators.required],
@@ -324,6 +382,19 @@ export class EpicAudienceFormComponent implements OnInit {
     groupId:                [''],
     patientIdList:          [''],
     fhirOutputFormat:       ['ndjson'],
+    // ── Full Refresh calendar recurrence (Search REST, Run Mode = Full Refresh only) ────────────────────────────
+    fullRefreshRecurrence:  ['daily'],
+    fullRefreshDaysOfWeek:  [[] as string[]],
+    fullRefreshDayOfMonth:  ['1'],
+    fullRefreshTime:        ['02:00'],
+    // ── Advanced Search Options (Search REST only) ──────────────────────────────
+    pageSize:               ['100'],
+    sortOrder:              [''],
+    includeLinked:          [''],
+    revIncludeLinked:       [''],
+    retryPolicy:            ['exponential'],
+    timeoutSeconds:         ['30'],
+    maxRecordsPerRun:       [''],
   });
 
   // ── reactive bridges from RxJS FormControl.valueChanges → Signals ───────────
@@ -336,7 +407,12 @@ export class EpicAudienceFormComponent implements OnInit {
   private readonly resourcesValue       = toSignal(this.form.controls.resources.valueChanges,       { initialValue: this.form.controls.resources.value });
   private readonly retrievalMethodValue = toSignal(this.form.controls.retrievalMethod.valueChanges, { initialValue: this.form.controls.retrievalMethod.value });
   private readonly exportScopeValue     = toSignal(this.form.controls.exportScope.valueChanges,     { initialValue: this.form.controls.exportScope.value });
+  private readonly runModeValue         = toSignal(this.form.controls.runMode.valueChanges,          { initialValue: this.form.controls.runMode.value });
   private readonly scopeVersionValue    = toSignal(this.form.controls.scopeVersion.valueChanges,    { initialValue: this.form.controls.scopeVersion.value });
+  private readonly fullRefreshRecurrenceValue = toSignal(this.form.controls.fullRefreshRecurrence.valueChanges, { initialValue: this.form.controls.fullRefreshRecurrence.value });
+  private readonly fullRefreshDaysOfWeekValue = toSignal(this.form.controls.fullRefreshDaysOfWeek.valueChanges, { initialValue: this.form.controls.fullRefreshDaysOfWeek.value });
+  private readonly fullRefreshDayOfMonthValue = toSignal(this.form.controls.fullRefreshDayOfMonth.valueChanges, { initialValue: this.form.controls.fullRefreshDayOfMonth.value });
+  private readonly fullRefreshTimeValue       = toSignal(this.form.controls.fullRefreshTime.valueChanges,       { initialValue: this.form.controls.fullRefreshTime.value });
 
   // One bridge per retrieval method's own Resource Type control — never shared,
   // so each method keeps an independent selection instead of leaking into the others.
@@ -362,12 +438,72 @@ export class EpicAudienceFormComponent implements OnInit {
     return method ? RETRIEVAL_METHOD_CONFIG[method] : null;
   });
 
+  private readonly retrievalVisibilityContext = computed<RetrievalFieldVisibilityContext>(() => ({
+    exportScope: this.exportScopeValue(),
+    runMode: this.runModeValue(),
+    fullRefreshRecurrence: this.fullRefreshRecurrenceValue(),
+  }));
+
   protected readonly visibleRetrievalFields = computed(() => {
     const cfg = this.retrievalConfig();
     if (!cfg) return [];
-    const scope = this.exportScopeValue();
-    return cfg.fields.filter(f => !f.visibleWhen || f.visibleWhen(scope));
+    const ctx = this.retrievalVisibilityContext();
+    return cfg.fields.filter(f => !f.advanced && (!f.visibleWhen || f.visibleWhen(ctx)));
   });
+
+  /** Fields rendered inside the collapsed "Advanced Search Options" disclosure. */
+  protected readonly advancedRetrievalFields = computed(() => {
+    const cfg = this.retrievalConfig();
+    if (!cfg) return [];
+    const ctx = this.retrievalVisibilityContext();
+    return cfg.fields.filter(f => f.advanced && (!f.visibleWhen || f.visibleWhen(ctx)));
+  });
+
+  /** Google-Calendar-style summary + the cron expression it compiles to, for Run Mode = Full Refresh. */
+  protected readonly fullRefreshCronExpression = computed(() => {
+    const [hh, mm] = (this.fullRefreshTimeValue() || '02:00').split(':');
+    const minute = Number(mm) || 0;
+    const hour = Number(hh) || 0;
+    switch (this.fullRefreshRecurrenceValue()) {
+      case 'weekly': {
+        const days = this.fullRefreshDaysOfWeekValue();
+        return days?.length ? `${minute} ${hour} * * ${days.join(',')}` : null;
+      }
+      case 'monthly':
+        return `${minute} ${hour} ${this.fullRefreshDayOfMonthValue() || '1'} * *`;
+      default:
+        return `${minute} ${hour} * * *`;
+    }
+  });
+
+  protected readonly fullRefreshCronSummary = computed(() => {
+    const cron = this.fullRefreshCronExpression();
+    const time = this.fullRefreshTimeValue() || '02:00';
+    switch (this.fullRefreshRecurrenceValue()) {
+      case 'weekly': {
+        const days = this.fullRefreshDaysOfWeekValue() ?? [];
+        const labels = WEEKDAY_OPTIONS.filter(o => days.includes(o.value)).map(o => o.label);
+        return labels.length ? `Weekly on ${labels.join(', ')} at ${time} — ${cron}` : 'Select at least one day.';
+      }
+      case 'monthly':
+        return `Monthly on day ${this.fullRefreshDayOfMonthValue() || '1'} at ${time} — ${cron}`;
+      default:
+        return `Daily at ${time} — ${cron}`;
+    }
+  });
+
+  protected readonly advancedOptionsOpen = signal(false);
+  protected toggleAdvancedOptions(): void { this.advancedOptionsOpen.update(v => !v); }
+
+  /** Incremental Sync is meaningless without the _lastUpdated cursor, so Run Mode = Incremental Sync forces it on and locks it. */
+  protected readonly incrementalCursorLocked = computed(() =>
+    this.retrievalMethod() === 'search-rest' && this.runModeValue() === 'incremental',
+  );
+
+  /** Full Refresh has no incremental filter, so it can pull the entire selected data set — worth a visible warning. */
+  protected readonly showFullRefreshWarning = computed(() =>
+    this.retrievalMethod() === 'search-rest' && this.runModeValue() === 'full',
+  );
 
   /** Generic reader for whichever method's Resource Type control the template is currently rendering. */
   protected selectedRetrievalResourceTypes(key: RetrievalFieldKey): string[] {
@@ -450,6 +586,7 @@ export class EpicAudienceFormComponent implements OnInit {
       this.form.controls.authMethod.setValue(this.wiz.authMethod());
       this.form.controls.callbackUrl.setValue(this.wiz.redirectUri());
       this.form.controls.launchUrl.setValue(this.wiz.launchUrlWiz());
+      this.restoreExtendedFieldsFromEditingNode();
     }
 
     if (this.wiz.discovered()) {
@@ -509,6 +646,109 @@ export class EpicAudienceFormComponent implements OnInit {
     this.form.controls.exportScope.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncRetrievalValidators());
+
+    this.form.controls.runMode.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((mode) => {
+        const cursorCtrl = this.form.controls.incrementalCursor;
+        if (mode === 'incremental') {
+          cursorCtrl.setValue(true);
+          cursorCtrl.disable({ emitEvent: false });
+        } else {
+          cursorCtrl.enable({ emitEvent: false });
+        }
+        this.syncRetrievalValidators();
+      });
+
+    this.form.controls.fullRefreshRecurrence.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.syncRetrievalValidators());
+  }
+
+  /**
+   * WizardService.open() only restores the handful of fields it exposes as named signals (audience, environment,
+   * clientId, authMethod, redirect/launch URL). Everything added since — JWT key material, CDS Hooks, scope
+   * version, and the entire Data Retrieval Method section — has to be read back from the node's raw field bag
+   * directly, using the exact same string keys save() writes. A missing key leaves the control at its form default,
+   * so this is safe to call for a node saved before a given field existed.
+   */
+  private restoreExtendedFieldsFromEditingNode(): void {
+    const fields = this.wiz.editingFields();
+    if (!fields) return;
+
+    const setIfPresent = (control: string, key: string): void => {
+      const value = fields[key];
+      if (value !== undefined && value !== '') {
+        this.form.get(control)?.setValue(value);
+      }
+    };
+
+    setIfPresent('jwksUrl', 'JWKS URL');
+    setIfPresent('jwtKid', 'JWT kid');
+    setIfPresent('privateKeyRef', 'Key vault reference');
+    setIfPresent('privateKeySecretName', 'Secret Name');
+
+    setIfPresent('cdsDiscoveryUrl', 'CDS discovery URL');
+    setIfPresent('cdsServiceEndpoint', 'CDS service endpoint');
+    setIfPresent('cdsTriggerHook', 'CDS trigger hook');
+    setIfPresent('cdsReturnCard', 'CDS return card');
+    setIfPresent('cdsDtrQuestionnaire', 'DTR questionnaire');
+
+    if (fields['Scope version']?.startsWith('v1')) this.form.controls.scopeVersion.setValue('v1');
+    else if (fields['Scope version']?.startsWith('v2')) this.form.controls.scopeVersion.setValue('v2');
+
+    const retrievalMethod = fields['Retrieval method key'] as RetrievalMethod | undefined;
+    if (!retrievalMethod || !RETRIEVAL_METHOD_CONFIG[retrievalMethod]) return;
+
+    this.form.controls.retrievalMethod.setValue(retrievalMethod);
+
+    // Each method owns its own Resource Type control; 'Retrieval resource type' is the one generic key save()
+    // writes regardless of which method was active, so route it to the matching method's control.
+    const methodCfg = RETRIEVAL_METHOD_CONFIG[retrievalMethod];
+    const resourceField = methodCfg.fields.find(f => f.type === 'multiselect');
+    if (resourceField && fields['Retrieval resource type']) {
+      const types = fields['Retrieval resource type'].split(',').map(s => s.trim()).filter(Boolean);
+      this.form.get(resourceField.key)?.setValue(types);
+    }
+
+    setIfPresent('eventType', 'Event type');
+    setIfPresent('notificationPayload', 'Notification payload');
+    setIfPresent('endpointType', 'Endpoint type');
+    setIfPresent('reconciliationSchedule', 'Reconciliation schedule');
+    setIfPresent('payloadFormat', 'Payload format');
+    setIfPresent('searchCriteria', 'Search criteria');
+    setIfPresent('schedulePollFrequency', 'Schedule / poll frequency');
+    // The runMode valueChanges subscription that normally locks Incremental Sync isn't registered yet at this
+    // point in ngOnInit, so replicate its effect explicitly rather than depending on subscription timing.
+    if (fields['Run mode']) {
+      this.form.controls.runMode.setValue(fields['Run mode']);
+    }
+    if (fields['Run mode'] === 'incremental') {
+      this.form.controls.incrementalCursor.setValue(true);
+      this.form.controls.incrementalCursor.disable({ emitEvent: false });
+    } else if (fields['Incremental cursor']) {
+      this.form.controls.incrementalCursor.setValue(fields['Incremental cursor'] === 'enabled');
+    }
+    setIfPresent('exportScope', 'Export scope');
+    setIfPresent('groupId', 'Group ID');
+    setIfPresent('patientIdList', 'Patient ID / list');
+    setIfPresent('fhirOutputFormat', 'FHIR output format');
+
+    setIfPresent('fullRefreshRecurrence', 'Full refresh recurrence');
+    const daysOfWeek = fields['Full refresh days of week'];
+    if (daysOfWeek) {
+      this.form.controls.fullRefreshDaysOfWeek.setValue(daysOfWeek.split(',').map(s => s.trim()).filter(Boolean));
+    }
+    setIfPresent('fullRefreshDayOfMonth', 'Full refresh day of month');
+    setIfPresent('fullRefreshTime', 'Full refresh time');
+
+    setIfPresent('pageSize', 'Page size (_count)');
+    setIfPresent('sortOrder', 'Sort (_sort)');
+    setIfPresent('includeLinked', 'Include (_include)');
+    setIfPresent('revIncludeLinked', 'Reverse include (_revinclude)');
+    setIfPresent('retryPolicy', 'Retry policy');
+    setIfPresent('timeoutSeconds', 'Timeout (seconds)');
+    setIfPresent('maxRecordsPerRun', 'Max records per run');
   }
 
   // ── audience field lifecycle ────────────────────────────────────────────────
@@ -539,6 +779,7 @@ export class EpicAudienceFormComponent implements OnInit {
     }
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
+      this.form.controls.incrementalCursor.enable({ emitEvent: false });
       this.form.patchValue({
         retrievalMethod: '',
         subscriptionResourceType: [], webhookResourceType: [], searchRestResourceType: [], bulkExportResourceType: [],
@@ -546,6 +787,9 @@ export class EpicAudienceFormComponent implements OnInit {
         endpointType: '', reconciliationSchedule: '', payloadFormat: '', searchCriteria: '',
         incrementalCursor: false, schedulePollFrequency: '', runMode: '', exportScope: '',
         groupId: '', patientIdList: '', fhirOutputFormat: 'ndjson',
+        fullRefreshRecurrence: 'daily', fullRefreshDaysOfWeek: [], fullRefreshDayOfMonth: '1', fullRefreshTime: '02:00',
+        pageSize: '100', sortOrder: '', includeLinked: '', revIncludeLinked: '',
+        retryPolicy: 'exponential', timeoutSeconds: '30', maxRecordsPerRun: '',
       });
     }
   }
@@ -572,6 +816,14 @@ export class EpicAudienceFormComponent implements OnInit {
     apply('resources',     cfg.showResourcePicker);
     apply('clientSecret',  method === 'secret');
     apply('jwksUrl',       method === 'jwt', true);
+    // Epic Backend Services signs a JWT assertion with an RS384 private key referenced by (Key ID, Key Vault Name,
+    // Secret Name) — ConfigurationService.ValidateEpicSourceConnection only requires all three in the non-interactive
+    // (Backend System) branch; an EHR-launch/standalone/patient app can pick JWT client auth without them, so scope
+    // the requirement to Backend System specifically rather than "JWT selected" generally.
+    const requiresPrivateKeyReference = method === 'jwt' && this.audience() === 'backend-system';
+    apply('jwtKid',               requiresPrivateKeyReference);
+    apply('privateKeyRef',        requiresPrivateKeyReference);
+    apply('privateKeySecretName', requiresPrivateKeyReference);
 
     apply('cdsDiscoveryUrl',     cfg.showCdsHooks);
     apply('cdsServiceEndpoint',  cfg.showCdsHooks);
@@ -599,7 +851,11 @@ export class EpicAudienceFormComponent implements OnInit {
 
     for (const key of RETRIEVAL_FIELD_KEYS) {
       const field = methodCfg?.fields.find(f => f.key === key);
-      apply(key, !!field && visibleKeys.has(key) && field.required);
+      let required = !!field && visibleKeys.has(key) && field.required;
+      if (required && field?.requiredUnless && this.form.get(field.requiredUnless.key)?.value === field.requiredUnless.value) {
+        required = false;
+      }
+      apply(key, required);
     }
   }
 
@@ -621,6 +877,11 @@ export class EpicAudienceFormComponent implements OnInit {
   /** Each retrieval method owns its own Resource Type control — `key` picks which one. */
   protected toggleRetrievalResource(key: RetrievalFieldKey, r: string): void { this.toggleArrayControl(key, r); }
   protected toggleAllRetrievalResources(key: RetrievalFieldKey, all: readonly string[]): void { this.toggleAllArrayControl(key, all); }
+
+  /** Weekday-picker field (Full Refresh recurrence) — same array-toggle mechanics as a resource-type multiselect.
+   *  Reads the bridged signal (not `.value`) so the checked state stays reactive. */
+  protected toggleWeekday(day: string): void { this.toggleArrayControl('fullRefreshDaysOfWeek', day); }
+  protected readonly selectedWeekdays = computed(() => this.fullRefreshDaysOfWeekValue() ?? []);
 
   /** Generic invalid-and-touched check used by the config-driven retrieval field renderer. */
   protected isRetrievalFieldInvalid(field: RetrievalFieldDef): boolean {
@@ -672,14 +933,25 @@ export class EpicAudienceFormComponent implements OnInit {
         } else {
           this.authMethodAuto.set(false);
         }
-        this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
-        this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
-        this.wiz.token.set(dv.tokenEndpoint);
-        this.wiz.authorize.set(dv.authzEndpoint);
+        // A plain (non-SMART) FHIR R4 server has no discovered endpoints — don't stomp the Token/Authorization
+        // Endpoint fields with empty strings; leave them for manual entry (and don't overwrite a manual entry the
+        // user already typed if Discover is re-run).
+        if (!result.smartConfigurationError) {
+          this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
+          this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
+          this.wiz.token.set(dv.tokenEndpoint);
+          this.wiz.authorize.set(dv.authzEndpoint);
+        }
         this.wiz.baseUrl.set(url);
         this.wiz.setDiscovered(true);
         this.discStatus.set('done');
-        if (result.resourceTypesError) {
+        if (result.smartConfigurationError) {
+          this.toast.show(
+            'No SMART discovery found',
+            `This server has no /.well-known/smart-configuration (plain FHIR R4 — e.g. a local HAPI test server). Enter Token/Authorization Endpoint manually. Found ${result.resourceTypes.length} resource type(s) from /metadata.`,
+            'warning',
+          );
+        } else if (result.resourceTypesError) {
           this.toast.show('Discovery complete (partial)', `Endpoints resolved. Resource types unavailable: ${result.resourceTypesError}`);
         } else {
           this.toast.show('Discovery complete', `Resolved endpoints + ${result.resourceTypes.length} resource types.`);
@@ -697,11 +969,17 @@ export class EpicAudienceFormComponent implements OnInit {
     const baseUrl = this.form.controls.epicBaseUrl.value.trim();
     if (!baseUrl) { this.toast.show('Base URL required', 'Enter the Epic FHIR base URL first.'); return; }
     this.testStatus.set('running');
-    // Real reachability test: probe the source's public SMART/metadata endpoints via the backend.
+    // Real reachability test: probe the source's public SMART/metadata endpoints via the backend. Both probes are
+    // best-effort server-side, so this only fails on network/URL errors, not a missing smart-configuration document.
     this.discovery.discover(baseUrl).subscribe({
-      next: () => {
+      next: (result) => {
         this.testStatus.set('ok');
-        this.toast.show('Test passed', 'Reached the source SMART configuration endpoint.');
+        this.toast.show(
+          'Test passed',
+          result.smartConfigurationError
+            ? 'Reached the FHIR endpoint (no SMART configuration document — plain FHIR R4 server).'
+            : 'Reached the source SMART configuration endpoint.',
+        );
       },
       error: (err) => {
         this.testStatus.set('fail');
@@ -719,7 +997,9 @@ export class EpicAudienceFormComponent implements OnInit {
       setTimeout(() => this.focusFirstInvalidField());
       return;
     }
-    const v = this.form.value;
+    // getRawValue (not .value) so the Incremental Sync checkbox is included even while
+    // locked/disabled by Run Mode = Incremental Sync (disabled controls are omitted from .value).
+    const v = this.form.getRawValue();
 
     const aud      = v.audience as EpicAudience;
     const envKey: EnvKey = v.environment === 'production' ? 'production' : 'sandbox';
@@ -755,8 +1035,9 @@ export class EpicAudienceFormComponent implements OnInit {
       algorithm:   'RS384',
       jwksMethod:  v.authMethod === 'jwt' ? 'hosted' : 'external',
       jwksUrl:     v.jwksUrl ?? '',
-      kid:         '',
+      kid:         v.jwtKid ?? '',
       kvRef:       v.privateKeyRef ?? '',
+      secretName:  v.privateKeySecretName ?? '',
       redirectUri: v.callbackUrl ?? '',
       launchUrl:   v.launchUrl ?? '',
     }, {
@@ -776,6 +1057,9 @@ export class EpicAudienceFormComponent implements OnInit {
       'DTR questionnaire':     v.cdsDtrQuestionnaire ?? '',
       ...(cfg.showRetrieval ? {
         'Data retrieval method':     this.retrievalConfig()?.label ?? '',
+        // Machine-readable retrieval method key (e.g. "search-rest"), distinct from the display label above —
+        // consumed by WorkflowBuildAssemblerService to build the CreateSourceConnectionRequest.retrieval payload.
+        'Retrieval method key':      this.retrievalMethod(),
         'Retrieval resource type':   this.activeRetrievalResourceTypes().join(', '),
         'Event type':                v.eventType ?? '',
         'Notification payload':      v.notificationPayload ?? '',
@@ -790,6 +1074,22 @@ export class EpicAudienceFormComponent implements OnInit {
         'Group ID':                  v.groupId ?? '',
         'Patient ID / list':         v.patientIdList ?? '',
         'FHIR output format':        v.fhirOutputFormat ?? '',
+        // ── Full Refresh calendar recurrence (Run Mode = Full Refresh only) ──
+        ...(v.runMode === 'full' ? {
+          'Full refresh recurrence':    v.fullRefreshRecurrence ?? 'daily',
+          'Full refresh days of week':  (v.fullRefreshDaysOfWeek ?? []).join(','),
+          'Full refresh day of month':  v.fullRefreshDayOfMonth ?? '1',
+          'Full refresh time':          v.fullRefreshTime ?? '02:00',
+          'Full refresh schedule (cron)': this.fullRefreshCronExpression() ?? '',
+        } : {}),
+        // ── Advanced Search Options ──────────────────────────────────────────
+        'Page size (_count)':        v.pageSize ?? '',
+        'Sort (_sort)':              v.sortOrder ?? '',
+        'Include (_include)':       v.includeLinked ?? '',
+        'Reverse include (_revinclude)': v.revIncludeLinked ?? '',
+        'Retry policy':              v.retryPolicy ?? '',
+        'Timeout (seconds)':         v.timeoutSeconds ?? '',
+        'Max records per run':       v.maxRecordsPerRun ?? '',
       } : {}),
     });
 

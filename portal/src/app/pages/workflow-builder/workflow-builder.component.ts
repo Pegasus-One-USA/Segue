@@ -82,14 +82,67 @@ export class WorkflowBuilderComponent implements OnInit {
         return audience.includes('backend');
       }));
 
+  /**
+   * A Backend System source configured through the Search REST retrieval wizard carries its own Run Mode +
+   * Schedule/Poll Frequency (or Full Refresh calendar recurrence) — that config IS the trigger for this workflow,
+   * so it supersedes the manual toolbar control below. Falls back to `null` (toolbar-driven) for anything that
+   * hasn't gone through that wizard step, so older/other workflows keep behaving exactly as before.
+   */
+  private readonly backendRetrievalFields = computed(() =>
+    this.store.nodes()
+      .filter(isSourceNode)
+      .map(node => node.fields ?? {})
+      .find(fields => !!fields['Retrieval method key'] && !!fields['Run mode']) ?? null);
+
+  protected readonly isWizardDrivenTrigger = computed(() => this.backendRetrievalFields() !== null);
+
+  /** Human-readable summary of the wizard-derived trigger, shown in place of the manual toolbar control. */
+  protected readonly wizardTriggerSummary = computed(() => {
+    const fields = this.backendRetrievalFields();
+    if (!fields) return '';
+    switch (fields['Run mode']) {
+      case 'incremental': return `Incremental Sync — ${this.pollFrequencyLabel(fields['Schedule / poll frequency'])}`;
+      case 'full':         return `Full Refresh — ${fields['Full refresh schedule (cron)'] || 'schedule pending'}`;
+      default:              return 'Manual Only — runs on demand';
+    }
+  });
+
+  private pollFrequencyLabel(raw: string | undefined): string {
+    const labels: Record<string, string> = { '5m': 'every 5 min', '15m': 'every 15 min', '30m': 'every 30 min', '1h': 'hourly', '1d': 'daily' };
+    return raw ? (labels[raw] ?? raw) : 'frequency pending';
+  }
+
+  private pollFrequencyToMinutes(raw: string | undefined): number {
+    const minutes: Record<string, number> = { '5m': 5, '15m': 15, '30m': 30, '1h': 60, '1d': 1440 };
+    return raw ? (minutes[raw] ?? 15) : 15;
+  }
+
   onTriggerTypeInput(value: string): void {
     this.triggerType.set(value as 'Manual' | 'Daily' | 'Weekly' | 'Monthly' | 'Cron' | 'Poll');
   }
   onCronInput(value: string): void { this.cronExpression.set(value); }
   onPollMinutesInput(value: string): void { this.pollMinutes.set(Math.max(1, Number(value) || 1)); }
 
-  /** Compiles the Trigger control into the backend trigger DTO. Non-backend workflows never schedule → null. */
+  /**
+   * Compiles the workflow's trigger DTO. A Backend System source configured via the Search REST retrieval wizard
+   * (Run Mode + Schedule/Poll Frequency or Full Refresh calendar recurrence) takes priority — that config already
+   * says exactly how this pipeline should run, so re-deriving the trigger from it avoids the wizard and the toolbar
+   * silently disagreeing about the same workflow's schedule. Falls back to the manual toolbar control for anything
+   * that hasn't gone through that wizard step (including non-backend workflows, which never schedule → null).
+   */
   private buildTrigger(): WorkflowTriggerRequest | null {
+    const wizardFields = this.backendRetrievalFields();
+    if (wizardFields) {
+      switch (wizardFields['Run mode']) {
+        case 'incremental':
+          return { type: 'Poll', intervalMinutes: this.pollFrequencyToMinutes(wizardFields['Schedule / poll frequency']) };
+        case 'full':
+          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+        default:
+          return { type: 'Manual' };
+      }
+    }
+
     if (!this.isBackendAudience()) {
       return null;
     }

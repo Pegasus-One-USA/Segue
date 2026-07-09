@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
@@ -49,17 +50,28 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             _ => throw new NotSupportedException($"Source system '{sourceConnection.SourceSystemType}' is not supported by the workflow engine.")
         };
 
+        // A loopback base URL (e.g. docker-compose's local HAPI FHIR) has no real OAuth server to talk to — any
+        // Token Endpoint configured against it is guaranteed to fail (either unreachable, or misinterpreted as a
+        // FHIR REST call by a plain FHIR server). Treat loopback sources as unauthenticated: skip resolving
+        // credential secrets and clear ApplicationType so CompositeFhirAccessTokenProvider's legacy inference falls
+        // through to its no-credentials branch (empty token, no Authorization header) instead of routing into the
+        // Backend Services JWT strategy. Real (non-loopback) sources are completely unaffected.
+        var isLoopback = Uri.TryCreate(sourceConnection.BaseUrl, UriKind.Absolute, out var baseUri) && baseUri.IsLoopback;
+
         string? privateKeyPem = null;
-        if (sourceConnection.Authentication.PrivateKey is not null)
+        if (!isLoopback && sourceConnection.Authentication.PrivateKey is not null)
         {
             privateKeyPem = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.PrivateKey, cancellationToken);
         }
 
         string? clientSecret = null;
-        if (sourceConnection.Authentication.ClientSecret is not null)
+        if (!isLoopback && sourceConnection.Authentication.ClientSecret is not null)
         {
             clientSecret = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.ClientSecret, cancellationToken);
         }
+
+        var retrieval = sourceConnection.Retrieval;
+        var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
         return new FhirSourceConfiguration(
             sourceType,
@@ -70,11 +82,60 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
             sourceConnection.Authentication.Scopes,
-            100,
+            retrieval?.PageSize ?? 100,
             5,
             sourceConnection.Id,
-            searchParameters,
+            composedSearchParameters,
             clientSecret,
-            ApplicationType: sourceConnection.ApplicationType);
+            ApplicationType: isLoopback ? null : sourceConnection.ApplicationType,
+            ResourceTypes: retrieval?.ResourceTypes is { Length: > 0 } types ? types : null,
+            MaxRecords: retrieval?.MaxRecordsPerRun);
+    }
+
+    /// <summary>
+    /// Layers a Backend System retrieval configuration's search criteria, incremental cursor, sort, and
+    /// include/revinclude settings onto the node-config search-parameters string. Returns the original string
+    /// unchanged when there is no retrieval config (interactive sources, or Backend sources predating this field) —
+    /// every existing connection keeps behaving exactly as before.
+    /// </summary>
+    private static string? ComposeSearchParameters(string? baseSearchParameters, SourceRetrievalConfiguration? retrieval)
+    {
+        if (retrieval is null)
+        {
+            return baseSearchParameters;
+        }
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(baseSearchParameters))
+        {
+            parts.Add(baseSearchParameters.Trim('&'));
+        }
+
+        if (!string.IsNullOrWhiteSpace(retrieval.SearchCriteria))
+        {
+            parts.Add(retrieval.SearchCriteria.Trim('&'));
+        }
+
+        if (retrieval.IncrementalSyncEnabled && retrieval.LastSuccessfulSyncUtc is { } lastSync)
+        {
+            parts.Add($"_lastUpdated=gt{lastSync:yyyy-MM-ddTHH:mm:ssZ}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(retrieval.SortOrder))
+        {
+            parts.Add($"_sort={retrieval.SortOrder}");
+        }
+
+        if (retrieval.IncludeParameters.Length > 0)
+        {
+            parts.Add($"_include={string.Join(',', retrieval.IncludeParameters)}");
+        }
+
+        if (retrieval.RevIncludeParameters.Length > 0)
+        {
+            parts.Add($"_revinclude={string.Join(',', retrieval.RevIncludeParameters)}");
+        }
+
+        return parts.Count == 0 ? null : string.Join('&', parts);
     }
 }

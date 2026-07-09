@@ -8,7 +8,11 @@
     placeholder="Untitled workflow"
     aria-label="Workflow name"
   />
-  @if (isBackendAudience()) {
+  @if (isWizardDrivenTrigger()) {
+    <span class="builder-status" title="Set from the Backend System source's Retrieval Configuration — edit it there to change this.">
+      ⏱ Trigger: {{ wizardTriggerSummary() }}
+    </span>
+  } @else if (isBackendAudience()) {
     <span class="builder-status" title="Backend Systems run on a schedule">⏱ Trigger</span>
     <select class="builder-input" aria-label="Trigger schedule"
             [value]="triggerType()" (change)="onTriggerTypeInput($any($event.target).value)">
