@@ -63,7 +63,9 @@ public static class WorkflowEndpoints
                     return Results.BadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
                 }
 
-                var destination = await configurationService.AddDestinationConfigurationAsync(spec.Destination, cancellationToken);
+                var destination = spec.ExistingId is { } existingDestinationId
+                    ? await configurationService.UpdateDestinationConfigurationAsync(existingDestinationId, spec.Destination, cancellationToken)
+                    : await configurationService.AddDestinationConfigurationAsync(spec.Destination, cancellationToken);
                 destinationIds[spec.NodeId] = destination.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config =>
                 {
@@ -85,7 +87,9 @@ public static class WorkflowEndpoints
                     return Results.BadRequest($"Source spec references unknown node '{spec.NodeId}'.");
                 }
 
-                var source = await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
+                var source = spec.ExistingId is { } existingSourceId
+                    ? await configurationService.UpdateSourceConnectionAsync(existingSourceId, spec.Source, cancellationToken)
+                    : await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
                 sourceIds[spec.NodeId] = source.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config => config["sourceConnectionId"] = source.Id.ToString());
             }
@@ -110,15 +114,16 @@ public static class WorkflowEndpoints
                         $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
                 }
 
-                var mapping = await configurationService.AddMappingProfileAsync(
-                    new CreateMappingProfileRequest(
-                        spec.Name,
-                        spec.ResourceType,
-                        sourceConnectionId,
-                        destinationId,
-                        spec.DestinationObject,
-                        spec.Fields),
-                    cancellationToken);
+                var mappingRequest = new CreateMappingProfileRequest(
+                    spec.Name,
+                    spec.ResourceType,
+                    sourceConnectionId,
+                    destinationId,
+                    spec.DestinationObject,
+                    spec.Fields);
+                var mapping = spec.ExistingId is { } existingMappingId
+                    ? await configurationService.UpdateMappingProfileAsync(existingMappingId, mappingRequest, cancellationToken)
+                    : await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken);
                 mappingIds[spec.NodeId] = mapping.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config => config["mappingProfileId"] = mapping.Id.ToString());
 
@@ -145,7 +150,7 @@ public static class WorkflowEndpoints
                 request.Edges,
                 request.Trigger);
 
-            var workflow = BuildWorkflow(Guid.NewGuid(), definitionRequest);
+            var workflow = BuildWorkflow(request.WorkflowId ?? Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(workflow, cancellationToken);
 
             var result = new WorkflowBuildResult(workflow.Id, sourceIds, destinationIds, mappingIds);

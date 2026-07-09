@@ -190,9 +190,12 @@ export class WorkflowBuilderComponent implements OnInit {
 
   /**
    * Single "Save". Behaves by context:
-   * - Editing an existing workflow (id already set) → update it in place (PUT); never re-creates config records.
-   * - New canvas with wizard-drawn source/destination specs → create those records + save (POST /workflows/build).
-   * - New canvas referencing existing configs by id (or empty) → plain design save.
+   * - Canvas carries wizard-drawn source/destination specs → create-on-save (POST /workflows/build). When editing an
+   *   already-built workflow, the existing workflow id (and each spec's existingId, sourced from the node's own
+   *   fields) is passed along so the server updates the workflow definition and its Source/Destination/MappingProfile
+   *   records in place instead of duplicating them — this is what makes edits to retrieval/connection config actually
+   *   reach the backing entity, not just the node's display config.
+   * - Canvas has no such specs (pure picker-by-id or transform-only) → plain design save (PUT).
    * Interactive/launch workflows are saved enabled with their source binding (build enables by default; the plain-save
    * path activates when a launch source id is present).
    */
@@ -206,39 +209,34 @@ export class WorkflowBuilderComponent implements OnInit {
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
 
-    // Editing an existing workflow → update in place. Re-provisioning configs here would create duplicates.
-    if (existingId) {
-      this.saveWorkflow(name, existingId, isLaunch);
-      return;
-    }
-
-    // New workflow: create-on-save when the canvas carries wizard-drawn source/destination specs.
     const request = this.buildAssembler.assemble(name, this.buildTrigger());
     const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
     if (hasSpecs) {
-      this.buildWorkflow(request);
+      this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
       return;
     }
 
-    // Otherwise the canvas references existing configs by id (or is empty) → plain design save.
-    this.saveWorkflow(name, null, isLaunch);
+    // No wizard-drawn specs → plain design save.
+    this.saveWorkflow(name, existingId, isLaunch);
   }
 
   private buildWorkflow(request: WorkflowBuildRequest): void {
+    const isUpdate = !!request.workflowId;
     this.workflowBusy.set(true);
-    this.workflowStatus.set('Creating configs + saving workflow...');
+    this.workflowStatus.set(isUpdate ? 'Syncing configs + saving workflow...' : 'Creating configs + saving workflow...');
     this.workflowApi.build(request).subscribe({
       next: result => {
         this.currentWorkflowId.set(result.workflowId);
         this.workflowIdInput.set(result.workflowId);
-        const created =
+        const synced =
           Object.keys(result.sourceConnectionIds).length +
           Object.keys(result.destinationIds).length +
           Object.keys(result.mappingProfileIds).length;
         const unmapped = this.buildAssembler.lastUnmappedResources;
         const caveat = unmapped.length ? ` (not wired: ${unmapped.join(', ')})` : '';
-        this.workflowStatus.set(`Created ${created} config(s) + saved workflow.${caveat}`);
-        this.toast.success('Workflow saved', `Provisioned configs and saved. You can Run it now.${caveat}`);
+        const verb = isUpdate ? 'Synced' : 'Created';
+        this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
+        this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.workflowBusy.set(false);
         this.resetCanvasAndWorkflowState();
       },
@@ -300,10 +298,13 @@ export class WorkflowBuilderComponent implements OnInit {
     const t = TRANSFORMS.find(x => x.id === e.transformId);
     if (!t) return;
 
-    // Editing an existing destination node's configuration (dest wizard edit flow).
+    // Editing an existing destination node's configuration (dest wizard edit flow). Merge onto the node's existing
+    // fields rather than replacing them outright — server-injected machine keys (destinationId, mappingProfileId,
+    // secretKeyVaultName/secretName from create-on-save) aren't surfaced as form controls here and must survive.
     if (e.editNodeId) {
+      const previousFields = this.store.byId(e.editNodeId)?.fields ?? {};
       this.store.updateNode(e.editNodeId, {
-        fields: { '__name': t.name, ...(e.config ?? {}) },
+        fields: { ...previousFields, '__name': t.name, ...(e.config ?? {}) },
       });
       this.toast.show('Updated', `${t.name} configuration updated.`);
       return;

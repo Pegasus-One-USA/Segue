@@ -55,13 +55,40 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
             return default;
         }
 
-        return property.Deserialize<T>(JsonOptions);
+        // Speculative read: the caller doesn't know in advance whether this property is actually shaped like T (e.g.
+        // a wizard-authored node's raw field bag under a matching key name, or a genuinely-typed embedded config from
+        // the route→graph projection). A shape mismatch should fall through to the next resolution strategy, not
+        // crash the whole run with a raw JsonException.
+        try
+        {
+            return property.Deserialize<T>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
     }
 
     protected static T? ReadConfiguration<T>(WorkflowNode node)
-        => string.IsNullOrWhiteSpace(node.ConfigurationJson)
-            ? default
-            : JsonSerializer.Deserialize<T>(node.ConfigurationJson, JsonOptions);
+    {
+        if (string.IsNullOrWhiteSpace(node.ConfigurationJson))
+        {
+            return default;
+        }
+
+        // Same rationale as above: this overload guesses that the *entire* node config already matches T's shape
+        // (used by hand-authored/route-projected configs). A wizard-authored node whose raw field bag doesn't match
+        // — e.g. "Scopes" as a space-joined string instead of a JSON array — must fall through cleanly rather than
+        // bubble a JsonException up through the workflow run.
+        try
+        {
+            return JsonSerializer.Deserialize<T>(node.ConfigurationJson, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
+    }
 
     protected static string? ReadStringConfiguration(WorkflowNode node, string propertyName)
     {

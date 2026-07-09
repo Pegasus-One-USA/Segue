@@ -89,7 +89,9 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             clientSecret,
             ApplicationType: isLoopback ? null : sourceConnection.ApplicationType,
             ResourceTypes: retrieval?.ResourceTypes is { Length: > 0 } types ? types : null,
-            MaxRecords: retrieval?.MaxRecordsPerRun);
+            MaxRecords: retrieval?.MaxRecordsPerRun,
+            RetryPolicy: retrieval?.RetryPolicy,
+            TimeoutSeconds: retrieval?.TimeoutSeconds);
     }
 
     /// <summary>
@@ -126,14 +128,17 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             parts.Add($"_sort={retrieval.SortOrder}");
         }
 
-        if (retrieval.IncludeParameters.Length > 0)
+        // FHIR search repeats the parameter for multiple _include/_revinclude directives (_include=A&_include=B) —
+        // comma-joining them into one _include=A,B is not valid syntax and HAPI (and likely other servers) rejects
+        // it with a 400. One `parts` entry per value achieves the repeated-parameter form once joined with '&' below.
+        foreach (var include in retrieval.IncludeParameters)
         {
-            parts.Add($"_include={string.Join(',', retrieval.IncludeParameters)}");
+            parts.Add($"_include={include}");
         }
 
-        if (retrieval.RevIncludeParameters.Length > 0)
+        foreach (var revInclude in retrieval.RevIncludeParameters)
         {
-            parts.Add($"_revinclude={string.Join(',', retrieval.RevIncludeParameters)}");
+            parts.Add($"_revinclude={revInclude}");
         }
 
         return parts.Count == 0 ? null : string.Join('&', parts);
