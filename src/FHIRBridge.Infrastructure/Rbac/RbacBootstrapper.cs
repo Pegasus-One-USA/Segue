@@ -3,6 +3,7 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Security;
 
@@ -25,14 +26,30 @@ namespace FHIRBridge.Infrastructure.Security;
 public sealed class RbacBootstrapper : IRbacBootstrapper
 {
     private readonly FHIRBridgeDbContext _dbContext;
+    private readonly ILogger<RbacBootstrapper> _logger;
 
-    public RbacBootstrapper(FHIRBridgeDbContext dbContext)
+    public RbacBootstrapper(FHIRBridgeDbContext dbContext, ILogger<RbacBootstrapper> logger)
     {
         _dbContext = dbContext;
+        _logger = logger;
     }
 
     public async Task EnsureAsync(CancellationToken cancellationToken)
     {
+        // A duplicate value anywhere in the taxonomy (a repeated enum value, Id, or display name, or two
+        // seed entries for the same Group+Action) makes every Id/Code this class writes from RbacSeedData
+        // suspect -- log it and leave the database exactly as it was rather than risk seeding corrupted data.
+        var validationErrors = RbacDefinitionValidator.Validate();
+        if (validationErrors.Count > 0)
+        {
+            foreach (var error in validationErrors)
+            {
+                _logger.LogError("RBAC definition validation failed: {ValidationError}", error);
+            }
+
+            return;
+        }
+
         var existingCategories = await _dbContext.PermissionCategories
             .IgnoreQueryFilters()
             .ToDictionaryAsync(c => c.Id, cancellationToken);
