@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Security;
+using FHIRBridge.Observability.Logging;
 using Microsoft.AspNetCore.DataProtection;
 using FHIRBridge.Application;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -18,8 +19,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, loggerConfig) =>
+    loggerConfig.ConfigureFhirBridge(context.Configuration, "FHIRBridge.Api"));
 
 if (builder.Environment.IsDevelopment())
 {
@@ -347,7 +352,7 @@ static void SyncDiscoveredPermissions(WebApplication app)
     SyncDiscoveredPermissionsAsync(repository, app.Logger).GetAwaiter().GetResult();
 }
 
-static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repository, ILogger logger)
+static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repository, Microsoft.Extensions.Logging.ILogger logger)
 {
     var discoveredCodes = PermissionCatalog.DiscoveredCodes(typeof(Program).Assembly);
     var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);

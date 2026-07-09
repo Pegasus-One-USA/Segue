@@ -172,7 +172,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var resources = new List<ResourceEnvelope>();
         foreach (var type in resourceTypes)
         {
-            var page = await client.SearchAsync(type, source, cancellationToken);
+            var page = await SearchWithPolicyAsync(client, type, source, cancellationToken);
             resources.AddRange(page.Select(resource => new ResourceEnvelope(
                 resource.ResourceType,
                 resource.ResourceId ?? string.Empty,
@@ -202,6 +202,50 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 ["resourceType"] = string.Join(',', resourceTypes),
                 ["count"] = resources.Count
             });
+    }
+
+    /// <summary>
+    /// Applies the retrieval config's Retry Policy and Timeout around one SearchAsync call — a node-level layer on
+    /// top of (not a replacement for) whatever transient-fault retry the connector's own HttpClient already does
+    /// internally: this retries the *whole* resource-type fetch if it still fails/times out after those internal
+    /// retries are exhausted. A null source.RetryPolicy/TimeoutSeconds (the default for every source that predates
+    /// this field) is a single attempt with no per-call timeout — unchanged behavior.
+    /// </summary>
+    private static async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> SearchWithPolicyAsync(
+        IFhirSourceClient client,
+        string resourceType,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var maxAttempts = source.RetryPolicy switch
+        {
+            "fixed-3" => 3,
+            "exponential" => 3,
+            _ => 1,
+        };
+
+        for (var attempt = 1; ; attempt++)
+        {
+            using var timeoutCts = source.TimeoutSeconds is { } timeoutSeconds
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : null;
+            timeoutCts?.CancelAfter(TimeSpan.FromSeconds(source.TimeoutSeconds!.Value));
+
+            try
+            {
+                return await client.SearchAsync(resourceType, source, timeoutCts?.Token ?? cancellationToken);
+            }
+            catch (Exception) when (attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
+            {
+                // The outer token is still live, so whatever was caught is either a timeout (inner token fired) or a
+                // transient failure the connector's own retries didn't recover from — back off and try the whole
+                // resource-type fetch again.
+                var delay = source.RetryPolicy == "exponential"
+                    ? TimeSpan.FromSeconds(Math.Pow(2, attempt - 1))
+                    : TimeSpan.FromSeconds(1);
+                await Task.Delay(delay, cancellationToken);
+            }
+        }
     }
 
     protected override object CreatePayload(

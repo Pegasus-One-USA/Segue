@@ -242,7 +242,11 @@ export class WizardService {
 
     const editingId = this.store.editingNodeId();
     if (editingId) {
-      this.store.updateNode(editingId, { fields, connected: this.connected() } as any);
+      // Merge onto the node's existing fields rather than replacing them outright — this form only manages a
+      // subset of keys (connection/auth/retrieval); server-injected machine keys like sourceConnectionId (added
+      // by create-on-save, never surfaced as a form control) must survive an edit untouched.
+      const previousFields = this.store.byId(editingId)?.fields ?? {};
+      this.store.updateNode(editingId, { fields: { ...previousFields, ...fields }, connected: this.connected() } as any);
       this.toast.show('Epic updated', `${fields['__name']} saved.`);
     } else {
       const count = this.store.nodes().filter(n => !n.kind).length;

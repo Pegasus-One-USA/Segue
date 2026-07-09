@@ -61,7 +61,7 @@ export class WorkflowBuildAssemblerService {
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
       const fields = this.fieldsFor(id, nodesById);
-      sources.push({ nodeId: id, source: this.buildSource(fields) });
+      sources.push({ nodeId: id, source: this.buildSource(fields), existingId: fields['sourceConnectionId'] || null });
     }
 
     const destinations: DestinationBuildSpec[] = [];
@@ -69,14 +69,19 @@ export class WorkflowBuildAssemblerService {
 
     for (const destNode of graph.nodes.filter(node => this.isDestinationNode(node))) {
       const destFields = this.fieldsFor(destNode.id, nodesById);
-      destinations.push({ nodeId: destNode.id, destination: this.buildDestination(destFields, destNode) });
+      destinations.push({
+        nodeId: destNode.id,
+        destination: this.buildDestination(destFields, destNode),
+        existingId: destFields['destinationId'] || null,
+      });
 
       const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
       const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
       if (!mappingNodeId || !sourceNodeId) continue;
 
+      const mappingFields = this.fieldsFor(mappingNodeId, nodesById);
       const mappingSpec = this.buildMapping(mappingNodeId, sourceNodeId, destNode.id, destFields);
-      if (mappingSpec) mappings.push(mappingSpec);
+      if (mappingSpec) mappings.push({ ...mappingSpec, existingId: mappingFields['mappingProfileId'] || null });
     }
 
     return { ...graph, sources, destinations, mappings };

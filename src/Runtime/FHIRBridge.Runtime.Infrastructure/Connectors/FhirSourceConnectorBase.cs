@@ -64,6 +64,16 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
 
         for (var page = 0; page < maxPages && nextUrl is not null; page++)
         {
+            // Explicit, structured request log — .NET's default IHttpClientFactory request logging doesn't surface
+            // the query string at the levels enabled here, and this is exactly what needs to be greppable in Seq
+            // when verifying _count/_sort/_include/_revinclude/search-criteria actually reached the outbound call.
+            _logger.LogInformation(
+                "{Source} search request for {ResourceType} (page {Page}): {SearchUrl}",
+                SourceDisplayName,
+                resourceType,
+                page + 1,
+                nextUrl);
+
             using var response = await SendWithRetryAsync(nextUrl, accessToken, source, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {

@@ -2,13 +2,23 @@ using FHIRBridge.Application;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using FHIRBridge.Worker;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// HostApplicationBuilder has no .Host.UseSerilog() (that's WebApplicationBuilder-only, via Serilog.AspNetCore) — build
+// the shared logger directly and register it as the logging provider instead.
+var serilogLogger = new LoggerConfiguration()
+    .ConfigureFhirBridge(builder.Configuration, "FHIRBridge.Worker")
+    .CreateLogger();
+builder.Logging.ClearProviders();
+builder.Logging.AddSerilog(serilogLogger, dispose: true);
 
 // DbSecretStore (app-provisioned secrets, e.g. destination connection strings written by the Api's wizard) encrypts
 // at rest via Data Protection — a real runtime dependency of the shared configuration/secret-resolution graph, not
