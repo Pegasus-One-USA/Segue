@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RBAC &amp; Permission System — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --core: #475569;
+    --core-bg: #E2E8F0;
+    --dynamic: #B45309;
+    --dynamic-bg: #FEF3E2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 14px 0 20px;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  /* Table of contents */
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  /* Pills / badges */
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-core     { color: var(--core);     background: var(--core-bg); }
+  .pill-dynamic  { color: var(--dynamic);  background: var(--dynamic-bg); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  /* File tables */
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.compare th { background: #F1F5F9; text-align: left; padding: 10px 14px; font-size: 12.5px; color: var(--ink); border-bottom: 1px solid var(--border); }
+  table.compare td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: #334155; }
+  table.compare tr:last-child td { border-bottom: none; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>RBAC &amp; Permission System</h1>
+    <p class="subtitle">FHIRBridge Portal &amp; API — how a permission is defined, how it gets into the database, and how a live request is actually authorized against it, end to end</p>
+    <div class="meta">
+      <div><strong>Branch</strong> feature/RBAC-frontend-backend-implemention-grouping</div>
+      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20)</div>
+      <div><strong>Status</strong> Implemented, tested, merged with main</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#pipelines">The three permission pipelines</a></li>
+      <li><a href="#boot-flow">Boot-time flow</a></li>
+      <li><a href="#request-flow">Request-time authorization flow</a></li>
+      <li><a href="#dynamic">The dynamic / resource-based mechanism</a></li>
+      <li><a href="#multi-declare">Same permission on multiple endpoints</a></li>
+      <li><a href="#validation">Duplicate-definition validation</a></li>
+      <li><a href="#files-taxonomy">Files — taxonomy definition</a></li>
+      <li><a href="#files-dynamic">Files — dynamic mechanism</a></li>
+      <li><a href="#files-boot">Files — boot-time execution &amp; static discovery</a></li>
+      <li><a href="#files-request">Files — request-time authorization</a></li>
+      <li><a href="#files-frontend">Files — frontend consumption</a></li>
+      <li><a href="#id-scheme">Why the Id looks the way it does</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    Before this system, every permission needed a hand-picked GUID, a hand-typed wire-format code, and
+    a hand-typed display name &mdash; three places to keep in sync, and nothing stopped a typo
+    (<code>[StandardPermission("usr.viw")]</code>) from silently registering a policy nobody could ever
+    satisfy. Now a permission's entire identity is a <strong>pure function of two enum values</strong>
+    (<code>PermissionGroupCode</code>, <code>PermissionActionCode</code>) &mdash; the same pair always
+    produces the same Id, wire-format code, and display name, in every environment, on every boot, with
+    nobody hand-picking anything.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">3</div><div class="label">independent permission pipelines</div></div>
+    <div class="card"><div class="num">35</div><div class="label">permissions live today</div></div>
+    <div class="card"><div class="num">3</div><div class="label">categories &middot; growing group/action set</div></div>
+    <div class="card"><div class="num">0</div><div class="label">hand-picked GUIDs anywhere</div></div>
+    <div class="card"><div class="num">195</div><div class="label">backend tests passing</div></div>
+  </div>
+
+  <ul class="feature-list">
+    <li><strong>Built-in permissions.</strong> A curated list (<code>RbacSeedData.Permissions</code>) self-provisions and self-heals on every boot.</li>
+    <li><strong>Static discovered permissions.</strong> A <code>[StandardPermission(group, action)]</code> attribute on any controller/action auto-registers itself &mdash; no seed-data edit needed.</li>
+    <li><strong>Dynamic / resource-based permissions.</strong> For endpoints whose required group can only be known once the request is inspected (e.g. which EHR vendor a source connection is for), a permission is auto-discovered per vendor with zero code beyond adding one enum member.</li>
+    <li><strong>Direct user-level overrides.</strong> An admin can grant or deny a specific permission for one user, overriding whatever their role would otherwise give them &mdash; merged in at login time.</li>
+    <li><strong>Duplicate-definition guard.</strong> A copy-pasted enum value, Guid, or display name is caught at boot and logged as an error instead of silently corrupting the permission table.</li>
+  </ul>
+
+  <h2 id="pipelines"><span class="num">2.</span>The three permission pipelines</h2>
+  <p class="section-intro">There are three independent ways a permission comes to exist, and they never touch the same row.</p>
+  <table class="compare">
+    <tr><th></th><th>Built-in</th><th>Discovered (static)</th><th>Discovered (dynamic)</th></tr>
+    <tr>
+      <td><strong>Declared in</strong></td>
+      <td><code>RbacSeedData.Permissions</code> (a C# list)</td>
+      <td><code>[StandardPermission]</code> on a controller/action</td>
+      <td><code>[DynamicSourceSystemPermission]</code>, crossed with every value of a declared enum</td>
+    </tr>
+    <tr>
+      <td><strong>Use case</strong></td>
+      <td>A fixed <code>(Group, Action)</code> known at compile time</td>
+      <td>Same</td>
+      <td>The required Group can only be known once the request body is inspected</td>
+    </tr>
+    <tr><td><strong>IsSystem</strong></td><td><code>true</code></td><td><code>false</code></td><td><code>false</code></td></tr>
+    <tr>
+      <td><strong>Owned / synced by</strong></td>
+      <td><code>RbacBootstrapper</code></td>
+      <td colspan="2"><code>Program.cs</code> &rarr; <code>SyncDiscoveredPermissionsAsync</code> (both kinds share the same sync pass &mdash; <code>PermissionCatalog</code> produces both side by side)</td>
+    </tr>
+    <tr>
+      <td><strong>Typical use</strong></td>
+      <td>Permissions deliberately promoted into the canonical seed list</td>
+      <td>Any <code>[StandardPermission]</code> usage not in that list</td>
+      <td>A vendor/type axis where adding a new value should never require touching this code again</td>
+    </tr>
+  </table>
+  <div class="callout">
+    <strong>Ownership handoff</strong>
+    A permission can start as discovered-only, then later be promoted into <code>RbacSeedData.Permissions</code>
+    &mdash; at that point <code>SyncDiscoveredPermissionsAsync</code> stops touching it entirely and
+    <code>RbacBootstrapper</code> takes over for good.
+  </div>
+
+  <h2 id="boot-flow"><span class="num">3.</span>Boot-time flow</h2>
+  <p class="section-intro">Both passes run synchronously during startup, before <code>app.Run()</code> — a request is never served against a partially-synced permission table.</p>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>dbContext.Database.Migrate()</strong><span>Apply any pending EF Core migrations.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>RbacDefinitionValidator.Validate()</strong><span>Runs first, inside <code>RbacBootstrapper.EnsureAsync</code>, before any write. Any duplicate value/Id/display-name/seed-pair &rarr; every error logged, method returns immediately, database untouched this boot.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>RbacBootstrapper.EnsureAsync</strong><span>Upserts Categories &rarr; Groups &rarr; built-in Permissions (by Id, then by Name fallback) &rarr; deactivates orphans &rarr; upserts the 4 system Roles &rarr; upserts Role&rarr;Permission grants.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>SyncDiscoveredPermissionsAsync (Program.cs)</strong><span>Calls <code>PermissionCatalog.DiscoveredPermissions</code>, skips anything already seed-declared, deactivates orphaned discovered permissions, upserts the rest (static and dynamic together), grants new ones to SuperAdmin.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Policy registration</strong><span>One ASP.NET Core authorization policy (<code>"HasPermission:{code}"</code>) registered per code returned by <code>PermissionCatalog.AllPermissionCodes</code> &mdash; the union of declared and discovered.</span></div>
+    </div>
+  </div>
+
+  <h3>What <code>PermissionCatalog.DiscoveredPermissions</code> actually does <span class="pill pill-core">Core</span></h3>
+  <p>This method does the <strong>combining</strong>, not <code>Program.cs</code> — by the time <code>SyncDiscoveredPermissionsAsync</code> sees a <code>DiscoveredPermission</code>, duplicates are already merged and static-vs-dynamic origin is already resolved.</p>
+  <p><strong>Static pass</strong> — reflects over every <code>ControllerBase</code>-derived type for <code>[StandardPermission]</code> on the class and each method, tagging each occurrence with its declaring location. Groups all occurrences by wire-format code (case-insensitive); for each group, combines descriptions (deduplicated, joined with <code>" | "</code>) and instances into one <code>DiscoveredPermission</code> with <code>IsDynamic = false</code>.</p>
+  <p><strong>Dynamic pass</strong> — groups every <code>[DynamicSourceSystemPermission]</code> occurrence by <code>(EnumType, Action)</code>, calls <code>SourceSystemPermissionGroups.AllGroupsFor(enumType)</code> to get every group a value of that enum resolves to right now, crosses each with the action, and skips any code a static declaration already produced. Everything else becomes a <code>DiscoveredPermission</code> with <code>IsDynamic = true</code> — see <a href="#dynamic">section 5</a>.</p>
+  <div class="callout warn">
+    <strong>Why <code>IsDynamic</code> exists</strong>
+    It's what lets <code>FindUndeclaredCodes</code> (the typo-detection check logged at startup) tell a
+    genuine <code>[StandardPermission]</code> typo apart from a dynamically-discovered code that's
+    <em>supposed</em> to have no seed entry — without it, every dynamic code falsely warned as
+    "used but not declared" on every single boot.
+  </div>
+
+  <h2 id="request-flow"><span class="num">4.</span>Request-time authorization flow</h2>
+  <p class="section-intro">Everything above is how permissions get <em>into</em> the database. This is how a live HTTP request is actually checked against them — the part most implementation notes skip.</p>
+
+  <h3>Step A — login issues the token</h3>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>LocalAuthService.GetPermissionCodesAsync(userId, roleIds)</strong><span>roleCodes = union of every granted role's Permission.Name. userAllocations = this user's direct PermissionAllocation rows. Result = (roleCodes minus anything the user has an allocation for) &cup; every allocation the user has enabled &mdash; a direct override always wins over the role default, granting or denying.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>JwtAccessTokenIssuer.Issue(user, roleNames, permissionCodes)</strong><span>One <code>"permissions"</code> claim per code, e.g. <code>Claim("permissions", "epic.edit")</code>. Token returned to the client.</span></div>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>This is a snapshot, not a live check</strong>
+    The merge happens once, at login. A permission override made after that only takes effect on the
+    user's <em>next</em> login — the currently-issued access token is unaffected (verified by
+    <code>PermissionEnforcementTests.Granting_a_direct_override__adds_the_permission_on_next_login_only</code>).
+  </div>
+
+  <h3>Step B — every subsequent request re-checks the token's claims</h3>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>app.UseAuthentication()</strong><span>Validates the JWT signature/expiry, populates <code>HttpContext.User</code> with its claims.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Password-change-required gate (Program.cs)</strong><span>403s any <code>/api/v1/*</code> call (except change-password/me) if the <code>pwd_change_required</code> claim is <code>"true"</code>.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>app.UseAuthorization()</strong><span>Evaluates <code>[Authorize(Policy = "HasPermission:{code}")]</code> against the policies registered at boot.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>PermissionAuthorizationHandler.HandleRequirementAsync</strong><span>Reads <code>ICurrentUserService.CurrentUser.Permissions</code> &mdash; <code>HttpContextCurrentUserService</code> filters <code>HttpContext.User.Claims</code> down to type <code>"permissions"</code>. Succeeds if the required code is present (case-insensitive); otherwise the request is rejected with 403 before the controller action ever runs.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Controller action runs</strong><span>For a <code>[StandardPermission]</code>-gated action, nothing further to do &mdash; already authorized above. For a <code>[DynamicSourceSystemPermission]</code>-gated action, the action body calls <code>this.AuthorizePermissionAsync(...)</code> itself, using the same policy machinery with a group resolved from the request instead of one fixed at startup.</span></div>
+    </div>
+  </div>
+
+  <h3>Step C — the Angular portal's role in this <span class="pill pill-frontend">Frontend</span></h3>
+  <p>
+    The portal never calls a "check my permission" endpoint at request time. It decodes the
+    <code>permissions</code> claim array out of the JWT once (on login and on app boot) into its own
+    <code>AuthStore</code> signal, and every <code>AuthService.hasPermission('epic.edit')</code> call
+    afterward is a local string comparison against that decoded array &mdash; not a network call. The
+    frontend's view of "what am I allowed to do" is a snapshot from login time too, exactly like the
+    backend's token, just on the other side of the wire.
+  </p>
+
+  <h2 id="dynamic"><span class="num">5.</span>The dynamic / resource-based mechanism <span class="pill pill-dynamic">Dynamic</span></h2>
+  <p class="section-intro">
+    Some endpoints can't use a fixed <code>[StandardPermission(group, action)]</code>: the actual
+    permission group they need depends on data inside the request, only known once it's inspected. The
+    canonical example is <code>ConfigurationsController.AddSourceConnection</code> &mdash; a source
+    connection's required permission depends on which EHR vendor (<code>SourceSystemType</code>) it's
+    for, and Epic/Cerner/Athenahealth/Allscripts each need their own dedicated permission.
+  </p>
+
+  <div class="card">
+    <h4>SourceSystemPermissionGroups.GroupFor(Enum value)</h4>
+    <p style="margin:0;">Resolves the <code>PermissionGroupCode</code> for <em>any</em> enum value <strong>by name, not a hand-maintained dictionary</strong>: <code>Enum.TryParse&lt;PermissionGroupCode&gt;(value.ToString())</code>. A value with no same-named group falls back to the generic <code>SourceConnections</code> group. Checks <code>Enum.IsDefined</code> on the incoming value first &mdash; otherwise an out-of-range integer (allowed through by the default <code>JsonStringEnumConverter</code>) could coincidentally parse into an unrelated vendor's group by number.</p>
+  </div>
+  <div class="card">
+    <h4>SourceSystemPermissionGroups.AllGroupsFor(Type enumType)</h4>
+    <p style="margin:0;">Every group a value of <code>enumType</code> can resolve to right now, deliberately excluding the generic <code>SourceConnections</code> fallback (curated by hand instead of auto-discovered).</p>
+  </div>
+  <div class="card">
+    <h4>DynamicSourceSystemPermissionAttribute(Type enumType, action, description)</h4>
+    <p style="margin:0;">Metadata only &mdash; does <strong>not</strong> extend <code>AuthorizeAttribute</code> and enforces nothing by itself. Only tells <code>PermissionCatalog</code> which enum type + action to cross so one permission per resolved group is auto-discovered at startup.</p>
+  </div>
+  <div class="card">
+    <h4>ControllerAuthorizationExtensions.AuthorizePermissionAsync</h4>
+    <p style="margin:0;">The actual enforcement, called <strong>imperatively inside the action body</strong>:</p>
+    <pre><code>var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
+if (denied is not null) return denied;</code></pre>
+    <p style="margin:0;">This overload takes the enum value directly, resolves the group via <code>GroupFor</code> internally, then builds the code and calls <code>IAuthorizationService.AuthorizeAsync</code> against the same <code>HasPermission:{code}</code> policy every other check uses. Because both the attribute (read at startup) and this call (evaluated per request) resolve the group the same way, they can never disagree about which permissions exist versus which get checked.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Proven end to end</strong>
+    Adding <code>PermissionGroupCode.Allscripts</code> (matching the pre-existing
+    <code>SourceSystemType.Allscripts</code>, which had no dedicated group before) produced a working
+    <code>allscripts.edit</code> permission with <strong>zero other code changes</strong> — no attribute
+    edit, no seed-data edit, no controller change. See
+    <code>tests/FHIRBridge.Api.IntegrationTests/Tests/SourceConnectionPermissionTests.cs</code>.
+  </div>
+
+  <h2 id="multi-declare"><span class="num">6.</span>Same permission on multiple endpoints</h2>
+  <p class="section-intro">Fully supported by design — it's normal for the same permission to gate more than one endpoint.</p>
+  <ul class="feature-list">
+    <li><strong>Same Group+Action, same description everywhere.</strong> <code>Instances</code> accumulates every declaring method; <code>Description</code> stays that one text.</li>
+    <li><strong>Same Group+Action, different descriptions.</strong> <code>Description</code> becomes every distinct text joined with <code>" | "</code> — nothing is silently dropped (an earlier version used <code>.DistinctBy(p =&gt; p.Code)</code>, which kept only the first attribute's description; that bug is what this replaced).</li>
+    <li><strong>New text on an already-synced row.</strong> Appended (<code>"{existing} | {new}"</code>), guarded so re-appending the same text next boot is a no-op.</li>
+    <li><strong>Removing all but one usage.</strong> <code>Instances</code> drops the removed location; the permission stays active as long as one usage remains.</li>
+    <li><strong>Removing every usage.</strong> The permission is deactivated, never deleted.</li>
+  </ul>
+
+  <h2 id="validation"><span class="num">7.</span>Duplicate-definition validation</h2>
+  <p class="section-intro">
+    The entire scheme is a <em>pure function</em> of the taxonomy enums — a mistake <strong>inside</strong>
+    that taxonomy can silently corrupt every Id/Code derived from it.
+    <code>RbacDefinitionValidator.Validate()</code> runs at the very top of
+    <code>RbacBootstrapper.EnsureAsync</code>, before any database write.
+  </p>
+  <table class="file-table">
+    <tr><th>Check</th><th>Catches</th></tr>
+    <tr>
+      <td class="file-path">Duplicate underlying enum value</td>
+      <td class="why">C# allows two members to share an int (<code>Epic = 10, Foo = 10</code>) — once that happens, <code>.ToString()</code>/<code>(int)</code> conversions can no longer tell them apart. Checked via reflection over the enum's declared fields directly, since <code>Enum.GetValues</code> alone renders both colliding members as the same first-declared name.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Duplicate declared Id</td>
+      <td class="why">A copy-pasted <code>[PermissionCategory]</code>/<code>[PermissionGroup]</code> where the Guid literal wasn't changed for the new member.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Duplicate display name</td>
+      <td class="why">Not a data-corruption risk like the two above, but almost always a copy-paste mistake that leaves two permissions indistinguishable in the permission-management UI.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Duplicate (Group, Action) seed pair</td>
+      <td class="why">Two <code>RbacSeedData.Permissions</code> entries declaring the same pair produce the exact same duplicate code, since Id/Name/Code are all derived from that pair, never hand-picked.</td>
+    </tr>
+  </table>
+  <div class="callout warn">
+    <strong>What happens on failure</strong>
+    Every error is logged via <code>ILogger.LogError</code> and <code>RbacBootstrapper.EnsureAsync</code>
+    returns immediately — no category, group, or permission row is written that boot. The database is
+    left exactly as it was rather than risk seeding data derived from an ambiguous definition. Unit-tested
+    in <code>RbacDefinitionValidatorTests.cs</code> against deliberately-broken private test enums (never
+    the real production enums), plus one live regression test asserting today's real definitions are clean.
+  </div>
+
+  <h2 id="files-taxonomy"><span class="num">8.</span>Files — taxonomy definition <span class="pill pill-backend">Backend</span></h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Layer</th><th>Purpose</th></tr>
+    <tr><td class="file-path">Rbac/PermissionCategoryCode.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Enum of valid categories; each member carries <code>[PermissionCategory(id, displayName)]</code>.</td></tr>
+    <tr><td class="file-path">Rbac/PermissionGroupCode.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Enum of valid groups; each member carries <code>[PermissionGroup(id, category, displayName)]</code>. A vendor group's member name (Epic, Cerner, Athenahealth, ...) must match its <code>SourceSystemType</code> counterpart exactly.</td></tr>
+    <tr><td class="file-path">Rbac/PermissionActionCode.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Enum of valid actions; each member carries <code>[PermissionDisplayName(displayName)]</code>. No Id needed — never a standalone row.</td></tr>
+    <tr><td class="file-path">Rbac/PermissionCategoryAttribute.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Carries a category's stable Guid + display name.</td></tr>
+    <tr><td class="file-path">Rbac/PermissionGroupAttribute.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Carries a group's stable Guid + owning category + display name.</td></tr>
+    <tr><td class="file-path">Rbac/PermissionDisplayNameAttribute.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Carries an action's display text.</td></tr>
+    <tr><td class="file-path">Rbac/PermissionTaxonomy.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">The generator: <code>BuildPermissionId</code>/<code>BuildPermissionCode</code>/<code>BuildPermissionDisplayName</code>, plus reflection helpers to read the attributes above.</td></tr>
+    <tr><td class="file-path">Rbac/RbacDefinitionValidator.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Duplicate-value/Id/display-name/seed-pair checker — see section 7.</td></tr>
+    <tr><td class="file-path">Rbac/RbacSeedData.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Assembles Categories/Groups/Permissions/Roles/RolePermissions from the enums + taxonomy — the canonical list <code>RbacBootstrapper</code> reads on every boot.</td></tr>
+  </table>
+
+  <h2 id="files-dynamic"><span class="num">9.</span>Files — dynamic mechanism <span class="pill pill-backend">Backend</span> <span class="pill pill-dynamic">Dynamic</span></h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+    <tr><td class="file-path">Application/Rbac/SourceSystemPermissionGroups.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>GroupFor(Enum)</code>/<code>AllGroupsFor(Type)</code> — name-based enum-to-<code>PermissionGroupCode</code> resolution, no hand-maintained mapping table.</td></tr>
+    <tr><td class="file-path">Api/Rbac/DynamicSourceSystemPermissionAttribute.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Metadata-only attribute declaring an enum type + action for <code>PermissionCatalog</code> to cross.</td></tr>
+    <tr><td class="file-path">Api/Security/ControllerAuthorizationExtensions.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>AuthorizePermissionAsync</code> — imperative check, one overload per <code>(PermissionGroupCode, action)</code>, one per <code>(Enum value, action)</code>.</td></tr>
+    <tr><td class="file-path">Controllers/V1/ConfigurationsController.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">First real consumer of the mechanism — <code>AddSourceConnection</code>/<code>UpdateSourceConnection</code>.</td></tr>
+  </table>
+
+  <h2 id="files-boot"><span class="num">10.</span>Files — boot-time execution &amp; static discovery <span class="pill pill-backend">Backend</span></h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+    <tr><td class="file-path">Infrastructure/Rbac/RbacBootstrapper.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Runtime executor for <code>RbacSeedData</code>, gated by <code>RbacDefinitionValidator</code>. Self-provisions/self-heals the built-in permission set on every boot.</td></tr>
+    <tr><td class="file-path">Api/Rbac/PermissionCatalog.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Reflects over <code>[StandardPermission]</code> and <code>[DynamicSourceSystemPermission]</code> usages, combines duplicates, distinguishes static vs. dynamic origin.</td></tr>
+    <tr><td class="file-path">Api/Rbac/StandardPermissionAttribute.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">The attribute for a fixed, compile-time-known <code>(Group, Action)</code>.</td></tr>
+    <tr><td class="file-path">Api/Program.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>SyncDiscoveredPermissionsAsync</code> + policy registration loop + <code>FindUndeclaredCodes</code> typo warning + middleware ordering.</td></tr>
+    <tr><td class="file-path">Domain/Entities/Permission.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why"><code>IsActive</code>, <code>Instances</code>, <code>UpdateName</code>/<code>UpdateDescription</code>/<code>UpdateInstances</code>/<code>Activate</code>/<code>Deactivate</code>.</td></tr>
+    <tr><td class="file-path">Infrastructure/Persistence/Configurations/PermissionConfiguration.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Maps <code>IsActive</code>/<code>Instances</code>; no unique index on Name (Id already guarantees uniqueness per pair).</td></tr>
+    <tr><td class="file-path">IUserAccessRepository.cs + EfUserAccessRepository.cs / InMemoryUserAccessRepository.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why"><code>UpdatePermissionAsync</code> — mutates already-persisted rows, not just inserts.</td></tr>
+  </table>
+
+  <h2 id="files-request"><span class="num">11.</span>Files — request-time authorization <span class="pill pill-backend">Backend</span></h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+    <tr><td class="file-path">Application/Services/LocalAuthService.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why"><code>GetPermissionCodesAsync</code> merges role-granted codes with the user's direct overrides at login.</td></tr>
+    <tr><td class="file-path">Api/Security/JwtAccessTokenIssuer.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Adds one <code>"permissions"</code> claim per code to the issued JWT.</td></tr>
+    <tr><td class="file-path">Application/Security/AuthorizationPolicies.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why"><code>HasPermission(code)</code> &rarr; <code>"HasPermission:{code}"</code> policy name.</td></tr>
+    <tr><td class="file-path">Api/Security/PermissionRequirement.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why"><code>IAuthorizationRequirement</code> carrying one permission code.</td></tr>
+    <tr><td class="file-path">Api/Security/PermissionAuthorizationHandler.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">The actual per-request check — succeeds if the code is in <code>ICurrentUserService.CurrentUser.Permissions</code>.</td></tr>
+    <tr><td class="file-path">Api/Security/HttpContextCurrentUserService.cs</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Filters <code>HttpContext.User.Claims</code> down to <code>"permissions"</code>-typed claims.</td></tr>
+  </table>
+
+  <h2 id="files-frontend"><span class="num">12.</span>Files — frontend consumption <span class="pill pill-frontend">Frontend</span></h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+    <tr><td class="file-path">auth/services/token.service.ts</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Decodes the JWT (<code>atob</code>/<code>JSON.parse</code>, no library) into a plain claims object.</td></tr>
+    <tr><td class="file-path">auth/services/jwt-user.mapper.ts</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why"><code>buildUserFromJwt</code> reads the <code>permissions</code> claim array into <code>Permission[]</code> (id and name both set to the same code string — the JWT carries no separate Id).</td></tr>
+    <tr><td class="file-path">auth/store/auth.store.ts</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Signal-based store; <code>permissions</code> computed signal; <code>hasPermission</code>/<code>hasAnyPermission</code>/<code>hasRole</code>/<code>isAdmin</code>.</td></tr>
+    <tr><td class="file-path">auth/services/auth.service.ts</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why">Thin public wrapper over the store — what components/guards actually call.</td></tr>
+    <tr><td class="file-path">auth/guards/permission.guard.ts</td><td class="status"><span class="pill pill-core">Core</span></td><td class="why"><code>CanActivateFn</code> reading a route's <code>data.permissions</code>/<code>data.requireAll</code>, admin-short-circuited.</td></tr>
+  </table>
+
+  <h2 id="id-scheme"><span class="num">13.</span>Why the Id looks the way it does</h2>
+  <pre><code>Guid.Parse($"{(int)group:D8}-0000-0000-0000-{(int)action:D12}");</code></pre>
+  <ul class="feature-list">
+    <li>Group occupies the first 8 digits, Action the last 12; the two middle segments are always zero.</li>
+    <li><strong>Category is deliberately excluded.</strong> A group's owning category is a mutable fact (re-synced by <code>RbacBootstrapper</code> on the next boot) — not part of a permission's identity. Baking it into the Id would make the Id stale the moment that mapping changes.</li>
+    <li><strong><code>"D"</code> (decimal), not <code>"X"</code> (hex).</strong> Every digit reads back as the enum's literal int value — with hex formatting, any value &ge; 10 would render as a letter (<code>10</code> &rarr; <code>a</code>); decimal keeps it <code>10</code>. Example: Epic (group = 10) + Read (action = 11) &rarr; <code>00000010-0000-0000-0000-000000000011</code>.</li>
+    <li>The same Action reused under a different Group naturally produces a different Id — e.g. View under both User and Role never collides.</li>
+  </ul>
+
+  <h2 id="verification"><span class="num">14.</span>Verification</h2>
+  <ul class="feature-list">
+    <li><strong>Backend:</strong> full solution build succeeds; <strong>195</strong> tests pass (5 Architecture + 42 Runtime + 70 Unit + 78 Integration).</li>
+    <li><strong>Dynamic mechanism proven live:</strong> adding <code>PermissionGroupCode.Allscripts</code> (zero other code) produced a working <code>allscripts.edit</code> permission, verified against the real dev SQL Server database.</li>
+    <li><strong>Validator proven live:</strong> unit tests exercise all four duplicate scenarios against private test enums, plus a regression test confirming today's real taxonomy is clean.</li>
+    <li><strong>Security review:</strong> a dedicated integration-test pass (<code>PermissionEnforcementTests.cs</code>) found and fixed a real bug where a controller's class-level authorization policy silently overrode every action's own permission requirement.</li>
+  </ul>
+
+  <footer>
+    FHIRBridge &middot; RBAC &amp; Permission System documentation &middot; branch <code>feature/RBAC-frontend-backend-implemention-grouping</code>
+  </footer>
+
+</div>
+</body>
+</html>

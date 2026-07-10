@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adding New Permissions — How-To — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --dynamic: #B45309;
+    --dynamic-bg: #FEF3E2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 14px 0 20px;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-dynamic  { color: var(--dynamic);  background: var(--dynamic-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.compare th { background: #F1F5F9; text-align: left; padding: 10px 14px; font-size: 12.5px; color: var(--ink); border-bottom: 1px solid var(--border); }
+  table.compare td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: #334155; }
+  table.compare tr:last-child td { border-bottom: none; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Adding New Permissions</h1>
+    <p class="subtitle">FHIRBridge Portal &amp; API — the practical, mechanical steps for a developer adding a new permission-gated feature</p>
+    <div class="meta">
+      <div><strong>Branch</strong> feature/RBAC-frontend-backend-implemention-grouping</div>
+      <div><strong>Audience</strong> Developers adding a new permission-gated endpoint</div>
+      <div><strong>Companion doc</strong> RBAC-Permission-System.html (the "why")</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#rule">The one rule</a></li>
+      <li><a href="#category">Adding a new Category</a></li>
+      <li><a href="#group">Adding a new Group</a></li>
+      <li><a href="#action">Adding a new Action</a></li>
+      <li><a href="#standard">Gating a fixed endpoint</a></li>
+      <li><a href="#dynamic">Gating a resource-based endpoint</a></li>
+      <li><a href="#reuse">Reusing a permission on multiple endpoints</a></li>
+      <li><a href="#seed-or-not">Seed-declared or discovered-only?</a></li>
+      <li><a href="#checklist">Checklist</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="rule"><span class="num">1.</span>The one rule</h2>
+  <p class="section-intro">
+    You never hand-pick a permission's Id, wire-format code, or display name. You only ever declare
+    <strong>which Group and Action an endpoint needs</strong> — everything else is generated. If the
+    Group/Action/Category you need doesn't exist yet, add it first, then use it.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">1</div><div class="label">file to edit per new Category/Group/Action</div></div>
+    <div class="card"><div class="num">0</div><div class="label">GUIDs you compute by hand</div></div>
+    <div class="card"><div class="num">2</div><div class="label">ways to gate an endpoint — fixed or resource-based</div></div>
+  </div>
+
+  <h2 id="category"><span class="num">2.</span>Adding a new Category</h2>
+  <p>Edit <strong>one file</strong>: <code>src/FHIRBridge.Application/Rbac/PermissionCategoryCode.cs</code>.</p>
+  <pre><code>public enum PermissionCategoryCode
+{
+    [PermissionCategory("40000000-0000-0000-0000-000000000001", "Access Control")]
+    AccessControl = 1,
+
+    [PermissionCategory("40000000-0000-0000-0000-000000000002", "Platform")]
+    Platform = 2,
+
+    [PermissionCategory("40000000-0000-0000-0000-000000000003", "Pipelines")]
+    Pipelines = 3,
+
+    // Add your new category here:
+    [PermissionCategory("40000000-0000-0000-0000-000000000004", "Reporting")]
+    Reporting = 4,
+}</code></pre>
+  <ul class="feature-list">
+    <li>Pick the next unused integer value.</li>
+    <li>Pick a <strong>new, never-before-used</strong> Guid — any valid unique Guid works; this project's built-in categories happen to follow a <code>40000000-...-000N</code> pattern for readability, but that's a convention, not a requirement.</li>
+    <li>The second argument is the human-readable display name shown in the permission-management UI.</li>
+  </ul>
+  <div class="callout">
+    <strong>Nothing else to touch</strong>
+    <code>RbacSeedData.Categories</code> is built from <code>Enum.GetValues&lt;PermissionCategoryCode&gt;()</code>, so the new category appears automatically on the next boot.
+  </div>
+
+  <h2 id="group"><span class="num">3.</span>Adding a new Group</h2>
+  <p>Edit <strong>one file</strong>: <code>src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs</code>.</p>
+  <pre><code>public enum PermissionGroupCode
+{
+    [PermissionGroup("30000000-0000-0000-0000-000000000004", PermissionCategoryCode.AccessControl, "User")]
+    User = 1,
+
+    // ...existing groups...
+
+    // Add your new group here:
+    [PermissionGroup("30000000-0000-0000-0000-000000000012", PermissionCategoryCode.Reporting, "Dashboard")]
+    Dashboard = 12,
+}</code></pre>
+  <ul class="feature-list">
+    <li>Same rules as a category: next unused int, a fresh unique Guid.</li>
+    <li>The second argument is the <code>PermissionCategoryCode</code> that owns this group — must already exist.</li>
+    <li>Third argument is the display name.</li>
+  </ul>
+  <div class="callout">
+    <strong>Re-categorizing later is free</strong>
+    Just change the <code>PermissionCategoryCode</code> argument in this one attribute — <code>RbacBootstrapper</code> re-syncs the row's <code>CategoryId</code> on the next boot, no migration, no data loss.
+  </div>
+  <div class="callout warn">
+    <strong>Vendor groups are special</strong>
+    If this group represents an EHR vendor (a <code>SourceSystemType</code> value), name the member
+    <strong>identically</strong> to the <code>SourceSystemType</code> member — see
+    <a href="#dynamic">section 6</a>. <code>SourceSystemPermissionGroups.GroupFor</code> resolves the
+    group by that exact name match, not a lookup table.
+  </div>
+
+  <h2 id="action"><span class="num">4.</span>Adding a new Action</h2>
+  <p>Edit <strong>one file</strong>: <code>src/FHIRBridge.Application/Rbac/PermissionActionCode.cs</code>.</p>
+  <pre><code>public enum PermissionActionCode
+{
+    [PermissionDisplayName("View")]
+    View = 1,
+
+    // ...existing actions...
+
+    // Add your new action here:
+    [PermissionDisplayName("Export")]
+    Export = 13,
+}</code></pre>
+  <ul class="feature-list">
+    <li>Next unused int, and the display text used when building a permission's display name (e.g. <code>"Export Dashboard"</code>).</li>
+    <li>Actions don't carry their own Guid — never a standalone row, only ever combined with a Group to derive a permission's Id.</li>
+  </ul>
+  <div class="callout warn">
+    <strong>Check before reusing an action</strong>
+    <code>View</code>/<code>Create</code>/<code>Edit</code>/<code>Delete</code> are meant to be reused
+    across groups (<code>user.view</code> and <code>role.view</code> are two different permissions,
+    same Action). Only add a brand-new action if none of the existing ones fit what you mean.
+  </div>
+
+  <h2 id="standard"><span class="num">5.</span>Gating a fixed endpoint <span class="pill pill-backend">Backend</span></h2>
+  <p>Use this when the required Group/Action is known at compile time — the default case.</p>
+  <pre><code>[HttpGet]
+[StandardPermission(PermissionGroupCode.Dashboard, PermissionActionCode.Export, description: "Export the operations dashboard to PDF.")]
+public async Task&lt;IActionResult&gt; ExportDashboard(CancellationToken cancellationToken)
+{
+    ...
+}</code></pre>
+  <ul class="feature-list">
+    <li>First two arguments: the Group and Action this endpoint requires. Category is <strong>not</strong> an argument — it's derived from the group automatically.</li>
+    <li><code>description</code> is optional but should always be supplied for a new permission — skip it and the permission still works, but a startup warning reminds you to add one.</li>
+  </ul>
+  <div class="callout">
+    <strong>That's it</strong>
+    On the next boot: <code>PermissionCatalog</code> discovers the attribute via reflection,
+    <code>SyncDiscoveredPermissionsAsync</code> creates the row (<code>IsSystem = false</code>) if it
+    doesn't exist and grants it to SuperAdmin, and an authorization policy
+    (<code>HasPermission:{group}.{action}</code>) is registered automatically.
+  </div>
+
+  <h2 id="dynamic"><span class="num">6.</span>Gating a resource-based endpoint <span class="pill pill-dynamic">Dynamic</span></h2>
+  <p class="section-intro">
+    Use this instead when the endpoint's required Group can't be known until the request is inspected
+    — the running example is <code>ConfigurationsController.AddSourceConnection</code>, where the
+    permission depends on which EHR vendor (<code>SourceSystemType</code>) the request is for.
+  </p>
+
+  <h3>Case A — the vendor already exists as a <code>SourceSystemType</code>, it just has no dedicated group yet</h3>
+  <p>This is a <strong>one-line change</strong>:</p>
+  <pre><code>// PermissionGroupCode.cs — the ONLY change needed. The member name must match the
+// SourceSystemType member name exactly (case-sensitive) — that's the whole mechanism.
+[PermissionGroup("30000000-0000-0000-0000-000000000013", PermissionCategoryCode.Pipelines, "Allscripts")]
+Allscripts = 13,</code></pre>
+  <div class="callout">
+    <strong>Nothing else to touch</strong>
+    No attribute change, no seed-data edit, no controller change. On the next boot,
+    <code>SourceSystemPermissionGroups.GroupFor(SourceSystemType.Allscripts)</code> resolves to
+    <code>PermissionGroupCode.Allscripts</code> by name, <code>PermissionCatalog</code>'s dynamic pass
+    crosses it with the <code>Edit</code> action already declared on
+    <code>ConfigurationsController.AddSourceConnection</code>, and <code>allscripts.edit</code> appears
+    as a real, grantable permission. Proven end to end in
+    <code>tests/FHIRBridge.Api.IntegrationTests/Tests/SourceConnectionPermissionTests.cs</code>.
+  </div>
+
+  <h3>Case B — wiring up a brand-new resource-based endpoint from scratch</h3>
+  <pre><code>[HttpPost("source-connections")]
+[DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection.")]
+public async Task&lt;IActionResult&gt; AddSourceConnection([FromBody] CreateSourceConnectionRequest request, CancellationToken cancellationToken)
+{
+    var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
+    if (denied is not null) return denied;
+
+    // ... normal action body ...
+}</code></pre>
+  <ul class="feature-list">
+    <li><code>[DynamicSourceSystemPermission(typeof(TEnum), action, description)]</code> declares which enum type to loop over and which action to cross it with. Metadata only — enforces nothing by itself.</li>
+    <li><code>this.AuthorizePermissionAsync(_authorizationService, &lt;the enum value from the request&gt;, action)</code> is the real check, called explicitly in the action body. It resolves the group from the value the same way the attribute above tells <code>PermissionCatalog</code> to at startup, so the two can never disagree.</li>
+    <li>A value with <strong>no</strong> same-named <code>PermissionGroupCode</code> member falls back to the generic <code>SourceConnections</code> group automatically — no error, just shared with every other unmapped value.</li>
+  </ul>
+  <div class="callout warn">
+    <strong>Don't reach for this by default</strong>
+    Only use the dynamic mechanism when the group genuinely can't be decided until a request arrives.
+    If it's fixed and known at compile time, use <a href="#standard">section 5</a> instead.
+  </div>
+
+  <h2 id="reuse"><span class="num">7.</span>Reusing a permission on multiple endpoints</h2>
+  <p>Just apply the same <code>[StandardPermission(group, action)]</code> pair on as many controllers/methods as need it:</p>
+  <pre><code>// UsersController.cs
+[StandardPermission(PermissionGroupCode.Report, PermissionActionCode.View, description: "View reports and analytics.")]
+public async Task&lt;IActionResult&gt; GetUserReports(...) { ... }
+
+// ReportsController.cs
+[StandardPermission(PermissionGroupCode.Report, PermissionActionCode.View, description: "View reports and analytics.")]
+public async Task&lt;IActionResult&gt; GetAllReports(...) { ... }</code></pre>
+  <p>
+    Both resolve to the exact same <code>report.view</code> permission (same Id, one database row). If
+    the two descriptions differ, both are kept (joined with <code>" | "</code>) rather than one silently
+    overwriting the other. The <code>Instances</code> column on the <code>Permission</code> row records
+    every declaring <code>ClassName.MethodName</code>, so you can always see everywhere a permission is
+    actually enforced.
+  </p>
+
+  <h2 id="seed-or-not"><span class="num">8.</span>Seed-declared or discovered-only?</h2>
+  <p class="section-intro">Usually, leave it as discovered-only (do nothing extra). Only promote it to a seed-declared, built-in permission if you specifically want that.</p>
+  <table class="compare">
+    <tr><th></th><th>Discovered-only (default)</th><th>Seed-declared</th></tr>
+    <tr><td><strong>IsSystem</strong></td><td><code>false</code></td><td><code>true</code></td></tr>
+    <tr><td><strong>Granted to SuperAdmin automatically</strong></td><td>Yes</td><td>Only if also added to <code>SystemRoleDefaultPermissions</code></td></tr>
+    <tr><td><strong>Removable by just deleting the attribute usage</strong></td><td>Yes — deactivates automatically</td><td>No — must remove the <code>RbacSeedData.Permissions</code> entry</td></tr>
+    <tr><td><strong>Typical use</strong></td><td>Any new feature-gated endpoint</td><td>Core platform permissions you want to explicitly curate</td></tr>
+  </table>
+  <p>
+    If you do add one to <code>RbacSeedData.Permissions</code>, also decide whether
+    <code>SuperAdmin</code>/<code>Admin</code>/<code>Operations</code>/<code>Audit</code> should be
+    granted it by default — <code>SuperAdmin</code>/<code>Admin</code> get every seed-declared
+    permission automatically; <code>Operations</code>/<code>Audit</code> need an explicit entry in
+    <code>SystemRoleDefaultPermissions.Grants</code>.
+  </p>
+
+  <h2 id="checklist"><span class="num">9.</span>Checklist</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Does the Group you need already exist?</strong><span>If not, add it (and its Category, if that's also new).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Does the Action you need already exist and mean what you want?</strong><span>If not, add it.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Is the required group fixed and known at compile time?</strong><span>Apply <code>[StandardPermission]</code>. Does it depend on request data instead? Use the dynamic mechanism (section 6).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Build and boot once locally.</strong><span>Confirm the permission gets created — check the <code>Permissions</code> table, or <code>GET /api/v1/permissions/catalog</code>.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Should this be a built-in, curated permission?</strong><span>If yes, add it to <code>RbacSeedData.Permissions</code> and decide which built-in roles get it by default.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>Double-check your new int value and Guid aren't copy-pasted.</strong><span><code>RbacDefinitionValidator</code> catches a duplicate at boot and logs an error instead of writing corrupted data — but pick a genuinely fresh Guid and the next unused int every time regardless.</span></div>
+    </div>
+  </div>
+
+  <footer>
+    FHIRBridge &middot; Adding New Permissions how-to &middot; branch <code>feature/RBAC-frontend-backend-implemention-grouping</code> &middot; companion to RBAC-Permission-System.html
+  </footer>
+
+</div>
+</body>
+</html>

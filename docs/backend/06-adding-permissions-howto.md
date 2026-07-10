@@ -103,6 +103,41 @@ That's it. On the next application boot:
 - `Program.cs`'s `SyncDiscoveredPermissionsAsync` creates the `Permission` row (`IsSystem = false`) if it doesn't already exist, and grants it to SuperAdmin automatically.
 - An authorization policy (`HasPermission:{group}.{action}`) is registered automatically — nothing to add to `Program.cs`'s policy-registration loop, it already iterates every discovered/declared code.
 
+## Adding a permission whose required group depends on runtime data (resource-based / dynamic)
+
+Use this instead of `[StandardPermission]` when the endpoint's required `Group` can't be known until the request is inspected — the running example is `ConfigurationsController.AddSourceConnection`, where the permission depends on which EHR vendor (`SourceSystemType`) the request is for.
+
+**If the vendor already has no dedicated group** (i.e. it currently falls back to the generic `SourceConnections` permission), promoting it to its own dedicated, auto-discovered permission is **one line**:
+
+```csharp
+// PermissionGroupCode.cs — the ONLY change needed. The member name must match the
+// SourceSystemType member name exactly (case-sensitive) — that's the whole mechanism.
+[PermissionGroup("30000000-0000-0000-0000-000000000013", PermissionCategoryCode.Pipelines, "Allscripts")]
+Allscripts = 13,
+```
+
+Nothing else — no attribute change, no seed-data edit, no controller change. On the next boot, `SourceSystemPermissionGroups.GroupFor(SourceSystemType.Allscripts)` resolves to `PermissionGroupCode.Allscripts` by name, `PermissionCatalog`'s dynamic pass crosses it with the `Edit` action already declared on `ConfigurationsController.AddSourceConnection`, and `allscripts.edit` appears as a real, grantable permission. This was proven end to end this session — see `tests/FHIRBridge.Api.IntegrationTests/Tests/SourceConnectionPermissionTests.cs`.
+
+**If you're wiring up a brand-new resource-based endpoint from scratch** (not just adding a vendor to an existing one):
+
+```csharp
+[HttpPost("source-connections")]
+[DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection.")]
+public async Task<IActionResult> AddSourceConnection([FromBody] CreateSourceConnectionRequest request, CancellationToken cancellationToken)
+{
+    var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
+    if (denied is not null) return denied;
+
+    // ... normal action body ...
+}
+```
+
+1. `[DynamicSourceSystemPermission(typeof(TEnum), action, description)]` — declares which enum type to loop over and which action to cross it with. This is metadata only; it does not enforce anything by itself.
+2. `this.AuthorizePermissionAsync(_authorizationService, <the actual enum value from the request>, action)` — the real check, called explicitly in the action body. It resolves the group from the value the exact same way the attribute above tells `PermissionCatalog` to at startup, so the two can never disagree about which permissions exist versus which get enforced.
+3. A vendor/type value with **no** same-named `PermissionGroupCode` member falls back to the generic `PermissionGroupCode.SourceConnections` group automatically — no error, just shared with every other unmapped value. If you want it to have its own dedicated permission instead, add the one-line enum member shown above.
+
+**Don't do this** if the endpoint's permission is fixed and known at compile time — that's what `[StandardPermission]` is for. Reach for the dynamic mechanism only when the group genuinely can't be decided until a request arrives.
+
 ## Reusing the same permission on more than one endpoint
 
 Just apply the same `[StandardPermission(group, action)]` pair on as many controllers/methods as need it — this is expected and fully supported:
@@ -136,6 +171,7 @@ If you do add one to `RbacSeedData.Permissions`, also decide whether `SuperAdmin
 
 1. Does the `Group` you need already exist? If not, add it (and its `Category`, if that's also new).
 2. Does the `Action` you need already exist and mean what you want? If not, add it.
-3. Apply `[StandardPermission(group, action, description: "...")]` to the controller/action.
+3. Is the required group fixed and known at compile time? Apply `[StandardPermission(group, action, description: "...")]`. Does it instead depend on data inside the request? Use the dynamic mechanism above.
 4. Build and boot once (locally) to confirm the permission gets created — check the `Permissions` table for the new row, or check `/api/v1/permissions/catalog`.
 5. If this should be a built-in, curated permission (not just "exists because an endpoint needs it"), add it to `RbacSeedData.Permissions` and decide which built-in roles get it.
+6. Double-check your new int value and Guid (if any) aren't copy-pasted from an existing member. `RbacDefinitionValidator` catches a duplicate at boot and logs an error instead of writing corrupted data, but it's still better to not rely on that — pick a genuinely fresh Guid and the next unused int, every time.
