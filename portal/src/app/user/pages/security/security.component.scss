@@ -132,3 +132,12 @@
 }
 .api-key-meta { font-size: 11.5px; color: var(--color-muted-2); }
 .mono { font-family: monospace; }
+
+/* ── MFA ──────────────────────────────────────────────────────────── */
+// The enrollment-specific styles (secret/QR/backup-codes) moved with the enrollment markup into
+// MfaEnrollmentPanelComponent's own stylesheet — only the disable-flow's error alert stays here.
+.mfa-alert {
+  margin-top: 12px; padding: 10px 14px; border-radius: 9px;
+  background: var(--color-error-soft); border: 1px solid #FECACA;
+  color: var(--color-error); font-size: 13px;
+}

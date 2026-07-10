@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './auth/guards/auth.guard';
 import { permissionGuard } from './auth/guards/permission.guard';
 import { setupGuard } from './auth/guards/setup.guard';
+import { mfaSetupGuard } from './auth/guards/mfa-setup.guard';
 
 export const routes: Routes = [
 
@@ -33,7 +34,7 @@ export const routes: Routes = [
   // ── App Shell — wraps every authenticated page ──────────────────────────────
   {
     path: '',
-    canActivate: [authGuard],
+    canActivate: [authGuard, mfaSetupGuard],
     loadComponent: () =>
       import('./layout/app-shell/app-shell.component').then(m => m.AppShellComponent),
     children: [

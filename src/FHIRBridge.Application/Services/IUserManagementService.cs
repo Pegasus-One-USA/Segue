@@ -28,6 +28,16 @@ public interface IUserManagementService
 
     Task<UserDetailDto> UpdateUserStatusAsync(Guid userId, UpdateUserStatusRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Admin override: disables MFA for a user without requiring a code — for account recovery when
+    /// they've lost their authenticator and backup codes. Self-service disable (which does require a
+    /// current code) is handled separately by <see cref="IMfaService.DisableAsync"/>.
+    /// </summary>
+    Task<UserDetailDto> DisableMfaForUserAsync(Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>Admin policy toggle: requires (or stops requiring) this account to have MFA enabled.</summary>
+    Task<UserDetailDto> SetMfaRequirementAsync(Guid userId, bool required, CancellationToken cancellationToken);
+
     Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RoleDto>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken);

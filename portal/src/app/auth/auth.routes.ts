@@ -34,6 +34,12 @@ export const AUTH_ROUTES: Routes = [
       import('./pages/change-password/change-password.component').then(m => m.ChangePasswordComponent),
   },
   {
+    path: 'setup-mfa',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/mfa-setup-required/mfa-setup-required.component').then(m => m.MfaSetupRequiredComponent),
+  },
+  {
     path: 'set-password',
     loadComponent: () =>
       import('./pages/set-password/set-password.component').then(m => m.SetPasswordComponent),

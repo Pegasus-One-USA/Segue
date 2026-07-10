@@ -68,6 +68,15 @@ export interface User {
   status:             UserStatus;
   loginType:          LoginType;
   mustChangePassword: boolean;
+  /** Decoded from the `mfa_setup_required` JWT claim — already accounts for both the admin policy
+   *  AND current enrollment status (true only while blocked). The app must route the user straight
+   *  to MFA enrollment while this is true — see mfaSetupGuard. Optional (defaults to falsy) so it
+   *  doesn't force every mock/test User literal in the codebase to specify it. */
+  mfaSetupRequired?:  boolean;
+  /** Admin policy (raw): this account is required to have 2FA enabled. Distinct from
+   *  mfaSetupRequired above — this is the toggle an admin sets on another user's account (see
+   *  UserDetailComponent); mfaSetupRequired is the derived "currently blocked" flag for yourself. */
+  mfaRequired?:       boolean;
   emailVerified:      boolean;
   twoFactorEnabled:   boolean;
   invitedBy?:         string;
@@ -167,6 +176,8 @@ export interface UserManagementDto {
   globalRoleNames:      string[];
   createdOnUtc:         string;
   lastLoginOnUtc:       string | null;
+  mfaEnabled:           boolean;
+  mustSetupMfa:         boolean;
 }
 
 export interface UserDetailDto {
@@ -181,7 +192,9 @@ export interface UserDetailDto {
   directPermissionAllocations: PermissionAllocationDto[];
   createdOnUtc:              string;
   lastLoginOnUtc:            string | null;
+  mustSetupMfa:              boolean;
   invitationToken?:          string;
+  mfaEnabled:                boolean;
 }
 
 /** Result of an invite / resend-invite call, surfaced to the UI so it can show the invite link. */
@@ -192,4 +205,18 @@ export interface InviteResult {
   invitationToken?: string;
   /** Absolute link the invited user should open to set their password. */
   invitationLink?:  string;
+}
+
+/**
+ * Result of an admin-triggered password reset request, surfaced to the UI so it can show the
+ * reset link directly (email delivery isn't wired up yet — see LocalAuth:ExposeResetTokens).
+ */
+export interface PasswordResetLinkResult {
+  success:     boolean;
+  message:     string;
+  email:       string;
+  resetToken?: string;
+  /** Absolute link the user should open to choose a new password. Undefined when the backend
+   *  doesn't expose raw reset tokens (e.g. LocalAuth:ExposeResetTokens=false, as in production). */
+  resetLink?:  string;
 }

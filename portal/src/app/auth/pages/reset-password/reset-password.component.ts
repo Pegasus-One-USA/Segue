@@ -71,6 +71,7 @@ export class ResetPasswordComponent {
   private readonly route = inject(ActivatedRoute);
 
   private readonly token = this.route.snapshot.queryParamMap.get('token') ?? '';
+  private readonly email = this.route.snapshot.queryParamMap.get('email') ?? '';
 
   protected readonly done         = signal(false);
   protected readonly loading      = signal(false);
@@ -79,7 +80,7 @@ export class ResetPasswordComponent {
   protected readonly showPassword = signal(false);
   protected readonly showConfirm  = signal(false);
 
-  protected readonly hasToken = !!this.token;
+  protected readonly hasToken = !!this.token && !!this.email;
 
   protected readonly form = this.fb.nonNullable.group(
     {
@@ -105,7 +106,7 @@ export class ResetPasswordComponent {
     this.submitted.set(true);
     this.form.markAllAsTouched();
 
-    if (!this.token) {
+    if (!this.token || !this.email) {
       this.error.set('Invalid or expired reset link. Please request a new one.');
       return;
     }
@@ -115,7 +116,7 @@ export class ResetPasswordComponent {
     this.loading.set(true);
     this.error.set(null);
 
-    this.auth.resetPassword({ token: this.token, newPassword, confirmPassword }).subscribe({
+    this.auth.resetPassword({ token: this.token, email: this.email, newPassword, confirmPassword }).subscribe({
       next: () => {
         this.loading.set(false);
         this.done.set(true);

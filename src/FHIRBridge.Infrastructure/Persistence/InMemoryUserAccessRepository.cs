@@ -94,6 +94,15 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         return Task.FromResult(user);
     }
 
+    public Task<User?> GetUserByMfaChallengeTokenHashAsync(string mfaChallengeTokenHash, CancellationToken cancellationToken)
+    {
+        var user = _users.Values.FirstOrDefault(x =>
+            !x.IsDeleted &&
+            string.Equals(x.MfaChallengeTokenHash, mfaChallengeTokenHash, StringComparison.Ordinal));
+
+        return Task.FromResult(user);
+    }
+
     public Task AddUserAsync(User user, CancellationToken cancellationToken)
     {
         _users[user.Id] = user;

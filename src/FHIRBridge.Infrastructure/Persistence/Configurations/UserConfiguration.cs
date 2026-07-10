@@ -55,6 +55,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.MfaBackupCodeHashes)
             .HasMaxLength(4000);
 
+        // Login-time MFA challenge (issued after password verification, consumed by the follow-up code submission).
+        builder.Property(x => x.MfaChallengeTokenHash)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.MustSetupMfa)
+            .IsRequired();
+
         builder.Property(x => x.CreatedOnUtc)
             .IsRequired();
 
@@ -82,5 +89,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(x => x.Email);
 
         builder.HasIndex(x => x.RefreshTokenHash);
+
+        builder.HasIndex(x => x.MfaChallengeTokenHash);
     }
 }

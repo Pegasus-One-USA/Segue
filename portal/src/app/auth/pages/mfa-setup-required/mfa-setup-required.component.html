@@ -1,0 +1,34 @@
+<!-- auth/pages/mfa-setup-required/mfa-setup-required.component.html -->
+<div class="mfa-setup-page">
+  <div class="mfa-setup-card">
+
+    <div class="card-header">
+      <div class="header-icon-wrap">
+        <mat-icon class="header-icon">shield</mat-icon>
+      </div>
+      <div>
+        <h1 class="card-title">Two-Factor Authentication Required</h1>
+        <p class="card-sub">Your administrator requires two-factor authentication on this account. Set it up now to continue.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    @if (finishing()) {
+      <div class="finishing" role="status">
+        <mat-spinner diameter="24" strokeWidth="2"></mat-spinner>
+        <span>Finishing setup…</span>
+      </div>
+    } @else {
+      <app-mfa-enrollment-panel [allowCancel]="false" [autoStart]="true" (enrolled)="onEnrolled()" />
+
+      <div class="sign-out-row">
+        <button type="button" class="sign-out-link" (click)="backToSignIn()">
+          <mat-icon>logout</mat-icon>
+          Not able to set this up right now? Back to sign in
+        </button>
+      </div>
+    }
+
+  </div>
+</div>
