@@ -42,14 +42,14 @@
     font-family: inherit;
     transition: border-color 0.15s, box-shadow 0.15s;
 
-    &::placeholder { color: #9CA3AF; } // no exact token — placeholder grey
+    &::placeholder { color: var(--color-muted-2); }
     &:focus {
       border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
     }
     &.error {
       border-color: var(--color-error);
-      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.10);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 10%, transparent);
     }
   }
 }
@@ -70,7 +70,7 @@
 
   &:hover:not(:disabled) {
     background: var(--color-primary-dark);
-    box-shadow: 0 4px 14px rgba(0, 168, 157, 0.35);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primary) 35%, transparent);
   }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
@@ -92,8 +92,8 @@
 
 .auth-error {
   background: var(--color-error-soft);
-  border: 1.5px solid #FECACA; // no exact token — light red border
-  color: #DC2626; // no exact token — slightly lighter error text than #991B1B
+  border: 1.5px solid color-mix(in srgb, var(--color-error) 35%, transparent);
+  color: var(--color-error);
   border-radius: var(--radius-base);
   padding: 10px 14px;
   font-size: 13px;
@@ -117,7 +117,7 @@
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: #9CA3AF; // no exact token — icon grey
+    color: var(--color-muted-2);
     font-size: 12px;
     cursor: pointer;
     padding: 0;
@@ -127,6 +127,6 @@
 }
 
 .field-err {
-  color: #DC2626; // no exact token — slightly lighter error text than #991B1B
+  color: var(--color-error);
   font-size: 12px;
 }

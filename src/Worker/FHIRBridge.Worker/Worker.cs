@@ -116,7 +116,11 @@ public sealed class Worker : BackgroundService
 
             try
             {
-                var context = new WorkflowExecutionContext(Guid.NewGuid(), Guid.NewGuid().ToString("N"));
+                var context = new WorkflowExecutionContext(
+                    Guid.NewGuid(),
+                    Guid.NewGuid().ToString("N"),
+                    triggeredBy: "scheduler",
+                    triggerType: "Scheduled");
                 var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
                 workflow.MarkTriggered(nowUtc);
                 await store.SaveAsync(workflow, cancellationToken);

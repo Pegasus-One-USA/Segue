@@ -7,6 +7,7 @@ import {
   DestinationData,
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
+import { ToastComponent } from '../../components/shared/toast/toast.component';
 
 interface LaunchModal {
   name: string;
@@ -26,7 +27,7 @@ interface DataModal {
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe],
+  imports: [CommonModule, DatePipe, ToastComponent],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -81,6 +82,11 @@ export class WorkflowListComponent implements OnInit {
 
   onSearch(value: string): void {
     this.searchQuery.set(value);
+  }
+
+  /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
+  onNewWorkflow(): void {
+    this.router.navigate(['/workflow-builder']);
   }
 
   onAction(row: WorkflowSummary): void {

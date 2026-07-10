@@ -54,4 +54,16 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
             .OrderByDescending(run => run.StartedAt)
             .ToArrayAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyCollection<WorkflowRun>> ListRecentAsync(
+        int count,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Include(run => run.NodeRuns)
+            .OrderByDescending(run => run.StartedAt)
+            .Take(Math.Clamp(count, 1, 1000))
+            .ToArrayAsync(cancellationToken);
+    }
 }

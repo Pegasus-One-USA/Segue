@@ -22,14 +22,16 @@
 
 // ── Page Shell ────────────────────────────────────────────────────────────────
 .auth-page {
-  position:       fixed;
-  inset:          0;
-  overflow-y:     auto;
-  overflow-x:     hidden;
-  display:        flex;
-  flex-direction: column;
-  align-items:    center;
-  padding:        40px 24px;
+  position:        fixed;
+  inset:           0;
+  overflow-y:      auto;
+  overflow-x:      hidden;
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  gap:             20px;
+  padding:         40px 24px;
   background:
     radial-gradient(ellipse 90% 55% at 15%  -5%, rgba(0, 168, 157, 0.13) 0%, transparent 60%),
     radial-gradient(ellipse 65% 50% at 88% 108%, rgba(99, 102, 241, 0.09) 0%, transparent 60%),
@@ -76,11 +78,45 @@
   }
 }
 
+// ── Custom tenant background image ─────────────────────────────────────────────
+.auth-page--custom-bg {
+  background-size:     cover;
+  background-position: center;
+  background-repeat:   no-repeat;
+}
+
+// ── Layout row (optional illustration + card) ──────────────────────────────────
+.auth-layout {
+  position:        relative;
+  z-index:         1;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  gap:             48px;
+  width:           100%;
+}
+
+.auth-illustration {
+  flex:       1;
+  max-width:  420px;
+  display:    flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width:     100%;
+    max-height: 480px;
+    object-fit: contain;
+  }
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+}
+
 // ── Card ──────────────────────────────────────────────────────────────────────
 .auth-card {
   position:      relative;
-  z-index:       1;
-  margin:        auto 0;
   width:         100%;
   max-width:     444px;
   padding:       40px 44px 48px;
@@ -103,43 +139,6 @@
     height:        3px;
     background:    linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary) 100%);
     border-radius: 20px 20px 0 0;
-  }
-}
-
-// ── Logo / Brand ──────────────────────────────────────────────────────────────
-.auth-logo {
-  display:        flex;
-  align-items:    center;
-  gap:            13px;
-  margin-bottom:  28px;
-  padding-bottom: 24px;
-  border-bottom:  1px solid var(--color-border);
-
-  .logo-icon {
-    flex-shrink: 0;
-    display:     flex;
-    filter:      drop-shadow(0 2px 10px rgba(0, 168, 157, 0.28));
-  }
-
-  .logo-text {
-    display:        flex;
-    flex-direction: column;
-    gap:            2px;
-  }
-
-  .brand {
-    font-size:      21px;
-    font-weight:    800;
-    color:          var(--color-primary);
-    letter-spacing: -0.5px;
-    line-height:    1.2;
-  }
-
-  .brand-tag {
-    font-size:      11px;
-    font-weight:    400;
-    color:          var(--color-muted);
-    letter-spacing: 0.25px;
   }
 }
 
@@ -166,11 +165,11 @@
   align-items:   flex-start;
   gap:           10px;
   background:    var(--color-error-soft);
-  border:        1px solid #FECACA;
+  border:        1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
   border-left:   4px solid var(--color-error);
   border-radius: var(--radius-md);
   padding:       12px 16px;
-  color:         #991B1B;
+  color:         var(--color-error-strong);
   font-size:     13.5px;
   line-height:   1.5;
   margin-bottom: 20px;
@@ -187,11 +186,11 @@
 
   &--success {
     background:  var(--color-success-soft);
-    border-color: #6EE7B7;
-    border-left-color: #059669;
-    color:        #065F46;
+    border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+    border-left-color: var(--color-success);
+    color:        var(--color-success-strong);
 
-    .alert-icon { color: #059669; }
+    .alert-icon { color: var(--color-success); }
   }
 }
 

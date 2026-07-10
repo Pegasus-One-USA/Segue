@@ -163,7 +163,7 @@
           </div>
 
           <!-- SMART scope version — v1 (coarse) vs v2 (granular) -->
-          <div class="eaf-field">
+          <div *ngif="false" class="eaf-field">
             <label class="eaf-label" for="eaf-scopeVersion">
               SMART Scope Version <span class="eaf-req">*</span>
               @if (scopeVersionAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
@@ -199,7 +199,10 @@
           </div>
 
           <div class="eaf-field">
-            <label class="eaf-label" for="eaf-authMethod">Client Auth Method</label>
+            <label class="eaf-label" for="eaf-authMethod">
+              Client Auth Method
+              @if (authMethodAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
+            </label>
             <div class="eaf-select-wrap">
               <select id="eaf-authMethod" class="eaf-select" formControlName="authMethod">
                 <option value="public">Public Client + PKCE (no secret)</option>
@@ -207,7 +210,13 @@
                 <option value="jwt">JWT / Private Key (JWKS)</option>
               </select>
             </div>
-            <p class="eaf-hint">Provider EHR launch is normally a public client (PKCE) — no client secret required. Choose Client Secret or JWT only if your Epic app is registered as confidential.</p>
+            @if (authMethodAuto()) {
+              <p class="eaf-hint">SMART Backend Services requires JWT (<code>private_key_jwt</code>) client authentication — not user-editable via discovery for this audience. Override if needed.</p>
+            } @else if (audience() === 'backend-system') {
+              <p class="eaf-hint">Backend System apps authenticate with a signed JWT assertion (client credentials) — no interactive login.</p>
+            } @else {
+              <p class="eaf-hint">Provider EHR launch is normally a public client (PKCE) — no client secret required. Choose Client Secret or JWT only based on how your Epic app is actually registered — the server's discovery document lists everything it can accept, not what your specific app uses.</p>
+            }
           </div>
 
           @if (showSecret()) {
@@ -232,18 +241,41 @@
               }
               <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in Epic APP).</p>
             </div>
-            <div class="eaf-field">
-              <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Reference</label>
-              <input id="eaf-privateKeyRef" class="eaf-input" type="text" formControlName="privateKeyRef"
-                     placeholder="e.g. azure-kv://epic-private-key" />
-            </div>
+            @if (audience() === 'backend-system') {
+              <div class="eaf-field" [class.eaf-field--error]="form.controls.jwtKid.touched && form.controls.jwtKid.invalid">
+                <label class="eaf-label" for="eaf-jwtKid">Key ID (kid) <span class="eaf-req">*</span></label>
+                <input id="eaf-jwtKid" class="eaf-input" type="text" formControlName="jwtKid"
+                       placeholder="e.g. 8f2a1c4e-…-jwk-1" />
+                @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
+                  <p class="eaf-error-msg">Key ID is required.</p>
+                }
+                <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what Epic's app registration expects.</p>
+              </div>
+              <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
+                <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
+                <input id="eaf-privateKeyRef" class="eaf-input" type="text" formControlName="privateKeyRef"
+                       placeholder="e.g. fhirbridge-secrets" />
+                @if (form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid) {
+                  <p class="eaf-error-msg">Key Vault Name is required.</p>
+                }
+              </div>
+              <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid">
+                <label class="eaf-label" for="eaf-privateKeySecretName">Secret Name <span class="eaf-req">*</span></label>
+                <input id="eaf-privateKeySecretName" class="eaf-input" type="text" formControlName="privateKeySecretName"
+                       placeholder="e.g. epic-backend-private-key" />
+                @if (form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid) {
+                  <p class="eaf-error-msg">Secret Name is required.</p>
+                }
+                <p class="eaf-hint">Where the private key PEM is stored — Azure Key Vault in production, or your configured local secret store for dev/test.</p>
+              </div>
+            }
           }
         </div>
       </div>
 
       <!-- ═══════════ SECTION 5: Resource Type & Scopes ════════════════════════ -->
       @if (audienceConfig().showResourcePicker) {
-        <div class="eaf-section">
+        <div *ngif="false" class="eaf-section">
           <div class="eaf-section-head">
             <span class="eaf-section-num">5</span>
             <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
@@ -318,7 +350,7 @@
       } @else {
         <!-- Backend System: no shared picker here — Resource Type lives inside the
              selected Data Retrieval Method below; this just previews the resulting scopes. -->
-        <div class="eaf-section">
+        <div *ngif="false" class="eaf-section">
           <div class="eaf-section-head">
             <span class="eaf-section-num">5</span>
             <span class="eaf-section-title">Scopes</span>
@@ -538,13 +570,17 @@
           <div class="eaf-grid">
             @for (field of visibleRetrievalFields(); track field.key) {
               <div class="eaf-field"
-                   [class.eaf-field--full]="field.type === 'textarea' || field.type === 'multiselect'"
+                   [class.eaf-field--full]="field.type === 'textarea' || field.type === 'multiselect' || field.type === 'weekday-picker'"
                    [class.eaf-field--error]="isRetrievalFieldInvalid(field)">
 
                 @if (field.type === 'checkbox') {
-                  <label class="eaf-checkbox-row">
+                  <label class="eaf-checkbox-row"
+                         [class.eaf-checkbox-row--locked]="field.key === 'incrementalCursor' && incrementalCursorLocked()">
                     <input type="checkbox" [formControlName]="field.key" />
                     <span>{{ field.label }}</span>
+                    @if (field.key === 'incrementalCursor' && incrementalCursorLocked()) {
+                      <span class="eaf-tag-fixed">locked — required by Run Mode</span>
+                    }
                   </label>
                 } @else {
                   <label class="eaf-label" [attr.for]="'eaf-' + field.key">
@@ -566,6 +602,21 @@
                     @case ('textarea') {
                       <textarea [id]="'eaf-' + field.key" class="eaf-input eaf-textarea" rows="3"
                                 [formControlName]="field.key" [placeholder]="field.placeholder ?? ''"></textarea>
+                    }
+                    @case ('time') {
+                      <input [id]="'eaf-' + field.key" class="eaf-input" type="time" [formControlName]="field.key" />
+                    }
+                    @case ('weekday-picker') {
+                      <div class="eaf-weekday-picker" [attr.data-control]="field.key">
+                        @for (opt of field.options; track opt.value) {
+                          <label class="eaf-weekday-chip" [class.eaf-weekday-chip--checked]="selectedWeekdays().includes(opt.value)">
+                            <input type="checkbox"
+                                   [checked]="selectedWeekdays().includes(opt.value)"
+                                   (change)="toggleWeekday(opt.value); form.get(field.key)?.markAsTouched()" />
+                            <span>{{ opt.label }}</span>
+                          </label>
+                        }
+                      </div>
                     }
                     @case ('multiselect') {
                       <div class="eaf-resources-grid" [attr.data-control]="field.key">
@@ -596,10 +647,67 @@
                 @if (isRetrievalFieldInvalid(field)) {
                   <p class="eaf-error-msg">{{ field.label }} is required.</p>
                 }
-                @if (field.hint && field.type !== 'checkbox') {
+                @if (field.hint) {
                   <p class="eaf-hint">{{ field.hint }}</p>
                 }
               </div>
+            }
+
+            @if (showFullRefreshWarning()) {
+              <div class="eaf-callout eaf-callout--warn eaf-callout--sm eaf-field--full">
+                ⚠ Full Refresh re-fetches every matching record with no incremental filter — this may pull large data volumes and take significantly longer than an incremental run.
+              </div>
+              <div class="eaf-cron-preview eaf-field--full">
+                <span class="eaf-tag-auto">schedule</span>
+                <span>{{ fullRefreshCronSummary() }}</span>
+              </div>
+            }
+
+            @if (advancedRetrievalFields().length) {
+              <button type="button" class="eaf-advanced-toggle eaf-field--full"
+                      (click)="toggleAdvancedOptions()"
+                      [attr.aria-expanded]="advancedOptionsOpen()">
+                <span class="eaf-advanced-toggle__chevron" [class.eaf-advanced-toggle__chevron--open]="advancedOptionsOpen()">›</span>
+                <span>Advanced Search Options</span>
+                <span class="eaf-advanced-toggle__count">{{ advancedOptionsOpen() ? 'Hide' : 'Show' }}</span>
+              </button>
+
+              @if (advancedOptionsOpen()) {
+                <div class="eaf-advanced-panel eaf-field--full">
+                  @for (field of advancedRetrievalFields(); track field.key) {
+                    <div class="eaf-field" [class.eaf-field--error]="isRetrievalFieldInvalid(field)">
+                      <label class="eaf-label" [attr.for]="'eaf-' + field.key">
+                        {{ field.label }}
+                        @if (field.required) { <span class="eaf-req">*</span> }
+                      </label>
+
+                      @switch (field.type) {
+                        @case ('select') {
+                          <div class="eaf-select-wrap">
+                            <select [id]="'eaf-' + field.key" class="eaf-select" [formControlName]="field.key">
+                              <option value="" disabled>— Select —</option>
+                              @for (opt of field.options; track opt.value) {
+                                <option [value]="opt.value">{{ opt.label }}</option>
+                              }
+                            </select>
+                          </div>
+                        }
+                        @default {
+                          <input [id]="'eaf-' + field.key" class="eaf-input" type="text"
+                                 [formControlName]="field.key" [placeholder]="field.placeholder ?? ''" />
+                        }
+                      }
+
+                      @if (isRetrievalFieldInvalid(field)) {
+                        <p class="eaf-error-msg">{{ field.label }} is required.</p>
+                      }
+                      @if (field.hint) {
+                        <p class="eaf-hint">{{ field.hint }}</p>
+                      }
+                    </div>
+                  }
+                </div>
+              }
             }
           </div>
         </div>

@@ -163,10 +163,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
     }
 
+
     public async Task<Uri> StartInteractiveFromContextAsync(
-        string launchContext,
-        string redirectUri,
-        CancellationToken cancellationToken)
+      string launchContext,
+      string redirectUri,
+      CancellationToken cancellationToken)
     {
         var context = _launchTokenProtector.UnprotectContext(launchContext)
             ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
@@ -221,9 +222,72 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         return authorizationUrl;
     }
+    public async Task<Uri> StartStandaloneFromContextAsync(
+        string launchContext,
+        string redirectUri,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(redirectUri))
+        {
+            throw new ArgumentException("A redirect URI is required to start interactive authorization.", nameof(redirectUri));
+        }
+
+        var context = _launchTokenProtector.UnprotectContext(launchContext)
+            ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
+
+        // Workflow launch: the graph's source node names the connection to OAuth against.
+        if (context.WorkflowId is { } workflowId)
+        {
+            var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
+            return await StartStandaloneCoreAsync(workflowSource, redirectUri, routeId: null, workflowId, cancellationToken);
+        }
+
+        if (context.RouteId is { } contextRouteId)
+        {
+            var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
+            return await StartStandaloneCoreAsync(sourceConnection, redirectUri, routeId, workflowId: null, cancellationToken);
+        }
+
+        throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
+    }
+
+    private async Task<Uri> StartStandaloneCoreAsync(
+        SourceConnection sourceConnection,
+        string redirectUri,
+        Guid? routeId,
+        Guid? workflowId,
+        CancellationToken cancellationToken)
+    {
+        var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken);
+        var clientId = RequireClientId(sourceConnection);
+
+        var source = new FhirSourceConfiguration(
+            SourceType: MapSourceType(sourceConnection.SourceSystemType),
+            Name: sourceConnection.Name,
+            // No launch issuer in a standalone sign-in — the configured FHIR base URL is the audience.
+            BaseUrl: sourceConnection.BaseUrl,
+            TokenEndpoint: smartConfiguration.TokenEndpoint,
+            ClientId: clientId,
+            KeyId: null,
+            PrivateKeyPem: null,
+            Scopes: ApplyPatientSelection(
+                sourceConnection.Authentication.Scopes,
+                sourceConnection.Interactive?.PatientSelectionMethod),
+            SourceConnectionId: sourceConnection.Id,
+            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
+
+        var authorizationUrl = await IssueAuthorizationAsync(
+            source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
+
+        await RecordAuditAsync(sourceConnection.Id, "StandaloneAuthorizationStarted", "Started",
+            $"Provider-standalone sign-in started for {sourceConnection.Name}.", cancellationToken);
+
+        return authorizationUrl;
+    }
+
 
     public async Task<ApplicationType?> GetWorkflowApplicationTypeAsync(Guid workflowId, CancellationToken cancellationToken) =>
-        (await ResolveWorkflowSourceAsync(workflowId, cancellationToken)).ApplicationType;
+    (await ResolveWorkflowSourceAsync(workflowId, cancellationToken)).ApplicationType;
 
     public async Task<ApplicationType?> GetRouteApplicationTypeAsync(Guid routeId, CancellationToken cancellationToken) =>
         (await ResolveRouteSourceAsync(routeId, cancellationToken)).Source.ApplicationType;
@@ -365,7 +429,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         if (pending.RouteId is { } routeId)
         {
-            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, cancellationToken);
+            // Deliberately NOT the request token: the callback's caller is the provider's browser, which may
+            // disconnect (tab closed, redirect) while the run is still pulling from the EHR. The run must not
+            // die with the connection.
+            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None);
         }
         else if (pending.WorkflowId is { } workflowId)
         {
@@ -437,7 +504,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             return false;
         }
 
-        var context = new WorkflowExecutionContext(Guid.NewGuid(), $"ehr-launch:{sourceConnectionId:N}");
+        var context = new WorkflowExecutionContext(
+            Guid.NewGuid(),
+            $"ehr-launch:{sourceConnectionId:N}",
+            triggeredBy: $"source:{sourceConnectionId:N}",
+            triggerType: "InteractiveLaunch");
         var result = await _workflowOrchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
         await RecordAuditAsync(
@@ -464,7 +535,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken)
                 ?? throw new NotFoundException("WorkflowDefinition", workflowId);
 
-            var context = new WorkflowExecutionContext(Guid.NewGuid(), $"ehr-launch:workflow:{workflowId:N}");
+            var context = new WorkflowExecutionContext(
+                Guid.NewGuid(),
+                $"ehr-launch:workflow:{workflowId:N}",
+                triggeredBy: $"source:{sourceConnectionId:N}",
+                triggerType: "InteractiveLaunch");
             var result = await _workflowOrchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchWorkflowTriggered", "Started",

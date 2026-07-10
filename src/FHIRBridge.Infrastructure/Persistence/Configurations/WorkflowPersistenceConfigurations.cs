@@ -128,6 +128,8 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.CompletedAt);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.ErrorMessage).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.TriggeredBy).HasMaxLength(200);
+        builder.Property(x => x.TriggerType).HasMaxLength(50);
 
         builder.HasMany(x => x.NodeRuns)
             .WithOne()
@@ -139,6 +141,27 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
 
         builder.HasIndex(x => x.WorkflowDefinitionId);
         builder.HasIndex(x => x.StartedAt);
+    }
+}
+
+public sealed class WorkflowNodeRunPayloadEntityTypeConfiguration : IEntityTypeConfiguration<WorkflowNodeRunPayload>
+{
+    public void Configure(EntityTypeBuilder<WorkflowNodeRunPayload> builder)
+    {
+        builder.ToTable("WorkflowNodeRunPayloads");
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.WorkflowRunId).IsRequired();
+        builder.Property(x => x.WorkflowNodeRunId).IsRequired();
+        builder.Property(x => x.NodeType).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.Contract).HasMaxLength(100).IsRequired();
+        // Encrypted at rest (can carry PHI: raw fetched resources, mapped field values) — see EfWorkflowNodeResourceHistoryRecorder.
+        builder.Property(x => x.PayloadJson).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.ItemCount);
+        builder.Property(x => x.RecordedAtUtc).IsRequired();
+
+        builder.HasIndex(x => x.WorkflowRunId);
+        builder.HasIndex(x => x.RecordedAtUtc);
     }
 }
 

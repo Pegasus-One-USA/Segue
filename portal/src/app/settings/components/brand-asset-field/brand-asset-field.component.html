@@ -1,0 +1,37 @@
+<div class="baf" [class.baf--disabled]="disabled()">
+  <label class="baf-label" [for]="fieldId">{{ label() }}</label>
+
+  <div class="baf-row">
+    @if (value()) {
+      <img class="baf-preview" [src]="value()" alt="" />
+    } @else {
+      <div class="baf-preview baf-preview--empty">—</div>
+    }
+
+    <div class="baf-controls">
+      <input
+        [id]="fieldId"
+        class="baf-url"
+        type="text"
+        placeholder="Paste an image URL…"
+        [value]="value()"
+        [disabled]="disabled()"
+        (input)="onUrlInput($any($event.target).value)"
+        (blur)="onTouched?.()"
+      />
+      <div class="baf-actions">
+        <label class="baf-upload-btn">
+          Upload
+          <input type="file" accept="image/*" [disabled]="disabled()" (change)="onFileSelected($event)" hidden />
+        </label>
+        @if (value()) {
+          <button type="button" class="baf-clear-btn" [disabled]="disabled()" (click)="clear()">Clear</button>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (hint()) {
+    <p class="baf-hint">{{ hint() }}</p>
+  }
+</div>

@@ -15,6 +15,7 @@ import { PasswordValidation } from '../../models/password-policy.model';
 import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.component';
 import { SsoAuthApiService } from '../../services/sso-auth-api.service';
 import { SsoResult } from '../../services/sso.service';
+import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
 
 export type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepted' | 'success';
 
@@ -36,6 +37,7 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
     MatIconModule,
     MatProgressSpinnerModule,
     SsoButtonsComponent,
+    AuthBrandHeaderComponent,
   ],
   templateUrl: './set-password.component.html',
   styleUrl: './set-password.component.scss',

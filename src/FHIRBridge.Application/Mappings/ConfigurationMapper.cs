@@ -30,7 +30,8 @@ public static class ConfigurationMapper
                 sourceConnection.Authentication.KeyId),
             sourceConnection.IsEnabled,
             sourceConnection.ApplicationType,
-            ToDto(sourceConnection.Interactive));
+            ToDto(sourceConnection.Interactive),
+            ToDto(sourceConnection.Retrieval));
     }
 
     private static SourceInteractiveConfigurationDto? ToDto(SourceInteractiveConfiguration? interactive) =>
@@ -50,6 +51,40 @@ public static class ConfigurationMapper
                 dto.LaunchUrl,
                 dto.TrustedIssuers ?? [],
                 dto.PatientSelectionMethod);
+
+    private static SourceRetrievalConfigurationDto? ToDto(SourceRetrievalConfiguration? retrieval) =>
+        retrieval is null
+            ? null
+            : new SourceRetrievalConfigurationDto(
+                retrieval.RetrievalMethod,
+                retrieval.ResourceTypes,
+                retrieval.SearchCriteria,
+                retrieval.IncrementalSyncEnabled,
+                retrieval.PageSize,
+                retrieval.SortOrder,
+                retrieval.IncludeParameters,
+                retrieval.RevIncludeParameters,
+                retrieval.RetryPolicy,
+                retrieval.TimeoutSeconds,
+                retrieval.MaxRecordsPerRun,
+                retrieval.LastSuccessfulSyncUtc);
+
+    public static SourceRetrievalConfiguration? ToDomain(SourceRetrievalConfigurationDto? dto) =>
+        dto is null
+            ? null
+            : new SourceRetrievalConfiguration(
+                dto.RetrievalMethod,
+                dto.ResourceTypes ?? [],
+                dto.SearchCriteria,
+                dto.IncrementalSyncEnabled,
+                dto.PageSize,
+                dto.SortOrder,
+                dto.IncludeParameters,
+                dto.RevIncludeParameters,
+                dto.RetryPolicy,
+                dto.TimeoutSeconds,
+                dto.MaxRecordsPerRun,
+                dto.LastSuccessfulSyncUtc);
 
     public static WebhookConfigurationDto ToDto(WebhookConfiguration webhookConfiguration)
     {

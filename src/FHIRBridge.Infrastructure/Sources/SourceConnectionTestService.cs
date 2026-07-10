@@ -127,13 +127,27 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         SourceConnection sourceConnection,
         CancellationToken cancellationToken)
     {
-        var source = await BuildEpicSourceConfigurationAsync(sourceConnection, cancellationToken);
-        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        // A loopback base URL has no real OAuth server — any Token Endpoint configured against it is guaranteed to
+        // fail (unreachable, or misinterpreted as a FHIR REST call by a plain FHIR server). Test reachability
+        // directly against /metadata with no bearer token instead of attempting a real JWT exchange. Real
+        // (non-loopback) Epic endpoints are completely unaffected.
+        var isLoopback = Uri.TryCreate(sourceConnection.BaseUrl, UriKind.Absolute, out var baseUri) && baseUri.IsLoopback;
+
+        string? accessToken = null;
+        if (!isLoopback)
+        {
+            var source = await BuildEpicSourceConfigurationAsync(sourceConnection, cancellationToken);
+            accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        }
+
         var metadataUrl = $"{sourceConnection.BaseUrl.TrimEnd('/')}/metadata";
 
         var httpClient = _httpClientFactory.CreateClient(nameof(SourceConnectionTestService));
         using var request = new HttpRequestMessage(HttpMethod.Get, metadataUrl);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        if (accessToken is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/fhir+json"));
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
@@ -153,7 +167,9 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
             sourceConnection.SourceSystemType.ToString(),
             true,
             "Completed",
-            "Epic SMART Backend Services authentication and FHIR metadata call succeeded.",
+            isLoopback
+                ? "Reached the FHIR metadata endpoint (loopback source — no SMART Backend Services auth attempted)."
+                : "Epic SMART Backend Services authentication and FHIR metadata call succeeded.",
             DateTime.UtcNow);
     }
 

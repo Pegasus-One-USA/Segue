@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Security;
+using FHIRBridge.Observability.Logging;
 using Microsoft.AspNetCore.DataProtection;
 using FHIRBridge.Application;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -18,8 +19,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, loggerConfig) =>
+    loggerConfig.ConfigureFhirBridge(context.Configuration, "FHIRBridge.Api"));
 
 if (builder.Environment.IsDevelopment())
 {
@@ -350,7 +355,7 @@ static void SyncDiscoveredPermissions(WebApplication app)
 
 static async Task SyncDiscoveredPermissionsAsync(
     IUserAccessRepository repository,
-    ILogger logger)
+    Microsoft.Extensions.Logging.ILogger logger)
 {
     // Every permission referenced by a [StandardPermission] attribute. PermissionCatalog already
     // deduplicates these by code and combines descriptions/instances, so each entry here is unique

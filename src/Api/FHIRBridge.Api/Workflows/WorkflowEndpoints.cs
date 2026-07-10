@@ -2,7 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -61,7 +63,9 @@ public static class WorkflowEndpoints
                     return Results.BadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
                 }
 
-                var destination = await configurationService.AddDestinationConfigurationAsync(spec.Destination, cancellationToken);
+                var destination = spec.ExistingId is { } existingDestinationId
+                    ? await configurationService.UpdateDestinationConfigurationAsync(existingDestinationId, spec.Destination, cancellationToken)
+                    : await configurationService.AddDestinationConfigurationAsync(spec.Destination, cancellationToken);
                 destinationIds[spec.NodeId] = destination.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config =>
                 {
@@ -83,7 +87,9 @@ public static class WorkflowEndpoints
                     return Results.BadRequest($"Source spec references unknown node '{spec.NodeId}'.");
                 }
 
-                var source = await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
+                var source = spec.ExistingId is { } existingSourceId
+                    ? await configurationService.UpdateSourceConnectionAsync(existingSourceId, spec.Source, cancellationToken)
+                    : await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
                 sourceIds[spec.NodeId] = source.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config => config["sourceConnectionId"] = source.Id.ToString());
             }
@@ -108,15 +114,16 @@ public static class WorkflowEndpoints
                         $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
                 }
 
-                var mapping = await configurationService.AddMappingProfileAsync(
-                    new CreateMappingProfileRequest(
-                        spec.Name,
-                        spec.ResourceType,
-                        sourceConnectionId,
-                        destinationId,
-                        spec.DestinationObject,
-                        spec.Fields),
-                    cancellationToken);
+                var mappingRequest = new CreateMappingProfileRequest(
+                    spec.Name,
+                    spec.ResourceType,
+                    sourceConnectionId,
+                    destinationId,
+                    spec.DestinationObject,
+                    spec.Fields);
+                var mapping = spec.ExistingId is { } existingMappingId
+                    ? await configurationService.UpdateMappingProfileAsync(existingMappingId, mappingRequest, cancellationToken)
+                    : await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken);
                 mappingIds[spec.NodeId] = mapping.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config => config["mappingProfileId"] = mapping.Id.ToString());
 
@@ -143,7 +150,7 @@ public static class WorkflowEndpoints
                 request.Edges,
                 request.Trigger);
 
-            var workflow = BuildWorkflow(Guid.NewGuid(), definitionRequest);
+            var workflow = BuildWorkflow(request.WorkflowId ?? Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(workflow, cancellationToken);
 
             var result = new WorkflowBuildResult(workflow.Id, sourceIds, destinationIds, mappingIds);
@@ -203,9 +210,7 @@ public static class WorkflowEndpoints
                     }
                 }
 
-                var isLaunch = applicationType is ApplicationType.EhrLaunch
-                    or ApplicationType.Standalone
-                    or ApplicationType.Patient;
+                var isLaunch = applicationType is ApplicationType.EhrLaunch or ApplicationType.Standalone or ApplicationType.Patient;
 
                 var hasDestination = workflow.Nodes.Any(node =>
                     node.Category == WorkflowNodeCategory.Destination
@@ -250,6 +255,7 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IConfigurationRepository configurationRepository,
             IDestinationDataService destinationDataService,
+            IWorkflowRunStore runStore,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -291,8 +297,11 @@ public static class WorkflowEndpoints
                     .FirstOrDefault() ?? string.Empty;
             }
 
+            var runs = await runStore.ListByDefinitionAsync(workflowId, cancellationToken);
+            var pipelineRunIds = runs.Select(run => run.Id).ToArray();
+
             var result = await destinationDataService.ReadSampleAsync(
-                destinationId, destinationObject, top ?? 50, cancellationToken);
+                destinationId, destinationObject, top ?? 50, pipelineRunIds, cancellationToken);
             return Results.Ok(result);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
@@ -337,6 +346,7 @@ public static class WorkflowEndpoints
             WorkflowRunRequest? request,
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
+            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -347,7 +357,9 @@ public static class WorkflowEndpoints
 
             var context = new WorkflowExecutionContext(
                 Guid.NewGuid(),
-                request?.CorrelationId ?? Guid.NewGuid().ToString("N"));
+                request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
+                triggeredBy: currentUserService.CurrentUser.AuditName,
+                triggerType: "Manual");
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             return Results.Ok(result);
@@ -368,6 +380,159 @@ public static class WorkflowEndpoints
             var run = await runStore.GetAsync(runId, cancellationToken);
             return run is null ? Results.NotFound() : Results.Ok(run);
         });
+
+        // ── Execution History (global, across every workflow) ───────────────────────
+        // Backs the portal's Execution History screen for the Runtime Plane — the path actually exercised by
+        // "Run" and interactive (EHR launch / standalone) launches, as opposed to the Configured Pipeline's
+        // separate route-execution history under /api/v1/pipeline-runs/route-executions.
+        group.MapGet("/workflow-runs", async (
+            string? status,
+            string? source,
+            string? triggeredBy,
+            string? search,
+            int? page,
+            int? pageSize,
+            IWorkflowRunStore runStore,
+            IWorkflowDefinitionStore definitionStore,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var runs = await runStore.ListRecentAsync(500, cancellationToken);
+            var workflowsById = (await definitionStore.ListAsync(cancellationToken)).ToDictionary(w => w.Id);
+            var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+            var sourceInfoById = sources.ToDictionary(s => s.Id, s => (s.Name, SystemType: s.SourceSystemType.ToString()));
+
+            var items = new List<WorkflowRunHistoryDto>();
+            foreach (var run in runs)
+            {
+                if (!workflowsById.TryGetValue(run.WorkflowDefinitionId, out var workflow))
+                {
+                    continue;
+                }
+
+                var (sourceName, sourceSystemType) = ResolveWorkflowSource(workflow, sourceInfoById);
+
+                items.Add(new WorkflowRunHistoryDto(
+                    run.Id,
+                    run.WorkflowDefinitionId,
+                    workflow.Name,
+                    sourceName,
+                    sourceSystemType,
+                    run.Status.ToString(),
+                    run.StartedAt,
+                    run.CompletedAt,
+                    run.TriggeredBy,
+                    run.TriggerType,
+                    run.NodeRuns.Count,
+                    run.ErrorMessage));
+            }
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                items = items.Where(x => string.Equals(x.Status, status, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(source))
+            {
+                items = items.Where(x =>
+                    string.Equals(x.SourceName, source, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(x.SourceSystemType, source, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(triggeredBy))
+            {
+                items = items.Where(x =>
+                    string.Equals(x.TriggeredBy, triggeredBy, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(x.TriggerType, triggeredBy, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                items = items.Where(x =>
+                    x.PipelineName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                    || (x.SourceName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+            }
+
+            var effectivePage = page is > 0 ? page.Value : 1;
+            var effectivePageSize = pageSize is > 0 ? pageSize.Value : 25;
+            var totalCount = items.Count;
+            var paged = items
+                .OrderByDescending(x => x.StartedAt)
+                .Skip((effectivePage - 1) * effectivePageSize)
+                .Take(effectivePageSize)
+                .ToList();
+
+            return Results.Ok(new PagedResult<WorkflowRunHistoryDto>(paged, totalCount, effectivePage, effectivePageSize));
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        group.MapGet("/workflow-runs/{runId:guid}/summary", async (
+            Guid runId,
+            IWorkflowRunStore runStore,
+            IWorkflowDefinitionStore definitionStore,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            if (run is null)
+            {
+                return Results.NotFound();
+            }
+
+            var workflow = await definitionStore.GetAsync(run.WorkflowDefinitionId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+            var sourceInfoById = sources.ToDictionary(s => s.Id, s => (s.Name, SystemType: s.SourceSystemType.ToString()));
+            var (sourceName, sourceSystemType) = ResolveWorkflowSource(workflow, sourceInfoById);
+
+            return Results.Ok(new WorkflowRunHistoryDto(
+                run.Id,
+                run.WorkflowDefinitionId,
+                workflow.Name,
+                sourceName,
+                sourceSystemType,
+                run.Status.ToString(),
+                run.StartedAt,
+                run.CompletedAt,
+                run.TriggeredBy,
+                run.TriggerType,
+                run.NodeRuns.Count,
+                run.ErrorMessage));
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads, so
+        // every call is itself audited — the same pattern used for the Configured Pipeline's equivalent endpoint.
+        group.MapGet("/workflow-runs/{runId:guid}/resources", async (
+            Guid runId,
+            int? page,
+            int? pageSize,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            IOperationalAuditService auditService,
+            ICurrentUserService currentUserService,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await recorder.GetPagedAsync(
+                runId,
+                page is > 0 ? page.Value : 1,
+                pageSize is > 0 ? pageSize.Value : 25,
+                cancellationToken);
+
+            await auditService.RecordAsync(
+                new RecordOperationalAuditLogRequest(
+                    null, null, null, null, null, null,
+                    "ExecutionDetailViewed",
+                    "Completed",
+                    $"Execution history detail viewed for workflow run {runId}.",
+                    result.Items.Count,
+                    currentUserService.CurrentUser.AuditName,
+                    null),
+                cancellationToken);
+
+            return Results.Ok(result);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapPost("/workflows/{workflowId:guid}/activate", async (
             Guid workflowId,
@@ -451,6 +616,24 @@ public static class WorkflowEndpoints
 
         entityId = Guid.Empty;
         return false;
+    }
+
+    // First Source-category node whose referenced connection resolves — good enough for Execution History display
+    // (unlike /workflows/summary, this doesn't need the launch-vs-run precedence rule, just a name to show).
+    private static (string? Name, string? SystemType) ResolveWorkflowSource(
+        WorkflowDefinition workflow,
+        IReadOnlyDictionary<Guid, (string Name, string SystemType)> sourceInfoById)
+    {
+        foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Source))
+        {
+            if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId)
+                && sourceInfoById.TryGetValue(sourceId, out var info))
+            {
+                return (info.Name, info.SystemType);
+            }
+        }
+
+        return (null, null);
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)

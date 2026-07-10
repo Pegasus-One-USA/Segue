@@ -11,7 +11,11 @@ export interface DiscoveredEndpoints {
   resourceTypes: string[];
   codeChallengeMethods: string[];
   capabilities: string[];
+  tokenEndpointAuthMethods: string[];
   resourceTypesError: string | null;
+  /** Set when the endpoint has no /.well-known/smart-configuration at all (plain, non-SMART FHIR R4 server) —
+   *  token/authorize above are then empty and must be filled in manually. */
+  smartConfigurationError: string | null;
 }
 
 interface ProbeSmartConfiguration {
@@ -20,12 +24,14 @@ interface ProbeSmartConfiguration {
   scopesSupported: string[];
   codeChallengeMethodsSupported: string[];
   capabilities: string[];
+  tokenEndpointAuthMethodsSupported: string[];
 }
 
 interface ProbeResponse {
   smartConfiguration: ProbeSmartConfiguration;
   resourceTypes: string[];
   resourceTypesError: string | null;
+  smartConfigurationError: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -35,7 +41,9 @@ export class EpicDiscoveryService {
   /**
    * Live SMART discovery: POSTs the base URL to the backend probe, which fetches the source's public
    * `.well-known/smart-configuration` (OAuth endpoints + scopes) and `/metadata` (supported resource types).
-   * Live-only — a failed call surfaces as an error so misconfiguration isn't masked.
+   * Both are best-effort server-side — a plain (non-SMART) FHIR R4 server has no smart-configuration document at
+   * all, which surfaces here as `smartConfigurationError` rather than failing the whole call, so the wizard can
+   * fall back to manual token/authorize entry instead of blocking the rest of the form.
    */
   discover(baseUrl: string, _envKey?: EnvKey): Observable<DiscoveredEndpoints> {
     return this.http.post<ProbeResponse>(SOURCE_DISCOVERY_ENDPOINTS.probe, { baseUrl }).pipe(
@@ -46,7 +54,9 @@ export class EpicDiscoveryService {
         resourceTypes: response.resourceTypes ?? [],
         codeChallengeMethods: response.smartConfiguration.codeChallengeMethodsSupported ?? [],
         capabilities: response.smartConfiguration.capabilities ?? [],
+        tokenEndpointAuthMethods: response.smartConfiguration.tokenEndpointAuthMethodsSupported ?? [],
         resourceTypesError: response.resourceTypesError ?? null,
+        smartConfigurationError: response.smartConfigurationError ?? null,
       })),
     );
   }

@@ -1,0 +1,24 @@
+{
+  "tenantId": "default",
+  "companyName": "FHIRBridge",
+  "primaryColor": "#00A89D",
+  "secondaryColor": "#0076A8",
+  "accentColor": "#007A72",
+  "backgroundColor": "#F5F7FA",
+  "fontFamily": "",
+  "footerText": "FHIRBridge Platform",
+  "supportEmail": "support@fhirbridge.com",
+  "supportPhone": "",
+  "website": "https://fhirbridge.com",
+  "emailFooterText": "FHIRBridge Healthcare Integration Platform",
+  "defaultThemeMode": "light",
+  "assets": {
+    "logoUrl": "",
+    "darkLogoUrl": "",
+    "faviconUrl": "favicon.ico",
+    "loginBackgroundUrl": "",
+    "loginIllustrationUrl": "",
+    "emailLogoUrl": ""
+  },
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}

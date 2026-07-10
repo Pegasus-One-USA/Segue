@@ -8,6 +8,7 @@ import {
   MappingBuildSpec,
   MappingFieldRequest,
   SourceBuildSpec,
+  SourceRetrievalConfigurationRequest,
   WorkflowBuildRequest,
   WorkflowNodeRequest,
   WorkflowTriggerRequest,
@@ -19,6 +20,11 @@ interface DestMappingRow {
   path: string;    // FHIR element path captured by the wizard (e.g. "Patient.name.family")
   target: string;  // destination table / file (e.g. "dbo.Patient")
   column: string;  // destination column
+  // Array-aware metadata stamped by the wizard from the backend FHIR catalog. When present these are
+  // authoritative; when absent (offline/degraded) we fall back to the naive path conversion below.
+  jsonPath?: string;       // e.g. "$.name[*].given[*]"
+  valueType?: string;      // String | Integer | Decimal | Boolean | Date | DateTime | Json
+  arrays?: string[];       // array-ancestor fhir paths
 }
 
 /**
@@ -55,7 +61,7 @@ export class WorkflowBuildAssemblerService {
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
       const fields = this.fieldsFor(id, nodesById);
-      sources.push({ nodeId: id, source: this.buildSource(fields) });
+      sources.push({ nodeId: id, source: this.buildSource(fields), existingId: fields['sourceConnectionId'] || null });
     }
 
     const destinations: DestinationBuildSpec[] = [];
@@ -63,14 +69,19 @@ export class WorkflowBuildAssemblerService {
 
     for (const destNode of graph.nodes.filter(node => this.isDestinationNode(node))) {
       const destFields = this.fieldsFor(destNode.id, nodesById);
-      destinations.push({ nodeId: destNode.id, destination: this.buildDestination(destFields, destNode) });
+      destinations.push({
+        nodeId: destNode.id,
+        destination: this.buildDestination(destFields, destNode),
+        existingId: destFields['destinationId'] || null,
+      });
 
       const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
       const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
       if (!mappingNodeId || !sourceNodeId) continue;
 
+      const mappingFields = this.fieldsFor(mappingNodeId, nodesById);
       const mappingSpec = this.buildMapping(mappingNodeId, sourceNodeId, destNode.id, destFields);
-      if (mappingSpec) mappings.push(mappingSpec);
+      if (mappingSpec) mappings.push({ ...mappingSpec, existingId: mappingFields['mappingProfileId'] || null });
     }
 
     return { ...graph, sources, destinations, mappings };
@@ -108,13 +119,18 @@ export class WorkflowBuildAssemblerService {
       baseUrl: fields['FHIR base URL'] || '',
       authentication: {
         authenticationType: appType === 'Backend' ? 'SmartBackendServices' : 'None',
-        clientId: fields['Active client ID'] || fields['Client ID'] || null,
+        clientId: fields['Client ID'] || fields['Active client ID'] || null,
         tokenEndpoint: fields['Token endpoint'] || null,
         scopes,
         keyId: fields['JWT kid'] || null,
+        // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name) —
+        // required by ConfigurationService.ValidateEpicSourceConnection for any non-interactive Epic source.
+        privateKeyKeyVaultName: fields['Key vault reference'] || null,
+        privateKeySecretName: fields['Secret Name'] || null,
       },
       applicationType: appType,
       interactive,
+      retrieval: appType === 'Backend' ? this.buildRetrieval(fields) : null,
     };
   }
 
@@ -124,6 +140,37 @@ export class WorkflowBuildAssemblerService {
     if (ctx.includes('standalone')) return 'Standalone';
     if (ctx.includes('patient')) return 'Patient';
     return 'Backend';
+  }
+
+  /** Backend System only — maps the wizard's Retrieval Configuration fields onto the backend's retrieval DTO.
+   *  Returns null when no retrieval method was chosen (e.g. the connection is still being drafted). */
+  private buildRetrieval(fields: Record<string, string>): SourceRetrievalConfigurationRequest | null {
+    const retrievalMethod = fields['Retrieval method key'];
+    if (!retrievalMethod) return null;
+
+    const splitList = (raw: string | undefined): string[] =>
+      (raw ?? '').split(',').map(v => v.trim()).filter(Boolean);
+    const toPositiveNumber = (raw: string | undefined): number | null => {
+      const n = Number(raw);
+      return raw && Number.isFinite(n) && n > 0 ? n : null;
+    };
+
+    const includeParameters = splitList(fields['Include (_include)']);
+    const revIncludeParameters = splitList(fields['Reverse include (_revinclude)']);
+
+    return {
+      retrievalMethod,
+      resourceTypes: splitList(fields['Retrieval resource type']),
+      searchCriteria: fields['Search criteria'] || null,
+      incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
+      pageSize: toPositiveNumber(fields['Page size (_count)']),
+      sortOrder: fields['Sort (_sort)'] || null,
+      includeParameters: includeParameters.length ? includeParameters : null,
+      revIncludeParameters: revIncludeParameters.length ? revIncludeParameters : null,
+      retryPolicy: fields['Retry policy'] || null,
+      timeoutSeconds: toPositiveNumber(fields['Timeout (seconds)']),
+      maxRecordsPerRun: toPositiveNumber(fields['Max records per run']),
+    };
   }
 
   // ── destination ─────────────────────────────────────────────────────────────
@@ -195,14 +242,25 @@ export class WorkflowBuildAssemblerService {
     const primaryRows = rows.filter(row => row.resource === primary);
     const destinationObject = primaryRows[0]?.target || this.targetForResource(destFields, primary) || primary;
 
-    const fields: MappingFieldRequest[] = primaryRows.map(row => ({
-      targetField: row.column,
-      jsonPath: this.toJsonPath(row.path, primary),
-      valueType: this.valueTypeFor(row.path),
-      isRequired: false,
-      defaultValue: null,
-      format: null,
-    }));
+    const fields: MappingFieldRequest[] = primaryRows.map(row => {
+      // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
+      // naive conversion only when the catalog was unavailable.
+      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, primary);
+      const arrays = row.arrays ?? [];
+      const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
+      return {
+        targetField: row.column,
+        jsonPath,
+        valueType: row.valueType ?? this.valueTypeFor(row.path),
+        isRequired: false,
+        defaultValue: null,
+        format: null,
+        // A flat destination column takes the first match when the path crosses an array; multi-value
+        // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
+        arrayPolicy: isArrayPath ? 'FirstItem' : 'Scalar',
+        arrayAncestors: arrays.length > 0 ? arrays : null,
+      };
+    });
 
     return {
       nodeId: mappingNodeId,
@@ -234,7 +292,11 @@ export class WorkflowBuildAssemblerService {
     }
   }
 
-  /** Best-effort FHIR element path → JSONPath: strip the leading "Resource." and prefix "$.". */
+  /**
+   * Fallback FHIR element path → JSONPath used only when the wizard could not stamp a catalog-derived
+   * path on the row (offline/degraded). Strips the leading "Resource." and prefixes "$."; it does NOT
+   * infer array-ness — the backend catalog is the source of truth for that (see DestMappingRow.jsonPath).
+   */
   private toJsonPath(path: string, resourceType: string): string {
     let p = path.trim();
     if (p.startsWith(`${resourceType}.`)) p = p.slice(resourceType.length + 1);

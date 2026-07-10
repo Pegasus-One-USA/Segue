@@ -16,4 +16,11 @@ public sealed record SmartConfigurationDto(
     IReadOnlyList<string> GrantTypesSupported,
     IReadOnlyList<string> ResponseTypesSupported,
     IReadOnlyList<string> CodeChallengeMethodsSupported,
-    IReadOnlyList<string> Capabilities);
+    IReadOnlyList<string> Capabilities,
+    IReadOnlyList<string> TokenEndpointAuthMethodsSupported)
+{
+    /// <summary>All-empty document for servers with no SMART discovery endpoint at all (plain FHIR R4 servers) —
+    /// lets the wizard fall back to manual endpoint entry instead of failing the probe outright.</summary>
+    public static SmartConfigurationDto Empty { get; } = new(
+        null, null, null, null, null, [], [], [], [], [], []);
+}

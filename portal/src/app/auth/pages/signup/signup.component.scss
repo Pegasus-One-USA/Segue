@@ -163,11 +163,11 @@
   align-items:   flex-start;
   gap:           10px;
   background:    var(--color-error-soft);
-  border:        1px solid #FECACA;
+  border:        1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
   border-left:   4px solid var(--color-error);
   border-radius: var(--radius-md);
   padding:       12px 16px;
-  color:         #991B1B;
+  color:         var(--color-error-strong);
   font-size:     13.5px;
   line-height:   1.5;
   margin-bottom: 20px;

@@ -33,6 +33,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly ISecretProvider _secretProvider;
     private readonly IOperationalAuditService _auditService;
     private readonly IConfiguredPipelineRunRepository _pipelineRunRepository;
+    private readonly IPipelineRunRouteExecutionRepository _routeExecutionRepository;
+    private readonly IExecutionResourceHistoryRecorder _resourceHistoryRecorder;
     private readonly IResourceNormalizationService _normalizationService;
     private readonly IMappedRecordNormalizationService _mappedRecordNormalizationService;
     private readonly IGovernancePolicyService _governancePolicyService;
@@ -52,6 +54,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         ISecretProvider secretProvider,
         IOperationalAuditService auditService,
         IConfiguredPipelineRunRepository pipelineRunRepository,
+        IPipelineRunRouteExecutionRepository routeExecutionRepository,
+        IExecutionResourceHistoryRecorder resourceHistoryRecorder,
         ILogger<ConfiguredPipelineService> logger,
         IResourceNormalizationService? normalizationService = null,
         IMappedRecordNormalizationService? mappedRecordNormalizationService = null,
@@ -70,6 +74,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _secretProvider = secretProvider;
         _auditService = auditService;
         _pipelineRunRepository = pipelineRunRepository;
+        _routeExecutionRepository = routeExecutionRepository;
+        _resourceHistoryRecorder = resourceHistoryRecorder;
         _normalizationService = normalizationService ?? new PassThroughResourceNormalizationService();
         _mappedRecordNormalizationService = mappedRecordNormalizationService ?? new PassThroughMappedRecordNormalizationService();
         _governancePolicyService = governancePolicyService ?? new DefaultGovernancePolicyService();
@@ -128,6 +134,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
         var config = await LoadConfigurationAsync(cancellationToken);
         var scheduledAtUtc = request.ScheduledAtUtc ?? DateTime.UtcNow;
+
+        // TriggerType is derived from the request shape rather than trusting a caller-supplied value, so it can
+        // never drift from TriggeredBy the way it used to (see CompleteRunAsync's old TriggerType: triggeredBy bug).
+        var triggerType = request.UseBulkExport
+            ? "Bulk"
+            : request.RunDueSchedulesOnly
+                ? "Scheduled"
+                : "Manual";
 
         await RecordAuditAsync(
             pipelineRunId,
@@ -303,6 +317,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         route,
                         resources,
                         request.TriggeredBy,
+                        triggerType,
                         request.CorrelationId,
                         errors,
                         cancellationToken);
@@ -322,6 +337,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             errors,
             startedOnUtc,
             request.TriggeredBy,
+            triggerType,
             request.CorrelationId,
             cancellationToken);
     }
@@ -362,6 +378,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             .ToList();
         var extractedCount = resourcesByType.Sum(group => group.Count());
         var processedResourceTypes = new List<string>();
+        const string triggerType = "Webhook";
 
         await RecordAuditAsync(
             pipelineRunId,
@@ -411,6 +428,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     route,
                     resourcesForType.ToList(),
                     request.TriggeredBy,
+                    triggerType,
                     request.CorrelationId,
                     errors,
                     cancellationToken);
@@ -429,6 +447,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             errors,
             startedOnUtc,
             request.TriggeredBy,
+            triggerType,
             request.CorrelationId,
             cancellationToken);
     }
@@ -440,12 +459,37 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         RouteMappingWorkItem route,
         IReadOnlyCollection<ResourceEnvelope> resources,
         string? triggeredBy,
+        string? triggerType,
         string? correlationId,
         List<string> errors,
         CancellationToken cancellationToken)
     {
         // Source, destination, and resource type are all owned by the route's mapping profile.
         var mappingProfile = route.MappingProfile;
+        // Already resolved once (successfully) to extract `resources`, so this is guaranteed to exist here.
+        var sourceConnection = GetRequired(
+            config.SourceConnections,
+            mappingProfile.SourceConnectionId,
+            "SourceConnection");
+
+        // One durable row per route execution — the Execution History screen's display grain. Name/source are
+        // snapshotted now so history still reads correctly if the mapping profile or source is later renamed.
+        var routeExecutionId = await _routeExecutionRepository.CreateRunningAsync(
+            pipelineRunId,
+            route.Route.Id,
+            mappingProfile.Id,
+            mappingProfile.Name,
+            sourceConnection.Id,
+            sourceConnection.Name,
+            sourceConnection.SourceSystemType.ToString(),
+            triggeredBy,
+            triggerType,
+            DateTime.UtcNow,
+            cancellationToken);
+
+        // Errors accumulated by THIS route only — `errors` is shared across every route in the whole run, so a
+        // before/after count is how we isolate this route's outcome for the route-execution status.
+        var errorCountBefore = errors.Count;
 
         try
         {
@@ -464,6 +508,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     resources.Count,
                     triggeredBy,
                     correlationId,
+                    cancellationToken);
+
+                await _routeExecutionRepository.CompleteAsync(
+                    routeExecutionId,
+                    PipelineRunRouteExecutionStatus.Skipped,
+                    0,
+                    0,
+                    0,
+                    "Skipped: one or more lifecycle dependencies are disabled.",
+                    DateTime.UtcNow,
                     cancellationToken);
 
                 return new RouteExecutionResult(0, 0);
@@ -491,6 +545,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             var governedResources = await PrepareResourcesForRouteAsync(
                 pipelineRunId,
+                routeExecutionId,
                 route.Route,
                 destination,
                 mappingProfile,
@@ -503,6 +558,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             var mappedRecords = await MapResourcesAsync(
                 pipelineRunId,
+                routeExecutionId,
                 mappingProfile,
                 governedResources,
                 errors,
@@ -514,6 +570,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 mappingProfile,
                 mappedRecords,
                 cancellationToken);
+
+            if (writtenCount > 0)
+            {
+                await _resourceHistoryRecorder.RecordStoredAsync(
+                    routeExecutionId,
+                    mappedRecords.Select(record => record.SourceResourceId).ToList(),
+                    cancellationToken);
+            }
 
             await RecordAuditAsync(
                 pipelineRunId,
@@ -528,6 +592,23 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 writtenCount,
                 triggeredBy,
                 correlationId,
+                cancellationToken);
+
+            var routeHadErrors = errors.Count > errorCountBefore;
+            var routeStatus = !routeHadErrors
+                ? PipelineRunRouteExecutionStatus.Completed
+                : writtenCount > 0
+                    ? PipelineRunRouteExecutionStatus.CompletedWithErrors
+                    : PipelineRunRouteExecutionStatus.Failed;
+
+            await _routeExecutionRepository.CompleteAsync(
+                routeExecutionId,
+                routeStatus,
+                resources.Count,
+                mappedRecords.Count,
+                writtenCount,
+                routeHadErrors ? string.Join("; ", errors.Skip(errorCountBefore)) : null,
+                DateTime.UtcNow,
                 cancellationToken);
 
             return new RouteExecutionResult(mappedRecords.Count, writtenCount);
@@ -557,12 +638,23 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 correlationId,
                 cancellationToken);
 
+            await _routeExecutionRepository.CompleteAsync(
+                routeExecutionId,
+                PipelineRunRouteExecutionStatus.Failed,
+                resources.Count,
+                0,
+                0,
+                exception.Message,
+                DateTime.UtcNow,
+                cancellationToken);
+
             return new RouteExecutionResult(0, 0);
         }
     }
 
     private async Task<IReadOnlyCollection<ResourceEnvelope>> PrepareResourcesForRouteAsync(
         Guid pipelineRunId,
+        Guid routeExecutionId,
         ResourcePipelineRoute route,
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
@@ -577,6 +669,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
         foreach (var resource in resources)
         {
+            // Recorded before governance runs — the resource genuinely was fetched from source regardless of
+            // whether it's ultimately allowed through, and later stages update this same row in place.
+            await _resourceHistoryRecorder.RecordFetchedAsync(
+                routeExecutionId, resourceType, resource.ResourceId, resource.RawJson, cancellationToken);
+
             var governanceDecision = await _governancePolicyService.EvaluateAsync(
                 new ResourceGovernanceContext(
                     pipelineRunId,
@@ -590,6 +687,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             if (!governanceDecision.IsAllowed)
             {
+                var denialReason = governanceDecision.DenialReason ?? "Governance policy denied resource access.";
                 errors.Add($"{resourceType}/{resource.ResourceId ?? "unknown"}: Governance denied resource access. {governanceDecision.DenialReason}");
 
                 await RecordAuditAsync(
@@ -601,11 +699,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     resourceType,
                     "ResourceAccessDenied",
                     "Denied",
-                    governanceDecision.DenialReason ?? "Governance policy denied resource access.",
+                    denialReason,
                     1,
                     triggeredBy,
                     correlationId,
                     cancellationToken);
+
+                await _resourceHistoryRecorder.RecordFailedAsync(
+                    routeExecutionId, resourceType, resource.ResourceId, denialReason, cancellationToken);
 
                 continue;
             }
@@ -618,6 +719,17 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     resource.RawJson),
                 cancellationToken);
             var governedJson = normalizationResult.NormalizedJson;
+
+            await _resourceHistoryRecorder.RecordNormalizedAsync(
+                routeExecutionId,
+                resourceType,
+                resource.ResourceId,
+                governedJson,
+                normalizationResult.AppliedProfiles,
+                normalizationResult.Warnings,
+                normalizationResult.DataQualityScore,
+                normalizationResult.MasterPatientId,
+                cancellationToken);
 
             await RecordLineageAsync(
                 pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
@@ -657,6 +769,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IReadOnlyList<string> errors,
         DateTime startedOnUtc,
         string? triggeredBy,
+        string? triggerType,
         string? correlationId,
         CancellationToken cancellationToken)
     {
@@ -695,7 +808,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             completedOnUtc,
             IsEnabled: true,
             TriggeredBy: triggeredBy,
-            TriggerType: triggeredBy);
+            TriggerType: triggerType);
 
         await _pipelineRunRepository.AddAsync(pipelineRun, cancellationToken);
 
@@ -1020,8 +1133,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             _ => throw new NotSupportedException($"Source system '{sourceConnection.SourceSystemType}' is not supported by the configured pipeline.")
         };
 
+        // A loopback base URL has no real OAuth server — skip resolving credential secrets and clear ApplicationType
+        // so CompositeFhirAccessTokenProvider's legacy inference returns an empty token (no Authorization header)
+        // instead of routing into a real JWT/client-credentials exchange. Mirrors SourceConnectionRuntimeResolver;
+        // real (non-loopback) sources are completely unaffected.
+        var isLoopback = Uri.TryCreate(sourceConnection.BaseUrl, UriKind.Absolute, out var baseUri) && baseUri.IsLoopback;
+
         string? privateKeyPem = null;
-        if (sourceConnection.Authentication.PrivateKey is not null)
+        if (!isLoopback && sourceConnection.Authentication.PrivateKey is not null)
         {
             privateKeyPem = await _secretProvider.GetSecretAsync(
                 sourceConnection.Authentication.PrivateKey,
@@ -1029,7 +1148,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         }
 
         string? clientSecret = null;
-        if (sourceConnection.Authentication.ClientSecret is not null)
+        if (!isLoopback && sourceConnection.Authentication.ClientSecret is not null)
         {
             clientSecret = await _secretProvider.GetSecretAsync(
                 sourceConnection.Authentication.ClientSecret,
@@ -1050,11 +1169,12 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             sourceConnection.Id,
             searchParameters,
             clientSecret,
-            ApplicationType: sourceConnection.ApplicationType);
+            ApplicationType: isLoopback ? null : sourceConnection.ApplicationType);
     }
 
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(
         Guid pipelineRunId,
+        Guid routeExecutionId,
         MappingProfile mappingProfile,
         IReadOnlyCollection<ResourceEnvelope> resources,
         List<string> errors,
@@ -1089,12 +1209,20 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 result.Values,
                 resource.RawJson);
 
-            mappedRecords.Add(await _mappedRecordNormalizationService.NormalizeAsync(
+            var normalizedMappedRecord = await _mappedRecordNormalizationService.NormalizeAsync(
                 new MappedRecordNormalizationRequest(
                     resource.RawJson,
                     mappedRecord,
                     mappingFields),
-                cancellationToken));
+                cancellationToken);
+            mappedRecords.Add(normalizedMappedRecord);
+
+            await _resourceHistoryRecorder.RecordMappedAsync(
+                routeExecutionId,
+                mappingProfile.ResourceType,
+                resource.ResourceId,
+                normalizedMappedRecord.Values,
+                cancellationToken);
         }
 
         return mappedRecords;

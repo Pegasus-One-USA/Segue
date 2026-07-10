@@ -101,7 +101,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     private void SetupDiscovery(string? authorize = "https://auth.example.com/authorize", string? token = "https://auth.example.com/token")
     {
         _discovery.Setup(x => x.DiscoverSmartConfigurationAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SmartConfigurationDto(authorize, token, null, null, null, [], [], [], [], []));
+            .ReturnsAsync(new SmartConfigurationDto(authorize, token, null, null, null, [], [], [], [], [], []));
     }
 
     [Fact]

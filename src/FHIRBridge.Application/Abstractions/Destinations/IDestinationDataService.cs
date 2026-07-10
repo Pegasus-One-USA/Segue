@@ -13,5 +13,6 @@ public interface IDestinationDataService
         Guid destinationId,
         string destinationObject,
         int top,
+        IReadOnlyCollection<Guid> pipelineRunIds,
         CancellationToken cancellationToken);
 }

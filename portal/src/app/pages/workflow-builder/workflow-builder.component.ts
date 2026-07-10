@@ -82,14 +82,67 @@ export class WorkflowBuilderComponent implements OnInit {
         return audience.includes('backend');
       }));
 
+  /**
+   * A Backend System source configured through the Search REST retrieval wizard carries its own Run Mode +
+   * Schedule/Poll Frequency (or Full Refresh calendar recurrence) — that config IS the trigger for this workflow,
+   * so it supersedes the manual toolbar control below. Falls back to `null` (toolbar-driven) for anything that
+   * hasn't gone through that wizard step, so older/other workflows keep behaving exactly as before.
+   */
+  private readonly backendRetrievalFields = computed(() =>
+    this.store.nodes()
+      .filter(isSourceNode)
+      .map(node => node.fields ?? {})
+      .find(fields => !!fields['Retrieval method key'] && !!fields['Run mode']) ?? null);
+
+  protected readonly isWizardDrivenTrigger = computed(() => this.backendRetrievalFields() !== null);
+
+  /** Human-readable summary of the wizard-derived trigger, shown in place of the manual toolbar control. */
+  protected readonly wizardTriggerSummary = computed(() => {
+    const fields = this.backendRetrievalFields();
+    if (!fields) return '';
+    switch (fields['Run mode']) {
+      case 'incremental': return `Incremental Sync — ${this.pollFrequencyLabel(fields['Schedule / poll frequency'])}`;
+      case 'full':         return `Full Refresh — ${fields['Full refresh schedule (cron)'] || 'schedule pending'}`;
+      default:              return 'Manual Only — runs on demand';
+    }
+  });
+
+  private pollFrequencyLabel(raw: string | undefined): string {
+    const labels: Record<string, string> = { '5m': 'every 5 min', '15m': 'every 15 min', '30m': 'every 30 min', '1h': 'hourly', '1d': 'daily' };
+    return raw ? (labels[raw] ?? raw) : 'frequency pending';
+  }
+
+  private pollFrequencyToMinutes(raw: string | undefined): number {
+    const minutes: Record<string, number> = { '5m': 5, '15m': 15, '30m': 30, '1h': 60, '1d': 1440 };
+    return raw ? (minutes[raw] ?? 15) : 15;
+  }
+
   onTriggerTypeInput(value: string): void {
     this.triggerType.set(value as 'Manual' | 'Daily' | 'Weekly' | 'Monthly' | 'Cron' | 'Poll');
   }
   onCronInput(value: string): void { this.cronExpression.set(value); }
   onPollMinutesInput(value: string): void { this.pollMinutes.set(Math.max(1, Number(value) || 1)); }
 
-  /** Compiles the Trigger control into the backend trigger DTO. Non-backend workflows never schedule → null. */
+  /**
+   * Compiles the workflow's trigger DTO. A Backend System source configured via the Search REST retrieval wizard
+   * (Run Mode + Schedule/Poll Frequency or Full Refresh calendar recurrence) takes priority — that config already
+   * says exactly how this pipeline should run, so re-deriving the trigger from it avoids the wizard and the toolbar
+   * silently disagreeing about the same workflow's schedule. Falls back to the manual toolbar control for anything
+   * that hasn't gone through that wizard step (including non-backend workflows, which never schedule → null).
+   */
   private buildTrigger(): WorkflowTriggerRequest | null {
+    const wizardFields = this.backendRetrievalFields();
+    if (wizardFields) {
+      switch (wizardFields['Run mode']) {
+        case 'incremental':
+          return { type: 'Poll', intervalMinutes: this.pollFrequencyToMinutes(wizardFields['Schedule / poll frequency']) };
+        case 'full':
+          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+        default:
+          return { type: 'Manual' };
+      }
+    }
+
     if (!this.isBackendAudience()) {
       return null;
     }
@@ -137,9 +190,12 @@ export class WorkflowBuilderComponent implements OnInit {
 
   /**
    * Single "Save". Behaves by context:
-   * - Editing an existing workflow (id already set) → update it in place (PUT); never re-creates config records.
-   * - New canvas with wizard-drawn source/destination specs → create those records + save (POST /workflows/build).
-   * - New canvas referencing existing configs by id (or empty) → plain design save.
+   * - Canvas carries wizard-drawn source/destination specs → create-on-save (POST /workflows/build). When editing an
+   *   already-built workflow, the existing workflow id (and each spec's existingId, sourced from the node's own
+   *   fields) is passed along so the server updates the workflow definition and its Source/Destination/MappingProfile
+   *   records in place instead of duplicating them — this is what makes edits to retrieval/connection config actually
+   *   reach the backing entity, not just the node's display config.
+   * - Canvas has no such specs (pure picker-by-id or transform-only) → plain design save (PUT).
    * Interactive/launch workflows are saved enabled with their source binding (build enables by default; the plain-save
    * path activates when a launch source id is present).
    */
@@ -153,40 +209,36 @@ export class WorkflowBuilderComponent implements OnInit {
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
 
-    // Editing an existing workflow → update in place. Re-provisioning configs here would create duplicates.
-    if (existingId) {
-      this.saveWorkflow(name, existingId, isLaunch);
-      return;
-    }
-
-    // New workflow: create-on-save when the canvas carries wizard-drawn source/destination specs.
     const request = this.buildAssembler.assemble(name, this.buildTrigger());
     const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
     if (hasSpecs) {
-      this.buildWorkflow(request);
+      this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
       return;
     }
 
-    // Otherwise the canvas references existing configs by id (or is empty) → plain design save.
-    this.saveWorkflow(name, null, isLaunch);
+    // No wizard-drawn specs → plain design save.
+    this.saveWorkflow(name, existingId, isLaunch);
   }
 
   private buildWorkflow(request: WorkflowBuildRequest): void {
+    const isUpdate = !!request.workflowId;
     this.workflowBusy.set(true);
-    this.workflowStatus.set('Creating configs + saving workflow...');
+    this.workflowStatus.set(isUpdate ? 'Syncing configs + saving workflow...' : 'Creating configs + saving workflow...');
     this.workflowApi.build(request).subscribe({
       next: result => {
         this.currentWorkflowId.set(result.workflowId);
         this.workflowIdInput.set(result.workflowId);
-        const created =
+        const synced =
           Object.keys(result.sourceConnectionIds).length +
           Object.keys(result.destinationIds).length +
           Object.keys(result.mappingProfileIds).length;
         const unmapped = this.buildAssembler.lastUnmappedResources;
         const caveat = unmapped.length ? ` (not wired: ${unmapped.join(', ')})` : '';
-        this.workflowStatus.set(`Created ${created} config(s) + saved workflow.${caveat}`);
-        this.toast.show('Workflow created', `Provisioned configs and saved. You can Run it now.${caveat}`);
+        const verb = isUpdate ? 'Synced' : 'Created';
+        this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
+        this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.workflowBusy.set(false);
+        this.resetCanvasAndWorkflowState();
       },
       error: err => {
         const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Create-on-save failed.';
@@ -246,10 +298,13 @@ export class WorkflowBuilderComponent implements OnInit {
     const t = TRANSFORMS.find(x => x.id === e.transformId);
     if (!t) return;
 
-    // Editing an existing destination node's configuration (dest wizard edit flow).
+    // Editing an existing destination node's configuration (dest wizard edit flow). Merge onto the node's existing
+    // fields rather than replacing them outright — server-injected machine keys (destinationId, mappingProfileId,
+    // secretKeyVaultName/secretName from create-on-save) aren't surfaced as form controls here and must survive.
     if (e.editNodeId) {
+      const previousFields = this.store.byId(e.editNodeId)?.fields ?? {};
       this.store.updateNode(e.editNodeId, {
-        fields: { '__name': t.name, ...(e.config ?? {}) },
+        fields: { ...previousFields, '__name': t.name, ...(e.config ?? {}) },
       });
       this.toast.show('Updated', `${t.name} configuration updated.`);
       return;
@@ -366,17 +421,22 @@ export class WorkflowBuilderComponent implements OnInit {
 
             if (!activate) {
               this.workflowStatus.set(`Saved ${saved.name}.`);
+              this.toast.success('Workflow saved', `"${saved.name}" was saved.`);
               this.workflowBusy.set(false);
+              this.resetCanvasAndWorkflowState();
               return;
             }
 
             this.workflowApi.activate(saved.id).subscribe({
               next: active => {
                 this.workflowStatus.set(`Saved and activated ${active.name}.`);
+                this.toast.success('Workflow saved', `"${active.name}" was saved and activated.`);
                 this.workflowBusy.set(false);
+                this.resetCanvasAndWorkflowState();
               },
               error: () => {
                 this.workflowStatus.set('Saved workflow, but activation failed.');
+                this.toast.warning('Activation failed', `"${saved.name}" was saved but could not be activated.`);
                 this.workflowBusy.set(false);
               },
             });
@@ -392,6 +452,17 @@ export class WorkflowBuilderComponent implements OnInit {
         this.workflowBusy.set(false);
       },
     });
+  }
+
+  /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */
+  private resetCanvasAndWorkflowState(): void {
+    this.store.reset();
+    this.currentWorkflowId.set(null);
+    this.workflowName.set('');
+    this.workflowIdInput.set('');
+    this.triggerType.set('Manual');
+    this.cronExpression.set('0 0 * * *');
+    this.pollMinutes.set(15);
   }
 
   private addStubSource(s: Source): void {

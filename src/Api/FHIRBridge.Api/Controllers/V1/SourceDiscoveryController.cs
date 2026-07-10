@@ -35,9 +35,19 @@ public sealed class SourceDiscoveryController : ControllerBase
             return BadRequest("baseUrl is required.");
         }
 
-        // SMART discovery is authoritative (fail the call if it can't be read). Resource types are best-effort — some
-        // servers gate /metadata behind auth, so surface that as a message rather than failing the whole probe.
-        var smart = await _probeService.ProbeSmartConfigurationAsync(request.BaseUrl, cancellationToken);
+        // Both probes are best-effort: a plain (non-SMART) FHIR R4 server — e.g. a bare HAPI test instance — has no
+        // /.well-known/smart-configuration at all, and some servers gate /metadata behind auth. Either failing
+        // shouldn't fail the whole probe; the wizard falls back to manual endpoint entry / the static resource list.
+        var smart = SmartConfigurationDto.Empty;
+        string? smartConfigurationError = null;
+        try
+        {
+            smart = await _probeService.ProbeSmartConfigurationAsync(request.BaseUrl, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            smartConfigurationError = ex.Message;
+        }
 
         IReadOnlyList<string> resourceTypes = [];
         string? resourceTypesError = null;
@@ -50,6 +60,6 @@ public sealed class SourceDiscoveryController : ControllerBase
             resourceTypesError = ex.Message;
         }
 
-        return Ok(new SourceDiscoveryProbeResult(smart, resourceTypes, resourceTypesError));
+        return Ok(new SourceDiscoveryProbeResult(smart, resourceTypes, resourceTypesError, smartConfigurationError));
     }
 }

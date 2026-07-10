@@ -1,3 +1,5 @@
+<app-toast />
+
 <div class="list-page">
 
   <!-- Header -->
@@ -6,10 +8,16 @@
       <h1 class="page-title">Workflows</h1>
       <p class="page-sub">Launch interactive (EHR / patient) workflows, run backend workflows, and inspect what they wrote.</p>
     </div>
-    <button class="btn-secondary" type="button" (click)="reload()" [disabled]="loading()">
-      <span class="ico-refresh" [class.spin]="loading()">&#8635;</span>
-      Refresh
-    </button>
+    <div class="page-head-actions">
+      <button class="btn-secondary" type="button" (click)="reload()" [disabled]="loading()">
+        <span class="ico-refresh" [class.spin]="loading()">&#8635;</span>
+        Refresh
+      </button>
+      <button class="btn-cta" type="button" (click)="onNewWorkflow()">
+        <span class="btn-ico">&#43;</span>
+        New Workflow
+      </button>
+    </div>
   </div>
 
   <!-- Filter -->
@@ -50,8 +58,8 @@
             <th>Source</th>
             <th>Audience</th>
             <th>Status</th>
-            <th class="col-num">Nodes</th>
-            <th class="col-num">Edges</th>
+            <!-- <th class="col-num">Nodes</th> -->
+            <!-- <th class="col-num">Edges</th> -->
             <th>Last Run</th>
             <th class="col-actions">Actions</th>
           </tr>
@@ -84,8 +92,8 @@
                   {{ w.status }}
                 </span>
               </td>
-              <td class="col-num">{{ w.nodes }}</td>
-              <td class="col-num">{{ w.edges }}</td>
+              <!-- <td class="col-num">{{ w.nodes }}</td> -->
+              <!-- <td class="col-num">{{ w.edges }}</td> -->
               <td>
                 @if (w.lastRun) {
                   <div class="lastrun">
@@ -166,7 +174,13 @@
       <div class="state-block">
         <div class="empty-icon">&#9889;</div>
         <h3>{{ searchQuery() ? 'No workflows matched your search' : 'No workflows yet' }}</h3>
-        <p>{{ searchQuery() ? 'Try a different search term.' : 'Build a workflow in the Pipeline Builder to see it here.' }}</p>
+        <p>{{ searchQuery() ? 'Try a different search term.' : 'Create your first workflow to see it here.' }}</p>
+        @if (!searchQuery()) {
+          <button class="btn-cta" type="button" (click)="onNewWorkflow()">
+            <span class="btn-ico">&#43;</span>
+            New Workflow
+          </button>
+        }
       </div>
     }
   </div>

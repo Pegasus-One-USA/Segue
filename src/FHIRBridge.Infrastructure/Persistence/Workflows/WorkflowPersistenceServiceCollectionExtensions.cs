@@ -24,6 +24,7 @@ public static class WorkflowPersistenceServiceCollectionExtensions
         // Scoped, because both stores depend on the scoped FHIRBridgeDbContext.
         services.AddScoped<IWorkflowDefinitionStore, SqlWorkflowDefinitionStore>();
         services.AddScoped<IWorkflowRunStore, SqlWorkflowRunStore>();
+        services.AddScoped<IWorkflowNodeResourceHistoryRecorder, EfWorkflowNodeResourceHistoryRecorder>();
 
         // Scenario B: gate + project + resolve the launch graph. Registered here so ILaunchWorkflowResolver's
         // dependency on the (SQL) IWorkflowDefinitionStore is always satisfiable; hosts that don't opt into

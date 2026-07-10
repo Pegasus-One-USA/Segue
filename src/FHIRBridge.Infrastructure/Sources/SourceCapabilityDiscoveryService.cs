@@ -59,13 +59,26 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
                 $"Capability discovery is not implemented for {sourceConnection.SourceSystemType}.");
         }
 
-        var configuration = await BuildEpicSourceConfigurationAsync(sourceConnection, cancellationToken);
-        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(configuration, cancellationToken);
+        // A loopback base URL has no real OAuth server — skip the JWT exchange and call /metadata unauthenticated,
+        // mirroring SourceConnectionTestService/SourceConnectionRuntimeResolver. Real (non-loopback) Epic endpoints
+        // are completely unaffected.
+        var isLoopback = Uri.TryCreate(sourceConnection.BaseUrl, UriKind.Absolute, out var baseUri) && baseUri.IsLoopback;
+
+        string? accessToken = null;
+        if (!isLoopback)
+        {
+            var configuration = await BuildEpicSourceConfigurationAsync(sourceConnection, cancellationToken);
+            accessToken = await _accessTokenProvider.GetAccessTokenAsync(configuration, cancellationToken);
+        }
+
         var metadataUrl = $"{sourceConnection.BaseUrl.TrimEnd('/')}/metadata";
 
         var httpClient = _httpClientFactory.CreateClient(nameof(SourceCapabilityDiscoveryService));
         using var request = new HttpRequestMessage(HttpMethod.Get, metadataUrl);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        if (accessToken is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/fhir+json"));
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
@@ -175,7 +188,8 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
             GetStringArray("grant_types_supported"),
             GetStringArray("response_types_supported"),
             GetStringArray("code_challenge_methods_supported"),
-            GetStringArray("capabilities"));
+            GetStringArray("capabilities"),
+            GetStringArray("token_endpoint_auth_methods_supported"));
     }
 
     private async Task<FhirSourceConfiguration> BuildEpicSourceConfigurationAsync(

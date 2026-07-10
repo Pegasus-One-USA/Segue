@@ -1,0 +1,19 @@
+<header class="abh">
+  <div class="abh-icon" aria-hidden="true">
+    @if (branding.effectiveLogoUrl()) {
+      <img [src]="branding.effectiveLogoUrl()" [alt]="branding.current().companyName" />
+    } @else {
+      <svg width="40" height="40" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="10" fill="var(--color-primary)"/>
+        <path d="M10 18h16M18 10v16" stroke="var(--color-on-primary)" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="18" cy="18" r="5" stroke="var(--color-on-primary)" stroke-width="2"/>
+      </svg>
+    }
+  </div>
+  <div class="abh-text">
+    <span class="abh-brand">{{ branding.current().companyName }}</span>
+    @if (branding.isDefault()) {
+      <span class="abh-tag">Healthcare Integration Platform</span>
+    }
+  </div>
+</header>

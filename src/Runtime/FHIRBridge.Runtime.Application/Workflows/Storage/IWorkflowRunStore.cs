@@ -16,4 +16,9 @@ public interface IWorkflowRunStore
     Task<IReadOnlyCollection<WorkflowRun>> ListByDefinitionAsync(
         Guid workflowDefinitionId,
         CancellationToken cancellationToken);
+
+    /// <summary>Most recent runs across every workflow definition, newest first — backs the global Execution History list.</summary>
+    Task<IReadOnlyCollection<WorkflowRun>> ListRecentAsync(
+        int count,
+        CancellationToken cancellationToken);
 }

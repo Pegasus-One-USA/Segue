@@ -19,8 +19,8 @@
   border-radius: 10px; cursor: pointer;
   transition: background .15s, border-color .15s;
 
-  &:hover { background: rgba(0,168,157,.07); border-color: rgba(0,168,157,.2); }
-  .um-wrap.open & { background: rgba(0,168,157,.1); border-color: rgba(0,168,157,.3); }
+  &:hover { background: color-mix(in srgb, var(--color-primary) 7%, transparent); border-color: color-mix(in srgb, var(--color-primary) 20%, transparent); }
+  .um-wrap.open & { background: color-mix(in srgb, var(--color-primary) 10%, transparent); border-color: color-mix(in srgb, var(--color-primary) 30%, transparent); }
 }
 
 .um-avatar {
@@ -34,7 +34,7 @@
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
 }
 .um-trigger-name {
-  font-size: 13px; font-weight: 600; color: #1E293B; line-height: 1.2;
+  font-size: 13px; font-weight: 600; color: var(--color-ink); line-height: 1.2;
 }
 .um-trigger-role {
   font-size: 11px; color: var(--color-muted); line-height: 1.2;
@@ -71,7 +71,7 @@
 .um-header {
   display: flex; align-items: flex-start; gap: 14px;
   padding: 18px 18px 16px;
-  background: linear-gradient(135deg, rgba(0,168,157,.06) 0%, rgba(0,168,157,.02) 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 6%, transparent) 0%, color-mix(in srgb, var(--color-primary) 2%, transparent) 100%);
 }
 
 .um-header-avatar {
@@ -79,14 +79,14 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; font-weight: 700; color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(0,168,157,.3);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
 .um-header-info {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
 }
 .um-header-name {
-  font-size: 15px; font-weight: 700; color: #0F172A;
+  font-size: 15px; font-weight: 700; color: var(--color-ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .um-header-email {
@@ -96,7 +96,8 @@
 .um-header-role {
   display: inline-block; margin-top: 4px;
   font-size: 11px; font-weight: 600;
-  background: rgba(0,168,157,.1); border-radius: 99px;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent); border-radius: 99px;
   padding: 2px 8px;
 }
 .um-header-org {
@@ -105,7 +106,7 @@
 
 /* ── Divider ──────────────────────────────────────────────────────── */
 .um-divider {
-  height: 1px; background: #F1F5F9; margin: 0;
+  height: 1px; background: var(--color-border); margin: 0;
 }
 
 /* ── Sections & Items ─────────────────────────────────────────────── */
@@ -123,7 +124,7 @@
 
 .um-item-icon {
   width: 32px; height: 32px; border-radius: 8px;
-  background: #F1F5F9; display: flex; align-items: center; justify-content: center;
+  background: var(--color-side); display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 
   svg { width: 16px; height: 16px; color: var(--color-muted); }
@@ -132,16 +133,16 @@
 .um-item-body {
   flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;
 }
-.um-item-label  { font-size: 13.5px; font-weight: 600; color: #1E293B; }
+.um-item-label  { font-size: 13.5px; font-weight: 600; color: var(--color-ink); }
 .um-item-sub    { font-size: 11.5px; color: var(--color-muted-2); }
-.um-item-arrow  { width: 14px; height: 14px; color: #CBD5E1; flex-shrink: 0; }
+.um-item-arrow  { width: 14px; height: 14px; color: var(--color-muted-2); flex-shrink: 0; }
 
 /* ── Appearance section ───────────────────────────────────────────── */
 .um-section--appearance { padding: 10px 14px 12px; }
 
 .um-appear-label {
   display: flex; align-items: center; gap: 10px;
-  font-size: 13px; font-weight: 600; color: #1E293B; margin-bottom: 8px;
+  font-size: 13px; font-weight: 600; color: var(--color-ink); margin-bottom: 8px;
 
   .um-item-icon { width: 28px; height: 28px; }
   svg { width: 15px; height: 15px; }
@@ -158,7 +159,7 @@
   cursor: pointer; transition: all .12s;
 
   svg { width: 13px; height: 13px; }
-  &:hover { border-color: var(--color-primary); color: var(--color-primary); background: #F0FDFC; }
+  &:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
   &.active {
     border-color: var(--color-primary); background: var(--color-primary-soft);
     color: var(--color-primary); font-weight: 600;
@@ -167,16 +168,16 @@
 
 /* ── Logout section ──────────────────────────────────────────────── */
 .um-item--logout {
-  .um-item-icon { background: #FFF1F2; svg { color: #E11D48; } }
-  .um-item-label { color: #E11D48; }
-  &:hover { background: #FFF1F2; }
+  .um-item-icon { background: var(--color-error-soft); svg { color: var(--color-error); } }
+  .um-item-label { color: var(--color-error); }
+  &:hover { background: var(--color-error-soft); }
 }
 
 .um-logout-confirm {
   padding: 8px 12px 10px;
 }
 .um-logout-q {
-  font-size: 13px; font-weight: 600; color: #1E293B; margin: 0 0 10px;
+  font-size: 13px; font-weight: 600; color: var(--color-ink); margin: 0 0 10px;
 }
 .um-logout-btns {
   display: flex; gap: 8px;
@@ -187,10 +188,10 @@
   font-size: 13px; font-weight: 600; cursor: pointer; transition: all .12s;
 }
 .um-logout-cancel {
-  background: #F1F5F9; border: 1px solid var(--color-border); color: #475569;
+  background: var(--color-side); border: 1px solid var(--color-border); color: var(--color-ink-2);
   &:hover { background: var(--color-border); }
 }
 .um-logout-ok {
-  background: #E11D48; border: 1px solid #E11D48; color: #fff;
-  &:hover { background: #BE123C; }
+  background: var(--color-error); border: 1px solid var(--color-error); color: #fff;
+  &:hover { background: color-mix(in srgb, var(--color-error) 80%, black); }
 }

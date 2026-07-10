@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(dotnet run *)",
+      "Bash(tee /tmp/fhirbridge-api.log)",
+      "Bash(npm start *)",
+      "Bash(tee /tmp/fhirbridge-portal.log)",
+      "Read(//tmp/**)",
+      "Bash(netstat -ano)",
+      "Bash(rm -f /tmp/fhirbridge-api.log)",
+      "Bash(curl -sk -o /dev/null -w \"%{http_code}\\\\n\" https://localhost:5000/swagger/index.html)",
+      "Bash(curl -sk -o /dev/null -w \"%{http_code}\\\\n\" https://localhost:5000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:4200/)",
+      "Bash(curl -sk -o /dev/null -w \"API swagger: %{http_code}\\\\n\" https://localhost:5000/swagger/index.html)",
+      "Bash(powershell -Command \"Get-Process -Id 7832 | Select-Object Id,ProcessName,StartTime\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/swagger/index.html)",
+      "Bash(powershell -Command \"Stop-Process -Id 7832 -Force; Start-Sleep -Seconds 2; if \\(Get-Process -Id 7832 -ErrorAction SilentlyContinue\\) { 'still running' } else { 'stopped' }\")",
+      "Bash(curl -sk -o /dev/null -w '%{http_code}' https://localhost:5000/swagger/index.html)",
+      "Bash(echo \"API https swagger: $\\(curl -sk -o /dev/null -w '%{http_code}' https://localhost:5000/swagger/index.html\\)\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200/)",
+      "Bash(echo \"Portal: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200/\\)\")",
+      "Bash(echo \"API https swagger: $\\(curl -sk -o /dev/null -w '%{http_code}' https://localhost:5000/swagger/index.html 2>/dev/null\\)\")",
+      "Bash(echo \"Portal: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200/ 2>/dev/null\\)\")",
+      "PowerShell($conn = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { $conn.OwningProcess | Select-Object -Unique | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; if \\($p\\) { \"Stopping $\\($p.ProcessName\\) \\($\\($p.Id\\)\\)\"; Stop-Process -Id $_ -Force } } } else { \"nothing on 5000\" }; Start-Sleep 2; if \\(Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue\\) { \"5000 still in use\" } else { \"5000 free\" })",
+      "Bash(dotnet build *)",
+      "PowerShell($conn = Get-NetTCPConnection -LocalPort 4200 -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { $conn.OwningProcess | Select-Object -Unique | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; if \\($p\\) { \"Stopping $\\($p.ProcessName\\) \\($\\($p.Id\\)\\)\"; Stop-Process -Id $_ -Force } } } else { \"nothing on 4200\" }; Start-Sleep 2; if \\(Get-NetTCPConnection -LocalPort 4200 -State Listen -ErrorAction SilentlyContinue\\) { \"4200 still in use\" } else { \"4200 free\" })",
+      "Bash(rm -f /tmp/fhirbridge-portal.log)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html)",
+      "Bash(echo \"API swagger: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html\\)\")",
+      "Bash(echo \"API: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html 2>/dev/null || echo down\\)\")"
+    ]
+  }
+}

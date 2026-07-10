@@ -121,6 +121,20 @@ export interface SourceInteractiveConfigurationRequest {
   patientSelectionMethod?: string | null;
 }
 
+export interface SourceRetrievalConfigurationRequest {
+  retrievalMethod: string;                    // search-rest | subscription | webhook | bulk-export
+  resourceTypes: string[];
+  searchCriteria?: string | null;
+  incrementalSyncEnabled?: boolean;
+  pageSize?: number | null;
+  sortOrder?: string | null;
+  includeParameters?: string[] | null;
+  revIncludeParameters?: string[] | null;
+  retryPolicy?: string | null;
+  timeoutSeconds?: number | null;
+  maxRecordsPerRun?: number | null;
+}
+
 export interface CreateSourceConnectionRequest {
   name: string;
   sourceSystemType: string;                   // Sample | Epic | ...
@@ -128,6 +142,7 @@ export interface CreateSourceConnectionRequest {
   authentication: SourceAuthenticationRequest;
   applicationType?: string | null;           // Backend | EhrLaunch | Standalone | Patient
   interactive?: SourceInteractiveConfigurationRequest | null;
+  retrieval?: SourceRetrievalConfigurationRequest | null;
 }
 
 export interface CreateDestinationConfigurationRequest {
@@ -146,10 +161,14 @@ export interface MappingFieldRequest {
   isRequired: boolean;
   defaultValue?: string | null;
   format?: string | null;
+  arrayPolicy?: string;                        // Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson | RejectIfMultiple
+  arrayAncestors?: string[] | null;            // array-ancestor fhir paths (child-table alignment)
 }
 
-export interface SourceBuildSpec { nodeId: string; source: CreateSourceConnectionRequest; }
-export interface DestinationBuildSpec { nodeId: string; destination: CreateDestinationConfigurationRequest; }
+// existingId: when the node already carries an id from a prior create-on-save (round-tripped through node.fields on
+// load-and-edit), the server updates that record in place instead of provisioning a duplicate.
+export interface SourceBuildSpec { nodeId: string; source: CreateSourceConnectionRequest; existingId?: string | null; }
+export interface DestinationBuildSpec { nodeId: string; destination: CreateDestinationConfigurationRequest; existingId?: string | null; }
 export interface MappingBuildSpec {
   nodeId: string;
   sourceNodeId: string;
@@ -158,6 +177,7 @@ export interface MappingBuildSpec {
   resourceType: string;
   destinationObject: string;
   fields: MappingFieldRequest[];
+  existingId?: string | null;
 }
 
 export interface WorkflowBuildRequest {
@@ -169,6 +189,9 @@ export interface WorkflowBuildRequest {
   destinations?: DestinationBuildSpec[];
   mappings?: MappingBuildSpec[];
   trigger?: WorkflowTriggerRequest | null;
+  // Set when re-saving an already-built workflow: the server updates that workflow definition (and, paired with each
+  // spec's existingId, the Source/Destination/MappingProfile records) in place instead of creating duplicates.
+  workflowId?: string | null;
 }
 
 export interface WorkflowBuildResult {

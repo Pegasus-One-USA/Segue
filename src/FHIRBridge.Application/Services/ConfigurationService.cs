@@ -53,7 +53,8 @@ public sealed class ConfigurationService : IConfigurationService
             request.BaseUrl,
             ConfigurationMapper.ToDomain(request.Authentication),
             request.ApplicationType,
-            ConfigurationMapper.ToDomain(request.Interactive));
+            ConfigurationMapper.ToDomain(request.Interactive),
+            ConfigurationMapper.ToDomain(request.Retrieval));
 
         await _repository.AddSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
@@ -78,7 +79,8 @@ public sealed class ConfigurationService : IConfigurationService
             request.BaseUrl,
             ConfigurationMapper.ToDomain(request.Authentication),
             request.ApplicationType,
-            ConfigurationMapper.ToDomain(request.Interactive));
+            ConfigurationMapper.ToDomain(request.Interactive),
+            ConfigurationMapper.ToDomain(request.Retrieval));
 
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
@@ -588,6 +590,42 @@ public sealed class ConfigurationService : IConfigurationService
         {
             ValidateEpicSourceConnection(request);
         }
+
+        // Retrieval config is a Backend System concept (vendor-agnostic — Epic, Cerner, or any other Backend
+        // source) independent of the Epic-specific checks above; interactive audiences (EHR launch / standalone /
+        // patient) never populate it, so this is a no-op for them.
+        if (request.ApplicationType == ApplicationType.Backend && request.Retrieval is not null)
+        {
+            ValidateRetrievalConfiguration(request.Retrieval);
+        }
+    }
+
+    private static void ValidateRetrievalConfiguration(SourceRetrievalConfigurationDto retrieval)
+    {
+        if (string.IsNullOrWhiteSpace(retrieval.RetrievalMethod))
+        {
+            throw new InvalidOperationException("A data retrieval method is required for Backend System sources.");
+        }
+
+        if (retrieval.RetrievalMethod == "search-rest" && (retrieval.ResourceTypes is null || retrieval.ResourceTypes.Length == 0))
+        {
+            throw new InvalidOperationException("At least one resource type is required for Search (REST) retrieval.");
+        }
+
+        if (retrieval.PageSize is <= 0)
+        {
+            throw new InvalidOperationException("Page size must be a positive number.");
+        }
+
+        if (retrieval.TimeoutSeconds is <= 0)
+        {
+            throw new InvalidOperationException("Timeout must be a positive number of seconds.");
+        }
+
+        if (retrieval.MaxRecordsPerRun is <= 0)
+        {
+            throw new InvalidOperationException("Max records per run must be a positive number.");
+        }
     }
 
     private static void ValidateEpicSourceConnection(CreateSourceConnectionRequest request)
@@ -628,6 +666,15 @@ public sealed class ConfigurationService : IConfigurationService
             return;
         }
 
+        // A loopback base URL (e.g. docker-compose's local HAPI FHIR) is never a real Epic tenant — it has no OAuth
+        // server to exchange a private_key_jwt assertion with, so the SMART Backend Services requirement below
+        // would be unsatisfiable no matter what's configured. Skip it entirely for loopback; any real (non-loopback)
+        // Epic endpoint still requires full JWT/Key Vault setup, unchanged.
+        if (IsLoopbackUrl(request.BaseUrl))
+        {
+            return;
+        }
+
         // Backend Services (machine-to-machine): client_credentials + private_key_jwt.
         if (request.Authentication.AuthenticationType != AuthenticationType.SmartBackendServices)
         {
@@ -648,13 +695,31 @@ public sealed class ConfigurationService : IConfigurationService
         }
     }
 
+    private static bool IsLoopbackUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.IsLoopback;
+
     private static void ValidateHttpsUrl(string? value, string fieldName)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
         {
             throw new InvalidOperationException($"{fieldName} must be an absolute HTTPS URL.");
         }
+
+        if (string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Mirrors SourceConnection.ValidateBaseUrl's loopback exception, so a local/dev FHIR server (e.g.
+        // docker-compose's HAPI FHIR at http://localhost:8080/fhir) can be configured without relaxing the HTTPS
+        // requirement for real endpoints.
+        if (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) && uri.IsLoopback)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"{fieldName} must be an absolute HTTPS URL (plain HTTP is allowed only for loopback addresses).");
     }
 
     private Task RecordConfigurationAuditAsync(

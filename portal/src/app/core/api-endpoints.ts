@@ -48,9 +48,28 @@ export const DESTINATION_ENDPOINTS = {
   schema:        (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
 };
 
+// ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
+// Array-aware FHIR element metadata (correct JSONPaths, cardinality, array ancestors) generated from
+// the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
+export const MAPPING_ENDPOINTS = {
+  resources:     `${API_V1_BASE}/mapping/catalog/resources`,
+  resourceFields: (resourceType: string) =>
+    `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
+};
+
+// ─── Execution History (WorkflowEndpoints — api/v1/workflow-runs) ──────────────
+// Backs the Runtime Plane's execution history (the path "Run" and interactive EHR/standalone launches actually
+// take). The Configured Pipeline has its own parallel route-execution history under /pipeline-runs/route-executions,
+// used only by the route/schedule/webhook path — not currently surfaced in the portal since it has no UI trigger.
+export const EXECUTION_HISTORY_ENDPOINTS = {
+  list:      `${API_V1_BASE}/workflow-runs`,
+  byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
+  resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
 };
 
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────
