@@ -118,6 +118,11 @@ public static class DependencyInjection
             // path self-seeds the same catalog in InMemoryUserAccessRepository's constructor.
             services.AddScoped<IRbacBootstrapper, RbacBootstrapper>();
 
+            // EHR vendor endpoint-directory importers (currently just Epic's open.epic.com/Endpoints/R4) — only
+            // registered in the DB path, same reasoning as IRbacBootstrapper above. Adding a new vendor's directory
+            // is registering one more IEhrEndpointDirectorySeeder here; Program.cs runs every registered one.
+            services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
+
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IOperationalAuditService, EfOperationalAuditService>();
@@ -161,6 +166,7 @@ public static class DependencyInjection
         services.AddScoped<IFhirAccessTokenAuditSink, FhirAccessTokenAuditSink>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));
+        services.AddHttpClient(nameof(EpicEndpointDirectorySeeder));
         services.AddHttpClient(nameof(MappedBlobStorageDestinationWriter));
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
         services.AddHttpClient(nameof(MappedFhirRepositoryDestinationWriter));

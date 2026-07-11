@@ -135,10 +135,24 @@ export class WorkflowBuildAssemblerService {
   }
 
   private applicationTypeFor(fields: Record<string, string>): string {
+    // Key off the exact app key (wizard.service.ts save() always writes 'App key') rather than fuzzy-matching the
+    // human-readable context string — "Patient (standalone)" contains the substring "standalone", so checking
+    // ctx.includes('standalone') before ctx.includes('patient') silently misclassified every patient-audience
+    // connection as Standalone (requesting user/ clinician scopes instead of patient/, which is why Epic rendered
+    // Hyperspace instead of MyChart for patient-facing sources).
+    switch (fields['App key']) {
+      case 'provider-ehr-launch': return 'EhrLaunch';
+      case 'provider-standalone': return 'Standalone';
+      case 'patient-standalone': return 'Patient';
+      case 'backend-system': return 'Backend';
+    }
+
+    // Fallback for connections saved before 'App key' was captured — patient checked before standalone since
+    // "Patient (standalone)" contains "standalone" as a substring.
     const ctx = (fields['App context'] ?? fields['Epic audience'] ?? '').toLowerCase();
     if (ctx.includes('ehr')) return 'EhrLaunch';
-    if (ctx.includes('standalone')) return 'Standalone';
     if (ctx.includes('patient')) return 'Patient';
+    if (ctx.includes('standalone')) return 'Standalone';
     return 'Backend';
   }
 

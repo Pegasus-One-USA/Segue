@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.DataProtection;
 using FHIRBridge.Application;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
@@ -334,6 +335,13 @@ static void BootstrapDatabase(WebApplication app)
 
     var bootstrapper = scope.ServiceProvider.GetService<IRbacBootstrapper>();
     bootstrapper?.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    // Runs every registered vendor endpoint-directory seeder (currently just Epic's) — adding a new vendor never
+    // touches this call site, only DependencyInjection.cs's registration list.
+    foreach (var seeder in scope.ServiceProvider.GetServices<IEhrEndpointDirectorySeeder>())
+    {
+        seeder.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
+    }
 }
 
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only
