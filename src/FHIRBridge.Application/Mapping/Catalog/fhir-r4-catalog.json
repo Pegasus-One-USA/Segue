@@ -1278,6 +1278,133 @@
         "arrays": [
           "telecom"
         ]
+      },
+      {
+        "label": "Name \u203A Text",
+        "jsonPath": "$.name[*].text",
+        "fhirPath": "name.text",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "name"
+        ]
+      },
+      {
+        "label": "Marital Status \u203A Text",
+        "jsonPath": "$.maritalStatus.text",
+        "fhirPath": "maritalStatus.text",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
+      },
+      {
+        "label": "Contact \u203A Name \u203A Text",
+        "jsonPath": "$.contact[*].name.text",
+        "fhirPath": "contact.name.text",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ]
+      },
+      {
+        "label": "Contact \u203A Address \u203A Text",
+        "jsonPath": "$.contact[*].address.text",
+        "fhirPath": "contact.address.text",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ]
+      },
+      {
+        "label": "Communication \u203A Language \u203A Text",
+        "jsonPath": "$.communication[*].language.text",
+        "fhirPath": "communication.language.text",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "communication"
+        ]
+      },
+      {
+        "label": "Communication \u203A Preferred Language Type (verbal/written)",
+        "jsonPath": "$.communication[*]._preferred.extension[*].valueCoding.display",
+        "fhirPath": "communication._preferred.extension.valueCoding.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "communication"
+        ]
+      },
+      {
+        "label": "Legal Sex (Extension)",
+        "jsonPath": "$.legalSex",
+        "fhirPath": "legalSex",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
+      },
+      {
+        "label": "Sex For Clinical Use (Extension)",
+        "jsonPath": "$.sexForClinicalUse",
+        "fhirPath": "sexForClinicalUse",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
+      },
+      {
+        "label": "Pronouns (Extension)",
+        "jsonPath": "$.pronouns",
+        "fhirPath": "pronouns",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
+      },
+      {
+        "label": "Race (US Core Extension)",
+        "jsonPath": "$.race",
+        "fhirPath": "race",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
+      },
+      {
+        "label": "Race Category (US Core Extension)",
+        "jsonPath": "$.raceCategory",
+        "fhirPath": "raceCategory",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
+      },
+      {
+        "label": "Ethnicity (US Core Extension)",
+        "jsonPath": "$.ethnicity",
+        "fhirPath": "ethnicity",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
+      },
+      {
+        "label": "Member Id (Payer Identifier)",
+        "jsonPath": "$.memberId",
+        "fhirPath": "memberId",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": []
       }
     ],
     "Observation": [

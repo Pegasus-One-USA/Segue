@@ -15,4 +15,16 @@ public interface IDestinationDataService
         int top,
         IReadOnlyCollection<Guid> pipelineRunIds,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads every row matching an equality filter on an arbitrary column — for destination tables that don't carry
+    /// a PipelineRunId (e.g. one-to-many child tables keyed only by a parent identifier like PatientId).
+    /// </summary>
+    Task<DestinationDataDto> ReadByColumnAsync(
+        Guid destinationId,
+        string destinationObject,
+        string columnName,
+        string columnValue,
+        int top,
+        CancellationToken cancellationToken);
 }

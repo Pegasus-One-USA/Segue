@@ -50,10 +50,12 @@ They coexist — know which one you're touching:
 | [02 — API Surface](02-api-surface.md) | ~15 v1 controllers + workflow endpoints, dual-scheme JWT auth, authorization policies, middleware order |
 | [03 — Runtime Pipeline](03-runtime-pipeline.md) | DAG orchestrator, source connectors, SMART token providers + ApplicationType strategies, destinations, workflow engine, Worker |
 | [04 — App Services & Building Blocks](04-app-services-and-building-blocks.md) | Application services, rich Infrastructure capabilities, built-vs-stub building blocks, test suite |
-| [05 — Permission Auto-Generation](05-permission-auto-generation.md) | How a permission's Id/Name/DisplayName is generated, the two sync pipelines (seed-declared vs. discovered), boot-time flow, file-by-file changelog, multi-declaration behavior |
-| [06 — Adding Permissions (How-To)](06-adding-permissions-howto.md) | Practical steps: adding a Category/Group/Action, applying `[StandardPermission]`, reusing a permission across endpoints, seed-declared vs. discovered-only |
+| [05 — Workflow Node Checkpoints Plan](05-workflow-node-checkpoints-plan.md) | **Proposed, not yet built.** Per-node "Copy URL" / partial-execution checkpoints for the ranked workflow engine — implement this doc verbatim when picked up |
+| [06 — Permission Auto-Generation](05-permission-auto-generation.md) | How a permission's Id/Name/DisplayName is generated, the two sync pipelines (seed-declared vs. discovered), boot-time flow, file-by-file changelog, multi-declaration behavior |
+| [07 — Adding Permissions (How-To)](06-adding-permissions-howto.md) | Practical steps: adding a Category/Group/Action, applying `[StandardPermission]`, reusing a permission across endpoints, seed-declared vs. discovered-only |
 
 ## Maturity flags (as of this review)
 
+- **Planned, not started:** per-node checkpoint URLs / partial DAG execution — see [05](05-workflow-node-checkpoints-plan.md).
 - **Stubs / not implemented:** `Contracts`, `EventBus`, `Messaging` building blocks; both `ControlPlane` projects; the `Gateway` (YARP) has no routes.
 - **Phase-1 no-ops:** the Runtime plane's transform step (`FhirResourceNormalizer` only compacts JSON) and some governance placeholders in the *core Application* layer — the real normalization/governance/de-id implementations live in `FHIRBridge.Infrastructure`.

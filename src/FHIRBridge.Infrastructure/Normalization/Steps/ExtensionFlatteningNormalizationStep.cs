@@ -134,10 +134,24 @@ public sealed class ExtensionFlatteningNormalizationStep : IResourceNormalizatio
                 continue;
             }
 
-            if (node is JsonObject coding)
+            if (node is JsonObject valueObject)
             {
-                // valueCoding / valueCodeableConcept -> prefer display, fall back to code.
-                var display = coding["display"]?.GetValue<string>() ?? coding["code"]?.GetValue<string>();
+                // valueCodeableConcept -> prefer the concept's own text, else the first coding's display/code.
+                if (valueObject["coding"] is JsonArray codings)
+                {
+                    var text = valueObject["text"]?.GetValue<string>();
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        return JsonValue.Create(text);
+                    }
+
+                    var firstCoding = codings.OfType<JsonObject>().FirstOrDefault();
+                    var codingDisplay = firstCoding?["display"]?.GetValue<string>() ?? firstCoding?["code"]?.GetValue<string>();
+                    return codingDisplay is null ? null : JsonValue.Create(codingDisplay);
+                }
+
+                // valueCoding -> display, fall back to code.
+                var display = valueObject["display"]?.GetValue<string>() ?? valueObject["code"]?.GetValue<string>();
                 return display is null ? null : JsonValue.Create(display);
             }
 
@@ -177,6 +191,12 @@ public sealed class ExtensionFlatteningNormalizationStep : IResourceNormalizatio
         },
         new FlatteningRule
         {
+            ExtensionUrl = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
+            NestedUrl = "ombCategory",
+            TargetProperty = "raceCategory"
+        },
+        new FlatteningRule
+        {
             ExtensionUrl = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity",
             NestedUrl = "text",
             TargetProperty = "ethnicity"
@@ -185,6 +205,21 @@ public sealed class ExtensionFlatteningNormalizationStep : IResourceNormalizatio
         {
             ExtensionUrl = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex",
             TargetProperty = "birthsex"
+        },
+        new FlatteningRule
+        {
+            ExtensionUrl = "http://open.epic.com/FHIR/StructureDefinition/extension/legal-sex",
+            TargetProperty = "legalSex"
+        },
+        new FlatteningRule
+        {
+            ExtensionUrl = "http://open.epic.com/FHIR/StructureDefinition/extension/sex-for-clinical-use",
+            TargetProperty = "sexForClinicalUse"
+        },
+        new FlatteningRule
+        {
+            ExtensionUrl = "http://open.epic.com/FHIR/StructureDefinition/extension/calculated-pronouns-to-use-for-text",
+            TargetProperty = "pronouns"
         }
     ];
 

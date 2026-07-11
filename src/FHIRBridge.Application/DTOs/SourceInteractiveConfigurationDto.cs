@@ -11,4 +11,5 @@ public sealed record SourceInteractiveConfigurationDto(
     string[] RedirectUris,
     string? LaunchUrl,
     string[] TrustedIssuers,
-    PatientSelectionMethod? PatientSelectionMethod = null);
+    PatientSelectionMethod? PatientSelectionMethod = null,
+    string? PostLaunchRedirectUri = null);

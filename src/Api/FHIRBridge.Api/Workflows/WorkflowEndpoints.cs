@@ -264,37 +264,14 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
-            var destinationId = Guid.Empty;
-            var destinationObject = string.Empty;
-            foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
-            {
-                if (TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out destinationId))
-                {
-                    destinationObject = GetConfigurationString(node.ConfigurationJson, "destinationObject")
-                        ?? GetConfigurationString(node.ConfigurationJson, "target")
-                        ?? string.Empty;
-                    break;
-                }
-            }
+            var (destinationId, destinationObject) = await ResolveDestinationTargetAsync(
+                workflow, configurationRepository, cancellationToken);
 
             if (destinationId == Guid.Empty)
             {
                 return Results.Ok(new DestinationDataDto(
                     string.Empty, [], [], 0,
                     "This workflow has no saved destination to preview. Save or build the destination first."));
-            }
-
-            // The destination node often doesn't carry the table name (the writer derives it from the bound mapping).
-            // Fall back to the mapping profile targeting this destination — the same DestinationObject that picked the
-            // write-time table — so the read hits the table the pipeline actually wrote to.
-            if (string.IsNullOrWhiteSpace(destinationObject))
-            {
-                var mappings = await configurationRepository.GetMappingProfilesAsync(cancellationToken);
-                destinationObject = mappings
-                    .Where(mapping => mapping.DestinationId == destinationId
-                        && !string.IsNullOrWhiteSpace(mapping.DestinationObject))
-                    .Select(mapping => mapping.DestinationObject)
-                    .FirstOrDefault() ?? string.Empty;
             }
 
             var runs = await runStore.ListByDefinitionAsync(workflowId, cancellationToken);
@@ -304,6 +281,37 @@ public static class WorkflowEndpoints
                 destinationId, destinationObject, top ?? 50, pipelineRunIds, cancellationToken);
             return Results.Ok(result);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Third-party-app return trip for a workflow-triggered EHR launch (see OAuthController.Callback, which
+        // redirects here with ?workflowRunId=... once the launch's workflow run completes). Anonymous — the calling
+        // app has no FHIRBridge session; the unguessable run id is the trust boundary, same as /oauth/callback.
+        // Demo-scoped: reads the source node's raw retrieved FHIR resources straight from Execution History
+        // (the same decrypted payload the admin "Execution History" screen shows) rather than any destination
+        // table, and hands back the Patient resource's own JSON as-is for the caller to bind directly. This is
+        // independent of whatever destination tables/Mapping Profiles exist — it reflects what the source node
+        // actually fetched for this specific run, not what got (or didn't get) written downstream.
+        group.MapGet("/workflows/runs/{workflowRunId:guid}/launch-result", async (
+            Guid workflowRunId,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var payloads = await recorder.GetPagedAsync(workflowRunId, page: 1, pageSize: 50, cancellationToken);
+            var sourcePayload = payloads.Items.FirstOrDefault(item => item.Contract == "ResourceBatch");
+            if (sourcePayload is null)
+            {
+                return Results.Ok(new { patient = (JsonNode?)null });
+            }
+
+            var resources = (JsonNode.Parse(sourcePayload.PayloadJson) as JsonObject)?["Resources"] as JsonArray;
+            var patientEntry = resources?.FirstOrDefault(
+                resource => string.Equals(resource?["ResourceType"]?.GetValue<string>(), "Patient", StringComparison.OrdinalIgnoreCase));
+            var patientJson = patientEntry?["Payload"]?.GetValue<string>();
+
+            return Results.Ok(new
+            {
+                patient = string.IsNullOrWhiteSpace(patientJson) ? null : JsonNode.Parse(patientJson),
+            });
+        });
 
         group.MapGet("/workflows/{workflowId:guid}", async (
             Guid workflowId,
@@ -634,6 +642,42 @@ public static class WorkflowEndpoints
         }
 
         return (null, null);
+    }
+
+    // Resolves a workflow's destination node → its created destination id + target table name, falling back to the
+    // mapping profile targeting that destination when the node itself doesn't carry the table name (the writer
+    // derives it from the bound mapping at write time). Shared by destination-data and launch-result.
+    private static async Task<(Guid DestinationId, string DestinationObject)> ResolveDestinationTargetAsync(
+        WorkflowDefinition workflow,
+        IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
+    {
+        var destinationId = Guid.Empty;
+        var destinationObject = string.Empty;
+        foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+        {
+            if (TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out destinationId))
+            {
+                destinationObject = GetConfigurationString(node.ConfigurationJson, "destinationObject")
+                    ?? GetConfigurationString(node.ConfigurationJson, "target")
+                    ?? string.Empty;
+                break;
+            }
+        }
+
+        if (destinationId == Guid.Empty || !string.IsNullOrWhiteSpace(destinationObject))
+        {
+            return (destinationId, destinationObject);
+        }
+
+        var mappings = await configurationRepository.GetMappingProfilesAsync(cancellationToken);
+        destinationObject = mappings
+            .Where(mapping => mapping.DestinationId == destinationId
+                && !string.IsNullOrWhiteSpace(mapping.DestinationObject))
+            .Select(mapping => mapping.DestinationObject)
+            .FirstOrDefault() ?? string.Empty;
+
+        return (destinationId, destinationObject);
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)

@@ -256,6 +256,7 @@ public static class DependencyInjection
         // Per-resource normalization pipeline (Phase D flatten -> B validate -> C score -> E match).
         // Overrides the Application-layer PassThrough default because Infrastructure is registered last.
         services.AddScoped<IResourceNormalizationStep, ExtensionFlatteningNormalizationStep>();
+        services.AddScoped<IResourceNormalizationStep, IdentifierFlatteningNormalizationStep>();
         services.AddScoped<IResourceNormalizationStep, UsCoreValidationNormalizationStep>();
         services.AddScoped<IResourceNormalizationStep, DataQualityScoringNormalizationStep>();
         services.AddScoped<IResourceNormalizationStep, PatientMatchingNormalizationStep>();

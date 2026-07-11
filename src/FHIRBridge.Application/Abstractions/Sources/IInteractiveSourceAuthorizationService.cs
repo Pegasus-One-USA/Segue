@@ -73,5 +73,14 @@ public interface IInteractiveSourceAuthorizationService
     Task<ApplicationType?> GetRouteApplicationTypeAsync(Guid routeId, CancellationToken cancellationToken);
 }
 
-/// <summary>Which source connection was authorized once the callback completes.</summary>
-public sealed record InteractiveAuthorizationResult(Guid SourceConnectionId, string SourceName);
+/// <summary>
+/// Which source connection was authorized once the callback completes. For a workflow-triggered launch,
+/// <see cref="WorkflowRunId"/> carries the resulting run id and <see cref="PostLaunchRedirectUri"/> carries where the
+/// caller should redirect the browser (the source's configured PostLaunchRedirectUri) instead of returning JSON —
+/// both are null when no workflow run was triggered or no redirect URI is configured.
+/// </summary>
+public sealed record InteractiveAuthorizationResult(
+    Guid SourceConnectionId,
+    string SourceName,
+    Guid? WorkflowRunId = null,
+    string? PostLaunchRedirectUri = null);

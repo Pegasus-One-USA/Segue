@@ -3,6 +3,7 @@ using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace FHIRBridge.Api.Controllers.V1;
 
@@ -201,6 +202,16 @@ public sealed class OAuthController : ControllerBase
         }
 
         var result = await _authorizationService.CompleteAsync(state, code, cancellationToken);
+
+        // A workflow-triggered launch with a configured PostLaunchRedirectUri hands the browser back to the
+        // third-party app that opened the EHR launch, rather than leaving it on this bare JSON response — the run
+        // id lets that app fetch its result (see GetWorkflowRunLaunchResult on WorkflowEndpoints).
+        if (result.WorkflowRunId is { } workflowRunId && !string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
+        {
+            var returnUrl = QueryHelpers.AddQueryString(
+                result.PostLaunchRedirectUri, "workflowRunId", workflowRunId.ToString());
+            return Redirect(returnUrl);
+        }
 
         return Ok(new
         {
