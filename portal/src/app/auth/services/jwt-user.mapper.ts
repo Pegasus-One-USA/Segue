@@ -24,7 +24,7 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     const dot = code.indexOf('.');
     const resource = dot >= 0 ? code.slice(0, dot) : code;
     const action = dot >= 0 ? code.slice(dot + 1) : '';
-    return { id: code, name: code, resource, action, description: code };
+    return { id: code, name: code, displayName: code, resource, action, description: code };
   });
 
   const roles: Role[] = toArray(payload['roles']).map(rn => ({
@@ -50,10 +50,16 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     role: roles.length ? roles[0].name : 'Audit',
     roles,
     permissions,
+    // The JWT's permissions claim is already the backend's merged (role ∪ overrides) set — there's
+    // no separate override list to carry here.
+    directPermissionAllocations: [],
     orgId: 'org',
     status: 'active',
     loginType: 'local',
     mustChangePassword: false,
+    // Unlike mustChangePassword above (not currently claim-driven), this one has to be read for
+    // real — mfaSetupGuard checks it on every navigation, not just right after login.
+    mfaSetupRequired: String(payload['mfa_setup_required']) === 'true',
     emailVerified: true,
     twoFactorEnabled: false,
     createdAt: nowIso,

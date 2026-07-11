@@ -64,6 +64,22 @@ public sealed class User : AuditableChildEntity<Guid>
     /// <summary>When the user last completed MFA enrollment (confirmed a code against the staged secret).</summary>
     public DateTime? MfaEnrolledOnUtc { get; private set; }
 
+    /// <summary>Hash of the short-lived, single-use token issued after password verification when MFA is required to finish logging in.</summary>
+    public string? MfaChallengeTokenHash { get; private set; }
+    public DateTime? MfaChallengeExpiresOnUtc { get; private set; }
+
+    /// <summary>
+    /// Admin-set policy: this account must have MFA enabled. When true and <see cref="MfaEnabled"/>
+    /// is false, login succeeds but the session is gated to MFA enrollment only (mirrors
+    /// <see cref="MustChangePassword"/>'s gate) until the user completes enrollment.
+    /// </summary>
+    public bool MustSetupMfa { get; private set; }
+
+    /// <summary>True while the account is blocked to MFA-enrollment-only: an admin requires MFA but
+    /// it isn't enrolled yet. Computed once here rather than re-derived at each call site (the JWT
+    /// claim and the login response both need this exact value and must never disagree).</summary>
+    public bool IsMfaSetupRequired => MustSetupMfa && !MfaEnabled;
+
     // Invitation flow fields.
     public string? InvitationTokenHash { get; private set; }
     public DateTime? InvitationTokenExpiresOnUtc { get; private set; }
@@ -129,13 +145,15 @@ public sealed class User : AuditableChildEntity<Guid>
         MfaBackupCodeHashes = string.Join('\n', backupCodeHashes);
     }
 
-    /// <summary>Fully disables MFA and clears the secret and backup codes.</summary>
+    /// <summary>Fully disables MFA and clears the secret, backup codes, and any pending login challenge.</summary>
     public void DisableMfa()
     {
         MfaEnabled = false;
         MfaSecret = null;
         MfaBackupCodeHashes = null;
         MfaEnrolledOnUtc = null;
+        MfaChallengeTokenHash = null;
+        MfaChallengeExpiresOnUtc = null;
     }
 
     /// <summary>
@@ -160,6 +178,26 @@ public sealed class User : AuditableChildEntity<Guid>
 
         MfaBackupCodeHashes = remaining.Count == 0 ? null : string.Join('\n', remaining);
         return true;
+    }
+
+    /// <summary>Stores the hash of a newly issued login-time MFA challenge token.</summary>
+    public void SetMfaChallengeToken(string tokenHash, DateTime expiresOnUtc)
+    {
+        MfaChallengeTokenHash = tokenHash;
+        MfaChallengeExpiresOnUtc = expiresOnUtc;
+    }
+
+    /// <summary>Clears the login-time MFA challenge token once it has been consumed or should no longer be usable.</summary>
+    public void ClearMfaChallengeToken()
+    {
+        MfaChallengeTokenHash = null;
+        MfaChallengeExpiresOnUtc = null;
+    }
+
+    /// <summary>Sets or clears the admin policy requiring this account to have MFA enabled.</summary>
+    public void SetMustSetupMfa(bool required)
+    {
+        MustSetupMfa = required;
     }
 
     public void EnableLocalLogin(string passwordHash, bool mustChangePassword)

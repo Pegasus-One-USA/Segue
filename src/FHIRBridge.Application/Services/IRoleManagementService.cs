@@ -10,6 +10,8 @@ public interface IRoleManagementService
 
     Task<IReadOnlyList<PermissionDto>> GetPermissionsAsync(CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<PermissionCatalogCategoryDto>> GetPermissionCatalogAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<PermissionDto>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken);
 
     Task<RoleDto> CreateRoleAsync(CreateRoleRequest request, CancellationToken cancellationToken);

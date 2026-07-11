@@ -182,10 +182,6 @@ export class UserProfileService {
     this._apiKeys.update(keys => keys.filter(k => k.id !== id));
   }
 
-  toggleTwoFactor(): void {
-    this._profile.update(p => ({ ...p, twoFactorEnabled: !p.twoFactorEnabled }));
-  }
-
   updateNotifications(email: boolean, inApp: boolean): void {
     this._profile.update(p => ({
       ...p,

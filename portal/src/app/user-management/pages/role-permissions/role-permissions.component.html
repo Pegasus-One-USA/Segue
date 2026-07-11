@@ -108,31 +108,63 @@
         </div>
 
         <div class="permissions-list">
-          @for (group of permissionGroups(); track group.resource) {
-            <div class="permission-group">
-              <div class="permission-group__header">
-                <span class="permission-group__title">{{ group.resource }}</span>
-                <mat-checkbox
-                  class="select-all-checkbox select-all-checkbox--sm"
-                  [attr.aria-label]="'Select all ' + group.resource + ' permissions'"
-                  [checked]="isGroupChecked(group)"
-                  [indeterminate]="isGroupIndeterminate(group)"
-                  [disabled]="isSystemRole()"
-                  (change)="toggleGroup(group, $event.checked)"
-                ></mat-checkbox>
-              </div>
-              <div class="permission-group__items">
-                @for (perm of group.permissions; track perm.id) {
-                  <mat-checkbox
-                    [checked]="isChecked(perm.id)"
-                    [disabled]="isSystemRole()"
-                    (change)="togglePermission(perm.id)"
-                  >
-                    {{ perm.name }}
-                    <span class="permission-desc">{{ perm.description }}</span>
-                  </mat-checkbox>
-                }
-              </div>
+          @for (cat of permissionGrid(); track cat.id) {
+            <div class="permission-category">
+              <button
+                type="button"
+                class="permission-category__header"
+                [attr.aria-expanded]="!isCategoryCollapsed(cat.id)"
+                (click)="toggleCategoryCollapsed(cat.id)"
+              >
+                <mat-icon class="permission-category__chevron" [class.permission-category__chevron--collapsed]="isCategoryCollapsed(cat.id)">
+                  expand_more
+                </mat-icon>
+                <h3 class="permission-category__title">{{ cat.displayName }}</h3>
+              </button>
+              @if (!isCategoryCollapsed(cat.id)) {
+              <table class="permission-grid">
+                <thead>
+                  <tr>
+                    <th class="permission-grid__group-col">Group</th>
+                    @for (action of cat.actions; track action) {
+                      <th class="permission-grid__action-col">{{ action }}</th>
+                    }
+                    <th class="permission-grid__all-col">All</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of cat.rows; track row.id) {
+                    <tr>
+                      <td class="permission-grid__group-name">{{ row.displayName }}</td>
+                      @for (action of cat.actions; track action) {
+                        <td class="permission-grid__cell">
+                          @if (row.cells.get(action); as perm) {
+                            <mat-checkbox
+                              [attr.aria-label]="perm.displayName"
+                              [matTooltip]="perm.description"
+                              matTooltipPosition="above"
+                              [checked]="isChecked(perm.id)"
+                              [disabled]="isSystemRole()"
+                              (change)="togglePermission(perm.id)"
+                            ></mat-checkbox>
+                          }
+                        </td>
+                      }
+                      <td class="permission-grid__cell permission-grid__cell--all">
+                        <mat-checkbox
+                          class="select-all-checkbox select-all-checkbox--sm"
+                          [attr.aria-label]="'Select all ' + row.displayName + ' permissions'"
+                          [checked]="isRowChecked(row)"
+                          [indeterminate]="isRowIndeterminate(row)"
+                          [disabled]="isSystemRole()"
+                          (change)="toggleRow(row, $event.checked)"
+                        ></mat-checkbox>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              }
             </div>
           } @empty {
             <div class="no-results">No permissions matched "{{ searchQuery() }}".</div>

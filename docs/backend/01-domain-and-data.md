@@ -19,7 +19,7 @@
 `User`, `Role`, `Permission`, `RolePermission`, `UserRole`, `TenantUser` (user↔tenant↔role join).
 - 5 seeded platform roles: **GlobalAdmin, TenantAdmin, PipelineEngineer, Analyst, Auditor**.
 - 28 permission codes in `Application/Security/UnifiedPermissions.cs`.
-- Deterministic seed GUIDs in `SeededSecurityIds`; role→permission map in `UnifiedRolePermissionSeed`.
+- Deterministic seed GUIDs in `SeededSecurityIds`; role→permission map in `SystemRoleDefaultPermissions`.
 
 ### Records & audit
 | Entity | Purpose |

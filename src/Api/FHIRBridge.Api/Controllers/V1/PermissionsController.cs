@@ -26,4 +26,13 @@ public sealed class PermissionsController : ControllerBase
 
         return Ok(permissions);
     }
+
+    [HttpGet("catalog")]
+    [ProducesResponseType(typeof(IReadOnlyList<PermissionCatalogCategoryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCatalog(CancellationToken cancellationToken)
+    {
+        var catalog = await _roleManagementService.GetPermissionCatalogAsync(cancellationToken);
+
+        return Ok(catalog);
+    }
 }

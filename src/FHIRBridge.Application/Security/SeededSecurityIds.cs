@@ -8,43 +8,10 @@ public static class SeededSecurityIds
     public static readonly Guid OperationsRoleId = Guid.Parse("10000000-0000-0000-0000-000000000003");
     public static readonly Guid AuditRoleId = Guid.Parse("10000000-0000-0000-0000-000000000005");
 
-    // ── Original platform permissions ────────────────────────────────────────
-    public static readonly Guid ConfigurationWritePermissionId = Guid.Parse("20000000-0000-0000-0000-000000000003");
-    public static readonly Guid PipelineExecutePermissionId = Guid.Parse("20000000-0000-0000-0000-000000000004");
-    public static readonly Guid AuditLogsReadPermissionId = Guid.Parse("20000000-0000-0000-0000-000000000005");
-    public static readonly Guid SourceConnectionsTestPermissionId = Guid.Parse("20000000-0000-0000-0000-000000000006");
-
-    // ── User module permissions (spec §4.1) ──────────────────────────────────
-    public static readonly Guid UserInvitePermissionId = Guid.Parse("20000000-0000-0000-0001-000000000001");
-    public static readonly Guid UserViewPermissionId = Guid.Parse("20000000-0000-0000-0001-000000000002");
-    public static readonly Guid UserEditPermissionId = Guid.Parse("20000000-0000-0000-0001-000000000003");
-    public static readonly Guid UserDeactivatePermissionId = Guid.Parse("20000000-0000-0000-0001-000000000004");
-
-    // ── Role module permissions ───────────────────────────────────────────────
-    public static readonly Guid RoleCreatePermissionId = Guid.Parse("20000000-0000-0000-0002-000000000001");
-    public static readonly Guid RoleEditPermissionId = Guid.Parse("20000000-0000-0000-0002-000000000002");
-    public static readonly Guid RoleDeletePermissionId = Guid.Parse("20000000-0000-0000-0002-000000000003");
-    public static readonly Guid RoleAssignPermissionId = Guid.Parse("20000000-0000-0000-0002-000000000004");
-    public static readonly Guid RoleViewPermissionId = Guid.Parse("20000000-0000-0000-0002-000000000005");
-
-    // ── Workflow module permissions ───────────────────────────────────────────
-    public static readonly Guid WorkflowCreatePermissionId = Guid.Parse("20000000-0000-0000-0003-000000000001");
-    public static readonly Guid WorkflowEditPermissionId = Guid.Parse("20000000-0000-0000-0003-000000000002");
-    public static readonly Guid WorkflowDeletePermissionId = Guid.Parse("20000000-0000-0000-0003-000000000003");
-    public static readonly Guid WorkflowRunPermissionId = Guid.Parse("20000000-0000-0000-0003-000000000004");
-    public static readonly Guid WorkflowViewPermissionId = Guid.Parse("20000000-0000-0000-0003-000000000005");
-
-    // ── Report / payload permissions ─────────────────────────────────────────
-    public static readonly Guid ReportViewPermissionId = Guid.Parse("20000000-0000-0000-0005-000000000001");
-    public static readonly Guid PayloadViewPermissionId = Guid.Parse("20000000-0000-0000-0006-000000000001");
-
-    // ── Permission categories ──────────────────────────────────────────────────
-    public static readonly Guid ConfigurationCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000001");
-    public static readonly Guid PipelineCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000002");
-    public static readonly Guid AuditCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000003");
-    public static readonly Guid UserCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000004");
-    public static readonly Guid RoleCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000005");
-    public static readonly Guid WorkflowCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000006");
-    public static readonly Guid ReportCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000007");
-    public static readonly Guid PayloadCategoryId = Guid.Parse("30000000-0000-0000-0000-000000000008");
+    // Category, group, and permission ids are no longer hand-picked here. A category's/group's id lives
+    // directly on its enum member via [PermissionCategory]/[PermissionGroup] (see PermissionCategoryCode.cs /
+    // PermissionGroupCode.cs) — adding a new one is a single-file change. A permission's id is derived
+    // deterministically from its Group+Action pair (see PermissionTaxonomy.BuildPermissionId), so the same
+    // action reused under a different group (e.g. View under both User and Role) naturally gets a distinct
+    // id instead of colliding.
 }

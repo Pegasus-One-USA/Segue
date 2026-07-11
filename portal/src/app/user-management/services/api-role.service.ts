@@ -4,9 +4,11 @@ import { Observable, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { ROLES_ENDPOINTS, PERMISSIONS_ENDPOINTS } from '../../core/api-endpoints';
 import { IRoleService } from './i-role.service';
-import { mapRoleDto, mapPermissionDto } from '../../auth/services/api-user.service';
+import { mapRoleDto, mapPermissionDto, mapPermissionCatalogDto } from '../../auth/services/api-user.service';
 import { CreateRoleRequest, UpdateRoleRequest } from '../../auth/models/auth-request.model';
-import { Role, Permission, RoleDto, PermissionDto } from '../../auth/models/user.model';
+import {
+  Role, Permission, RoleDto, PermissionDto, PermissionCategory, PermissionCatalogCategoryDto,
+} from '../../auth/models/user.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiRoleService extends IRoleService {
@@ -49,6 +51,13 @@ export class ApiRoleService extends IRoleService {
   getPermissions(): Observable<Permission[]> {
     return this.http.get<PermissionDto[]>(PERMISSIONS_ENDPOINTS.list).pipe(
       map(dtos => (dtos ?? []).map(mapPermissionDto)),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  getPermissionCatalog(): Observable<PermissionCategory[]> {
+    return this.http.get<PermissionCatalogCategoryDto[]>(PERMISSIONS_ENDPOINTS.catalog).pipe(
+      map(dtos => (dtos ?? []).map(mapPermissionCatalogDto)),
       catchError(err => throwError(() => err))
     );
   }

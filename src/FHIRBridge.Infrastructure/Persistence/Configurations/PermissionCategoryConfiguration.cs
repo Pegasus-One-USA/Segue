@@ -15,7 +15,13 @@ public sealed class PermissionCategoryConfiguration : IEntityTypeConfiguration<P
             .HasMaxLength(100)
             .IsRequired();
 
+        builder.Property(x => x.DisplayName)
+            .HasMaxLength(100)
+            .IsRequired();
+
         builder.Property(x => x.Description).HasMaxLength(500);
+
+        builder.Property(x => x.IsVisible).IsRequired();
 
         builder.HasIndex(x => x.Name)
             .IsUnique();

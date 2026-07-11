@@ -50,6 +50,8 @@ They coexist — know which one you're touching:
 | [02 — API Surface](02-api-surface.md) | ~15 v1 controllers + workflow endpoints, dual-scheme JWT auth, authorization policies, middleware order |
 | [03 — Runtime Pipeline](03-runtime-pipeline.md) | DAG orchestrator, source connectors, SMART token providers + ApplicationType strategies, destinations, workflow engine, Worker |
 | [04 — App Services & Building Blocks](04-app-services-and-building-blocks.md) | Application services, rich Infrastructure capabilities, built-vs-stub building blocks, test suite |
+| [05 — Permission Auto-Generation](05-permission-auto-generation.md) | How a permission's Id/Name/DisplayName is generated, the two sync pipelines (seed-declared vs. discovered), boot-time flow, file-by-file changelog, multi-declaration behavior |
+| [06 — Adding Permissions (How-To)](06-adding-permissions-howto.md) | Practical steps: adding a Category/Group/Action, applying `[StandardPermission]`, reusing a permission across endpoints, seed-declared vs. discovered-only |
 
 ## Maturity flags (as of this review)
 

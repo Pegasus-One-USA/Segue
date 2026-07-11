@@ -1,6 +1,6 @@
 // user-management/pages/user-detail/user-detail.component.ts
 import {
-  Component, OnInit, OnDestroy, signal, inject, Input,
+  Component, OnInit, OnDestroy, signal, computed, inject, Input,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -21,13 +21,34 @@ import { MatBadgeModule } from '@angular/material/badge';
 
 import { IUserService } from '../../../auth/services/i-user.service';
 import { AuthService } from '../../../auth/services/auth.service';
+import { IRoleService } from '../../services/i-role.service';
 import {
-  User, UserRole, Permission,
+  User, UserRole, Permission, PermissionCategory,
 } from '../../../auth/models/user.model';
 import { ROLE_CONFIG } from '../user-list/user-list.component';
 import { EditUserDialogComponent } from '../../dialogs/edit-user-dialog/edit-user-dialog.component';
 import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/assign-roles-dialog.component';
+import { ResetPasswordLinkDialogComponent } from '../../dialogs/reset-password-link-dialog/reset-password-link-dialog.component';
+import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
+
+// A permission within the effective-permissions preview — same shape as `Permission` plus
+// whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
+interface StatusPermission extends Permission {
+  allowed: boolean;
+}
+
+interface StatusGroup {
+  id: string;
+  displayName: string;
+  permissions: StatusPermission[];
+}
+
+interface StatusCategory {
+  id: string;
+  displayName: string;
+  groups: StatusGroup[];
+}
 
 @Component({
   selector: 'app-user-detail',
@@ -54,6 +75,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   @Input() id!: string;
 
   private readonly userService = inject(IUserService);
+  private readonly roleService = inject(IRoleService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
   private readonly snackBar    = inject(MatSnackBar);
@@ -63,13 +85,70 @@ export class UserDetailComponent implements OnInit, OnDestroy {
 
   // ─── State signals ────────────────────────────────────────────────────────
   user      = signal<User | null>(null);
+  catalog   = signal<PermissionCategory[]>([]);
   loading   = signal(true);
   activeTab = signal(0);
 
   readonly roleConfig = ROLE_CONFIG;
 
+  // Bypassing a user's second factor entirely is too sensitive to delegate to the general "edit
+  // user" permission Admins also hold — the backend enforces this too (SuperAdminOnly policy on
+  // POST /users/{id}/mfa/disable); this just keeps the button from being shown to someone who'd
+  // get a 403 anyway.
+  protected readonly isSuperAdmin = computed(() => this.authService.hasRole('SuperAdmin'));
+
+  // ─── Computed: this user's true effective permission ids ─────────────────
+  // Mirrors the backend's LocalAuthService.GetPermissionCodesAsync merge: role-derived permissions,
+  // minus anything the user has a direct override for, plus back in only the enabled overrides.
+  // Effective Permissions must reflect this, not just role.permissions — otherwise it goes stale
+  // the moment an admin sets a direct override on the "Direct Permission Overrides" tab.
+  effectivePermissionIds = computed<Set<string>>(() => {
+    const user = this.user();
+    if (!user) return new Set();
+
+    const ids = new Set(user.permissions.map(p => p.id));
+    for (const allocation of user.directPermissionAllocations) {
+      ids.delete(allocation.permissionId);
+      if (allocation.isEnabled) ids.add(allocation.permissionId);
+    }
+    return ids;
+  });
+
+  // ─── Computed: full catalog, each permission marked allowed/denied for this user ─
+  catalogWithStatus = computed<StatusCategory[]>(() => {
+    const allowedIds = this.effectivePermissionIds();
+    return this.catalog().map(cat => ({
+      id:          cat.id,
+      displayName: cat.displayName,
+      groups: cat.groups.map(g => ({
+        id:          g.id,
+        displayName: g.displayName,
+        permissions: g.permissions.map(p => ({ ...p, allowed: allowedIds.has(p.id) })),
+      })),
+    }));
+  });
+
+  totalPermissionsCount = computed(() =>
+    this.catalog().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
+  );
+  // Counted from catalogWithStatus (catalog permissions only) rather than user().permissions.length
+  // directly — a role can carry permissions the catalog excludes (deactivated/hidden ones), which
+  // would otherwise make allowed + denied not add up to the catalog total.
+  allowedCount = computed(() =>
+    this.catalogWithStatus().reduce(
+      (sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.filter(p => p.allowed).length, 0), 0)
+  );
+  deniedCount  = computed(() => this.totalPermissionsCount() - this.allowedCount());
+
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   ngOnInit(): void {
+    this.roleService.getPermissionCatalog()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: catalog => this.catalog.set(catalog),
+        error: () => this.snackBar.open('Failed to load the permission catalog.', 'Dismiss', { duration: 4000 }),
+      });
+
     if (this.id) {
       this.loadUser(this.id);
     }
@@ -149,14 +228,73 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   resetPassword(): void {
     const u = this.user();
     if (!u) return;
-    this.userService.resetUserPassword(u.id)
+    this.userService.resetUserPassword(u.id, u.email)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: () => {
-          this.snackBar.open(`Password reset email sent to "${u.email}".`, 'Dismiss', { duration: 3000 });
+        next: (res) => {
+          this.dialog.open(ResetPasswordLinkDialogComponent, {
+            width: '540px', restoreFocus: false, data: res,
+          });
         },
         error: (err: {message?: string}) => {
           this.snackBar.open(err?.message ?? 'Failed to reset password.', 'Dismiss', { duration: 4000 });
+        },
+      });
+  }
+
+  // ─── Disable MFA (admin account-recovery override) ─────────────────────────
+  disableMfa(): void {
+    const u = this.user();
+    if (!u) return;
+
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '440px', restoreFocus: false,
+      data: {
+        title:        'Disable two-factor authentication',
+        message:      `This removes 2FA from "${u.fullName}"'s account without requiring a code — ` +
+                       'use this only for account recovery when they\'ve lost their authenticator and backup codes. ' +
+                       'They can re-enroll from their own Security settings afterward.',
+        confirmLabel: 'Disable 2FA',
+        danger:       true,
+      },
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (!confirmed) return;
+      this.userService.disableUserMfa(u.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (updated) => {
+            this.user.set(updated);
+            this.snackBar.open(`Two-factor authentication disabled for "${u.fullName}".`, 'Dismiss', { duration: 3000 });
+          },
+          error: (err: {message?: string}) => {
+            this.snackBar.open(err?.message ?? 'Failed to disable two-factor authentication.', 'Dismiss', { duration: 4000 });
+          },
+        });
+    });
+  }
+
+  // ─── Require / stop requiring MFA (admin policy toggle) ────────────────────
+  toggleMfaRequirement(): void {
+    const u = this.user();
+    if (!u) return;
+    const required = !u.mfaRequired;
+
+    this.userService.setUserMfaRequirement(u.id, required)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (updated) => {
+          this.user.set(updated);
+          this.snackBar.open(
+            required
+              ? `Two-factor authentication is now required for "${u.fullName}". They'll be prompted to set it up on next login.`
+              : `Two-factor authentication is no longer required for "${u.fullName}".`,
+            'Dismiss', { duration: 4000 },
+          );
+        },
+        error: (err: {message?: string}) => {
+          this.snackBar.open(err?.message ?? 'Failed to update the MFA requirement.', 'Dismiss', { duration: 4000 });
         },
       });
   }
@@ -245,20 +383,5 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       pending:   'status-pending',
     };
     return map[status] ?? 'status-inactive';
-  }
-
-  groupPermissions(perms: Permission[]): Map<string, Permission[]> {
-    const groups = new Map<string, Permission[]>();
-    for (const p of perms) {
-      const list = groups.get(p.resource) ?? [];
-      list.push(p);
-      groups.set(p.resource, list);
-    }
-    return groups;
-  }
-
-  getPermissionsGrouped(user: User): { resource: string; permissions: Permission[] }[] {
-    const groups = this.groupPermissions(user.permissions ?? []);
-    return Array.from(groups.entries()).map(([resource, permissions]) => ({ resource, permissions }));
   }
 }

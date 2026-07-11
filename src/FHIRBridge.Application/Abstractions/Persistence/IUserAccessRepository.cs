@@ -16,6 +16,8 @@ public interface IUserAccessRepository
 
     Task<User?> GetUserByRefreshTokenHashAsync(string refreshTokenHash, CancellationToken cancellationToken);
 
+    Task<User?> GetUserByMfaChallengeTokenHashAsync(string mfaChallengeTokenHash, CancellationToken cancellationToken);
+
     Task AddUserAsync(User user, CancellationToken cancellationToken);
 
     Task UpdateUserAsync(User user, CancellationToken cancellationToken);
@@ -44,6 +46,12 @@ public interface IUserAccessRepository
 
     Task AddPermissionCategoryAsync(PermissionCategory category, CancellationToken cancellationToken);
 
+    // ── Permission Groups ────────────────────────────────────────────────────
+
+    Task<IReadOnlyList<PermissionGroup>> GetPermissionGroupsAsync(CancellationToken cancellationToken);
+
+    Task AddPermissionGroupAsync(PermissionGroup group, CancellationToken cancellationToken);
+
     // ── Permissions ──────────────────────────────────────────────────────────
 
     Task<IReadOnlyList<Permission>> GetPermissionsAsync(CancellationToken cancellationToken);
@@ -51,6 +59,8 @@ public interface IUserAccessRepository
     Task<Permission?> GetPermissionByIdAsync(Guid permissionId, CancellationToken cancellationToken);
 
     Task AddPermissionAsync(Permission permission, CancellationToken cancellationToken);
+
+    Task UpdatePermissionAsync(Permission permission, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Permission>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken);
 

@@ -30,6 +30,10 @@ import { InviteUserDialogComponent } from '../../dialogs/invite-user-dialog/invi
 import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/assign-roles-dialog.component';
 import { InviteResultDialogComponent } from '../../dialogs/invite-result-dialog/invite-result-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { DisableWithoutPermissionDirective } from '../../../auth/directives/disable-without-permission.directive';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
   'SuperAdmin': { label: 'Super Admin', color: '#5B21B6', bg: '#EDE9FE' },
@@ -54,6 +58,8 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: s
     MatTooltipModule,
     MatProgressSpinnerModule,
     MatDividerModule,
+    HideWithoutPermissionDirective,
+    DisableWithoutPermissionDirective,
   ],
   templateUrl: './user-list.component.html',
   styleUrls: ['./user-list.component.scss'],
@@ -64,6 +70,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly dialog      = inject(MatDialog);
   private readonly snackBar    = inject(MatSnackBar);
   private readonly router      = inject(Router);
+  private readonly actionGuard = inject(PermissionActionGuard);
 
   private readonly destroy$      = new Subject<void>();
   private readonly searchSubject = new Subject<string>();
@@ -96,12 +103,20 @@ export class UserListComponent implements OnInit, OnDestroy {
   readonly roleConfig = ROLE_CONFIG;
 
   // ─── Permission gating ──────────────────────────────────────────────────────
+  // PermissionGroup/PermissionAction/permissionCode are auto-generated from the backend's own
+  // enums (see scripts/generate-permissions.mjs) — exposed as instance fields because template
+  // expressions can't reach a plain imported enum/function directly. No permission code in this
+  // file is a hand-typed 'group.action' string literal; every check goes through permissionCode().
+  protected readonly PermissionGroup = PermissionGroup;
+  protected readonly PermissionAction = PermissionAction;
+  protected readonly permissionCode = permissionCode;
+
   private isAdmin(): boolean            { return this.authService.isAdmin(); }
-  canInvite    = (): boolean => this.isAdmin() || this.authService.hasPermission('user.invite');
-  canToggle    = (): boolean => this.isAdmin() || this.authService.hasPermission('user.deactivate');
-  canEdit      = (): boolean => this.isAdmin() || this.authService.hasPermission('user.edit');
-  canAssignRole = (): boolean => this.isAdmin() || this.authService.hasPermission('role.assign');
-  canDelete    = (): boolean => this.isAdmin() || this.authService.hasPermission('user.delete');
+  canInvite     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Invite));
+  canToggle     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Deactivate));
+  canEdit       = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Edit));
+  canAssignRole = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.Role, PermissionAction.Assign));
+  canDelete     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Delete));
   hasRowMenu   = (): boolean =>
     this.canEdit() || this.canAssignRole() || this.canToggle() || this.canInvite() || this.canDelete();
 
@@ -185,6 +200,7 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // ─── Dialogs ─────────────────────────────────────────────────────────────
   openEditDialog(user: User): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to edit users.')) return;
     const ref = this.dialog.open(EditUserDialogComponent, {
       width: '640px', disableClose: true, restoreFocus: false, data: { user },
     });
@@ -192,6 +208,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   openInviteDialog(): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Invite), 'You do not have permission to invite users.')) return;
     const ref = this.dialog.open(InviteUserDialogComponent, {
       width: '560px', disableClose: true, restoreFocus: false,
     });
@@ -199,6 +216,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   openAssignRolesDialog(user: User): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Assign), 'You do not have permission to assign roles.')) return;
     const ref = this.dialog.open(AssignRolesDialogComponent, {
       width: '680px', disableClose: true, restoreFocus: false, data: { user },
     });
@@ -207,6 +225,7 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // ─── User actions ─────────────────────────────────────────────────────────
   deleteUser(user: User): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Delete), 'You do not have permission to delete users.')) return;
     const ref = this.dialog.open(ConfirmDialogComponent, {
       width: '420px', restoreFocus: false,
       data: {
@@ -234,6 +253,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   toggleStatus(user: User, action: 'enable' | 'disable'): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Deactivate), 'You do not have permission to activate or deactivate users.')) return;
     const call$ = action === 'enable'
       ? this.userService.enableUser(user.id)
       : this.userService.disableUser(user.id);
@@ -251,6 +271,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   resendInvitation(user: User): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Invite), 'You do not have permission to invite users.')) return;
     this.userService.resendInvitation(user.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({

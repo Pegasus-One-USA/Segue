@@ -9,12 +9,21 @@ export const API_V1_BASE = `${environment.apiBase}/api/v1`;
 // ─── Auth (AuthController — api/v1/auth) ────────────────────────────────────────
 export const AUTH_ENDPOINTS = {
   login:          `${API_V1_BASE}/auth/internal/login`,
+  loginMfa:       `${API_V1_BASE}/auth/internal/login/mfa`,
   logout:         `${API_V1_BASE}/auth/logout`,
   me:             `${API_V1_BASE}/auth/me`,
   refresh:        `${API_V1_BASE}/auth/refresh`,
   forgotPassword: `${API_V1_BASE}/auth/internal/forgot-password`,
   resetPassword:  `${API_V1_BASE}/auth/internal/reset-password`,
   changePassword: `${API_V1_BASE}/auth/internal/change-password`,
+};
+
+// ─── MFA (MfaController — api/v1/auth/mfa) ──────────────────────────────────────
+export const MFA_ENDPOINTS = {
+  status:  `${API_V1_BASE}/auth/mfa/status`,
+  enroll:  `${API_V1_BASE}/auth/mfa/enroll`,
+  verify:  `${API_V1_BASE}/auth/mfa/verify`,
+  disable: `${API_V1_BASE}/auth/mfa/disable`,
 };
 
 // ─── Users (UsersController — api/v1/users) ─────────────────────────────────────
@@ -29,6 +38,8 @@ export const USERS_ENDPOINTS = {
   permissionAllocations:       (id: string) => `${API_V1_BASE}/users/${id}/permission-allocations`,
   permissionAllocationById:    (id: string, permissionId: string) =>
     `${API_V1_BASE}/users/${id}/permission-allocations/${permissionId}`,
+  mfaDisable:   (id: string) => `${API_V1_BASE}/users/${id}/mfa/disable`,
+  mfaRequire:   (id: string) => `${API_V1_BASE}/users/${id}/mfa/require`,
 };
 
 // ─── Roles & Permissions (RolesController — api/v1/roles, permissions) ─────────
@@ -38,7 +49,8 @@ export const ROLES_ENDPOINTS = {
 };
 
 export const PERMISSIONS_ENDPOINTS = {
-  list: `${API_V1_BASE}/permissions`,
+  list:    `${API_V1_BASE}/permissions`,
+  catalog: `${API_V1_BASE}/permissions/catalog`,
 };
 
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────

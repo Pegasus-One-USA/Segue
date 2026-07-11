@@ -304,10 +304,21 @@ public static class DependencyInjection
 
         services.AddSingleton<ConfigurationSecretProvider>();
         services.AddSingleton<AzureKeyVaultSecretProvider>();
-        // B1: app-provisioned secrets stored encrypted in the control-plane DB (scoped — uses the DbContext).
-        services.AddScoped<DbSecretStore>();
-        services.AddScoped<ISecretWriter>(sp => sp.GetRequiredService<DbSecretStore>());
-        services.AddScoped<ISecretProvider, CompositeSecretProvider>();
+        // B1: app-provisioned secrets. DbSecretStore/CompositeSecretProvider need FHIRBridgeDbContext, which
+        // only exists on the SQL-backed path below — the InMemory path gets a process-local stand-in instead.
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            services.AddSingleton<InMemorySecretStore>();
+            services.AddSingleton<ISecretWriter>(sp => sp.GetRequiredService<InMemorySecretStore>());
+            services.AddSingleton<ISecretProvider>(sp => sp.GetRequiredService<InMemorySecretStore>());
+        }
+        else
+        {
+            services.AddScoped<DbSecretStore>();
+            services.AddScoped<ISecretWriter>(sp => sp.GetRequiredService<DbSecretStore>());
+            services.AddScoped<ISecretProvider, CompositeSecretProvider>();
+        }
+
         services.AddScoped<IConfiguredPipelineService, ConfiguredPipelineService>();
 
         // Synchronous patient-scoped aggregation read. Bound from "PatientAggregation"; defaults apply when absent.

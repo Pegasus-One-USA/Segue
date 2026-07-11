@@ -47,7 +47,16 @@
 - **`PipelineRunMetricsService`**, and option types (`IncrementalSyncOptions`, `ExpertDeterminationOptions`, `PatientAggregationOptions`).
 
 ### Security/
-- **`UnifiedRoles`** (SuperAdmin, Admin, Operations, Audit), **`UnifiedPermissions`** (tenants.read/write, configuration.write, pipeline.execute, auditlogs.read, sourceconnections.test), **`AuthorizationPolicies`**, **`UnifiedRolePermissionSeed`** + **`SeededSecurityIds`**, **`CurrentUserClaimReader`**, **`EntraAuthenticationOptions`** + **`EntraGroupRoleMapper`** (projects Entra group claims onto built-in roles).
+- **`UnifiedRoles`** (SuperAdmin, Admin, Operations, Audit) and the standardized permission taxonomy —
+  **`PermissionCategoryCode`** / **`PermissionGroupCode`** / **`PermissionActionCode`** (the only source of
+  valid Category/Group/Action values) plus **`PermissionTaxonomy`** (maps each group to its category, and
+  derives a permission's wire-format code, display name, and id from its Group+Action pair — nothing is
+  hand-picked, and a permission's id is a packed, human-readable GUID built straight from its Group+Action
+  enum values). **`RbacSeedData`** is the canonical list of built-in categories/groups/permissions/roles;
+  **`SystemRoleDefaultPermissions`** + **`SeededSecurityIds`** (role ids) define the built-in role→permission
+  grants. Also **`AuthorizationPolicies`**,
+  **`CurrentUserClaimReader`**, **`EntraAuthenticationOptions`** + **`EntraGroupRoleMapper`** (projects Entra
+  group claims onto built-in roles).
 
 ### DTOs/ (~52)
 Request/response contracts for the API: tenant/source/webhook/destination/mapping/route create+read DTOs, `MappingFieldDto`/`MappingTestResultDto`/`MappingChildTableDto`, `ConfiguredPipelineRunDto`, `OperationalAuditLogDto`, `SourceCapabilityProfileDto`, terminology result models, auth/identity DTOs (login, password change/reset, role/permission/user management), `HedisMeasureReportDto`, `RunAnomalyDto`, `ManifestImportResultDto`, `MappedDestinationRecord`, and more.

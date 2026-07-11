@@ -6,27 +6,30 @@ import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { AuthStore } from '../store/auth.store';
+import { PermissionService } from './permission.service';
 import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
 import { UserRole, MessageResponse, TokenPair } from '../models/user.model';
 import {
-  LoginRequest, LoginResponse,
+  LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
 import { buildUserFromJwt } from './jwt-user.mapper';
+import { extractApiErrorMessage } from '../../core/http-error.util';
 
 const LOCKOUT_MINUTES = 30;
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly api      = inject(IAuthService);
-  private readonly store    = inject(AuthStore);
-  private readonly tokens   = inject(TokenService);
-  private readonly session  = inject(SessionService);
-  private readonly router   = inject(Router);
-  private readonly security = inject(AccountSecurityService);
-  private readonly emailSvc = inject(EmailNotificationService);
+  private readonly api        = inject(IAuthService);
+  private readonly store      = inject(AuthStore);
+  private readonly tokens     = inject(TokenService);
+  private readonly session    = inject(SessionService);
+  private readonly router     = inject(Router);
+  private readonly security   = inject(AccountSecurityService);
+  private readonly emailSvc   = inject(EmailNotificationService);
+  private readonly permission = inject(PermissionService);
 
   // ─── Expose store signals directly ────────────────────────────────────────
   readonly currentUser     = this.store.currentUser;
@@ -39,7 +42,10 @@ export class AuthService {
   readonly displayName     = this.store.displayName;
 
   // ─── Login ─────────────────────────────────────────────────────────────────
-  login(req: LoginRequest): Observable<LoginResponse> {
+  // When the account has MFA enabled, the resolved value carries requiresMfa: true plus a
+  // challenge token instead of a session — no user/tokens are stored and no navigation happens
+  // until the caller (LoginComponent) submits a code via completeMfaLogin().
+  login(req: LoginRequest): Observable<LoginResult> {
     // Check account lockout before hitting the API
     const lockInfo = this.security.getLockoutInfo(req.email);
     if (lockInfo.locked) {
@@ -54,10 +60,12 @@ export class AuthService {
     return this.api.login(req).pipe(
       tap({
         next: (res) => {
+          this.store.setLoading(false);
+          if (res.requiresMfa) return;
+
           this.security.clearAttempts(req.email, res.user.id);
           this.store.setUser(res.user);
           this.session.start(res.user.id, res.accessToken, res.refreshToken, req.rememberMe ?? false);
-          this.store.setLoading(false);
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
@@ -72,6 +80,32 @@ export class AuthService {
           }
 
           this.store.setError(message);
+          this.store.setLoading(false);
+        },
+      })
+    );
+  }
+
+  // ─── Complete an MFA-gated login ────────────────────────────────────────────
+  // Takes the email alongside the challenge token/code purely to key the client-side lockout
+  // tracker (AccountSecurityService) the same way login()'s error path does — the server has its
+  // own independent lockout check keyed by the account itself, this is just the UI-side counter.
+  completeMfaLogin(email: string, challengeToken: string, code: string, rememberMe = false): Observable<LoginResponse> {
+    this.store.setLoading(true);
+    this.store.setError(null);
+
+    return this.api.verifyMfaLogin(challengeToken, code).pipe(
+      tap({
+        next: (res) => {
+          this.security.clearAttempts(email, res.user.id);
+          this.store.setUser(res.user);
+          this.session.start(res.user.id, res.accessToken, res.refreshToken, rememberMe);
+          this.store.setLoading(false);
+          this.router.navigate(['/dashboard']);
+        },
+        error: (err) => {
+          this.security.recordFailedAttempt(email);
+          this.store.setError(extractApiErrorMessage(err, 'Invalid or expired code. Please try again.'));
           this.store.setLoading(false);
         },
       })
@@ -123,15 +157,32 @@ export class AuthService {
   }
 
   // ─── Refresh ───────────────────────────────────────────────────────────────
+  // Called by authInterceptor on a 401. Two things easy to get wrong here, both fixed:
+  //  1. setTokens()'s 3rd arg defaults to false — omitting it would silently flip a
+  //     "Remember me" (localStorage) session back to session-only on every refresh.
+  //     Reading the current flag first and passing it through preserves the user's choice.
+  //  2. A refreshed access token may carry different permission claims (e.g. an admin
+  //     changed this user's role since login) — re-decoding it and updating AuthStore
+  //     is what actually makes "permissions update on refresh" true, not just the token.
   refreshToken(refreshToken: string): Observable<TokenPair> {
+    const rememberMe = this.tokens.isRemembered;
     return this.api.refreshToken(refreshToken).pipe(
-      tap(pair => this.tokens.setTokens(pair.accessToken, pair.refreshToken))
+      tap(pair => {
+        this.tokens.setTokens(pair.accessToken, pair.refreshToken, rememberMe);
+        const payload = this.tokens.decodePayload<Record<string, unknown>>(pair.accessToken);
+        if (payload) this.store.setUser(buildUserFromJwt(payload));
+      })
     );
   }
 
   // ─── Permission helpers ───────────────────────────────────────────────────
+  // hasPermission() delegates to PermissionService (the one centralized, admin-bypass-aware,
+  // O(1) implementation) rather than AuthStore.hasPermission() — AuthStore keeps its own
+  // simple version for backward compatibility with call sites that inject it directly, but
+  // every NEW call site (this facade, the two directives, the guard) should route through
+  // PermissionService so there's a single place that logic can evolve.
   hasRole(...roles: UserRole[]): boolean    { return this.store.hasRole(...roles); }
-  hasPermission(perm: string): boolean      { return this.store.hasPermission(perm); }
+  hasPermission(perm: string): boolean      { return this.permission.hasPermission(perm); }
   isAdmin(): boolean                        { return this.store.isAdmin(); }
 
   // ─── Initialise from stored token (called in app init) ───────────────────

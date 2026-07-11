@@ -2,13 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
-import { USERS_ENDPOINTS, ROLES_ENDPOINTS, PERMISSIONS_ENDPOINTS } from '../../core/api-endpoints';
+import { USERS_ENDPOINTS, ROLES_ENDPOINTS, PERMISSIONS_ENDPOINTS, AUTH_ENDPOINTS } from '../../core/api-endpoints';
 import { IUserService } from './i-user.service';
-import { CreateUserRequest, UpdateUserRequest, InviteUserRequest } from '../models/auth-request.model';
+import { CreateUserRequest, UpdateUserRequest, InviteUserRequest, ForgotPasswordResponseDto } from '../models/auth-request.model';
 import {
-  User, UserRole, UserStatus, UserQueryParams, PaginatedResponse, MessageResponse,
+  User, UserRole, UserStatus, UserQueryParams, PaginatedResponse,
   UserManagementDto, UserDetailDto, RoleDto, PermissionDto, Role, Permission,
-  BackendUserStatus, InviteResult, PermissionAllocationDto, SYSTEM_ROLE_NAMES,
+  BackendUserStatus, InviteResult, PasswordResetLinkResult, PermissionAllocationDto, SYSTEM_ROLE_NAMES,
+  PermissionCatalogCategoryDto, PermissionCatalogGroupDto, PermissionCategory,
 } from '../models/user.model';
 
 // ─── Role-name → front-end UserRole ──────────────────────────────────────────
@@ -61,9 +62,24 @@ export function mapPermissionDto(dto: PermissionDto): Permission {
   return {
     id:          dto.id,
     name:        dto.name,
+    displayName: dto.displayName ?? dto.name,
     resource:    resource ?? '',
     action:      action ?? '',
     description: dto.description,
+  };
+}
+
+export function mapPermissionCatalogDto(dto: PermissionCatalogCategoryDto): PermissionCategory {
+  return {
+    id:          dto.id,
+    name:        dto.name,
+    displayName: dto.displayName,
+    groups: (dto.groups ?? []).map((g: PermissionCatalogGroupDto) => ({
+      id:          g.id,
+      name:        g.name,
+      displayName: g.displayName,
+      permissions: (g.permissions ?? []).map(mapPermissionDto),
+    })),
   };
 }
 
@@ -83,7 +99,8 @@ function mapListDto(dto: UserManagementDto): User {
     loginType:          dto.isLocalLoginEnabled ? 'local' : 'sso',
     mustChangePassword: dto.mustChangePassword,
     emailVerified:      true,
-    twoFactorEnabled:   false,
+    twoFactorEnabled:   dto.mfaEnabled,
+    mfaRequired:        dto.mustSetupMfa,
     lastLoginAt:        dto.lastLoginOnUtc ?? undefined,
     createdAt:          dto.createdOnUtc,
     updatedAt:          dto.createdOnUtc,
@@ -103,12 +120,14 @@ function mapDetailDto(dto: UserDetailDto): User {
     role:               roles[0]?.name ?? 'Audit',
     roles,
     permissions:        [...new Map(roles.flatMap(r => r.permissions).map(p => [p.id, p])).values()],
+    directPermissionAllocations: dto.directPermissionAllocations ?? [],
     orgId:              '',
     status:             toStatus(dto.status, dto.isEnabled),
     loginType:          'local',
     mustChangePassword: false,
     emailVerified:      true,
-    twoFactorEnabled:   false,
+    twoFactorEnabled:   dto.mfaEnabled,
+    mfaRequired:        dto.mustSetupMfa,
     lastLoginAt:        dto.lastLoginOnUtc ?? undefined,
     createdAt:          dto.createdOnUtc,
     updatedAt:          dto.createdOnUtc,
@@ -128,6 +147,26 @@ function toInviteResult(dto: UserDetailDto, fallbackEmail: string): InviteResult
     invitationLink:  token
       ? `${location.origin}/auth/set-password?token=${token}&email=${encodeURIComponent(email)}`
       : undefined,
+  };
+}
+
+// The reset-password page needs the email alongside the token — the backend looks the account up
+// by email, then verifies the token hash (see LocalAuthService.ResetPasswordAsync). Exported so
+// MockUserService can build an identically-shaped link for its own simulated reset token.
+export function buildResetLink(token: string, email: string): string {
+  return `${location.origin}/auth/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+}
+
+function toPasswordResetLinkResult(dto: ForgotPasswordResponseDto, email: string): PasswordResetLinkResult {
+  const token = dto.resetToken ?? undefined;
+  return {
+    success:    true,
+    message:    token
+      ? `Reset link generated for ${email}.`
+      : `Reset requested for ${email}, but no link was returned (email delivery isn't configured).`,
+    email,
+    resetToken: token,
+    resetLink:  token ? buildResetLink(token, email) : undefined,
   };
 }
 
@@ -314,8 +353,42 @@ export class ApiUserService extends IUserService {
     );
   }
 
+  setUserPermissionAllocations(userId: string, permissionIdToIsEnabled: Record<string, boolean>): Observable<User> {
+    return this.http
+      .put<UserDetailDto>(USERS_ENDPOINTS.permissionAllocations(userId), { permissionIdToIsEnabled })
+      .pipe(
+        map(mapDetailDto),
+        catchError(err => throwError(() => err))
+      );
+  }
+
+  // ─── Reset password (admin-triggered) ───────────────────────────────────
+  // Reuses the same self-service forgot-password endpoint the login page uses — the backend
+  // treats it identically regardless of caller, and already returns the raw token in dev config.
+  resetUserPassword(_userId: string, email: string): Observable<PasswordResetLinkResult> {
+    return this.http.post<ForgotPasswordResponseDto>(AUTH_ENDPOINTS.forgotPassword, { email }).pipe(
+      map(dto => toPasswordResetLinkResult(dto, email)),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Disable MFA (admin account-recovery override) ──────────────────────
+  disableUserMfa(userId: string): Observable<User> {
+    return this.http.post<UserDetailDto>(USERS_ENDPOINTS.mfaDisable(userId), {}).pipe(
+      map(mapDetailDto),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  // ─── Require / stop requiring MFA (admin policy toggle) ──────────────────
+  setUserMfaRequirement(userId: string, required: boolean): Observable<User> {
+    return this.http.post<UserDetailDto>(USERS_ENDPOINTS.mfaRequire(userId), { required }).pipe(
+      map(mapDetailDto),
+      catchError(err => throwError(() => err))
+    );
+  }
+
   // ─── Not backed by an endpoint yet ───────────────────────────────────────
   createUser(_req: CreateUserRequest): Observable<User>          { return notImpl() as any; }
   suspendUser(_id: string): Observable<User>                     { return notImpl() as any; }
-  resetUserPassword(_userId: string): Observable<MessageResponse>{ return notImpl() as any; }
 }

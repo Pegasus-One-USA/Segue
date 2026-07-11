@@ -3,23 +3,49 @@ import {
   Component, OnInit, signal, computed, inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { forkJoin, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatRadioModule, MatRadioChange } from '@angular/material/radio';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { IUserService } from '../../../auth/services/i-user.service';
-import { User, Role, Permission, UserRole } from '../../../auth/models/user.model';
+import { IRoleService } from '../../services/i-role.service';
+import { User, Role, Permission, PermissionCategory, UserRole } from '../../../auth/models/user.model';
 import { ROLE_CONFIG } from '../../pages/user-list/user-list.component';
+import { AuthStore } from '../../../auth/store/auth.store';
+
+function backendErrorMessage(err: unknown, fallback: string): string {
+  const body = (err as { error?: { error?: string } } | null)?.error;
+  return body?.error ?? fallback;
+}
 
 interface DialogData {
   user: User;
+}
+
+// A permission within the allowed/denied preview — same shape as `Permission` plus whether the
+// currently-selected role grants it.
+interface StatusPermission extends Permission {
+  allowed: boolean;
+}
+
+interface StatusGroup {
+  id: string;
+  displayName: string;
+  permissions: StatusPermission[];
+}
+
+interface StatusCategory {
+  id: string;
+  displayName: string;
+  groups: StatusGroup[];
 }
 
 @Component({
@@ -30,10 +56,9 @@ interface DialogData {
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
-    MatCheckboxModule,
+    MatRadioModule,
     MatProgressSpinnerModule,
     MatDividerModule,
-    MatChipsModule,
     MatTooltipModule,
   ],
   templateUrl: './assign-roles-dialog.component.html',
@@ -41,50 +66,65 @@ interface DialogData {
 })
 export class AssignRolesDialogComponent implements OnInit {
   private readonly userService = inject(IUserService);
+  private readonly roleService = inject(IRoleService);
+  private readonly authStore   = inject(AuthStore);
   private readonly dialogRef   = inject(MatDialogRef<AssignRolesDialogComponent>);
   private readonly snackBar    = inject(MatSnackBar);
   readonly data                = inject<DialogData>(MAT_DIALOG_DATA);
 
   // ─── State signals ────────────────────────────────────────────────────────
-  allRoles     = signal<Role[]>([]);
-  loading      = signal(false);
-  actionLoading = signal<string | null>(null); // roleId being toggled
+  allRoles      = signal<Role[]>([]);
+  catalog       = signal<PermissionCategory[]>([]);
+  loading       = signal(false);
+  actionLoading = signal<string | null>(null); // roleId being assigned
 
   // Mutable local copy of user so we can reflect changes immediately
   localUser = signal<User>({ ...this.data.user, roles: [...this.data.user.roles] });
 
   readonly roleConfig = ROLE_CONFIG;
 
-  // ─── Computed: assigned role IDs ─────────────────────────────────────────
+  // ─── Computed: the single assigned role (a user has at most one) ─────────
+  assignedRole = computed<Role | null>(() => this.localUser().roles[0] ?? null);
+
   assignedRoleIds = computed(() =>
     new Set(this.localUser().roles.map(r => r.id))
   );
 
-  // ─── Computed: effective permissions from assigned roles ─────────────────
-  effectivePermissions = computed<Permission[]>(() => {
-    const seen = new Set<string>();
-    const perms: Permission[] = [];
-    for (const role of this.localUser().roles) {
-      for (const perm of role.permissions ?? []) {
-        if (!seen.has(perm.id)) {
-          seen.add(perm.id);
-          perms.push(perm);
-        }
-      }
-    }
-    return perms;
+  // The backend refuses to remove your own Super Admin role (self-lockout protection) — this
+  // dialog is editing the currently logged-in user's own account and their role is Super Admin,
+  // so every other role must stay disabled rather than let the click round-trip into a 400.
+  isEditingOwnSuperAdmin = computed(() =>
+    this.assignedRole()?.name === 'SuperAdmin' && this.data.user.id === this.authStore.currentUser()?.id
+  );
+
+  // ─── Computed: what the assigned role grants ──────────────────────────────
+  effectivePermissions = computed<Permission[]>(() => this.assignedRole()?.permissions ?? []);
+
+  // ─── Computed: full catalog, each permission marked allowed/denied by the assigned role ─
+  catalogWithStatus = computed<StatusCategory[]>(() => {
+    const allowedIds = new Set(this.effectivePermissions().map(p => p.id));
+    return this.catalog().map(cat => ({
+      id:          cat.id,
+      displayName: cat.displayName,
+      groups: cat.groups.map(g => ({
+        id:          g.id,
+        displayName: g.displayName,
+        permissions: g.permissions.map(p => ({ ...p, allowed: allowedIds.has(p.id) })),
+      })),
+    }));
   });
 
-  // ─── Computed: grouped permissions ───────────────────────────────────────
-  permissionGroups = computed<{ resource: string; permissions: Permission[] }[]>(() => {
-    const groups = new Map<string, Permission[]>();
-    for (const p of this.effectivePermissions()) {
-      const list = groups.get(p.resource) ?? [];
-      list.push(p);
-      groups.set(p.resource, list);
-    }
-    return Array.from(groups.entries()).map(([resource, permissions]) => ({ resource, permissions }));
-  });
+  totalPermissionsCount = computed(() =>
+    this.catalog().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
+  );
+  // Counted from catalogWithStatus (catalog permissions only) rather than effectivePermissions()
+  // directly — a role can carry permissions the catalog excludes (deactivated/hidden ones), which
+  // would otherwise make allowed + denied not add up to the catalog total.
+  allowedCount = computed(() =>
+    this.catalogWithStatus().reduce(
+      (sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.filter(p => p.allowed).length, 0), 0)
+  );
+  deniedCount  = computed(() => this.totalPermissionsCount() - this.allowedCount());
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   ngOnInit(): void {
@@ -93,72 +133,69 @@ export class AssignRolesDialogComponent implements OnInit {
 
   loadRoles(): void {
     this.loading.set(true);
-    this.userService.getRoles().subscribe({
-      next: roles => {
+    forkJoin({
+      roles:   this.userService.getRoles(),
+      catalog: this.roleService.getPermissionCatalog(),
+    }).subscribe({
+      next: ({ roles, catalog }) => {
         this.allRoles.set(roles);
+        this.catalog.set(catalog);
         this.loading.set(false);
       },
       error: err => {
         this.loading.set(false);
-        this.snackBar.open(err?.message ?? 'Failed to load roles.', 'Dismiss', { duration: 4000 });
+        this.snackBar.open(backendErrorMessage(err, 'Failed to load roles.'), 'Dismiss', { duration: 4000 });
       },
     });
   }
 
-  // ─── Role assignment ──────────────────────────────────────────────────────
+  // ─── Role assignment — a user may only have one role at a time ───────────
   isAssigned(roleId: string): boolean {
     return this.assignedRoleIds().has(roleId);
   }
 
-  toggleRole(role: Role): void {
-    if (this.actionLoading()) return; // prevent concurrent toggles
-
-    if (this.isAssigned(role.id)) {
-      this.removeRole(role);
-    } else {
-      this.assignRole(role);
-    }
+  // Every role except the one already assigned is unselectable while editing your own
+  // Super Admin account — see isEditingOwnSuperAdmin.
+  isRoleDisabled(roleId: string): boolean {
+    return this.isEditingOwnSuperAdmin() && !this.isAssigned(roleId);
   }
 
-  assignRole(role: Role): void {
+  onRoleRadioChange(change: MatRadioChange): void {
+    const role = this.allRoles().find(r => r.id === change.value);
+    if (role) this.selectRole(role);
+  }
+
+  selectRole(role: Role): void {
+    if (this.actionLoading() || this.isRoleDisabled(role.id)) return;
+
+    const currentRoles = this.localUser().roles;
+    const alreadyAssigned = currentRoles.some(r => r.id === role.id);
+    if (alreadyAssigned && currentRoles.length === 1) return; // already the sole role
+
     this.actionLoading.set(role.id);
-    this.userService.assignRole(this.localUser().id, role.id).subscribe({
+    const rolesToRemove = currentRoles.filter(r => r.id !== role.id);
+
+    const removeChain = rolesToRemove.reduce(
+      (chain, r) => chain.pipe(switchMap(() => this.userService.removeRole(this.localUser().id, r.id))),
+      of(this.localUser()),
+    );
+
+    // The target role may already be one of several assigned roles (legacy multi-role state) — in
+    // that case just remove the others, don't re-assign a role the user already has.
+    const finalChain = alreadyAssigned
+      ? removeChain
+      : removeChain.pipe(switchMap(() => this.userService.assignRole(this.localUser().id, role.id)));
+
+    finalChain.subscribe({
       next: updatedUser => {
         this.localUser.set(updatedUser);
         this.actionLoading.set(null);
-        this.snackBar.open(
-          `Role "${role.displayName}" assigned.`,
-          'Dismiss',
-          { duration: 2500 },
-        );
+        this.snackBar.open(`Role set to "${role.displayName}".`, 'Dismiss', { duration: 2500 });
       },
       error: err => {
         this.actionLoading.set(null);
         this.snackBar.open(
-          err?.message ?? `Failed to assign role "${role.displayName}".`,
-          'Dismiss',
-          { duration: 4000 },
-        );
-      },
-    });
-  }
-
-  removeRole(role: Role): void {
-    this.actionLoading.set(role.id);
-    this.userService.removeRole(this.localUser().id, role.id).subscribe({
-      next: updatedUser => {
-        this.localUser.set(updatedUser);
-        this.actionLoading.set(null);
-        this.snackBar.open(
-          `Role "${role.displayName}" removed.`,
-          'Dismiss',
-          { duration: 2500 },
-        );
-      },
-      error: err => {
-        this.actionLoading.set(null);
-        this.snackBar.open(
-          err?.message ?? `Failed to remove role "${role.displayName}".`,
+          backendErrorMessage(err, `Failed to set role "${role.displayName}".`),
           'Dismiss',
           { duration: 4000 },
         );

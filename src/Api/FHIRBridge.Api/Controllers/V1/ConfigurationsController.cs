@@ -1,6 +1,8 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,37 +14,52 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// in their own controllers.
 /// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+[Authorize]
 [Route("api/v1")]
 public sealed class ConfigurationsController : ControllerBase
 {
     private readonly IConfigurationService _configurationService;
+    private readonly IAuthorizationService _authorizationService;
 
-    public ConfigurationsController(IConfigurationService configurationService)
+    public ConfigurationsController(
+        IConfigurationService configurationService,
+        IAuthorizationService authorizationService)
     {
         _configurationService = configurationService;
+        _authorizationService = authorizationService;
     }
 
     // ── Source connections ────────────────────────────────────────────────────
+    // Which permission a source connection requires depends on its vendor (SourceSystemType), known
+    // only once the request is inspected — a static [StandardPermission] can't express that, so these
+    // two check a resolved, vendor-specific permission at runtime instead of declaring one up front.
 
     [HttpPost("source-connections")]
+    [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection.")]
     [ProducesResponseType(typeof(SourceConnectionDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddSourceConnection(
         [FromBody] CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
+        if (denied is not null) return denied;
+
         var sourceConnection = await _configurationService.AddSourceConnectionAsync(request, cancellationToken);
 
         return Created($"/api/v1/source-connections/{sourceConnection.Id}", sourceConnection);
     }
 
     [HttpPut("source-connections/{sourceConnectionId:guid}")]
+    [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection.")]
     [ProducesResponseType(typeof(SourceConnectionDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateSourceConnection(
         Guid sourceConnectionId,
         [FromBody] CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
+        if (denied is not null) return denied;
+
         var sourceConnection = await _configurationService.UpdateSourceConnectionAsync(
             sourceConnectionId,
             request,
@@ -51,7 +68,12 @@ public sealed class ConfigurationsController : ControllerBase
         return Ok(sourceConnection);
     }
 
+    // Deactivating only takes an id, not the connection's vendor — resolving that would need a lookup
+    // first (the write-only IConfigurationService doesn't expose one yet), so this stays admin-only for
+    // now rather than guess. Add a GetSourceConnectionByIdAsync + the same AuthorizePermissionAsync call
+    // once that's needed.
     [HttpPost("source-connections/{sourceConnectionId:guid}/deactivate")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(SourceConnectionDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateSourceConnection(
         Guid sourceConnectionId,
@@ -68,6 +90,7 @@ public sealed class ConfigurationsController : ControllerBase
     // ── Webhooks ──────────────────────────────────────────────────────────────
 
     [HttpPost("webhooks")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(WebhookConfigurationDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddWebhookConfiguration(
         [FromBody] CreateWebhookConfigurationRequest request,
@@ -79,6 +102,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("webhooks/{webhookConfigurationId:guid}/deactivate")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(WebhookConfigurationDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateWebhookConfiguration(
         Guid webhookConfigurationId,
@@ -95,6 +119,7 @@ public sealed class ConfigurationsController : ControllerBase
     // ── Destinations ──────────────────────────────────────────────────────────
 
     [HttpPost("destinations")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddDestinationConfiguration(
         [FromBody] CreateDestinationConfigurationRequest request,
@@ -106,6 +131,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPut("destinations/{destinationId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateDestinationConfiguration(
         Guid destinationId,
@@ -121,6 +147,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("destinations/{destinationId:guid}/deactivate")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateDestinationConfiguration(
         Guid destinationId,
@@ -137,6 +164,7 @@ public sealed class ConfigurationsController : ControllerBase
     // ── Mapping profiles ──────────────────────────────────────────────────────
 
     [HttpPost("mapping-profiles")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddMappingProfile(
         [FromBody] CreateMappingProfileRequest request,
@@ -148,6 +176,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPut("mapping-profiles/{mappingProfileId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateMappingProfile(
         Guid mappingProfileId,
@@ -163,6 +192,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("mapping-profiles/{mappingProfileId:guid}/deactivate")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateMappingProfile(
         Guid mappingProfileId,
@@ -179,6 +209,7 @@ public sealed class ConfigurationsController : ControllerBase
     // ── Resources / routes ────────────────────────────────────────────────────
 
     [HttpPost("resources")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(ResourceConfigurationDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> ConfigureResource(
         [FromBody] ConfigureResourceRequest request,
@@ -190,6 +221,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("resources/{resourceType}/deactivate")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(ResourceConfigurationDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateResourceConfiguration(
         string resourceType,
@@ -204,6 +236,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("resources/{resourceType}/routes")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(ResourcePipelineRouteDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddResourceRoute(
         string resourceType,
@@ -216,6 +249,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPut("resources/{resourceType}/routes/{routeId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(ResourcePipelineRouteDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateResourceRoute(
         string resourceType,
@@ -229,6 +263,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("resources/{resourceType}/routes/{routeId:guid}/deactivate")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(ResourcePipelineRouteDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateResourceRoute(
         string resourceType,

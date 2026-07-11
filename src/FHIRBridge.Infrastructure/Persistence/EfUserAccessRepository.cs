@@ -59,6 +59,13 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
             cancellationToken);
     }
 
+    public Task<User?> GetUserByMfaChallengeTokenHashAsync(string mfaChallengeTokenHash, CancellationToken cancellationToken)
+    {
+        return _dbContext.Users.FirstOrDefaultAsync(
+            x => x.MfaChallengeTokenHash != null && x.MfaChallengeTokenHash == mfaChallengeTokenHash,
+            cancellationToken);
+    }
+
     public async Task DeleteUserAsync(User user, CancellationToken cancellationToken)
     {
         user.ApplyDeleted("system", DateTime.UtcNow);
@@ -135,6 +142,19 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PermissionGroup>> GetPermissionGroupsAsync(CancellationToken cancellationToken)
+    {
+        return await _dbContext.PermissionGroups
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddPermissionGroupAsync(PermissionGroup group, CancellationToken cancellationToken)
+    {
+        await _dbContext.PermissionGroups.AddAsync(group, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Permission>> GetPermissionsAsync(CancellationToken cancellationToken)
     {
         return await _dbContext.Permissions
@@ -150,6 +170,12 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
     public async Task AddPermissionAsync(Permission permission, CancellationToken cancellationToken)
     {
         await _dbContext.Permissions.AddAsync(permission, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdatePermissionAsync(Permission permission, CancellationToken cancellationToken)
+    {
+        _dbContext.Permissions.Update(permission);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 

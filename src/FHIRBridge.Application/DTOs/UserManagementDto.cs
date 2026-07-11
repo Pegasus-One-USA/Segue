@@ -13,4 +13,6 @@ public sealed record UserManagementDto(
     bool MustChangePassword,
     IReadOnlyList<string> GlobalRoleNames,
     DateTime CreatedOnUtc,
-    DateTime? LastLoginOnUtc);
+    DateTime? LastLoginOnUtc,
+    bool MfaEnabled,
+    bool MustSetupMfa);

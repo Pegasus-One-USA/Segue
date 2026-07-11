@@ -1,7 +1,7 @@
 import { Observable } from 'rxjs';
 import {
   User, Role, Permission, PermissionAllocationDto,
-  PaginatedResponse, MessageResponse, UserQueryParams, InviteResult,
+  PaginatedResponse, UserQueryParams, InviteResult, PasswordResetLinkResult,
 } from '../models/user.model';
 import {
   CreateUserRequest, UpdateUserRequest, InviteUserRequest,
@@ -22,8 +22,14 @@ export abstract class IUserService {
   abstract getPermissions(): Observable<Permission[]>;
   abstract inviteUser(req: InviteUserRequest): Observable<InviteResult>;
   abstract resendInvitation(userId: string): Observable<InviteResult>;
-  abstract resetUserPassword(userId: string): Observable<MessageResponse>;
+  abstract resetUserPassword(userId: string, email: string): Observable<PasswordResetLinkResult>;
+  /** Admin account-recovery action: force-disables MFA for a user who lost their authenticator, without requiring a code. */
+  abstract disableUserMfa(userId: string): Observable<User>;
+  /** Admin policy toggle: requires (or stops requiring) this user to have MFA enabled. */
+  abstract setUserMfaRequirement(userId: string, required: boolean): Observable<User>;
   abstract getUserPermissionAllocations(userId: string): Observable<PermissionAllocationDto[]>;
   abstract setUserPermissionAllocation(userId: string, permissionId: string, isEnabled: boolean): Observable<User>;
   abstract removeUserPermissionAllocation(userId: string, permissionId: string): Observable<void>;
+  /** Replaces every direct override at once. An empty map clears all overrides (full role inheritance). */
+  abstract setUserPermissionAllocations(userId: string, permissionIdToIsEnabled: Record<string, boolean>): Observable<User>;
 }

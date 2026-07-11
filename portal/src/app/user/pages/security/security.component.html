@@ -43,20 +43,50 @@
               <div>
                 <h2 class="card-title">Two-Factor Authentication</h2>
                 <p class="card-sub">
-                  @if (profile().twoFactorEnabled) {
+                  @if (mfaStatus()?.enabled) {
                     2FA is <strong class="text-green">enabled</strong>. Your account has an extra layer of security.
+                    @if (mfaStatus()!.remainingBackupCodes === 0) {
+                      <br /><span class="text-red">No backup codes remain — disable and re-enable to generate new ones.</span>
+                    }
                   } @else {
                     2FA is <strong class="text-red">disabled</strong>. Enable it to protect your account.
                   }
                 </p>
               </div>
-              <button
-                [class]="profile().twoFactorEnabled ? 'btn-danger-outline' : 'btn-primary'"
-                type="button" (click)="toggleTwoFactor()"
-              >
-                Phase 2
-              </button>
+              @if (mfaStatus()?.enabled) {
+                <button class="btn-danger-outline" type="button" (click)="openDisable()" [disabled]="mfaBusy() || disableOpen()">
+                  Disable
+                </button>
+              }
             </div>
+
+            <!-- Enrollment (the panel owns its own trigger/QR/confirm/backup-codes states) -->
+            @if (!mfaStatus()?.enabled) {
+              <app-mfa-enrollment-panel (enrolled)="onEnrolled()" />
+            }
+
+            @if (mfaError() && !disableOpen()) {
+              <div class="mfa-alert" role="alert">{{ mfaError() }}</div>
+            }
+
+            <!-- Disable -->
+            @if (disableOpen()) {
+              <div class="inline-form">
+                <div class="form-field">
+                  <label>Current code or a backup code</label>
+                  <input type="text" inputmode="numeric" autocomplete="one-time-code" #disableCode placeholder="123456" />
+                </div>
+                @if (mfaError()) {
+                  <div class="mfa-alert" role="alert">{{ mfaError() }}</div>
+                }
+                <div class="form-actions">
+                  <button class="btn-danger-outline" type="button" [disabled]="mfaBusy()" (click)="confirmDisable(disableCode.value)">
+                    Disable 2FA
+                  </button>
+                  <button class="btn-ghost" type="button" [disabled]="mfaBusy()" (click)="cancelDisable()">Cancel</button>
+                </div>
+              </div>
+            }
           </section>
 
           <!-- Active Sessions -->

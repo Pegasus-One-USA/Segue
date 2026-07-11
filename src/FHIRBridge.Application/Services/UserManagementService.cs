@@ -286,6 +286,44 @@ public sealed class UserManagementService : IUserManagementService
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }
 
+    public async Task<UserDetailDto> DisableMfaForUserAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        if (user.MfaEnabled)
+        {
+            user.DisableMfa();
+            await _repository.UpdateUserAsync(user, cancellationToken);
+            await AuditAsync(
+                "MfaDisabledByAdmin",
+                $"MFA disabled by an administrator for {user.Email ?? user.ExternalUserId}.",
+                cancellationToken);
+        }
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Admin policy toggle: requires (or stops requiring) this account to have MFA enabled. Setting
+    /// this while the user has no MFA enrolled gates their next login to enrollment only — see
+    /// LocalAuthService's RequiresMfaSetup handling and the corresponding gate middleware in Program.cs.
+    /// </summary>
+    public async Task<UserDetailDto> SetMfaRequirementAsync(Guid userId, bool required, CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        user.SetMustSetupMfa(required);
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        await AuditAsync(
+            required ? "MfaRequiredByAdmin" : "MfaRequirementRemovedByAdmin",
+            $"MFA {(required ? "required" : "no longer required")} by an administrator for {user.Email ?? user.ExternalUserId}.",
+            cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
     public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
@@ -307,7 +345,7 @@ public sealed class UserManagementService : IUserManagementService
                 role.Id,
                 role.Name,
                 role.Description,
-                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description, p.CategoryId)).ToArray(),
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.DisplayName, p.Description, p.GroupId, p.IsVisible)).ToArray(),
                 role.IsSystem));
         }
 
@@ -405,6 +443,26 @@ public sealed class UserManagementService : IUserManagementService
         await ForceReauthenticationAsync(user, cancellationToken);
     }
 
+    public async Task<UserDetailDto> SetUserPermissionAllocationsAsync(
+        Guid userId,
+        SetUserPermissionAllocationsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("User was not found.");
+
+        await _repository.SetUserPermissionAllocationsAsync(userId, request.PermissionIdToIsEnabled, cancellationToken);
+        await AuditAsync(
+            "UserPermissionAllocationsReplaced",
+            request.PermissionIdToIsEnabled.Count == 0
+                ? $"All direct permission overrides cleared for user {user.Email ?? user.ExternalUserId}; now fully inherits role grants."
+                : $"Direct permission overrides replaced for user {user.Email ?? user.ExternalUserId} ({request.PermissionIdToIsEnabled.Count} override(s)).",
+            cancellationToken);
+        await ForceReauthenticationAsync(user, cancellationToken);
+
+        return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
+    }
+
     /// <summary>
     /// Clears the user's refresh token so their next silent-refresh attempt fails and they're forced
     /// through a real login, picking up the newly resolved permission set. The access token already in
@@ -447,7 +505,7 @@ public sealed class UserManagementService : IUserManagementService
                 role.Id,
                 role.Name,
                 role.Description,
-                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.Description, p.CategoryId)).ToArray(),
+                permissions.Select(p => new PermissionDto(p.Id, p.Name, p.DisplayName, p.Description, p.GroupId, p.IsVisible)).ToArray(),
                 role.IsSystem));
         }
 
@@ -468,7 +526,9 @@ public sealed class UserManagementService : IUserManagementService
             allocationDtos,
             user.CreatedOnUtc,
             user.LastLoginOnUtc,
-            invitationToken);
+            invitationToken,
+            user.MfaEnabled,
+            user.MustSetupMfa);
     }
 
     private async Task<UserManagementDto> ToManagementDtoAsync(User user, CancellationToken cancellationToken)
@@ -486,7 +546,9 @@ public sealed class UserManagementService : IUserManagementService
             user.MustChangePassword,
             roles.Select(x => x.Name).ToArray(),
             user.CreatedOnUtc,
-            user.LastLoginOnUtc);
+            user.LastLoginOnUtc,
+            user.MfaEnabled,
+            user.MustSetupMfa);
     }
 
     private async Task AuditAsync(string action, string message, CancellationToken cancellationToken)

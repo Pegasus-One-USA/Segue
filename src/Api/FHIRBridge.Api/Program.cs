@@ -101,6 +101,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services
     .AddFHIRBridgeApplication()
@@ -120,7 +121,13 @@ builder.Services.AddAuthorization(options =>
         policy.AddRequirements(new UnifiedAdminRequirement());
     });
 
-    // Permission-based policies — one per permission code declared on UnifiedPermissions
+    options.AddPolicy(AuthorizationPolicies.SuperAdminOnly, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new SuperAdminOnlyRequirement());
+    });
+
+    // Permission-based policies — one per permission code declared in RbacSeedData.Permissions
     // or referenced via [StandardPermission] on a controller (see PermissionCatalog).
     foreach (var code in PermissionCatalog.AllPermissionCodes(typeof(Program).Assembly))
     {
@@ -218,13 +225,14 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
-// A [StandardPermission("some.code")] whose code doesn't match a UnifiedPermissions
-// constant still gets a policy (see PermissionCatalog.AllPermissionCodes above), but
-// it's almost always a typo — surface it at startup instead of a silent 403 later.
+// A [StandardPermission(group, action)] whose derived code has no matching
+// RbacSeedData.Permissions entry still gets a policy (see PermissionCatalog.AllPermissionCodes
+// above), but it's almost always a sign the seed data is missing that permission — surface it
+// at startup instead of a silent 403 later.
 foreach (var undeclaredCode in PermissionCatalog.FindUndeclaredCodes(typeof(Program).Assembly))
 {
     app.Logger.LogWarning(
-        "Permission code '{PermissionCode}' is used via [StandardPermission] but is not declared on UnifiedPermissions.",
+        "Permission code '{PermissionCode}' is used via [StandardPermission] but is not declared in RbacSeedData.Permissions.",
         undeclaredCode);
 }
 
@@ -282,25 +290,35 @@ SyncDiscoveredPermissions(app);
 
 app.UseCors("Portal");
 app.UseAuthentication();
+
+// Each entry blocks every /api/v1 route except its own allowlist while its claim is "true" — e.g.
+// must change password, or must finish MFA enrollment. One shared check so a third gate is just
+// another entry here, not a third copy-pasted middleware block.
+var sessionGates = new[]
+{
+    (Claim: "pwd_change_required",
+     Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me" },
+     Message: "Password change is required before using FHIRBridge."),
+    (Claim: "mfa_setup_required",
+     Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me" },
+     Message: "Two-factor authentication setup is required before using FHIRBridge."),
+};
+
 app.Use(async (context, next) =>
 {
-    var requiresPasswordChange = context.User.Identity?.IsAuthenticated == true &&
-                                 string.Equals(
-                                     context.User.FindFirst("pwd_change_required")?.Value,
-                                     "true",
-                                     StringComparison.OrdinalIgnoreCase);
-
-    if (requiresPasswordChange &&
-        context.Request.Path.StartsWithSegments("/api/v1") &&
-        !context.Request.Path.StartsWithSegments("/api/v1/auth/internal/change-password") &&
-        !context.Request.Path.StartsWithSegments("/api/v1/auth/me"))
+    foreach (var gate in sessionGates)
     {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new
+        var required = context.User.Identity?.IsAuthenticated == true &&
+                        string.Equals(context.User.FindFirst(gate.Claim)?.Value, "true", StringComparison.OrdinalIgnoreCase);
+
+        if (required &&
+            context.Request.Path.StartsWithSegments("/api/v1") &&
+            !gate.Allowed.Any(allowed => context.Request.Path.StartsWithSegments(allowed)))
         {
-            message = "Password change is required before using FHIRBridge."
-        });
-        return;
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { message = gate.Message });
+            return;
+        }
     }
 
     await next();
@@ -360,67 +378,125 @@ static void SyncDiscoveredPermissions(WebApplication app)
     SyncDiscoveredPermissionsAsync(repository, app.Logger).GetAwaiter().GetResult();
 }
 
-static async Task SyncDiscoveredPermissionsAsync(IUserAccessRepository repository, Microsoft.Extensions.Logging.ILogger logger)
+static async Task SyncDiscoveredPermissionsAsync(
+    IUserAccessRepository repository,
+    Microsoft.Extensions.Logging.ILogger logger)
 {
-    var discoveredCodes = PermissionCatalog.DiscoveredCodes(typeof(Program).Assembly);
+    // Every permission referenced by a [StandardPermission] attribute. PermissionCatalog already
+    // deduplicates these by code and combines descriptions/instances, so each entry here is unique
+    // by Id — no further grouping needed.
+    var discoveredPermissions = PermissionCatalog.DiscoveredPermissions(typeof(Program).Assembly);
+    var discoveredPermissionsById = discoveredPermissions.ToDictionary(p => p.Id);
+
     var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);
-    var existingCodes = new HashSet<string>(existingPermissions.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+    var existingPermissionsById = existingPermissions.ToDictionary(p => p.Id);
+
+    // Permissions declared in RbacSeedData are owned by RbacBootstrapper and must never be
+    // deactivated by this method.
+    var seedDeclaredPermissionIds = new HashSet<Guid>(RbacSeedData.Permissions.Select(p => p.Id));
 
     var superAdminRole = await repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, CancellationToken.None);
 
-    var categories = (await repository.GetPermissionCategoriesAsync(CancellationToken.None))
-        .ToDictionary(c => c.Name, c => c.Id, StringComparer.OrdinalIgnoreCase);
-
-    foreach (var code in discoveredCodes.Where(code => !existingCodes.Contains(code)))
+    // 1. Deactivate a non-seeded permission that's active but no longer discovered in code.
+    foreach (var existingPermission in existingPermissions)
     {
-        var categoryId = await GetOrCreateCategoryIdAsync(repository, categories, code, CancellationToken.None);
+        if (!existingPermission.IsActive)
+        {
+            continue;
+        }
 
-        var permission = new Permission(
-            Guid.NewGuid(),
-            code,
-            $"Auto-registered permission for '{code}'.",
-            categoryId,
-            isSystem: false);
+        if (seedDeclaredPermissionIds.Contains(existingPermission.Id))
+        {
+            continue;
+        }
 
-        await repository.AddPermissionAsync(permission, CancellationToken.None);
-        logger.LogWarning(
-            "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission]; review its category/description in the Permissions table.",
-            code);
+        if (!discoveredPermissionsById.ContainsKey(existingPermission.Id))
+        {
+            existingPermission.Deactivate();
+            await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
+        }
+    }
+
+    // 2 & 3. Update an existing permission's fields, or create a new one.
+    foreach (var discoveredPermission in discoveredPermissions)
+    {
+        var displayName = PermissionTaxonomy.BuildPermissionDisplayName(
+            discoveredPermission.Group,
+            discoveredPermission.Action);
+
+        var description = string.IsNullOrWhiteSpace(discoveredPermission.Description)
+            ? $"Auto-registered permission for '{discoveredPermission.Code}'."
+            : discoveredPermission.Description;
+
+        if (existingPermissionsById.TryGetValue(discoveredPermission.Id, out var existingPermission))
+        {
+            // Keep every mutable field synchronized with what's currently discovered from source code.
+            var changed = false;
+
+            if (existingPermission.Name != discoveredPermission.Code)
+            {
+                existingPermission.UpdateName(discoveredPermission.Code);
+                changed = true;
+            }
+
+            if (existingPermission.DisplayName != displayName)
+            {
+                existingPermission.UpdateDisplayName(displayName);
+                changed = true;
+            }
+
+            if (!string.Equals(existingPermission.Description, description, StringComparison.Ordinal))
+            {
+                existingPermission.UpdateDescription(description);
+                changed = true;
+            }
+
+            if (existingPermission.Instances != discoveredPermission.Instances)
+            {
+                existingPermission.UpdateInstances(discoveredPermission.Instances);
+                changed = true;
+            }
+
+            if (!existingPermission.IsActive)
+            {
+                existingPermission.Activate();
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
+            }
+
+            continue;
+        }
+
+        // New permission.
+        var groupId = RbacSeedData.GroupIdsByCode[discoveredPermission.Group];
+
+        var newPermission = new Permission(
+            discoveredPermission.Id,
+            discoveredPermission.Code,
+            displayName,
+            description,
+            groupId,
+            isSystem: false,
+            instances: discoveredPermission.Instances);
+
+        await repository.AddPermissionAsync(newPermission, CancellationToken.None);
+
+        if (string.IsNullOrWhiteSpace(discoveredPermission.Description))
+        {
+            logger.LogWarning(
+                "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission] with no description; add one to the attribute.",
+                discoveredPermission.Code);
+        }
 
         if (superAdminRole is not null)
         {
-            await repository.AddRolePermissionAsync(superAdminRole.Id, permission.Id, CancellationToken.None);
+            await repository.AddRolePermissionAsync(superAdminRole.Id, newPermission.Id, CancellationToken.None);
         }
     }
-}
-
-// Derives a category from the permission code's prefix (e.g. "Epic.patient.view" -> "Epic"),
-// reusing an existing category case-insensitively so "Epic" and "epic" never both exist. The
-// in-flight `categories` dictionary is updated too, so multiple new codes sharing a fresh prefix
-// within the same sync run reuse the one category created for the first of them.
-static async Task<Guid?> GetOrCreateCategoryIdAsync(
-    IUserAccessRepository repository,
-    Dictionary<string, Guid> categories,
-    string code,
-    CancellationToken cancellationToken)
-{
-    var prefix = code.Split('.', 2)[0];
-    if (prefix.Length == 0)
-    {
-        return null;
-    }
-
-    var categoryName = char.ToUpperInvariant(prefix[0]) + prefix[1..];
-    if (categories.TryGetValue(categoryName, out var existingId))
-    {
-        return existingId;
-    }
-
-    var category = new PermissionCategory(Guid.NewGuid(), categoryName);
-    await repository.AddPermissionCategoryAsync(category, cancellationToken);
-    categories[categoryName] = category.Id;
-
-    return category.Id;
 }
 
 static (int status, string message) MapException(Exception ex)

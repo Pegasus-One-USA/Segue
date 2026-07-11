@@ -20,7 +20,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpGet]
-    [StandardPermission(UnifiedPermissions.RoleView)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.View, description: "View roles and their permissions.")]
     [ProducesResponseType(typeof(IReadOnlyList<RoleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
@@ -30,7 +30,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpGet("{roleId:guid}")]
-    [StandardPermission(UnifiedPermissions.RoleView)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.View, description: "View roles and their permissions.")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid roleId, CancellationToken cancellationToken)
@@ -41,7 +41,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpPost]
-    [StandardPermission(UnifiedPermissions.RoleCreate)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.Create, description: "Create a new custom role.")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(
         [FromBody] CreateRoleRequest request,
@@ -53,7 +53,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpPut("{roleId:guid}")]
-    [StandardPermission(UnifiedPermissions.RoleEdit)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.Edit, description: "Edit an existing role.")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
@@ -67,7 +67,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpDelete("{roleId:guid}")]
-    [StandardPermission(UnifiedPermissions.RoleDelete)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.Delete, description: "Delete a custom role.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(Guid roleId, CancellationToken cancellationToken)
@@ -78,7 +78,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpGet("{roleId:guid}/permissions")]
-    [StandardPermission(UnifiedPermissions.RoleView)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.View, description: "View roles and their permissions.")]
     [ProducesResponseType(typeof(IReadOnlyList<PermissionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPermissions(Guid roleId, CancellationToken cancellationToken)
     {
@@ -88,7 +88,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpPost("{roleId:guid}/permissions")]
-    [StandardPermission(UnifiedPermissions.RoleEdit)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.Edit, description: "Edit an existing role.")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> AddPermissions(
         Guid roleId,
@@ -101,7 +101,7 @@ public sealed class RolesController : ControllerBase
     }
 
     [HttpDelete("{roleId:guid}/permissions/{permissionId:guid}")]
-    [StandardPermission(UnifiedPermissions.RoleEdit)]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.Edit, description: "Edit an existing role.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RemovePermission(
         Guid roleId,

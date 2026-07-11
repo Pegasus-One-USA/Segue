@@ -1,0 +1,54 @@
+// user-management/pages/user-detail/tri-state-toggle.component.scss
+:host {
+  display: inline-flex;
+}
+
+.tri-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+
+  mat-icon {
+    font-size: 15px;
+    height: 15px;
+    width: 15px;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-muted);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+
+  &--disabled {
+    opacity: 0.6;
+  }
+
+  &--deny {
+    background: var(--color-error-soft);
+    border-color: var(--color-error);
+    color: var(--color-error-strong);
+  }
+
+  &--inherit {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-muted);
+  }
+
+  &--grant {
+    background: var(--color-success-soft);
+    border-color: var(--color-success);
+    color: var(--color-success-strong);
+  }
+}

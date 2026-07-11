@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { JwtPayload } from '../models/auth-state.model';
 
-const ACCESS_KEY  = 'fb_access';
+// Exported so CrossTabAuthSyncService can identify which localStorage key changed in a
+// `storage` event without duplicating the literal string or reaching into private state.
+export const ACCESS_KEY  = 'fb_access';
 const REFRESH_KEY = 'fb_refresh';
 const REMEMBER_KEY = 'fb_remember';
 

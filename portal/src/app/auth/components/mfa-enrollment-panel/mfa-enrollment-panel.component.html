@@ -1,0 +1,65 @@
+<div class="mfa-enrollment-panel">
+
+  @if (!mfaEnrollment() && !autoStart()) {
+    <button class="btn-primary" type="button" [disabled]="mfaBusy()" (click)="beginEnrollment()">
+      Begin Setup
+    </button>
+  }
+
+  @if (mfaError() && !mfaEnrollment()) {
+    <div class="mfa-alert" role="alert">{{ mfaError() }}</div>
+  }
+
+  @if (!!mfaEnrollment()) {
+    <div class="inline-form">
+      @if (!mfaBackupCodes()) {
+        <p class="card-sub">Scan this with your authenticator app, or enter the secret manually:</p>
+
+        @if (mfaQrDataUrl()) {
+          <img [src]="mfaQrDataUrl()" width="200" height="200" alt="MFA enrollment QR code — scan with your authenticator app" class="mfa-qr" />
+        }
+
+        <div class="mfa-secret-row">
+          <input type="text" class="mono" [value]="mfaEnrollment()?.secret" readonly />
+          <button class="btn-outline" type="button" (click)="copyToClipboard(mfaEnrollment()!.secret, 'secret')">
+            {{ copiedField() === 'secret' ? 'Copied!' : 'Copy' }}
+          </button>
+        </div>
+        <p class="card-sub mono mfa-otp-uri">{{ mfaEnrollment()?.otpAuthUri }}</p>
+
+        <div class="form-field">
+          <label>6-digit code from your app</label>
+          <input type="text" inputmode="numeric" autocomplete="one-time-code" #confirmCode placeholder="123456" />
+        </div>
+        @if (mfaError()) {
+          <div class="mfa-alert" role="alert">{{ mfaError() }}</div>
+        }
+        <div class="form-actions">
+          <button class="btn-primary" type="button" [disabled]="mfaBusy()" (click)="confirmEnrollment(confirmCode.value)">
+            Confirm &amp; Enable
+          </button>
+          @if (allowCancel()) {
+            <button class="btn-ghost" type="button" [disabled]="mfaBusy()" (click)="cancelEnrollment()">Cancel</button>
+          }
+        </div>
+      } @else {
+        <p class="card-sub">
+          <strong class="text-red">Save these backup codes now</strong> — they won't be shown again.
+          Each one can be used once if you lose access to your authenticator app.
+        </p>
+        <div class="mfa-backup-codes">
+          @for (code of mfaBackupCodes()!; track code) {
+            <span class="mono">{{ code }}</span>
+          }
+        </div>
+        <div class="form-actions">
+          <button class="btn-outline" type="button" (click)="copyToClipboard(mfaBackupCodes()!.join('\n'), 'backup')">
+            {{ copiedField() === 'backup' ? 'Copied!' : 'Copy all' }}
+          </button>
+          <button class="btn-primary" type="button" (click)="finishEnrollment()">Done</button>
+        </div>
+      }
+    </div>
+  }
+
+</div>

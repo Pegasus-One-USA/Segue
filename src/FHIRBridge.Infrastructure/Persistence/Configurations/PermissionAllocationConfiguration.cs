@@ -37,6 +37,6 @@ public sealed class PermissionAllocationConfiguration : IEntityTypeConfiguration
         builder.HasIndex(x => new { x.UserId, x.PermissionId }).IsUnique();
 
         // Built-in role→permission grants are provisioned at runtime by IRbacBootstrapper
-        // (RbacSeedData/UnifiedRolePermissionSeed); per-user allocations are never seeded here.
+        // (RbacSeedData/SystemRoleDefaultPermissions); per-user allocations are never seeded here.
     }
 }

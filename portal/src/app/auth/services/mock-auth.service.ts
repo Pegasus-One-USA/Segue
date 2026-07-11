@@ -4,11 +4,23 @@ import { delay, switchMap } from 'rxjs/operators';
 import { IAuthService } from './i-auth.service';
 import { User, MessageResponse, TokenPair } from '../models/user.model';
 import {
-  LoginRequest, LoginResponse,
+  LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
 import { MOCK_USERS, ALL_ROLES } from '../mock/mock-db';
+
+// ─── MFA challenge simulation (local dev only, no backend) ─────────────────────
+// Maps a fabricated challenge token to the userId it was issued for, so verifyMfaLogin can
+// find the same user again without a real server-side store. Any well-formed 6-digit code
+// (or the fixed dev backup code) is accepted — this mock exists to exercise the two-step UI
+// flow locally, not to simulate real TOTP validation.
+const MFA_DEV_BACKUP_CODE = 'DEV-BYPASS';
+const pendingMfaChallenges = new Map<string, string>();
+
+function isAcceptableMockCode(code: string): boolean {
+  return /^\d{6}$/.test(code) || code.trim().toUpperCase() === MFA_DEV_BACKUP_CODE;
+}
 
 // ─── Fake JWT helpers ──────────────────────────────────────────────────────────
 function fakeJWT(user: User, expiresIn = 3600): string {
@@ -40,7 +52,7 @@ function sanitise(u: User): User {
 export class MockAuthService extends IAuthService {
 
   // ─── Login ─────────────────────────────────────────────────────────────────
-  override login(req: LoginRequest): Observable<LoginResponse> {
+  override login(req: LoginRequest): Observable<LoginResult> {
     return of(null).pipe(
       delay(800),
       switchMap(() => {
@@ -59,9 +71,35 @@ export class MockAuthService extends IAuthService {
         if (user.status === 'pending')
           return throwError(() => ({ code: 'EMAIL_NOT_VERIFIED', message: 'Please verify your email address before signing in.' }));
 
+        if (user.twoFactorEnabled) {
+          const mfaChallengeToken = `mfa_${user.id}_${Date.now()}`;
+          pendingMfaChallenges.set(mfaChallengeToken, user.id);
+          return of<LoginResult>({ requiresMfa: true, mfaChallengeToken });
+        }
+
         const accessToken  = fakeJWT(user, req.rememberMe ? 86400 * 30 : 3600);
         const refreshToken = fakeRefresh(user.id);
-        return of<LoginResponse>({ accessToken, refreshToken, expiresIn: 3600, user: sanitise(user) });
+        return of<LoginResult>({ requiresMfa: false, accessToken, refreshToken, expiresIn: 3600, user: sanitise(user) });
+      })
+    );
+  }
+
+  // ─── Complete an MFA-gated login ────────────────────────────────────────────
+  override verifyMfaLogin(challengeToken: string, code: string): Observable<LoginResponse> {
+    return of(null).pipe(
+      delay(500),
+      switchMap(() => {
+        const userId = pendingMfaChallenges.get(challengeToken);
+        const user = userId ? MOCK_USERS.find(u => u.id === userId) : undefined;
+        if (!user)
+          return throwError(() => ({ code: 'MFA_CHALLENGE_EXPIRED', message: 'Your session has expired. Please log in again.' }));
+        if (!isAcceptableMockCode(code))
+          return throwError(() => ({ code: 'MFA_INVALID_CODE', message: 'A valid MFA code is required.' }));
+
+        pendingMfaChallenges.delete(challengeToken);
+        const accessToken  = fakeJWT(user, 3600);
+        const refreshToken = fakeRefresh(user.id);
+        return of<LoginResponse>({ requiresMfa: false, accessToken, refreshToken, expiresIn: 3600, user: sanitise(user) });
       })
     );
   }

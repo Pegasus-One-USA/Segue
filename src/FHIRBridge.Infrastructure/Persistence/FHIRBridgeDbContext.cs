@@ -30,6 +30,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<PermissionCategory> PermissionCategories => Set<PermissionCategory>();
+    public DbSet<PermissionGroup> PermissionGroups => Set<PermissionGroup>();
     public DbSet<PermissionAllocation> PermissionAllocations => Set<PermissionAllocation>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<ProvisionedSecret> ProvisionedSecrets => Set<ProvisionedSecret>();
