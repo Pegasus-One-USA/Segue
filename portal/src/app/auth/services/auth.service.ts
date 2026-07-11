@@ -6,6 +6,7 @@ import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { AuthStore } from '../store/auth.store';
+import { PermissionService } from './permission.service';
 import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
 import { UserRole, MessageResponse, TokenPair } from '../models/user.model';
@@ -20,13 +21,14 @@ const LOCKOUT_MINUTES = 30;
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly api      = inject(IAuthService);
-  private readonly store    = inject(AuthStore);
-  private readonly tokens   = inject(TokenService);
-  private readonly session  = inject(SessionService);
-  private readonly router   = inject(Router);
-  private readonly security = inject(AccountSecurityService);
-  private readonly emailSvc = inject(EmailNotificationService);
+  private readonly api        = inject(IAuthService);
+  private readonly store      = inject(AuthStore);
+  private readonly tokens     = inject(TokenService);
+  private readonly session    = inject(SessionService);
+  private readonly router     = inject(Router);
+  private readonly security   = inject(AccountSecurityService);
+  private readonly emailSvc   = inject(EmailNotificationService);
+  private readonly permission = inject(PermissionService);
 
   // ─── Expose store signals directly ────────────────────────────────────────
   readonly currentUser     = this.store.currentUser;
@@ -123,15 +125,32 @@ export class AuthService {
   }
 
   // ─── Refresh ───────────────────────────────────────────────────────────────
+  // Called by authInterceptor on a 401. Two things easy to get wrong here, both fixed:
+  //  1. setTokens()'s 3rd arg defaults to false — omitting it would silently flip a
+  //     "Remember me" (localStorage) session back to session-only on every refresh.
+  //     Reading the current flag first and passing it through preserves the user's choice.
+  //  2. A refreshed access token may carry different permission claims (e.g. an admin
+  //     changed this user's role since login) — re-decoding it and updating AuthStore
+  //     is what actually makes "permissions update on refresh" true, not just the token.
   refreshToken(refreshToken: string): Observable<TokenPair> {
+    const rememberMe = this.tokens.isRemembered;
     return this.api.refreshToken(refreshToken).pipe(
-      tap(pair => this.tokens.setTokens(pair.accessToken, pair.refreshToken))
+      tap(pair => {
+        this.tokens.setTokens(pair.accessToken, pair.refreshToken, rememberMe);
+        const payload = this.tokens.decodePayload<Record<string, unknown>>(pair.accessToken);
+        if (payload) this.store.setUser(buildUserFromJwt(payload));
+      })
     );
   }
 
   // ─── Permission helpers ───────────────────────────────────────────────────
+  // hasPermission() delegates to PermissionService (the one centralized, admin-bypass-aware,
+  // O(1) implementation) rather than AuthStore.hasPermission() — AuthStore keeps its own
+  // simple version for backward compatibility with call sites that inject it directly, but
+  // every NEW call site (this facade, the two directives, the guard) should route through
+  // PermissionService so there's a single place that logic can evolve.
   hasRole(...roles: UserRole[]): boolean    { return this.store.hasRole(...roles); }
-  hasPermission(perm: string): boolean      { return this.store.hasPermission(perm); }
+  hasPermission(perm: string): boolean      { return this.permission.hasPermission(perm); }
   isAdmin(): boolean                        { return this.store.isAdmin(); }
 
   // ─── Initialise from stored token (called in app init) ───────────────────
