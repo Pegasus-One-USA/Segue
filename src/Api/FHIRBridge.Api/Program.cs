@@ -101,6 +101,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services
     .AddFHIRBridgeApplication()
@@ -118,6 +119,12 @@ builder.Services.AddAuthorization(options =>
     {
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new UnifiedAdminRequirement());
+    });
+
+    options.AddPolicy(AuthorizationPolicies.SuperAdminOnly, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new SuperAdminOnlyRequirement());
     });
 
     // Permission-based policies — one per permission code declared in RbacSeedData.Permissions
@@ -283,25 +290,35 @@ SyncDiscoveredPermissions(app);
 
 app.UseCors("Portal");
 app.UseAuthentication();
+
+// Each entry blocks every /api/v1 route except its own allowlist while its claim is "true" — e.g.
+// must change password, or must finish MFA enrollment. One shared check so a third gate is just
+// another entry here, not a third copy-pasted middleware block.
+var sessionGates = new[]
+{
+    (Claim: "pwd_change_required",
+     Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me" },
+     Message: "Password change is required before using FHIRBridge."),
+    (Claim: "mfa_setup_required",
+     Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me" },
+     Message: "Two-factor authentication setup is required before using FHIRBridge."),
+};
+
 app.Use(async (context, next) =>
 {
-    var requiresPasswordChange = context.User.Identity?.IsAuthenticated == true &&
-                                 string.Equals(
-                                     context.User.FindFirst("pwd_change_required")?.Value,
-                                     "true",
-                                     StringComparison.OrdinalIgnoreCase);
-
-    if (requiresPasswordChange &&
-        context.Request.Path.StartsWithSegments("/api/v1") &&
-        !context.Request.Path.StartsWithSegments("/api/v1/auth/internal/change-password") &&
-        !context.Request.Path.StartsWithSegments("/api/v1/auth/me"))
+    foreach (var gate in sessionGates)
     {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new
+        var required = context.User.Identity?.IsAuthenticated == true &&
+                        string.Equals(context.User.FindFirst(gate.Claim)?.Value, "true", StringComparison.OrdinalIgnoreCase);
+
+        if (required &&
+            context.Request.Path.StartsWithSegments("/api/v1") &&
+            !gate.Allowed.Any(allowed => context.Request.Path.StartsWithSegments(allowed)))
         {
-            message = "Password change is required before using FHIRBridge."
-        });
-        return;
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { message = gate.Message });
+            return;
+        }
     }
 
     await next();

@@ -126,6 +126,35 @@ public sealed class UsersController : ControllerBase
         return Ok(user);
     }
 
+    /// <summary>
+    /// Admin account-recovery action: force-disables MFA for a user who lost their authenticator/backup
+    /// codes, without requiring a code. Restricted to SuperAdmin — bypassing the second factor entirely
+    /// is too sensitive to delegate to the general "edit user" permission Admins also hold.
+    /// </summary>
+    [HttpPost("{userId:guid}/mfa/disable")]
+    [Authorize(Policy = AuthorizationPolicies.SuperAdminOnly)]
+    [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DisableUserMfa(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _userManagementService.DisableMfaForUserAsync(userId, cancellationToken);
+
+        return Ok(user);
+    }
+
+    /// <summary>Admin policy toggle: requires (or stops requiring) this user to have MFA enabled. If required and not yet enrolled, their next login is gated to MFA enrollment only.</summary>
+    [HttpPost("{userId:guid}/mfa/require")]
+    [StandardPermission(PermissionGroupCode.User, PermissionActionCode.Edit, description: "Require or stop requiring two-factor authentication for a user.")]
+    [ProducesResponseType(typeof(UserDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetUserMfaRequirement(
+        Guid userId,
+        [FromBody] SetMfaRequirementRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManagementService.SetMfaRequirementAsync(userId, request.Required, cancellationToken);
+
+        return Ok(user);
+    }
+
     [HttpDelete("{userId:guid}")]
     [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

@@ -22,14 +22,20 @@
 
     <div class="auth-card" role="region" [attr.aria-label]="'Sign in to ' + branding.current().companyName">
 
-      <!-- ── Brand / Logo ──────────────────────────────────────────── -->
-      <app-auth-brand-header />
+    <!-- ── Brand / Logo ──────────────────────────────────────────── -->
+    <app-auth-brand-header />
 
-      <!-- ── Heading ───────────────────────────────────────────────── -->
-      <p class="auth-sub">Sign in to your account to continue</p>
+    <!-- ── Heading ───────────────────────────────────────────────── -->
+    <p class="auth-sub">
+      @if (stage() === 'credentials') {
+        Sign in to your account to continue
+      } @else {
+        Enter the 6-digit code from your authenticator app
+      }
+    </p>
 
     <!-- ── Account activated banner ─────────────────────────────── -->
-    @if (activated()) {
+    @if (activated() && stage() === 'credentials') {
       <div class="auth-alert auth-alert--success" role="status" aria-live="polite">
         <mat-icon class="alert-icon" aria-hidden="true">check_circle</mat-icon>
         <span>Your account has been activated successfully. Please sign in.</span>
@@ -44,7 +50,58 @@
       </div>
     }
 
+    <!-- ── MFA code stage ───────────────────────────────────────── -->
+    @if (stage() === 'mfa') {
+      <form [formGroup]="mfaForm" (ngSubmit)="submitMfa()" novalidate>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Authentication code</mat-label>
+          <mat-icon matPrefix class="field-icon" aria-hidden="true">shield</mat-icon>
+          <input
+            matInput
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            formControlName="code"
+            aria-required="true"
+          />
+          @if (mfaFieldError('required')) {
+            <mat-error>A code is required</mat-error>
+          } @else if (mfaFieldError('minlength')) {
+            <mat-error>Enter your 6-digit code or a backup code</mat-error>
+          }
+        </mat-form-field>
+
+        <button
+          mat-flat-button
+          color="primary"
+          type="submit"
+          class="submit-btn"
+          [disabled]="isLoading()"
+          aria-label="Verify code"
+        >
+          @if (isLoading()) {
+            <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
+            <span>Verifying…</span>
+          } @else {
+            <span>Verify</span>
+          }
+        </button>
+
+        <div class="mfa-back-row">
+          <button
+            type="button"
+            class="forgot-link"
+            (click)="backToCredentials()"
+            [disabled]="isLoading()"
+          >
+            Back to sign in
+          </button>
+        </div>
+      </form>
+    }
+
     <!-- ── Form ──────────────────────────────────────────────────── -->
+    @if (stage() === 'credentials') {
     <form [formGroup]="form" (ngSubmit)="submit()" novalidate autocomplete="on">
 
       <!-- Email -->
@@ -137,6 +194,7 @@
         (authenticated)="onSsoAuthenticated($event)"
         (failed)="onSsoFailed($event)"
       />
+    }
 
     </div>
   </div>

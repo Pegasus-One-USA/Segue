@@ -59,6 +59,13 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
             cancellationToken);
     }
 
+    public Task<User?> GetUserByMfaChallengeTokenHashAsync(string mfaChallengeTokenHash, CancellationToken cancellationToken)
+    {
+        return _dbContext.Users.FirstOrDefaultAsync(
+            x => x.MfaChallengeTokenHash != null && x.MfaChallengeTokenHash == mfaChallengeTokenHash,
+            cancellationToken);
+    }
+
     public async Task DeleteUserAsync(User user, CancellationToken cancellationToken)
     {
         user.ApplyDeleted("system", DateTime.UtcNow);

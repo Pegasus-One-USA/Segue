@@ -82,22 +82,81 @@ public sealed class LocalAuthService : ILocalAuthService
             throw new InvalidOperationException("Invalid email or password.");
         }
 
-        // Second factor: when the account has MFA enabled, a valid TOTP or backup code is mandatory.
-        if (user.MfaEnabled && !IsMfaSatisfied(user, request.MfaCode))
+        // Second factor: when the account has MFA enabled, the password alone isn't enough to log in.
+        // Issue a short-lived, single-use challenge and let the client finish via CompleteMfaLoginAsync —
+        // no tokens yet, and no lockout penalty just for not having submitted a code.
+        if (user.MfaEnabled)
         {
+            // Reuse the refresh-token issuer purely for its "random bytes -> SHA-256 hash" mint —
+            // the hash itself becomes the opaque, client-facing challenge token (same trick
+            // IssueRefreshToken uses), just with a 5-minute expiry instead of its 30-day default.
+            var (challengeToken, _) = _accessTokenIssuer.IssueRefreshToken();
+            var challengeExpiresOnUtc = DateTime.UtcNow.AddMinutes(5);
+            user.SetMfaChallengeToken(challengeToken, challengeExpiresOnUtc);
+            await _repository.UpdateUserAsync(user, cancellationToken);
+            await AuditAsync("LocalLogin", "MfaChallengeIssued", $"MFA challenge issued for {email}.", email, cancellationToken);
+            await RecordActivityAsync("LoginMfaChallengeIssued", UserActivityStatuses.Success, email, user.Id,
+                UserActivitySeverities.Information, null, cancellationToken);
+
+            return LocalLoginResponse.MfaRequired(challengeToken, challengeExpiresOnUtc);
+        }
+
+        return await FinishSuccessfulLoginAsync(user, cancellationToken);
+    }
+
+    public async Task<LocalLoginResponse> CompleteMfaLoginAsync(
+        MfaLoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        // The challenge token the client holds already IS its own hash (see the IssueRefreshToken
+        // reuse in LoginAsync) — no re-hashing needed to use it as the lookup key.
+        var user = await _repository.GetUserByMfaChallengeTokenHashAsync(request.ChallengeToken, cancellationToken);
+
+        if (user is null || user.MfaChallengeExpiresOnUtc is null || user.MfaChallengeExpiresOnUtc < DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("Your session has expired. Please log in again.");
+        }
+
+        if (user.IsLockedOut(DateTime.UtcNow))
+        {
+            await AuditAsync("LocalLogin", "Locked", $"MFA completion blocked (account locked) for {user.Email}.", user.Email, cancellationToken);
+            throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
+        }
+
+        // The account may have been disabled (or had local login turned off) in the minutes between
+        // the password check and this call — re-verify before minting tokens, same guard LoginAsync
+        // applies up front, so a since-disabled account can't ride an already-issued challenge in.
+        if (!user.IsEnabled || !user.IsLocalLoginEnabled)
+        {
+            user.ClearMfaChallengeToken();
+            await _repository.UpdateUserAsync(user, cancellationToken);
+            await AuditAsync("LocalLogin", "Denied", $"MFA completion blocked (account disabled) for {user.Email}.", user.Email, cancellationToken);
+            throw new InvalidOperationException("This account is disabled.");
+        }
+
+        if (!IsMfaSatisfied(user, request.Code))
+        {
+            // A guess against a live challenge is a real failed attempt, unlike the code-less first step.
             user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
                 TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
             await _repository.UpdateUserAsync(user, cancellationToken);
-            await AuditAsync("LocalLogin", "MfaFailed", $"MFA challenge failed for {email}.", email, cancellationToken);
-            await RecordActivityAsync("LoginMfaFailed", UserActivityStatuses.Failed, email, user.Id,
-                UserActivitySeverities.Warning, "Missing or invalid MFA code.", cancellationToken);
+            await AuditAsync("LocalLogin", "MfaFailed", $"MFA challenge failed for {user.Email}.", user.Email, cancellationToken);
+            await RecordActivityAsync("LoginMfaFailed", UserActivityStatuses.Failed, user.Email, user.Id,
+                UserActivitySeverities.Warning, "Invalid MFA code.", cancellationToken);
             throw new InvalidOperationException("A valid MFA code is required.");
         }
 
+        user.ClearMfaChallengeToken();
+        return await FinishSuccessfulLoginAsync(user, cancellationToken);
+    }
+
+    /// <summary>Shared tail of a successful local login: records the login, audits it, and issues a session.</summary>
+    private async Task<LocalLoginResponse> FinishSuccessfulLoginAsync(User user, CancellationToken cancellationToken)
+    {
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("LocalLogin", "Completed", $"Local login completed for {email}.", email, cancellationToken);
-        await RecordActivityAsync("Login", UserActivityStatuses.Success, email, user.Id,
+        await AuditAsync("LocalLogin", "Completed", $"Local login completed for {user.Email}.", user.Email, cancellationToken);
+        await RecordActivityAsync("Login", UserActivityStatuses.Success, user.Email, user.Id,
             UserActivitySeverities.Information, null, cancellationToken);
 
         return await CreateLoginResponseAsync(user, cancellationToken);
@@ -289,18 +348,22 @@ public sealed class LocalAuthService : ILocalAuthService
         await _repository.UpdateUserAsync(user, cancellationToken);
 
         return new LocalLoginResponse(
-            token.AccessToken,
-            token.TokenType,
-            token.ExpiresOnUtc,
-            user.MustChangePassword,
-            new UserProfileDto(
+            RequiresMfa: false,
+            MfaChallengeToken: null,
+            MfaChallengeExpiresOnUtc: null,
+            AccessToken: token.AccessToken,
+            TokenType: token.TokenType,
+            ExpiresOnUtc: token.ExpiresOnUtc,
+            RequiresPasswordChange: user.MustChangePassword,
+            Profile: new UserProfileDto(
                 user.Id,
                 user.ExternalUserId,
                 user.Email,
                 user.DisplayName,
                 roleNames),
-            BuildRawRefreshToken(refreshHash),
-            refreshExpiry);
+            RefreshToken: BuildRawRefreshToken(refreshHash),
+            RefreshTokenExpiresOnUtc: refreshExpiry,
+            RequiresMfaSetup: user.IsMfaSetupRequired);
     }
 
     /// <summary>

@@ -57,6 +57,9 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     status: 'active',
     loginType: 'local',
     mustChangePassword: false,
+    // Unlike mustChangePassword above (not currently claim-driven), this one has to be read for
+    // real — mfaSetupGuard checks it on every navigation, not just right after login.
+    mfaSetupRequired: String(payload['mfa_setup_required']) === 'true',
     emailVerified: true,
     twoFactorEnabled: false,
     createdAt: nowIso,

@@ -1156,6 +1156,13 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<DateTime?>("MfaChallengeExpiresOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MfaChallengeTokenHash")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<bool>("MfaEnabled")
                         .HasColumnType("bit");
 
@@ -1173,6 +1180,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("MustChangePassword")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("MustSetupMfa")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("PasswordExpiresOnUtc")
@@ -1211,6 +1221,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExternalUserId")
                         .IsUnique();
+
+                    b.HasIndex("MfaChallengeTokenHash");
 
                     b.HasIndex("RefreshTokenHash");
 

@@ -7,11 +7,21 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+  requiresMfa?: false;
   accessToken:  string;
   refreshToken: string;
   expiresIn:    number;
   user:         User;
 }
+
+/** Password was correct but the account has MFA enabled — no session yet. Submit the challenge
+ *  token plus a TOTP/backup code (via AuthService.completeMfaLogin) to finish signing in. */
+export interface MfaChallengeResponse {
+  requiresMfa: true;
+  mfaChallengeToken: string;
+}
+
+export type LoginResult = LoginResponse | MfaChallengeResponse;
 
 export interface RegisterRequest {
   firstName:   string;
@@ -32,8 +42,23 @@ export interface ForgotPasswordRequest {
   email: string;
 }
 
+/**
+ * Mirrors the backend's ForgotPasswordResponse. resetToken/expiresOnUtc are only populated when
+ * LocalAuth:ExposeResetTokens=true (local/dev config; see appsettings.Development.json) — shared
+ * by both the self-service forgot-password flow (auth-api.service.ts) and the admin-triggered
+ * "generate a reset link" action (api-user.service.ts), since both call the same endpoint.
+ */
+export interface ForgotPasswordResponseDto {
+  accepted: boolean;
+  resetToken?: string | null;
+  expiresOnUtc?: string | null;
+}
+
 export interface ResetPasswordRequest {
   token:           string;
+  // The backend looks the account up by email + reset-token hash (not by token alone), so this
+  // must round-trip from the reset link's query params — see ResetPasswordComponent.
+  email:           string;
   newPassword:     string;
   confirmPassword: string;
 }

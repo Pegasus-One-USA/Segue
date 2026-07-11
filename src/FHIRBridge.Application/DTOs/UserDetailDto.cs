@@ -14,4 +14,6 @@ public sealed record UserDetailDto(
     IReadOnlyList<PermissionAllocationDto> DirectPermissionAllocations,
     DateTime CreatedOnUtc,
     DateTime? LastLoginOnUtc,
-    string? InvitationToken);
+    string? InvitationToken,
+    bool MfaEnabled,
+    bool MustSetupMfa);

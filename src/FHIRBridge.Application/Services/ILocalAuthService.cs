@@ -7,6 +7,10 @@ public interface ILocalAuthService
 {
     Task<LocalLoginResponse> LoginAsync(LocalLoginRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Completes a login that returned <see cref="LocalLoginResponse.RequiresMfa"/>, exchanging the
+    /// challenge token plus a TOTP/backup code for a full session.</summary>
+    Task<LocalLoginResponse> CompleteMfaLoginAsync(MfaLoginRequest request, CancellationToken cancellationToken);
+
     Task<LocalLoginResponse> ChangePasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken);
 
     Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken);

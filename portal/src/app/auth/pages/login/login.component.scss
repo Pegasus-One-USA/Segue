@@ -396,6 +396,9 @@
   border-radius:   var(--radius-sm);
   padding:         3px 6px;
   margin-right:    -6px;
+  background:      none;
+  border:          none;
+  cursor:          pointer;
   transition:      color var(--transition-base), background var(--transition-base);
 
   &:hover {
@@ -407,6 +410,17 @@
     outline:        2px solid var(--color-primary);
     outline-offset: 2px;
   }
+
+  &[disabled] {
+    opacity: 0.5;
+    cursor:  not-allowed;
+  }
+}
+
+.mfa-back-row {
+  display:         flex;
+  justify-content: center;
+  margin-top:      16px;
 }
 
 // ── Submit Button ─────────────────────────────────────────────────────────────

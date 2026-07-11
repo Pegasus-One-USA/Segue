@@ -17,9 +17,12 @@ import { AuthService } from '../../services/auth.service';
 import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.component';
 import { SsoAuthApiService } from '../../services/sso-auth-api.service';
 import { SsoResult } from '../../services/sso.service';
+import { extractApiErrorMessage } from '../../../core/http-error.util';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
 import { AppFooterComponent } from '../../../layout/app-footer/app-footer.component';
 import { BrandingService } from '../../../services/branding.service';
+
+type LoginStage = 'credentials' | 'mfa';
 
 @Component({
   selector: 'app-login',
@@ -69,12 +72,25 @@ export class LoginComponent {
     rememberMe: [false],
   });
 
+  // ─── MFA challenge stage ────────────────────────────────────────────────────
+  protected readonly stage = signal<LoginStage>('credentials');
+  protected readonly mfaSubmitted = signal(false);
+  private mfaChallengeToken = '';
+  private email = '';
+  private rememberMe = false;
+
+  protected readonly mfaForm = this.fb.nonNullable.group({
+    code: ['', [Validators.required, Validators.minLength(6)]],
+  });
+
   protected togglePassword(): void {
     this.showPassword.update(v => !v);
   }
 
   protected onKeydown(e: KeyboardEvent): void {
-    this.capsLockOn.set(e.getModifierState('CapsLock'));
+    if (typeof e.getModifierState === 'function') {
+      this.capsLockOn.set(e.getModifierState('CapsLock'));
+    }
   }
 
   protected submit(): void {
@@ -82,13 +98,53 @@ export class LoginComponent {
     if (this.form.invalid) return;
 
     const { email, password, rememberMe } = this.form.getRawValue();
-    this.auth.login({ email: email.trim(), password, rememberMe }).subscribe();
+    this.email = email.trim();
+    this.rememberMe = rememberMe;
+    this.auth.login({ email: this.email, password, rememberMe }).subscribe(res => {
+      if (res?.requiresMfa) {
+        this.mfaChallengeToken = res.mfaChallengeToken;
+        this.mfaSubmitted.set(false);
+        this.mfaForm.reset({ code: '' });
+        this.stage.set('mfa');
+      }
+    });
   }
 
-  // Helpers for template validation display
+  // ─── MFA code submission ───────────────────────────────────────────────────
+  protected submitMfa(): void {
+    this.mfaSubmitted.set(true);
+    if (this.mfaForm.invalid) return;
+
+    const { code } = this.mfaForm.getRawValue();
+    this.auth.completeMfaLogin(this.email, this.mfaChallengeToken, code.trim(), this.rememberMe).subscribe({
+      error: (err) => {
+        const message = extractApiErrorMessage(err, '');
+        if (message.toLowerCase().includes('expired')) {
+          // The challenge itself is dead (backend-issued expiry, or unknown token) — there's
+          // nothing to retry against, so send the user back to re-enter their password.
+          this.stage.set('credentials');
+          this.form.patchValue({ password: '' });
+        }
+      },
+    });
+  }
+
+  protected backToCredentials(): void {
+    this.stage.set('credentials');
+    this.mfaForm.reset({ code: '' });
+  }
+
+  // Helpers for template validation display. Angular's strictly-typed reactive forms give `form`
+  // and `mfaForm` incompatible `.get()` overloads, so a single generic helper can't type-check
+  // cleanly across both — two one-line methods are simpler than fighting that.
   protected fieldError(field: string, error: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl?.hasError(error) && (ctrl.touched || this.submitted()));
+  }
+
+  protected mfaFieldError(error: string): boolean {
+    const ctrl = this.mfaForm.get('code');
+    return !!(ctrl?.hasError(error) && (ctrl.touched || this.mfaSubmitted()));
   }
 
   // ─── SSO ───────────────────────────────────────────────────────────────────

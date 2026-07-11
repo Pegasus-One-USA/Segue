@@ -158,6 +158,19 @@ public sealed class AuthController : ControllerBase
         return Ok(response);
     }
 
+    [HttpPost("internal/login/mfa")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CompleteMfaLogin(
+        [FromBody] MfaLoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _localAuthService.CompleteMfaLoginAsync(request, cancellationToken);
+
+        return Ok(response);
+    }
+
     [HttpPost("internal/change-password")]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> ChangePassword(

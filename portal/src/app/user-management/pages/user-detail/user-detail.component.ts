@@ -28,6 +28,8 @@ import {
 import { ROLE_CONFIG } from '../user-list/user-list.component';
 import { EditUserDialogComponent } from '../../dialogs/edit-user-dialog/edit-user-dialog.component';
 import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/assign-roles-dialog.component';
+import { ResetPasswordLinkDialogComponent } from '../../dialogs/reset-password-link-dialog/reset-password-link-dialog.component';
+import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
@@ -88,6 +90,12 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   activeTab = signal(0);
 
   readonly roleConfig = ROLE_CONFIG;
+
+  // Bypassing a user's second factor entirely is too sensitive to delegate to the general "edit
+  // user" permission Admins also hold — the backend enforces this too (SuperAdminOnly policy on
+  // POST /users/{id}/mfa/disable); this just keeps the button from being shown to someone who'd
+  // get a 403 anyway.
+  protected readonly isSuperAdmin = computed(() => this.authService.hasRole('SuperAdmin'));
 
   // ─── Computed: this user's true effective permission ids ─────────────────
   // Mirrors the backend's LocalAuthService.GetPermissionCodesAsync merge: role-derived permissions,
@@ -220,14 +228,73 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   resetPassword(): void {
     const u = this.user();
     if (!u) return;
-    this.userService.resetUserPassword(u.id)
+    this.userService.resetUserPassword(u.id, u.email)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: () => {
-          this.snackBar.open(`Password reset email sent to "${u.email}".`, 'Dismiss', { duration: 3000 });
+        next: (res) => {
+          this.dialog.open(ResetPasswordLinkDialogComponent, {
+            width: '540px', restoreFocus: false, data: res,
+          });
         },
         error: (err: {message?: string}) => {
           this.snackBar.open(err?.message ?? 'Failed to reset password.', 'Dismiss', { duration: 4000 });
+        },
+      });
+  }
+
+  // ─── Disable MFA (admin account-recovery override) ─────────────────────────
+  disableMfa(): void {
+    const u = this.user();
+    if (!u) return;
+
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '440px', restoreFocus: false,
+      data: {
+        title:        'Disable two-factor authentication',
+        message:      `This removes 2FA from "${u.fullName}"'s account without requiring a code — ` +
+                       'use this only for account recovery when they\'ve lost their authenticator and backup codes. ' +
+                       'They can re-enroll from their own Security settings afterward.',
+        confirmLabel: 'Disable 2FA',
+        danger:       true,
+      },
+    });
+
+    ref.afterClosed().subscribe(confirmed => {
+      if (!confirmed) return;
+      this.userService.disableUserMfa(u.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (updated) => {
+            this.user.set(updated);
+            this.snackBar.open(`Two-factor authentication disabled for "${u.fullName}".`, 'Dismiss', { duration: 3000 });
+          },
+          error: (err: {message?: string}) => {
+            this.snackBar.open(err?.message ?? 'Failed to disable two-factor authentication.', 'Dismiss', { duration: 4000 });
+          },
+        });
+    });
+  }
+
+  // ─── Require / stop requiring MFA (admin policy toggle) ────────────────────
+  toggleMfaRequirement(): void {
+    const u = this.user();
+    if (!u) return;
+    const required = !u.mfaRequired;
+
+    this.userService.setUserMfaRequirement(u.id, required)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (updated) => {
+          this.user.set(updated);
+          this.snackBar.open(
+            required
+              ? `Two-factor authentication is now required for "${u.fullName}". They'll be prompted to set it up on next login.`
+              : `Two-factor authentication is no longer required for "${u.fullName}".`,
+            'Dismiss', { duration: 4000 },
+          );
+        },
+        error: (err: {message?: string}) => {
+          this.snackBar.open(err?.message ?? 'Failed to update the MFA requirement.', 'Dismiss', { duration: 4000 });
         },
       });
   }

@@ -11,11 +11,12 @@ import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
 import { UserRole, MessageResponse, TokenPair } from '../models/user.model';
 import {
-  LoginRequest, LoginResponse,
+  LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
 import { buildUserFromJwt } from './jwt-user.mapper';
+import { extractApiErrorMessage } from '../../core/http-error.util';
 
 const LOCKOUT_MINUTES = 30;
 
@@ -41,7 +42,10 @@ export class AuthService {
   readonly displayName     = this.store.displayName;
 
   // ─── Login ─────────────────────────────────────────────────────────────────
-  login(req: LoginRequest): Observable<LoginResponse> {
+  // When the account has MFA enabled, the resolved value carries requiresMfa: true plus a
+  // challenge token instead of a session — no user/tokens are stored and no navigation happens
+  // until the caller (LoginComponent) submits a code via completeMfaLogin().
+  login(req: LoginRequest): Observable<LoginResult> {
     // Check account lockout before hitting the API
     const lockInfo = this.security.getLockoutInfo(req.email);
     if (lockInfo.locked) {
@@ -56,10 +60,12 @@ export class AuthService {
     return this.api.login(req).pipe(
       tap({
         next: (res) => {
+          this.store.setLoading(false);
+          if (res.requiresMfa) return;
+
           this.security.clearAttempts(req.email, res.user.id);
           this.store.setUser(res.user);
           this.session.start(res.user.id, res.accessToken, res.refreshToken, req.rememberMe ?? false);
-          this.store.setLoading(false);
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
@@ -74,6 +80,32 @@ export class AuthService {
           }
 
           this.store.setError(message);
+          this.store.setLoading(false);
+        },
+      })
+    );
+  }
+
+  // ─── Complete an MFA-gated login ────────────────────────────────────────────
+  // Takes the email alongside the challenge token/code purely to key the client-side lockout
+  // tracker (AccountSecurityService) the same way login()'s error path does — the server has its
+  // own independent lockout check keyed by the account itself, this is just the UI-side counter.
+  completeMfaLogin(email: string, challengeToken: string, code: string, rememberMe = false): Observable<LoginResponse> {
+    this.store.setLoading(true);
+    this.store.setError(null);
+
+    return this.api.verifyMfaLogin(challengeToken, code).pipe(
+      tap({
+        next: (res) => {
+          this.security.clearAttempts(email, res.user.id);
+          this.store.setUser(res.user);
+          this.session.start(res.user.id, res.accessToken, res.refreshToken, rememberMe);
+          this.store.setLoading(false);
+          this.router.navigate(['/dashboard']);
+        },
+        error: (err) => {
+          this.security.recordFailedAttempt(email);
+          this.store.setError(extractApiErrorMessage(err, 'Invalid or expired code. Please try again.'));
           this.store.setLoading(false);
         },
       })

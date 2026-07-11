@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two-Factor Authentication (MFA) Implementation — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+
+  /* Table of contents */
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  /* Pills / badges */
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  /* File tables */
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Two-Factor Authentication (MFA) Implementation</h1>
+    <p class="subtitle">FHIRBridge Portal &amp; API — implementation summary, approach, and file-by-file change log</p>
+    <div class="meta">
+      <div><strong>Branch</strong> feature/MFA-implementation</div>
+      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20)</div>
+      <div><strong>Status</strong> Implemented, reviewed, tested</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#features">What was built</a></li>
+      <li><a href="#approach">Implementation approach</a></li>
+      <li><a href="#login-flow">Login flow, step by step</a></li>
+      <li><a href="#backend-domain">Backend — Domain</a></li>
+      <li><a href="#backend-application">Backend — Application layer</a></li>
+      <li><a href="#backend-infrastructure">Backend — Infrastructure / persistence</a></li>
+      <li><a href="#backend-api">Backend — API layer</a></li>
+      <li><a href="#backend-tests">Backend — Tests</a></li>
+      <li><a href="#frontend-models">Frontend — Models</a></li>
+      <li><a href="#frontend-services">Frontend — Services</a></li>
+      <li><a href="#frontend-components">Frontend — Components &amp; pages</a></li>
+      <li><a href="#frontend-guards">Frontend — Guards &amp; routes</a></li>
+      <li><a href="#frontend-config">Frontend — Config</a></li>
+      <li><a href="#limitations">Known limitations &amp; follow-ups</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    FHIRBridge already had a fully-built TOTP (Time-based One-Time Password) engine on the backend
+    &mdash; secret generation, code validation, backup codes &mdash; but it was completely unreachable
+    from the product: the Angular portal had no enrollment screen and the login flow had no way to
+    ask for a second factor. This work built everything needed to actually turn that dormant backend
+    capability into a real, usable 2FA feature, end to end, plus two admin-facing controls
+    (force MFA for a user, and account recovery when someone loses their authenticator) and a
+    related password-reset convenience tool.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">45</div><div class="label">files changed</div></div>
+    <div class="card"><div class="num">17</div><div class="label">new files</div></div>
+    <div class="card"><div class="num">1</div><div class="label">dead file removed</div></div>
+    <div class="card"><div class="num">2</div><div class="label">EF migrations</div></div>
+    <div class="card"><div class="num">75 / 82 / 5</div><div class="label">unit / integration / architecture tests passing</div></div>
+    <div class="card"><div class="num">2</div><div class="label">independent review passes</div></div>
+  </div>
+
+  <h2 id="features"><span class="num">2.</span>What was built</h2>
+  <ul class="feature-list">
+    <li><strong>Two-step login with MFA.</strong> A correct password now returns either a session (no MFA) or a short-lived challenge token (MFA enabled) — the client submits the challenge plus a TOTP/backup code to a second endpoint to finish signing in.</li>
+    <li><strong>Self-service enrollment &amp; disable.</strong> Users can turn MFA on (scan a QR code or enter the secret manually, confirm a code, save one-time backup codes) and off from their own Security settings page.</li>
+    <li><strong>Admin account recovery.</strong> A SuperAdmin can force-disable a user's MFA without a code &mdash; for when someone loses their phone and their backup codes.</li>
+    <li><strong>Admin-forced MFA policy.</strong> An admin can require MFA on any user's account; if they haven't enrolled yet, their very next login (and every subsequent navigation) is gated to a dedicated enrollment screen until they finish.</li>
+    <li><strong>Admin password-reset link tool.</strong> A secondary, smaller feature added alongside the MFA work: since outbound email isn't wired up yet, an admin can generate a password-reset link for a user and hand it to them directly.</li>
+    <li><strong>Two independent code-review passes.</strong> A correctness-focused pass (8 parallel reviewers) found and fixed a real security gap and several bugs; a follow-up cleanup pass removed duplicated logic.</li>
+  </ul>
+
+  <h2 id="approach"><span class="num">3.</span>Implementation approach</h2>
+  <p>
+    Rather than inventing new patterns, this work deliberately mirrors mechanisms the codebase
+    already uses elsewhere, so the new feature reads as a natural extension of the existing app
+    instead of a bolted-on subsystem:
+  </p>
+  <div class="card">
+    <h4>Challenge-token minting reuses the refresh-token trick</h4>
+    <p style="margin:0;">The MFA challenge token is minted by calling the existing
+    <code>IAccessTokenIssuer.IssueRefreshToken()</code> purely for its "random bytes &rarr; SHA-256
+    hash, the hash <em>is</em> the token" mechanic (just with a 5-minute expiry instead of 30 days)
+    &mdash; no new token-generation code was written.</p>
+  </div>
+  <div class="card">
+    <h4>Session gating extends the existing password-change gate</h4>
+    <p style="margin:0;">FHIRBridge already blocks all API routes except a small allowlist when a
+    <code>pwd_change_required</code> JWT claim is true. A second claim, <code>mfa_setup_required</code>,
+    was added following the exact same shape, and the two checks were generalized into one
+    data-driven loop in <code>Program.cs</code> instead of a second copy-pasted middleware block.</p>
+  </div>
+  <div class="card">
+    <h4>One enrollment UI, two hosts</h4>
+    <p style="margin:0;">The QR-code/secret/confirm-code/backup-codes UI was built once as a
+    standalone <code>MfaEnrollmentPanelComponent</code> and embedded in both the self-service
+    Security page and the forced first-login setup page &mdash; each host just decides whether
+    "Cancel" is offered and what happens once enrollment finishes.</p>
+  </div>
+  <div class="card">
+    <h4>Guard-based redirect, not scattered special-casing</h4>
+    <p style="margin:0;">A single route guard (<code>mfaSetupGuard</code>) runs alongside the
+    existing <code>authGuard</code> on the app shell's parent route. Because Angular evaluates
+    parent-route guards before any child route activates, this one guard automatically protects
+    every page in the authenticated app &mdash; no individual page needed its own check.</p>
+  </div>
+  <div class="card">
+    <h4>A stricter policy for a more sensitive action</h4>
+    <p style="margin:0;">Bypassing a user's second factor entirely is more sensitive than the general
+    "edit user" permission Admins already hold, so a new <code>SuperAdminOnly</code> authorization
+    policy (mirroring the existing <code>UnifiedAdmin</code> policy's structure) restricts that one
+    action to the highest privilege tier, enforced on the server &mdash; not just hidden in the UI.</p>
+  </div>
+
+  <h2 id="login-flow"><span class="num">4.</span>Login flow, step by step</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>POST /auth/internal/login</strong><span>Email + password. If the account doesn't have MFA enabled, this alone completes the login and returns tokens.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Challenge issued</strong><span>If MFA is enabled, the server mints a 5-minute, single-use challenge token and returns <code>{ requiresMfa: true, mfaChallengeToken }</code> — no session yet, and no lockout penalty for not having a code yet.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>POST /auth/internal/login/mfa</strong><span>Challenge token + a 6-digit TOTP code (or a backup code). A wrong code here counts as a real failed attempt toward account lockout.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Session issued</strong><span>On success, the account is re-checked (still enabled, still allowed to log in locally) before tokens are minted — closing a gap where a disabled account could otherwise ride out an already-issued challenge.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Forced-setup check</strong><span>If an admin requires MFA for this account and it still isn't enrolled, the access token carries <code>mfa_setup_required: true</code> — the frontend guard immediately redirects to <code>/auth/setup-mfa</code>, and the backend gate middleware blocks every other API route until enrollment finishes.</span></div>
+    </div>
+  </div>
+
+  <h2 id="backend-domain"><span class="num">5.</span>Backend — Domain</h2>
+  <p class="section-intro">The <code>User</code> aggregate gained the state needed to track a login-time MFA challenge and an admin-set "must enroll" policy.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Domain/Entities/User.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">
+        Added <code>MfaChallengeTokenHash</code>/<code>MfaChallengeExpiresOnUtc</code> fields and
+        <code>SetMfaChallengeToken()</code>/<code>ClearMfaChallengeToken()</code> methods to hold the
+        login-time challenge (mirrors the existing refresh-token fields). Added <code>MustSetupMfa</code>
+        + <code>SetMustSetupMfa()</code> for the admin "require MFA" policy. Added a computed
+        <code>IsMfaSetupRequired</code> property (<code>MustSetupMfa &amp;&amp; !MfaEnabled</code>) so
+        this one-line rule lives in exactly one place instead of being re-derived at every call site
+        (mirrors the existing <code>IsLockedOut(DateTime)</code> pattern). Fixed <code>DisableMfa()</code>
+        to also clear the challenge-token fields, so a force-disable mid-challenge doesn't leave a
+        stale row behind.
+      </td>
+    </tr>
+  </table>
+
+  <h2 id="backend-application"><span class="num">6.</span>Backend — Application layer</h2>
+  <p class="section-intro">DTOs, service interfaces, and the core login/admin logic.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">Abstractions/Persistence/IUserAccessRepository.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>GetUserByMfaChallengeTokenHashAsync</code> so the second login step can find the user directly from the challenge token, with no need to resend the email.</td>
+    </tr>
+    <tr>
+      <td class="file-path">DTOs/LocalLoginRequest.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Removed the now-unused <code>MfaCode</code> parameter (the new flow never accepts a code on the first call) and added the new <code>MfaLoginRequest(ChallengeToken, Code)</code> for the second step.</td>
+    </tr>
+    <tr>
+      <td class="file-path">DTOs/LocalLoginResponse.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>RequiresMfa</code>, <code>MfaChallengeToken</code>, <code>MfaChallengeExpiresOnUtc</code>, and <code>RequiresMfaSetup</code> fields (and made <code>AccessToken</code>/<code>Profile</code> nullable) — the response now has to represent three distinct outcomes: a full session, a challenge with no session, or a session that's gated to MFA enrollment only.</td>
+    </tr>
+    <tr>
+      <td class="file-path">DTOs/UserDetailDto.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>MfaEnabled</code> and <code>MustSetupMfa</code>. Without the first, the admin User Management screens always showed "2FA disabled" even for users who had it on — a real bug found and fixed during this work.</td>
+    </tr>
+    <tr>
+      <td class="file-path">DTOs/UserManagementDto.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Same as above, for the user-list endpoint.</td>
+    </tr>
+    <tr>
+      <td class="file-path">DTOs/SetMfaRequirementRequest.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Simple <code>(bool Required)</code> request body for the new admin "require/stop requiring MFA" toggle endpoint (mirrors the existing <code>UpdateUserStatusRequest</code> shape).</td>
+    </tr>
+    <tr>
+      <td class="file-path">Security/AuthorizationPolicies.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the <code>SuperAdminOnly</code> policy name constant.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Services/ILocalAuthService.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>CompleteMfaLoginAsync</code> to the interface — the second step of the login flow.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Services/LocalAuthService.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">
+        The core of the login redesign. <code>LoginAsync</code> now issues an MFA challenge (with no
+        lockout penalty) instead of throwing when MFA is enabled and no code was supplied. New
+        <code>CompleteMfaLoginAsync</code> validates the challenge + code and finishes the login —
+        it re-checks the account is still enabled before minting tokens, closing a gap (found in
+        code review) where a since-disabled account could otherwise complete a pending challenge.
+        Extracted a shared <code>FinishSuccessfulLoginAsync</code> helper used by both successful
+        paths, removing duplicated "record login / audit / issue tokens" logic. The challenge token
+        itself is minted by reusing <code>IAccessTokenIssuer.IssueRefreshToken()</code> rather than a
+        new bespoke generator (a duplication also found and fixed in review).
+      </td>
+    </tr>
+    <tr>
+      <td class="file-path">Services/IUserManagementService.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>DisableMfaForUserAsync</code> (admin recovery) and <code>SetMfaRequirementAsync</code> (admin policy toggle) to the interface.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Services/UserManagementService.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Implements the two new admin actions above, and threads <code>MfaEnabled</code>/<code>MustSetupMfa</code> through to both DTO-mapping methods.</td>
+    </tr>
+  </table>
+
+  <h2 id="backend-infrastructure"><span class="num">7.</span>Backend — Infrastructure / persistence</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">Persistence/Configurations/UserConfiguration.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">EF Core column mappings for the new challenge-token fields and <code>MustSetupMfa</code>, plus an index on the challenge-token hash for fast lookup.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Persistence/EfUserAccessRepository.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Implements the new challenge-token lookup against the real SQL Server-backed store.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Persistence/InMemoryUserAccessRepository.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Same lookup, for the in-memory repository used by local dev and integration tests.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Migrations/20260709074348_AddMfaChallengeToken(.cs / .Designer.cs)</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Adds the <code>MfaChallengeTokenHash</code>/<code>MfaChallengeExpiresOnUtc</code> columns and index.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Migrations/20260709114745_AddMustSetupMfa(.cs / .Designer.cs)</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Adds the <code>MustSetupMfa</code> column.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Migrations/FHIRBridgeDbContextModelSnapshot.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Auto-generated snapshot update reflecting both migrations above.</td>
+    </tr>
+  </table>
+
+  <h2 id="backend-api"><span class="num">8.</span>Backend — API layer</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">Controllers/V1/AuthController.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">New <code>POST /api/v1/auth/internal/login/mfa</code> endpoint — the second step of login, calling <code>CompleteMfaLoginAsync</code>.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Controllers/V1/UsersController.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">New <code>POST /api/v1/users/{id}/mfa/disable</code> (SuperAdmin-only, admin recovery) and <code>POST /api/v1/users/{id}/mfa/require</code> (admin policy toggle) endpoints.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Security/JwtAccessTokenIssuer.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the <code>mfa_setup_required</code> claim to every issued token (mirrors the existing <code>pwd_change_required</code> claim) — needed so both the backend gate and the frontend guard can check status without an extra round-trip.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Program.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Extended the existing password-change gate middleware with a second gate for <code>mfa_setup_required</code>; refactored both into one data-driven loop over a small list of <code>(claim, allowed paths, message)</code> entries instead of two copy-pasted middleware blocks. Registered the new <code>SuperAdminOnlyAuthorizationHandler</code> and <code>SuperAdminOnly</code> policy.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Security/SuperAdminOnlyRequirement.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Declares the accepted role names for the stricter policy (SuperAdmin only, unlike the existing <code>UnifiedAdmin</code> policy which also accepts Admin).</td>
+    </tr>
+    <tr>
+      <td class="file-path">Security/SuperAdminOnlyAuthorizationHandler.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Enforces the policy above — added because bypassing a user's MFA entirely is too sensitive to leave gated by the general "edit user" permission Admins also hold.</td>
+    </tr>
+  </table>
+
+  <h2 id="backend-tests"><span class="num">9.</span>Backend — Tests</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">tests/FHIRBridge.UnitTests/Auth/LocalAuthServiceMfaTests.cs</td>
+      <td class="status"><span class="pill pill-new">New</span> <span class="pill pill-test">Test</span></td>
+      <td class="why">Unit tests for challenge issuance, successful completion, wrong-code lockout, and expired/unknown challenge handling — all against mocked dependencies.</td>
+    </tr>
+    <tr>
+      <td class="file-path">tests/FHIRBridge.Api.IntegrationTests/Tests/MfaLoginTests.cs</td>
+      <td class="status"><span class="pill pill-new">New</span> <span class="pill pill-test">Test</span></td>
+      <td class="why">End-to-end tests generating real RFC 6238 TOTP codes and exercising the full login &rarr; challenge &rarr; complete round trip against a live test server.</td>
+    </tr>
+  </table>
+
+  <h2 id="frontend-models"><span class="num">10.</span>Frontend — Models</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">auth/models/auth-request.model.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>MfaChallengeResponse</code> / <code>LoginResult</code> (a discriminated union representing the two possible login outcomes) and a shared <code>ForgotPasswordResponseDto</code>. Fixed <code>ResetPasswordRequest</code> to actually carry <code>email</code> — a pre-existing bug where the reset-password page never sent the email the backend requires to look the account up, silently breaking every password reset link in the app.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/models/user.model.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>mfaSetupRequired</code> (decoded from the JWT claim, read by the route guard), <code>mfaRequired</code> (the raw admin policy flag, shown/toggled in the admin UI), and <code>mfaEnabled</code>/<code>mustSetupMfa</code> on the backend DTO interfaces.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/models/mfa.model.ts</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">TypeScript mirrors of the backend's MFA management DTOs (status, enrollment, code request, confirmed-enrollment).</td>
+    </tr>
+  </table>
+
+  <h2 id="frontend-services"><span class="num">11.</span>Frontend — Services</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">auth/services/mfa-api.service.ts</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">HTTP client for the authenticated MFA management endpoints (status/enroll/verify/disable).</td>
+    </tr>
+    <tr>
+      <td class="file-path">core/http-error.util.ts</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Shared <code>extractApiErrorMessage()</code> helper. The backend's error body is <code>{ error: "..." }</code>, which doesn't match Angular's generic <code>HttpErrorResponse.message</code> — checking the fields in the wrong order (a real bug found in review) meant the real backend message, and any logic keyed off its wording, never surfaced. Written once and reused everywhere instead of copy-pasted.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/auth-api.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why"><code>login()</code> now returns the discriminated <code>LoginResult</code>; new <code>verifyMfaLogin()</code> for step two. Fixed the reset-password request body, which was sending the wrong field name (<code>token</code> instead of <code>resetToken</code>) and no <code>email</code> at all.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/auth.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why"><code>login()</code> branches on the MFA-required result instead of always establishing a session. New <code>completeMfaLogin()</code> for step two, correctly wired into the client-side lockout tracker (a gap found in review — wrong-code attempts weren't being counted client-side).</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/i-auth.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Interface signature updated for the two-step login.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/i-user.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">New abstract <code>disableUserMfa()</code> / <code>setUserMfaRequirement()</code> methods for the admin actions.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/jwt-user.mapper.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Decodes the new <code>mfa_setup_required</code> claim into the frontend <code>User</code> object so the route guard can check it on every navigation without re-parsing the token itself.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/mock-auth.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Simulates the MFA challenge/verify flow for local development without a real backend.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/mock-user.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Simulates the new admin actions (disable MFA, require MFA, reset-password link) in mock mode.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/api-user.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Implements <code>disableUserMfa()</code>, <code>setUserMfaRequirement()</code>, and the admin "generate password reset link" feature (reusing the existing self-service forgot-password endpoint); exports a shared <code>buildResetLink()</code> helper reused by the mock service.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/services/user-api.service.ts</td>
+      <td class="status"><span class="pill pill-deleted">Deleted</span></td>
+      <td class="why">A dead, never-wired duplicate of <code>api-user.service.ts</code> targeting a nonexistent API path convention. Surfaced and removed while updating its (unused) interface implementation — confirmed via search that nothing referenced it anywhere in the app.</td>
+    </tr>
+  </table>
+
+  <h2 id="frontend-components"><span class="num">12.</span>Frontend — Components &amp; pages</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">auth/components/mfa-enrollment-panel/*</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The shared "scan QR / enter code / save backup codes" enrollment UI, built once and embedded in both the self-service Security page and the forced first-login setup page — the host decides whether Cancel is offered and what happens once enrollment finishes.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/pages/mfa-setup-required/*</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The forced-enrollment screen at <code>/auth/setup-mfa</code>. Includes a "back to sign in" (logout) option for anyone unable to set up MFA right now, and refreshes the session token immediately after enrollment so the route guard recognizes completion without a page reload.</td>
+    </tr>
+    <tr>
+      <td class="file-path">user-management/dialogs/reset-password-link-dialog/*</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Shows the admin the generated password-reset link with a copy-to-clipboard button, mirroring the existing invitation-link dialog's pattern.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/pages/login/login.component.*</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the second "enter your code" stage to the existing login form, plus the redirect/error handling for challenge expiry.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/pages/reset-password/reset-password.component.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Now reads <code>email</code> from the reset link's query params (previously only read <code>token</code>) and requires both before allowing submission — the other half of the reset-password round-trip bug fix.</td>
+    </tr>
+    <tr>
+      <td class="file-path">user/pages/security/security.component.*</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Replaced the previous placeholder (a button labelled "Phase 2" that only flipped a local, non-persisted flag) with real enroll/disable calls against the backend, using the new shared enrollment panel.</td>
+    </tr>
+    <tr>
+      <td class="file-path">user-management/pages/user-detail/user-detail.component.*</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the "Disable Two-Factor Authentication" action (SuperAdmin-only, hidden for regular Admins), the "Require 2FA" / "Stop Requiring 2FA" toggle (hidden once the user has actually enrolled), a persistent status row, and the "Send Password Reset Email" action.</td>
+    </tr>
+    <tr>
+      <td class="file-path">user/services/user-profile.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Removed the now-unused fake <code>toggleTwoFactor()</code> method that only flipped a local signal and never called the backend.</td>
+    </tr>
+  </table>
+
+  <h2 id="frontend-guards"><span class="num">13.</span>Frontend — Guards &amp; routes</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">auth/guards/mfa-setup.guard.ts</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Redirects to <code>/auth/setup-mfa</code> from anywhere in the authenticated app whenever the current session's <code>mfaSetupRequired</code> flag is true.</td>
+    </tr>
+    <tr>
+      <td class="file-path">app.routes.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the new guard alongside the existing <code>authGuard</code> on the app-shell's parent route, so it applies uniformly to every child route (dashboard, security, user management, etc.) without touching each page individually.</td>
+    </tr>
+    <tr>
+      <td class="file-path">auth/auth.routes.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Registered the new <code>/auth/setup-mfa</code> route.</td>
+    </tr>
+  </table>
+
+  <h2 id="frontend-config"><span class="num">14.</span>Frontend — Config</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">core/api-endpoints.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the new MFA endpoints (enroll/verify/disable/status/require, login-mfa) and the reset-password-link endpoint path.</td>
+    </tr>
+    <tr>
+      <td class="file-path">package.json / package-lock.json</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the <code>qrcode</code> dependency (plus <code>@types/qrcode</code>) for rendering the enrollment QR code entirely client-side — the backend intentionally returns only the raw secret and an <code>otpauth://</code> URI, no image.</td>
+    </tr>
+  </table>
+
+  <h2 id="limitations"><span class="num">15.</span>Known limitations &amp; follow-ups</h2>
+  <div class="callout warn">
+    <strong>Password-reset-link endpoint reuse</strong>
+    The admin "generate password reset link" tool reuses the existing public, anonymous
+    forgot-password endpoint rather than a dedicated admin-authenticated route. This matches the
+    stated "local testing, email isn't wired up yet" use case, but before any production use it
+    should get its own authenticated endpoint with a proper audit trail of which admin triggered it.
+  </div>
+  <div class="callout warn">
+    <strong>Mock/demo mode doesn't simulate forced setup</strong>
+    <code>MockAuthService</code> (used only when running the portal without a real backend) simulates
+    the login-time MFA challenge, but not the admin-forced "must set up MFA" policy — that path is
+    only exercised against the real API.
+  </div>
+  <div class="callout warn">
+    <strong>Two parallel authorization-policy classes</strong>
+    <code>SuperAdminOnlyRequirement</code>/<code>Handler</code> duplicate the shape of the pre-existing
+    <code>UnifiedAdminRequirement</code>/<code>Handler</code> rather than sharing one generalized
+    role-set mechanism. This was a deliberate trade-off to avoid modifying pre-existing authorization
+    infrastructure used throughout the app, in favor of a small, low-risk, consistent duplicate.
+  </div>
+
+  <h2 id="verification"><span class="num">16.</span>Verification</h2>
+  <p>Every change in this document was verified before being considered complete:</p>
+  <ul class="feature-list">
+    <li><strong>Backend:</strong> full solution build succeeds; <strong>75</strong> unit tests, <strong>82</strong> integration tests, and <strong>5</strong> architecture tests all pass.</li>
+    <li><strong>Frontend:</strong> clean TypeScript compilation (<code>tsc --noEmit</code>) and a successful production build (<code>ng build</code>).</li>
+    <li><strong>Two independent review passes:</strong> a correctness-focused pass across 8 parallel reviewers (3 correctness angles, 3 cleanup angles, altitude, coding-convention checks) found and fixed a real security gap plus several bugs; a follow-up simplification pass removed duplicated logic.</li>
+    <li><strong>Manual smoke test path:</strong> enable 2FA on a test account &rarr; log out/in &rarr; confirm the code-entry stage appears &rarr; confirm a wrong code is rejected and a correct one succeeds &rarr; as an admin, require 2FA for another user &rarr; confirm they're forced to <code>/auth/setup-mfa</code> and can't navigate anywhere else until they finish (or sign out).</li>
+  </ul>
+
+  <footer>
+    FHIRBridge &middot; Two-Factor Authentication implementation documentation &middot; branch <code>feature/MFA-implementation</code>
+  </footer>
+
+</div>
+</body>
+</html>

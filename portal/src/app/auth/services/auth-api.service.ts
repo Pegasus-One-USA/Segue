@@ -13,9 +13,9 @@ import { IAuthService } from './i-auth.service';
 import { TokenService } from './token.service';
 import { User, MessageResponse, TokenPair } from '../models/user.model';
 import {
-  LoginRequest, LoginResponse,
+  LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
-  ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
+  ForgotPasswordRequest, ForgotPasswordResponseDto, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
 import { buildUserFromJwt } from './jwt-user.mapper';
 
@@ -29,19 +29,15 @@ interface AuthProfileDto {
 }
 
 interface LocalLoginResponseDto {
-  accessToken:              string;
-  tokenType:                string;
-  expiresOnUtc:             string;
+  requiresMfa:               boolean;
+  mfaChallengeToken?:        string | null;
+  accessToken:               string | null;
+  tokenType:                string | null;
+  expiresOnUtc:             string | null;
   requiresPasswordChange:   boolean;
-  profile?:                 AuthProfileDto;
-  refreshToken?:            string;
-  refreshTokenExpiresOnUtc?: string;
-}
-
-interface ForgotPasswordResponseDto {
-  accepted:      boolean;
-  resetToken?:   string | null;
-  expiresOnUtc?: string | null;
+  profile?:                 AuthProfileDto | null;
+  refreshToken?:            string | null;
+  refreshTokenExpiresOnUtc?: string | null;
 }
 
 // Backend returns an absolute expiry timestamp; LoginResponse/TokenPair need relative seconds.
@@ -56,25 +52,45 @@ export class AuthApiService extends IAuthService {
   private readonly tokens = inject(TokenService);
 
   // ─── Login ─────────────────────────────────────────────────────────────────
-  override login(req: LoginRequest): Observable<LoginResponse> {
+  override login(req: LoginRequest): Observable<LoginResult> {
     return this.http
       .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.login, { email: req.email, password: req.password })
       .pipe(
-        map(dto => {
-          // The JWT carries the roles + permissions claims — rebuild the user from those so
-          // every login path (local + SSO) produces the same User shape.
-          const payload = this.tokens.decodePayload<Record<string, unknown>>(dto.accessToken) ?? {};
-          const user = buildUserFromJwt(payload);
-          user.mustChangePassword = dto.requiresPasswordChange ?? false;
-          return {
-            accessToken:  dto.accessToken,
-            refreshToken: dto.refreshToken ?? '',
-            expiresIn:    secondsUntil(dto.expiresOnUtc),
-            user,
-          };
-        }),
+        map(dto => this.mapLoginResult(dto)),
         catchError(err => throwError(() => err)),
       );
+  }
+
+  // ─── Complete an MFA-gated login ────────────────────────────────────────────
+  override verifyMfaLogin(challengeToken: string, code: string): Observable<LoginResponse> {
+    return this.http
+      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.loginMfa, { challengeToken, code })
+      .pipe(
+        map(dto => this.mapLoginResult(dto) as LoginResponse),
+        catchError(err => throwError(() => err)),
+      );
+  }
+
+  private mapLoginResult(dto: LocalLoginResponseDto): LoginResult {
+    if (dto.requiresMfa) {
+      return {
+        requiresMfa: true,
+        mfaChallengeToken: dto.mfaChallengeToken!,
+      };
+    }
+
+    // The JWT carries the roles + permissions claims — rebuild the user from those so
+    // every login path (local + SSO) produces the same User shape.
+    const payload = this.tokens.decodePayload<Record<string, unknown>>(dto.accessToken!) ?? {};
+    const user = buildUserFromJwt(payload);
+    user.mustChangePassword = dto.requiresPasswordChange ?? false;
+    return {
+      requiresMfa: false,
+      accessToken:  dto.accessToken!,
+      refreshToken: dto.refreshToken ?? '',
+      expiresIn:    secondsUntil(dto.expiresOnUtc ?? undefined),
+      user,
+    };
   }
 
   // ─── Logout ────────────────────────────────────────────────────────────────
@@ -104,11 +120,15 @@ export class AuthApiService extends IAuthService {
   }
 
   // ─── Reset password ────────────────────────────────────────────────────────
+  // Backend looks the account up by email, then verifies the token hash against it — so both
+  // fields are required, and the field is named resetToken (not token) on the wire.
   override resetPassword(req: ResetPasswordRequest): Observable<MessageResponse> {
-    return this.http.post(AUTH_ENDPOINTS.resetPassword, { token: req.token, newPassword: req.newPassword }).pipe(
-      map(() => ({ success: true, message: 'Password has been reset successfully. You may now sign in.' })),
-      catchError(err => throwError(() => err)),
-    );
+    return this.http
+      .post(AUTH_ENDPOINTS.resetPassword, { email: req.email, resetToken: req.token, newPassword: req.newPassword })
+      .pipe(
+        map(() => ({ success: true, message: 'Password has been reset successfully. You may now sign in.' })),
+        catchError(err => throwError(() => err)),
+      );
   }
 
   // ─── Change password ───────────────────────────────────────────────────────
@@ -150,9 +170,9 @@ export class AuthApiService extends IAuthService {
   override refreshToken(refreshToken: string): Observable<TokenPair> {
     return this.http.post<LocalLoginResponseDto>(AUTH_ENDPOINTS.refresh, { refreshToken }).pipe(
       map(dto => ({
-        accessToken:  dto.accessToken,
+        accessToken:  dto.accessToken!,
         refreshToken: dto.refreshToken ?? '',
-        expiresIn:    secondsUntil(dto.expiresOnUtc),
+        expiresIn:    secondsUntil(dto.expiresOnUtc ?? undefined),
       })),
       catchError(err => throwError(() => err)),
     );

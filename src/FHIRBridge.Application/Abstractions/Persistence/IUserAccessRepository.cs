@@ -16,6 +16,8 @@ public interface IUserAccessRepository
 
     Task<User?> GetUserByRefreshTokenHashAsync(string refreshTokenHash, CancellationToken cancellationToken);
 
+    Task<User?> GetUserByMfaChallengeTokenHashAsync(string mfaChallengeTokenHash, CancellationToken cancellationToken);
+
     Task AddUserAsync(User user, CancellationToken cancellationToken);
 
     Task UpdateUserAsync(User user, CancellationToken cancellationToken);
