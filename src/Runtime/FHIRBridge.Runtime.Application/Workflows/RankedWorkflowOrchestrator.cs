@@ -27,12 +27,34 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _resourceHistoryRecorder = resourceHistoryRecorder;
     }
 
-    public async Task<WorkflowRunResult> ExecuteAsync(
+    public Task<WorkflowRunResult> ExecuteAsync(
         WorkflowDefinition workflowDefinition,
         WorkflowExecutionContext context,
         CancellationToken cancellationToken = default)
+        => ExecuteAsync(workflowDefinition, context, targetNodeId: null, cancellationToken);
+
+    /// <summary>Runs the full graph when <paramref name="targetNodeId"/> is null; otherwise restricts execution to
+    /// that node's ancestor closure (see <see cref="RestrictToAncestorClosure"/>) — a checkpoint run. The resulting
+    /// <see cref="WorkflowRun"/> records <paramref name="targetNodeId"/> so a checkpoint result can be resolved
+    /// later from just the run id.</summary>
+    public async Task<WorkflowRunResult> ExecuteAsync(
+        WorkflowDefinition workflowDefinition,
+        WorkflowExecutionContext context,
+        Guid? targetNodeId,
+        CancellationToken cancellationToken = default)
     {
-        var validationResult = _graphValidator.Validate(workflowDefinition);
+        if (targetNodeId is { } requestedTargetNodeId
+            && workflowDefinition.Nodes.All(node => node.Id != requestedTargetNodeId))
+        {
+            throw new ArgumentException(
+                $"Node '{requestedTargetNodeId}' does not exist in this workflow.", nameof(targetNodeId));
+        }
+
+        var effectiveDefinition = targetNodeId is { } id
+            ? RestrictToAncestorClosure(workflowDefinition, id)
+            : workflowDefinition;
+
+        var validationResult = _graphValidator.Validate(effectiveDefinition);
         if (!validationResult.IsValid)
         {
             throw new WorkflowGraphValidationException(validationResult.Errors);
@@ -43,8 +65,9 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             workflowDefinition.Id,
             DateTimeOffset.UtcNow,
             context.TriggeredBy,
-            context.TriggerType);
-        var orderedNodes = TopologicalSort(workflowDefinition);
+            context.TriggerType,
+            targetNodeId);
+        var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
 
         try
@@ -65,7 +88,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var incomingOutputs = GetIncomingOutputs(workflowDefinition, node, outputsByNodeId);
+                var incomingOutputs = GetIncomingOutputs(effectiveDefinition, node, outputsByNodeId);
                 var inputContract = incomingOutputs.FirstOrDefault()?.Contract ?? WorkflowDataContract.None;
                 var nodeRun = new WorkflowNodeRun(
                     Guid.NewGuid(),
@@ -182,6 +205,36 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         => _runStore is null
             ? Task.CompletedTask
             : _runStore.SaveAsync(workflowRun, cancellationToken);
+
+    /// <summary>Projects <paramref name="workflowDefinition"/> down to the subgraph <paramref name="targetNodeId"/>
+    /// actually depends on — true backward reachability over edges, not a rank threshold (which would incorrectly
+    /// pull in unrelated sibling branches once a workflow branches). See
+    /// docs/backend/05-workflow-node-checkpoints-plan.md §3.4.</summary>
+    internal static WorkflowDefinition RestrictToAncestorClosure(WorkflowDefinition workflowDefinition, Guid targetNodeId)
+    {
+        var visited = new HashSet<Guid> { targetNodeId };
+        var frontier = new Queue<Guid>();
+        frontier.Enqueue(targetNodeId);
+
+        while (frontier.Count > 0)
+        {
+            var current = frontier.Dequeue();
+            foreach (var edge in workflowDefinition.Edges.Where(e => e.ToNodeId == current))
+            {
+                if (visited.Add(edge.FromNodeId))
+                {
+                    frontier.Enqueue(edge.FromNodeId);
+                }
+            }
+        }
+
+        var restrictedNodes = workflowDefinition.Nodes.Where(n => visited.Contains(n.Id)).ToArray();
+        var restrictedEdges = workflowDefinition.Edges
+            .Where(e => visited.Contains(e.FromNodeId) && visited.Contains(e.ToNodeId))
+            .ToArray();
+
+        return workflowDefinition.WithNodesAndEdges(restrictedNodes, restrictedEdges);
+    }
 
     private static IReadOnlyCollection<WorkflowNodeOutput> GetIncomingOutputs(
         WorkflowDefinition workflowDefinition,

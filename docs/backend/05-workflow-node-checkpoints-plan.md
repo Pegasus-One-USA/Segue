@@ -215,6 +215,21 @@ With this entry:
 
 This replaces the original 4.2's "widen `Mapping`'s contracts or add a new node type" framing — the new-node-type path is confirmed as the right one, it's just cheaper than originally scoped (no widened contracts anywhere, no orchestrator changes) because the validator was already doing the safety-critical part.
 
+### 4.3 Status: implemented, gated
+
+`WebhookNotifierNodeExecutor` (`src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs`) is fully built and unit-tested (`tests/FHIRBridge.Runtime.UnitTests/Workflows/WebhookNotifierNodeExecutorTests.cs`, 7 cases: default payload, retry-until-success, fail-vs-best-effort, Bearer auth, PHI-safety, no-URL no-op). It supports:
+
+| Config key | Purpose |
+|---|---|
+| `webhookUrl`, `httpMethod`, `contentType`, `timeoutSeconds` | Delivery |
+| `authType` (`None`/`Bearer`/`ApiKeyHeader`/`Basic`/`Hmac`), `authSecretKeyVaultName`, `authSecretName`, `authHeaderName` | Auth, via the existing `ISecretProvider`/`SecretReference` pattern — no secret is ever inlined in node config |
+| `payloadTemplate` (`WriteSummary`/`RunPing`/`Custom`), `customPayloadTemplate` | What gets sent |
+| `includeRecordLevelData` | Always a no-op by design — record-level data is never forwarded to an external URL regardless of this flag, to avoid a one-click PHI-exfiltration path; setting it true only adds a metadata warning |
+| `retryCount`, `retryBackoffSeconds`, `expectedStatusCodes`, `onFailure` (`Fail`/`BestEffort`) | Reliability |
+| `headers` (JSON object) | Static custom headers; `X-Idempotency-Key` (the workflow run id) and `X-FHIRBridge-Node-Id` are always sent automatically |
+
+**Deliberately not listed in the catalog** — `DefaultWorkflowNodeCatalog.cs` has its entry commented out (same "GATED" pattern as the other unlisted destination writers below it), so it never appears in `/api/v1/workflow-catalog` and the portal palette never shows it. The executor + DI registration (`WorkflowInfrastructureServiceCollectionExtensions`) stay in place — re-enable by uncommenting the catalog entry once this capability is actually in scope.
+
 ## 5. Suggested sequencing
 
 | Step | Scope | Depends on |

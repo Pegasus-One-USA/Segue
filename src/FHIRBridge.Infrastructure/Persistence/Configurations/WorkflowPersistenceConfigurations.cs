@@ -71,6 +71,7 @@ public sealed class WorkflowNodeEntityTypeConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.PositionX).IsRequired();
         builder.Property(x => x.PositionY).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.CheckpointUrlEnabled).IsRequired().HasDefaultValue(false);
 
         builder.HasMany(x => x.Configuration)
             .WithOne()
@@ -130,6 +131,7 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.ErrorMessage).HasColumnType("nvarchar(max)");
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.TriggerType).HasMaxLength(50);
+        builder.Property(x => x.TargetNodeId);
 
         builder.HasMany(x => x.NodeRuns)
             .WithOne()

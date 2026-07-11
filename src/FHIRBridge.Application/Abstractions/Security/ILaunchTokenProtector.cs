@@ -13,6 +13,10 @@ public interface ILaunchTokenProtector
     /// <summary>Encrypts a workflowId into an opaque launch token (launch runs the referenced workflow graph).</summary>
     string ProtectWorkflowContext(Guid workflowId);
 
+    /// <summary>Encrypts a (workflowId, targetNodeId) pair into an opaque checkpoint-launch token — hitting it runs
+    /// only that node's ancestor closure, not the full workflow graph.</summary>
+    string ProtectWorkflowCheckpointContext(Guid workflowId, Guid targetNodeId);
+
     /// <summary>Decrypts a launch-context token; returns null if it is malformed or tampered.</summary>
     LaunchContext? UnprotectContext(string token);
 
@@ -23,5 +27,6 @@ public interface ILaunchTokenProtector
     string? UnprotectState(string token);
 }
 
-/// <summary>What a launch URL resolves to: either a pipeline route or a workflow graph (exactly one is set).</summary>
-public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null);
+/// <summary>What a launch URL resolves to: a pipeline route, a full workflow graph, or a single checkpoint node
+/// within a workflow graph (when <see cref="TargetNodeId"/> is set, <see cref="WorkflowId"/> is also set).</summary>
+public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null, Guid? TargetNodeId = null);

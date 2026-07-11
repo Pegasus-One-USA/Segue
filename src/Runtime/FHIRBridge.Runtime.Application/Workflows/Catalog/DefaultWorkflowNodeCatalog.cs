@@ -72,6 +72,21 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             "Audit & Lineage",
             "audit-lineage",
             "Hash-chained audit and record-level lineage."),
+        // GATED (not yet in scope): WebhookNotifierNodeExecutor is fully implemented and registered (see
+        // WorkflowInfrastructureServiceCollectionExtensions.AddWorkflowInfrastructure) but not listed in the
+        // catalog, so it never appears in the /workflow-catalog palette. Re-add this entry (rank 71 — one above
+        // SqlServerDestination/CsvDestination's rank 70) once the capability is productized.
+        // new(
+        //     WorkflowNodeTypes.WebhookNotifier,
+        //     WorkflowNodeCategory.Destination,
+        //     71,
+        //     [],
+        //     [WorkflowDataContract.DestinationWriteResult],
+        //     WorkflowDataContract.DestinationWriteResult,
+        //     WorkflowNodeTypes.WebhookNotifier,
+        //     "HTTP Notify (Webhook)",
+        //     "http-notify",
+        //     "Notify a webhook once an upstream destination finishes writing."),
         Analytics(WorkflowNodeTypes.HedisMeasureReport),
         Analytics(WorkflowNodeTypes.AnomalyDetection),
         Analytics(WorkflowNodeTypes.PatientAggregation)

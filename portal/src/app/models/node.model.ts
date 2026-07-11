@@ -6,6 +6,8 @@ export interface BaseNode {
   y: number;
   kind?: NodeKind;
   fields: Record<string, string>;
+  /** Opt-in per-node "Copy URL" checkpoint (Phase 1) — see docs/backend/05-workflow-node-checkpoints-plan.md. */
+  checkpointUrlEnabled?: boolean;
 }
 
 export interface SourceNode extends BaseNode {

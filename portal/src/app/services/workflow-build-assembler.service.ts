@@ -111,6 +111,8 @@ export class WorkflowBuildAssemblerService {
       launchUrl: fields['Launch URL'] || null,
       trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
       patientSelectionMethod: null,
+      // Only meaningful for EHR launch — the wizard only shows/populates this field for that audience.
+      launchDisplayMode: appType === 'EhrLaunch' ? (fields['Launch display mode'] || null) : null,
     };
 
     return {

@@ -394,6 +394,30 @@ export class WorkflowBuilderComponent implements OnInit {
     this.editingNodeId.set(null);
   }
 
+  // ── checkpoint (Phase 1) ────────────────────────────────────────────────────
+  /** The node's checkpointUrlEnabled flag toggles instantly on canvas, but the URL only exists once the backend has
+   * persisted it — so this always requires a saved workflow, and re-saving after toggling before copying. */
+  onCopyCheckpointUrl(nodeId: string): void {
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) {
+      this.toast.show('Save first', 'Save the workflow before copying a checkpoint URL — the node needs a saved id.');
+      return;
+    }
+
+    this.workflowApi.checkpointUrl(workflowId, nodeId).subscribe({
+      next: ({ checkpointUrl }) => {
+        navigator.clipboard?.writeText(checkpointUrl).then(
+          () => this.toast.success('Copied', 'Checkpoint URL copied to clipboard.'),
+          () => this.toast.show('Copy failed', checkpointUrl),
+        );
+      },
+      error: err => {
+        const msg = err?.error?.error_description ?? err?.error?.error ?? 'Could not generate a checkpoint URL.';
+        this.toast.show('Checkpoint URL failed', typeof msg === 'string' ? msg : 'Save the workflow again and retry.');
+      },
+    });
+  }
+
   // ── private helpers ────────────────────────────────────────────────────────
   private saveWorkflow(name: string, workflowId?: string | null, activate = false): void {
     if (this.workflowApi.catalog().length === 0) {

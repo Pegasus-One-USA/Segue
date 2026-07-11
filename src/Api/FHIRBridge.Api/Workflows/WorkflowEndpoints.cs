@@ -373,6 +373,101 @@ public static class WorkflowEndpoints
             return Results.Ok(result);
         });
 
+        // Per-node checkpoint (docs/backend/05-workflow-node-checkpoints-plan.md §3.5). Admin-only: generates the
+        // opaque URL for a node that already has CheckpointUrlEnabled set. Hitting the returned URL (anonymous,
+        // below) runs only that node's ancestor closure and returns a run id.
+        group.MapGet("/workflows/{workflowId:guid}/nodes/{nodeId:guid}/checkpoint-url", async (
+            Guid workflowId,
+            Guid nodeId,
+            IWorkflowDefinitionStore store,
+            ILaunchTokenProtector tokenProtector,
+            HttpRequest httpRequest,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            var node = workflow.Nodes.FirstOrDefault(n => n.Id == nodeId);
+            if (node is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (!node.CheckpointUrlEnabled)
+            {
+                return Results.BadRequest(new { error = "checkpoint_not_enabled", error_description = "Enable the checkpoint flag on this node before requesting its URL." });
+            }
+
+            var token = tokenProtector.ProtectWorkflowCheckpointContext(workflowId, nodeId);
+            var url = $"{httpRequest.Scheme}://{httpRequest.Host}/api/v1/workflows/checkpoint/{token}";
+            return Results.Ok(new { checkpointUrl = url });
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // The checkpoint URL itself. Anonymous — same trust model as /oauth/launch/{context}: the encrypted,
+        // unguessable token is the boundary, not a session. Runs the target node's ancestor closure only and
+        // returns a run id; fetch its output via /workflows/runs/{workflowRunId}/checkpoint-result.
+        group.MapGet("/workflows/checkpoint/{token}", async (
+            string token,
+            ILaunchTokenProtector tokenProtector,
+            IWorkflowDefinitionStore store,
+            IRankedWorkflowOrchestrator orchestrator,
+            CancellationToken cancellationToken) =>
+        {
+            var launchContext = tokenProtector.UnprotectContext(token);
+            if (launchContext?.WorkflowId is not { } workflowId || launchContext.TargetNodeId is not { } targetNodeId)
+            {
+                return Results.BadRequest(new { error = "invalid_token", error_description = "This checkpoint URL is invalid or has expired." });
+            }
+
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            var node = workflow?.Nodes.FirstOrDefault(n => n.Id == targetNodeId);
+            if (workflow is null || node is null || !node.CheckpointUrlEnabled)
+            {
+                return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
+            }
+
+            var context = new WorkflowExecutionContext(
+                Guid.NewGuid(),
+                Guid.NewGuid().ToString("N"),
+                triggeredBy: "checkpoint-url",
+                triggerType: "Checkpoint");
+            var result = await orchestrator.ExecuteAsync(workflow, context, targetNodeId, cancellationToken);
+
+            return Results.Ok(new { workflowRunId = result.WorkflowRun.Id });
+        });
+
+        // Companion to the checkpoint trigger above: returns the checkpointed node's captured output for a run,
+        // resolved from just the run id (the frontend never needs to pass a node id around). Anonymous, same
+        // trust model as /workflows/runs/{workflowRunId}/launch-result.
+        group.MapGet("/workflows/runs/{workflowRunId:guid}/checkpoint-result", async (
+            Guid workflowRunId,
+            IWorkflowRunStore runStore,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var run = await runStore.GetAsync(workflowRunId, cancellationToken);
+            if (run?.TargetNodeId is not { } targetNodeId)
+            {
+                return Results.NotFound(new { error = "not_a_checkpoint_run", error_description = "This run id is not a checkpoint run." });
+            }
+
+            var targetNodeRun = run.NodeRuns.FirstOrDefault(nodeRun => nodeRun.WorkflowNodeId == targetNodeId);
+            if (targetNodeRun is null)
+            {
+                return Results.Ok(new { result = (JsonNode?)null, contract = (string?)null });
+            }
+
+            var payloads = await recorder.GetPagedAsync(workflowRunId, page: 1, pageSize: 50, cancellationToken);
+            var payload = payloads.Items.FirstOrDefault(item => item.WorkflowNodeRunId == targetNodeRun.Id);
+
+            return payload is null
+                ? Results.Ok(new { result = (JsonNode?)null, contract = (string?)null })
+                : Results.Ok(new { result = JsonNode.Parse(payload.PayloadJson), contract = payload.Contract });
+        });
+
         // Persisted run history (Scenario A): node-by-node execution timeline for the builder UI.
         group.MapGet("/workflows/{workflowId:guid}/runs", async (
             Guid workflowId,
@@ -724,7 +819,8 @@ public static class WorkflowEndpoints
                 nodeRequest.ConfigurationJson ?? "{}",
                 nodeRequest.PositionX,
                 nodeRequest.PositionY,
-                nodeRequest.IsEnabled);
+                nodeRequest.IsEnabled,
+                nodeRequest.CheckpointUrlEnabled);
 
             nodeIdsByClientId[nodeRequest.Id] = node.Id;
         }

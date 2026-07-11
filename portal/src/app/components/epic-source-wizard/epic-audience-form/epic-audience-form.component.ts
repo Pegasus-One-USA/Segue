@@ -80,6 +80,10 @@ interface AudienceFieldConfig {
   showLaunchUrl: boolean;
   showRedirect: boolean;
   showCdsHooks: boolean;
+  /** Whether this app's registered EHR launch-display setting (Embedded/External Browser/Sidebar) applies.
+   *  Only meaningful for the EHR-launch audience — FHIRBridge doesn't control this behavior, the EHR does; this
+   *  just records how the app was registered there. */
+  showLaunchDisplayMode: boolean;
   /** Whether the retrieval-method section applies (Backend System only). */
   showRetrieval: boolean;
   /** Whether the shared Resource Type picker (Section 5) applies. False for Backend System,
@@ -96,10 +100,10 @@ interface AudienceFieldConfig {
 
 const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {
   // CDS Hooks removed from the UI (not required) — flag kept for future use but disabled everywhere.
-  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
-  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
-  'patient':             { showLaunchUrl: false, showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Callback URL', scopePrefix: 'patient', includeInteractiveScopes: true },
-  'backend-system':      { showLaunchUrl: false, showRedirect: false, showCdsHooks: false, showRetrieval: true,  showResourcePicker: false, redirectMode: 'readonly', redirectLabel: '',             scopePrefix: 'system',  includeInteractiveScopes: false },
+  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: true },
+  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: false },
+  'patient':             { showLaunchUrl: false, showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Callback URL', scopePrefix: 'patient', includeInteractiveScopes: true,  showLaunchDisplayMode: false },
+  'backend-system':      { showLaunchUrl: false, showRedirect: false, showCdsHooks: false, showRetrieval: true,  showResourcePicker: false, redirectMode: 'readonly', redirectLabel: '',             scopePrefix: 'system',  includeInteractiveScopes: false, showLaunchDisplayMode: false },
 };
 
 // ── Data Retrieval Method registry (Backend System only) ───────────────────────
@@ -353,6 +357,9 @@ export class EpicAudienceFormComponent implements OnInit {
     privateKeyRef:       [''],
     privateKeySecretName: [''],
     launchUrl:         ['https://fhirbridge.com/launch', urlValidator],
+    // How the app is registered to open within the EHR (EHR-launch audience only) — mirrors Epic's own Hyperspace/
+    // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
+    launchDisplayMode: ['Embedded'],
     callbackUrl:       ['https://fhirbridge.com/oauth/callback', [Validators.required, urlValidator]],
     resources:         [[] as string[], Validators.required],
     scopeVersion:      ['v2'],
@@ -683,6 +690,7 @@ export class EpicAudienceFormComponent implements OnInit {
       }
     };
 
+    setIfPresent('launchDisplayMode', 'Launch display mode');
     setIfPresent('jwksUrl', 'JWKS URL');
     setIfPresent('jwtKid', 'JWT kid');
     setIfPresent('privateKeyRef', 'Key vault reference');
@@ -765,6 +773,10 @@ export class EpicAudienceFormComponent implements OnInit {
 
     if (prevCfg.showLaunchUrl && !nextCfg.showLaunchUrl) {
       this.form.patchValue({ launchUrl: '' });
+    }
+
+    if (prevCfg.showLaunchDisplayMode && !nextCfg.showLaunchDisplayMode) {
+      this.form.patchValue({ launchDisplayMode: 'Embedded' });
     }
 
     if (prevCfg.showCdsHooks && !nextCfg.showCdsHooks) {
@@ -1050,6 +1062,9 @@ export class EpicAudienceFormComponent implements OnInit {
       // WizardService.save()'s own ScopeBuilderService-derived default (which knows nothing about the selected
       // resources, scope version, or audience-specific scopes this form computed).
       'Scopes':                this.scopeString().split(/\s+/).filter(Boolean).join(' '),
+      // Only meaningful for EHR launch — cleared to '' otherwise so it's never wired into the build request
+      // (see WorkflowBuildAssemblerService.buildSource, which only reads this key for the EhrLaunch application type).
+      'Launch display mode':   cfg.showLaunchDisplayMode ? (v.launchDisplayMode ?? 'Embedded') : '',
       'CDS discovery URL':     v.cdsDiscoveryUrl ?? '',
       'CDS service endpoint':  v.cdsServiceEndpoint ?? '',
       'CDS trigger hook':      v.cdsTriggerHook ?? '',

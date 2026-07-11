@@ -1,4 +1,9 @@
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
@@ -177,6 +182,281 @@ public sealed class InMemoryDestinationNodeExecutor : DestinationNodeExecutor
         : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory)
     {
     }
+}
+
+/// <summary>Phase 2 example node: consumes an upstream destination's <see cref="DestinationWriteResult"/> (not
+/// fresh mapped records) and notifies a webhook that the write completed. Not currently exposed in the catalog
+/// (see the "GATED" comment in DefaultWorkflowNodeCatalog.cs) — implemented and DI-registered so it's ready to
+/// re-list once this capability is actually in scope, matching the same gating pattern already used for the other
+/// unlisted destination writers. See docs/backend/05-workflow-node-checkpoints-plan.md §4.2.</summary>
+public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
+{
+    private static readonly JsonSerializerOptions PayloadJsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly ISecretProvider? _secretProvider;
+    private readonly IHttpClientFactory? _httpClientFactory;
+
+    public WebhookNotifierNodeExecutor(ISecretProvider? secretProvider = null, IHttpClientFactory? httpClientFactory = null)
+        : base(WorkflowNodeTypes.WebhookNotifier, WorkflowDataContract.DestinationWriteResult)
+    {
+        _secretProvider = secretProvider;
+        _httpClientFactory = httpClientFactory;
+    }
+
+    public override async Task<WorkflowNodeOutput> ExecuteAsync(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        IReadOnlyCollection<WorkflowNodeOutput> inputs,
+        CancellationToken cancellationToken)
+    {
+        var upstreamWrite = inputs.Select(input => input.Payload).OfType<DestinationWriteResult>().FirstOrDefault();
+        var config = ReadWebhookConfiguration(node);
+        var result = new DestinationWriteResult(
+            upstreamWrite?.DestinationId ?? node.Id.ToString("N"),
+            upstreamWrite?.RecordsWritten ?? 0,
+            DateTimeOffset.UtcNow);
+
+        var metadata = new Dictionary<string, object?> { ["executor"] = nameof(WebhookNotifierNodeExecutor) };
+        if (config.IncludeRecordLevelData)
+        {
+            metadata["warning"] = "includeRecordLevelData is not supported — record-level data is never forwarded to a webhook, to protect PHI.";
+        }
+
+        if (string.IsNullOrWhiteSpace(config.WebhookUrl) || _httpClientFactory is null)
+        {
+            metadata["delivered"] = false;
+            metadata["reason"] = "No webhook URL configured.";
+            return new WorkflowNodeOutput(node.Id, node.NodeType, result, OutputContract, metadata);
+        }
+
+        var payloadJson = BuildPayloadJson(config, context, upstreamWrite);
+        var httpClient = _httpClientFactory.CreateClient(nameof(WebhookNotifierNodeExecutor));
+        httpClient.Timeout = TimeSpan.FromSeconds(config.TimeoutSeconds);
+
+        var (delivered, statusCode, attempts, error) = await SendWithRetryAsync(
+            httpClient, config, context, node, payloadJson, cancellationToken);
+
+        metadata["delivered"] = delivered;
+        metadata["attempts"] = attempts;
+        if (statusCode is { } code)
+        {
+            metadata["httpStatusCode"] = code;
+        }
+        if (error is not null)
+        {
+            metadata["error"] = error;
+        }
+
+        if (!delivered && config.OnFailure == WebhookOnFailure.Fail)
+        {
+            throw new InvalidOperationException(
+                $"Webhook notification to '{config.WebhookUrl}' failed after {attempts} attempt(s): {error}");
+        }
+
+        return new WorkflowNodeOutput(node.Id, node.NodeType, result, OutputContract, metadata);
+    }
+
+    protected override object CreatePayload(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        IReadOnlyCollection<WorkflowNodeOutput> inputs)
+    {
+        var upstreamWrite = inputs.Select(input => input.Payload).OfType<DestinationWriteResult>().FirstOrDefault();
+        return new DestinationWriteResult(
+            upstreamWrite?.DestinationId ?? node.Id.ToString("N"),
+            upstreamWrite?.RecordsWritten ?? 0,
+            DateTimeOffset.UtcNow);
+    }
+
+    private async Task<(bool Delivered, int? StatusCode, int Attempts, string? Error)> SendWithRetryAsync(
+        HttpClient httpClient,
+        WebhookConfiguration config,
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        string payloadJson,
+        CancellationToken cancellationToken)
+    {
+        var maxAttempts = Math.Max(1, config.RetryCount + 1);
+        string? lastError = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(new HttpMethod(config.HttpMethod), config.WebhookUrl)
+                {
+                    Content = new StringContent(payloadJson, Encoding.UTF8, config.ContentType),
+                };
+                request.Headers.TryAddWithoutValidation("X-Idempotency-Key", context.WorkflowRunId.ToString("N"));
+                request.Headers.TryAddWithoutValidation("X-FHIRBridge-Node-Id", node.Id.ToString("N"));
+                foreach (var header in config.Headers)
+                {
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+
+                await ApplyAuthAsync(request, config, payloadJson, cancellationToken);
+
+                using var response = await httpClient.SendAsync(request, cancellationToken);
+                var success = config.ExpectedStatusCodes.Count > 0
+                    ? config.ExpectedStatusCodes.Contains((int)response.StatusCode)
+                    : response.IsSuccessStatusCode;
+
+                if (success)
+                {
+                    return (true, (int)response.StatusCode, attempt, null);
+                }
+
+                lastError = $"HTTP {(int)response.StatusCode}";
+            }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+            {
+                lastError = exception.Message;
+            }
+
+            if (attempt < maxAttempts)
+            {
+                var backoff = TimeSpan.FromSeconds(config.RetryBackoffSeconds * Math.Pow(2, attempt - 1));
+                await Task.Delay(backoff, cancellationToken);
+            }
+        }
+
+        return (false, null, maxAttempts, lastError);
+    }
+
+    private async Task ApplyAuthAsync(
+        HttpRequestMessage request, WebhookConfiguration config, string payloadJson, CancellationToken cancellationToken)
+    {
+        if (config.AuthType == WebhookAuthType.None || _secretProvider is null)
+        {
+            return;
+        }
+
+        var secret = await _secretProvider.GetSecretAsync(
+            new SecretReference(config.AuthSecretKeyVaultName ?? string.Empty, config.AuthSecretName ?? string.Empty),
+            cancellationToken);
+
+        switch (config.AuthType)
+        {
+            case WebhookAuthType.Bearer:
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+                break;
+            case WebhookAuthType.ApiKeyHeader:
+                request.Headers.TryAddWithoutValidation(config.AuthHeaderName ?? "X-Api-Key", secret);
+                break;
+            case WebhookAuthType.Basic:
+                // Secret is expected to be stored pre-formatted as "username:password".
+                request.Headers.Authorization = new AuthenticationHeaderValue(
+                    "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(secret)));
+                break;
+            case WebhookAuthType.Hmac:
+                using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret)))
+                {
+                    var signature = Convert.ToHexStringLower(hmac.ComputeHash(Encoding.UTF8.GetBytes(payloadJson)));
+                    request.Headers.TryAddWithoutValidation(config.AuthHeaderName ?? "X-Signature-256", signature);
+                }
+                break;
+        }
+    }
+
+    private static string BuildPayloadJson(
+        WebhookConfiguration config, WorkflowExecutionContext context, DestinationWriteResult? upstreamWrite)
+    {
+        if (config.PayloadTemplate == WebhookPayloadTemplate.Custom
+            && !string.IsNullOrWhiteSpace(config.CustomPayloadTemplate))
+        {
+            return RenderCustomTemplate(config.CustomPayloadTemplate, context, upstreamWrite);
+        }
+
+        object payload = config.PayloadTemplate == WebhookPayloadTemplate.RunPing
+            ? new { workflowRunId = context.WorkflowRunId, status = "completed" }
+            : new
+            {
+                destinationId = upstreamWrite?.DestinationId,
+                recordsWritten = upstreamWrite?.RecordsWritten ?? 0,
+                writtenAtUtc = upstreamWrite?.WrittenAt ?? DateTimeOffset.UtcNow,
+                workflowRunId = context.WorkflowRunId,
+            };
+
+        return JsonSerializer.Serialize(payload, PayloadJsonOptions);
+    }
+
+    private static string RenderCustomTemplate(
+        string template, WorkflowExecutionContext context, DestinationWriteResult? upstreamWrite)
+        => template
+            .Replace("{{destinationId}}", upstreamWrite?.DestinationId ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{recordsWritten}}", (upstreamWrite?.RecordsWritten ?? 0).ToString(), StringComparison.OrdinalIgnoreCase)
+            .Replace("{{workflowRunId}}", context.WorkflowRunId.ToString(), StringComparison.OrdinalIgnoreCase)
+            .Replace("{{timestampUtc}}", DateTimeOffset.UtcNow.ToString("O"), StringComparison.OrdinalIgnoreCase);
+
+    private static WebhookConfiguration ReadWebhookConfiguration(WorkflowNode node)
+    {
+        var authType = Enum.TryParse<WebhookAuthType>(ReadStringConfiguration(node, "authType"), true, out var parsedAuth)
+            ? parsedAuth
+            : WebhookAuthType.None;
+        var payloadTemplate = Enum.TryParse<WebhookPayloadTemplate>(ReadStringConfiguration(node, "payloadTemplate"), true, out var parsedTemplate)
+            ? parsedTemplate
+            : WebhookPayloadTemplate.WriteSummary;
+        var onFailure = Enum.TryParse<WebhookOnFailure>(ReadStringConfiguration(node, "onFailure"), true, out var parsedOnFailure)
+            ? parsedOnFailure
+            : WebhookOnFailure.Fail;
+
+        var expectedStatusCodes = (ReadStringConfiguration(node, "expectedStatusCodes") ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(code => int.TryParse(code, out var parsed) ? parsed : (int?)null)
+            .Where(code => code is not null)
+            .Select(code => code!.Value)
+            .ToArray();
+
+        var headers = ReadConfiguration<Dictionary<string, string>>(node, "headers") ?? new Dictionary<string, string>();
+
+        return new WebhookConfiguration(
+            WebhookUrl: ReadStringConfiguration(node, "webhookUrl"),
+            HttpMethod: ReadStringConfiguration(node, "httpMethod") ?? "POST",
+            ContentType: ReadStringConfiguration(node, "contentType") ?? "application/json",
+            TimeoutSeconds: ReadIntConfiguration(node, "timeoutSeconds") ?? 30,
+            AuthType: authType,
+            AuthSecretKeyVaultName: ReadStringConfiguration(node, "authSecretKeyVaultName"),
+            AuthSecretName: ReadStringConfiguration(node, "authSecretName"),
+            AuthHeaderName: ReadStringConfiguration(node, "authHeaderName"),
+            PayloadTemplate: payloadTemplate,
+            CustomPayloadTemplate: ReadStringConfiguration(node, "customPayloadTemplate"),
+            // Portal-authored node config is a flat string dictionary (BaseNode.fields: Record<string,string>), so a
+            // checkbox value round-trips as the JSON string "true"/"false", not a genuine JSON boolean — read it as a
+            // string and parse leniently rather than relying on ReadBoolConfiguration's strict JsonValueKind check.
+            IncludeRecordLevelData: bool.TryParse(ReadStringConfiguration(node, "includeRecordLevelData"), out var includeRecords) && includeRecords,
+            RetryCount: ReadIntConfiguration(node, "retryCount") ?? 0,
+            RetryBackoffSeconds: ReadIntConfiguration(node, "retryBackoffSeconds") ?? 2,
+            ExpectedStatusCodes: expectedStatusCodes,
+            OnFailure: onFailure,
+            Headers: headers);
+    }
+
+    private static int? ReadIntConfiguration(WorkflowNode node, string propertyName)
+        => int.TryParse(ReadStringConfiguration(node, propertyName), out var value) ? value : null;
+
+    private enum WebhookAuthType { None, Bearer, ApiKeyHeader, Basic, Hmac }
+
+    private enum WebhookPayloadTemplate { WriteSummary, RunPing, Custom }
+
+    private enum WebhookOnFailure { Fail, BestEffort }
+
+    private sealed record WebhookConfiguration(
+        string? WebhookUrl,
+        string HttpMethod,
+        string ContentType,
+        int TimeoutSeconds,
+        WebhookAuthType AuthType,
+        string? AuthSecretKeyVaultName,
+        string? AuthSecretName,
+        string? AuthHeaderName,
+        WebhookPayloadTemplate PayloadTemplate,
+        string? CustomPayloadTemplate,
+        bool IncludeRecordLevelData,
+        int RetryCount,
+        int RetryBackoffSeconds,
+        IReadOnlyCollection<int> ExpectedStatusCodes,
+        WebhookOnFailure OnFailure,
+        IReadOnlyDictionary<string, string> Headers);
 }
 
 public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase

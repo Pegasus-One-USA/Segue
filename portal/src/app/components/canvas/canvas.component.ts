@@ -35,6 +35,8 @@ export class CanvasComponent {
   readonly openWizard          = output<string | undefined>();
   readonly openTransformPicker = output<string>();
   readonly openSourcePicker    = output<void>();
+  /** Node-level "Copy checkpoint URL" (Phase 1) — the parent owns the saved workflow id, so it makes the API call. */
+  readonly copyCheckpointUrl   = output<string>();
 
   // ── computed view helpers ─────────────────────────────────────────────────
   protected readonly nodes    = this.store.nodes;
@@ -236,5 +238,42 @@ export class CanvasComponent {
     const id = this.ctxMenu()?.nodeId;
     if (id) this.onNodeDelete(id);
     this.ctxMenu.set(null);
+  }
+
+  // ── checkpoint (Phase 1) ───────────────────────────────────────────────────
+  /** True for the node currently under the context menu — drives which checkpoint action(s) the menu shows. */
+  protected checkpointEnabledForCtxNode(): boolean {
+    const id = this.ctxMenu()?.nodeId;
+    const node = id ? this.store.byId(id) : undefined;
+    return !!node?.checkpointUrlEnabled;
+  }
+
+  /** Merge nodes are a client-side-only grouping concept (never sent to the backend) — no checkpoint actions for them. */
+  protected ctxNodeIsMerge(): boolean {
+    const id = this.ctxMenu()?.nodeId;
+    const node = id ? this.store.byId(id) : undefined;
+    return node?.kind === 'merge';
+  }
+
+  ctxToggleCheckpoint(): void {
+    const id = this.ctxMenu()?.nodeId;
+    const node = id ? this.store.byId(id) : undefined;
+    if (!id || !node) { this.ctxMenu.set(null); return; }
+
+    const enabling = !node.checkpointUrlEnabled;
+    this.store.updateNode(id, { checkpointUrlEnabled: enabling });
+    this.toast.show(
+      enabling ? 'Checkpoint enabled' : 'Checkpoint disabled',
+      enabling
+        ? 'Save the workflow, then use "Copy checkpoint URL" on this node.'
+        : 'This node no longer offers a checkpoint URL once you save.',
+    );
+    this.ctxMenu.set(null);
+  }
+
+  ctxCopyCheckpointUrl(): void {
+    const id = this.ctxMenu()?.nodeId;
+    this.ctxMenu.set(null);
+    if (id) this.copyCheckpointUrl.emit(id);
   }
 }
