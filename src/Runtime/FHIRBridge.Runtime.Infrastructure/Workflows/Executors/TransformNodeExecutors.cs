@@ -86,13 +86,38 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         {
             var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
             var mapped = _mappingEngine?.Map(sourceJson, fields);
-            records.Add(new MappedDestinationRecord(
-                context.WorkflowRunId,
-                resource.ResourceType,
-                destinationObject,
-                resource.ResourceId,
-                mapped?.Values ?? new Dictionary<string, object?>(),
-                sourceJson));
+
+            // Parent row (Scalar/FirstItem/RejectIfMultiple fields land here). Skipped when every field on this
+            // node uses SeparateDestination, so a node dedicated to a child table doesn't emit an empty parent row.
+            if (mapped is null || mapped.Values.Count > 0)
+            {
+                records.Add(new MappedDestinationRecord(
+                    context.WorkflowRunId,
+                    resource.ResourceType,
+                    destinationObject,
+                    resource.ResourceId,
+                    mapped?.Values ?? new Dictionary<string, object?>(),
+                    sourceJson));
+            }
+
+            // ArrayPolicy.SeparateDestination rows: one record per array element, routed to its own child table.
+            foreach (var childTable in mapped?.ChildTables ?? [])
+            {
+                foreach (var row in childTable.Rows)
+                {
+                    var values = row
+                        .Where(kv => !string.Equals(kv.Key, "RowIndex", StringComparison.OrdinalIgnoreCase))
+                        .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+
+                    records.Add(new MappedDestinationRecord(
+                        context.WorkflowRunId,
+                        resource.ResourceType,
+                        childTable.Name,
+                        resource.ResourceId,
+                        values,
+                        sourceJson));
+                }
+            }
         }
 
         return new WorkflowNodeOutput(

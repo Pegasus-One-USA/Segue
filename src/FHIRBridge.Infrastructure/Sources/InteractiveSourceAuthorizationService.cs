@@ -427,6 +427,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         await RecordAuditAsync(pending.SourceConnectionId, "InteractiveAuthorizationCompleted", "Completed",
             $"Interactive OAuth sign-in completed for {pending.SourceName}.", cancellationToken);
 
+        Guid? workflowRunId = null;
         if (pending.RouteId is { } routeId)
         {
             // Deliberately NOT the request token: the callback's caller is the provider's browser, which may
@@ -436,10 +437,17 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         }
         else if (pending.WorkflowId is { } workflowId)
         {
-            await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, cancellationToken);
+            // Same reasoning as the route path above — the run must survive the browser disconnecting/redirecting
+            // while it's still in flight, so it uses CancellationToken.None rather than the request's token.
+            workflowRunId = await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, CancellationToken.None);
         }
 
-        return new InteractiveAuthorizationResult(pending.SourceConnectionId, pending.SourceName);
+        var postLaunchRedirectUri = workflowRunId is not null
+            ? sourceConnection.Interactive?.PostLaunchRedirectUri
+            : null;
+
+        return new InteractiveAuthorizationResult(
+            pending.SourceConnectionId, pending.SourceName, workflowRunId, postLaunchRedirectUri);
     }
 
     // After a launch completes, run every enabled pipeline route bound to the launched source — the launch establishes
@@ -522,8 +530,9 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     }
 
     // Workflow launch: run the referenced workflow graph once the token is stored (mirrors TriggerRouteRunAsync;
-    // a run failure is audited but does not fail the sign-in, since the token is already persisted).
-    private async Task TriggerWorkflowRunAsync(Guid sourceConnectionId, Guid workflowId, CancellationToken cancellationToken)
+    // a run failure is audited but does not fail the sign-in, since the token is already persisted). Returns the
+    // resulting run id (null on failure) so the caller can redirect the browser to it once the run settles.
+    private async Task<Guid?> TriggerWorkflowRunAsync(Guid sourceConnectionId, Guid workflowId, CancellationToken cancellationToken)
     {
         try
         {
@@ -545,6 +554,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchWorkflowTriggered", "Started",
                 $"Workflow '{workflow.Name}' ({result.WorkflowRun.NodeRuns.Count} node run(s)) triggered by EHR launch for source {sourceConnectionId}.",
                 cancellationToken);
+
+            return result.WorkflowRun.Id;
         }
         catch (Exception exception)
         {
@@ -556,6 +567,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchWorkflowTriggerFailed", "Failed",
                 exception.Message, cancellationToken);
+
+            return null;
         }
     }
 

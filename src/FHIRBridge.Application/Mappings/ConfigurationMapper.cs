@@ -41,7 +41,8 @@ public static class ConfigurationMapper
                 interactive.RedirectUris,
                 interactive.LaunchUrl,
                 interactive.TrustedIssuers,
-                interactive.PatientSelectionMethod);
+                interactive.PatientSelectionMethod,
+                interactive.PostLaunchRedirectUri);
 
     public static SourceInteractiveConfiguration? ToDomain(SourceInteractiveConfigurationDto? dto) =>
         dto is null
@@ -50,7 +51,8 @@ public static class ConfigurationMapper
                 dto.RedirectUris ?? [],
                 dto.LaunchUrl,
                 dto.TrustedIssuers ?? [],
-                dto.PatientSelectionMethod);
+                dto.PatientSelectionMethod,
+                dto.PostLaunchRedirectUri);
 
     private static SourceRetrievalConfigurationDto? ToDto(SourceRetrievalConfiguration? retrieval) =>
         retrieval is null

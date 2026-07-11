@@ -41,6 +41,10 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
                 .HasMaxLength(500)
                 .HasColumnName("LaunchUrl");
 
+            interactive.Property(x => x.PostLaunchRedirectUri)
+                .HasMaxLength(500)
+                .HasColumnName("PostLaunchRedirectUri");
+
             interactive.Property(x => x.PatientSelectionMethod)
                 .HasConversion<string>()
                 .HasMaxLength(50)

@@ -102,6 +102,80 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
         }
     }
 
+    public async Task<DestinationDataDto> ReadByColumnAsync(
+        Guid destinationId,
+        string destinationObject,
+        string columnName,
+        string columnValue,
+        int top,
+        CancellationToken cancellationToken)
+    {
+        var destination = await _repository.GetDestinationAsync(destinationId, cancellationToken)
+            ?? throw new NotFoundException("DestinationConfiguration", destinationId);
+
+        if (!IsRelational(destination.DestinationType))
+        {
+            return new DestinationDataDto(destinationObject, [], [], 0,
+                $"Destination type '{destination.DestinationType}' is not a relational database — no rows to preview.");
+        }
+
+        var target = destination.Target is { Length: > 0 } ? destination.Target : destinationObject;
+        string schema, table;
+        string validatedColumn;
+        try
+        {
+            (schema, table) = ParseTarget(target);
+            validatedColumn = ValidateIdentifier(columnName);
+        }
+        catch (Exception ex)
+        {
+            return new DestinationDataDto(target, [], [], 0, ex.Message);
+        }
+
+        var boundedTop = Math.Clamp(top, 1, 500);
+
+        try
+        {
+            var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+            await using var connection = await OpenConnectionAsync(destination.DestinationType, connectionString, cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = BuildColumnSelect(destination.DestinationType, schema, table, validatedColumn, boundedTop);
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@value";
+            parameter.Value = columnValue;
+            command.Parameters.Add(parameter);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+            var rows = new List<IReadOnlyList<string?>>();
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var row = new string?[reader.FieldCount];
+                for (var i = 0; i < reader.FieldCount; i++)
+                {
+                    row[i] = reader.IsDBNull(i) ? null : Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture);
+                }
+                rows.Add(row);
+            }
+
+            var qualified = string.IsNullOrEmpty(schema) ? table : $"{schema}.{table}";
+            return new DestinationDataDto(qualified, columns, rows, rows.Count, null);
+        }
+        catch (Exception ex)
+        {
+            return new DestinationDataDto(target, [], [], 0, ex.Message);
+        }
+    }
+
+    private static string BuildColumnSelect(DestinationType type, string schema, string table, string column, int top)
+    {
+        var qualified = QualifiedName(type, schema, table);
+        var where = $"WHERE {Quote(type, column)} = @value";
+        return type is DestinationType.SqlServer or DestinationType.AzureSql
+            ? $"SELECT TOP {top} * FROM {qualified} {where}"
+            : $"SELECT * FROM {qualified} {where} LIMIT {top}";
+    }
+
     private static bool IsRelational(DestinationType type)
         => type is DestinationType.SqlServer or DestinationType.AzureSql or DestinationType.PostgreSql or DestinationType.MySql;
 
