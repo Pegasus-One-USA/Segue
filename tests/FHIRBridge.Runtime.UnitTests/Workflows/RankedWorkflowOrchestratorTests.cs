@@ -191,6 +191,83 @@ public sealed class RankedWorkflowOrchestratorTests
         persisted.ErrorMessage.Should().Be("write failed");
     }
 
+    [Fact]
+    public async Task ExecuteAsync_with_targetNodeId_runs_only_the_ancestor_closure_not_sibling_branches()
+    {
+        // Fan-out: Mapping feeds both SqlServer and Csv destinations. A checkpoint targeting SqlServer must run
+        // Mapping (its ancestor) but must NEVER run Csv (a sibling, not an ancestor) — this is the exact scenario
+        // rank-threshold filtering would get wrong (see docs/backend/05-workflow-node-checkpoints-plan.md §3.4).
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "checkpoint-fan-out", 1);
+        var source = AddNode(workflow, WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, 0);
+        var mapping = AddNode(workflow, WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, 60);
+        var sql = AddNode(workflow, WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination, 70);
+        var csv = AddNode(workflow, WorkflowNodeTypes.CsvDestination, WorkflowNodeCategory.Destination, 70);
+        workflow.AddEdge(source.Id, mapping.Id);
+        workflow.AddEdge(mapping.Id, sql.Id);
+        workflow.AddEdge(mapping.Id, csv.Id);
+
+        var calls = new List<string>();
+        var orchestrator = CreateOrchestrator(
+            new RecordingExecutor(WorkflowNodeTypes.EpicSource, calls, WorkflowDataContract.ResourceBatch),
+            new RecordingExecutor(WorkflowNodeTypes.Mapping, calls, WorkflowDataContract.MappedRecordBatch),
+            new RecordingExecutor(WorkflowNodeTypes.SqlServerDestination, calls, WorkflowDataContract.DestinationWriteResult),
+            new RecordingExecutor(WorkflowNodeTypes.CsvDestination, calls, WorkflowDataContract.DestinationWriteResult));
+
+        var result = await orchestrator.ExecuteAsync(workflow, CreateContext(), targetNodeId: sql.Id);
+
+        calls.Should().Equal(WorkflowNodeTypes.EpicSource, WorkflowNodeTypes.Mapping, WorkflowNodeTypes.SqlServerDestination);
+        calls.Should().NotContain(WorkflowNodeTypes.CsvDestination);
+        result.WorkflowRun.TargetNodeId.Should().Be(sql.Id);
+        result.WorkflowRun.NodeRuns.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_with_targetNodeId_on_a_diamond_still_includes_every_ancestor_branch()
+    {
+        // Diamond: two independent upstream branches (Epic, Sample) merge — via separate Consent nodes — into one
+        // Mapping node. A checkpoint on the destination must include BOTH branches, not just one.
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "checkpoint-diamond", 1);
+        var epic = AddNode(workflow, WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, 0);
+        var sample = AddNode(workflow, WorkflowNodeTypes.SampleSource, WorkflowNodeCategory.Source, 0);
+        var epicConsent = AddNode(workflow, WorkflowNodeTypes.Consent, WorkflowNodeCategory.Compliance, 10);
+        var sampleConsent = AddNode(workflow, WorkflowNodeTypes.Consent, WorkflowNodeCategory.Compliance, 10);
+        var mapping = AddNode(workflow, WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, 60);
+        var sql = AddNode(workflow, WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination, 70);
+        workflow.AddEdge(epic.Id, epicConsent.Id);
+        workflow.AddEdge(sample.Id, sampleConsent.Id);
+        workflow.AddEdge(epicConsent.Id, mapping.Id);
+        workflow.AddEdge(sampleConsent.Id, mapping.Id);
+        workflow.AddEdge(mapping.Id, sql.Id);
+
+        var calls = new List<string>();
+        var orchestrator = CreateOrchestrator(
+            new RecordingExecutor(WorkflowNodeTypes.EpicSource, calls, WorkflowDataContract.ResourceBatch),
+            new RecordingExecutor(WorkflowNodeTypes.SampleSource, calls, WorkflowDataContract.ResourceBatch),
+            new RecordingExecutor(WorkflowNodeTypes.Consent, calls, WorkflowDataContract.ResourceBatch),
+            new RecordingExecutor(WorkflowNodeTypes.Mapping, calls, WorkflowDataContract.MappedRecordBatch),
+            new RecordingExecutor(WorkflowNodeTypes.SqlServerDestination, calls, WorkflowDataContract.DestinationWriteResult));
+
+        var result = await orchestrator.ExecuteAsync(workflow, CreateContext(), targetNodeId: sql.Id);
+
+        result.WorkflowRun.NodeRuns.Should().HaveCount(6);
+        calls.Count(call => call == WorkflowNodeTypes.Consent).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_with_targetNodeId_that_does_not_exist_throws()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("checkpoint-missing-node");
+        var orchestrator = CreateOrchestrator(
+            new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle"),
+            new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+            new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+            new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload));
+
+        var act = async () => await orchestrator.ExecuteAsync(workflow, CreateContext(), targetNodeId: Guid.NewGuid());
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+
     private static WorkflowDefinition BuildValidSourceToSqlWorkflow(string name)
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), name, 1);

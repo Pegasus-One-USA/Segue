@@ -121,6 +121,12 @@
 
   &:hover { background: var(--color-side); }
   &--danger { color: var(--color-error); &:hover { background: var(--color-error-soft); } }
+
+  &:disabled {
+    color: var(--color-muted-2, #94A3B8);
+    cursor: not-allowed;
+    &:hover { background: transparent; }
+  }
 }
 
 .ctx-ico {

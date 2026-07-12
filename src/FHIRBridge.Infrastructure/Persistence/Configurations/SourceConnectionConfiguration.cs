@@ -50,6 +50,11 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
                 .HasMaxLength(50)
                 .HasColumnName("PatientSelectionMethod");
 
+            interactive.Property(x => x.LaunchDisplayMode)
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .HasColumnName("LaunchDisplayMode");
+
             var trustedIssuers = interactive.Property(x => x.TrustedIssuers)
                 .HasConversion(
                     value => string.Join(' ', value),

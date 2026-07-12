@@ -394,7 +394,7 @@
         [disabled]="isNextDisabled() || probeState() === 'testing'"
         (click)="next()"
       >
-        @if (step() === TOTAL_STEPS) { ✓ Add to Pipeline }
+        @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }
         @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
         @else { Next }
       </button>

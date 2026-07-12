@@ -38,6 +38,7 @@ export interface WorkflowNodeRequest {
   positionX: number;
   positionY: number;
   isEnabled: boolean;
+  checkpointUrlEnabled?: boolean;
 }
 
 export interface WorkflowEdgeRequest {
@@ -119,6 +120,8 @@ export interface SourceInteractiveConfigurationRequest {
   launchUrl?: string | null;
   trustedIssuers?: string[];
   patientSelectionMethod?: string | null;
+  /** How the app is registered to open within the EHR (EHR-launch audience only) — 'Embedded' | 'ExternalBrowser' | 'Sidebar'. */
+  launchDisplayMode?: string | null;
 }
 
 export interface SourceRetrievalConfigurationRequest {
@@ -228,6 +231,16 @@ export interface WorkflowLaunchUrl {
   opensDirectly?: boolean;
 }
 
+/** A per-node "Copy URL" checkpoint (Phase 1) — running it executes only that node's ancestor closure. */
+export interface WorkflowCheckpointUrl {
+  checkpointUrl: string;
+}
+
+export interface WorkflowCheckpointResult {
+  result: unknown;
+  contract: string | null;
+}
+
 /** A capped sample of rows read back from a relational destination table ("View destination data"). */
 export interface DestinationData {
   table: string;
@@ -283,6 +296,16 @@ export class WorkflowApiService {
     return this.http.get<WorkflowLaunchUrl>(WORKFLOW_ENDPOINTS.launchUrl(workflowId));
   }
 
+  /** Per-node checkpoint (Phase 1): the node must already have checkpointUrlEnabled saved server-side. */
+  checkpointUrl(workflowId: string, nodeId: string): Observable<WorkflowCheckpointUrl> {
+    return this.http.get<WorkflowCheckpointUrl>(WORKFLOW_ENDPOINTS.checkpointUrl(workflowId, nodeId));
+  }
+
+  /** Reads back a checkpoint run's captured node output, resolved from just the run id. */
+  checkpointResult(workflowRunId: string): Observable<WorkflowCheckpointResult> {
+    return this.http.get<WorkflowCheckpointResult>(WORKFLOW_ENDPOINTS.checkpointResult(workflowRunId));
+  }
+
   /** Reads back a capped sample of rows the workflow's destination wrote. */
   destinationData(workflowId: string, top = 50): Observable<DestinationData> {
     return this.http.get<DestinationData>(
@@ -305,5 +328,10 @@ export class WorkflowApiService {
 
   delete(workflowId: string): Observable<void> {
     return this.http.delete<void>(WORKFLOW_ENDPOINTS.byId(workflowId));
+  }
+
+  /** Duplicates a workflow (exact node/edge/config copy, new ids) under a new name. Always created disabled. */
+  copy(workflowId: string, name: string): Observable<WorkflowDefinitionDto> {
+    return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.copy(workflowId), { name });
   }
 }

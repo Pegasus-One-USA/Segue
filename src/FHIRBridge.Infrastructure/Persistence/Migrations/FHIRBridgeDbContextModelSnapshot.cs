@@ -1477,6 +1477,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<bool>("CheckpointUrlEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("ConfigurationJson")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1651,6 +1656,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("TargetNodeId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("TriggerType")
                         .HasMaxLength(50)
@@ -1989,6 +1997,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         {
                             b1.Property<Guid>("SourceConnectionId")
                                 .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("LaunchDisplayMode")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("LaunchDisplayMode");
 
                             b1.Property<string>("LaunchUrl")
                                 .HasMaxLength(500)

@@ -26,8 +26,11 @@ public sealed record WorkflowNodeRequest(
     string? ConfigurationJson,
     double PositionX,
     double PositionY,
-    bool IsEnabled);
+    bool IsEnabled,
+    bool CheckpointUrlEnabled = false);
 
 public sealed record WorkflowEdgeRequest(string FromNodeId, string ToNodeId);
 
 public sealed record WorkflowRunRequest(string? CorrelationId);
+
+public sealed record CopyWorkflowRequest(string Name);

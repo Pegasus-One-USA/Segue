@@ -131,8 +131,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string redirectUri,
         CancellationToken cancellationToken)
     {
-        var sourceConnection = await GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
-        return await StartEhrLaunchCoreAsync(sourceConnection, issuer, launch, redirectUri, routeId: null, workflowId: null, cancellationToken);
+        try
+        {
+            var sourceConnection = await GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+            return await StartEhrLaunchCoreAsync(sourceConnection, issuer, launch, redirectUri, routeId: null, workflowId: null, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            await RecordAccessAttemptFailureAsync("EhrLaunch", issuer, sourceConnectionId, exception, cancellationToken);
+            throw;
+        }
     }
 
     public async Task<Uri> StartEhrLaunchFromContextAsync(
@@ -142,25 +150,38 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string redirectUri,
         CancellationToken cancellationToken)
     {
-        var context = _launchTokenProtector.UnprotectContext(launchContext)
-            ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
-
-        // Workflow launch: the graph's source node names the connection to OAuth against and validate iss for.
-        if (context.WorkflowId is { } workflowId)
+        // Tracks the source connection as soon as it resolves, so a later failure (e.g. untrusted issuer) is audited
+        // against the real connection rather than logged as an anonymous/unresolved attempt.
+        Guid? resolvedSourceConnectionId = null;
+        try
         {
-            var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
-            return await StartEhrLaunchCoreAsync(
-                workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId, cancellationToken);
-        }
+            var context = _launchTokenProtector.UnprotectContext(launchContext)
+                ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
 
-        if (context.RouteId is { } contextRouteId)
+            // Workflow launch: the graph's source node names the connection to OAuth against and validate iss for.
+            if (context.WorkflowId is { } workflowId)
+            {
+                var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
+                resolvedSourceConnectionId = workflowSource.Id;
+                return await StartEhrLaunchCoreAsync(
+                    workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId, cancellationToken);
+            }
+
+            if (context.RouteId is { } contextRouteId)
+            {
+                var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
+                resolvedSourceConnectionId = sourceConnection.Id;
+                return await StartEhrLaunchCoreAsync(
+                    sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null, cancellationToken);
+            }
+
+            throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
+        }
+        catch (Exception exception)
         {
-            var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
-            return await StartEhrLaunchCoreAsync(
-                sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null, cancellationToken);
+            await RecordAccessAttemptFailureAsync("EhrLaunchFromContext", issuer, resolvedSourceConnectionId, exception, cancellationToken);
+            throw;
         }
-
-        throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
     }
 
 
@@ -169,86 +190,112 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
       string redirectUri,
       CancellationToken cancellationToken)
     {
-        var context = _launchTokenProtector.UnprotectContext(launchContext)
-            ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
-
-        SourceConnection sourceConnection;
-        Guid? routeId = null;
-        Guid? workflowId = null;
-        if (context.WorkflowId is { } wf)
+        // Tracks the source connection as soon as it resolves, so a later failure is audited against the real
+        // connection rather than logged as an anonymous/unresolved attempt.
+        Guid? resolvedSourceConnectionId = null;
+        try
         {
-            sourceConnection = await ResolveWorkflowSourceAsync(wf, cancellationToken);
-            workflowId = wf;
+            var context = _launchTokenProtector.UnprotectContext(launchContext)
+                ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
+
+            SourceConnection sourceConnection;
+            Guid? routeId = null;
+            Guid? workflowId = null;
+            if (context.WorkflowId is { } wf)
+            {
+                sourceConnection = await ResolveWorkflowSourceAsync(wf, cancellationToken);
+                workflowId = wf;
+            }
+            else if (context.RouteId is { } rt)
+            {
+                (sourceConnection, routeId) = await ResolveRouteSourceAsync(rt, cancellationToken);
+            }
+            else
+            {
+                throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
+            }
+
+            resolvedSourceConnectionId = sourceConnection.Id;
+
+            // This entry point is for the directly-opened flows (provider standalone / patient). An EHR-launch source has
+            // no patient context without an iss/launch token, so it must use the /oauth/launch entry instead.
+            if (sourceConnection.ApplicationType is ApplicationType.EhrLaunch)
+            {
+                throw new InvalidOperationException(
+                    "This source is configured for EHR launch; open it from the EHR (which supplies iss + launch) rather than directly.");
+            }
+
+            var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken);
+            var clientId = RequireClientId(sourceConnection);
+
+            var source = new FhirSourceConfiguration(
+                SourceType: MapSourceType(sourceConnection.SourceSystemType),
+                Name: sourceConnection.Name,
+                BaseUrl: sourceConnection.BaseUrl,
+                TokenEndpoint: smartConfiguration.TokenEndpoint,
+                ClientId: clientId,
+                KeyId: null,
+                PrivateKeyPem: null,
+                Scopes: ApplyPatientSelection(
+                    sourceConnection.Authentication.Scopes,
+                    sourceConnection.Interactive?.PatientSelectionMethod),
+                SourceConnectionId: sourceConnection.Id,
+                AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
+
+            var authorizationUrl = await IssueAuthorizationAsync(
+                source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
+
+            await RecordAuditAsync(sourceConnection.Id, "InteractiveAuthorizationStarted", "Started",
+                $"Standalone/patient OAuth sign-in started for {sourceConnection.Name}.", cancellationToken);
+
+            return authorizationUrl;
         }
-        else if (context.RouteId is { } rt)
+        catch (Exception exception)
         {
-            (sourceConnection, routeId) = await ResolveRouteSourceAsync(rt, cancellationToken);
+            await RecordAccessAttemptFailureAsync("InteractiveFromContext", issuer: null, resolvedSourceConnectionId, exception, cancellationToken);
+            throw;
         }
-        else
-        {
-            throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
-        }
-
-        // This entry point is for the directly-opened flows (provider standalone / patient). An EHR-launch source has
-        // no patient context without an iss/launch token, so it must use the /oauth/launch entry instead.
-        if (sourceConnection.ApplicationType is ApplicationType.EhrLaunch)
-        {
-            throw new InvalidOperationException(
-                "This source is configured for EHR launch; open it from the EHR (which supplies iss + launch) rather than directly.");
-        }
-
-        var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken);
-        var clientId = RequireClientId(sourceConnection);
-
-        var source = new FhirSourceConfiguration(
-            SourceType: MapSourceType(sourceConnection.SourceSystemType),
-            Name: sourceConnection.Name,
-            BaseUrl: sourceConnection.BaseUrl,
-            TokenEndpoint: smartConfiguration.TokenEndpoint,
-            ClientId: clientId,
-            KeyId: null,
-            PrivateKeyPem: null,
-            Scopes: ApplyPatientSelection(
-                sourceConnection.Authentication.Scopes,
-                sourceConnection.Interactive?.PatientSelectionMethod),
-            SourceConnectionId: sourceConnection.Id,
-            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
-
-        var authorizationUrl = await IssueAuthorizationAsync(
-            source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
-
-        await RecordAuditAsync(sourceConnection.Id, "InteractiveAuthorizationStarted", "Started",
-            $"Standalone/patient OAuth sign-in started for {sourceConnection.Name}.", cancellationToken);
-
-        return authorizationUrl;
     }
     public async Task<Uri> StartStandaloneFromContextAsync(
         string launchContext,
         string redirectUri,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(redirectUri))
+        // Tracks the source connection as soon as it resolves, so a later failure is audited against the real
+        // connection rather than logged as an anonymous/unresolved attempt.
+        Guid? resolvedSourceConnectionId = null;
+        try
         {
-            throw new ArgumentException("A redirect URI is required to start interactive authorization.", nameof(redirectUri));
+            if (string.IsNullOrWhiteSpace(redirectUri))
+            {
+                throw new ArgumentException("A redirect URI is required to start interactive authorization.", nameof(redirectUri));
+            }
+
+            var context = _launchTokenProtector.UnprotectContext(launchContext)
+                ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
+
+            // Workflow launch: the graph's source node names the connection to OAuth against.
+            if (context.WorkflowId is { } workflowId)
+            {
+                var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
+                resolvedSourceConnectionId = workflowSource.Id;
+                return await StartStandaloneCoreAsync(workflowSource, redirectUri, routeId: null, workflowId, cancellationToken);
+            }
+
+            if (context.RouteId is { } contextRouteId)
+            {
+                var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
+                resolvedSourceConnectionId = sourceConnection.Id;
+                return await StartStandaloneCoreAsync(sourceConnection, redirectUri, routeId, workflowId: null, cancellationToken);
+            }
+
+            throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
         }
-
-        var context = _launchTokenProtector.UnprotectContext(launchContext)
-            ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
-
-        // Workflow launch: the graph's source node names the connection to OAuth against.
-        if (context.WorkflowId is { } workflowId)
+        catch (Exception exception)
         {
-            var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
-            return await StartStandaloneCoreAsync(workflowSource, redirectUri, routeId: null, workflowId, cancellationToken);
+            await RecordAccessAttemptFailureAsync("StandaloneFromContext", issuer: null, resolvedSourceConnectionId, exception, cancellationToken);
+            throw;
         }
-
-        if (context.RouteId is { } contextRouteId)
-        {
-            var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
-            return await StartStandaloneCoreAsync(sourceConnection, redirectUri, routeId, workflowId: null, cancellationToken);
-        }
-
-        throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
     }
 
     private async Task<Uri> StartStandaloneCoreAsync(
@@ -760,6 +807,46 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 null,
                 action,
                 status,
+                message,
+                null,
+                _currentUserService.CurrentUser.AuditName,
+                null),
+            cancellationToken);
+    }
+
+    // Every anonymous OAuth entry point (EHR launch, standalone, patient) is reachable by any third party on the
+    // internet — a stale/tampered context, an untrusted issuer, or a deleted workflow/route are all indistinguishable
+    // from a probing attacker until resolved. Recording every failure here (not just successes) means the operational
+    // audit log — the same table surfaced as the lineage/compliance trail elsewhere in the app — captures who tried
+    // to reach the API and why it was refused, even when no source connection could be resolved.
+    private Task RecordAccessAttemptFailureAsync(
+        string entryPoint,
+        string? issuer,
+        Guid? sourceConnectionId,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogWarning(
+            exception,
+            "Third-party OAuth access attempt via {EntryPoint} was rejected (iss {Issuer}, source {SourceConnectionId}).",
+            entryPoint,
+            issuer ?? "n/a",
+            sourceConnectionId?.ToString() ?? "unresolved");
+
+        var message = issuer is null
+            ? exception.Message
+            : $"{exception.Message} (iss {issuer})";
+
+        return _auditService.RecordAsync(
+            new RecordOperationalAuditLogRequest(
+                null,
+                null,
+                sourceConnectionId,
+                null,
+                null,
+                null,
+                $"{entryPoint}Rejected",
+                "Rejected",
                 message,
                 null,
                 _currentUserService.CurrentUser.AuditName,

@@ -9,7 +9,8 @@ public sealed class WorkflowRun
         Guid workflowDefinitionId,
         DateTimeOffset startedAt,
         string? triggeredBy = null,
-        string? triggerType = null)
+        string? triggerType = null,
+        Guid? targetNodeId = null)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -22,6 +23,7 @@ public sealed class WorkflowRun
         Status = WorkflowRunStatus.Running;
         TriggeredBy = triggeredBy;
         TriggerType = triggerType;
+        TargetNodeId = targetNodeId;
     }
 
     public Guid Id { get; }
@@ -41,6 +43,10 @@ public sealed class WorkflowRun
 
     /// <summary>How the run was launched: Manual, Scheduled, or InteractiveLaunch.</summary>
     public string? TriggerType { get; }
+
+    /// <summary>Set when this run is a checkpoint run (restricted to one node's ancestor closure) — null for a normal,
+    /// full-graph run. Lets the checkpoint-result endpoint resolve which node to read back from just the run id.</summary>
+    public Guid? TargetNodeId { get; }
 
     public IReadOnlyCollection<WorkflowNodeRun> NodeRuns => _nodeRuns;
 

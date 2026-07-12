@@ -401,6 +401,18 @@
               </div>
             }
 
+            @if (audienceConfig().showLaunchDisplayMode) {
+              <div class="eaf-field eaf-field--full">
+                <label class="eaf-label" for="eaf-launchDisplayMode">Launch Display Mode</label>
+                <select id="eaf-launchDisplayMode" class="eaf-input" formControlName="launchDisplayMode">
+                  <option value="Embedded">Embedded (within Hyperspace)</option>
+                  <option value="ExternalBrowser">External Browser</option>
+                  <option value="Sidebar">Sidebar (side-by-side with the chart)</option>
+                </select>
+                <p class="eaf-hint">Match whatever this app is registered as in Epic's own Hyperspace/Hyperdrive app-launch configuration — FHIRBridge doesn't control this behavior, it's just recorded here for reference (e.g. Embedded launches need the launch page to allow being framed; External Browser does not).</p>
+              </div>
+            }
+
             @if (audienceConfig().showRedirect) {
               @if (audienceConfig().redirectMode === 'readonly') {
                 <div class="eaf-field eaf-field--full">
@@ -720,7 +732,7 @@
   <div class="eaf-footer">
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">Cancel</button>
     <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
-      ✓ Add to Pipeline
+      {{ isEditing ? '✓ Update' : '✓ Add to Pipeline' }}
     </button>
   </div>
 

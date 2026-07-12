@@ -29,6 +29,11 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
     public string ProtectWorkflowContext(Guid workflowId) =>
         _contextProtector.Protect($"wf:{workflowId:N}");
 
+    // Checkpoint tokens carry a third "chk:" discriminator plus both ids, pipe-delimited. Distinct prefix from "wf:"
+    // so a checkpoint token can never be replayed as a full-workflow launch token or vice versa.
+    public string ProtectWorkflowCheckpointContext(Guid workflowId, Guid targetNodeId) =>
+        _contextProtector.Protect($"chk:{workflowId:N}|{targetNodeId:N}");
+
     public LaunchContext? UnprotectContext(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -39,6 +44,19 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
         try
         {
             var value = _contextProtector.Unprotect(token);
+
+            if (value.StartsWith("chk:", StringComparison.Ordinal))
+            {
+                var parts = value["chk:".Length..].Split('|');
+                if (parts.Length == 2
+                    && Guid.TryParseExact(parts[0], "N", out var checkpointWorkflowId)
+                    && Guid.TryParseExact(parts[1], "N", out var targetNodeId))
+                {
+                    return new LaunchContext(RouteId: null, WorkflowId: checkpointWorkflowId, TargetNodeId: targetNodeId);
+                }
+
+                return null;
+            }
 
             if (value.StartsWith("wf:", StringComparison.Ordinal)
                 && Guid.TryParseExact(value["wf:".Length..], "N", out var workflowId))

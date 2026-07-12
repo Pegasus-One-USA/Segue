@@ -58,7 +58,8 @@ public sealed class WorkflowDefinition
         string configurationJson = "{}",
         double positionX = 0,
         double positionY = 0,
-        bool isEnabled = true)
+        bool isEnabled = true,
+        bool checkpointUrlEnabled = false)
     {
         var node = new WorkflowNode(
             Guid.NewGuid(),
@@ -71,10 +72,21 @@ public sealed class WorkflowDefinition
             configurationJson,
             positionX,
             positionY,
-            isEnabled);
+            isEnabled,
+            checkpointUrlEnabled);
 
         _nodes.Add(node);
         return node;
+    }
+
+    /// <summary>Projects this definition onto a restricted node/edge subset (e.g. a checkpoint's ancestor closure).
+    /// Used only for in-flight execution — never persisted — so it deliberately does not go through AddNode/AddEdge.</summary>
+    public WorkflowDefinition WithNodesAndEdges(IReadOnlyCollection<WorkflowNode> nodes, IReadOnlyCollection<WorkflowEdge> edges)
+    {
+        var projected = new WorkflowDefinition(Id, Name, Version, IsEnabled);
+        projected._nodes.AddRange(nodes);
+        projected._edges.AddRange(edges);
+        return projected;
     }
 
     public WorkflowEdge AddEdge(Guid fromNodeId, Guid toNodeId)
