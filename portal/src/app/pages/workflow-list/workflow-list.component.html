@@ -254,8 +254,8 @@
 
 <!-- ── Copy workflow modal ──────────────────────────────────────────────────── -->
 @if (copyModal(); as m) {
-  <div class="modal-overlay" (click)="cancelCopy()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-overlay" tabindex="0" (click)="cancelCopy()" (keydown.escape)="cancelCopy()">
+    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
       <div class="modal-head">
         <h2>Copy workflow</h2>
         <button class="modal-close" type="button" [disabled]="m.busy" (click)="cancelCopy()">&times;</button>
