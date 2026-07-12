@@ -329,4 +329,9 @@ export class WorkflowApiService {
   delete(workflowId: string): Observable<void> {
     return this.http.delete<void>(WORKFLOW_ENDPOINTS.byId(workflowId));
   }
+
+  /** Duplicates a workflow (exact node/edge/config copy, new ids) under a new name. Always created disabled. */
+  copy(workflowId: string, name: string): Observable<WorkflowDefinitionDto> {
+    return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.copy(workflowId), { name });
+  }
 }

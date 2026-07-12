@@ -1,5 +1,5 @@
 import {
-  Component, inject, computed, signal, ElementRef, viewChild, output,
+  Component, inject, computed, signal, ElementRef, viewChild, output, input,
 } from '@angular/core';
 import { PipelineStore } from '../../services/pipeline.store';
 import { CanvasService } from '../../services/canvas.service';
@@ -37,6 +37,9 @@ export class CanvasComponent {
   readonly openSourcePicker    = output<void>();
   /** Node-level "Copy checkpoint URL" (Phase 1) — the parent owns the saved workflow id, so it makes the API call. */
   readonly copyCheckpointUrl   = output<string>();
+
+  /** True once the workflow has a saved id — a checkpoint URL can only be generated against a persisted node. */
+  readonly workflowSaved = input<boolean>(false);
 
   // ── computed view helpers ─────────────────────────────────────────────────
   protected readonly nodes    = this.store.nodes;

@@ -32,3 +32,5 @@ public sealed record WorkflowNodeRequest(
 public sealed record WorkflowEdgeRequest(string FromNodeId, string ToNodeId);
 
 public sealed record WorkflowRunRequest(string? CorrelationId);
+
+public sealed record CopyWorkflowRequest(string Name);

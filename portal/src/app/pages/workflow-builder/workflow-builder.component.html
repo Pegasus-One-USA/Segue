@@ -40,6 +40,7 @@
 <!-- ── Canvas ──────────────────────────────────────────────────────────────── -->
 <div class="builder-canvas-area">
   <app-canvas
+    [workflowSaved]="!!currentWorkflowId()"
     (openWizard)="onOpenWizard($event ?? undefined)"
     (openTransformPicker)="onOpenTransformPicker($event)"
     (openSourcePicker)="onOpenSourcePicker()"

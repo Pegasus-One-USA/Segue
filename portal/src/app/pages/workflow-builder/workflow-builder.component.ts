@@ -161,6 +161,13 @@ export class WorkflowBuilderComponent implements OnInit {
     // catalog resolves (the mapper needs node metadata), so Save issues a PUT update of the same workflow.
     const editId = this.route.snapshot.queryParamMap.get('id');
 
+    // The PipelineStore is a root singleton, so its canvas state outlives this component (e.g. an abandoned,
+    // unsaved edit/creation left nodes on it). A fresh "New Workflow" navigation must always start blank rather
+    // than inheriting whatever was left over from whatever was on the canvas before.
+    if (!editId) {
+      this.resetCanvasAndWorkflowState();
+    }
+
     this.workflowApi.loadCatalog().subscribe({
       next: items => {
         this.workflowStatus.set(`Catalog loaded (${items.length} nodes).`);
@@ -310,23 +317,98 @@ export class WorkflowBuilderComponent implements OnInit {
       return;
     }
 
-    const siblings = this.store.outboundEdges(e.attachNode.id).length;
+    const attachNode = this.resolveDestinationAttachPoint(e.attachNode, e.transformId);
+
+    const siblings = this.store.outboundEdges(attachNode.id).length;
     const node: TransformNode = {
       id:          this.store.nextTransformId(),
       kind:        'transform',
       transformId: e.transformId,
-      sourceName:  this._nodeDisplayName(this.store.rootSourceOf(e.attachNode) ?? e.attachNode),
+      sourceName:  this._nodeDisplayName(this.store.rootSourceOf(attachNode) ?? attachNode),
       statusAtAdd: e.status,
-      x:           e.attachNode.x + 300,
-      y:           e.attachNode.y + siblings * 170,
+      x:           attachNode.x + 300,
+      y:           attachNode.y + siblings * 170,
       fields:      { '__name': t.name, ...(e.config ?? {}) },
     };
     this.store.addNode(node);
-    this.store.addEdge({ id: this.store.nextEdgeId(), from: e.attachNode.id, to: node.id });
+    this.store.addEdge({ id: this.store.nextEdgeId(), from: attachNode.id, to: node.id });
     this.toast.show(
       'Step added',
       e.status === 'caveat' ? `${t.name} added with caveat.` : `${t.name} added.`,
     );
+  }
+
+  /**
+   * Resolves where a new destination node should actually attach, handling two cases that both stem from the same
+   * root fact — a destination always needs an upstream Mapping node, and a Mapping node can only back ONE
+   * MappingProfile (one resourceType/fields shape):
+   *
+   * 1. attachNode isn't a Mapping node at all (e.g. a destination picked directly from a source or another
+   *    transform). WorkflowGraphMapperService.toRequest() would silently insert a synthetic Mapping node between
+   *    them at save time regardless — historically an invisible node the canvas never showed during creation, but
+   *    which then appeared for real the next time the workflow was reloaded for editing (the "extra node" only
+   *    showing up in edit mode). Insert it explicitly and immediately instead, so the canvas always matches
+   *    exactly what gets persisted — creation and edit-reload now render identically.
+   * 2. attachNode IS a Mapping node that already feeds one destination. Attaching a second destination there would
+   *    make WorkflowBuildAssemblerService build two MappingBuildSpecs against the SAME shared node id, so the
+   *    backend's /workflows/build handler would overwrite the first destination's `mappingProfileId` with the
+   *    second's, silently corrupting the first destination's field mapping at runtime (MappingNodeExecutor
+   *    resolves its fields from whichever mappingProfileId ends up on the node). Clone the Mapping node instead —
+   *    same upstream parent, starting from the same field config — so each destination keeps its own dedicated node.
+   */
+  private resolveDestinationAttachPoint(attachNode: CanvasNode, transformId: string): CanvasNode {
+    if (!transformId.startsWith('dest-')) return attachNode;
+
+    const isMappingNode = attachNode.kind === 'transform' && (attachNode as TransformNode).transformId === 'field-mapping';
+    if (!isMappingNode) {
+      return this.insertMappingNode(attachNode);
+    }
+
+    const alreadyHasDestinationChild = this.store.outboundEdges(attachNode.id)
+      .map(edge => this.store.byId(edge.to))
+      .some(child => child?.kind === 'transform' && (child as TransformNode).transformId.startsWith('dest-'));
+
+    return alreadyHasDestinationChild ? this.cloneMappingNode(attachNode) : attachNode;
+  }
+
+  private insertMappingNode(parent: CanvasNode): TransformNode {
+    const mappingNode: TransformNode = {
+      id:          this.store.nextTransformId(),
+      kind:        'transform',
+      transformId: 'field-mapping',
+      sourceName:  this._nodeDisplayName(this.store.rootSourceOf(parent) ?? parent),
+      statusAtAdd: 'show',
+      x:           parent.x + 300,
+      y:           parent.y + this.store.outboundEdges(parent.id).length * 170,
+      fields:      { '__name': 'Field Mapping' },
+    };
+    this.store.addNode(mappingNode);
+    this.store.addEdge({ id: this.store.nextEdgeId(), from: parent.id, to: mappingNode.id });
+    return mappingNode;
+  }
+
+  private cloneMappingNode(original: CanvasNode): TransformNode {
+    const parentEdge = this.store.inboundEdges(original.id)[0];
+    const parent = parentEdge ? this.store.byId(parentEdge.from) : undefined;
+    if (!parent) return original as TransformNode;
+
+    const siblingMappingCount = this.store.outboundEdges(parent.id)
+      .map(edge => this.store.byId(edge.to))
+      .filter(n => n?.kind === 'transform' && (n as TransformNode).transformId === 'field-mapping').length;
+
+    const clone: TransformNode = {
+      ...(original as TransformNode),
+      id:     this.store.nextTransformId(),
+      y:      original.y + siblingMappingCount * 170,
+      fields: { ...original.fields },
+    };
+    this.store.addNode(clone);
+    this.store.addEdge({ id: this.store.nextEdgeId(), from: parent.id, to: clone.id });
+    this.toast.show(
+      'Mapping node added',
+      'Each destination needs its own field mapping — a second Mapping node was created for this one.',
+    );
+    return clone;
   }
 
   onMergeSelected(e: MergeEvent): void {

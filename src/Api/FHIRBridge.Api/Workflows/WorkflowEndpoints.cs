@@ -333,6 +333,62 @@ public static class WorkflowEndpoints
             return Results.Ok(workflow);
         });
 
+        // Duplicates an existing workflow definition under a new name — every node/edge/config is copied exactly
+        // (same node types, ranks, positions, and ConfigurationJson, so any source/destination/mapping ids embedded
+        // in a node's config keep pointing at the same backing connections as the original). New Guids throughout
+        // (workflow id + every node/edge id) via the same BuildWorkflow path every other create/save uses, so this
+        // can never diverge from what a normal save would have produced.
+        group.MapPost("/workflows/{workflowId:guid}/copy", async (
+            Guid workflowId,
+            CopyWorkflowRequest request,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var name = request.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return Results.BadRequest(new { error = "invalid_request", error_description = "A name is required to copy a workflow." });
+            }
+
+            var source = await store.GetAsync(workflowId, cancellationToken);
+            if (source is null)
+            {
+                return Results.NotFound();
+            }
+
+            var nodeRequests = source.Nodes
+                .Select(node => new WorkflowNodeRequest(
+                    node.Id.ToString(),
+                    node.NodeType,
+                    node.Category,
+                    node.Rank,
+                    node.SubRank,
+                    node.DisplayName,
+                    node.ConfigurationJson,
+                    node.PositionX,
+                    node.PositionY,
+                    node.IsEnabled,
+                    node.CheckpointUrlEnabled))
+                .ToArray();
+
+            var edgeRequests = source.Edges
+                .Select(edge => new WorkflowEdgeRequest(edge.FromNodeId.ToString(), edge.ToNodeId.ToString()))
+                .ToArray();
+
+            var triggerRequest = source.Trigger is { } trigger
+                ? new WorkflowTriggerRequest(trigger.Type, trigger.ScheduleExpression, trigger.IntervalMinutes, trigger.BackfillOnFirstRun)
+                : null;
+
+            // Always created disabled, regardless of the source's enabled state: an enabled Schedule/Poll trigger
+            // firing immediately — in parallel with the original, against the same source/destination — would
+            // double-run and double-write before the user has even reviewed the copy.
+            var definitionRequest = new WorkflowDefinitionRequest(name, IsEnabled: false, nodeRequests, edgeRequests, triggerRequest);
+            var copy = BuildWorkflow(Guid.NewGuid(), definitionRequest);
+            await store.SaveAsync(copy, cancellationToken);
+
+            return Results.Created($"/api/v1/workflows/{copy.Id}", copy);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         group.MapPost("/workflows/{workflowId:guid}/validate", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,

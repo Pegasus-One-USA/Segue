@@ -732,7 +732,7 @@
   <div class="eaf-footer">
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">Cancel</button>
     <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
-      ✓ Add to Pipeline
+      {{ isEditing ? '✓ Update' : '✓ Add to Pipeline' }}
     </button>
   </div>
 
