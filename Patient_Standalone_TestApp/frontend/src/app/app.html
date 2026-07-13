@@ -1,0 +1,168 @@
+<div class="phone-backdrop">
+  <div class="phone">
+    <div class="phone__statusbar">
+      <span>9:41</span>
+      <span class="phone__statusbar-icons">●●●</span>
+    </div>
+
+    @if (!loggedIn()) {
+      <main class="login-screen">
+        <div class="login-screen__brand">HealthApp</div>
+        <p class="login-screen__subtitle">Sign in to view your health dashboard</p>
+
+        <label class="field">
+          Email
+          <input type="email" [ngModel]="loginEmail()" (ngModelChange)="loginEmail.set($event)" placeholder="you@example.com" />
+        </label>
+        <label class="field">
+          Password
+          <input type="password" [ngModel]="loginPassword()" (ngModelChange)="loginPassword.set($event)" (keyup.enter)="login()" />
+        </label>
+
+        @if (loginError()) {
+          <p class="error-banner">{{ loginError() }}</p>
+        }
+
+        <button type="button" class="connect-btn" (click)="login()">Log In</button>
+      </main>
+    } @else if (screen() === 'home') {
+      <header class="app-topbar">
+        <span class="app-topbar__title">HealthApp</span>
+        <div class="app-topbar__actions">
+          @if (role() === 'Admin') {
+            <button type="button" class="icon-btn" (click)="openSettings()" aria-label="Workflow settings">⚙</button>
+          }
+          <button type="button" class="icon-btn" (click)="logout()" aria-label="Log out">⎋</button>
+        </div>
+      </header>
+
+      <main class="app-screen">
+        <section class="patient-card">
+          <div class="patient-card__avatar">{{ patient.initials }}</div>
+          <div class="patient-card__info">
+            <div class="patient-card__name">{{ patient.name }}</div>
+            <div class="patient-card__address">{{ patient.address }}</div>
+          </div>
+        </section>
+
+        <section class="vitals-row">
+          <div class="vital-card">
+            <div class="vital-card__label">Heart Rate</div>
+            <div class="vital-card__value">{{ vitals.heartRate }}<span class="vital-card__unit">bpm</span></div>
+          </div>
+          <div class="vital-card">
+            <div class="vital-card__label">Blood Pressure</div>
+            <div class="vital-card__value">{{ vitals.bloodPressureSystolic }}/{{ vitals.bloodPressureDiastolic }}<span class="vital-card__unit">mmHg</span></div>
+          </div>
+          <div class="vital-card">
+            <div class="vital-card__label">Steps Walked</div>
+            <div class="vital-card__value">{{ vitals.steps.toLocaleString() }}<span class="vital-card__unit">steps</span></div>
+          </div>
+        </section>
+
+        @if (errorMessage()) {
+          <p class="error-banner">{{ errorMessage() }}</p>
+        }
+
+        <button type="button" class="link-btn" (click)="openRecords()">View All Records →</button>
+
+        <button type="button" class="connect-btn" (click)="openConnectFlow()" [disabled]="processing()">
+          Connect Get Data
+        </button>
+      </main>
+    } @else {
+      <header class="app-topbar">
+        <button type="button" class="icon-btn" (click)="closeRecords()" aria-label="Back">←</button>
+        <span class="app-topbar__title">Records</span>
+        <span class="app-topbar__spacer"></span>
+      </header>
+
+      <main class="app-screen">
+        @if (recordsError()) {
+          <p class="error-banner">{{ recordsError() }}</p>
+        }
+
+        @if (currentRecord(); as record) {
+          <section class="results-card">
+            <div class="results-card__header">Record Created On: {{ record.recordCreatedOn }}</div>
+            <dl class="record-list">
+              @for (field of currentRecordFields(); track field.label) {
+                <div class="record-list__row">
+                  <dt>{{ field.label }}</dt>
+                  <dd>{{ field.value }}</dd>
+                </div>
+              }
+            </dl>
+          </section>
+
+          <div class="carousel-nav">
+            <button type="button" class="icon-btn" (click)="previousRecord()" [disabled]="recordIndex() === 0" aria-label="Previous record">←</button>
+            <span class="carousel-nav__position">{{ recordIndex() + 1 }} of {{ records().length }}</span>
+            <button type="button" class="icon-btn" (click)="nextRecord()" [disabled]="recordIndex() === records().length - 1" aria-label="Next record">→</button>
+          </div>
+        } @else {
+          <p class="error-banner">No patient records yet — use "Connect Get Data" to fetch some.</p>
+        }
+      </main>
+    }
+
+    @if (loggedIn()) {
+      <!-- Hospital selector popup -->
+      @if (hospitalModalOpen()) {
+        <div class="sheet-backdrop" (click)="closeHospitalModal()">
+          <div class="sheet" (click)="$event.stopPropagation()">
+            <div class="sheet__handle"></div>
+            <div class="sheet__title">Select a Hospital</div>
+            <ul class="hospital-list">
+              @for (hospital of hospitals(); track hospital.id) {
+                <li
+                  class="hospital-row"
+                  [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
+                  (click)="selectHospital(hospital.id)"
+                >
+                  <span class="hospital-row__name">{{ hospital.name }}</span>
+                  <span class="hospital-row__badge">Org #{{ hospital.organizationId }}</span>
+                </li>
+              }
+            </ul>
+            <div class="sheet__actions">
+              <button type="button" class="btn-secondary" (click)="closeHospitalModal()">Cancel</button>
+              <button type="button" class="btn-primary" [disabled]="!selectedHospital()" (click)="process()">Process</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Processing overlay -->
+      @if (processing()) {
+        <div class="sheet-backdrop">
+          <div class="processing-card">
+            <div class="spinner"></div>
+            <div class="processing-card__step">{{ processingStep() }}</div>
+          </div>
+        </div>
+      }
+
+      <!-- Admin workflow settings popup -->
+      @if (settingsOpen()) {
+        <div class="sheet-backdrop" (click)="closeSettings()">
+          <div class="sheet" (click)="$event.stopPropagation()">
+            <div class="sheet__handle"></div>
+            <div class="sheet__title">Workflow Settings</div>
+            <label class="field">
+              Workflow URL
+              <input type="text" [ngModel]="workflowUrlDraft()" (ngModelChange)="workflowUrlDraft.set($event)" placeholder="https://..." />
+            </label>
+            @if (settingsError()) {
+              <p class="error-banner">{{ settingsError() }}</p>
+            }
+            <div class="sheet__actions">
+              <button type="button" class="btn-secondary" (click)="closeSettings()">Cancel</button>
+              <button type="button" class="btn-primary" (click)="saveSettings()">Save</button>
+            </div>
+          </div>
+        </div>
+      }
+    }
+  </div>
+</div>

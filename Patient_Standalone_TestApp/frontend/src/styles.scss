@@ -1,0 +1,87 @@
+/* Design tokens mirrored from the FHIRBridge portal (portal/src/styles.scss), but with a blue primary
+   instead of the portal's teal — a deliberate visual cue that this is the separate demo app, not FHIRBridge itself. */
+:root {
+  --color-primary:      #2563EB;
+  --color-primary-dark: #1D4ED8;
+  --color-primary-soft: #EFF6FF;
+  --color-primary-mid:  #BFDBFE;
+  --color-secondary:    #0EA5E9;
+  --color-on-primary:   #FFFFFF;
+
+  --color-success:      #10B981;
+  --color-success-soft: #ECFDF5;
+  --color-success-strong: #065F46;
+  --color-warning:      #F59E0B;
+  --color-warning-soft: #FFF4E5;
+  --color-warning-strong: #92400E;
+  --color-error:        #EF4444;
+  --color-error-soft:   #FEF2F2;
+  --color-error-strong: #991B1B;
+  --color-info:         #3B7FFF;
+  --color-info-soft:    #EFF6FF;
+
+  --color-ink:    #1A202C;
+  --color-ink-2:  #374151;
+  --color-muted:  #64748B;
+  --color-muted-2: #94A3B8;
+  --color-border: #E2E8F0;
+  --color-border-input: #CBD5E1;
+  --color-bg:     #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-side:   #F8FAFC;
+
+  --radius-sm:    6px;
+  --radius-base:  8px;
+  --radius-md:    10px;
+  --radius-card:  14px;
+  --radius-modal: 18px;
+  --radius-pill:  999px;
+
+  --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.22);
+
+  --font-family: Inter, 'Segoe UI', system-ui, Arial, sans-serif;
+
+  --transition-fast: 100ms ease;
+  --transition-base: 150ms ease;
+  --transition-slow: 200ms ease;
+}
+
+* , *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-family);
+  color: var(--color-ink);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
