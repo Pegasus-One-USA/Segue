@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { LineageApiService } from '../../services/lineage-api.service';
-import { LineageChain, LineageEntry, PagedResult } from '../../models/lineage.model';
+import { FieldLineageEntry, LineageChain, LineageEntry, PagedResult } from '../../models/lineage.model';
 
 @Component({
   selector: 'app-lineage-list',
@@ -37,6 +37,8 @@ export class LineageListComponent implements OnInit, OnDestroy {
   readonly selectedEntry = signal<LineageEntry | null>(null);
   readonly chain = signal<LineageChain | null>(null);
   readonly chainLoading = signal(false);
+  readonly fields = signal<FieldLineageEntry[]>([]);
+  readonly fieldsLoading = signal(false);
 
   readonly displayedCols = ['index', 'resourceType', 'action', 'status', 'occurredOnUtc'];
 
@@ -93,6 +95,7 @@ export class LineageListComponent implements OnInit, OnDestroy {
     this.selectedEntry.set(entry);
     this.chain.set(null);
     this.chainLoading.set(true);
+    this.fields.set([]);
 
     this.api.chain({
       pipelineRunId: entry.pipelineRunId,
@@ -105,11 +108,29 @@ export class LineageListComponent implements OnInit, OnDestroy {
       },
       error: () => this.chainLoading.set(false),
     });
+
+    if (!entry.sourceResourceId) {
+      return;
+    }
+
+    this.fieldsLoading.set(true);
+    this.api.fields({
+      resourceType: entry.resourceType,
+      sourceResourceId: entry.sourceResourceId,
+      pipelineRunId: entry.pipelineRunId,
+    }).subscribe({
+      next: fields => {
+        this.fields.set(fields);
+        this.fieldsLoading.set(false);
+      },
+      error: () => this.fieldsLoading.set(false),
+    });
   }
 
   closeChain(): void {
     this.selectedEntry.set(null);
     this.chain.set(null);
+    this.fields.set([]);
   }
 
   readonly showingFrom = () =>

@@ -14,7 +14,10 @@ export interface OperationalLog {
   triggeredBy: string | null;
   correlationId: string | null;
   occurredOnUtc: string;
+  severity: string;
 }
+
+export type OperationalLogSeverity = 'Debug' | 'Information' | 'Warning' | 'Error';
 
 export interface PagedResult<T> {
   items: T[];
@@ -29,6 +32,7 @@ export interface OperationalLogFilter {
   action?: string;
   status?: string;
   search?: string;
+  severity?: string;
   page: number;
   pageSize: number;
 }

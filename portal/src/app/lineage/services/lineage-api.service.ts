@@ -2,7 +2,15 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { LINEAGE_ENDPOINTS } from '../../core/api-endpoints';
-import { LineageChain, LineageChainQuery, LineageEntry, LineageFilter, PagedResult } from '../models/lineage.model';
+import {
+  FieldLineageEntry,
+  FieldLineageQuery,
+  LineageChain,
+  LineageChainQuery,
+  LineageEntry,
+  LineageFilter,
+  PagedResult,
+} from '../models/lineage.model';
 
 @Injectable({ providedIn: 'root' })
 export class LineageApiService {
@@ -28,5 +36,14 @@ export class LineageApiService {
     if (query.sourceResourceId) params = params.set('sourceResourceId', query.sourceResourceId);
 
     return this.http.get<LineageChain>(LINEAGE_ENDPOINTS.chain, { params });
+  }
+
+  fields(query: FieldLineageQuery): Observable<FieldLineageEntry[]> {
+    let params = new HttpParams()
+      .set('resourceType', query.resourceType)
+      .set('sourceResourceId', query.sourceResourceId);
+    if (query.pipelineRunId) params = params.set('pipelineRunId', query.pipelineRunId);
+
+    return this.http.get<FieldLineageEntry[]>(LINEAGE_ENDPOINTS.fields, { params });
   }
 }
