@@ -17,10 +17,12 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class LineageController : ControllerBase
 {
     private readonly ILineageQueryService _lineageQueryService;
+    private readonly IFieldLineageQueryService _fieldLineageQueryService;
 
-    public LineageController(ILineageQueryService lineageQueryService)
+    public LineageController(ILineageQueryService lineageQueryService, IFieldLineageQueryService fieldLineageQueryService)
     {
         _lineageQueryService = lineageQueryService;
+        _fieldLineageQueryService = fieldLineageQueryService;
     }
 
     [HttpGet]
@@ -58,5 +60,29 @@ public sealed class LineageController : ControllerBase
             cancellationToken);
 
         return Ok(result);
+    }
+
+    // Field-level drill-down for one resource — "why does this destination column hold this value." Empty unless
+    // FieldLineage:Enabled was on (and a Mapping node actually ran) for the run(s) that touched this resource; the
+    // resource-level chain above is what tells the caller a resource exists to drill into in the first place.
+    [HttpGet("fields")]
+    [StandardPermission(PermissionGroupCode.AuditLogs, PermissionActionCode.Read, description: "View field-level resource lineage.")]
+    [ProducesResponseType(typeof(IReadOnlyList<FieldLineageRecord>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFields(
+        [FromQuery] string resourceType,
+        [FromQuery] string sourceResourceId,
+        [FromQuery] Guid? pipelineRunId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(resourceType) || string.IsNullOrWhiteSpace(sourceResourceId))
+        {
+            return BadRequest(new { error = "invalid_request", error_description = "resourceType and sourceResourceId are required." });
+        }
+
+        var fields = await _fieldLineageQueryService.GetFieldsAsync(
+            new FieldLineageQuery(resourceType, sourceResourceId, pipelineRunId),
+            cancellationToken);
+
+        return Ok(fields);
     }
 }

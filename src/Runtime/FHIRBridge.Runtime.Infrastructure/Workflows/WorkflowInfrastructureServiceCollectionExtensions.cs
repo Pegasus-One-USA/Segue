@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
@@ -71,10 +72,11 @@ public static class WorkflowInfrastructureServiceCollectionExtensions
         {
             var executors = serviceProvider.GetServices<IWorkflowNodeExecutor>();
             var lineageTracker = serviceProvider.GetService<ILineageTracker>();
+            var auditService = serviceProvider.GetService<IOperationalAuditService>();
 
             return lineageTracker is null
                 ? new WorkflowNodeExecutorRegistry(executors)
-                : new LineageTrackingWorkflowNodeExecutorRegistry(executors, lineageTracker);
+                : new LineageTrackingWorkflowNodeExecutorRegistry(executors, lineageTracker, auditService);
         });
 
         return services;

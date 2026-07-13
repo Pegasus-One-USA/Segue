@@ -24,6 +24,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<PipelineRunResourceRecord> PipelineRunResourceRecords => Set<PipelineRunResourceRecord>();
     public DbSet<OperationalAuditLog> OperationalAuditLogs => Set<OperationalAuditLog>();
     public DbSet<ResourceLineageEntry> ResourceLineageEntries => Set<ResourceLineageEntry>();
+    public DbSet<FieldLineageEntry> FieldLineageEntries => Set<FieldLineageEntry>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
     public DbSet<UserActivityAuditLog> UserActivityAuditLogs => Set<UserActivityAuditLog>();
     public DbSet<User> Users => Set<User>();

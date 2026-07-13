@@ -33,7 +33,16 @@ public sealed class UserActivityAuditLog : Entity<Guid>
         string? sessionId,
         string? failureReason,
         string severity,
-        DateTime occurredOnUtc)
+        DateTime occurredOnUtc,
+        // Structured columns for the enterprise Audit Trail screen (Module/Action/Object/Old/New as distinct,
+        // filterable fields) — trailing optional so this doesn't disturb the two existing call sites that don't
+        // set them yet. EntityName/EntityId now mean strictly "the affected object's name/id" (e.g. "Epic Sandbox",
+        // "Observation.code"); Module ("Mapping"/"SourceConnection"/"Workflow"/...) and Action ("Created"/"Updated"/
+        // "Deleted"/...) used to be conflated into EntityName — this un-conflates them.
+        string? module = null,
+        string? action = null,
+        string? oldValue = null,
+        string? newValue = null)
     {
         Id = Guid.NewGuid();
         UserId = userId;
@@ -53,6 +62,10 @@ public sealed class UserActivityAuditLog : Entity<Guid>
         FailureReason = failureReason;
         Severity = severity;
         OccurredOnUtc = occurredOnUtc;
+        Module = module;
+        Action = action;
+        OldValue = oldValue;
+        NewValue = newValue;
     }
 
     public Guid? UserId { get; private set; }
@@ -72,6 +85,10 @@ public sealed class UserActivityAuditLog : Entity<Guid>
     public string? FailureReason { get; private set; }
     public string Severity { get; private set; } = default!;
     public DateTime OccurredOnUtc { get; private set; }
+    public string? Module { get; private set; }
+    public string? Action { get; private set; }
+    public string? OldValue { get; private set; }
+    public string? NewValue { get; private set; }
 
     /// <summary>Hash of the previous entry in the chain (null for the first entry).</summary>
     public string? PreviousHash { get; private set; }
@@ -109,6 +126,10 @@ public sealed class UserActivityAuditLog : Entity<Guid>
             CorrelationId,
             SessionId,
             FailureReason,
+            Module,
+            Action,
+            OldValue,
+            NewValue,
             Severity,
             OccurredOnUtc.ToString("O"),
             previousHash);

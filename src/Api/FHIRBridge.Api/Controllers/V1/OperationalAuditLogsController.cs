@@ -43,12 +43,13 @@ public sealed class OperationalAuditLogsController : ControllerBase
         [FromQuery] string? action,
         [FromQuery] string? status,
         [FromQuery] string? search,
+        [FromQuery] string? severity,
         [FromQuery] int page,
         [FromQuery] int pageSize,
         CancellationToken cancellationToken)
     {
         var result = await _auditService.GetPagedAsync(
-            new OperationalAuditLogFilter(pipelineRunId, resourceType, action, status, search),
+            new OperationalAuditLogFilter(pipelineRunId, resourceType, action, status, search, severity),
             page <= 0 ? 1 : page,
             pageSize <= 0 ? 25 : pageSize,
             cancellationToken);

@@ -16,7 +16,8 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
     {
         get
         {
-            var principal = _httpContextAccessor.HttpContext?.User;
+            var httpContext = _httpContextAccessor.HttpContext;
+            var principal = httpContext?.User;
             if (principal?.Identity?.IsAuthenticated != true)
             {
                 return new CurrentUserInfo(null, null, null, [], false);
@@ -33,7 +34,13 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
                 CurrentUserClaimReader.GetDisplayName(principal),
                 CurrentUserClaimReader.GetRoles(principal),
                 true,
-                permissions);
+                permissions,
+                IpAddress: httpContext?.Connection.RemoteIpAddress?.ToString(),
+                UserAgent: httpContext?.Request.Headers.UserAgent.ToString(),
+                // Prefer an incoming correlation header (set by a caller/gateway that already tracks one across
+                // hops) over ASP.NET Core's own per-request TraceIdentifier, so a multi-service trace stays joined.
+                CorrelationId: httpContext?.Request.Headers["X-Correlation-Id"].FirstOrDefault()
+                    ?? httpContext?.TraceIdentifier);
         }
     }
 }

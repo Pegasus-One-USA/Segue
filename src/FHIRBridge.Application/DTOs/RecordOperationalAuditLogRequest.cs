@@ -12,4 +12,16 @@ public sealed record RecordOperationalAuditLogRequest(
     string Message,
     int? ResourceCount,
     string? TriggeredBy,
-    string? CorrelationId);
+    string? CorrelationId,
+    // Trailing optional so every pre-existing call site (config changes, connection tests, pipeline
+    // start/complete, ...) keeps defaulting to Information without needing to change.
+    string Severity = OperationalLogSeverities.Information);
+
+/// <summary>Stable severity values for <see cref="RecordOperationalAuditLogRequest.Severity"/>.</summary>
+public static class OperationalLogSeverities
+{
+    public const string Debug = "Debug";
+    public const string Information = "Information";
+    public const string Warning = "Warning";
+    public const string Error = "Error";
+}

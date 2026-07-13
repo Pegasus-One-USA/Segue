@@ -18,4 +18,8 @@ public sealed record UserActivityAuditLogDto(
     string? SessionId,
     string? FailureReason,
     string Severity,
-    DateTime OccurredOnUtc);
+    DateTime OccurredOnUtc,
+    string? Module,
+    string? Action,
+    string? OldValue,
+    string? NewValue);
