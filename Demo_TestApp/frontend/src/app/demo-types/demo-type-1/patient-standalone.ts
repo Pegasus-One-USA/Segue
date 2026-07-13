@@ -1,14 +1,15 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 const BACKEND_BASE_URL = 'http://localhost:5500';
+const FHIRBRIDGE_BASE_URL = 'http://localhost:5000';
 
 interface Hospital {
-  id: number;
+  id: string;
   name: string;
-  organizationId: number;
 }
 
 interface PatientCard {
@@ -35,7 +36,7 @@ interface PatientCard {
   templateUrl: './patient-standalone.html',
   styleUrl: './patient-standalone.scss'
 })
-export class PatientStandaloneComponent {
+export class PatientStandaloneComponent implements OnInit {
   readonly role = input<'Admin' | 'Patient' | null>(null);
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
@@ -58,13 +59,18 @@ export class PatientStandaloneComponent {
   protected readonly workflowUrlDraft = signal('');
   protected readonly settingsError = signal('');
 
-  // Hospital picker (loaded from the database)
+  // Hospital picker (loaded from FHIRBridge's public EHR endpoint directory)
   protected readonly hospitals = signal<Hospital[]>([]);
   protected readonly hospitalModalOpen = signal(false);
-  protected readonly selectedHospitalId = signal<number | null>(null);
+  protected readonly hospitalSearch = signal('');
+  protected readonly selectedHospitalId = signal<string | null>(null);
   protected readonly selectedHospital = computed(() =>
     this.hospitals().find((h) => h.id === this.selectedHospitalId()) ?? null
   );
+  protected readonly filteredHospitals = computed(() => {
+    const query = this.hospitalSearch().trim().toLowerCase();
+    return this.hospitals().filter((h) => h.name.toLowerCase().includes(query));
+  });
 
   protected readonly processing = signal(false);
   protected readonly processingStep = signal('');
@@ -99,7 +105,20 @@ export class PatientStandaloneComponent {
     ].map((field) => ({ label: field.label, value: field.value ?? '—' }));
   });
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly route: ActivatedRoute
+  ) {}
+
+  ngOnInit(): void {
+    // The OAuth "Connect" flow redirects back here (often into a fresh tab, per FHIRBridge's configured
+    // PostLaunchRedirectUri) with ?workflowRunId=<id> once the launched workflow has finished pulling and
+    // storing the patient's data — jump straight to the Records screen instead of leaving the user on Home.
+    const workflowRunId = this.route.snapshot.queryParamMap.get('workflowRunId');
+    if (workflowRunId) {
+      void this.openRecords();
+    }
+  }
 
   async openSettings(): Promise<void> {
     this.settingsError.set('');
@@ -137,10 +156,11 @@ export class PatientStandaloneComponent {
   async openConnectFlow(): Promise<void> {
     this.errorMessage.set('');
     this.selectedHospitalId.set(null);
+    this.hospitalSearch.set('');
 
     try {
       const hospitals = await firstValueFrom(
-        this.http.get<Hospital[]>(`${BACKEND_BASE_URL}/api/hospitals`, { withCredentials: true })
+        this.http.get<Hospital[]>(`${FHIRBRIDGE_BASE_URL}/api/v1/ehr-endpoints/public`)
       );
       this.hospitals.set(hospitals);
       this.hospitalModalOpen.set(true);
@@ -149,7 +169,11 @@ export class PatientStandaloneComponent {
     }
   }
 
-  selectHospital(id: number): void {
+  onHospitalSearch(value: string): void {
+    this.hospitalSearch.set(value);
+  }
+
+  selectHospital(id: string): void {
     this.selectedHospitalId.set(id);
   }
 

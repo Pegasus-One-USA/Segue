@@ -101,16 +101,24 @@
         <div class="sheet" (click)="$event.stopPropagation()">
           <div class="sheet__handle"></div>
           <div class="sheet__title">Select a Hospital</div>
+          <input
+            type="search"
+            class="hospital-search"
+            placeholder="Search hospitals..."
+            [value]="hospitalSearch()"
+            (input)="onHospitalSearch($any($event.target).value)"
+          />
           <ul class="hospital-list">
-            @for (hospital of hospitals(); track hospital.id) {
+            @for (hospital of filteredHospitals(); track hospital.id) {
               <li
                 class="hospital-row"
                 [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
                 (click)="selectHospital(hospital.id)"
               >
                 <span class="hospital-row__name">{{ hospital.name }}</span>
-                <span class="hospital-row__badge">Org #{{ hospital.organizationId }}</span>
               </li>
+            } @empty {
+              <li class="hospital-empty">No hospitals matched your search.</li>
             }
           </ul>
           <div class="sheet__actions">
