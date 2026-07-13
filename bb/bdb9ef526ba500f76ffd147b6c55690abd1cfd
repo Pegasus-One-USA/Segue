@@ -1,0 +1,20 @@
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_2b3e33386ac39d::t_3a068ba6fa2ccd 9-10
+  s_2b3e33386ac39d::t_265317e8820c22 126-139,152-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "bbbdb9ef526ba500f76ffd147b6c55690abd1cfd",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
