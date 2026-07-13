@@ -1,0 +1,113 @@
+docs/backend/05-workflow-node-checkpoints-plan.md
+  s_9cb69e0cdd8b77::t_ca79c3613cc1e5 218-232
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_9cb69e0cdd8b77::t_278f1d8c8fd2a7 83-87,89-96,111-114,149-150,165-175,277-284,286,291,294-311,397-399,475-483,495,502,510,678,687,744,829-832,858-882,1165-1167
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_114d5c731b1d0a::t_a79659c922c76b 397
+portal/src/app/core/api-endpoints.ts
+  s_9cb69e0cdd8b77::t_5c3eb2b15843af 99,102-103
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_114d5c731b1d0a::t_051e3e28188708 139-144,255-293
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_114d5c731b1d0a::t_d8cf233c6c8701 355-386
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_114d5c731b1d0a::t_7c7fd4516a0752 27-33,60-61,214-247
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_114d5c731b1d0a::t_5a5e3b39fa5c1b 152,201,214
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_114d5c731b1d0a::t_1a4b8068e75c9f 74,134
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/ISourceConnectionRuntimeResolver.cs
+  s_114d5c731b1d0a::t_a0c5c5237d90b2 15
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_114d5c731b1d0a::t_87c5918c5b6bb5 229-230
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_a75aea47651416::t_4505471cebf938 404-415,549-550,552-569,572-577,742
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_2b61b2c58de087::t_666ee07d2c8710 178-184,334-336,341,343-344,348,355-427,493-516
+portal/src/app/services/workflow-api.service.ts
+  s_2b61b2c58de087::t_fac99fa029b717 41,123-124,239-248,304-313,337-341
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_2b61b2c58de087::t_716e71d8af599f 114-115,135-137,163-166,180-185,198
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_9cb69e0cdd8b77::t_862e7e42daaad6 76,79,86-88,93,96,132-134,139,141
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_a75aea47651416::t_21f296396e8b3a 25
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_5c7aaf194e196a::t_feb472c0dcf4c8 41-43
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_a75aea47651416::t_65925a5c7b0d58 55-58,60-63
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_2b61b2c58de087::t_6af40ba332c122 45-46,56-57
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_5c7aaf194e196a::t_8355c1ead6ff9c 594-600,610
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_2b61b2c58de087::t_d1b9d0a259628e 53-57
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_5c7aaf194e196a::t_f3f03f3dcf8f64 106-109
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_5c7aaf194e196a::t_cb8b6d469de868 130-136
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_a75aea47651416::t_63e3bf9f284183 84-85,87-88,134-143,153-156,158-168,170-180,182-183,193-196,198-199,201-216,218,220-226,228-260,262-268,275-278,280-283,285-286,288-294,296-313,315-316,325,328-332,338-339,354-357,445-449,479-481,699-700,702,850-889
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_2b61b2c58de087::t_027048ada57d5b 5,21-24,28-29,33,39,84,112-129
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirPatientContextProvider.cs
+  s_5c7aaf194e196a::t_f1cfc1586b9b52 14-21
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_2b61b2c58de087::t_ed36b07c0bc644 43-49
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_5c7aaf194e196a::t_e95b75f4d36d92 88-101
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2b61b2c58de087::t_5004f04557ddcb 160
+tests/FHIRBridge.Runtime.UnitTests/Auth/SmartInteractiveCachedTokenTests.cs
+  s_5c7aaf194e196a::t_02c248bf4f338e 29,45,64
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_5c7aaf194e196a::t_329a982e85f6e1 80-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "9aa43f3ee0c73bb2402254552ca889322a63776c",
+  "prompts": {},
+  "sessions": {
+    "s_114d5c731b1d0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61e95b00-534f-4458-8fba-1ecf45efb8b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_2b61b2c58de087": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b10e7981-8c72-4d24-a8f0-ae88db6f3c97",
+        "model": "unknown"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_5c7aaf194e196a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "daa75dc8-5d4d-445b-8f2d-278fe60b2f79",
+        "model": "unknown"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_9cb69e0cdd8b77": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "870ab4ec-a2eb-41c9-a988-bf4901ddb321",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_a75aea47651416": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4fb7637f-7952-453c-aa96-4865084c50d6",
+        "model": "unknown"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}

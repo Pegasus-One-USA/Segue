@@ -1,0 +1,73 @@
+tests/FHIRBridge.Runtime.UnitTests/Connectors/FhirBulkExportClientTests.cs
+  s_2b61b2c58de087::t_60c4eeaab3c4f3 23-24
+  s_2b61b2c58de087::t_3735cd6e7b6d53 133
+  s_2b61b2c58de087::t_e02d99ec788bbd 26,28-29,32,34,41,43,45-46,49,51,55,57,59-60,63,65,70,72,74-75,78,83,99,101-122,127,154
+  s_2b61b2c58de087::t_240b4909593bcf 141
+  s_9cb69e0cdd8b77::t_592ffab789cb08 1-22,25,27,30-31,33,35-40,42,44,47-48,50,52-54,56,58,61-62,64,66-69,71,73,76-77,79-82,84-98,100,123-126,128-132,134-140,142-153,155
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirRestBulkExportClient.cs
+  s_2b61b2c58de087::t_e5102d3cd1d8d1 73-84,116,147,252-256,261-330
+  s_2b61b2c58de087::t_5588844da753ab 338-347
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2b61b2c58de087::t_dd7b3a61394f71 17,19
+  s_2b61b2c58de087::t_5ef028fb48ccb1 29-31
+  s_2b61b2c58de087::t_515253eabd754d 41-43,53-54,65-66,77-78,89-90,101-102,135-136
+  s_2b61b2c58de087::t_f75d1ebe4a263f 18
+  s_2b61b2c58de087::t_9e4af266f7aaba 55
+  s_2b61b2c58de087::t_a946eadaadca04 67
+  s_2b61b2c58de087::t_dd71d1e5f23df8 79
+  s_2b61b2c58de087::t_c719d383ce19b5 91
+  s_2b61b2c58de087::t_a571c3de9e0563 103
+  s_2b61b2c58de087::t_ef40ccad41be79 128,143,183-189,193-196,272-286
+.claude/settings.json
+  s_9cb69e0cdd8b77::t_6d6cb49df8fe99 32-35
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_9cb69e0cdd8b77::t_48b7fb645aeffd 298-305,649-653,809-820,834-839,842-843,853,1045-1050,1113-1114
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_2b61b2c58de087::t_90e25b11ecf56d 95-98,106-110,144-149
+portal/src/app/services/workflow-api.service.ts
+  s_2b61b2c58de087::t_7f435708c01af2 136-140
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_2b61b2c58de087::t_245f7faa488893 174-182,196-200
+src/FHIRBridge.Application/DTOs/SourceRetrievalConfigurationDto.cs
+  s_2b61b2c58de087::t_b69b7f341cbbfd 19-23
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_2b61b2c58de087::t_9fcf403cb3f0a5 72-76,93-97
+src/FHIRBridge.Domain/ValueObjects/SourceRetrievalConfiguration.cs
+  s_2b61b2c58de087::t_d414f6df1ccb26 27-31,45-48,63-75,83-84
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_2b61b2c58de087::t_bc526a3504e2ba 54-57
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_2b61b2c58de087::t_f30d89d2dbea8f 171-190
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_2b61b2c58de087::t_7a83393233e213 15,219-225,228,240,249,1124-1147
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_2b61b2c58de087::t_731e3167dd5092 94-104
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirBulkExportModels.cs
+  s_2b61b2c58de087::t_76685f240dc842 22-24,28-39
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_2b61b2c58de087::t_e4528b9b79709d 34-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "7bba34468e28de5212794a14176189cd30924ec4",
+  "prompts": {},
+  "sessions": {
+    "s_2b61b2c58de087": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b10e7981-8c72-4d24-a8f0-ae88db6f3c97",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    },
+    "s_9cb69e0cdd8b77": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "870ab4ec-a2eb-41c9-a988-bf4901ddb321",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}

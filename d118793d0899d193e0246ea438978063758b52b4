@@ -1,0 +1,21 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713104446_AddBulkExportRetrievalSettings.Designer.cs
+  s_2b61b2c58de087::t_a3adc767d48f2c 1-2252
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713104446_AddBulkExportRetrievalSettings.cs
+  s_2b61b2c58de087::t_a3adc767d48f2c 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "d118793d0899d193e0246ea438978063758b52b4",
+  "prompts": {},
+  "sessions": {
+    "s_2b61b2c58de087": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b10e7981-8c72-4d24-a8f0-ae88db6f3c97",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}

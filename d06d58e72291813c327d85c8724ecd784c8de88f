@@ -1,0 +1,117 @@
+portal/src/app/components/canvas/canvas.component.ts
+  s_2b3e33386ac39d::t_440ee03aaf3a8c 38-39
+  s_2b3e33386ac39d::t_75b922616d68ab 242-278
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260711074916_AddWorkflowCheckpointAndTargetNode.Designer.cs
+  s_2b3e33386ac39d::t_d1648fde7428e4 1-2226
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_2b3e33386ac39d::t_18d1721518999b 6,251,279-280,283,330,339,366
+  s_2b3e33386ac39d::t_9ea7846a4e9916 187-241,246-250,252-278,321,324,328,332,358-359,363,368,381,392,432
+  s_2b3e33386ac39d::t_8f19a6da7e849e 1-4
+  s_2b3e33386ac39d::t_17da1403632872 242-245
+  s_2b3e33386ac39d::t_ce03f8039d351c 281-282
+  s_2b3e33386ac39d::t_6f41862b913d5a 284-286,318-320
+  s_2b3e33386ac39d::t_36e1440169e00c 322-323
+  s_2b3e33386ac39d::t_de142f03440c84 325-327
+  s_2b3e33386ac39d::t_1403090b917a15 329
+  s_2b3e33386ac39d::t_510dff31dae776 331
+  s_2b3e33386ac39d::t_7609ebce17772d 333-338
+  s_2b3e33386ac39d::t_9a2b2a797313de 340-342,355-357
+  s_2b3e33386ac39d::t_836718d354c1ef 360-362
+  s_2b3e33386ac39d::t_843b657621694e 364-365
+  s_2b3e33386ac39d::t_129521fa0b8e14 367
+  s_2b3e33386ac39d::t_b19a8735860584 369-371,378-380
+  s_2b3e33386ac39d::t_96805a40bb5e44 382-384,389-391
+  s_2b3e33386ac39d::t_7ec5e0d493629a 393-395,429-431
+  s_2b3e33386ac39d::t_3359b6f75f61b7 433-435
+  s_2b3e33386ac39d::t_e995de6aa1dd34 287-317,343-354,372-377,385-388,396-428,436-461
+src/FHIRBridge.Domain/Enums/LaunchDisplayMode.cs
+  s_2b3e33386ac39d::t_482af46bb1fb14 1-21
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260711074916_AddWorkflowCheckpointAndTargetNode.cs
+  s_2b3e33386ac39d::t_d1648fde7428e4 1-40
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260711084603_AddSourceLaunchDisplayMode.Designer.cs
+  s_2b3e33386ac39d::t_2bfa66377b3e65 1-2231
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260711084603_AddSourceLaunchDisplayMode.cs
+  s_2b3e33386ac39d::t_2bfa66377b3e65 1-29
+tests/FHIRBridge.Runtime.UnitTests/Workflows/WebhookNotifierNodeExecutorTests.cs
+  s_2b3e33386ac39d::t_a9520cc3fb0db3 1-206
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_2b3e33386ac39d::t_2043001b4ed3fd 30-39,43,46-57,220,229
+  s_2b3e33386ac39d::t_481742d0ee2fbf 217-219
+  s_2b3e33386ac39d::t_37e012efd5ea1d 221-223,226-228
+  s_2b3e33386ac39d::t_c265c012230219 230-232
+  s_2b3e33386ac39d::t_474c3f9281d6d8 68-70,91,209-216,224-225,233-238
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_2b3e33386ac39d::t_a3d9aefedb3bf0 1480-1484,1660-1662,2001-2005
+docs/backend/05-workflow-node-checkpoints-plan.md
+  s_2b3e33386ac39d::t_4b0ff8fac8d65c 218-232
+portal/src/app/components/canvas/canvas.component.html
+  s_2b3e33386ac39d::t_cba44ce83e0014 72-83
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_2b3e33386ac39d::t_c240ded8de6381 404-415
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_2b3e33386ac39d::t_3064c3c4b101d6 83-86,103-106,360-362,693,778-781,1065-1067
+portal/src/app/core/api-endpoints.ts
+  s_2b3e33386ac39d::t_a207682e5f59dd 101-102
+portal/src/app/models/node.model.ts
+  s_2b3e33386ac39d::t_33babc747c5edd 9-10
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_2b3e33386ac39d::t_a749a6e21ee6b1 46
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_2b3e33386ac39d::t_b93dc31031036f 397-420
+portal/src/app/services/workflow-api.service.ts
+  s_2b3e33386ac39d::t_e5824e8c881ead 41,123-124,234-243,299-308
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_2b3e33386ac39d::t_f315170316012d 114-115
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_2b3e33386ac39d::t_8ab78b17b29a8d 152,201,214
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_2b3e33386ac39d::t_fcf190ca78a02a 29-30
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2b3e33386ac39d::t_a0a2f95fb2f837 376-470,822-823
+src/FHIRBridge.Application/Abstractions/Security/ILaunchTokenProtector.cs
+  s_2b3e33386ac39d::t_5510fdeda36ef5 16-19,30-32
+src/FHIRBridge.Application/DTOs/SourceInteractiveConfigurationDto.cs
+  s_2b3e33386ac39d::t_faf1c62428eea4 15-16
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_2b3e33386ac39d::t_10e045f7b7b810 45-46,56-57
+src/FHIRBridge.Domain/ValueObjects/SourceInteractiveConfiguration.cs
+  s_2b3e33386ac39d::t_4ed3b79cfeaa42 22-23,30,47-50
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_2b3e33386ac39d::t_5babf25d9629c7 53-57
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_2b3e33386ac39d::t_74ec2d63a3a8a5 74,134
+src/FHIRBridge.Infrastructure/Security/DataProtectionLaunchTokenProtector.cs
+  s_2b3e33386ac39d::t_a51f75ab4a634e 32-36,48-60
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_2b3e33386ac39d::t_93efe3ddb45eb8 75-89
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_2b3e33386ac39d::t_43e70356c7f993 50-54
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IRankedWorkflowOrchestrator.cs
+  s_2b3e33386ac39d::t_09683f52ecba97 11-18
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowDefinition.cs
+  s_2b3e33386ac39d::t_b432b693252f25 61-62,75-76,82-91
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowNode.cs
+  s_2b3e33386ac39d::t_1b7fd24fd1e0bf 16-17,40,67-73,76-77
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_2b3e33386ac39d::t_f723a4c2c50641 12-13,26,47-50
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_2b3e33386ac39d::t_dbf78fd54ee145 54,62-63
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_2b3e33386ac39d::t_efb7cb0a2f1a53 194-270
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "d06d58e72291813c327d85c8724ecd784c8de88f",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

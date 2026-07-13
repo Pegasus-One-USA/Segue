@@ -1,0 +1,129 @@
+src/FHIRBridge.Infrastructure/Normalization/Steps/IdentifierFlatteningNormalizationStep.cs
+  s_aef62b240a2754::t_4608ab7fc4120f 1-136
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260710140723_AddPostLaunchRedirectUri.cs
+  s_2b3e33386ac39d::t_8c4b5787431b9a 1-29
+src/FHIRBridge.Application/DTOs/SourceInteractiveConfigurationDto.cs
+  s_2b3e33386ac39d::t_92d532ccdb0e54 14-15
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_aef62b240a2754::t_b4f7ebc012858b 89-120
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2b3e33386ac39d::t_722f7b4772a81a 288-300,302-313
+  s_2b3e33386ac39d::t_a6376e665a6d76 301,655-678
+  s_2b3e33386ac39d::t_da8b3a975287b3 285-287
+  s_2b3e33386ac39d::t_0997e3005b759b 314-315
+  s_2b3e33386ac39d::t_66dca37dce11b5 652-654
+  s_2b3e33386ac39d::t_1b33f7b077a181 679-681
+  s_2b3e33386ac39d::t_b1b9a833c2ad59 267-268,647-651,682
+docs/backend/prototypes/workflow-checkpoint-phase1.html
+  s_2b3e33386ac39d::t_9671f5b92bb5f3 1-2197
+tests/FHIRBridge.UnitTests/Normalization/ExtensionFlatteningNormalizationStepTests.cs
+  s_aef62b240a2754::t_60048363a12920 1-78
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.json
+  s_aef62b240a2754::t_66ebbdf2102f24 1281-1407
+tests/FHIRBridge.UnitTests/Normalization/IdentifierFlatteningNormalizationStepTests.cs
+  s_aef62b240a2754::t_842c9f87a95b7c 1-48
+src/FHIRBridge.Application/Abstractions/Destinations/IDestinationDataService.cs
+  s_2b3e33386ac39d::t_d35158426fa6de 18-29
+src/FHIRBridge.Infrastructure/Normalization/Steps/ExtensionFlatteningNormalizationStep.cs
+  s_aef62b240a2754::t_988946f1d43481 194-198,208-222
+  s_aef62b240a2754::t_68a30899c6086f 137,139-154,193
+docs/backend/05-workflow-node-checkpoints-plan.md
+  s_2b3e33386ac39d::t_f84d394c30690b 227
+  s_2b3e33386ac39d::t_c6dab78bec6220 234-236
+  s_2b3e33386ac39d::t_816ccf0983cbad 1-14,19-35,38-51,54,60-73,76-84,88-90,93-94,99-107,110-111,116-137,140-142,157,220-226,240-241
+  s_2b3e33386ac39d::t_fcd24b8e2f379b 162-216
+  s_2b3e33386ac39d::t_77448acbdb1dae 15-18
+  s_2b3e33386ac39d::t_506208efa25be6 36-37
+  s_2b3e33386ac39d::t_0e2c0ca229390e 52-53
+  s_2b3e33386ac39d::t_646386bf27c0e7 55-59
+  s_2b3e33386ac39d::t_52828942a1216a 74-75
+  s_2b3e33386ac39d::t_145e6cf28c2297 85-87
+  s_2b3e33386ac39d::t_6b41f01d16ca44 91-92
+  s_2b3e33386ac39d::t_1bbc44b1940672 95-98
+  s_2b3e33386ac39d::t_68f1594a205fa4 108-109
+  s_2b3e33386ac39d::t_d450117168ae3a 112-115
+  s_2b3e33386ac39d::t_daf18d9b27d650 138-139
+  s_2b3e33386ac39d::t_7c156640a0a98b 143-145,154-156
+  s_2b3e33386ac39d::t_943434943a174f 158-161
+  s_2b3e33386ac39d::t_ca4c6794d170a7 217-219
+  s_2b3e33386ac39d::t_f8a7a4f36845a4 228-233
+  s_2b3e33386ac39d::t_f47e67b1cba1f7 237-239
+  s_2b3e33386ac39d::t_88541a806e9c70 242
+  s_2b3e33386ac39d::t_6149dbe6cbbbe6 146-153
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_2b3e33386ac39d::t_2f812c1ebcdcbd 6
+  s_2b3e33386ac39d::t_a8922c8dc13d80 206-215
+docs/backend/prototypes/workflow-checkpoint-phase1-and-2.html
+  s_2b3e33386ac39d::t_e2da00e6433bf3 1451
+  s_2b3e33386ac39d::t_4de9474a35e33d 824-831,834-859,862-864
+  s_2b3e33386ac39d::t_97a2d10957696e 1761-1767,1770
+  s_2b3e33386ac39d::t_6c0391fd8827ab 951-958,960-963
+  s_2b3e33386ac39d::t_5f05d9c23ceb26 1431
+  s_2b3e33386ac39d::t_06bad84d993404 906
+  s_2b3e33386ac39d::t_0531f1557c4805 1-314,316-338,340-823,832-833,865-905,907-950,959,964-1409,1411,1413-1430,1432-1437,1439-1445,1448-1450,1453-1760,1771-2309
+  s_2b3e33386ac39d::t_3bb60b7b91b022 1438,1447,1452
+  s_2b3e33386ac39d::t_acf3250050aaf7 1446
+  s_2b3e33386ac39d::t_5a7db7f08afce6 1768-1769
+  s_2b3e33386ac39d::t_d88f16a3bf3538 339
+  s_2b3e33386ac39d::t_7e989a5d5d6a2c 860-861
+  s_2b3e33386ac39d::t_c6ca650393c724 315
+  s_2b3e33386ac39d::t_b4237759a5374e 1410,1412
+src/FHIRBridge.Domain/ValueObjects/SourceInteractiveConfiguration.cs
+  s_2b3e33386ac39d::t_4da2f8412ba514 21-22,28,37-44
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationDataService.cs
+  s_2b3e33386ac39d::t_2baaa0739d288d 105-178
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineArrayPolicyTests.cs
+  s_aef62b240a2754::t_322d7390e73e03 1-67
+  s_aef62b240a2754::t_7fa9d0b9e30cc5 68-69
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_25894534494cb6 430,440-442,445-450
+  s_2b3e33386ac39d::t_62c5467783fb0f 533-535,557-558,570-571
+docs/backend/README.md
+  s_2b3e33386ac39d::t_87cece5fd54d9f 53-55,59
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260710140723_AddPostLaunchRedirectUri.Designer.cs
+  s_2b3e33386ac39d::t_8c4b5787431b9a 1-2112
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_48b1143e05c553 76-86
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_aef62b240a2754::t_41e4bb097245f6 44-47
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6fe72b0759281b::t_afb12a487862d9 2003-2007
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_2b3e33386ac39d::t_f271206e8d0e09 24-26
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_2b3e33386ac39d::t_8292095630dfff 44-45,54-55
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_aef62b240a2754::t_b7f7cfabcd8c21 259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "d8c2310f692e39d3df4998e672d5419af11438f7",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_aef62b240a2754": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b17d93dd-e056-43d1-ba98-afb82ca08954",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

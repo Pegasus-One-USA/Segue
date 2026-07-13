@@ -1,0 +1,80 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260711105222_InitialCreate.Designer.cs
+  s_2b3e33386ac39d::t_fc15647ac1db30 1-2231
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_2b3e33386ac39d::t_c305b820c7905e 27-33
+  s_2b3e33386ac39d::t_ae89b40412a4da 60-61,214-247
+portal/src/app/components/canvas/canvas.component.ts
+  s_2b3e33386ac39d::t_185dcf4a6f5692 2
+  s_2b3e33386ac39d::t_58c6a7a2a3e506 41-43
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_2d43dd5bf245df 134-143,153-156,158-167,171,174,179-180,183,195-196,198-199,205,210,214,223,252-254,256-257,266-267,270,274-275,278-281,286,293-294,297
+  s_2b3e33386ac39d::t_76980585c3ea72 168-170
+  s_2b3e33386ac39d::t_fcb9c00748083e 172-173
+  s_2b3e33386ac39d::t_2d15f713036806 175-176
+  s_2b3e33386ac39d::t_fe158bd6ce7508 178
+  s_2b3e33386ac39d::t_8df26f51b8df0d 182
+  s_2b3e33386ac39d::t_7cccc0acccaeda 193-194
+  s_2b3e33386ac39d::t_93babf2993f2ba 202-204
+  s_2b3e33386ac39d::t_b05cea799e4573 206-209
+  s_2b3e33386ac39d::t_2e6a1b2487a8e0 211-213
+  s_2b3e33386ac39d::t_abf308d3d7dc71 215-216
+  s_2b3e33386ac39d::t_3deb621f81eff2 220-222
+  s_2b3e33386ac39d::t_9076bc3cc88eff 224-226
+  s_2b3e33386ac39d::t_bfb38a0b6e945d 249-251
+  s_2b3e33386ac39d::t_36597909f944f6 255
+  s_2b3e33386ac39d::t_f18aa2c3980f1c 264-265
+  s_2b3e33386ac39d::t_818421e9d130c8 269
+  s_2b3e33386ac39d::t_25d63e321f291a 271-272
+  s_2b3e33386ac39d::t_3c7b7ea5132750 277
+  s_2b3e33386ac39d::t_6f6bcc6e2c91b3 282-283
+  s_2b3e33386ac39d::t_cd947aa7bb5681 285
+  s_2b3e33386ac39d::t_d00b1f7e4be1a8 287-292
+  s_2b3e33386ac39d::t_832c10b01e4edf 296
+  s_2b3e33386ac39d::t_8966f658084381 201,218,228-248,816-855
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260711105222_InitialCreate.cs
+  s_2b3e33386ac39d::t_fc15647ac1db30 1-1200
+portal/src/app/components/canvas/canvas.component.html
+  s_2b3e33386ac39d::t_9df6ca689267f0 75-85
+portal/src/app/components/canvas/canvas.component.scss
+  s_2b3e33386ac39d::t_e566651cf43faa 124-129
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_2b3e33386ac39d::t_e047fe88e7cf24 735
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_2b3e33386ac39d::t_80ba11c85cea46 397
+portal/src/app/core/api-endpoints.ts
+  s_2b3e33386ac39d::t_9958d5706a8f16 99
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_2b3e33386ac39d::t_7ff6175f433715 43
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_2b3e33386ac39d::t_671cbbeecdb8ea 164-170,320-322,327,329-330,334,341-413
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_2b3e33386ac39d::t_a65bd8f96382f0 139-144,255-293
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_2b3e33386ac39d::t_f893320ad38257 355-386
+portal/src/app/services/workflow-api.service.ts
+  s_2b3e33386ac39d::t_24a96bedcba048 332-336
+src/Api/FHIRBridge.Api/Program.cs
+  s_2b3e33386ac39d::t_adcdbcd69fbda4 19,505-510,512-513
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_2b3e33386ac39d::t_a13e35cc049b07 35-36
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2b3e33386ac39d::t_6834f6013e27c3 336-391
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_2b3e33386ac39d::t_a6e2cfcee51ed2 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "af588577ea4494ff3100172a73923b48334e7a6b",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
