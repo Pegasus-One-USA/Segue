@@ -53,6 +53,12 @@ export const PERMISSIONS_ENDPOINTS = {
   catalog: `${API_V1_BASE}/permissions/catalog`,
 };
 
+// ─── EHR Endpoints (EhrEndpointsController — api/v1/ehr-endpoints) ─────────────
+export const EHR_ENDPOINTS_ENDPOINTS = {
+  list: `${API_V1_BASE}/ehr-endpoints`,
+  byId: (id: string) => `${API_V1_BASE}/ehr-endpoints/${id}`,
+};
+
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
 export const DESTINATION_ENDPOINTS = {
   schemaPreview: `${API_V1_BASE}/destinations/schema-preview`,

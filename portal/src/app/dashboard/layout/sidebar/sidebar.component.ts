@@ -27,6 +27,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows' },
   { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history' },
   { type: 'item', icon: '⚙',  label: 'Settings',         route: '/settings/branding', permissions: ['configuration.write'] },
+  { type: 'item', icon: '🏥', label: 'EHR Endpoints',    route: '/ehr-endpoints',     permissions: ['configuration.write'] },
   { type: 'section', label: 'Governance' },
   { type: 'item', icon: '📋', label: 'Activity Feed',    route: '/activity',           permissions: ['auditlogs.read'] },
   { type: 'item', icon: '🧾', label: 'Operational Logs', route: '/operational-logs',   permissions: ['auditlogs.read'] },

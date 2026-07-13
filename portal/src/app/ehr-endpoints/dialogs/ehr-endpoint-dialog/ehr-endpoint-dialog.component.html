@@ -1,0 +1,137 @@
+<div class="dialog-container">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>dns</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2>{{ isEdit ? 'Edit EHR Endpoint' : 'Add EHR Endpoint' }}</h2>
+      <p>{{ isEdit ? 'Update endpoint details' : 'Add a known client-organization FHIR endpoint' }}</p>
+    </div>
+    <button mat-icon-button class="dialog-close" (click)="dialogRef.close(false)">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Form -->
+  <mat-dialog-content>
+
+    @if (errorMessage()) {
+      <div class="notice error-notice">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <form [formGroup]="form" novalidate class="dialog-form">
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Vendor</mat-label>
+        <mat-select formControlName="vendor">
+          @for (option of vendorOptions; track option.value) {
+            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+          }
+        </mat-select>
+        @if (hasError('vendor', 'required')) {
+          <mat-error>Vendor is required.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Vendor Endpoint Id</mat-label>
+        <input
+          matInput
+          formControlName="vendorEndpointId"
+          placeholder="e.g. the vendor's org id for this endpoint"
+          autocomplete="off"
+        />
+        @if (hasError('vendorEndpointId', 'required')) {
+          <mat-error>Vendor endpoint id is required.</mat-error>
+        } @else if (hasError('vendorEndpointId', 'maxlength')) {
+          <mat-error>Maximum 100 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Name</mat-label>
+        <input
+          matInput
+          formControlName="name"
+          placeholder="e.g. Acme Health System"
+          autocomplete="off"
+        />
+        @if (hasError('name', 'required')) {
+          <mat-error>Name is required.</mat-error>
+        } @else if (hasError('name', 'maxlength')) {
+          <mat-error>Maximum 300 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>FHIR Base URL</mat-label>
+        <input
+          matInput
+          formControlName="fhirBaseUrl"
+          placeholder="https://fhir.example.org/api/FHIR/R4/"
+          autocomplete="off"
+        />
+        @if (hasError('fhirBaseUrl', 'required')) {
+          <mat-error>FHIR base URL is required.</mat-error>
+        } @else if (hasError('fhirBaseUrl', 'maxlength')) {
+          <mat-error>Maximum 500 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Format Type</mat-label>
+        <input
+          matInput
+          formControlName="formatType"
+          placeholder="e.g. R4"
+          autocomplete="off"
+        />
+        @if (hasError('formatType', 'required')) {
+          <mat-error>Format type is required.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Status</mat-label>
+        <input
+          matInput
+          formControlName="status"
+          placeholder="e.g. active"
+          autocomplete="off"
+        />
+        @if (hasError('status', 'required')) {
+          <mat-error>Status is required.</mat-error>
+        }
+      </mat-form-field>
+
+    </form>
+  </mat-dialog-content>
+
+  <!-- Actions -->
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-stroked-button class="btn-cancel" (click)="dialogRef.close(false)">
+        Cancel
+      </button>
+      <button
+        mat-flat-button
+        class="btn-save"
+        [disabled]="saving()"
+        (click)="save()"
+      >
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        } @else {
+          <mat-icon>{{ isEdit ? 'save' : 'add' }}</mat-icon>
+        }
+        {{ isEdit ? 'Save Changes' : 'Add Endpoint' }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

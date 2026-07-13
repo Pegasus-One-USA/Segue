@@ -4,6 +4,7 @@ using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    partial class FHIRBridgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260713121141_FilterEhrEndpointsUniqueIndexBySoftDelete")]
+    partial class FilterEhrEndpointsUniqueIndexBySoftDelete
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2044,16 +2047,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("SourceConnectionId")
                                 .HasColumnType("uniqueidentifier");
 
-                            b1.Property<string>("ExportScope")
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("RetrievalExportScope");
-
-                            b1.Property<string>("GroupId")
-                                .HasMaxLength(200)
-                                .HasColumnType("nvarchar(200)")
-                                .HasColumnName("RetrievalGroupId");
-
                             b1.Property<string>("IncludeParameters")
                                 .IsRequired()
                                 .HasMaxLength(500)
@@ -2072,20 +2065,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasColumnType("int")
                                 .HasColumnName("RetrievalMaxRecordsPerRun");
 
-                            b1.Property<string>("OutputFormat")
-                                .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)")
-                                .HasColumnName("RetrievalOutputFormat");
-
                             b1.Property<int?>("PageSize")
                                 .HasColumnType("int")
                                 .HasColumnName("RetrievalPageSize");
-
-                            b1.Property<string>("PatientIds")
-                                .IsRequired()
-                                .HasMaxLength(4000)
-                                .HasColumnType("nvarchar(4000)")
-                                .HasColumnName("RetrievalPatientIds");
 
                             b1.Property<string>("ResourceTypes")
                                 .IsRequired()
