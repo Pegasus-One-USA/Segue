@@ -19,13 +19,15 @@ public sealed class SourceInteractiveConfiguration
         string? launchUrl,
         string[] trustedIssuers,
         PatientSelectionMethod? patientSelectionMethod = null,
-        string? postLaunchRedirectUri = null)
+        string? postLaunchRedirectUri = null,
+        LaunchDisplayMode? launchDisplayMode = null)
     {
         RedirectUris = redirectUris ?? [];
         LaunchUrl = launchUrl;
         TrustedIssuers = trustedIssuers ?? [];
         PatientSelectionMethod = patientSelectionMethod;
         PostLaunchRedirectUri = postLaunchRedirectUri;
+        LaunchDisplayMode = launchDisplayMode;
     }
 
     public string[] RedirectUris { get; private set; } = [];
@@ -42,4 +44,8 @@ public sealed class SourceInteractiveConfiguration
     /// the existing JSON-response behavior.
     /// </summary>
     public string? PostLaunchRedirectUri { get; private set; }
+
+    /// <summary>How this source's app is registered to open within the EHR (EHR-launch audience only) — see
+    /// <see cref="Enums.LaunchDisplayMode"/>. Null for non-EHR-launch sources or when not yet recorded.</summary>
+    public LaunchDisplayMode? LaunchDisplayMode { get; private set; }
 }

@@ -96,6 +96,9 @@ export const WORKFLOW_ENDPOINTS = {
   runs:            (id: string) => `${API_V1_BASE}/workflows/${id}/runs`,
   activate:        (id: string) => `${API_V1_BASE}/workflows/${id}/activate`,
   deactivate:      (id: string) => `${API_V1_BASE}/workflows/${id}/deactivate`,
+  copy:            (id: string) => `${API_V1_BASE}/workflows/${id}/copy`,
   launchUrl:       (id: string) => `${API_V1_BASE}/workflows/${id}/launch-url`,
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,
+  checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
+  checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
 };

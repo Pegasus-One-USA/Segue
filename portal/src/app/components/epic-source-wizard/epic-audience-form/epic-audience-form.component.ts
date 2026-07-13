@@ -80,8 +80,20 @@ interface AudienceFieldConfig {
   showLaunchUrl: boolean;
   showRedirect: boolean;
   showCdsHooks: boolean;
-  /** Whether the retrieval-method section applies (Backend System only). */
+  /** Whether this app's registered EHR launch-display setting (Embedded/External Browser/Sidebar) applies.
+   *  Only meaningful for the EHR-launch audience — FHIRBridge doesn't control this behavior, the EHR does; this
+   *  just records how the app was registered there. */
+  showLaunchDisplayMode: boolean;
+  /** Whether the retrieval-method section applies at all. */
   showRetrieval: boolean;
+  /**
+   * How much of the retrieval section this audience gets:
+   * - 'none': no retrieval section (EHR launch / patient — data arrives via the SMART launch context).
+   * - 'oneshot': a curated Search REST subset (Resource Types, Search Criteria, Max Results, Include Related
+   *   Resources) for a user-initiated, single fetch — no scheduler, since there's no recurring run to schedule.
+   * - 'automated': the full retrieval method picker + config (Backend System) for unattended, recurring execution.
+   */
+  retrievalScope: 'none' | 'oneshot' | 'automated';
   /** Whether the shared Resource Type picker (Section 5) applies. False for Backend System,
    *  where Resource Type instead lives inside the selected retrieval method's own config —
    *  never both, to avoid showing two Resource Type pickers at once. */
@@ -96,10 +108,10 @@ interface AudienceFieldConfig {
 
 const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {
   // CDS Hooks removed from the UI (not required) — flag kept for future use but disabled everywhere.
-  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
-  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true },
-  'patient':             { showLaunchUrl: false, showRedirect: true,  showCdsHooks: false, showRetrieval: false, showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Callback URL', scopePrefix: 'patient', includeInteractiveScopes: true },
-  'backend-system':      { showLaunchUrl: false, showRedirect: false, showCdsHooks: false, showRetrieval: true,  showResourcePicker: false, redirectMode: 'readonly', redirectLabel: '',             scopePrefix: 'system',  includeInteractiveScopes: false },
+  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, retrievalScope: 'none',     showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: true },
+  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: true,  retrievalScope: 'oneshot',  showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: false },
+  'patient':             { showLaunchUrl: false, showRedirect: true,  showCdsHooks: false, showRetrieval: false, retrievalScope: 'none',     showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Callback URL', scopePrefix: 'patient', includeInteractiveScopes: true,  showLaunchDisplayMode: false },
+  'backend-system':      { showLaunchUrl: false, showRedirect: false, showCdsHooks: false, showRetrieval: true,  retrievalScope: 'automated', showResourcePicker: false, redirectMode: 'readonly', redirectLabel: '',             scopePrefix: 'system',  includeInteractiveScopes: false, showLaunchDisplayMode: false },
 };
 
 // ── Data Retrieval Method registry (Backend System only) ───────────────────────
@@ -134,6 +146,8 @@ interface RetrievalFieldVisibilityContext {
   exportScope: string;
   runMode: string;
   fullRefreshRecurrence: string;
+  /** Drives the Standalone (one-shot, user-initiated) vs. Backend System (automated, scheduled) field split. */
+  retrievalScope: AudienceFieldConfig['retrievalScope'];
 }
 
 interface RetrievalFieldDef {
@@ -148,8 +162,17 @@ interface RetrievalFieldDef {
   visibleWhen?: (ctx: RetrievalFieldVisibilityContext) => boolean;
   /** Field is only required while another field does NOT hold the given value (e.g. schedule isn't required when Run Mode is Manual Only). */
   requiredUnless?: { key: RetrievalFieldKey; value: string };
-  /** Rendered inside the collapsed "Advanced Search Options" disclosure instead of the main field grid. */
-  advanced?: boolean;
+  /**
+   * Rendered inside the collapsed "Advanced Search Options" disclosure instead of the main field grid. A function
+   * lets a field be "advanced" for one retrieval scope and promoted to the main grid for another (e.g. Max Results
+   * and Include Related Resources are two of only four fields Standalone sees, so they belong in the main grid
+   * there, while they stay tucked away for Backend System's much larger field set).
+   */
+  advanced?: boolean | ((ctx: RetrievalFieldVisibilityContext) => boolean);
+}
+
+function isFieldAdvanced(field: RetrievalFieldDef, ctx: RetrievalFieldVisibilityContext): boolean {
+  return typeof field.advanced === 'function' ? field.advanced(ctx) : !!field.advanced;
 }
 
 interface RetrievalMethodConfig {
@@ -251,30 +274,41 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     label: 'Search (REST)',
     description: 'FHIRBridge polls Epic’s FHIR REST API on a schedule.',
     fields: [
-      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: true },
+      // Resource Type / Search Criteria / Max Results / Include Related Resources are the only four fields shown to
+      // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
+      // that only makes sense for Backend System's unattended, recurring execution.
+      //
+      // For Standalone this field is hidden — it reuses the shared Resource Type & Scopes picker (Section 5)
+      // instead of a second, separate multiselect, since that picker already drives the SMART scopes this
+      // connection's one-shot fetch runs under.
+      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
       { key: 'searchCriteria',        label: 'Search Criteria',                  type: 'text',         required: false, placeholder: 'status=active&category=vital-signs', hint: 'Optional FHIR search parameters appended to every request.' },
-      { key: 'runMode',               label: 'Run Mode',                         type: 'select',       required: true, options: [
+      { key: 'runMode',               label: 'Run Mode',                         type: 'select',       required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated', options: [
         { value: 'incremental', label: 'Incremental Sync' },
         { value: 'full',        label: 'Full Refresh' },
         { value: 'manual',      label: 'Manual Only' },
       ], hint: 'Incremental Sync polls only changed records on a short interval; Full Refresh reloads everything on a calendar schedule; Manual Only runs on demand.' },
-      { key: 'incrementalCursor',     label: 'Incremental Sync (_lastUpdated)',  type: 'checkbox',    required: false, hint: 'Only fetch resources changed since the last successful run. Enabled automatically when Run Mode is Incremental Sync.' },
+      { key: 'incrementalCursor',     label: 'Incremental Sync (_lastUpdated)',  type: 'checkbox',    required: false, visibleWhen: ctx => ctx.retrievalScope === 'automated', hint: 'Only fetch resources changed since the last successful run. Enabled automatically when Run Mode is Incremental Sync.' },
       // Incremental Sync wants a tight polling interval; Full Refresh wants a calendar-anchored time (off-hours,
       // low-traffic) — these are different backend trigger primitives (Poll+minutes vs Schedule+cron), so they get
-      // different controls rather than forcing one picker to do both jobs.
-      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS, requiredUnless: { key: 'runMode', value: 'manual' }, visibleWhen: ctx => ctx.runMode !== 'full', hint: 'Not required when Run Mode is Manual Only — the pipeline only runs when triggered.' },
-      { key: 'fullRefreshRecurrence',  label: 'Repeat',                           type: 'select',       required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.runMode === 'full', hint: 'Full Refresh reloads everything with no incremental filter — anchor it to a specific, low-traffic time rather than a tight interval.' },
-      { key: 'fullRefreshDaysOfWeek', label: 'On',                               type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'weekly' },
-      { key: 'fullRefreshDayOfMonth', label: 'Day of month',                     type: 'select',       required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
-      { key: 'fullRefreshTime',       label: 'At',                               type: 'time',          required: true, visibleWhen: ctx => ctx.runMode === 'full', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
-      // ── Advanced Search Options (collapsed by default) ──────────────────────
-      { key: 'pageSize',           label: 'Page Size (_count)',              type: 'text',   required: false, placeholder: '100', hint: 'Resources requested per page. The server may cap this lower than requested.', advanced: true },
-      { key: 'sortOrder',          label: 'Sort (_sort)',                    type: 'select', required: false, options: SORT_OPTIONS, hint: 'Sort order applied to each search request.', advanced: true },
-      { key: 'includeLinked',     label: 'Include Linked Resources (_include)', type: 'text', required: false, placeholder: 'Encounter:patient', hint: 'Comma-separated _include parameters to pull referenced resources in the same response.', advanced: true },
-      { key: 'revIncludeLinked', label: 'Reverse Include (_revinclude)',    type: 'text',   required: false, placeholder: 'Observation:patient', hint: 'Comma-separated _revinclude parameters to pull resources that reference the selected type.', advanced: true },
-      { key: 'retryPolicy',       label: 'Retry Policy',                     type: 'select', required: false, options: RETRY_POLICY_OPTIONS, hint: 'How failed requests are retried before the run is marked failed.', advanced: true },
-      { key: 'timeoutSeconds',    label: 'Timeout (seconds)',                type: 'text',   required: false, placeholder: '30', hint: 'Per-request timeout before the connector aborts and retries.', advanced: true },
-      { key: 'maxRecordsPerRun',  label: 'Max Records Per Run',              type: 'text',   required: false, placeholder: 'e.g. 50000', hint: 'Safety cap — stops pulling once this many records are fetched in a single run.', advanced: true },
+      // different controls rather than forcing one picker to do both jobs. None of this applies to Standalone —
+      // a user-initiated one-shot fetch has no recurring schedule to configure.
+      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS, requiredUnless: { key: 'runMode', value: 'manual' }, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode !== 'full', hint: 'Not required when Run Mode is Manual Only — the pipeline only runs when triggered.' },
+      { key: 'fullRefreshRecurrence',  label: 'Repeat',                           type: 'select',       required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Full Refresh reloads everything with no incremental filter — anchor it to a specific, low-traffic time rather than a tight interval.' },
+      { key: 'fullRefreshDaysOfWeek', label: 'On',                               type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'weekly' },
+      { key: 'fullRefreshDayOfMonth', label: 'Day of month',                     type: 'select',       required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
+      { key: 'fullRefreshTime',       label: 'At',                               type: 'time',          required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      // ── Max Results / Include Related Resources: main-grid fields for Standalone, tucked into "Advanced Search
+      // Options" for Backend System (unchanged Backend behavior — just joined by two new promoted-for-Standalone
+      // fields below). ─────────────────────────────────────────────────────────
+      { key: 'maxRecordsPerRun',  label: 'Max Results',                     type: 'text',   required: false, placeholder: 'e.g. 50000', hint: 'Safety cap — stops fetching once this many records are returned.', advanced: ctx => ctx.retrievalScope === 'automated' },
+      { key: 'includeLinked',     label: 'Include Related Resources (_include)', type: 'text', required: false, placeholder: 'Encounter:patient', hint: 'Comma-separated _include parameters to pull referenced resources in the same response.', advanced: ctx => ctx.retrievalScope === 'automated' },
+      // ── Advanced Search Options (Backend System only — collapsed by default) ────
+      { key: 'pageSize',           label: 'Page Size (_count)',              type: 'text',   required: false, placeholder: '100', hint: 'Resources requested per page. The server may cap this lower than requested.', advanced: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
+      { key: 'sortOrder',          label: 'Sort (_sort)',                    type: 'select', required: false, options: SORT_OPTIONS, hint: 'Sort order applied to each search request.', advanced: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
+      { key: 'revIncludeLinked', label: 'Reverse Include (_revinclude)',    type: 'text',   required: false, placeholder: 'Observation:patient', hint: 'Comma-separated _revinclude parameters to pull resources that reference the selected type.', advanced: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
+      { key: 'retryPolicy',       label: 'Retry Policy',                     type: 'select', required: false, options: RETRY_POLICY_OPTIONS, hint: 'How failed requests are retried before the run is marked failed.', advanced: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
+      { key: 'timeoutSeconds',    label: 'Timeout (seconds)',                type: 'text',   required: false, placeholder: '30', hint: 'Per-request timeout before the connector aborts and retries.', advanced: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
     ],
   },
   'bulk-export': {
@@ -360,6 +394,9 @@ export class EpicAudienceFormComponent implements OnInit {
     privateKeyRef:       [''],
     privateKeySecretName: [''],
     launchUrl:         ['https://fhirbridge.com/launch', urlValidator],
+    // How the app is registered to open within the EHR (EHR-launch audience only) — mirrors Epic's own Hyperspace/
+    // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
+    launchDisplayMode: ['Embedded'],
     callbackUrl:       ['https://fhirbridge.com/oauth/callback', [Validators.required, urlValidator]],
     resources:         [[] as string[], Validators.required],
     scopeVersion:      ['v2'],
@@ -435,9 +472,15 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly showSecret     = computed(() => this.authMethod() === 'secret');
   protected readonly showJwt        = computed(() => this.authMethod() === 'jwt');
 
-  // ── Data Retrieval Method (Backend System only) ─────────────────────────────
-  protected readonly retrievalMethodOptions = Object.values(RETRIEVAL_METHOD_CONFIG)
-    .map(c => ({ value: c.value, label: c.label }));
+  // ── Data Retrieval Method (Backend System: all four methods; Standalone: Search REST only, one-shot) ──────────
+  /** Standalone only ever offers Search REST — Subscription/Webhook/Bulk Export are async, unattended patterns
+   *  that don't fit a user-initiated, one-shot launch. */
+  protected readonly retrievalMethodOptions = computed(() => {
+    const all = Object.values(RETRIEVAL_METHOD_CONFIG).map(c => ({ value: c.value, label: c.label }));
+    return this.audienceConfig().retrievalScope === 'oneshot'
+      ? all.filter(o => o.value === 'search-rest')
+      : all;
+  });
 
   protected readonly retrievalMethod = computed(() => this.retrievalMethodValue() as RetrievalMethod | '');
   protected readonly retrievalConfig = computed(() => {
@@ -449,13 +492,14 @@ export class EpicAudienceFormComponent implements OnInit {
     exportScope: this.exportScopeValue(),
     runMode: this.runModeValue(),
     fullRefreshRecurrence: this.fullRefreshRecurrenceValue(),
+    retrievalScope: this.audienceConfig().retrievalScope,
   }));
 
   protected readonly visibleRetrievalFields = computed(() => {
     const cfg = this.retrievalConfig();
     if (!cfg) return [];
     const ctx = this.retrievalVisibilityContext();
-    return cfg.fields.filter(f => !f.advanced && (!f.visibleWhen || f.visibleWhen(ctx)));
+    return cfg.fields.filter(f => !isFieldAdvanced(f, ctx) && (!f.visibleWhen || f.visibleWhen(ctx)));
   });
 
   /** Fields rendered inside the collapsed "Advanced Search Options" disclosure. */
@@ -463,7 +507,7 @@ export class EpicAudienceFormComponent implements OnInit {
     const cfg = this.retrievalConfig();
     if (!cfg) return [];
     const ctx = this.retrievalVisibilityContext();
-    return cfg.fields.filter(f => f.advanced && (!f.visibleWhen || f.visibleWhen(ctx)));
+    return cfg.fields.filter(f => isFieldAdvanced(f, ctx) && (!f.visibleWhen || f.visibleWhen(ctx)));
   });
 
   /** Google-Calendar-style summary + the cron expression it compiles to, for Run Mode = Full Refresh. */
@@ -631,6 +675,7 @@ export class EpicAudienceFormComponent implements OnInit {
     }
 
     this.prevAudience = this.audience();
+    this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
 
     this.form.controls.audience.valueChanges
@@ -639,6 +684,7 @@ export class EpicAudienceFormComponent implements OnInit {
         const nextAudience = next as EpicAudience;
         this.clearInapplicableFields(this.prevAudience, nextAudience);
         this.prevAudience = nextAudience;
+        this.lockRetrievalMethodIfOneShot();
         this.syncValidators();
       });
 
@@ -695,6 +741,7 @@ export class EpicAudienceFormComponent implements OnInit {
       }
     };
 
+    setIfPresent('launchDisplayMode', 'Launch display mode');
     setIfPresent('jwksUrl', 'JWKS URL');
     setIfPresent('jwtKid', 'JWT kid');
     setIfPresent('privateKeyRef', 'Key vault reference');
@@ -779,6 +826,10 @@ export class EpicAudienceFormComponent implements OnInit {
       this.form.patchValue({ launchUrl: '' });
     }
 
+    if (prevCfg.showLaunchDisplayMode && !nextCfg.showLaunchDisplayMode) {
+      this.form.patchValue({ launchDisplayMode: 'Embedded' });
+    }
+
     if (prevCfg.showCdsHooks && !nextCfg.showCdsHooks) {
       this.form.patchValue({
         cdsDiscoveryUrl: '', cdsServiceEndpoint: '', cdsTriggerHook: '',
@@ -803,6 +854,31 @@ export class EpicAudienceFormComponent implements OnInit {
         pageSize: '100', sortOrder: '', includeLinked: '', revIncludeLinked: '',
         retryPolicy: 'exponential', timeoutSeconds: '30', maxRecordsPerRun: '',
       });
+    }
+
+    // Narrowing from Backend System (automated) to Provider Standalone (one-shot): clear the automation-only
+    // fields Standalone never shows (Run Mode, scheduler, incremental cursor, page size/sort/reverse-include/retry/
+    // timeout) so stale values from a prior Backend System attempt in the same form session can't silently ride
+    // along into the saved Standalone config. Search Criteria / Max Results / Include Related carry over — they're
+    // meaningful for both scopes. searchRestResourceType is also cleared: Standalone reuses the shared Resource
+    // Type & Scopes picker (Section 5) instead, so anything left in this hidden control would be dead data.
+    if (prevCfg.retrievalScope === 'automated' && nextCfg.retrievalScope === 'oneshot') {
+      this.form.controls.incrementalCursor.enable({ emitEvent: false });
+      this.form.patchValue({
+        searchRestResourceType: [],
+        incrementalCursor: false, schedulePollFrequency: '', runMode: '',
+        fullRefreshRecurrence: 'daily', fullRefreshDaysOfWeek: [], fullRefreshDayOfMonth: '1', fullRefreshTime: '02:00',
+        pageSize: '100', sortOrder: '', revIncludeLinked: '',
+        retryPolicy: 'exponential', timeoutSeconds: '30',
+      });
+    }
+  }
+
+  /** Standalone always uses Search REST — force-select it whenever the current audience is one-shot scoped, so
+   *  the (hidden, for oneshot) method dropdown never leaves the form with no method chosen. */
+  private lockRetrievalMethodIfOneShot(): void {
+    if (this.audienceConfig().retrievalScope === 'oneshot' && this.form.controls.retrievalMethod.value !== 'search-rest') {
+      this.form.controls.retrievalMethod.setValue('search-rest');
     }
   }
 
@@ -1086,6 +1162,9 @@ export class EpicAudienceFormComponent implements OnInit {
       // WizardService.save()'s own ScopeBuilderService-derived default (which knows nothing about the selected
       // resources, scope version, or audience-specific scopes this form computed).
       'Scopes':                this.scopeString().split(/\s+/).filter(Boolean).join(' '),
+      // Only meaningful for EHR launch — cleared to '' otherwise so it's never wired into the build request
+      // (see WorkflowBuildAssemblerService.buildSource, which only reads this key for the EhrLaunch application type).
+      'Launch display mode':   cfg.showLaunchDisplayMode ? (v.launchDisplayMode ?? 'Embedded') : '',
       'CDS discovery URL':     v.cdsDiscoveryUrl ?? '',
       'CDS service endpoint':  v.cdsServiceEndpoint ?? '',
       'CDS trigger hook':      v.cdsTriggerHook ?? '',

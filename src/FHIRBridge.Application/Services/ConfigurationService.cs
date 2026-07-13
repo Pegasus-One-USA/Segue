@@ -591,10 +591,13 @@ public sealed class ConfigurationService : IConfigurationService
             ValidateEpicSourceConnection(request);
         }
 
-        // Retrieval config is a Backend System concept (vendor-agnostic — Epic, Cerner, or any other Backend
-        // source) independent of the Epic-specific checks above; interactive audiences (EHR launch / standalone /
-        // patient) never populate it, so this is a no-op for them.
-        if (request.ApplicationType == ApplicationType.Backend && request.Retrieval is not null)
+        // Retrieval config is a Backend System / Provider Standalone concept (vendor-agnostic — Epic, Cerner, or
+        // any other source) independent of the Epic-specific checks above. Backend System gets the full method
+        // picker for unattended, recurring execution; Provider Standalone gets a curated Search REST subset (no
+        // Run Mode/scheduler — a one-shot, user-initiated fetch has no recurring run to schedule) — the DTO simply
+        // arrives with those fields null for Standalone, which every check below already tolerates since they're
+        // optional. EHR-launch / patient never populate it, so this is a no-op for them.
+        if (request.ApplicationType is ApplicationType.Backend or ApplicationType.Standalone && request.Retrieval is not null)
         {
             ValidateRetrievalConfiguration(request.Retrieval);
         }
@@ -604,7 +607,7 @@ public sealed class ConfigurationService : IConfigurationService
     {
         if (string.IsNullOrWhiteSpace(retrieval.RetrievalMethod))
         {
-            throw new InvalidOperationException("A data retrieval method is required for Backend System sources.");
+            throw new InvalidOperationException("A data retrieval method is required for Backend System or Provider Standalone sources.");
         }
 
         if (retrieval.RetrievalMethod == "search-rest" && (retrieval.ResourceTypes is null || retrieval.ResourceTypes.Length == 0))

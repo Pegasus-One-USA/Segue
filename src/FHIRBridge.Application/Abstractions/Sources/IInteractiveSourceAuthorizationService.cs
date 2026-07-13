@@ -52,11 +52,15 @@ public interface IInteractiveSourceAuthorizationService
     /// <summary>Completes a sign-in from the OAuth callback, exchanging the code (with the retained PKCE verifier) for a token, and triggering the launched pipeline route when the launch was route-scoped.</summary>
     Task<InteractiveAuthorizationResult> CompleteAsync(string state, string authorizationCode, CancellationToken cancellationToken);
 
-    /// <summary>Builds the opaque, encrypted launch-context token to embed in the launch URL registered with the EHR for a given pipeline route.</summary>
-    string BuildLaunchContextToken(Guid routeId);
+    /// <summary>Builds the opaque, encrypted launch-context token to embed in the launch URL registered with the EHR
+    /// for a given pipeline route. <paramref name="ehrEndpointId"/> optionally names a specific hospital/organization
+    /// EhrEndpoint to launch against instead of the source connection's own configured base URL.</summary>
+    string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null);
 
-    /// <summary>Builds the opaque, encrypted launch token for a workflow graph: launching it runs that workflow (its source node's connection drives the OAuth + trusted-issuer validation).</summary>
-    string BuildWorkflowLaunchContextToken(Guid workflowId);
+    /// <summary>Builds the opaque, encrypted launch token for a workflow graph: launching it runs that workflow (its
+    /// source node's connection drives the OAuth + trusted-issuer validation). <paramref name="ehrEndpointId"/>
+    /// optionally names a specific hospital/organization EhrEndpoint to launch against.</summary>
+    string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null);
 
     /// <summary>
     /// Starts a standalone / patient interactive sign-in directly from an encrypted launch-context token — no EHR

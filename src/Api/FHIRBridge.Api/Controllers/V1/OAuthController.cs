@@ -73,24 +73,27 @@ public sealed class OAuthController : ControllerBase
     [Authorize]
     [HttpGet("pipelines/{routeId:guid}/launch-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetLaunchUrl(Guid routeId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetLaunchUrl(Guid routeId, [FromQuery] Guid? ehrEndpointId, CancellationToken cancellationToken)
     {
         var applicationType = await _authorizationService.GetRouteApplicationTypeAsync(routeId, cancellationToken);
-        var context = _authorizationService.BuildLaunchContextToken(routeId);
+        var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId);
         return Ok(BuildLaunchResponse(applicationType, context));
     }
 
     /// <summary>
     /// Returns the opaque, encrypted launch URL for a workflow graph. On launch, the workflow's source node's
     /// connection drives OAuth + trusted-issuer validation; on callback the workflow is run. Admin-only.
+    /// <paramref name="ehrEndpointId"/> optionally names a specific hospital/organization EhrEndpoint (from the
+    /// EhrEndpoints directory) to launch against instead of the source connection's own configured base URL — set
+    /// this when a third-party app carries a user's hospital selection through the launch.
     /// </summary>
     [Authorize]
     [HttpGet("workflows/{workflowId:guid}/launch-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetWorkflowLaunchUrl(Guid workflowId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetWorkflowLaunchUrl(Guid workflowId, [FromQuery] Guid? ehrEndpointId, CancellationToken cancellationToken)
     {
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId);
         return Ok(BuildLaunchResponse(applicationType, context));
     }
 
@@ -126,13 +129,16 @@ public sealed class OAuthController : ControllerBase
     /// Returns the opaque, encrypted provider-standalone URL to hand to a provider for a specific pipeline route.
     /// Clicking it takes the provider straight to the EHR's login (no <c>iss</c>/<c>launch</c> handshake); after
     /// sign-in and patient selection the callback runs the route for the selected patient. Admin-only.
+    /// <paramref name="ehrEndpointId"/> optionally names a specific hospital/organization EhrEndpoint to launch
+    /// against instead of the source connection's own configured base URL — set this when a third-party app carries
+    /// a user's hospital selection through the launch.
     /// </summary>
     [Authorize]
     [HttpGet("pipelines/{routeId:guid}/standalone-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetStandaloneUrl(Guid routeId)
+    public IActionResult GetStandaloneUrl(Guid routeId, [FromQuery] Guid? ehrEndpointId)
     {
-        var context = _authorizationService.BuildLaunchContextToken(routeId);
+        var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId);
         return Ok(new { standaloneUrl = BuildStandaloneUri(context) });
     }
 

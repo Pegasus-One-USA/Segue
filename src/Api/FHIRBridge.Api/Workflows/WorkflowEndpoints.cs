@@ -306,10 +306,15 @@ public static class WorkflowEndpoints
             var patientEntry = resources?.FirstOrDefault(
                 resource => string.Equals(resource?["ResourceType"]?.GetValue<string>(), "Patient", StringComparison.OrdinalIgnoreCase));
             var patientJson = patientEntry?["Payload"]?.GetValue<string>();
+            var patientResource = string.IsNullOrWhiteSpace(patientJson) ? null : JsonNode.Parse(patientJson);
 
             return Results.Ok(new
             {
-                patient = string.IsNullOrWhiteSpace(patientJson) ? null : JsonNode.Parse(patientJson),
+                patient = patientResource,
+                // The id a caller should pass as WorkflowRunRequest.PatientId on a later /run call against a
+                // different workflow that shares this one's source connection, so it reuses this exact launch's
+                // stored session/patient context instead of whichever session happens to be most recent by then.
+                patientId = (patientResource as JsonObject)?["id"]?.GetValue<string>(),
             });
         });
 
@@ -332,6 +337,62 @@ public static class WorkflowEndpoints
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
         });
+
+        // Duplicates an existing workflow definition under a new name — every node/edge/config is copied exactly
+        // (same node types, ranks, positions, and ConfigurationJson, so any source/destination/mapping ids embedded
+        // in a node's config keep pointing at the same backing connections as the original). New Guids throughout
+        // (workflow id + every node/edge id) via the same BuildWorkflow path every other create/save uses, so this
+        // can never diverge from what a normal save would have produced.
+        group.MapPost("/workflows/{workflowId:guid}/copy", async (
+            Guid workflowId,
+            CopyWorkflowRequest request,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var name = request.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return Results.BadRequest(new { error = "invalid_request", error_description = "A name is required to copy a workflow." });
+            }
+
+            var source = await store.GetAsync(workflowId, cancellationToken);
+            if (source is null)
+            {
+                return Results.NotFound();
+            }
+
+            var nodeRequests = source.Nodes
+                .Select(node => new WorkflowNodeRequest(
+                    node.Id.ToString(),
+                    node.NodeType,
+                    node.Category,
+                    node.Rank,
+                    node.SubRank,
+                    node.DisplayName,
+                    node.ConfigurationJson,
+                    node.PositionX,
+                    node.PositionY,
+                    node.IsEnabled,
+                    node.CheckpointUrlEnabled))
+                .ToArray();
+
+            var edgeRequests = source.Edges
+                .Select(edge => new WorkflowEdgeRequest(edge.FromNodeId.ToString(), edge.ToNodeId.ToString()))
+                .ToArray();
+
+            var triggerRequest = source.Trigger is { } trigger
+                ? new WorkflowTriggerRequest(trigger.Type, trigger.ScheduleExpression, trigger.IntervalMinutes, trigger.BackfillOnFirstRun)
+                : null;
+
+            // Always created disabled, regardless of the source's enabled state: an enabled Schedule/Poll trigger
+            // firing immediately — in parallel with the original, against the same source/destination — would
+            // double-run and double-write before the user has even reviewed the copy.
+            var definitionRequest = new WorkflowDefinitionRequest(name, IsEnabled: false, nodeRequests, edgeRequests, triggerRequest);
+            var copy = BuildWorkflow(Guid.NewGuid(), definitionRequest);
+            await store.SaveAsync(copy, cancellationToken);
+
+            return Results.Created($"/api/v1/workflows/{copy.Id}", copy);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapPost("/workflows/{workflowId:guid}/validate", async (
             Guid workflowId,
@@ -367,10 +428,106 @@ public static class WorkflowEndpoints
                 Guid.NewGuid(),
                 request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
-                triggerType: "Manual");
+                triggerType: "Manual",
+                targetPatientId: request?.PatientId);
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             return Results.Ok(result);
+        });
+
+        // Per-node checkpoint (docs/backend/05-workflow-node-checkpoints-plan.md §3.5). Admin-only: generates the
+        // opaque URL for a node that already has CheckpointUrlEnabled set. Hitting the returned URL (anonymous,
+        // below) runs only that node's ancestor closure and returns a run id.
+        group.MapGet("/workflows/{workflowId:guid}/nodes/{nodeId:guid}/checkpoint-url", async (
+            Guid workflowId,
+            Guid nodeId,
+            IWorkflowDefinitionStore store,
+            ILaunchTokenProtector tokenProtector,
+            HttpRequest httpRequest,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            var node = workflow.Nodes.FirstOrDefault(n => n.Id == nodeId);
+            if (node is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (!node.CheckpointUrlEnabled)
+            {
+                return Results.BadRequest(new { error = "checkpoint_not_enabled", error_description = "Enable the checkpoint flag on this node before requesting its URL." });
+            }
+
+            var token = tokenProtector.ProtectWorkflowCheckpointContext(workflowId, nodeId);
+            var url = $"{httpRequest.Scheme}://{httpRequest.Host}/api/v1/workflows/checkpoint/{token}";
+            return Results.Ok(new { checkpointUrl = url });
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // The checkpoint URL itself. Anonymous — same trust model as /oauth/launch/{context}: the encrypted,
+        // unguessable token is the boundary, not a session. Runs the target node's ancestor closure only and
+        // returns a run id; fetch its output via /workflows/runs/{workflowRunId}/checkpoint-result.
+        group.MapGet("/workflows/checkpoint/{token}", async (
+            string token,
+            ILaunchTokenProtector tokenProtector,
+            IWorkflowDefinitionStore store,
+            IRankedWorkflowOrchestrator orchestrator,
+            CancellationToken cancellationToken) =>
+        {
+            var launchContext = tokenProtector.UnprotectContext(token);
+            if (launchContext?.WorkflowId is not { } workflowId || launchContext.TargetNodeId is not { } targetNodeId)
+            {
+                return Results.BadRequest(new { error = "invalid_token", error_description = "This checkpoint URL is invalid or has expired." });
+            }
+
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            var node = workflow?.Nodes.FirstOrDefault(n => n.Id == targetNodeId);
+            if (workflow is null || node is null || !node.CheckpointUrlEnabled)
+            {
+                return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
+            }
+
+            var context = new WorkflowExecutionContext(
+                Guid.NewGuid(),
+                Guid.NewGuid().ToString("N"),
+                triggeredBy: "checkpoint-url",
+                triggerType: "Checkpoint");
+            var result = await orchestrator.ExecuteAsync(workflow, context, targetNodeId, cancellationToken);
+
+            return Results.Ok(new { workflowRunId = result.WorkflowRun.Id });
+        });
+
+        // Companion to the checkpoint trigger above: returns the checkpointed node's captured output for a run,
+        // resolved from just the run id (the frontend never needs to pass a node id around). Anonymous, same
+        // trust model as /workflows/runs/{workflowRunId}/launch-result.
+        group.MapGet("/workflows/runs/{workflowRunId:guid}/checkpoint-result", async (
+            Guid workflowRunId,
+            IWorkflowRunStore runStore,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var run = await runStore.GetAsync(workflowRunId, cancellationToken);
+            if (run?.TargetNodeId is not { } targetNodeId)
+            {
+                return Results.NotFound(new { error = "not_a_checkpoint_run", error_description = "This run id is not a checkpoint run." });
+            }
+
+            var targetNodeRun = run.NodeRuns.FirstOrDefault(nodeRun => nodeRun.WorkflowNodeId == targetNodeId);
+            if (targetNodeRun is null)
+            {
+                return Results.Ok(new { result = (JsonNode?)null, contract = (string?)null });
+            }
+
+            var payloads = await recorder.GetPagedAsync(workflowRunId, page: 1, pageSize: 50, cancellationToken);
+            var payload = payloads.Items.FirstOrDefault(item => item.WorkflowNodeRunId == targetNodeRun.Id);
+
+            return payload is null
+                ? Results.Ok(new { result = (JsonNode?)null, contract = (string?)null })
+                : Results.Ok(new { result = JsonNode.Parse(payload.PayloadJson), contract = payload.Contract });
         });
 
         // Persisted run history (Scenario A): node-by-node execution timeline for the builder UI.
@@ -724,7 +881,8 @@ public static class WorkflowEndpoints
                 nodeRequest.ConfigurationJson ?? "{}",
                 nodeRequest.PositionX,
                 nodeRequest.PositionY,
-                nodeRequest.IsEnabled);
+                nodeRequest.IsEnabled,
+                nodeRequest.CheckpointUrlEnabled);
 
             nodeIdsByClientId[nodeRequest.Id] = node.Id;
         }

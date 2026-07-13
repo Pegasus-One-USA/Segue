@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
@@ -17,18 +18,25 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
 {
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
+    // IFhirPatientContextProvider is never registered as its own service type — it's reached by downcasting the
+    // registered IFhirAccessTokenProvider (CompositeFhirAccessTokenProvider implements both), the same pattern
+    // FhirSourceConnectorBase.ApplyPatientScopeAsync already uses.
+    private readonly IFhirAccessTokenProvider? _accessTokenProvider;
 
     public SourceConnectionRuntimeResolver(
         IConfigurationRepository repository,
-        ISecretProvider secretProvider)
+        ISecretProvider secretProvider,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
     {
         _repository = repository;
         _secretProvider = secretProvider;
+        _accessTokenProvider = accessTokenProvider;
     }
 
     public async Task<FhirSourceConfiguration?> ResolveAsync(
         Guid sourceConnectionId,
         string? searchParameters,
+        string? targetPatientId,
         CancellationToken cancellationToken)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
@@ -73,7 +81,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         var retrieval = sourceConnection.Retrieval;
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
-        return new FhirSourceConfiguration(
+        var config = new FhirSourceConfiguration(
             sourceType,
             sourceConnection.Name,
             sourceConnection.BaseUrl,
@@ -101,7 +109,24 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             // sync is on and a prior run recorded a timestamp.
             Since: retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } lastSync }
                 ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
-                : null);
+                : null,
+            TargetPatientId: targetPatientId);
+
+        // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
+        // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME
+        // endpoint — it isn't stored on the SourceConnection row itself, only alongside the session's token. This is
+        // a no-op for Backend System sources and for any interactive source whose launch never carried an override,
+        // so every existing connection's behavior is unchanged.
+        if (_accessTokenProvider is IFhirPatientContextProvider patientContextProvider)
+        {
+            var resolvedBaseUrl = await patientContextProvider.GetResolvedBaseUrlAsync(config, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(resolvedBaseUrl))
+            {
+                config = config with { BaseUrl = resolvedBaseUrl };
+            }
+        }
+
+        return config;
     }
 
     /// <summary>

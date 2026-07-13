@@ -51,12 +51,15 @@ public static class WorkflowInfrastructureServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, SftpDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, RestApiDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, InMemoryDestinationNodeExecutor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, WebhookNotifierNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, PowerBiDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, TableauDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, DatabricksDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, HedisMeasureReportNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, AnomalyDetectionNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, PatientAggregationNodeExecutor>());
+
+        services.AddHttpClient(nameof(WebhookNotifierNodeExecutor));
 
         return services;
     }

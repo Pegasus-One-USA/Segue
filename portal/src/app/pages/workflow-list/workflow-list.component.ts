@@ -24,6 +24,13 @@ interface DataModal {
   error: string | null;
 }
 
+interface CopyModal {
+  workflowId: string;
+  sourceName: string;
+  name: string;
+  busy: boolean;
+}
+
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
@@ -50,6 +57,8 @@ export class WorkflowListComponent implements OnInit {
   readonly dataModal = signal<DataModal | null>(null);
   /** Workflow pending delete confirmation. */
   readonly confirmDelete = signal<WorkflowSummary | null>(null);
+  /** Workflow pending a copy — the modal's name field always starts empty. */
+  readonly copyModal = signal<CopyModal | null>(null);
 
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
@@ -198,6 +207,40 @@ export class WorkflowListComponent implements OnInit {
         this.rowBusyId.set(null);
         this.confirmDelete.set(null);
         this.toast.error('Delete failed', this.messageOf(err, 'Could not delete the workflow.'));
+      },
+    });
+  }
+
+  /** Opens the copy modal with an empty name field — the workflow isn't duplicated until a name is confirmed. */
+  askCopy(row: WorkflowSummary): void {
+    this.copyModal.set({ workflowId: row.workflowId, sourceName: row.name, name: '', busy: false });
+  }
+
+  onCopyNameInput(value: string): void {
+    this.copyModal.update(m => (m ? { ...m, name: value } : m));
+  }
+
+  cancelCopy(): void {
+    if (this.copyModal()?.busy) return;
+    this.copyModal.set(null);
+  }
+
+  /** Confirms the copy — blocked while the name is empty/whitespace-only or a copy call is already in flight. */
+  confirmCopy(): void {
+    const m = this.copyModal();
+    const name = m?.name.trim();
+    if (!m || !name || m.busy) return;
+
+    this.copyModal.set({ ...m, busy: true });
+    this.api.copy(m.workflowId, name).subscribe({
+      next: () => {
+        this.copyModal.set(null);
+        this.toast.success('Workflow copied', `"${name}" was created from "${m.sourceName}".`);
+        this.reload();
+      },
+      error: err => {
+        this.copyModal.update(current => (current ? { ...current, busy: false } : current));
+        this.toast.error('Copy failed', this.messageOf(err, 'Could not copy the workflow.'));
       },
     });
   }

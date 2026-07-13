@@ -100,7 +100,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
 
     private void SetupDiscovery(string? authorize = "https://auth.example.com/authorize", string? token = "https://auth.example.com/token")
     {
-        _discovery.Setup(x => x.DiscoverSmartConfigurationAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        _discovery.Setup(x => x.DiscoverSmartConfigurationAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SmartConfigurationDto(authorize, token, null, null, null, [], [], [], [], [], []));
     }
 
@@ -322,6 +322,52 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             context, "https://ehr.trusted.com/fhir", "launch-token", "https://fallback/cb", CancellationToken.None);
 
         forwardedLaunch.Should().Be("launch-token");
+    }
+
+    [Fact]
+    public async Task StartStandaloneFromContextAsync_uses_the_selected_hospital_endpoints_base_url_when_one_is_carried_in_the_context()
+    {
+        var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, []));
+        var ehrEndpoint = new EhrEndpoint(
+            SourceSystemType.Epic, "vendor-endpoint-1", "St. Example Hospital", "https://hospital.example.com/fhir/R4", "R4", "active");
+        _configurationRepository
+            .Setup(x => x.GetEhrEndpointAsync(ehrEndpoint.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ehrEndpoint);
+        SetupDiscovery();
+        FhirSourceConfiguration? captured = null;
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback((FhirSourceConfiguration s, string _, string _, string? _) => captured = s)
+            .Returns(new SmartAuthorizationRequest("https://auth.example.com/authorize", "verifier-1", "state"));
+
+        var context = _protector.ProtectContext(routeId, ehrEndpoint.Id);
+
+        await Service().StartStandaloneFromContextAsync(context, "https://fallback/callback", CancellationToken.None);
+
+        captured.Should().NotBeNull();
+        captured!.BaseUrl.Should().Be("https://hospital.example.com/fhir/R4");
+        _discovery.Verify(x => x.DiscoverSmartConfigurationAsync(
+            It.IsAny<Guid>(), "https://hospital.example.com/fhir/R4", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartStandaloneFromContextAsync_falls_back_to_the_connections_own_base_url_when_no_hospital_is_selected()
+    {
+        var (routeId, source) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, []));
+        SetupDiscovery();
+        FhirSourceConfiguration? captured = null;
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Callback((FhirSourceConfiguration s, string _, string _, string? _) => captured = s)
+            .Returns(new SmartAuthorizationRequest("https://auth.example.com/authorize", "verifier-1", "state"));
+
+        var context = _protector.ProtectContext(routeId);
+
+        await Service().StartStandaloneFromContextAsync(context, "https://fallback/callback", CancellationToken.None);
+
+        captured.Should().NotBeNull();
+        captured!.BaseUrl.Should().Be(source.BaseUrl);
+        _configurationRepository.Verify(x => x.GetEhrEndpointAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

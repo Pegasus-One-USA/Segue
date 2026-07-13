@@ -127,4 +127,11 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         _webhooks[e.Id] = e;
         return Task.CompletedTask;
     }
+
+    // ── EHR endpoints ─────────────────────────────────────────────────────────
+    // The EhrEndpoint directory is only ever populated by EpicEndpointDirectorySeeder against a real DbContext
+    // (registered on the real-DB path only) — there is no in-memory equivalent seeding, so this always misses.
+    // Callers already treat a missing EhrEndpoint as "fall back to the source connection's own base URL".
+    public Task<EhrEndpoint?> GetEhrEndpointAsync(Guid id, CancellationToken ct) =>
+        Task.FromResult<EhrEndpoint?>(null);
 }

@@ -21,13 +21,41 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
         _stateProtector = dataProtectionProvider.CreateProtector("FHIRBridge.OAuthLaunch.State.v1");
     }
 
-    public string ProtectContext(Guid routeId) =>
-        _contextProtector.Protect($"{routeId:N}");
+    // An optional hospital/organization EhrEndpoint id rides as a "|eh:{guid:N}" suffix on either token shape below.
+    // Appending it (rather than a new discriminator) keeps every previously minted token — which never has this
+    // suffix — parsing exactly as before.
+    private const string EhrEndpointSuffixPrefix = "|eh:";
+
+    public string ProtectContext(Guid routeId, Guid? ehrEndpointId = null) =>
+        _contextProtector.Protect(AppendEhrEndpointSuffix($"{routeId:N}", ehrEndpointId));
 
     // Workflow launch tokens carry a "wf:" discriminator so UnprotectContext can tell a workflow launch from a route
     // launch. Route tokens stay the bare "{guid:N}" form (backward compatible with previously minted launch URLs).
-    public string ProtectWorkflowContext(Guid workflowId) =>
-        _contextProtector.Protect($"wf:{workflowId:N}");
+    public string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null) =>
+        _contextProtector.Protect(AppendEhrEndpointSuffix($"wf:{workflowId:N}", ehrEndpointId));
+
+    private static string AppendEhrEndpointSuffix(string value, Guid? ehrEndpointId) =>
+        ehrEndpointId is { } id ? $"{value}{EhrEndpointSuffixPrefix}{id:N}" : value;
+
+    // Splits a trailing "|eh:{guid:N}" suffix off a decrypted value, returning the value with the suffix removed
+    // plus the parsed EhrEndpoint id (null if there was no suffix, or it didn't parse as a guid).
+    private static (string Value, Guid? EhrEndpointId) SplitEhrEndpointSuffix(string value)
+    {
+        var separatorIndex = value.IndexOf(EhrEndpointSuffixPrefix, StringComparison.Ordinal);
+        if (separatorIndex < 0)
+        {
+            return (value, null);
+        }
+
+        var head = value[..separatorIndex];
+        var suffix = value[(separatorIndex + EhrEndpointSuffixPrefix.Length)..];
+        return Guid.TryParseExact(suffix, "N", out var ehrEndpointId) ? (head, ehrEndpointId) : (head, null);
+    }
+
+    // Checkpoint tokens carry a third "chk:" discriminator plus both ids, pipe-delimited. Distinct prefix from "wf:"
+    // so a checkpoint token can never be replayed as a full-workflow launch token or vice versa.
+    public string ProtectWorkflowCheckpointContext(Guid workflowId, Guid targetNodeId) =>
+        _contextProtector.Protect($"chk:{workflowId:N}|{targetNodeId:N}");
 
     public LaunchContext? UnprotectContext(string token)
     {
@@ -40,15 +68,34 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
         {
             var value = _contextProtector.Unprotect(token);
 
-            if (value.StartsWith("wf:", StringComparison.Ordinal)
-                && Guid.TryParseExact(value["wf:".Length..], "N", out var workflowId))
+            if (value.StartsWith("chk:", StringComparison.Ordinal))
             {
-                return new LaunchContext(RouteId: null, WorkflowId: workflowId);
+                var parts = value["chk:".Length..].Split('|');
+                if (parts.Length == 2
+                    && Guid.TryParseExact(parts[0], "N", out var checkpointWorkflowId)
+                    && Guid.TryParseExact(parts[1], "N", out var targetNodeId))
+                {
+                    return new LaunchContext(RouteId: null, WorkflowId: checkpointWorkflowId, TargetNodeId: targetNodeId);
+                }
+
+                return null;
             }
 
-            if (Guid.TryParseExact(value, "N", out var routeId))
+            if (value.StartsWith("wf:", StringComparison.Ordinal))
             {
-                return new LaunchContext(RouteId: routeId);
+                var (wfValue, wfEhrEndpointId) = SplitEhrEndpointSuffix(value["wf:".Length..]);
+                if (Guid.TryParseExact(wfValue, "N", out var workflowId))
+                {
+                    return new LaunchContext(RouteId: null, WorkflowId: workflowId, EhrEndpointId: wfEhrEndpointId);
+                }
+
+                return null;
+            }
+
+            var (routeValue, routeEhrEndpointId) = SplitEhrEndpointSuffix(value);
+            if (Guid.TryParseExact(routeValue, "N", out var routeId))
+            {
+                return new LaunchContext(RouteId: routeId, EhrEndpointId: routeEhrEndpointId);
             }
 
             return null;

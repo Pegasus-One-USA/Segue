@@ -13,7 +13,8 @@ public sealed class WorkflowNode
         string configurationJson,
         double positionX,
         double positionY,
-        bool isEnabled)
+        bool isEnabled,
+        bool checkpointUrlEnabled = false)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -36,6 +37,7 @@ public sealed class WorkflowNode
         PositionX = positionX;
         PositionY = positionY;
         IsEnabled = isEnabled;
+        CheckpointUrlEnabled = checkpointUrlEnabled;
     }
 
     private readonly List<WorkflowNodeConfiguration> _configuration = [];
@@ -62,7 +64,16 @@ public sealed class WorkflowNode
 
     public bool IsEnabled { get; }
 
+    /// <summary>
+    /// Opt-in, per-node-instance flag: when set, this node can generate a "checkpoint" launch URL that runs only
+    /// this node's ancestor closure and returns its output — regardless of category or rank. See
+    /// docs/backend/05-workflow-node-checkpoints-plan.md.
+    /// </summary>
+    public bool CheckpointUrlEnabled { get; private set; }
+
     public IReadOnlyCollection<WorkflowNodeConfiguration> Configuration => _configuration;
+
+    public void SetCheckpointUrlEnabled(bool enabled) => CheckpointUrlEnabled = enabled;
 
     public WorkflowNodeConfiguration AddConfiguration(string key, string value)
     {

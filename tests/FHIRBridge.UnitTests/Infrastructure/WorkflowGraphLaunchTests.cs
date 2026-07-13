@@ -226,6 +226,8 @@ public sealed class WorkflowGraphLaunchTests
             Task.FromResult<IReadOnlyList<WebhookConfiguration>>([]);
         public Task<WebhookConfiguration?> GetWebhookAsync(Guid id, CancellationToken ct) => Task.FromResult<WebhookConfiguration?>(null);
 
+        public Task<EhrEndpoint?> GetEhrEndpointAsync(Guid id, CancellationToken ct) => Task.FromResult<EhrEndpoint?>(null);
+
         public Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();

@@ -149,6 +149,7 @@ export class WorkflowGraphMapperService {
       positionX: node.x,
       positionY: node.y,
       isEnabled: true,
+      checkpointUrlEnabled: !!node.checkpointUrlEnabled,
     };
   }
 
@@ -197,6 +198,7 @@ export class WorkflowGraphMapperService {
         color: source?.color,
         connectorLabel: name,
         fields: { ...config, __name: name },
+        checkpointUrlEnabled: !!node.checkpointUrlEnabled,
       } satisfies SourceNode;
     }
 
@@ -209,6 +211,7 @@ export class WorkflowGraphMapperService {
       x: node.positionX,
       y: node.positionY,
       fields: { ...config, __name: name },
+      checkpointUrlEnabled: !!node.checkpointUrlEnabled,
     } satisfies TransformNode;
   }
 

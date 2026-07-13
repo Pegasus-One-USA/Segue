@@ -103,4 +103,8 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
 
     public Task UpdateWebhookAsync(WebhookConfiguration e, CancellationToken ct) =>
         _db.SaveChangesAsync(ct);
+
+    // ── EHR endpoints ─────────────────────────────────────────────────────────
+    public async Task<EhrEndpoint?> GetEhrEndpointAsync(Guid id, CancellationToken ct) =>
+        await _db.EhrEndpoints.FirstOrDefaultAsync(x => x.Id == id, ct);
 }

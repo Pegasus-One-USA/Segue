@@ -69,6 +69,25 @@
           <svg class="ctx-ico" viewBox="0 0 16 16"><rect x="5" y="1" width="9" height="11" rx="1.5"/><rect x="2" y="4" width="9" height="11" rx="1.5"/></svg>
           Copy
         </button>
+        @if (!ctxNodeIsMerge()) {
+          <div class="ctx-sep"></div>
+          @if (checkpointEnabledForCtxNode()) {
+            @if (workflowSaved()) {
+              <button class="ctx-item" (click)="ctxCopyCheckpointUrl()">
+                <svg class="ctx-ico" viewBox="0 0 16 16"><path d="M6 10a3 3 0 0 1 0-4l2-2a3 3 0 0 1 4 4l-1 1"/><path d="M10 6a3 3 0 0 1 0 4l-2 2a3 3 0 0 1-4-4l1-1"/></svg>
+                Copy checkpoint URL
+              </button>
+            } @else {
+              <button class="ctx-item" disabled title="Save the workflow first — a checkpoint URL needs a saved node.">
+                <svg class="ctx-ico" viewBox="0 0 16 16"><path d="M6 10a3 3 0 0 1 0-4l2-2a3 3 0 0 1 4 4l-1 1"/><path d="M10 6a3 3 0 0 1 0 4l-2 2a3 3 0 0 1-4-4l1-1"/></svg>
+                Copy checkpoint URL (save first)
+              </button>
+            }
+            <button class="ctx-item" (click)="ctxToggleCheckpoint()">Disable checkpoint</button>
+          } @else {
+            <button class="ctx-item" (click)="ctxToggleCheckpoint()">Enable checkpoint</button>
+          }
+        }
         <div class="ctx-sep"></div>
         <button class="ctx-item ctx-item--danger" (click)="ctxDelete()">
           <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2,4 14,4"/><path d="M6,4V2h4v2"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>

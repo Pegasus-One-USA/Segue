@@ -40,4 +40,10 @@ public sealed record FhirSourceConfiguration(
     string? GroupId = null,
     IReadOnlyCollection<string>? PatientIds = null,
     string? OutputFormat = null,
-    DateTimeOffset? Since = null);
+    DateTimeOffset? Since = null,
+    // Disambiguates which stored interactive OAuth session (SmartAuthorizationCodeTokenProvider keys its token
+    // cache per source connection + patient) this run should use, when more than one patient has ever launched
+    // against the same interactive (Standalone/EhrLaunch/Patient) source connection. Null means "whichever session
+    // logged in most recently" (the pre-existing, single-slot behavior) — every caller that doesn't set this
+    // behaves exactly as before.
+    string? TargetPatientId = null);

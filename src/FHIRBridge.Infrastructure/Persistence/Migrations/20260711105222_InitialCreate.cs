@@ -59,6 +59,31 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "EhrEndpoints",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Vendor = table.Column<int>(type: "int", nullable: false),
+                    VendorEndpointId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    FhirBaseUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    FormatType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    CreatedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ModifiedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EhrEndpoints", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "OperationalAuditLogs",
                 columns: table => new
                 {
@@ -88,7 +113,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    DisplayName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    IsVisible = table.Column<bool>(type: "bit", nullable: false),
                     CreatedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ModifiedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -101,6 +128,61 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_PermissionCategories", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PipelineRunResourceRecords",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RouteExecutionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ResourceType = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    SourceResourceId = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Stage = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    ErrorMessage = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
+                    FetchedJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    FetchedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    NormalizedJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AppliedProfiles = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Warnings = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DataQualityScore = table.Column<double>(type: "float", nullable: true),
+                    MasterPatientId = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    NormalizedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    MappedValuesJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    MappedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    StoredAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    WriteStatus = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PipelineRunResourceRecords", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PipelineRunRouteExecutions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    PipelineRunId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RouteId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    MappingProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    PipelineName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    SourceConnectionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    SourceName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    SourceSystemType = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    StartedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CompletedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    TriggeredBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    TriggerType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    ExtractedCount = table.Column<int>(type: "int", nullable: false),
+                    MappedCount = table.Column<int>(type: "int", nullable: false),
+                    WrittenCount = table.Column<int>(type: "int", nullable: false),
+                    ErrorMessage = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PipelineRunRouteExecutions", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -223,6 +305,20 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     LaunchUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     TrustedIssuers = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
                     PatientSelectionMethod = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    PostLaunchRedirectUri = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    LaunchDisplayMode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    RetrievalMethod = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    RetrievalResourceTypes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    RetrievalSearchCriteria = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    RetrievalIncrementalSyncEnabled = table.Column<bool>(type: "bit", nullable: true),
+                    RetrievalPageSize = table.Column<int>(type: "int", nullable: true),
+                    RetrievalSortOrder = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    RetrievalIncludeParameters = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    RetrievalRevIncludeParameters = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    RetrievalRetryPolicy = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    RetrievalTimeoutSeconds = table.Column<int>(type: "int", nullable: true),
+                    RetrievalMaxRecordsPerRun = table.Column<int>(type: "int", nullable: true),
+                    RetrievalLastSuccessfulSyncUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     IsEnabled = table.Column<bool>(type: "bit", nullable: false),
                     CreatedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -295,6 +391,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     MfaSecret = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     MfaBackupCodeHashes = table.Column<string>(type: "nvarchar(4000)", maxLength: 4000, nullable: true),
                     MfaEnrolledOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    MfaChallengeTokenHash = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    MfaChallengeExpiresOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    MustSetupMfa = table.Column<bool>(type: "bit", nullable: false),
                     InvitationTokenHash = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     InvitationTokenExpiresOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     RefreshTokenHash = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
@@ -344,11 +443,34 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(400)", maxLength: 400, nullable: false),
                     Version = table.Column<int>(type: "int", nullable: false),
-                    IsEnabled = table.Column<bool>(type: "bit", nullable: false)
+                    IsEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    TriggerType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    TriggerScheduleExpression = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    TriggerIntervalMinutes = table.Column<int>(type: "int", nullable: true),
+                    TriggerBackfillOnFirstRun = table.Column<bool>(type: "bit", nullable: true),
+                    LastTriggeredOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_WorkflowDefinitions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "WorkflowNodeRunPayloads",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowRunId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WorkflowNodeRunId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    NodeType = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Contract = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    PayloadJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ItemCount = table.Column<int>(type: "int", nullable: true),
+                    RecordedAtUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowNodeRunPayloads", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -360,7 +482,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     StartedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     CompletedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    TriggeredBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    TriggerType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    TargetNodeId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -368,14 +493,15 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Permissions",
+                name: "PermissionGroups",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    CategoryId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    IsSystem = table.Column<bool>(type: "bit", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    DisplayName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    CategoryId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsVisible = table.Column<bool>(type: "bit", nullable: false),
                     CreatedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ModifiedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -387,13 +513,13 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Permissions", x => x.Id);
+                    table.PrimaryKey("PK_PermissionGroups", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Permissions_PermissionCategories_CategoryId",
+                        name: "FK_PermissionGroups_PermissionCategories_CategoryId",
                         column: x => x.CategoryId,
                         principalTable: "PermissionCategories",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -486,7 +612,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     ConfigurationJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     PositionX = table.Column<double>(type: "float", nullable: false),
                     PositionY = table.Column<double>(type: "float", nullable: false),
-                    IsEnabled = table.Column<bool>(type: "bit", nullable: false)
+                    IsEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    CheckpointUrlEnabled = table.Column<bool>(type: "bit", nullable: false, defaultValue: false)
                 },
                 constraints: table =>
                 {
@@ -527,14 +654,18 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "PermissionAllocations",
+                name: "Permissions",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    RoleId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    PermissionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    DisplayName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    GroupId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    IsSystem = table.Column<bool>(type: "bit", nullable: false),
+                    IsVisible = table.Column<bool>(type: "bit", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    Instances = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     CreatedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ModifiedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -546,26 +677,13 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_PermissionAllocations", x => x.Id);
-                    table.CheckConstraint("CK_PermissionAllocations_RoleXorUser", "([RoleId] IS NOT NULL AND [UserId] IS NULL) OR ([RoleId] IS NULL AND [UserId] IS NOT NULL)");
+                    table.PrimaryKey("PK_Permissions", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_PermissionAllocations_Permissions_PermissionId",
-                        column: x => x.PermissionId,
-                        principalTable: "Permissions",
+                        name: "FK_Permissions_PermissionGroups_GroupId",
+                        column: x => x.GroupId,
+                        principalTable: "PermissionGroups",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_PermissionAllocations_Roles_RoleId",
-                        column: x => x.RoleId,
-                        principalTable: "Roles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_PermissionAllocations_Users_UserId",
-                        column: x => x.UserId,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -662,6 +780,48 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "PermissionAllocations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RoleId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PermissionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ModifiedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedOnUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PermissionAllocations", x => x.Id);
+                    table.CheckConstraint("CK_PermissionAllocations_RoleXorUser", "([RoleId] IS NOT NULL AND [UserId] IS NULL) OR ([RoleId] IS NULL AND [UserId] IS NOT NULL)");
+                    table.ForeignKey(
+                        name: "FK_PermissionAllocations_Permissions_PermissionId",
+                        column: x => x.PermissionId,
+                        principalTable: "Permissions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_PermissionAllocations_Roles_RoleId",
+                        column: x => x.RoleId,
+                        principalTable: "Roles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_PermissionAllocations_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ResourcePipelineRouteMappings",
                 columns: table => new
                 {
@@ -698,6 +858,17 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "IX_ConfiguredPipelineRuns_Status",
                 table: "ConfiguredPipelineRuns",
                 column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EhrEndpoints_Name",
+                table: "EhrEndpoints",
+                column: "Name");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EhrEndpoints_Vendor_VendorEndpointId",
+                table: "EhrEndpoints",
+                columns: new[] { "Vendor", "VendorEndpointId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_MappingFields_MappingProfileId",
@@ -740,15 +911,50 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Permissions_CategoryId",
-                table: "Permissions",
+                name: "IX_PermissionGroups_CategoryId",
+                table: "PermissionGroups",
                 column: "CategoryId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PermissionGroups_Name",
+                table: "PermissionGroups",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Permissions_GroupId",
+                table: "Permissions",
+                column: "GroupId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Permissions_Name",
                 table: "Permissions",
-                column: "Name",
-                unique: true);
+                column: "Name");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunResourceRecords_FetchedAtUtc",
+                table: "PipelineRunResourceRecords",
+                column: "FetchedAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunResourceRecords_RouteExecutionId",
+                table: "PipelineRunResourceRecords",
+                column: "RouteExecutionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunRouteExecutions_PipelineRunId",
+                table: "PipelineRunRouteExecutions",
+                column: "PipelineRunId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunRouteExecutions_StartedOnUtc",
+                table: "PipelineRunRouteExecutions",
+                column: "StartedOnUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunRouteExecutions_Status",
+                table: "PipelineRunRouteExecutions",
+                column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ProvisionedSecrets_KeyVaultName_SecretName",
@@ -833,6 +1039,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Users_MfaChallengeTokenHash",
+                table: "Users",
+                column: "MfaChallengeTokenHash");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_RefreshTokenHash",
                 table: "Users",
                 column: "RefreshTokenHash");
@@ -857,6 +1068,16 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "IX_WorkflowNodeConfigurations_WorkflowNodeId",
                 table: "WorkflowNodeConfigurations",
                 column: "WorkflowNodeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowNodeRunPayloads_RecordedAtUtc",
+                table: "WorkflowNodeRunPayloads",
+                column: "RecordedAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowNodeRunPayloads_WorkflowRunId",
+                table: "WorkflowNodeRunPayloads",
+                column: "WorkflowRunId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_WorkflowNodeRuns_WorkflowRunId",
@@ -889,6 +1110,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "DestinationConfigurations");
 
             migrationBuilder.DropTable(
+                name: "EhrEndpoints");
+
+            migrationBuilder.DropTable(
                 name: "MappingFields");
 
             migrationBuilder.DropTable(
@@ -896,6 +1120,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "PermissionAllocations");
+
+            migrationBuilder.DropTable(
+                name: "PipelineRunResourceRecords");
+
+            migrationBuilder.DropTable(
+                name: "PipelineRunRouteExecutions");
 
             migrationBuilder.DropTable(
                 name: "ProcessedMessages");
@@ -925,6 +1155,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "WorkflowNodeConfigurations");
 
             migrationBuilder.DropTable(
+                name: "WorkflowNodeRunPayloads");
+
+            migrationBuilder.DropTable(
                 name: "WorkflowNodeRuns");
 
             migrationBuilder.DropTable(
@@ -946,7 +1179,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "WorkflowRuns");
 
             migrationBuilder.DropTable(
-                name: "PermissionCategories");
+                name: "PermissionGroups");
 
             migrationBuilder.DropTable(
                 name: "MappingProfiles");
@@ -956,6 +1189,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "WorkflowDefinitions");
+
+            migrationBuilder.DropTable(
+                name: "PermissionCategories");
 
             migrationBuilder.DropTable(
                 name: "SourceConnections");

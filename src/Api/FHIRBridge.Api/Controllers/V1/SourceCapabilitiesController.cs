@@ -58,6 +58,7 @@ public sealed class SourceCapabilitiesController : ControllerBase
     {
         var configuration = await _discoveryService.DiscoverSmartConfigurationAsync(
             sourceConnectionId,
+            overrideBaseUrl: null,
             cancellationToken);
 
         return Ok(configuration);
@@ -127,7 +128,7 @@ public sealed class SourceCapabilitiesController : ControllerBase
         var detected = false;
         try
         {
-            var smart = await _discoveryService.DiscoverSmartConfigurationAsync(sourceConnectionId, cancellationToken);
+            var smart = await _discoveryService.DiscoverSmartConfigurationAsync(sourceConnectionId, overrideBaseUrl: null, cancellationToken);
             supported = smart.ScopesSupported;
             if (string.IsNullOrWhiteSpace(scopeVersion))
             {

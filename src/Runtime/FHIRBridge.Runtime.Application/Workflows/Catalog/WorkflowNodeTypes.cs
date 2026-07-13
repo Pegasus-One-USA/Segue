@@ -47,6 +47,11 @@ public static class WorkflowNodeTypes
     public const string PowerBiDestination = "PowerBiDestinationNode";
     public const string TableauDestination = "TableauDestinationNode";
     public const string DatabricksDestination = "DatabricksDestinationNode";
+    /// <summary>Phase 2 example: a Destination-category node whose input is a previous destination's write result,
+    /// not fresh mapped records — demonstrates chaining a destination into another node via a bespoke catalog rank
+    /// tier (71, above Destination's 70) rather than relaxing the graph validator. See
+    /// docs/backend/05-workflow-node-checkpoints-plan.md §4.2.</summary>
+    public const string WebhookNotifier = "WebhookNotifierNode";
     public const string HedisMeasureReport = "HedisMeasureReportNode";
     public const string AnomalyDetection = "AnomalyDetectionNode";
     public const string PatientAggregation = "PatientAggregationNode";
