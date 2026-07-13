@@ -295,7 +295,14 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
         { value: 'ndjson',      label: 'NDJSON (application/fhir+ndjson)' },
         { value: 'ndjson-gzip', label: 'NDJSON (gzip compressed)' },
       ] },
-      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',    type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS },
+      // Bulk $export is a heavy operation and servers (e.g. Epic) cap its frequency (~once/24h), so it schedules on a
+      // calendar "Repeat" (min daily) — the same recurrence control as Search-REST Full Refresh — never a tight poll
+      // frequency. System and Group exports repeat on a schedule; a Patient ID list is a one-off, so it stays manual
+      // (no recurrence fields shown).
+      { key: 'fullRefreshRecurrence', label: 'Repeat',        type: 'select',         required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'How often to re-run this export. Patient ID list exports run manually and are not scheduled.' },
+      { key: 'fullRefreshDaysOfWeek', label: 'On',            type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.exportScope !== 'patient' && ctx.fullRefreshRecurrence === 'weekly' },
+      { key: 'fullRefreshDayOfMonth', label: 'Day of month',  type: 'select',         required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.exportScope !== 'patient' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
+      { key: 'fullRefreshTime',       label: 'At',            type: 'time',           required: true, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
     ],
   },
 };
@@ -639,6 +646,11 @@ export class EpicAudienceFormComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncValidators());
 
+    // Switching the base URL to/from a loopback address flips whether the OAuth/credential fields are required.
+    this.form.controls.epicBaseUrl.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.syncValidators());
+
     this.form.controls.retrievalMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncRetrievalValidators());
@@ -794,6 +806,18 @@ export class EpicAudienceFormComponent implements OnInit {
     }
   }
 
+  /** True for a loopback FHIR base URL (localhost / 127.x / ::1) — a local HAPI dev source the backend treats as
+   *  unauthenticated, so its OAuth/credential fields are optional in the wizard. */
+  private isLoopbackUrl(value: string | null | undefined): boolean {
+    if (!value) return false;
+    try {
+      const host = new URL(value).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+      return host === 'localhost' || host === '::1' || host === '127.0.0.1' || host.startsWith('127.');
+    } catch {
+      return false;
+    }
+  }
+
   /** Applies Validators.required (and URL format checks) only to fields the current audience shows. */
   private syncValidators(): void {
     const cfg    = this.audienceConfig();
@@ -807,10 +831,16 @@ export class EpicAudienceFormComponent implements OnInit {
       ctrl.updateValueAndValidity({ emitEvent: false });
     };
 
+    // A loopback FHIR base URL (e.g. local HAPI at http://localhost:8080/fhir) is treated as unauthenticated by the
+    // backend — it skips OAuth entirely — so the token/authorize endpoints and JWT key material aren't needed to
+    // create or run it. Relax those here so a local HAPI source can be configured and tested straight from the UI.
+    // Real (non-loopback) sources are unaffected: every credential field stays required exactly as before.
+    const isLoopback = this.isLoopbackUrl(this.form.controls.epicBaseUrl.value);
+
     apply('epicBaseUrl',   true, true);
     apply('clientId',      true);
-    apply('tokenEndpoint', true, true);
-    apply('authzEndpoint', true, true);
+    apply('tokenEndpoint', !isLoopback, true);
+    apply('authzEndpoint', !isLoopback, true);
     apply('callbackUrl',   cfg.showRedirect, true);
     apply('launchUrl',     cfg.showLaunchUrl, true);
     apply('resources',     cfg.showResourcePicker);
@@ -820,7 +850,7 @@ export class EpicAudienceFormComponent implements OnInit {
     // Secret Name) — ConfigurationService.ValidateEpicSourceConnection only requires all three in the non-interactive
     // (Backend System) branch; an EHR-launch/standalone/patient app can pick JWT client auth without them, so scope
     // the requirement to Backend System specifically rather than "JWT selected" generally.
-    const requiresPrivateKeyReference = method === 'jwt' && this.audience() === 'backend-system';
+    const requiresPrivateKeyReference = method === 'jwt' && this.audience() === 'backend-system' && !isLoopback;
     apply('jwtKid',               requiresPrivateKeyReference);
     apply('privateKeyRef',        requiresPrivateKeyReference);
     apply('privateKeySecretName', requiresPrivateKeyReference);
@@ -1012,6 +1042,12 @@ export class EpicAudienceFormComponent implements OnInit {
 
     const cfg = this.audienceConfig();
 
+    // Emit the calendar recurrence + compiled cron for anything that schedules on it: Search-REST Full Refresh, and
+    // a System/Group bulk export (a Patient-id-list export is a one-off and stays manual). buildTrigger() in the
+    // workflow builder reads 'Full refresh schedule (cron)' to compile the workflow's Schedule trigger.
+    const emitRecurrence = v.runMode === 'full'
+      || (this.retrievalMethod() === 'bulk-export' && v.exportScope !== '' && v.exportScope !== 'patient');
+
     this.wiz.setAppKey(appKeyMap[aud]);
     this.wiz.setEnv(envKey);
     this.wiz.stepName.set(v.appName ?? 'Epic');
@@ -1074,8 +1110,8 @@ export class EpicAudienceFormComponent implements OnInit {
         'Group ID':                  v.groupId ?? '',
         'Patient ID / list':         v.patientIdList ?? '',
         'FHIR output format':        v.fhirOutputFormat ?? '',
-        // ── Full Refresh calendar recurrence (Run Mode = Full Refresh only) ──
-        ...(v.runMode === 'full' ? {
+        // ── Calendar recurrence (Search-REST Full Refresh, or System/Group bulk export) ──
+        ...(emitRecurrence ? {
           'Full refresh recurrence':    v.fullRefreshRecurrence ?? 'daily',
           'Full refresh days of week':  (v.fullRefreshDaysOfWeek ?? []).join(','),
           'Full refresh day of month':  v.fullRefreshDayOfMonth ?? '1',

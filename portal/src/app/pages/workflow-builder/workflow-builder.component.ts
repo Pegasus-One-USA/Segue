@@ -92,7 +92,10 @@ export class WorkflowBuilderComponent implements OnInit {
     this.store.nodes()
       .filter(isSourceNode)
       .map(node => node.fields ?? {})
-      .find(fields => !!fields['Retrieval method key'] && !!fields['Run mode']) ?? null);
+      // Search-REST carries a Run mode; bulk export carries an Export scope. Either means the wizard already
+      // describes how this pipeline runs, so it drives the trigger instead of the manual toolbar control.
+      .find(fields => !!fields['Retrieval method key']
+        && (!!fields['Run mode'] || fields['Retrieval method key'] === 'bulk-export')) ?? null);
 
   protected readonly isWizardDrivenTrigger = computed(() => this.backendRetrievalFields() !== null);
 
@@ -100,6 +103,11 @@ export class WorkflowBuilderComponent implements OnInit {
   protected readonly wizardTriggerSummary = computed(() => {
     const fields = this.backendRetrievalFields();
     if (!fields) return '';
+    if (fields['Retrieval method key'] === 'bulk-export') {
+      const scope = fields['Export scope'] || 'system';
+      if (scope === 'patient') return 'Bulk Export (Patient list) — runs on demand';
+      return `Bulk Export (${scope}) — ${fields['Full refresh schedule (cron)'] || 'schedule pending'}`;
+    }
     switch (fields['Run mode']) {
       case 'incremental': return `Incremental Sync — ${this.pollFrequencyLabel(fields['Schedule / poll frequency'])}`;
       case 'full':         return `Full Refresh — ${fields['Full refresh schedule (cron)'] || 'schedule pending'}`;
@@ -133,6 +141,12 @@ export class WorkflowBuilderComponent implements OnInit {
   private buildTrigger(): WorkflowTriggerRequest | null {
     const wizardFields = this.backendRetrievalFields();
     if (wizardFields) {
+      // Bulk export: System/Group run on the calendar Repeat (compiled cron); a Patient id list is a one-off (manual).
+      if (wizardFields['Retrieval method key'] === 'bulk-export') {
+        return wizardFields['Export scope'] === 'patient'
+          ? { type: 'Manual' }
+          : { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+      }
       switch (wizardFields['Run mode']) {
         case 'incremental':
           return { type: 'Poll', intervalMinutes: this.pollFrequencyToMinutes(wizardFields['Schedule / poll frequency']) };

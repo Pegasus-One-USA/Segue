@@ -70,10 +70,18 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         string accessToken,
         CancellationToken cancellationToken)
     {
-        var kickOffUrl = BuildKickOffUrl(baseUrl, request);
+        // A patient-scoped export narrowed to a specific id list can only be expressed as a POST with a `patient`
+        // parameter in a Parameters resource body (FHIR Bulk Data v2) — it has no GET query-string form. Every other
+        // case (system, group, all-patient) stays a GET kick-off.
+        var usePostWithPatientList = request.Scope == BulkExportScope.Patient
+            && request.PatientIds is { Count: > 0 };
 
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, kickOffUrl);
-        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var httpRequest = usePostWithPatientList
+            ? BuildPostKickOff(baseUrl, request)
+            : new HttpRequestMessage(HttpMethod.Get, BuildKickOffUrl(baseUrl, request));
+
+        var kickOffUrl = httpRequest.RequestUri!.ToString();
+        SetBearer(httpRequest, accessToken);
         httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/fhir+json"));
         httpRequest.Headers.TryAddWithoutValidation("Prefer", "respond-async");
 
@@ -105,7 +113,7 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         for (var attempt = 0; attempt < _options.MaxPollAttempts; attempt++)
         {
             using var httpRequest = new HttpRequestMessage(HttpMethod.Get, statusUrl);
-            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            SetBearer(httpRequest, accessToken);
             httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
@@ -136,7 +144,7 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         CancellationToken cancellationToken)
     {
         using var httpRequest = new HttpRequestMessage(HttpMethod.Get, file.Url);
-        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        SetBearer(httpRequest, accessToken);
         httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/fhir+ndjson"));
 
         using var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -241,8 +249,83 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
             query.Add($"_typeFilter={Uri.EscapeDataString(request.TypeFilter)}");
         }
 
+        if (!string.IsNullOrWhiteSpace(request.OutputFormat))
+        {
+            query.Add($"_outputFormat={Uri.EscapeDataString(request.OutputFormat)}");
+        }
+
         var url = $"{baseUrl}/{path}";
         return query.Count == 0 ? url : $"{url}?{string.Join('&', query)}";
+    }
+
+    // POST [base]/Patient/$export with a Parameters resource carrying the export params and a repeated `patient`
+    // entry per id — the only way to scope an export to a specific patient list (FHIR Bulk Data v2, POST-only).
+    private static HttpRequestMessage BuildPostKickOff(string baseUrl, FhirBulkExportRequest request)
+    {
+        var buffer = new System.IO.MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("resourceType", "Parameters");
+            writer.WriteStartArray("parameter");
+
+            if (request.OutputFormat is { Length: > 0 } outputFormat)
+            {
+                WriteStringParameter(writer, "_outputFormat", outputFormat);
+            }
+
+            if (request.Since is { } since)
+            {
+                WriteParameter(writer, "_since", "valueInstant", since.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+            }
+
+            if (request.ResourceTypes is { Count: > 0 })
+            {
+                WriteStringParameter(writer, "_type", string.Join(',', request.ResourceTypes));
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.TypeFilter))
+            {
+                WriteStringParameter(writer, "_typeFilter", request.TypeFilter);
+            }
+
+            foreach (var patientId in request.PatientIds!)
+            {
+                if (string.IsNullOrWhiteSpace(patientId))
+                {
+                    continue;
+                }
+
+                writer.WriteStartObject();
+                writer.WriteString("name", "patient");
+                writer.WriteStartObject("valueReference");
+                writer.WriteString("reference", patientId.StartsWith("Patient/", StringComparison.OrdinalIgnoreCase)
+                    ? patientId
+                    : $"Patient/{patientId}");
+                writer.WriteEndObject();
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/Patient/$export")
+        {
+            Content = new StringContent(Encoding.UTF8.GetString(buffer.ToArray()), Encoding.UTF8, "application/fhir+json"),
+        };
+        return httpRequest;
+    }
+
+    private static void WriteStringParameter(Utf8JsonWriter writer, string name, string value)
+        => WriteParameter(writer, name, "valueString", value);
+
+    private static void WriteParameter(Utf8JsonWriter writer, string name, string valueField, string value)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("name", name);
+        writer.WriteString(valueField, value);
+        writer.WriteEndObject();
     }
 
     private static async Task<string> SafeReadAsync(HttpResponseMessage response, CancellationToken cancellationToken)
@@ -250,6 +333,16 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         body = body.ReplaceLineEndings(" ").Trim();
         return body.Length > 1000 ? body[..1000] + "..." : body;
+    }
+
+    // Only attach a bearer when we actually have one. A loopback / unauthenticated source (e.g. local HAPI) resolves
+    // to an empty token; sending "Authorization: Bearer " with no value trips some servers, so omit it entirely.
+    private static void SetBearer(HttpRequestMessage request, string? accessToken)
+    {
+        if (!string.IsNullOrWhiteSpace(accessToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
     }
 
     private static string RequireBaseUrl(FhirSourceConfiguration source)

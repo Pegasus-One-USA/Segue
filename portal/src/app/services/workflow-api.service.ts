@@ -133,6 +133,11 @@ export interface SourceRetrievalConfigurationRequest {
   retryPolicy?: string | null;
   timeoutSeconds?: number | null;
   maxRecordsPerRun?: number | null;
+  // Bulk Data $export (retrievalMethod === 'bulk-export') only.
+  exportScope?: string | null;                // system | patient | group
+  groupId?: string | null;                    // required when exportScope === 'group'
+  patientIds?: string[] | null;               // narrows a patient-scoped export; empty = all patients
+  outputFormat?: string | null;               // e.g. application/fhir+ndjson
 }
 
 export interface CreateSourceConnectionRequest {

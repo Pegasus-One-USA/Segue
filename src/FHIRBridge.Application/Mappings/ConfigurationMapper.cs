@@ -69,7 +69,11 @@ public static class ConfigurationMapper
                 retrieval.RetryPolicy,
                 retrieval.TimeoutSeconds,
                 retrieval.MaxRecordsPerRun,
-                retrieval.LastSuccessfulSyncUtc);
+                retrieval.LastSuccessfulSyncUtc,
+                retrieval.ExportScope,
+                retrieval.GroupId,
+                retrieval.PatientIds,
+                retrieval.OutputFormat);
 
     public static SourceRetrievalConfiguration? ToDomain(SourceRetrievalConfigurationDto? dto) =>
         dto is null
@@ -86,7 +90,11 @@ public static class ConfigurationMapper
                 dto.RetryPolicy,
                 dto.TimeoutSeconds,
                 dto.MaxRecordsPerRun,
-                dto.LastSuccessfulSyncUtc);
+                dto.LastSuccessfulSyncUtc,
+                dto.ExportScope,
+                dto.GroupId,
+                dto.PatientIds,
+                dto.OutputFormat);
 
     public static WebhookConfigurationDto ToDto(WebhookConfiguration webhookConfiguration)
     {
