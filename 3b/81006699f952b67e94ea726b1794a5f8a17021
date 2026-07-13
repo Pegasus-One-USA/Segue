@@ -1,0 +1,25 @@
+Demo_TestApp/frontend/src/app/app.routes.ts
+  s_2b3e33386ac39d::t_d9d6f22aafeb60 6-9
+  s_2b3e33386ac39d::t_2b62ac7a580c63 10-12
+  s_2b3e33386ac39d::t_4ed2866ce4acf2 13-14
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.html
+  s_2b3e33386ac39d::t_abe58564f3b31d 36-40
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts
+  s_2b3e33386ac39d::t_9ba04ee1e4a7d2 25,53-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "3b81006699f952b67e94ea726b1794a5f8a17021",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
