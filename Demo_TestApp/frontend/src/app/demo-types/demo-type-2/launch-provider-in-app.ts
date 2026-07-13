@@ -22,6 +22,7 @@ export class LaunchProviderInAppComponent implements OnInit {
 
   readonly patient = signal<Patient | null>(null);
   readonly isPatientLoading = signal(true);
+  readonly launchError = signal<string | null>(null);
 
   readonly age = computed(() => {
     const dateOfBirth = this.patient()?.dateOfBirth;
@@ -46,6 +47,15 @@ export class LaunchProviderInAppComponent implements OnInit {
         `${FHIRBRIDGE_BASE_URL}/api/v1/oauth/launch/${PROVIDER_LAUNCH_CONTEXT}` +
         `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}`;
       window.location.href = launchUrl;
+      return;
+    }
+
+    // FHIRBridge sets this instead of ?workflowRunId= when the workflow it triggered after OAuth threw —
+    // surface it rather than silently falling back to mock data, which would look like a working demo.
+    const launchError = this.route.snapshot.queryParamMap.get('launchError');
+    if (launchError) {
+      this.launchError.set(launchError);
+      this.isPatientLoading.set(false);
       return;
     }
 
