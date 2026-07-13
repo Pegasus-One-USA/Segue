@@ -51,4 +51,8 @@
     <Folder Include="Governance\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="FHIRBridge.UnitTests" />
+  </ItemGroup>
+
 </Project>

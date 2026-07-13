@@ -107,7 +107,7 @@ export class WorkflowBuildAssemblerService {
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const appType = this.applicationTypeFor(fields);
     const interactive = appType === 'Backend' ? null : {
-      redirectUris: [fields['Redirect URI'] || 'https://fhirbridge.com/oauth/callback'],
+      redirectUris: [fields['Redirect URI'] || 'http://localhost:5000/api/v1/oauth/callback'],
       launchUrl: fields['Launch URL'] || null,
       trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
       patientSelectionMethod: null,
@@ -132,7 +132,9 @@ export class WorkflowBuildAssemblerService {
       },
       applicationType: appType,
       interactive,
-      retrieval: appType === 'Backend' ? this.buildRetrieval(fields) : null,
+      // Provider Standalone gets a curated Search REST subset too (Resource Types/Search Criteria/Max Results/
+      // Include Related Resources — no scheduler, since it's a user-initiated one-shot fetch, not automated).
+      retrieval: appType === 'Backend' || appType === 'Standalone' ? this.buildRetrieval(fields) : null,
     };
   }
 
@@ -158,8 +160,10 @@ export class WorkflowBuildAssemblerService {
     return 'Backend';
   }
 
-  /** Backend System only — maps the wizard's Retrieval Configuration fields onto the backend's retrieval DTO.
-   *  Returns null when no retrieval method was chosen (e.g. the connection is still being drafted). */
+  /** Backend System (full method picker) and Provider Standalone (Search REST subset, one-shot — Run
+   *  Mode/scheduler fields are never populated so they simply come through as null/default) — maps the wizard's
+   *  Retrieval Configuration fields onto the backend's retrieval DTO. Returns null when no retrieval method was
+   *  chosen (e.g. the connection is still being drafted). */
   private buildRetrieval(fields: Record<string, string>): SourceRetrievalConfigurationRequest | null {
     const retrievalMethod = fields['Retrieval method key'];
     if (!retrievalMethod) return null;
@@ -173,10 +177,25 @@ export class WorkflowBuildAssemblerService {
 
     const includeParameters = splitList(fields['Include (_include)']);
     const revIncludeParameters = splitList(fields['Reverse include (_revinclude)']);
+    // Standalone hides the retrieval method's own Resource Type control and reuses the shared Resource Type &
+    // Scopes picker (Section 5, saved under 'Resources') instead — fall back to that when the retrieval-specific
+    // one is empty, which it always is for Standalone.
+    const retrievalResourceTypes = splitList(fields['Retrieval resource type']);
+    const resourceTypes = retrievalResourceTypes.length ? retrievalResourceTypes : splitList(fields['Resources']);
+
+    // Patient ID list is a free-text area — accept comma- or newline-separated ids.
+    const patientIds = (fields['Patient ID / list'] ?? '')
+      .split(/[\s,]+/).map(v => v.trim()).filter(Boolean);
+    const exportScope = fields['Export scope'] || null;
+    // The wizard uses short tokens; $export's _outputFormat expects the registered MIME type. Both ndjson variants
+    // map to application/fhir+ndjson (gzip is negotiated via transport encoding, not a distinct _outputFormat value).
+    const outputFormat = (fields['FHIR output format'] ?? '').startsWith('ndjson')
+      ? 'application/fhir+ndjson'
+      : null;
 
     return {
       retrievalMethod,
-      resourceTypes: splitList(fields['Retrieval resource type']),
+      resourceTypes,
       searchCriteria: fields['Search criteria'] || null,
       incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
       pageSize: toPositiveNumber(fields['Page size (_count)']),
@@ -186,6 +205,11 @@ export class WorkflowBuildAssemblerService {
       retryPolicy: fields['Retry policy'] || null,
       timeoutSeconds: toPositiveNumber(fields['Timeout (seconds)']),
       maxRecordsPerRun: toPositiveNumber(fields['Max records per run']),
+      // Bulk Data $export settings — only meaningful when retrievalMethod === 'bulk-export'.
+      exportScope,
+      groupId: exportScope === 'group' ? (fields['Group ID'] || null) : null,
+      patientIds: exportScope === 'patient' && patientIds.length ? patientIds : null,
+      outputFormat,
     };
   }
 

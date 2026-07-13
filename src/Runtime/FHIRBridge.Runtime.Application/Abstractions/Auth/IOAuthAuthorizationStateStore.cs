@@ -29,4 +29,8 @@ public sealed record PendingAuthorization(
     string TokenEndpoint,
     string ClientId,
     Guid? RouteId = null,
-    Guid? WorkflowId = null);
+    Guid? WorkflowId = null,
+    // The base URL actually used to issue this authorization (the source connection's own, or an EhrEndpoint
+    // override), carried through to the callback so the token exchange/save records the same value — the token
+    // exchange builds its own FhirSourceConfiguration from scratch and has no other way to know which URL was used.
+    string? ResolvedBaseUrl = null);

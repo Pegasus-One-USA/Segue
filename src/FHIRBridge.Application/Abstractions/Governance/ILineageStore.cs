@@ -1,3 +1,5 @@
+using FHIRBridge.Application.Abstractions.Persistence;
+
 namespace FHIRBridge.Application.Abstractions.Governance;
 
 /// <summary>
@@ -25,4 +27,17 @@ public sealed record ResourceLineageChain(
 public interface ILineageQueryService
 {
     Task<ResourceLineageChain> GetChainAsync(LineageQuery query, CancellationToken cancellationToken);
+
+    Task<PagedResult<ResourceLineageRecord>> GetPagedAsync(
+        LineageListFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>Filters for browsing lineage entries as a flat, paginated list (as opposed to one resource's chain).</summary>
+public sealed record LineageListFilter(
+    Guid? PipelineRunId,
+    string? ResourceType,
+    string? Action,
+    string? Status);

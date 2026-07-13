@@ -196,7 +196,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name");
 
                     b.HasIndex("Vendor", "VendorEndpointId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("EhrEndpoints", (string)null);
                 });
@@ -2043,6 +2044,16 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("SourceConnectionId")
                                 .HasColumnType("uniqueidentifier");
 
+                            b1.Property<string>("ExportScope")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalExportScope");
+
+                            b1.Property<string>("GroupId")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)")
+                                .HasColumnName("RetrievalGroupId");
+
                             b1.Property<string>("IncludeParameters")
                                 .IsRequired()
                                 .HasMaxLength(500)
@@ -2061,9 +2072,20 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasColumnType("int")
                                 .HasColumnName("RetrievalMaxRecordsPerRun");
 
+                            b1.Property<string>("OutputFormat")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)")
+                                .HasColumnName("RetrievalOutputFormat");
+
                             b1.Property<int?>("PageSize")
                                 .HasColumnType("int")
                                 .HasColumnName("RetrievalPageSize");
+
+                            b1.Property<string>("PatientIds")
+                                .IsRequired()
+                                .HasMaxLength(4000)
+                                .HasColumnType("nvarchar(4000)")
+                                .HasColumnName("RetrievalPatientIds");
 
                             b1.Property<string>("ResourceTypes")
                                 .IsRequired()

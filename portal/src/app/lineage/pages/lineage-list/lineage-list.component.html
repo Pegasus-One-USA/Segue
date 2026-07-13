@@ -1,0 +1,190 @@
+<div class="list-page">
+
+  <!-- Filter Bar -->
+  <div class="filter-card">
+    <div class="filter-row">
+
+      <div class="search-wrap">
+        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Filter by resource type (e.g. Patient)..."
+          [value]="resourceTypeFilter()"
+          (input)="onResourceType($any($event.target).value)"
+        />
+      </div>
+
+      <!-- Action filter -->
+      <div class="select-wrap">
+        <div class="select-box">
+          <select [value]="actionFilter()" (change)="onAction($any($event.target).value)">
+            <option value="">All Actions</option>
+            <option value="ResourceAccessed">Resource Accessed</option>
+            <option value="ResourceNormalized">Resource Normalized</option>
+            <option value="ResourceDeIdentified">Resource De-Identified</option>
+            <option value="ResourceWritten">Resource Written</option>
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-reset" type="button" (click)="reset()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 .49-3.5"></path>
+          </svg>
+          Reset
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Table Card -->
+  <div class="table-card">
+
+    <div class="table-meta">
+      <span class="entries-info">
+        @if (result().totalCount > 0) {
+          Showing {{ showingFrom() }} to {{ showingTo() }} of {{ result().totalCount }}
+          {{ result().totalCount === 1 ? 'entry' : 'entries' }}
+        } @else if (!loading()) {
+          No entries found
+        } @else {
+          Loading…
+        }
+      </span>
+    </div>
+
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="result().items" class="data-table">
+
+        <ng-container matColumnDef="index">
+          <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
+          <td mat-cell *matCellDef="let r; let i = index" class="col-index">
+            {{ pageIndex() * pageSize() + i + 1 }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="resourceType">
+          <th mat-header-cell *matHeaderCellDef>Resource Type</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-primary">{{ r.resourceType }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="action">
+          <th mat-header-cell *matHeaderCellDef>Action</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="action-badge" [class]="actionClass(r.action)">{{ r.action }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ r.status }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="occurredOnUtc">
+          <th mat-header-cell *matHeaderCellDef>When</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ r.occurredOnUtc | date:'MMM d, h:mm a' }}</span>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row" (click)="viewChain(row)"></tr>
+
+      </table>
+    </div>
+
+    @if (result().totalCount === 0 && !loading()) {
+      <div class="empty-state">
+        <div class="empty-state__icon-wrap">
+          <mat-icon>link</mat-icon>
+        </div>
+        <h3 class="empty-state__title">
+          @if (resourceTypeFilter() || actionFilter() || statusFilter()) {
+            No entries matched your filters
+          } @else {
+            No lineage recorded yet
+          }
+        </h3>
+        <p class="empty-state__sub">
+          @if (resourceTypeFilter() || actionFilter() || statusFilter()) {
+            Try adjusting your search or filters.
+          } @else {
+            Chain-of-custody steps will appear here as pipelines and workflows process resources.
+          }
+        </p>
+      </div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[5, 10, 25, 50]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+        class="table-paginator"
+      ></mat-paginator>
+    }
+
+  </div>
+
+  <!-- Chain drill-down drawer -->
+  @if (selectedEntry(); as entry) {
+    <div
+      class="drawer-backdrop"
+      role="button"
+      tabindex="0"
+      aria-label="Close chain view"
+      (click)="closeChain()"
+      (keydown.enter)="closeChain()"
+      (keydown.space)="closeChain()"
+    ></div>
+    <div class="drawer">
+      <div class="drawer-header">
+        <div>
+          <h3 class="drawer-title">Chain of Custody</h3>
+          <p class="drawer-sub">{{ entry.resourceType }} · {{ entry.sourceResourceId ?? 'unknown id' }}</p>
+        </div>
+        <button class="drawer-close" type="button" (click)="closeChain()" aria-label="Close chain view">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        @if (chainLoading()) {
+          <div class="drawer-loading">Loading chain…</div>
+        } @else if (chain() && chain()!.steps.length > 0) {
+          <ol class="chain-list">
+            @for (step of chain()!.steps; track $index) {
+              <li class="chain-step">
+                <span class="chain-dot" [class]="actionClass(step.action)"></span>
+                <div class="chain-body">
+                  <span class="chain-action">{{ step.action }}</span>
+                  <span class="chain-meta">{{ step.status }} · {{ step.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</span>
+                </div>
+              </li>
+            }
+          </ol>
+        } @else {
+          <div class="drawer-loading">No chain steps found for this resource.</div>
+        }
+      </div>
+    </div>
+  }
+
+</div>

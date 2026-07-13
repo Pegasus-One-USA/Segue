@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Persistence;
 
 namespace FHIRBridge.Infrastructure.Governance;
 
@@ -43,6 +44,33 @@ public sealed class InMemoryLineageStore : ILineageStore, ILineageQueryService, 
     {
         var steps = await QueryAsync(query, cancellationToken);
         return new ResourceLineageChain(query.SourceResourceId, steps);
+    }
+
+    public Task<PagedResult<ResourceLineageRecord>> GetPagedAsync(
+        LineageListFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            var query = _records
+                .Where(r => filter.PipelineRunId is null || r.PipelineRunId == filter.PipelineRunId)
+                .Where(r => filter.ResourceType is null || string.Equals(r.ResourceType, filter.ResourceType, StringComparison.OrdinalIgnoreCase))
+                .Where(r => filter.Action is null || string.Equals(r.Action, filter.Action, StringComparison.OrdinalIgnoreCase))
+                .Where(r => filter.Status is null || string.Equals(r.Status, filter.Status, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(r => r.OccurredOnUtc)
+                .ToList();
+
+            var take = Math.Clamp(pageSize, 1, 200);
+            var skip = Math.Max(0, (page - 1) * take);
+
+            return Task.FromResult(new PagedResult<ResourceLineageRecord>(
+                query.Skip(skip).Take(take).ToList(),
+                query.Count,
+                page,
+                take));
+        }
     }
 
     public Task<int> PurgeOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken)

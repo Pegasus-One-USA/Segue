@@ -22,6 +22,10 @@ public abstract class SourceApplicationStrategyBase : ISourceApplicationStrategy
     public virtual Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         Task.FromResult<string?>(null);
 
+    /// <summary>No resolved-base-url override by default; interactive strategies override to expose it.</summary>
+    public virtual Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        Task.FromResult<string?>(null);
+
     public SourceApplicationValidationResult Validate(FhirSourceConfiguration source)
     {
         ArgumentNullException.ThrowIfNull(source);

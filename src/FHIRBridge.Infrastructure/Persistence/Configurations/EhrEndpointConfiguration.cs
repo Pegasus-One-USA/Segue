@@ -18,8 +18,10 @@ public sealed class EhrEndpointConfiguration : IEntityTypeConfiguration<EhrEndpo
         builder.Property(x => x.FormatType).HasMaxLength(20).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
 
-        // Unique per vendor, not globally — different vendors could coincidentally reuse an id scheme.
-        builder.HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique();
+        // Unique per vendor, not globally — different vendors could coincidentally reuse an id scheme. Filtered to
+        // non-deleted rows so a re-added endpoint can reuse the same (Vendor, VendorEndpointId) as one a user
+        // soft-deleted earlier — otherwise the deleted row's index entry would permanently block that pair.
+        builder.HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique().HasFilter("[IsDeleted] = 0");
         builder.HasIndex(x => x.Name);
 
         // Rows are provisioned at runtime by vendor-specific IEhrEndpointDirectorySeeder implementations

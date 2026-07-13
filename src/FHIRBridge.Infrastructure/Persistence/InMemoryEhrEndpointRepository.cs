@@ -1,0 +1,43 @@
+using System.Collections.Concurrent;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Domain.Entities;
+
+namespace FHIRBridge.Infrastructure.Persistence;
+
+/// <summary>
+/// Used when no database connection string is configured (dev only). IEhrEndpointDirectorySeeder implementations
+/// only run against a real database (see DependencyInjection), so this only ever holds rows added by hand.
+/// </summary>
+public sealed class InMemoryEhrEndpointRepository : IEhrEndpointRepository
+{
+    private readonly ConcurrentDictionary<Guid, EhrEndpoint> _store = new();
+
+    public Task<IReadOnlyList<EhrEndpoint>> GetAllAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<EhrEndpoint>>(
+            _store.Values.Where(x => !x.IsDeleted).OrderBy(x => x.Name).ToArray());
+
+    public Task<EhrEndpoint?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        _store.TryGetValue(id, out var endpoint);
+        return Task.FromResult(endpoint is not null && !endpoint.IsDeleted ? endpoint : null);
+    }
+
+    public Task AddAsync(EhrEndpoint endpoint, CancellationToken cancellationToken)
+    {
+        _store[endpoint.Id] = endpoint;
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(EhrEndpoint endpoint, CancellationToken cancellationToken)
+    {
+        _store[endpoint.Id] = endpoint;
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(EhrEndpoint endpoint, CancellationToken cancellationToken)
+    {
+        endpoint.ApplyDeleted("system", DateTime.UtcNow);
+        _store[endpoint.Id] = endpoint;
+        return Task.CompletedTask;
+    }
+}

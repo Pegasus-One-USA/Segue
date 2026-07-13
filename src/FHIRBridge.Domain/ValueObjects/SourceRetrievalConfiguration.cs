@@ -24,7 +24,11 @@ public sealed class SourceRetrievalConfiguration
         string? retryPolicy = null,
         int? timeoutSeconds = null,
         int? maxRecordsPerRun = null,
-        DateTime? lastSuccessfulSyncUtc = null)
+        DateTime? lastSuccessfulSyncUtc = null,
+        string? exportScope = null,
+        string? groupId = null,
+        string[]? patientIds = null,
+        string? outputFormat = null)
     {
         RetrievalMethod = retrievalMethod;
         ResourceTypes = resourceTypes ?? [];
@@ -38,6 +42,10 @@ public sealed class SourceRetrievalConfiguration
         TimeoutSeconds = timeoutSeconds;
         MaxRecordsPerRun = maxRecordsPerRun;
         LastSuccessfulSyncUtc = lastSuccessfulSyncUtc;
+        ExportScope = exportScope;
+        GroupId = groupId;
+        PatientIds = patientIds ?? [];
+        OutputFormat = outputFormat;
     }
 
     public string RetrievalMethod { get; private set; } = default!;
@@ -52,6 +60,19 @@ public sealed class SourceRetrievalConfiguration
     public int? TimeoutSeconds { get; private set; }
     public int? MaxRecordsPerRun { get; private set; }
 
+    // ── Bulk Data $export settings (RetrievalMethod == "bulk-export" only) ──────────────────────────
+    /// <summary>Which $export variant to run: <c>system</c>, <c>patient</c>, or <c>group</c>. Null on non-bulk methods.</summary>
+    public string? ExportScope { get; private set; }
+
+    /// <summary>The Epic Group/registry FHIR id for a group-scoped export. Required when <see cref="ExportScope"/> is <c>group</c>.</summary>
+    public string? GroupId { get; private set; }
+
+    /// <summary>Patient FHIR ids to narrow a patient-scoped export (POST <c>Patient/$export</c> with a <c>patient</c> Parameters list). Empty = all patients.</summary>
+    public string[] PatientIds { get; private set; } = [];
+
+    /// <summary>Requested bulk output format, e.g. <c>application/fhir+ndjson</c>. Null lets the server pick its default.</summary>
+    public string? OutputFormat { get; private set; }
+
     /// <summary>UTC timestamp of the last run that completed successfully — the fallback incremental cursor when the
     /// connector doesn't expose its own resume token. Advanced only by <see cref="Entities.SourceConnection.RecordRetrievalSync"/>.</summary>
     public DateTime? LastSuccessfulSyncUtc { get; private set; }
@@ -59,5 +80,6 @@ public sealed class SourceRetrievalConfiguration
     /// <summary>Returns a copy with the sync cursor advanced; all other settings are carried over unchanged.</summary>
     public SourceRetrievalConfiguration WithLastSuccessfulSync(DateTime syncedAtUtc) => new(
         RetrievalMethod, ResourceTypes, SearchCriteria, IncrementalSyncEnabled, PageSize, SortOrder,
-        IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun, syncedAtUtc);
+        IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun, syncedAtUtc,
+        ExportScope, GroupId, PatientIds, OutputFormat);
 }

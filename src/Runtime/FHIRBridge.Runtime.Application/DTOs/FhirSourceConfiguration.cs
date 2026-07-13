@@ -31,4 +31,19 @@ public sealed record FhirSourceConfiguration(
     // enforced by SourceNodeExecutor around each SearchAsync call. Null means the connector's own global
     // retry/timeout defaults apply, unchanged — every source that doesn't set these behaves exactly as before.
     string? RetryPolicy = null,
-    int? TimeoutSeconds = null);
+    int? TimeoutSeconds = null,
+    // Backend System bulk-export retrieval config, when the referenced SourceConnection selected the "bulk-export"
+    // method. RetrievalMethod == "bulk-export" makes the source node executor extract via a FHIR Bulk Data $export
+    // (kick off → poll → NDJSON) instead of a paged search. Null on every other source — unchanged search behavior.
+    string? RetrievalMethod = null,
+    string? ExportScope = null,
+    string? GroupId = null,
+    IReadOnlyCollection<string>? PatientIds = null,
+    string? OutputFormat = null,
+    DateTimeOffset? Since = null,
+    // Disambiguates which stored interactive OAuth session (SmartAuthorizationCodeTokenProvider keys its token
+    // cache per source connection + patient) this run should use, when more than one patient has ever launched
+    // against the same interactive (Standalone/EhrLaunch/Patient) source connection. Null means "whichever session
+    // logged in most recently" (the pre-existing, single-slot behavior) — every caller that doesn't set this
+    // behaves exactly as before.
+    string? TargetPatientId = null);

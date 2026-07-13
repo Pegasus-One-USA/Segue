@@ -53,6 +53,12 @@ export const PERMISSIONS_ENDPOINTS = {
   catalog: `${API_V1_BASE}/permissions/catalog`,
 };
 
+// ─── EHR Endpoints (EhrEndpointsController — api/v1/ehr-endpoints) ─────────────
+export const EHR_ENDPOINTS_ENDPOINTS = {
+  list: `${API_V1_BASE}/ehr-endpoints`,
+  byId: (id: string) => `${API_V1_BASE}/ehr-endpoints/${id}`,
+};
+
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
 export const DESTINATION_ENDPOINTS = {
   schemaPreview: `${API_V1_BASE}/destinations/schema-preview`,
@@ -81,6 +87,22 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   list:      `${API_V1_BASE}/workflow-runs`,
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
+};
+
+// ─── Governance: user activity (UserActivityLogsController — api/v1/user-activity-logs) ────
+export const USER_ACTIVITY_LOGS_ENDPOINTS = {
+  list: `${API_V1_BASE}/user-activity-logs`,
+};
+
+// ─── Governance: operational/pipeline audit logs (OperationalAuditLogsController — api/v1/audit-logs) ────
+export const OPERATIONAL_LOGS_ENDPOINTS = {
+  list: `${API_V1_BASE}/audit-logs/paged`,
+};
+
+// ─── Governance: resource lineage / chain of custody (LineageController — api/v1/lineage) ────
+export const LINEAGE_ENDPOINTS = {
+  list:  `${API_V1_BASE}/lineage/entries`,
+  chain: `${API_V1_BASE}/lineage`,
 };
 
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────

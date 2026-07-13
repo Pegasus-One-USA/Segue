@@ -168,8 +168,8 @@
         after the user authorizes.
       </p>
       <div class="code-box">Epic &rarr; GET https://fhirbridge.com/launch?iss=&#123;issuer&#125;&amp;launch=&#123;token&#125;
-FHIRBridge &rarr; GET &#123;authorize&#125;?response_type=code&amp;client_id=&#123;clientId&#125;&amp;redirect_uri=https://fhirbridge.com/oauth/callback&amp;scope=&#123;scopes&#125;&amp;state=&#123;state&#125;&amp;aud=&#123;issuer&#125;&amp;launch=&#123;token&#125;&amp;code_challenge=&#123;S256&#125;
-Epic &rarr; GET https://fhirbridge.com/oauth/callback?code=&#123;code&#125;&amp;state=&#123;state&#125;
+FHIRBridge &rarr; GET &#123;authorize&#125;?response_type=code&amp;client_id=&#123;clientId&#125;&amp;redirect_uri=&#123;redirectUri&#125;&amp;scope=&#123;scopes&#125;&amp;state=&#123;state&#125;&amp;aud=&#123;issuer&#125;&amp;launch=&#123;token&#125;&amp;code_challenge=&#123;S256&#125;
+Epic &rarr; GET &#123;redirectUri&#125;?code=&#123;code&#125;&amp;state=&#123;state&#125;
 FHIRBridge &rarr; POST &#123;token&#125; code=&#123;code&#125; &amp; code_verifier=&#123;verifier&#125;</div>
     </div>
   </div>

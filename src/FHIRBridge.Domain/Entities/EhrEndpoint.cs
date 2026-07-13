@@ -27,6 +27,16 @@ public sealed class EhrEndpoint : AuditableChildEntity<Guid>
         Status = status;
     }
 
+    public void Update(SourceSystemType vendor, string vendorEndpointId, string name, string fhirBaseUrl, string formatType, string status)
+    {
+        Vendor = vendor;
+        VendorEndpointId = vendorEndpointId;
+        Name = name;
+        FhirBaseUrl = fhirBaseUrl;
+        FormatType = formatType;
+        Status = status;
+    }
+
     /// <summary>Which EHR vendor's directory this row came from (the vendor axis — same enum SourceConnection uses).</summary>
     public SourceSystemType Vendor { get; private set; }
 

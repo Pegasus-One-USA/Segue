@@ -12,21 +12,37 @@
         <input
           type="search"
           class="search-input"
-          placeholder="Search activity messages..."
+          placeholder="Search by user or activity..."
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
       </div>
 
-      <!-- Severity filter -->
+      <!-- Category filter -->
       <div class="select-wrap">
         <div class="select-box">
-          <select [value]="severityFilter()" (change)="onSeverity($any($event.target).value)">
-            <option value="">All Severities</option>
-            <option value="success">Success</option>
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="error">Error</option>
+          <select [value]="categoryFilter()" (change)="onCategory($any($event.target).value)">
+            <option value="">All Categories</option>
+            <option value="Authentication">Authentication</option>
+            <option value="Authorization">Authorization</option>
+            <option value="Configuration">Configuration</option>
+            <option value="DataAccess">Data Access</option>
+            <option value="Administration">Administration</option>
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Status filter -->
+      <div class="select-wrap">
+        <div class="select-box">
+          <select [value]="statusFilter()" (change)="onStatus($any($event.target).value)">
+            <option value="">All Statuses</option>
+            <option value="Success">Success</option>
+            <option value="Failed">Failed</option>
+            <option value="Denied">Denied</option>
           </select>
           <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -52,46 +68,59 @@
 
     <div class="table-meta">
       <span class="entries-info">
-        @if (filtered().length > 0) {
-          Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
-          {{ filtered().length === 1 ? 'entry' : 'entries' }}
-        } @else {
+        @if (result().totalCount > 0) {
+          Showing {{ showingFrom() }} to {{ showingTo() }} of {{ result().totalCount }}
+          {{ result().totalCount === 1 ? 'entry' : 'entries' }}
+        } @else if (!loading()) {
           No entries found
+        } @else {
+          Loading…
         }
       </span>
     </div>
 
     <div class="table-wrapper">
-      <table mat-table [dataSource]="paginated()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="index">
           <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
-          <td mat-cell *matCellDef="let e; let i = index" class="col-index">
+          <td mat-cell *matCellDef="let r; let i = index" class="col-index">
             {{ pageIndex() * pageSize() + i + 1 }}
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="severity">
-          <th mat-header-cell *matHeaderCellDef class="col-severity">Severity</th>
-          <td mat-cell *matCellDef="let e">
-            <span class="sev-badge" [class]="'sev-' + e.severity">
-              <span class="sev-icon">{{ severityIcon(e.severity) }}</span>
-              {{ severityLabel(e.severity) }}
-            </span>
+        <ng-container matColumnDef="category">
+          <th mat-header-cell *matHeaderCellDef>Category</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ r.category }}</span>
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="message">
-          <th mat-header-cell *matHeaderCellDef>Message</th>
-          <td mat-cell *matCellDef="let e">
-            <span class="cell-message">{{ e.message }}</span>
+        <ng-container matColumnDef="activity">
+          <th mat-header-cell *matHeaderCellDef>Activity</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-primary">{{ r.activity }}</span>
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="timestamp">
-          <th mat-header-cell *matHeaderCellDef>Timestamp</th>
-          <td mat-cell *matCellDef="let e">
-            <span class="cell-muted">{{ e.timestamp | date:'MMM d, h:mm a' }}</span>
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class]="statusClass(r.status)">{{ r.status }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="user">
+          <th mat-header-cell *matHeaderCellDef>User</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ userLabel(r) }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="occurredOnUtc">
+          <th mat-header-cell *matHeaderCellDef>When</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ r.occurredOnUtc | date:'MMM d, h:mm a' }}</span>
           </td>
         </ng-container>
 
@@ -101,31 +130,31 @@
       </table>
     </div>
 
-    @if (filtered().length === 0) {
+    @if (result().totalCount === 0 && !loading()) {
       <div class="empty-state">
         <div class="empty-state__icon-wrap">
           <mat-icon>feed</mat-icon>
         </div>
         <h3 class="empty-state__title">
-          @if (searchQuery() || severityFilter()) {
+          @if (searchQuery() || categoryFilter() || statusFilter()) {
             No events matched your filters
           } @else {
             No activity yet
           }
         </h3>
         <p class="empty-state__sub">
-          @if (searchQuery() || severityFilter()) {
+          @if (searchQuery() || categoryFilter() || statusFilter()) {
             Try adjusting your search or filters.
           } @else {
-            Activity events will appear here as pipelines run.
+            Activity events will appear here as users interact with the portal.
           }
         </p>
       </div>
     }
 
-    @if (filtered().length > pageSize()) {
+    @if (result().totalCount > pageSize()) {
       <mat-paginator
-        [length]="filtered().length"
+        [length]="result().totalCount"
         [pageSize]="pageSize()"
         [pageIndex]="pageIndex()"
         [pageSizeOptions]="[5, 10, 25, 50]"

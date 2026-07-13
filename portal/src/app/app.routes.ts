@@ -84,6 +84,17 @@ export const routes: Routes = [
           import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES),
       },
 
+      // EHR Endpoints directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      {
+        path: 'ehr-endpoints',
+        canActivate: [permissionGuard],
+        data: { permissions: ['configuration.write'] },
+        loadComponent: () =>
+          import('./ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component').then(
+            m => m.EhrEndpointListComponent
+          ),
+      },
+
       // User Account pages
       {
         path: 'profile',
@@ -133,13 +144,38 @@ export const routes: Routes = [
           ),
       },
 
-      // Activity feed list
+      // ── Governance (permission-gated; SuperAdmin / GlobalAdmin fall through) ──
+
+      // Activity feed list (UserActivityAuditLog — who did what, when, from where)
       {
         path: 'activity',
-        canActivate: [authGuard],
+        canActivate: [permissionGuard],
+        data: { permissions: ['auditlogs.read'] },
         loadComponent: () =>
           import('./activity/pages/activity-list/activity-list.component').then(
             m => m.ActivityListComponent
+          ),
+      },
+
+      // Operational logs (OperationalAuditLog — pipeline/system events)
+      {
+        path: 'operational-logs',
+        canActivate: [permissionGuard],
+        data: { permissions: ['auditlogs.read'] },
+        loadComponent: () =>
+          import('./operational-logs/pages/operational-logs-list/operational-logs-list.component').then(
+            m => m.OperationalLogsListComponent
+          ),
+      },
+
+      // Lineage (ResourceLineageEntry — PHI-free chain of custody)
+      {
+        path: 'lineage',
+        canActivate: [permissionGuard],
+        data: { permissions: ['auditlogs.read'] },
+        loadComponent: () =>
+          import('./lineage/pages/lineage-list/lineage-list.component').then(
+            m => m.LineageListComponent
           ),
       },
 

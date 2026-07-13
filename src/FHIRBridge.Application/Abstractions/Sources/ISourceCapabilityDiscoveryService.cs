@@ -22,8 +22,12 @@ public interface ISourceCapabilityDiscoveryService
     /// Fetches the source's public SMART discovery document (<c>{baseUrl}/.well-known/smart-configuration</c>) and
     /// returns its advertised OAuth endpoints + capabilities. Unlike <see cref="DiscoverAsync"/> this is not
     /// persisted — it is read on demand to configure an interactive authorization-code connection.
+    /// <paramref name="overrideBaseUrl"/>, when set, is fetched from instead of the source connection's own
+    /// configured base URL — used when a launch targets a specific hospital/organization endpoint (from the
+    /// <c>EhrEndpoints</c> directory) rather than the connection's default.
     /// </summary>
     Task<SmartConfigurationDto> DiscoverSmartConfigurationAsync(
         Guid sourceConnectionId,
+        string? overrideBaseUrl,
         CancellationToken cancellationToken);
 }

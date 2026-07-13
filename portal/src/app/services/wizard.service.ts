@@ -81,7 +81,7 @@ export class WizardService {
   readonly clientId     = signal('');
   readonly authMethod   = signal<'secret' | 'jwt'>('secret');
   readonly epicAudience = signal('provider-ehr-launch');
-  readonly redirectUri  = signal('https://fhirbridge.com/oauth/callback');
+  readonly redirectUri  = signal('http://localhost:5000/api/v1/oauth/callback');
   readonly launchUrlWiz = signal('https://fhirbridge.com/launch');
   readonly isEditing    = computed(() => !!this.store.editingNodeId());
 
@@ -132,7 +132,7 @@ export class WizardService {
     this.clientId.set(f['Client ID'] ?? '');
     this.authMethod.set(((f['Auth method'] as string) || 'secret') as 'secret' | 'jwt');
     this.epicAudience.set(f['Epic audience'] || f['App key'] || 'provider-ehr-launch');
-    this.redirectUri.set(f['Redirect URI'] ?? 'https://fhirbridge.com/oauth/callback');
+    this.redirectUri.set(f['Redirect URI'] ?? 'http://localhost:5000/api/v1/oauth/callback');
     this.launchUrlWiz.set(f['Launch URL'] ?? 'https://fhirbridge.com/launch');
     this.trustedIssuers.set(f['Trusted issuers'] ?? '');
 

@@ -77,6 +77,9 @@ public sealed class PatientScopedSearchTests
 
         public Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
             Task.FromResult(_patientId);
+
+        public Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+            Task.FromResult<string?>(null);
     }
 
     private sealed class CapturingHandler : HttpMessageHandler

@@ -90,6 +90,7 @@ public static class DependencyInjection
             services.AddSingleton<IPipelineRunRouteExecutionRepository, InMemoryPipelineRunRouteExecutionRepository>();
             services.AddSingleton<IExecutionResourceHistoryRecorder, InMemoryExecutionResourceHistoryRecorder>();
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
+            services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
@@ -122,6 +123,7 @@ public static class DependencyInjection
             // registered in the DB path, same reasoning as IRbacBootstrapper above. Adding a new vendor's directory
             // is registering one more IEhrEndpointDirectorySeeder here; Program.cs runs every registered one.
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
+            services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();

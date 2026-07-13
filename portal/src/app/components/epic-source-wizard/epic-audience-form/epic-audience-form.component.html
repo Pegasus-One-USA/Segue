@@ -429,7 +429,7 @@
                   <label class="eaf-label" for="eaf-callbackUrl">{{ audienceConfig().redirectLabel || 'Redirect URI' }} <span class="eaf-req">*</span></label>
                   <div class="eaf-input-row">
                     <input id="eaf-callbackUrl" class="eaf-input" type="url" formControlName="callbackUrl"
-                           placeholder="https://fhirbridge.com/oauth/callback" />
+                           placeholder="http://localhost:5000/api/v1/oauth/callback" />
                     <button class="eaf-discover-btn" type="button" (click)="copyRedirectUri()">⧉ Copy</button>
                   </div>
                   @if (form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid) {
@@ -546,28 +546,35 @@
           <span class="eaf-section-num">{{ sectionNumbers().retrievalMethod }}</span>
           <span class="eaf-section-title">Data Retrieval Method</span>
         </div>
-        <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this Backend System connection.</p>
+        @if (audienceConfig().retrievalScope === 'automated') {
+          <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this Backend System connection.</p>
 
-        <div class="eaf-grid">
-          <div class="eaf-field eaf-field--full"
-               [class.eaf-field--error]="form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid">
-            <label class="eaf-label" for="eaf-retrievalMethod">Data Retrieval Method <span class="eaf-req">*</span></label>
-            <div class="eaf-select-wrap">
-              <select id="eaf-retrievalMethod" class="eaf-select" formControlName="retrievalMethod">
-                <option value="" disabled>— Select a method —</option>
-                @for (m of retrievalMethodOptions; track m.value) {
-                  <option [value]="m.value">{{ m.label }}</option>
-                }
-              </select>
+          <div class="eaf-grid">
+            <div class="eaf-field eaf-field--full"
+                 [class.eaf-field--error]="form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid">
+              <label class="eaf-label" for="eaf-retrievalMethod">Data Retrieval Method <span class="eaf-req">*</span></label>
+              <div class="eaf-select-wrap">
+                <select id="eaf-retrievalMethod" class="eaf-select" formControlName="retrievalMethod">
+                  <option value="" disabled>— Select a method —</option>
+                  @for (m of retrievalMethodOptions(); track m.value) {
+                    <option [value]="m.value">{{ m.label }}</option>
+                  }
+                </select>
+              </div>
+              @if (form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid) {
+                <p class="eaf-error-msg">Select a data retrieval method.</p>
+              }
+              @if (retrievalConfig(); as method) {
+                <p class="eaf-hint">{{ method.description }}</p>
+              }
             </div>
-            @if (form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid) {
-              <p class="eaf-error-msg">Select a data retrieval method.</p>
-            }
-            @if (retrievalConfig(); as method) {
-              <p class="eaf-hint">{{ method.description }}</p>
-            }
           </div>
-        </div>
+        } @else {
+          <p class="eaf-section-sub">
+            This connection fetches FHIR resources with a one-time Search (REST) request when the user launches it —
+            no scheduler, since it's user-initiated rather than automated.
+          </p>
+        }
       </div>
 
       @if (retrievalConfig(); as method) {

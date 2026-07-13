@@ -1,7 +1,9 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { KpiMetric } from '../models/kpi-metric.model';
 import { HealthCheck } from '../models/health-check.model';
-import { ActivityEvent } from '../models/activity-event.model';
+import { ActivityEvent, ActivitySeverity } from '../models/activity-event.model';
+import { UserActivityLogsApiService } from '../../activity/services/user-activity-logs-api.service';
+import { UserActivityLog } from '../../activity/models/user-activity-log.model';
 
 const MOCK_KPIS: KpiMetric[] = [
   {
@@ -31,42 +33,48 @@ const MOCK_HEALTH: HealthCheck[] = [
   { id: 'storage',   label: 'Storage',         status: 'degraded', detail: '87% capacity' },
 ];
 
-const MOCK_ACTIVITY: ActivityEvent[] = [
-  {
-    id: 'a1', severity: 'success', timestamp: new Date(Date.now() - 4 * 60000),
-    message: 'Patient-pull pipeline completed — 12,480 records ingested',
-  },
-  {
-    id: 'a2', severity: 'error', timestamp: new Date(Date.now() - 12 * 60000),
-    message: 'Normalize transform failed — connection timeout after 30s',
-  },
-  {
-    id: 'a3', severity: 'info', timestamp: new Date(Date.now() - 60 * 60000),
-    message: 'Epic sandbox endpoint connected by Dev User',
-  },
-  {
-    id: 'a4', severity: 'info', timestamp: new Date(Date.now() - 2 * 60 * 60000),
-    message: 'Consent validation step added to FHIR-export pipeline',
-  },
-  {
-    id: 'a5', severity: 'warning', timestamp: new Date(Date.now() - 3 * 60 * 60000),
-    message: 'Storage degraded — disk usage at 87%, threshold is 80%',
-  },
-  {
-    id: 'a6', severity: 'success', timestamp: new Date(Date.now() - 5 * 60 * 60000),
-    message: 'Scheduled export completed — 5,320 records pushed to warehouse',
-  },
-];
+function toActivityEvent(entry: UserActivityLog): ActivityEvent {
+  return {
+    id: entry.id,
+    message: entry.activity,
+    severity: toSeverity(entry),
+    timestamp: new Date(entry.occurredOnUtc),
+  };
+}
+
+// Status (the operation's outcome) takes priority over severity (the log's own importance level) for coloring —
+// a "Failed"/"Denied" entry should always read as an error regardless of the severity it was logged at.
+function toSeverity(entry: UserActivityLog): ActivitySeverity {
+  if (entry.status === 'Failed' || entry.status === 'Denied') return 'error';
+  if (entry.status === 'Success') return 'success';
+  if (entry.severity === 'Critical') return 'error';
+  if (entry.severity === 'Warning') return 'warning';
+  return 'info';
+}
 
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
+  private readonly activityApi = inject(UserActivityLogsApiService);
+
   readonly kpis          = signal<KpiMetric[]>(MOCK_KPIS);
   readonly health        = signal<HealthCheck[]>(MOCK_HEALTH);
-  readonly activity      = signal<ActivityEvent[]>(MOCK_ACTIVITY);
+  readonly activity      = signal<ActivityEvent[]>([]);
   readonly lastRefreshed = signal<Date>(new Date());
+
+  constructor() {
+    this.loadActivity();
+  }
 
   refresh(): void {
     this.lastRefreshed.set(new Date());
-    // TODO: replace with real HTTP calls
+    this.loadActivity();
+    // TODO: replace KPIs/health with real HTTP calls
+  }
+
+  private loadActivity(): void {
+    this.activityApi.list({ page: 1, pageSize: 6 }).subscribe({
+      next: result => this.activity.set(result.items.map(toActivityEvent)),
+      error: () => this.activity.set([]),
+    });
   }
 }
