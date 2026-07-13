@@ -33,6 +33,17 @@ var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true
 
 app.MapGet("/", () => "HealthApp backend is running.");
 
+// Public — populates the "Login Type" dropdown on the login screen, before any session exists.
+app.MapGet("/api/demo-types", async (HealthAppDbContext db) =>
+{
+    var demoTypes = await db.DemoTypes
+        .OrderBy(t => t.Id)
+        .Select(t => new { t.Id, t.Name })
+        .ToListAsync();
+
+    return Results.Ok(demoTypes);
+});
+
 app.MapPost("/api/login", async (LoginRequest request, HealthAppDbContext db, SessionStore sessions, HttpContext http) =>
 {
     var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);

@@ -1,0 +1,42 @@
+@if (!loggedIn()) {
+  <main class="login-fullscreen">
+    <div class="login-card">
+      <div class="login-card__brand">HealthApp</div>
+      <p class="login-card__subtitle">Sign in to view your health dashboard</p>
+
+      <label class="field">
+        Login Type
+        <select [ngModel]="selectedDemoType()" (ngModelChange)="onDemoTypeChange($event)">
+          @for (type of demoTypes(); track type.id) {
+            <option [value]="type.name">{{ type.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        Email
+        <input type="email" [ngModel]="loginEmail()" (ngModelChange)="loginEmail.set($event)" placeholder="you@example.com" />
+      </label>
+      <label class="field">
+        Password
+        <input type="password" [ngModel]="loginPassword()" (ngModelChange)="loginPassword.set($event)" (keyup.enter)="login()" />
+      </label>
+
+      @if (loginError()) {
+        <p class="error-banner">{{ loginError() }}</p>
+      }
+
+      <button type="button" class="connect-btn" (click)="login()">Log In</button>
+    </div>
+  </main>
+} @else if (selectedDemoType() === 'DemoType2') {
+  <app-launch-provider-in-app
+    [loginTypeLabel]="selectedDemoType()"
+    (logout)="logout()"
+  ></app-launch-provider-in-app>
+} @else {
+  <app-patient-standalone
+    [role]="role()"
+    [loginTypeLabel]="selectedDemoType()"
+    (logout)="logout()"
+  ></app-patient-standalone>
+}

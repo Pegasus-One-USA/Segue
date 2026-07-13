@@ -23,13 +23,43 @@ expected shape.
 ## Layout
 
 ```
-Patient_Standalone_TestApp/
+Demo_TestApp/
   backend/    ASP.NET Core minimal API (port 5500) — own database, auth, and workflow-run logic
   frontend/   Angular mobile-styled app (port 5501, max width 500px) — login, dashboard, hospital picker
 ```
 
 Ports 5500/5501 avoid clashing with FHIRBridge's own services (API 5000,
 portal 4200, Gateway 54649/54650, Docker Compose services).
+
+The frontend also pulls in Angular Material/CDK/animations and Router (the
+latter bootstrapped with no routes — screens are still swapped by signals in
+`app.ts`/`app.html`, not page navigation; Router only exists so
+`ActivatedRoute` resolves real query params for the `DemoType2` screen).
+
+`frontend/src/app` is organized so each Login Type is fully self-contained —
+its own component, template, styles, and (for `DemoType2`) supporting
+model/service/config — under its own folder, segregated by `DemoType` row Id:
+
+```
+src/app/
+  app.ts / app.html / app.scss     Shell: login screen + Login Type dropdown, delegates by selection
+  demo-types/
+    demo-type-1/                   DemoType Id 1 — "Patient_Standalone"
+      patient-standalone.ts/html/scss
+    demo-type-2/                   DemoType Id 2 — "DemoType2"
+      launch-provider-in-app.ts/html/scss
+      core/
+        config/launch.config.ts    (gitignored — see below)
+        mock-data/patient.mock.ts
+        models/patient.model.ts
+        services/patient.service.ts
+```
+
+`styles.scss` holds only what's genuinely shared across the shell and every
+DemoType screen (`.icon-btn`, `.field`, `.error-banner`, `.connect-btn`,
+`.title-group`, `.login-type-badge`) — everything else lives inside the
+DemoType folder that uses it. `DemoType3` has no folder yet since it has no
+dedicated screen; it falls back to `demo-type-1`'s component (see below).
 
 ## Database
 
@@ -43,6 +73,7 @@ on first run (`EnsureCreated`, no migrations) with seed data:
 | `Hospitals` | 5 dummy hospitals, each with a name + `OrganizationId` |
 | `Patients` | `ResourceType`, `ResourceId`, `Payload` (raw FHIR JSON), `RecordCreatedOn` (set once, at first insert), `UpdatedAtUtc` (moves on every re-fetch), plus a persisted column for every demographic field — full/first/middle/last name, gender, legal sex, sex for clinical use, pronouns, marital status, patient status, deceased flag, US Core race/ethnicity/sex, full address, every telecom channel, care-team references. These are populated once at ingestion time (`PatientFieldExtractor`, called from `POST /api/workflow/run`), not re-parsed from JSON on every read. Age and long-form Date of Birth are still computed at read time since they change daily. Seeded with one sample Epic Patient resource. |
 | `WorkflowSettings` | Single row holding the admin-configured Workflow URL |
+| `DemoType` | Options for the login screen's **Login Type** dropdown (`Patient_Standalone`, `DemoType2`, `DemoType3`); the selection determines which post-login component/UI loads and is kept in the browser's `sessionStorage` |
 
 Seeded logins:
 
@@ -56,6 +87,12 @@ To reset to this seed state, drop the database and restart the backend:
 ```sql
 DROP DATABASE HealthAppDb;
 ```
+
+Because the backend uses `EnsureCreated` (no migrations), it only creates
+tables in a brand-new database — it won't add new tables to a `HealthAppDb`
+that already exists from before a schema change. Drop and recreate as above,
+or add the missing table by hand, matching the shape `HasData` seeds in
+`HealthAppDbContext.cs`.
 
 ## Run it
 
@@ -74,6 +111,23 @@ npm start
 
 Open `http://localhost:5501`.
 
+0. The login screen is full-page (not boxed in the phone mockup) and has a
+   **Login Type** dropdown, sourced from the `DemoType` table. The choice
+   only affects the demo's own UI — it isn't sent with the login request:
+   - `Patient_Standalone` loads the mobile phone-mockup view below
+     (`demo-types/demo-type-1`).
+   - `DemoType2` loads **Launch Provider In App**
+     (`demo-types/demo-type-2`), a full-screen Angular Material view
+     simulating a third-party provider app launched through FHIRBridge. With
+     no `?workflowRunId=` in the URL it shows mock patient data; reached via
+     a real EHR launch redirect (`?iss=...&launch=...`) it hands off to
+     FHIRBridge's `/api/v1/oauth/launch/{context}` endpoint instead. Needs
+     `demo-types/demo-type-2/core/config/launch.config.ts` (gitignored —
+     copy the `PROVIDER_LAUNCH_CONTEXT` token from wherever your FHIRBridge
+     instance minted it; this demo won't have a working launch flow without
+     it, though mock-data mode works with a placeholder).
+   - `DemoType3` currently falls back to `demo-type-1`'s mobile view — no
+     dedicated screen/folder yet.
 1. Log in as `admin@healthapp.local` / `Admin@123`, tap the gear icon, and set
    the **Workflow URL** to an endpoint that returns:
    ```json
@@ -91,6 +145,7 @@ Open `http://localhost:5501`.
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
+| `GET /api/demo-types` | — | List `DemoType` rows for the login screen's Login Type dropdown |
 | `POST /api/login` | — | Local login against `Users` table, sets an HttpOnly session cookie |
 | `POST /api/logout` | session | Clears the session |
 | `GET /api/hospitals` | session | List hospitals for the picker |

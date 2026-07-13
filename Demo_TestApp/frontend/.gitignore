@@ -41,3 +41,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Local secrets — the FHIRBridge launch-context token is a credential, not a checked-in constant.
+src/app/demo-types/demo-type-2/core/config/launch.config.ts

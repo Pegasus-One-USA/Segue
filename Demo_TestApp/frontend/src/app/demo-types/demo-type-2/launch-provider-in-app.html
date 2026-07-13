@@ -1,0 +1,195 @@
+<div class="fullscreen-shell">
+  <header class="fullscreen-shell__topbar">
+    <div class="title-group">
+      <span class="fullscreen-shell__title">HealthApp</span>
+      <span class="login-type-badge">{{ loginTypeLabel() }}</span>
+    </div>
+    <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+    </button>
+  </header>
+
+<div class="launch-page">
+  <header class="page-header">
+    <h1>Launch Provider In App</h1>
+    <p class="subtitle">This page simulates a third-party provider application launched through FHIRBridge.</p>
+
+    <mat-chip-set class="status-chips" aria-label="Connection status">
+      <mat-chip class="status-chip status-chip--connected">
+        <mat-icon class="status-dot">circle</mat-icon>
+        Connected via FHIRBridge
+      </mat-chip>
+      <mat-chip class="status-chip">Environment: Epic Sandbox</mat-chip>
+      <mat-chip class="status-chip">Launch Type: Provider Launch</mat-chip>
+    </mat-chip-set>
+  </header>
+
+  <section class="patient-section">
+    @if (isPatientLoading()) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+      </div>
+    } @else if (patient(); as p) {
+      <div class="patient-cards-grid">
+        <mat-card class="patient-card" appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>person</mat-icon>
+            <mat-card-title>Patient Profile</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="field-row">
+              <span class="field-label">Full Name</span>
+              <span class="field-value">{{ displayValue(p.fullName) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">First Name</span>
+              <span class="field-value">{{ displayValue(p.firstName) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Last Name</span>
+              <span class="field-value">{{ displayValue(p.lastName) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Gender</span>
+              <span class="field-value">{{ displayValue(p.gender) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Legal Sex</span>
+              <span class="field-value">{{ displayValue(p.legalSex) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Sex for Clinical Use</span>
+              <span class="field-value">{{ displayValue(p.sexForClinicalUse) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Pronouns</span>
+              <span class="field-value">{{ displayValue(p.pronouns) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Date of Birth</span>
+              <span class="field-value">{{ p.dateOfBirth ? (p.dateOfBirth | date: 'MMMM d, y') : 'Not Available' }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Age</span>
+              <span class="field-value">{{ age() }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Marital Status</span>
+              <span class="field-value">{{ displayValue(p.maritalStatus) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Status</span>
+              <span class="field-value">{{ p.active ? 'Active' : 'Inactive' }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Deceased</span>
+              <span class="field-value">{{ p.deceased ? 'Yes' : 'No' }}</span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card class="patient-card" appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>call</mat-icon>
+            <mat-card-title>Contact Information</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="field-row">
+              <span class="field-label">Email Address</span>
+              <span class="field-value">{{ displayValue(p.contact.email) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Phone</span>
+              <span class="field-value">{{ displayValue(p.contact.phone) }}</span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card class="patient-card" appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>home</mat-icon>
+            <mat-card-title>Home Address</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="field-row">
+              <span class="field-label">Street Address</span>
+              <span class="field-value">{{ displayValue(p.address.street) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">City</span>
+              <span class="field-value">{{ displayValue(p.address.city) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">State</span>
+              <span class="field-value">
+                {{ p.address.state ? p.address.state + (p.address.stateAbbreviation ? ' (' + p.address.stateAbbreviation + ')' : '') : 'Not Available' }}
+              </span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">ZIP</span>
+              <span class="field-value">{{ displayValue(p.address.zip) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Country</span>
+              <span class="field-value">{{ displayValue(p.address.country) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Address Valid Since</span>
+              <span class="field-value">{{ p.address.validSince ? (p.address.validSince | date: 'MMMM d, y') : 'Not Available' }}</span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card class="patient-card" appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>public</mat-icon>
+            <mat-card-title>Language Preferences</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="field-row">
+              <span class="field-label">Preferred Language</span>
+              <span class="field-value">
+                {{ p.languagePreference.language ? p.languagePreference.language + (p.languagePreference.mode ? ' (' + p.languagePreference.mode + ')' : '') : 'Not Available' }}
+              </span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card class="patient-card" appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>groups</mat-icon>
+            <mat-card-title>Demographics</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="field-row">
+              <span class="field-label">Race</span>
+              <span class="field-value">{{ displayValue(p.demographics.race) }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Ethnicity</span>
+              <span class="field-value">{{ displayValue(p.demographics.ethnicity) }}</span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card class="patient-card" appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>local_hospital</mat-icon>
+            <mat-card-title>Healthcare Organization</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="field-row">
+              <span class="field-label">Managing Organization</span>
+              <span class="field-value">{{ displayValue(p.managingOrganization) }}</span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    }
+  </section>
+</div>
+</div>

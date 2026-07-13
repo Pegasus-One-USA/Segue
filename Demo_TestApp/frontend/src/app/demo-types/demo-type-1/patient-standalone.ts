@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -9,11 +9,6 @@ interface Hospital {
   id: number;
   name: string;
   organizationId: number;
-}
-
-interface LoginResponse {
-  email: string;
-  role: 'Admin' | 'Patient';
 }
 
 interface PatientCard {
@@ -35,12 +30,16 @@ interface PatientCard {
 }
 
 @Component({
-  selector: 'app-root',
+  selector: 'app-patient-standalone',
   imports: [FormsModule],
-  templateUrl: './app.html',
-  styleUrl: './app.scss'
+  templateUrl: './patient-standalone.html',
+  styleUrl: './patient-standalone.scss'
 })
-export class App implements OnInit {
+export class PatientStandaloneComponent {
+  readonly role = input<'Admin' | 'Patient' | null>(null);
+  readonly loginTypeLabel = input('');
+  readonly logout = output<void>();
+
   protected readonly patient = {
     name: 'Sarah Whitfield',
     address: '482 Maple Grove Ave, Denver, CO 80203',
@@ -53,13 +52,6 @@ export class App implements OnInit {
     bloodPressureDiastolic: 76,
     steps: 6842,
   };
-
-  // Login
-  protected readonly loggedIn = signal(false);
-  protected readonly role = signal<'Admin' | 'Patient' | null>(null);
-  protected readonly loginEmail = signal('');
-  protected readonly loginPassword = signal('');
-  protected readonly loginError = signal('');
 
   // Admin settings (workflow URL, persisted server-side)
   protected readonly settingsOpen = signal(false);
@@ -108,55 +100,6 @@ export class App implements OnInit {
   });
 
   constructor(private readonly http: HttpClient) {}
-
-  ngOnInit(): void {
-    // The OAuth "Connect Get Data" flow opens the workflow URL in a new tab; when it redirects back the
-    // Angular app boots from scratch in that tab. Re-check the hb_session cookie (shared across tabs, unlike
-    // this component's signals) so an already-logged-in user lands on the dashboard instead of the login screen.
-    void this.restoreSession();
-  }
-
-  private async restoreSession(): Promise<void> {
-    try {
-      const response = await firstValueFrom(
-        this.http.get<LoginResponse>(`${BACKEND_BASE_URL}/api/session`, { withCredentials: true })
-      );
-      this.role.set(response.role);
-      this.loggedIn.set(true);
-    } catch {
-      // No valid session cookie — stay on the login screen.
-    }
-  }
-
-  async login(): Promise<void> {
-    this.loginError.set('');
-
-    try {
-      const response = await firstValueFrom(
-        this.http.post<LoginResponse>(
-          `${BACKEND_BASE_URL}/api/login`,
-          { email: this.loginEmail(), password: this.loginPassword() },
-          { withCredentials: true }
-        )
-      );
-
-      this.role.set(response.role);
-      this.loggedIn.set(true);
-    } catch {
-      this.loginError.set('Invalid email or password.');
-    }
-  }
-
-  async logout(): Promise<void> {
-    await firstValueFrom(this.http.post(`${BACKEND_BASE_URL}/api/logout`, {}, { withCredentials: true }));
-    this.loggedIn.set(false);
-    this.role.set(null);
-    this.loginEmail.set('');
-    this.loginPassword.set('');
-    this.errorMessage.set('');
-    this.screen.set('home');
-    this.records.set([]);
-  }
 
   async openSettings(): Promise<void> {
     this.settingsError.set('');

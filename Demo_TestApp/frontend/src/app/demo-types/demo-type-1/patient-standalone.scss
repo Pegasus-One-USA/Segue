@@ -61,49 +61,6 @@
   }
 }
 
-.login-screen {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 32px 28px;
-  gap: 4px;
-
-  &__brand {
-    font-size: 26px;
-    font-weight: 800;
-    color: var(--color-primary-dark);
-    text-align: center;
-    margin-bottom: 4px;
-  }
-
-  &__subtitle {
-    font-size: 13px;
-    color: var(--color-muted);
-    text-align: center;
-    margin: 0 0 20px;
-  }
-}
-
-.icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: var(--color-side);
-  color: var(--color-ink-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  flex-shrink: 0;
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-}
-
 .app-screen {
   flex: 1;
   overflow-y: auto;
@@ -186,15 +143,6 @@
   }
 }
 
-.error-banner {
-  background: var(--color-error-soft);
-  color: var(--color-error-strong);
-  border-radius: var(--radius-base);
-  padding: 10px 14px;
-  font-size: 13px;
-  margin: 0;
-}
-
 .link-btn {
   background: none;
   border: none;
@@ -226,33 +174,6 @@
   }
 }
 
-.connect-btn {
-  margin-top: auto;
-  width: 100%;
-  padding: 14px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  border: none;
-  border-radius: var(--radius-pill);
-  font-size: 15px;
-  font-weight: 700;
-  box-shadow: var(--shadow-sm);
-  transition: background var(--transition-base), transform var(--transition-fast);
-
-  &:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &:hover:not(:disabled) {
-    background: var(--color-primary-dark);
-  }
-}
-
 .results-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -269,7 +190,6 @@
     background: var(--color-side);
     border-bottom: 1px solid var(--color-border);
   }
-
 }
 
 .record-list {
@@ -393,30 +313,6 @@
     .hospital-row__badge {
       color: var(--color-primary-dark);
       background: var(--color-primary-mid);
-    }
-  }
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-  margin-bottom: 12px;
-
-  input {
-    padding: 9px 12px;
-    font-size: 14px;
-    border: 1.5px solid var(--color-border-input);
-    border-radius: var(--radius-base);
-    color: var(--color-ink);
-
-    &:focus {
-      outline: none;
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
     }
   }
 }
