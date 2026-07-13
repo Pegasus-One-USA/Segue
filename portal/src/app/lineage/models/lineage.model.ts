@@ -39,3 +39,26 @@ export interface LineageChainQuery {
   resourceType?: string;
   sourceResourceId?: string | null;
 }
+
+/**
+ * Matches the backend's FieldLineageRecord — for one resource, one mapped field's source FHIR path resolved to one
+ * destination column. Empty unless FieldLineage:Enabled was on when the resource was mapped. PHI-free: carries the
+ * field path and transformation, never the resolved value.
+ */
+export interface FieldLineageEntry {
+  pipelineRunId: string;
+  mappingProfileId: string | null;
+  resourceType: string;
+  sourceResourceId: string | null;
+  sourceFieldPath: string;
+  transformationType: string;
+  destinationObject: string | null;
+  destinationColumn: string;
+  occurredOnUtc: string;
+}
+
+export interface FieldLineageQuery {
+  resourceType: string;
+  sourceResourceId: string;
+  pipelineRunId?: string | null;
+}

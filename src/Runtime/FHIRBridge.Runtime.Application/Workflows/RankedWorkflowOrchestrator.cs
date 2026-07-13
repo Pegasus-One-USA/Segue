@@ -66,7 +66,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             DateTimeOffset.UtcNow,
             context.TriggeredBy,
             context.TriggerType,
-            targetNodeId);
+            targetNodeId,
+            workflowDefinitionVersion: workflowDefinition.Version);
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
 

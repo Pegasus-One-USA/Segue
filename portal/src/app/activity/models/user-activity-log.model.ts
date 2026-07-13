@@ -18,6 +18,10 @@ export interface UserActivityLog {
   failureReason: string | null;
   severity: string;
   occurredOnUtc: string;
+  module: string | null;
+  action: string | null;
+  oldValue: string | null;
+  newValue: string | null;
 }
 
 export interface PagedResult<T> {

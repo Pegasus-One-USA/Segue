@@ -68,6 +68,11 @@ public sealed class EfOperationalAuditService : IOperationalAuditService
             query = query.Where(x => x.Status == filter.Status);
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.Severity))
+        {
+            query = query.Where(x => x.Severity == filter.Severity);
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var search = filter.Search;

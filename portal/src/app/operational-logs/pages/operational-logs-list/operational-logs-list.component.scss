@@ -30,3 +30,15 @@
   &.status-failed     { background: var(--color-error-soft); color: #DC2626; }
   &.status-running    { background: var(--color-info-soft); color: #2563EB; }
 }
+
+// Severity badges
+.severity-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+
+  &.severity-debug       { background: var(--color-side); color: var(--color-muted); }
+  &.severity-information { background: var(--color-info-soft); color: var(--color-info-strong); }
+  &.severity-warning     { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &.severity-error       { background: var(--color-error-soft); color: var(--color-error-strong); }
+}

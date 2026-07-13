@@ -1,8 +1,7 @@
-using FHIRBridge.Application.Abstractions.Audit;
+using FHIRBridge.Api.Auditing;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Application.Security;
@@ -21,8 +20,6 @@ public sealed class PipelineRunsController : ControllerBase
     private readonly IPipelineRunDispatcher _pipelineRunDispatcher;
     private readonly IPipelineRunRouteExecutionRepository _routeExecutionRepository;
     private readonly IExecutionResourceHistoryRecorder _resourceHistoryRecorder;
-    private readonly IOperationalAuditService _auditService;
-    private readonly ICurrentUserService _currentUserService;
     private readonly bool _hasSharedTransport;
 
     public PipelineRunsController(
@@ -30,16 +27,12 @@ public sealed class PipelineRunsController : ControllerBase
         IPipelineRunDispatcher pipelineRunDispatcher,
         IPipelineRunRouteExecutionRepository routeExecutionRepository,
         IExecutionResourceHistoryRecorder resourceHistoryRecorder,
-        IOperationalAuditService auditService,
-        ICurrentUserService currentUserService,
         IConfiguration configuration)
     {
         _configuredPipelineService = configuredPipelineService;
         _pipelineRunDispatcher = pipelineRunDispatcher;
         _routeExecutionRepository = routeExecutionRepository;
         _resourceHistoryRecorder = resourceHistoryRecorder;
-        _auditService = auditService;
-        _currentUserService = currentUserService;
 
         // A shared transport (RabbitMQ / Azure Service Bus) lets the Worker pick up long-running jobs; InMemory cannot
         // cross the API→Worker process boundary, so those fall back to synchronous execution.
@@ -147,11 +140,13 @@ public sealed class PipelineRunsController : ControllerBase
 
     /// <summary>
     /// Drill-down into a route execution's per-resource fetch/normalize/map/store history. Returns decrypted PHI
-    /// payloads, so every call is itself audited (who viewed what run's detail, and when) per the HIPAA audit-controls
-    /// requirement for reading PHI — the same append-only <see cref="IOperationalAuditService"/> used elsewhere.
+    /// payloads, so every call is itself audited via <see cref="AuditDataAccessAttribute"/> (who viewed what run's
+    /// detail, and when) per the HIPAA audit-controls requirement for reading PHI — the same mechanism used for the
+    /// Runtime plane's equivalent endpoint (WorkflowEndpoints' /workflow-runs/{runId}/resources).
     /// </summary>
     [HttpGet("route-executions/{routeExecutionId:guid}/resources")]
     [ProducesResponseType(typeof(PagedResult<PipelineRunResourceHistoryDto>), StatusCodes.Status200OK)]
+    [AuditDataAccess("PipelineRun", "ExecutionDetailViewed", "routeExecutionId")]
     public async Task<IActionResult> GetRouteExecutionResources(
         Guid routeExecutionId,
         [FromQuery] int page,
@@ -162,22 +157,6 @@ public sealed class PipelineRunsController : ControllerBase
             routeExecutionId,
             page <= 0 ? 1 : page,
             pageSize <= 0 ? 25 : pageSize,
-            cancellationToken);
-
-        await _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "ExecutionDetailViewed",
-                "Completed",
-                $"Execution history detail viewed for route execution {routeExecutionId}.",
-                result.Items.Count,
-                _currentUserService.CurrentUser.AuditName,
-                null),
             cancellationToken);
 
         return Ok(result);

@@ -34,7 +34,8 @@ export class ActivityListComponent implements OnInit, OnDestroy {
   readonly loading        = signal(false);
   readonly result         = signal<PagedResult<UserActivityLog>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
 
-  readonly displayedCols = ['index', 'category', 'activity', 'status', 'user', 'occurredOnUtc'];
+  readonly displayedCols = ['index', 'category', 'module', 'activity', 'object', 'status', 'user', 'occurredOnUtc', 'expand'];
+  readonly expandedRowId = signal<string | null>(null);
 
   ngOnInit(): void {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
@@ -98,5 +99,17 @@ export class ActivityListComponent implements OnInit, OnDestroy {
 
   userLabel(entry: UserActivityLog): string {
     return entry.userEmail || '—';
+  }
+
+  hasDetail(entry: UserActivityLog): boolean {
+    return !!(entry.action || entry.oldValue || entry.newValue || entry.ipAddress || entry.userAgent || entry.correlationId);
+  }
+
+  isExpanded(entry: UserActivityLog): boolean {
+    return this.expandedRowId() === entry.id;
+  }
+
+  toggleExpand(entry: UserActivityLog): void {
+    this.expandedRowId.set(this.isExpanded(entry) ? null : entry.id);
   }
 }

@@ -35,7 +35,11 @@ public sealed class EfUserActivityAuditService : IUserActivityAuditService
             request.SessionId,
             request.FailureReason,
             request.Severity,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            request.Module,
+            request.Action,
+            request.OldValue,
+            request.NewValue);
 
         // Single tamper-evident hash chain across all activity entries.
         var previousHash = await _dbContext.UserActivityAuditLogs
@@ -115,5 +119,9 @@ public sealed class EfUserActivityAuditService : IUserActivityAuditService
         entity.SessionId,
         entity.FailureReason,
         entity.Severity,
-        entity.OccurredOnUtc);
+        entity.OccurredOnUtc,
+        entity.Module,
+        entity.Action,
+        entity.OldValue,
+        entity.NewValue);
 }

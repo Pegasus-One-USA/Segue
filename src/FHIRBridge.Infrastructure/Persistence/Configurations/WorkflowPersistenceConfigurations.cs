@@ -125,6 +125,7 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.WorkflowDefinitionId).IsRequired();
+        builder.Property(x => x.WorkflowDefinitionVersion).IsRequired();
         builder.Property(x => x.StartedAt).IsRequired();
         builder.Property(x => x.CompletedAt);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();

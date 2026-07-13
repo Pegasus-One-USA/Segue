@@ -18,7 +18,7 @@ public sealed class AcceptInviteViaSsoTests
     private readonly Mock<IUserAccessRepository> _repository = new();
     private readonly Mock<IPasswordHasher> _passwordHasher = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
-    private readonly Mock<IOperationalAuditService> _audit = new();
+    private readonly Mock<IUserActivityAuditService> _activityAudit = new();
     private readonly Mock<IEmailSender> _email = new();
     private readonly Mock<IExternalTokenValidator> _externalTokenValidator = new();
     private readonly Mock<ILocalAuthService> _localAuth = new();
@@ -33,7 +33,7 @@ public sealed class AcceptInviteViaSsoTests
         _repository.Object,
         _passwordHasher.Object,
         _currentUser.Object,
-        _audit.Object,
+        _activityAudit.Object,
         _email.Object,
         _externalTokenValidator.Object,
         _localAuth.Object,

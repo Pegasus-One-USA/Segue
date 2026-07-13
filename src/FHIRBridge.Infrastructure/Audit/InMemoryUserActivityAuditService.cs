@@ -29,7 +29,11 @@ public sealed class InMemoryUserActivityAuditService : IUserActivityAuditService
             request.SessionId,
             request.FailureReason,
             request.Severity,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            request.Module,
+            request.Action,
+            request.OldValue,
+            request.NewValue);
 
         lock (_gate)
         {
@@ -103,5 +107,9 @@ public sealed class InMemoryUserActivityAuditService : IUserActivityAuditService
         entity.SessionId,
         entity.FailureReason,
         entity.Severity,
-        entity.OccurredOnUtc);
+        entity.OccurredOnUtc,
+        entity.Module,
+        entity.Action,
+        entity.OldValue,
+        entity.NewValue);
 }

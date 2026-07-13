@@ -17,7 +17,11 @@ public sealed record RecordUserActivityRequest(
     string? CorrelationId = null,
     string? SessionId = null,
     string? FailureReason = null,
-    string Severity = UserActivitySeverities.Information);
+    string Severity = UserActivitySeverities.Information,
+    string? Module = null,
+    string? Action = null,
+    string? OldValue = null,
+    string? NewValue = null);
 
 /// <summary>Stable category buckets for <see cref="RecordUserActivityRequest.Category"/>.</summary>
 public static class UserActivityCategories

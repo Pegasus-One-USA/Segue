@@ -100,6 +100,12 @@ public static class DependencyInjection
             services.AddSingleton<ILineageStore>(sp => sp.GetRequiredService<InMemoryLineageStore>());
             services.AddSingleton<ILineageQueryService>(sp => sp.GetRequiredService<InMemoryLineageStore>());
             services.AddSingleton<IPurgeableStore>(sp => sp.GetRequiredService<InMemoryLineageStore>());
+
+            // P3: in-memory field-level lineage store/query/purge. Not durable across restarts (dev only).
+            services.AddSingleton<InMemoryFieldLineageStore>();
+            services.AddSingleton<IFieldLineageStore>(sp => sp.GetRequiredService<InMemoryFieldLineageStore>());
+            services.AddSingleton<IFieldLineageQueryService>(sp => sp.GetRequiredService<InMemoryFieldLineageStore>());
+            services.AddSingleton<IPurgeableStore>(sp => sp.GetRequiredService<InMemoryFieldLineageStore>());
         }
         else
         {
@@ -144,7 +150,15 @@ public static class DependencyInjection
             services.AddScoped<ILineageStore>(sp => sp.GetRequiredService<EfLineageStore>());
             services.AddScoped<ILineageQueryService>(sp => sp.GetRequiredService<EfLineageStore>());
             services.AddScoped<IPurgeableStore>(sp => sp.GetRequiredService<EfLineageStore>());
+
+            // P3: durable, EF-backed field-level lineage store/query/purge (FieldLineageEntries table).
+            services.AddScoped<EfFieldLineageStore>();
+            services.AddScoped<IFieldLineageStore>(sp => sp.GetRequiredService<EfFieldLineageStore>());
+            services.AddScoped<IFieldLineageQueryService>(sp => sp.GetRequiredService<EfFieldLineageStore>());
+            services.AddScoped<IPurgeableStore>(sp => sp.GetRequiredService<EfFieldLineageStore>());
         }
+
+        services.Configure<FieldLineageOptions>(configuration.GetSection(FieldLineageOptions.SectionName));
 
         services.AddRuntimeInfrastructure(configuration);
         services.AddMessaging(configuration);

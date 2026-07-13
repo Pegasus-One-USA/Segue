@@ -14,4 +14,5 @@ public sealed record OperationalAuditLogDto(
     int? ResourceCount,
     string? TriggeredBy,
     string? CorrelationId,
-    DateTime OccurredOnUtc);
+    DateTime OccurredOnUtc,
+    string Severity);
