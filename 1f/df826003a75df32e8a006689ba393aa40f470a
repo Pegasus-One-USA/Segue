@@ -1,0 +1,32 @@
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_2b3e33386ac39d::t_d1aa6e5436face 283-290
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_2b3e33386ac39d::t_83d2e2c98718fc 214-217,219-221
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_2b3e33386ac39d::t_1a17ba6bf3a07c 25
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_bed812e70d45e7 83-87,93-94
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_625a67f9fff791 511,523-525,528-531,536,619-622,645,658,662-663
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "1fdf826003a75df32e8a006689ba393aa40f470a",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
