@@ -1,0 +1,70 @@
+portal/src/app/operational-logs/pages/operational-logs-list/operational-logs-list.component.ts
+  s_2b3e33386ac39d::t_2e90541a245c42 73
+  s_2b3e33386ac39d::t_b91f4993419319 115-117
+  s_2b3e33386ac39d::t_501681a100e096 89,95
+  s_2b3e33386ac39d::t_808876e8937fa8 34,40
+  s_2b3e33386ac39d::t_aac18e14222865 118
+portal/src/app/activity/pages/activity-list/activity-list.component.ts
+  s_2b3e33386ac39d::t_9551ad5fd9a3f1 37-38
+  s_2b3e33386ac39d::t_728b7d5d3c3a0f 103-114
+portal/src/app/lineage/pages/lineage-list/lineage-list.component.ts
+  s_2b3e33386ac39d::t_e9465ce7830f3c 98,111-127,133
+  s_2b3e33386ac39d::t_47c5a6a59349d2 9
+  s_2b3e33386ac39d::t_1d29c6941a1e7d 40-41
+portal/src/app/lineage/pages/lineage-list/lineage-list.component.scss
+  s_2b3e33386ac39d::t_c805f37d3a26f0 79-106
+portal/src/app/operational-logs/pages/operational-logs-list/operational-logs-list.component.scss
+  s_2b3e33386ac39d::t_c0c78f2957adf8 41-43
+  s_2b3e33386ac39d::t_f96d1fbaccfdeb 33-40,44
+portal/src/app/activity/pages/activity-list/activity-list.component.scss
+  s_2b3e33386ac39d::t_ca125d9df9ba4b 18-19,21,23
+  s_2b3e33386ac39d::t_98ddb862021d79 16,25
+  s_2b3e33386ac39d::t_5326e3b6e1a37e 13,17,20,22,24,26-39,41
+  s_2b3e33386ac39d::t_8d9435aab53c55 14-15
+  s_2b3e33386ac39d::t_e1e3eddcfad5bd 40
+portal/src/app/operational-logs/models/operational-log.model.ts
+  s_2b3e33386ac39d::t_64801791e862fe 21
+  s_2b3e33386ac39d::t_ceea76d8817114 35
+  s_2b3e33386ac39d::t_918d71d074813f 17,20
+portal/src/app/lineage/pages/lineage-list/lineage-list.component.html
+  s_2b3e33386ac39d::t_ef9eb264569bbb 186-214
+portal/src/app/operational-logs/services/operational-logs-api.service.ts
+  s_2b3e33386ac39d::t_50d608be86cf1c 20
+portal/src/app/lineage/models/lineage.model.ts
+  s_2b3e33386ac39d::t_85245e1e8b52c5 42-64
+portal/src/app/activity/models/user-activity-log.model.ts
+  s_2b3e33386ac39d::t_08993e49ac6d03 21-24
+portal/src/app/lineage/services/lineage-api.service.ts
+  s_2b3e33386ac39d::t_7cf263d08c22fc 48
+  s_2b3e33386ac39d::t_4ac5e7e7142637 40-47
+  s_2b3e33386ac39d::t_72d2ee596457f5 5-13
+portal/src/app/activity/pages/activity-list/activity-list.component.html
+  s_2b3e33386ac39d::t_43925c2cf6e670 83,99-105,113-119,141-183,186
+portal/src/app/operational-logs/pages/operational-logs-list/operational-logs-list.component.html
+  s_2b3e33386ac39d::t_be707073b86a36 92-95
+  s_2b3e33386ac39d::t_ad7332b2dae7bf 96-98
+  s_2b3e33386ac39d::t_41452b36f4e61b 153,160
+  s_2b3e33386ac39d::t_f1f9dfc198867c 37-52
+portal/src/app/core/api-endpoints.ts
+  s_2b3e33386ac39d::t_0bc79015a1582f 98-100
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_2b3e33386ac39d::t_c1f68669f8c1eb 18
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_2b3e33386ac39d::t_b8ced4c3bbd321 38-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "0ab62ae12e4901e35f64c7dbbf8c34f531593f53",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
