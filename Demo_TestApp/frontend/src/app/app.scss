@@ -16,12 +16,19 @@
   box-shadow: var(--shadow-lg);
   padding: 40px 32px;
 
+  &__brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
   &__brand {
     font-size: 28px;
     font-weight: 800;
     color: var(--color-primary-dark);
     text-align: center;
-    margin-bottom: 4px;
   }
 
   &__subtitle {

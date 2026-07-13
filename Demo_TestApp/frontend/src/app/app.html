@@ -1,17 +1,24 @@
 @if (!loggedIn()) {
   <main class="login-fullscreen">
     <div class="login-card">
-      <div class="login-card__brand">HealthApp</div>
+      <div class="login-card__brand-row">
+        <div class="login-card__brand">HealthApp</div>
+        @if (lockedDemoTypeName(); as lockedName) {
+          <span class="login-type-badge">{{ lockedName }}</span>
+        }
+      </div>
       <p class="login-card__subtitle">Sign in to view your health dashboard</p>
 
-      <label class="field">
-        Login Type
-        <select [ngModel]="selectedDemoType()" (ngModelChange)="onDemoTypeChange($event)">
-          @for (type of demoTypes(); track type.id) {
-            <option [value]="type.name">{{ type.name }}</option>
-          }
-        </select>
-      </label>
+      @if (!lockedDemoTypeName()) {
+        <label class="field">
+          Login Type
+          <select [ngModel]="selectedDemoType()" (ngModelChange)="onDemoTypeChange($event)">
+            @for (type of demoTypes(); track type.id) {
+              <option [value]="type.name">{{ type.name }}</option>
+            }
+          </select>
+        </label>
+      }
       <label class="field">
         Email
         <input type="email" [ngModel]="loginEmail()" (ngModelChange)="loginEmail.set($event)" placeholder="you@example.com" />

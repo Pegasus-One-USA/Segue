@@ -1,6 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-standalone';
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
@@ -36,7 +37,11 @@ export class App implements OnInit {
   protected readonly demoTypes = signal<DemoType[]>([]);
   protected readonly selectedDemoType = signal(sessionStorage.getItem(DEMO_TYPE_STORAGE_KEY) ?? '');
 
-  constructor(private readonly http: HttpClient) {}
+  // Set when a `?DemoType=<id>` query param on the login URL matches a real DemoType row — hides the
+  // dropdown and shows the resolved name instead, so a link can pre-select the Login Type for the user.
+  protected readonly lockedDemoTypeName = signal<string | null>(null);
+
+  constructor(private readonly http: HttpClient, private readonly route: ActivatedRoute) {}
 
   ngOnInit(): void {
     // The OAuth "Connect Get Data" flow opens the workflow URL in a new tab; when it redirects back the
@@ -63,7 +68,16 @@ export class App implements OnInit {
       const demoTypes = await firstValueFrom(this.http.get<DemoType[]>(`${BACKEND_BASE_URL}/api/demo-types`));
       this.demoTypes.set(demoTypes);
 
-      if (!this.selectedDemoType() && demoTypes.length > 0) {
+      const requestedParam = this.route.snapshot.queryParamMap.get('DemoType');
+      const requestedId = requestedParam !== null ? Number(requestedParam) : null;
+      const matched = requestedId !== null && Number.isFinite(requestedId)
+        ? demoTypes.find((type) => type.id === requestedId)
+        : undefined;
+
+      if (matched) {
+        this.lockedDemoTypeName.set(matched.name);
+        this.onDemoTypeChange(matched.name);
+      } else if (!this.selectedDemoType() && demoTypes.length > 0) {
         this.onDemoTypeChange(demoTypes[0].name);
       }
     } catch {
