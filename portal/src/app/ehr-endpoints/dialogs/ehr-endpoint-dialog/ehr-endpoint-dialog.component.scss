@@ -19,14 +19,14 @@
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: #EDE9FE;
+    background: var(--color-primary-soft);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 
     mat-icon {
-      color: #5B21B6;
+      color: var(--color-primary);
       font-size: 22px;
       height: 22px;
       width: 22px;
@@ -53,9 +53,9 @@
 }
 
 .dialog-close {
-  color: var(--color-muted) !important;
+  color: var(--color-muted);
   flex-shrink: 0;
-  &:hover { background: var(--color-bg) !important; }
+  &:hover { background: var(--color-bg); }
 }
 
 // ─── Notice ────────────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@
   border: 1px solid var(--color-warning);
   border-radius: var(--radius-base);
   font-size: 13px;
-  color: #92400E;
+  color: var(--color-warning-strong);
   margin-bottom: 12px;
 
   mat-icon {
@@ -80,17 +80,17 @@
   }
 
   &.error-notice {
-    background: #FEE2E2;
-    border-color: #FCA5A5;
-    color: #991B1B;
+    background: var(--color-error-soft);
+    border-color: var(--color-error);
+    color: var(--color-error-strong);
 
-    mat-icon { color: #DC2626; }
+    mat-icon { color: var(--color-error); }
   }
 }
 
 // ─── Content ───────────────────────────────────────────────────────────────────
 mat-dialog-content {
-  padding: 24px !important;
+  padding: 24px;
   overflow-y: auto;
 }
 
@@ -106,8 +106,8 @@ mat-dialog-content {
   ::ng-deep {
     .mat-mdc-form-field-infix {
       min-height: 44px;
-      padding-top: 10px !important;
-      padding-bottom: 10px !important;
+      padding-top: 10px;
+      padding-bottom: 10px;
     }
 
     .mat-mdc-text-field-wrapper {
@@ -115,14 +115,14 @@ mat-dialog-content {
     }
 
     // White background for the select panel dropdown
-    .mat-mdc-select-panel { background: var(--color-surface) !important; }
+    .mat-mdc-select-panel { background: var(--color-surface); }
   }
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
 mat-dialog-actions {
-  padding: 16px 24px !important;
-  margin: 0 !important;
+  padding: 16px 24px;
+  margin: 0;
   border-top: 1px solid var(--color-border);
 }
 
@@ -134,21 +134,21 @@ mat-dialog-actions {
 }
 
 .btn-cancel {
-  border-color: var(--color-border) !important;
-  color: var(--color-ink-2) !important;
+  border-color: var(--color-border);
+  color: var(--color-ink-2);
   border-radius: var(--radius-base);
   font-weight: 500;
   height: 40px;
 
   &:hover {
-    background: var(--color-bg) !important;
-    border-color: var(--color-muted) !important;
+    background: var(--color-bg);
+    border-color: var(--color-muted);
   }
 }
 
 .btn-save {
-  background: var(--color-primary) !important;
-  color: #fff !important;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;
@@ -166,8 +166,8 @@ mat-dialog-actions {
     width: 18px;
   }
 
-  &:hover:not([disabled]) { background: var(--color-primary-dark) !important; }
-  &[disabled] { background: var(--color-muted) !important; opacity: 0.7; }
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
+  &[disabled] { background: var(--color-muted); opacity: 0.7; }
 
-  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0 !important; }
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0; }
 }
