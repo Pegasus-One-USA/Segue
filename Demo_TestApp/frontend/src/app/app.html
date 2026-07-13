@@ -35,11 +35,16 @@
       <button type="button" class="connect-btn" (click)="login()">Log In</button>
     </div>
   </main>
-} @else if (selectedDemoType() === 'DemoType2') {
+} @else if (selectedDemoType() === 'DemoType2' || selectedDemoType() === 'Provider_InApp') {
   <app-launch-provider-in-app
     [loginTypeLabel]="selectedDemoType()"
     (logout)="logout()"
   ></app-launch-provider-in-app>
+} @else if (selectedDemoType() === 'Provider_Standalone') {
+  <app-launch-standalone-provider
+    [loginTypeLabel]="selectedDemoType()"
+    (logout)="logout()"
+  ></app-launch-standalone-provider>
 } @else {
   <app-patient-standalone
     [role]="role()"
