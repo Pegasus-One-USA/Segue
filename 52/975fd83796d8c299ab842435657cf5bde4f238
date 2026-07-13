@@ -1,0 +1,187 @@
+tests/FHIRBridge.UnitTests/Audit/InMemoryOperationalAuditServiceSeverityTests.cs
+  s_2b3e33386ac39d::t_768ded2b1401d2 1-44
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2b3e33386ac39d::t_82c2cf48bb0009 20
+  s_2b3e33386ac39d::t_fd48d75e281930 33-35,87
+  s_2b3e33386ac39d::t_24baf629ae3294 46-48,59-61,72-74,85-86,98-99,111-112,147-148
+  s_2b3e33386ac39d::t_a3b8d2e2f974de 1-2
+  s_2b3e33386ac39d::t_92d9eccdf7e0a8 21-22
+  s_2b3e33386ac39d::t_a425ee923751c9 100
+  s_2b3e33386ac39d::t_a1febaade3f8d3 113
+  s_2b3e33386ac39d::t_f4e6c6c67c3df7 139,156,208,237-241,252,256,275-284,286,291-296,305-337
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_2b3e33386ac39d::t_ff19f4939d3e1f 2
+  s_2b3e33386ac39d::t_5a4afb7fbd650b 12
+  s_2b3e33386ac39d::t_fd6999e2a626a9 52-53,57-59,64-65
+  s_2b3e33386ac39d::t_2dc4444f3f40f6 80-81,110-116,156-202
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  s_2b3e33386ac39d::t_e8d2947b5bcf96 34
+  s_2b3e33386ac39d::t_806c3db48b0f4d 25
+  s_2b3e33386ac39d::t_7ddeb4f66b034d 64-100
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_2b3e33386ac39d::t_c9a9f787d437ff 1
+  s_2b3e33386ac39d::t_c52bc7bf1d1d9d 75,79
+src/FHIRBridge.Infrastructure/Governance/InMemoryFieldLineageStore.cs
+  s_2b3e33386ac39d::t_88d160f810f69b 1-48
+src/FHIRBridge.Application/Abstractions/Governance/FieldLineageOptions.cs
+  s_2b3e33386ac39d::t_79ca5b4af53ea0 1-14
+tests/FHIRBridge.Runtime.UnitTests/Workflows/LineageTrackingWorkflowNodeExecutorTests.cs
+  s_2b3e33386ac39d::t_dc7eac70271295 108-209
+  s_2b3e33386ac39d::t_1d1e6cab29e042 1
+src/FHIRBridge.Infrastructure/Persistence/Configurations/FieldLineageEntryConfiguration.cs
+  s_2b3e33386ac39d::t_43fda82936cba8 1-29
+src/FHIRBridge.Application/DTOs/UserActivityAuditLogDto.cs
+  s_2b3e33386ac39d::t_449b87f69353a1 21-25
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorRetryTests.cs
+  s_2b3e33386ac39d::t_f7f7af9c425937 1-13,15-121
+  s_2b3e33386ac39d::t_7d47e13604a47f 14
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_2b3e33386ac39d::t_9978becae34b5c 1
+  s_2b3e33386ac39d::t_99ff7f0bb83806 27-28,32
+  s_2b3e33386ac39d::t_b604dcf01ef261 68-69,71,145,195,275,355,409
+  s_2b3e33386ac39d::t_37d5c144a6c2ac 23-26
+  s_2b3e33386ac39d::t_c720925428572e 126,171,254,331,384,470
+  s_2b3e33386ac39d::t_3213450d0d6a8f 40,47
+  s_2b3e33386ac39d::t_67e03aac4294a5 119-120,122,124-125,165,169-170,230,248,252-253,307,325,329-330,378,382-383,444,464,468-469
+  s_2b3e33386ac39d::t_bd723e3284b5f1 85,97-98,100,102-104,226,231,303,308,440,445
+  s_2b3e33386ac39d::t_00cfb84c74dde4 144
+  s_2b3e33386ac39d::t_6d5bc3eed22333 146-147
+  s_2b3e33386ac39d::t_f83e2736ee3ecb 164
+  s_2b3e33386ac39d::t_f8c5b1309e6298 166-167
+  s_2b3e33386ac39d::t_fffa4ccd612eeb 194
+  s_2b3e33386ac39d::t_a99375d6fe8adb 196-197
+  s_2b3e33386ac39d::t_49193c64671208 225
+  s_2b3e33386ac39d::t_d03f76d64d91d5 227-228
+  s_2b3e33386ac39d::t_33bb2aceb6f932 232
+  s_2b3e33386ac39d::t_f927afbdfa3469 247
+  s_2b3e33386ac39d::t_a05c13ff6c4197 249-250
+  s_2b3e33386ac39d::t_a401348b83129b 274
+  s_2b3e33386ac39d::t_1ea5de9a1696cb 276-277
+  s_2b3e33386ac39d::t_e97ec643443c58 302
+  s_2b3e33386ac39d::t_1243297872a7e9 304-305
+  s_2b3e33386ac39d::t_f5b88a5fcbdbd2 309
+  s_2b3e33386ac39d::t_be7a9887a8386c 324
+  s_2b3e33386ac39d::t_72e4ae26d87fca 326-327
+  s_2b3e33386ac39d::t_aedc8f70b1b281 354
+  s_2b3e33386ac39d::t_eb2d250ac35a80 356-357
+  s_2b3e33386ac39d::t_5b7d284e6d1874 377
+  s_2b3e33386ac39d::t_fb86d018711481 408
+  s_2b3e33386ac39d::t_2b606c1373076f 410-412
+  s_2b3e33386ac39d::t_93bb6682b36ed8 439
+  s_2b3e33386ac39d::t_41cfbe8775e11d 441-443
+  s_2b3e33386ac39d::t_b63fd08ea1d67d 446
+  s_2b3e33386ac39d::t_a5eb13cc58270b 463
+  s_2b3e33386ac39d::t_416697a9016602 465-466
+  s_2b3e33386ac39d::t_ac3bb2facf7576 210,291,380,406,425,437,461,788-789,791-792,794-796,798-815,818-819
+src/FHIRBridge.Application/Abstractions/Governance/IFieldLineageStore.cs
+  s_2b3e33386ac39d::t_67ecef0a34ac61 1-37
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_2b3e33386ac39d::t_12281b11e194a8 88
+  s_2b3e33386ac39d::t_6c7e91070ead4b 23
+  s_2b3e33386ac39d::t_38f30ab9433bf4 42
+  s_2b3e33386ac39d::t_d1ecab6a89e15d 33
+  s_2b3e33386ac39d::t_f0490522283c28 2
+  s_2b3e33386ac39d::t_6cf2dc41f13469 18
+  s_2b3e33386ac39d::t_06a973aa24554a 128-133,164,196-201,237,278,291,295-297,299-301,317-318,336,341-342,344-346,357-362,402-408,430-436,463-465,467-468,484-486,488-489,503-505,509-510,604-611,613-630
+src/Api/FHIRBridge.Api/Controllers/V1/LineageController.cs
+  s_2b3e33386ac39d::t_0a3966e4408231 20,22,25
+  s_2b3e33386ac39d::t_be04f06216a5f5 64-87
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/LineageTrackingWorkflowNodeExecutor.cs
+  s_2b3e33386ac39d::t_0abe42b8ef3f2d 1,3,5,11-16,19-24,30,32-35,39,50-61,69-70,74-137
+  s_2b3e33386ac39d::t_62725d88830e02 138
+src/FHIRBridge.Infrastructure/Governance/EfFieldLineageStore.cs
+  s_2b3e33386ac39d::t_23412ac9474cf3 1-83
+src/FHIRBridge.Domain/Entities/FieldLineageEntry.cs
+  s_2b3e33386ac39d::t_078eac78560edf 1-51
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/LineageTrackingWorkflowNodeExecutorRegistry.cs
+  s_2b3e33386ac39d::t_1016edc5f4759e 1,10-12,20-21,25
+tests/FHIRBridge.UnitTests/Governance/InMemoryFieldLineageStoreTests.cs
+  s_2b3e33386ac39d::t_21b01eba500bc8 1-50
+src/Worker/FHIRBridge.Worker/ScheduleDispatcherWorker.cs
+  s_2b3e33386ac39d::t_5844f7cf0a73a9 4
+  s_2b3e33386ac39d::t_999f631f3d8924 1,3
+  s_2b3e33386ac39d::t_d344603775a769 50-53,57-66,74-76,79-97
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_2b3e33386ac39d::t_f30382265f3300 33
+  s_2b3e33386ac39d::t_c75c6f92a9f5b2 20-21
+  s_2b3e33386ac39d::t_d0096f133bbeb5 24,29
+  s_2b3e33386ac39d::t_dcfb3279a1a127 110,137,141-148,176,194-200,219-225,259-266,268-285
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorFieldLineageTests.cs
+  s_2b3e33386ac39d::t_7a652c21292419 1-106
+src/Api/FHIRBridge.Api/Controllers/V1/OperationalAuditLogsController.cs
+  s_2b3e33386ac39d::t_9207838c3b20bc 46,52
+src/Api/FHIRBridge.Api/Security/HttpContextCurrentUserService.cs
+  s_2b3e33386ac39d::t_56c255596375cd 19-20,37-43
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_2b3e33386ac39d::t_c3eb701e29bec1 24-26
+src/Api/FHIRBridge.Api/appsettings.json
+  s_2b3e33386ac39d::t_95fde75ba8e356 50-52
+src/FHIRBridge.Application/Abstractions/Audit/IOperationalAuditService.cs
+  s_2b3e33386ac39d::t_8d5688bae0c217 28-29
+src/FHIRBridge.Application/Abstractions/Security/ICurrentUserService.cs
+  s_2b3e33386ac39d::t_3126dbf6e66058 14-19
+src/FHIRBridge.Application/DTOs/OperationalAuditLogDto.cs
+  s_2b3e33386ac39d::t_b578921e051cda 17-18
+src/FHIRBridge.Application/DTOs/RecordOperationalAuditLogRequest.cs
+  s_2b3e33386ac39d::t_4e6eafce633544 15-27
+src/FHIRBridge.Application/DTOs/RecordUserActivityRequest.cs
+  s_2b3e33386ac39d::t_199b3d2574d7f7 20-24
+src/FHIRBridge.Domain/Entities/OperationalAuditLog.cs
+  s_2b3e33386ac39d::t_c0e4bbab9e2469 24-25,41,57
+src/FHIRBridge.Domain/Entities/UserActivityAuditLog.cs
+  s_2b3e33386ac39d::t_ac0c2edaed8bbd 36-45,65-68,88-91,129-132
+src/FHIRBridge.Infrastructure/Audit/EfOperationalAuditService.cs
+  s_2b3e33386ac39d::t_8cb9b7f48bb935 71-75
+src/FHIRBridge.Infrastructure/Audit/EfUserActivityAuditService.cs
+  s_2b3e33386ac39d::t_27623f0b1538ba 38-42,122-126
+src/FHIRBridge.Infrastructure/Audit/InMemoryOperationalAuditService.cs
+  s_2b3e33386ac39d::t_76c3e1add29b6f 30-31,87-91
+src/FHIRBridge.Infrastructure/Audit/InMemoryUserActivityAuditService.cs
+  s_2b3e33386ac39d::t_c53b97528fc1e9 32-36,110-114
+src/FHIRBridge.Infrastructure/Audit/OperationalAuditMapper.cs
+  s_2b3e33386ac39d::t_56ab0bc89829ca 30-31,50-51
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_2b3e33386ac39d::t_7b0714366c2e1f 102-107,151-156,159-160
+src/FHIRBridge.Infrastructure/Persistence/Configurations/OperationalAuditLogConfiguration.cs
+  s_2b3e33386ac39d::t_13528f6edf613b 21,24
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserActivityAuditLogConfiguration.cs
+  s_2b3e33386ac39d::t_1bfb675943e676 28-31,38
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_2b3e33386ac39d::t_c129e789441e58 27
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713140113_AddOperationalAuditLogSeverity.Designer.cs
+  s_2b3e33386ac39d::t_c76a94bf35d8cb 1-2261
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713140113_AddOperationalAuditLogSeverity.cs
+  s_2b3e33386ac39d::t_81b4bc7a7440eb 1-39
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713142805_AddFieldLineageEntries.Designer.cs
+  s_2b3e33386ac39d::t_fb157624ceb39a 1-2315
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713142805_AddFieldLineageEntries.cs
+  s_2b3e33386ac39d::t_e378a5a9f5d849 1-57
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713164114_AddUserActivityAuditLogModuleActionOldNewValue.Designer.cs
+  s_2b3e33386ac39d::t_da06ffc7d59869 1-2333
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260713164114_AddUserActivityAuditLogModuleActionOldNewValue.cs
+  s_2b3e33386ac39d::t_542f6d7d307f24 1-71
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_933a8a7a41c7cc 42,62,78,510-530
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  s_2b3e33386ac39d::t_35ca339590b785 25,34
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_2b3e33386ac39d::t_9f00a3289944de 32,50
+tests/FHIRBridge.UnitTests/Users/AcceptInviteViaSsoTests.cs
+  s_2b3e33386ac39d::t_da26c0f3781699 21,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "52975fd83796d8c299ab842435657cf5bde4f238",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
