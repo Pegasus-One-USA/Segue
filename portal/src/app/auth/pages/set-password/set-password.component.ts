@@ -16,6 +16,7 @@ import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.co
 import { SsoAuthApiService } from '../../services/sso-auth-api.service';
 import { SsoResult } from '../../services/sso.service';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
+import { authErrorMessage } from '../../services/http-error.util';
 
 export type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepted' | 'success';
 
@@ -131,8 +132,10 @@ export class SetPasswordComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this.ssoBusy.set(false);
-        const message = err?.error?.message
-          ?? 'Could not accept the invitation with that identity. Ensure the email matches your invite.';
+        const message = authErrorMessage(
+          err,
+          'Could not accept the invitation with that identity. Ensure the email matches your invite.'
+        );
         this.serverError.set(message);
         this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
       },

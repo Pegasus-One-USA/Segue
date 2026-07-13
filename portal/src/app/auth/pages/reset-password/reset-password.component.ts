@@ -16,6 +16,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../services/auth.service';
 import { PasswordStrengthComponent } from '../../components/password-strength/password-strength.component';
+import { authErrorMessage } from '../../services/http-error.util';
 
 // ── Validators ─────────────────────────────────────────────────────────────────
 
@@ -122,7 +123,7 @@ export class ResetPasswordComponent {
       },
       error: (e) => {
         this.loading.set(false);
-        this.error.set(e?.error?.message ?? 'Reset failed. The link may have expired.');
+        this.error.set(authErrorMessage(e, 'Reset failed. The link may have expired.'));
       },
     });
   }

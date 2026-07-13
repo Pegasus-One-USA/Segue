@@ -15,6 +15,7 @@ import {
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
 } from '../models/auth-request.model';
 import { buildUserFromJwt } from './jwt-user.mapper';
+import { authErrorMessage } from './http-error.util';
 
 const LOCKOUT_MINUTES = 30;
 
@@ -62,7 +63,7 @@ export class AuthService {
         },
         error: (err) => {
           const info = this.security.recordFailedAttempt(req.email);
-          let message = err?.message ?? 'Login failed. Please try again.';
+          let message = authErrorMessage(err, 'Login failed. Please try again.');
 
           if (info.locked) {
             message = `Account locked for ${LOCKOUT_MINUTES} minutes due to too many failed attempts.`;
@@ -100,7 +101,7 @@ export class AuthService {
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
-          this.store.setError(err?.message ?? 'Registration failed. Please try again.');
+          this.store.setError(authErrorMessage(err, 'Registration failed. Please try again.'));
           this.store.setLoading(false);
         },
       })

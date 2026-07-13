@@ -56,7 +56,6 @@
           type="email"
           formControlName="email"
           autocomplete="email"
-          (keydown)="onKeydown($event)"
           aria-required="true"
         />
         @if (fieldError('email', 'required')) {

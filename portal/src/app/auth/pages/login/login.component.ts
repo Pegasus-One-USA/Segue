@@ -20,6 +20,7 @@ import { SsoResult } from '../../services/sso.service';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
 import { AppFooterComponent } from '../../../layout/app-footer/app-footer.component';
 import { BrandingService } from '../../../services/branding.service';
+import { authErrorMessage } from '../../services/http-error.util';
 
 @Component({
   selector: 'app-login',
@@ -74,6 +75,9 @@ export class LoginComponent {
   }
 
   protected onKeydown(e: KeyboardEvent): void {
+    // Autofill / password-manager-triggered keydown events aren't always full native
+    // KeyboardEvents — some lack getModifierState entirely, throwing at runtime otherwise.
+    if (typeof e.getModifierState !== 'function') return;
     this.capsLockOn.set(e.getModifierState('CapsLock'));
   }
 
@@ -103,7 +107,7 @@ export class LoginComponent {
         this.ssoBusy.set(false);
         const message = err?.status === 401
           ? 'No matching account found for this identity. Ask an administrator for an invitation.'
-          : err?.error?.message ?? 'Single sign-on failed. Please try again.';
+          : authErrorMessage(err, 'Single sign-on failed. Please try again.');
         this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
       },
     });

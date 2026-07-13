@@ -50,7 +50,11 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     role: roles.length ? roles[0].name : 'Audit',
     roles,
     permissions,
-    orgId: 'org',
+    // No real multi-tenancy on the backend yet, so there's no org claim to read — '' (not a
+    // fake placeholder) matches ApiUserService's own convention and keeps it falsy, so
+    // BrandingService's `if (orgId && ...)` correctly skips fetching branding for a tenant
+    // that doesn't exist instead of guaranteeing a 404 on every login.
+    orgId: '',
     status: 'active',
     loginType: 'local',
     mustChangePassword: false,

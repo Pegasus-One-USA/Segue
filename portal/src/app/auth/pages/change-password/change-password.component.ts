@@ -18,6 +18,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from '../../services/auth.service';
 import { PasswordStrengthComponent } from '../../components/password-strength/password-strength.component';
+import { authErrorMessage } from '../../services/http-error.util';
 
 // ── Validators ─────────────────────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ export class ChangePasswordComponent {
       },
       error: (e) => {
         this.loading.set(false);
-        this.error.set(e?.error?.message ?? 'Failed to change password. Please check your current password.');
+        this.error.set(authErrorMessage(e, 'Failed to change password. Please check your current password.'));
       },
     });
   }

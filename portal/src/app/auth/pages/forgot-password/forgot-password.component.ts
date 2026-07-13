@@ -9,6 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../services/auth.service';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
+import { authErrorMessage } from '../../services/http-error.util';
 
 @Component({
   selector: 'app-forgot-password',
@@ -64,7 +65,7 @@ export class ForgotPasswordComponent {
       },
       error: (e) => {
         this.loading.set(false);
-        this.error.set(e?.error?.message ?? 'Request failed. Please try again.');
+        this.error.set(authErrorMessage(e, 'Request failed. Please try again.'));
       },
     });
   }
