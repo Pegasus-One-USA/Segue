@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 
 namespace FHIRBridge.Application.Abstractions.Audit;
@@ -10,4 +11,16 @@ namespace FHIRBridge.Application.Abstractions.Audit;
 public interface IUserActivityAuditService
 {
     Task RecordAsync(RecordUserActivityRequest request, CancellationToken cancellationToken);
+
+    Task<PagedResult<UserActivityAuditLogDto>> GetPagedAsync(
+        UserActivityLogFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
 }
+
+public sealed record UserActivityLogFilter(
+    string? Category,
+    string? Status,
+    Guid? UserId,
+    string? Search);

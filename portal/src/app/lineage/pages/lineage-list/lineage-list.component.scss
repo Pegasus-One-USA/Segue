@@ -1,0 +1,78 @@
+@use '../../../_list-page' as *;
+
+// Action badges — colored by pipeline stage, matching the canvas node color coding conventions.
+.action-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  background: var(--color-side); color: var(--color-ink-2);
+
+  &.action-resourceaccessed     { background: var(--color-info-soft); color: #2563EB; }
+  &.action-resourcenormalized   { background: #F3F0FF; color: #7C3AED; }
+  &.action-resourcedeidentified { background: #FFF4E5; color: #D97706; }
+  &.action-resourcewritten      { background: var(--color-success-soft); color: #059669; }
+}
+
+// ── Chain drill-down drawer ─────────────────────────────────────────────────
+.drawer-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 60;
+}
+
+.drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(420px, 100vw);
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.12);
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 20px 24px; border-bottom: 1px solid var(--color-border);
+}
+
+.drawer-title { font-size: 16px; font-weight: 700; color: var(--color-ink); margin: 0 0 4px; }
+.drawer-sub   { font-size: 13px; color: var(--color-muted); margin: 0; }
+
+.drawer-close {
+  border: none; background: transparent; cursor: pointer; color: var(--color-muted);
+  border-radius: var(--radius-base); padding: 4px;
+  &:hover { background: var(--color-side); color: var(--color-ink); }
+}
+
+.drawer-body { padding: 20px 24px; overflow-y: auto; flex: 1 1 auto; }
+
+.drawer-loading { font-size: 13.5px; color: var(--color-muted); text-align: center; padding: 32px 0; }
+
+.chain-list { list-style: none; margin: 0; padding: 0; }
+
+.chain-step {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding-bottom: 20px; position: relative;
+
+  &:not(:last-child)::before {
+    content: ''; position: absolute; left: 5px; top: 16px; bottom: 0;
+    width: 2px; background: var(--color-border);
+  }
+}
+
+.chain-dot {
+  width: 12px; height: 12px; border-radius: 50%; margin-top: 3px; flex-shrink: 0;
+  background: var(--color-muted);
+
+  &.action-resourceaccessed     { background: #2563EB; }
+  &.action-resourcenormalized   { background: #7C3AED; }
+  &.action-resourcedeidentified { background: #D97706; }
+  &.action-resourcewritten      { background: #059669; }
+}
+
+.chain-body { display: flex; flex-direction: column; gap: 2px; }
+
+.chain-action { font-size: 14px; font-weight: 600; color: var(--color-ink); }
+.chain-meta   { font-size: 12.5px; color: var(--color-muted); }

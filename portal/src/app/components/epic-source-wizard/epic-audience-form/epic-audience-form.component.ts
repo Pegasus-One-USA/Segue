@@ -397,7 +397,7 @@ export class EpicAudienceFormComponent implements OnInit {
     // How the app is registered to open within the EHR (EHR-launch audience only) — mirrors Epic's own Hyperspace/
     // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
     launchDisplayMode: ['Embedded'],
-    callbackUrl:       ['https://fhirbridge.com/oauth/callback', [Validators.required, urlValidator]],
+    callbackUrl:       ['http://localhost:5000/api/v1/oauth/callback', [Validators.required, urlValidator]],
     resources:         [[] as string[], Validators.required],
     scopeVersion:      ['v2'],
     appName:           ['FHIRBridge Epic'],

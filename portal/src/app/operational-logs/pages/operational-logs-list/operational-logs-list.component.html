@@ -12,43 +12,27 @@
         <input
           type="search"
           class="search-input"
-          placeholder="Search by user or activity..."
+          placeholder="Search by message or action..."
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
       </div>
 
-      <!-- Category filter -->
-      <div class="select-wrap">
-        <div class="select-box">
-          <select [value]="categoryFilter()" (change)="onCategory($any($event.target).value)">
-            <option value="">All Categories</option>
-            <option value="Authentication">Authentication</option>
-            <option value="Authorization">Authorization</option>
-            <option value="Configuration">Configuration</option>
-            <option value="DataAccess">Data Access</option>
-            <option value="Administration">Administration</option>
-          </select>
-          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
+      <input
+        type="text"
+        class="text-filter"
+        placeholder="Action (e.g. ResourceWritten)"
+        [value]="actionFilter()"
+        (input)="onActionInput($any($event.target).value)"
+      />
 
-      <!-- Status filter -->
-      <div class="select-wrap">
-        <div class="select-box">
-          <select [value]="statusFilter()" (change)="onStatus($any($event.target).value)">
-            <option value="">All Statuses</option>
-            <option value="Success">Success</option>
-            <option value="Failed">Failed</option>
-            <option value="Denied">Denied</option>
-          </select>
-          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
+      <input
+        type="text"
+        class="text-filter"
+        placeholder="Status (e.g. Completed)"
+        [value]="statusFilter()"
+        (input)="onStatusInput($any($event.target).value)"
+      />
 
       <div class="filter-actions">
         <button class="btn-reset" type="button" (click)="reset()">
@@ -89,17 +73,17 @@
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="category">
-          <th mat-header-cell *matHeaderCellDef>Category</th>
+        <ng-container matColumnDef="action">
+          <th mat-header-cell *matHeaderCellDef>Action</th>
           <td mat-cell *matCellDef="let r">
-            <span class="cell-muted">{{ r.category }}</span>
+            <span class="cell-primary">{{ r.action }}</span>
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="activity">
-          <th mat-header-cell *matHeaderCellDef>Activity</th>
+        <ng-container matColumnDef="resourceType">
+          <th mat-header-cell *matHeaderCellDef>Resource Type</th>
           <td mat-cell *matCellDef="let r">
-            <span class="cell-primary">{{ r.activity }}</span>
+            <span class="cell-muted">{{ r.resourceType ?? '—' }}</span>
           </td>
         </ng-container>
 
@@ -110,10 +94,17 @@
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="user">
-          <th mat-header-cell *matHeaderCellDef>User</th>
+        <ng-container matColumnDef="message">
+          <th mat-header-cell *matHeaderCellDef>Message</th>
           <td mat-cell *matCellDef="let r">
-            <span class="cell-muted">{{ userLabel(r) }}</span>
+            <span class="cell-message">{{ r.message }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="triggeredBy">
+          <th mat-header-cell *matHeaderCellDef>Triggered By</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="cell-muted">{{ r.triggeredBy ?? 'system' }}</span>
           </td>
         </ng-container>
 
@@ -133,20 +124,20 @@
     @if (result().totalCount === 0 && !loading()) {
       <div class="empty-state">
         <div class="empty-state__icon-wrap">
-          <mat-icon>feed</mat-icon>
+          <mat-icon>receipt_long</mat-icon>
         </div>
         <h3 class="empty-state__title">
-          @if (searchQuery() || categoryFilter() || statusFilter()) {
-            No events matched your filters
+          @if (searchQuery() || actionFilter() || statusFilter()) {
+            No entries matched your filters
           } @else {
-            No activity yet
+            No operational logs yet
           }
         </h3>
         <p class="empty-state__sub">
-          @if (searchQuery() || categoryFilter() || statusFilter()) {
+          @if (searchQuery() || actionFilter() || statusFilter()) {
             Try adjusting your search or filters.
           } @else {
-            Activity events will appear here as users interact with the portal.
+            Pipeline and workflow events will appear here as they run.
           }
         </p>
       </div>

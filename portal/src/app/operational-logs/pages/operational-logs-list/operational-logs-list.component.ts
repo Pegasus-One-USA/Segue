@@ -5,11 +5,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
-import { UserActivityLogsApiService } from '../../services/user-activity-logs-api.service';
-import { PagedResult, UserActivityLog } from '../../models/user-activity-log.model';
+import { OperationalLogsApiService } from '../../services/operational-logs-api.service';
+import { OperationalLog, PagedResult } from '../../models/operational-log.model';
 
 @Component({
-  selector: 'app-activity-list',
+  selector: 'app-operational-logs-list',
   standalone: true,
   imports: [
     CommonModule,
@@ -19,26 +19,38 @@ import { PagedResult, UserActivityLog } from '../../models/user-activity-log.mod
     MatIconModule,
     MatPaginatorModule,
   ],
-  templateUrl: './activity-list.component.html',
-  styleUrls: ['./activity-list.component.scss'],
+  templateUrl: './operational-logs-list.component.html',
+  styleUrls: ['./operational-logs-list.component.scss'],
 })
-export class ActivityListComponent implements OnInit, OnDestroy {
-  private readonly api = inject(UserActivityLogsApiService);
+export class OperationalLogsListComponent implements OnInit, OnDestroy {
+  private readonly api = inject(OperationalLogsApiService);
   private readonly search$ = new Subject<string>();
+  private readonly status$ = new Subject<string>();
+  private readonly action$ = new Subject<string>();
 
-  readonly searchQuery    = signal('');
-  readonly categoryFilter = signal('');
-  readonly statusFilter   = signal('');
-  readonly pageIndex      = signal(0);
-  readonly pageSize       = signal(10);
-  readonly loading        = signal(false);
-  readonly result         = signal<PagedResult<UserActivityLog>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
+  readonly searchQuery = signal('');
+  readonly statusFilter = signal('');
+  readonly actionFilter = signal('');
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(10);
+  readonly loading = signal(false);
+  readonly result = signal<PagedResult<OperationalLog>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
 
-  readonly displayedCols = ['index', 'category', 'activity', 'status', 'user', 'occurredOnUtc'];
+  readonly displayedCols = ['index', 'action', 'resourceType', 'status', 'message', 'triggeredBy', 'occurredOnUtc'];
 
   ngOnInit(): void {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
       this.searchQuery.set(value);
+      this.pageIndex.set(0);
+      this.load();
+    });
+    this.status$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
+      this.statusFilter.set(value);
+      this.pageIndex.set(0);
+      this.load();
+    });
+    this.action$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
+      this.actionFilter.set(value);
       this.pageIndex.set(0);
       this.load();
     });
@@ -48,13 +60,15 @@ export class ActivityListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.search$.complete();
+    this.status$.complete();
+    this.action$.complete();
   }
 
   load(): void {
     this.loading.set(true);
     this.api.list({
-      category: this.categoryFilter() || undefined,
       status: this.statusFilter() || undefined,
+      action: this.actionFilter() || undefined,
       search: this.searchQuery() || undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
@@ -68,14 +82,13 @@ export class ActivityListComponent implements OnInit, OnDestroy {
   }
 
   onSearch(val: string): void { this.search$.next(val); }
-
-  onCategory(val: string): void { this.categoryFilter.set(val); this.pageIndex.set(0); this.load(); }
-  onStatus(val: string): void   { this.statusFilter.set(val);   this.pageIndex.set(0); this.load(); }
+  onStatusInput(val: string): void { this.status$.next(val); }
+  onActionInput(val: string): void { this.action$.next(val); }
 
   reset(): void {
     this.searchQuery.set('');
-    this.categoryFilter.set('');
     this.statusFilter.set('');
+    this.actionFilter.set('');
     this.pageIndex.set(0);
     this.load();
   }
@@ -94,9 +107,5 @@ export class ActivityListComponent implements OnInit, OnDestroy {
 
   statusClass(status: string): string {
     return 'status-' + status.toLowerCase();
-  }
-
-  userLabel(entry: UserActivityLog): string {
-    return entry.userEmail || '—';
   }
 }

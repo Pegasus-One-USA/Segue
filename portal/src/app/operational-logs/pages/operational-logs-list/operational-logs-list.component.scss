@@ -1,0 +1,32 @@
+@use '../../../_list-page' as *;
+
+.text-filter {
+  flex: 0 0 220px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  font-size: 13.5px;
+  color: var(--color-ink);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+  &::placeholder { color: var(--color-muted); }
+  &:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
+}
+
+// Status badges — Status is a free-text field written by many callers, so this styles common values and
+// falls back to a neutral look for anything else via the unmatched-selector default below.
+.status-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  background: var(--color-side); color: var(--color-ink-2);
+
+  &.status-completed  { background: var(--color-success-soft); color: #059669; }
+  &.status-succeeded  { background: var(--color-success-soft); color: #059669; }
+  &.status-failed     { background: var(--color-error-soft); color: #DC2626; }
+  &.status-running    { background: var(--color-info-soft); color: #2563EB; }
+}
