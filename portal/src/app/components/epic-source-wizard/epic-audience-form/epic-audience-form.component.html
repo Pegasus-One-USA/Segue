@@ -429,7 +429,7 @@
                   <label class="eaf-label" for="eaf-callbackUrl">{{ audienceConfig().redirectLabel || 'Redirect URI' }} <span class="eaf-req">*</span></label>
                   <div class="eaf-input-row">
                     <input id="eaf-callbackUrl" class="eaf-input" type="url" formControlName="callbackUrl"
-                           placeholder="https://fhirbridge.com/oauth/callback" />
+                           placeholder="http://localhost:5000/api/v1/oauth/callback" />
                     <button class="eaf-discover-btn" type="button" (click)="copyRedirectUri()">⧉ Copy</button>
                   </div>
                   @if (form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid) {

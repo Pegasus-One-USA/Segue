@@ -107,7 +107,7 @@ export class WorkflowBuildAssemblerService {
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const appType = this.applicationTypeFor(fields);
     const interactive = appType === 'Backend' ? null : {
-      redirectUris: [fields['Redirect URI'] || 'https://fhirbridge.com/oauth/callback'],
+      redirectUris: [fields['Redirect URI'] || 'http://localhost:5000/api/v1/oauth/callback'],
       launchUrl: fields['Launch URL'] || null,
       trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
       patientSelectionMethod: null,

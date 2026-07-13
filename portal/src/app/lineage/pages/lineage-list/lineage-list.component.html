@@ -12,37 +12,21 @@
         <input
           type="search"
           class="search-input"
-          placeholder="Search by user or activity..."
-          [value]="searchQuery()"
-          (input)="onSearch($any($event.target).value)"
+          placeholder="Filter by resource type (e.g. Patient)..."
+          [value]="resourceTypeFilter()"
+          (input)="onResourceType($any($event.target).value)"
         />
       </div>
 
-      <!-- Category filter -->
+      <!-- Action filter -->
       <div class="select-wrap">
         <div class="select-box">
-          <select [value]="categoryFilter()" (change)="onCategory($any($event.target).value)">
-            <option value="">All Categories</option>
-            <option value="Authentication">Authentication</option>
-            <option value="Authorization">Authorization</option>
-            <option value="Configuration">Configuration</option>
-            <option value="DataAccess">Data Access</option>
-            <option value="Administration">Administration</option>
-          </select>
-          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
-
-      <!-- Status filter -->
-      <div class="select-wrap">
-        <div class="select-box">
-          <select [value]="statusFilter()" (change)="onStatus($any($event.target).value)">
-            <option value="">All Statuses</option>
-            <option value="Success">Success</option>
-            <option value="Failed">Failed</option>
-            <option value="Denied">Denied</option>
+          <select [value]="actionFilter()" (change)="onAction($any($event.target).value)">
+            <option value="">All Actions</option>
+            <option value="ResourceAccessed">Resource Accessed</option>
+            <option value="ResourceNormalized">Resource Normalized</option>
+            <option value="ResourceDeIdentified">Resource De-Identified</option>
+            <option value="ResourceWritten">Resource Written</option>
           </select>
           <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -89,31 +73,24 @@
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="category">
-          <th mat-header-cell *matHeaderCellDef>Category</th>
+        <ng-container matColumnDef="resourceType">
+          <th mat-header-cell *matHeaderCellDef>Resource Type</th>
           <td mat-cell *matCellDef="let r">
-            <span class="cell-muted">{{ r.category }}</span>
+            <span class="cell-primary">{{ r.resourceType }}</span>
           </td>
         </ng-container>
 
-        <ng-container matColumnDef="activity">
-          <th mat-header-cell *matHeaderCellDef>Activity</th>
+        <ng-container matColumnDef="action">
+          <th mat-header-cell *matHeaderCellDef>Action</th>
           <td mat-cell *matCellDef="let r">
-            <span class="cell-primary">{{ r.activity }}</span>
+            <span class="action-badge" [class]="actionClass(r.action)">{{ r.action }}</span>
           </td>
         </ng-container>
 
         <ng-container matColumnDef="status">
           <th mat-header-cell *matHeaderCellDef>Status</th>
           <td mat-cell *matCellDef="let r">
-            <span class="status-badge" [class]="statusClass(r.status)">{{ r.status }}</span>
-          </td>
-        </ng-container>
-
-        <ng-container matColumnDef="user">
-          <th mat-header-cell *matHeaderCellDef>User</th>
-          <td mat-cell *matCellDef="let r">
-            <span class="cell-muted">{{ userLabel(r) }}</span>
+            <span class="cell-muted">{{ r.status }}</span>
           </td>
         </ng-container>
 
@@ -125,7 +102,7 @@
         </ng-container>
 
         <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row" (click)="viewChain(row)"></tr>
 
       </table>
     </div>
@@ -133,20 +110,20 @@
     @if (result().totalCount === 0 && !loading()) {
       <div class="empty-state">
         <div class="empty-state__icon-wrap">
-          <mat-icon>feed</mat-icon>
+          <mat-icon>link</mat-icon>
         </div>
         <h3 class="empty-state__title">
-          @if (searchQuery() || categoryFilter() || statusFilter()) {
-            No events matched your filters
+          @if (resourceTypeFilter() || actionFilter() || statusFilter()) {
+            No entries matched your filters
           } @else {
-            No activity yet
+            No lineage recorded yet
           }
         </h3>
         <p class="empty-state__sub">
-          @if (searchQuery() || categoryFilter() || statusFilter()) {
+          @if (resourceTypeFilter() || actionFilter() || statusFilter()) {
             Try adjusting your search or filters.
           } @else {
-            Activity events will appear here as users interact with the portal.
+            Chain-of-custody steps will appear here as pipelines and workflows process resources.
           }
         </p>
       </div>
@@ -165,5 +142,49 @@
     }
 
   </div>
+
+  <!-- Chain drill-down drawer -->
+  @if (selectedEntry(); as entry) {
+    <div
+      class="drawer-backdrop"
+      role="button"
+      tabindex="0"
+      aria-label="Close chain view"
+      (click)="closeChain()"
+      (keydown.enter)="closeChain()"
+      (keydown.space)="closeChain()"
+    ></div>
+    <div class="drawer">
+      <div class="drawer-header">
+        <div>
+          <h3 class="drawer-title">Chain of Custody</h3>
+          <p class="drawer-sub">{{ entry.resourceType }} · {{ entry.sourceResourceId ?? 'unknown id' }}</p>
+        </div>
+        <button class="drawer-close" type="button" (click)="closeChain()" aria-label="Close chain view">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        @if (chainLoading()) {
+          <div class="drawer-loading">Loading chain…</div>
+        } @else if (chain() && chain()!.steps.length > 0) {
+          <ol class="chain-list">
+            @for (step of chain()!.steps; track $index) {
+              <li class="chain-step">
+                <span class="chain-dot" [class]="actionClass(step.action)"></span>
+                <div class="chain-body">
+                  <span class="chain-action">{{ step.action }}</span>
+                  <span class="chain-meta">{{ step.status }} · {{ step.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</span>
+                </div>
+              </li>
+            }
+          </ol>
+        } @else {
+          <div class="drawer-loading">No chain steps found for this resource.</div>
+        }
+      </div>
+    </div>
+  }
 
 </div>

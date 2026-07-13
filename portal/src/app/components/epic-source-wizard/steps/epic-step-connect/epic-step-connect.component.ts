@@ -35,7 +35,7 @@ export class EpicStepConnectComponent implements OnInit {
     organization:     ['', Validators.required],
     approvalStatus:   ['sandbox-registered'],
     launchUrl:        ['https://fhirbridge.com/launch'],
-    redirectUri:      ['https://fhirbridge.com/oauth/callback'],
+    redirectUri:      ['http://localhost:5000/api/v1/oauth/callback'],
     launchModeEnforcement: ['ehr-only'],
     enabledScopes:    [this._defaultScopes()],
     discoveryMode:    ['smart'],
@@ -172,7 +172,7 @@ export class EpicStepConnectComponent implements OnInit {
       tokenEndpoint:     dv?.tokenEndpoint ?? '',
       authzEndpoint:     dv?.authzEndpoint ?? '',
       launchUrl:         v.launchUrl ?? 'https://fhirbridge.com/launch',
-      redirectUri:       v.redirectUri ?? 'https://fhirbridge.com/oauth/callback',
+      redirectUri:       v.redirectUri ?? 'http://localhost:5000/api/v1/oauth/callback',
     };
   }
 

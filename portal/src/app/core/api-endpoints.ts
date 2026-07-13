@@ -83,6 +83,22 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
 };
 
+// ─── Governance: user activity (UserActivityLogsController — api/v1/user-activity-logs) ────
+export const USER_ACTIVITY_LOGS_ENDPOINTS = {
+  list: `${API_V1_BASE}/user-activity-logs`,
+};
+
+// ─── Governance: operational/pipeline audit logs (OperationalAuditLogsController — api/v1/audit-logs) ────
+export const OPERATIONAL_LOGS_ENDPOINTS = {
+  list: `${API_V1_BASE}/audit-logs/paged`,
+};
+
+// ─── Governance: resource lineage / chain of custody (LineageController — api/v1/lineage) ────
+export const LINEAGE_ENDPOINTS = {
+  list:  `${API_V1_BASE}/lineage/entries`,
+  chain: `${API_V1_BASE}/lineage`,
+};
+
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────
 export const WORKFLOW_ENDPOINTS = {
   catalog:         `${API_V1_BASE}/workflow-catalog`,

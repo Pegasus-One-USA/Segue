@@ -18,6 +18,11 @@ export class PipelineStore {
   readonly editingNodeId = signal<string | null>(null);
   readonly tempConnectorPath = signal<string | null>(null);
 
+  // Monotonic counter appended to every generated id. Date.now() alone has 1ms resolution and multiple
+  // ids are routinely minted within the same tick (e.g. auto-inserting a Mapping node followed immediately
+  // by its destination node), which produced duplicate ids and a dictionary-key collision at build time.
+  private idSequence = 0;
+
   // ── computed ──────────────────────────────────────────────────────────────
   readonly nodeMap = computed(() => {
     const map = new Map<string, CN>();
@@ -190,18 +195,18 @@ export class PipelineStore {
   }
 
   nextNodeId(): string {
-    return 'n' + Date.now();
+    return 'n' + Date.now() + '-' + (++this.idSequence);
   }
 
   nextEdgeId(): string {
-    return 'e' + this.edges().length;
+    return 'e' + this.edges().length + '-' + (++this.idSequence);
   }
 
   nextTransformId(): string {
-    return 't' + Date.now();
+    return 't' + Date.now() + '-' + (++this.idSequence);
   }
 
   nextMergeId(): string {
-    return 'm' + Date.now();
+    return 'm' + Date.now() + '-' + (++this.idSequence);
   }
 }

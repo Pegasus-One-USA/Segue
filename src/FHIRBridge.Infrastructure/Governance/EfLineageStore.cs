@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -74,6 +75,47 @@ public sealed class EfLineageStore : ILineageStore, ILineageQueryService, IPurge
     {
         var steps = await QueryAsync(query, cancellationToken);
         return new ResourceLineageChain(query.SourceResourceId, steps);
+    }
+
+    public async Task<PagedResult<ResourceLineageRecord>> GetPagedAsync(
+        LineageListFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _dbContext.ResourceLineageEntries
+            .AsNoTracking()
+            .Where(x => filter.PipelineRunId == null || x.PipelineRunId == filter.PipelineRunId)
+            .Where(x => filter.ResourceType == null || x.ResourceType == filter.ResourceType)
+            .Where(x => filter.Action == null || x.Action == filter.Action)
+            .Where(x => filter.Status == null || x.Status == filter.Status);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+
+        var entries = await query
+            .OrderByDescending(x => x.OccurredOnUtc)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
+        var records = entries
+            .Select(x => new ResourceLineageRecord(
+                x.PipelineRunId,
+                x.RouteId,
+                x.SourceConnectionId,
+                x.DestinationId,
+                x.MappingProfileId,
+                x.ResourceType,
+                x.SourceResourceId,
+                x.Action,
+                x.Status,
+                x.OccurredOnUtc))
+            .ToList();
+
+        return new PagedResult<ResourceLineageRecord>(records, totalCount, page, take);
     }
 
     public async Task<int> PurgeOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken)

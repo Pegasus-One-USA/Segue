@@ -26,8 +26,11 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '👥', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
   { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows' },
   { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history' },
-  { type: 'item', icon: '📋', label: 'Activity Feed',    route: '/activity' },
   { type: 'item', icon: '⚙',  label: 'Settings',         route: '/settings/branding', permissions: ['configuration.write'] },
+  { type: 'section', label: 'Governance' },
+  { type: 'item', icon: '📋', label: 'Activity Feed',    route: '/activity',           permissions: ['auditlogs.read'] },
+  { type: 'item', icon: '🧾', label: 'Operational Logs', route: '/operational-logs',   permissions: ['auditlogs.read'] },
+  { type: 'item', icon: '🔗', label: 'Lineage',          route: '/lineage',            permissions: ['auditlogs.read'] },
 ];
 
 @Component({

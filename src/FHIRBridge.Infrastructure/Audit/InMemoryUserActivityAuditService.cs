@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Audit;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 
@@ -38,4 +39,69 @@ public sealed class InMemoryUserActivityAuditService : IUserActivityAuditService
 
         return Task.CompletedTask;
     }
+
+    public Task<PagedResult<UserActivityAuditLogDto>> GetPagedAsync(
+        UserActivityLogFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            var query = _entries.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(filter.Category))
+            {
+                query = query.Where(x => x.Category == filter.Category);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+            {
+                query = query.Where(x => x.Status == filter.Status);
+            }
+
+            if (filter.UserId.HasValue)
+            {
+                query = query.Where(x => x.UserId == filter.UserId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.Search))
+            {
+                var search = filter.Search;
+                query = query.Where(x =>
+                    x.UserEmail.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    x.Activity.Contains(search, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var ordered = query.OrderByDescending(x => x.OccurredOnUtc).ToList();
+            var take = Math.Clamp(pageSize, 1, 200);
+            var skip = Math.Max(0, (page - 1) * take);
+
+            return Task.FromResult(new PagedResult<UserActivityAuditLogDto>(
+                ordered.Skip(skip).Take(take).Select(ToDto).ToList(),
+                ordered.Count,
+                page,
+                take));
+        }
+    }
+
+    private static UserActivityAuditLogDto ToDto(UserActivityAuditLog entity) => new(
+        entity.Id,
+        entity.UserId,
+        entity.UserEmail,
+        entity.Category,
+        entity.Activity,
+        entity.Status,
+        entity.EntityName,
+        entity.EntityId,
+        entity.IpAddress,
+        entity.UserAgent,
+        entity.HttpMethod,
+        entity.RequestPath,
+        entity.Details,
+        entity.CorrelationId,
+        entity.SessionId,
+        entity.FailureReason,
+        entity.Severity,
+        entity.OccurredOnUtc);
 }
