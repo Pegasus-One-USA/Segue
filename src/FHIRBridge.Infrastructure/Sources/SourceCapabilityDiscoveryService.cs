@@ -121,13 +121,19 @@ public sealed class SourceCapabilityDiscoveryService : ISourceCapabilityDiscover
 
     public async Task<SmartConfigurationDto> DiscoverSmartConfigurationAsync(
         Guid sourceConnectionId,
+        string? overrideBaseUrl,
         CancellationToken cancellationToken)
     {
         var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
 
+        // A hospital/organization-specific launch (EhrEndpoint override) discovers against THAT endpoint's base
+        // URL instead of the connection's own configured default — the authorize/token endpoints returned here must
+        // match whichever base URL the caller is actually going to use for the rest of the launch.
+        var baseUrl = string.IsNullOrWhiteSpace(overrideBaseUrl) ? sourceConnection.BaseUrl : overrideBaseUrl;
+
         // The SMART discovery document is public (no bearer token) per the SMART App Launch spec.
-        var smartConfigUrl = $"{sourceConnection.BaseUrl.TrimEnd('/')}/.well-known/smart-configuration";
+        var smartConfigUrl = $"{baseUrl.TrimEnd('/')}/.well-known/smart-configuration";
         var httpClient = _httpClientFactory.CreateClient(nameof(SourceCapabilityDiscoveryService));
         using var request = new HttpRequestMessage(HttpMethod.Get, smartConfigUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

@@ -12,5 +12,6 @@ public interface ISourceConnectionRuntimeResolver
     Task<FhirSourceConfiguration?> ResolveAsync(
         Guid sourceConnectionId,
         string? searchParameters,
+        string? targetPatientId,
         CancellationToken cancellationToken);
 }

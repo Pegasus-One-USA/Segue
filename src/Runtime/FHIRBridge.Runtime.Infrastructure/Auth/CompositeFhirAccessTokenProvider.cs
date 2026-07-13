@@ -85,4 +85,18 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
 
         return Task.FromResult<string?>(null);
     }
+
+    /// <summary>
+    /// Resolves the launch-established FHIR base URL via the same registry dispatch as token acquisition:
+    /// interactive application-type strategies expose it; all other grants return null.
+    /// </summary>
+    public Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        if (source.ApplicationType is { } applicationType)
+        {
+            return _applicationStrategies.Resolve(applicationType).GetResolvedBaseUrlAsync(source, cancellationToken);
+        }
+
+        return Task.FromResult<string?>(null);
+    }
 }

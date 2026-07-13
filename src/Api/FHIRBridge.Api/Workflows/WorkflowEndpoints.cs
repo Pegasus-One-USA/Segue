@@ -306,10 +306,15 @@ public static class WorkflowEndpoints
             var patientEntry = resources?.FirstOrDefault(
                 resource => string.Equals(resource?["ResourceType"]?.GetValue<string>(), "Patient", StringComparison.OrdinalIgnoreCase));
             var patientJson = patientEntry?["Payload"]?.GetValue<string>();
+            var patientResource = string.IsNullOrWhiteSpace(patientJson) ? null : JsonNode.Parse(patientJson);
 
             return Results.Ok(new
             {
-                patient = string.IsNullOrWhiteSpace(patientJson) ? null : JsonNode.Parse(patientJson),
+                patient = patientResource,
+                // The id a caller should pass as WorkflowRunRequest.PatientId on a later /run call against a
+                // different workflow that shares this one's source connection, so it reuses this exact launch's
+                // stored session/patient context instead of whichever session happens to be most recent by then.
+                patientId = (patientResource as JsonObject)?["id"]?.GetValue<string>(),
             });
         });
 
@@ -423,7 +428,8 @@ public static class WorkflowEndpoints
                 Guid.NewGuid(),
                 request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
-                triggerType: "Manual");
+                triggerType: "Manual",
+                targetPatientId: request?.PatientId);
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             return Results.Ok(result);

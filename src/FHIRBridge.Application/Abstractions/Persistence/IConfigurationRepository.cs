@@ -38,4 +38,7 @@ public interface IConfigurationRepository
     Task<WebhookConfiguration?> GetWebhookAsync(Guid id, CancellationToken ct);
     Task AddWebhookAsync(WebhookConfiguration e, CancellationToken ct);
     Task UpdateWebhookAsync(WebhookConfiguration e, CancellationToken ct);
+
+    // ── EHR endpoints (read-only directory, populated by EpicEndpointDirectorySeeder) ──────────────
+    Task<EhrEndpoint?> GetEhrEndpointAsync(Guid id, CancellationToken ct);
 }
