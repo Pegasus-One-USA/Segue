@@ -100,6 +100,16 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             MaxRecords: retrieval?.MaxRecordsPerRun,
             RetryPolicy: retrieval?.RetryPolicy,
             TimeoutSeconds: retrieval?.TimeoutSeconds,
+            RetrievalMethod: retrieval?.RetrievalMethod,
+            ExportScope: retrieval?.ExportScope,
+            GroupId: retrieval?.GroupId,
+            PatientIds: retrieval?.PatientIds is { Length: > 0 } patientIds ? patientIds : null,
+            OutputFormat: retrieval?.OutputFormat,
+            // Bulk $export uses the _since cursor (not the search path's _lastUpdated); carry it only when incremental
+            // sync is on and a prior run recorded a timestamp.
+            Since: retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } lastSync }
+                ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
+                : null,
             TargetPatientId: targetPatientId);
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the

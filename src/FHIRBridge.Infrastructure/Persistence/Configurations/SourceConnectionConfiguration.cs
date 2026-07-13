@@ -173,6 +173,26 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
 
             retrieval.Property(x => x.LastSuccessfulSyncUtc)
                 .HasColumnName("RetrievalLastSuccessfulSyncUtc");
+
+            retrieval.Property(x => x.ExportScope)
+                .HasMaxLength(50)
+                .HasColumnName("RetrievalExportScope");
+
+            retrieval.Property(x => x.GroupId)
+                .HasMaxLength(200)
+                .HasColumnName("RetrievalGroupId");
+
+            var patientIds = retrieval.Property(x => x.PatientIds)
+                .HasConversion(
+                    value => string.Join(' ', value),
+                    value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .HasMaxLength(4000)
+                .HasColumnName("RetrievalPatientIds");
+            patientIds.Metadata.SetValueComparer(StringArrayComparer);
+
+            retrieval.Property(x => x.OutputFormat)
+                .HasMaxLength(100)
+                .HasColumnName("RetrievalOutputFormat");
         });
     }
 }

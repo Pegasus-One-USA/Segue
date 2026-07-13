@@ -12,6 +12,7 @@ using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.Fhir;
+using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.DTOs;
@@ -215,9 +216,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         request.CorrelationId,
                         cancellationToken);
 
+                    // Bulk export runs either when the caller explicitly requests it (legacy API flag) or when the
+                    // source connection itself is configured for it (RetrievalMethod == "bulk-export") — so a
+                    // bulk-configured source uses $export from any trigger (manual, scheduled, or dispatched) without
+                    // the caller having to know.
+                    var useBulkExport = request.UseBulkExport
+                        || string.Equals(sourceConnection.Retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+
                     // For the search path, make the pull incremental ("since last run") unless bulk export is used
                     // (bulk $export uses _since, not _lastUpdated) or the route already pins _lastUpdated.
-                    var effectiveSearchParameters = request.UseBulkExport
+                    var effectiveSearchParameters = useBulkExport
                         ? routeGroup.Key.SearchParameters
                         : await ApplyIncrementalFilterAsync(
                             resourceType,
@@ -229,7 +237,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         effectiveSearchParameters,
                         cancellationToken);
 
-                    if (request.UseBulkExport)
+                    if (useBulkExport)
                     {
                         // Bulk Data $export path: scope the export to this resource type, reuse the rest of the pipeline.
                         if (_bulkExportClient is null)
@@ -238,9 +246,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         }
 
                         resources = await _bulkExportClient.ExportAsync(
-                            new FhirBulkExportRequest(
-                                BulkExportScope.System,
-                                ResourceTypes: [resourceType]),
+                            BuildBulkExportRequest(sourceConnection.Retrieval, resourceType),
                             sourceConfiguration,
                             cancellationToken);
                     }
@@ -1114,6 +1120,30 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
         return groups;
     }
+
+    // Projects the persisted bulk-export retrieval settings onto a runtime $export request for one resource type.
+    // Scope defaults to System when unset (the historical behavior); group/patient carry their id list. The _since
+    // cursor is applied only when incremental sync is enabled and a prior successful run recorded a timestamp.
+    internal static FhirBulkExportRequest BuildBulkExportRequest(SourceRetrievalConfiguration? retrieval, string resourceType)
+    {
+        var scope = MapBulkExportScope(retrieval?.ExportScope);
+
+        DateTimeOffset? since = retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } syncedAt }
+            ? new DateTimeOffset(DateTime.SpecifyKind(syncedAt, DateTimeKind.Utc))
+            : null;
+
+        return new FhirBulkExportRequest(
+            scope,
+            GroupId: scope == BulkExportScope.Group ? retrieval?.GroupId : null,
+            ResourceTypes: [resourceType],
+            Since: since,
+            PatientIds: scope == BulkExportScope.Patient ? retrieval?.PatientIds : null,
+            OutputFormat: retrieval?.OutputFormat);
+    }
+
+    // Maps the persisted wizard scope token to the runtime enum via the shared parser (not a switch on
+    // ApplicationType), so both pipeline planes agree and it stays clear of the no-switch architecture rule.
+    internal static BulkExportScope MapBulkExportScope(string? exportScope) => BulkExportScopes.Parse(exportScope);
 
     private async Task<FhirSourceConfiguration> BuildSourceConfigurationAsync(
         SourceConnection sourceConnection,

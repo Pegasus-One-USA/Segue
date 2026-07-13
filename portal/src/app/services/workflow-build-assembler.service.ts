@@ -183,6 +183,16 @@ export class WorkflowBuildAssemblerService {
     const retrievalResourceTypes = splitList(fields['Retrieval resource type']);
     const resourceTypes = retrievalResourceTypes.length ? retrievalResourceTypes : splitList(fields['Resources']);
 
+    // Patient ID list is a free-text area — accept comma- or newline-separated ids.
+    const patientIds = (fields['Patient ID / list'] ?? '')
+      .split(/[\s,]+/).map(v => v.trim()).filter(Boolean);
+    const exportScope = fields['Export scope'] || null;
+    // The wizard uses short tokens; $export's _outputFormat expects the registered MIME type. Both ndjson variants
+    // map to application/fhir+ndjson (gzip is negotiated via transport encoding, not a distinct _outputFormat value).
+    const outputFormat = (fields['FHIR output format'] ?? '').startsWith('ndjson')
+      ? 'application/fhir+ndjson'
+      : null;
+
     return {
       retrievalMethod,
       resourceTypes,
@@ -195,6 +205,11 @@ export class WorkflowBuildAssemblerService {
       retryPolicy: fields['Retry policy'] || null,
       timeoutSeconds: toPositiveNumber(fields['Timeout (seconds)']),
       maxRecordsPerRun: toPositiveNumber(fields['Max records per run']),
+      // Bulk Data $export settings — only meaningful when retrievalMethod === 'bulk-export'.
+      exportScope,
+      groupId: exportScope === 'group' ? (fields['Group ID'] || null) : null,
+      patientIds: exportScope === 'patient' && patientIds.length ? patientIds : null,
+      outputFormat,
     };
   }
 
