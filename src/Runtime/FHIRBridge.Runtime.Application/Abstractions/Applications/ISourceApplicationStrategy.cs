@@ -34,4 +34,11 @@ public interface ISourceApplicationStrategy
     /// fetch to the launched patient.
     /// </summary>
     Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the FHIR base URL the launch establishing this session actually resolved to (the source connection's
+    /// own configured base URL, or a hospital/organization EhrEndpoint override), for interactive types — or null for
+    /// types that never override it (Backend Services).
+    /// </summary>
+    Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
 }

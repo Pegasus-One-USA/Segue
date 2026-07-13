@@ -51,7 +51,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             throw new InvalidOperationException($"{ProviderName} requires a client id.");
         }
 
-        var key = BuildStoreKey(source);
+        var key = BuildStoreKey(source, source.TargetPatientId);
         var stored = await _tokenStore.GetAsync(key, cancellationToken);
         if (stored is null)
         {
@@ -91,8 +91,20 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     /// </summary>
     public async Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
-        var stored = await _tokenStore.GetAsync(BuildStoreKey(source), cancellationToken);
+        var stored = await _tokenStore.GetAsync(BuildStoreKey(source, source.TargetPatientId), cancellationToken);
         return stored?.Patient;
+    }
+
+    /// <summary>
+    /// Returns the FHIR base URL this session's launch actually resolved to (the source connection's own configured
+    /// base URL, or a hospital/organization EhrEndpoint override), or null when nothing was stored for this
+    /// (source connection, patient) session yet. Lets a later, separately triggered workflow run search against the
+    /// same hospital's endpoint this session's login established, without needing to be told which hospital again.
+    /// </summary>
+    public async Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        var stored = await _tokenStore.GetAsync(BuildStoreKey(source, source.TargetPatientId), cancellationToken);
+        return stored?.ResolvedBaseUrl;
     }
 
     /// <summary>
@@ -237,9 +249,28 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 DateTimeOffset.UtcNow.AddSeconds(expiresIn),
                 token.Scope,
                 token.Patient,
-                source.TokenEndpoint);
+                source.TokenEndpoint,
+                // By the time this runs, source.BaseUrl already carries whichever URL the caller actually issued
+                // this session against (the connection's own, or a resolved hospital/organization EhrEndpoint
+                // override) — capturing it here is what lets a later, separately triggered workflow run reuse it.
+                source.BaseUrl);
 
-            await _tokenStore.SaveAsync(BuildStoreKey(source), stored, cancellationToken);
+            // Always save to the unscoped "default" slot — the pre-existing single-session behavior every caller
+            // that doesn't specify TargetPatientId still relies on (e.g. the inline run triggered straight off this
+            // same exchange, before any caller could know which patient just logged in).
+            await _tokenStore.SaveAsync(BuildStoreKey(source, null), stored, cancellationToken);
+
+            // ALSO save under a patient-specific key when a patient is known — either just returned by the token
+            // endpoint (a fresh authorization_code exchange) or already known by the caller (a refresh, where
+            // source.TargetPatientId was set to look the stored token up in the first place). This is what lets a
+            // second, separately-triggered workflow ask for THIS patient's session explicitly and get it even after
+            // a different patient has since logged in against the same source connection and overwritten "default".
+            var resolvedPatientId = token.Patient ?? source.TargetPatientId;
+            if (!string.IsNullOrWhiteSpace(resolvedPatientId))
+            {
+                await _tokenStore.SaveAsync(BuildStoreKey(source, resolvedPatientId), stored, cancellationToken);
+            }
+
             await _auditSink.RecordAsync(source, $"{action}Succeeded", "Completed", $"{ProviderName} access token acquired.", cancellationToken);
             return token.AccessToken!;
         }
@@ -334,10 +365,12 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     }
 
     // Token store key: prefer the durable source-connection id; fall back to the token endpoint + client identity.
-    private string BuildStoreKey(FhirSourceConfiguration source) =>
+    // The patient segment isolates concurrent sessions on the same source connection — "default" is the unscoped
+    // slot every pre-existing caller (that never set TargetPatientId) reads/writes, so this is purely additive.
+    private string BuildStoreKey(FhirSourceConfiguration source, string? patientId) =>
         source.SourceConnectionId is { } id && id != Guid.Empty
-            ? $"{ProviderName.ToLowerInvariant()}|{id}"
-            : $"{ProviderName.ToLowerInvariant()}|{source.TokenEndpoint}|{source.ClientId}";
+            ? $"{ProviderName.ToLowerInvariant()}|{id}|{patientId ?? "default"}"
+            : $"{ProviderName.ToLowerInvariant()}|{source.TokenEndpoint}|{source.ClientId}|{patientId ?? "default"}";
 
     private sealed class TokenResponse
     {

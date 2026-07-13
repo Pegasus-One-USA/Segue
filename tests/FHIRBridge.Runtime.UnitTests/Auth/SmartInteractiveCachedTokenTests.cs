@@ -26,7 +26,7 @@ public sealed class SmartInteractiveCachedTokenTests
     {
         var store = new InMemoryFhirAuthorizationCodeTokenStore();
         await store.SaveAsync(
-            $"smart|{SourceId}",
+            $"smart|{SourceId}|default",
             new StoredOAuthToken("cached-access-token", null, DateTimeOffset.UtcNow.AddMinutes(30)),
             CancellationToken.None);
         var provider = new SmartAuthorizationCodeTokenProvider(new HttpClient(new ThrowingHandler()), store);
@@ -42,7 +42,7 @@ public sealed class SmartInteractiveCachedTokenTests
         var handler = new CapturingHandler();
         var store = new InMemoryFhirAuthorizationCodeTokenStore();
         await store.SaveAsync(
-            $"smart|{SourceId}",
+            $"smart|{SourceId}|default",
             new StoredOAuthToken(
                 "expired", "refresh-1", DateTimeOffset.UtcNow.AddMinutes(-5),
                 TokenEndpoint: "https://auth.example.com/token"),
@@ -61,7 +61,7 @@ public sealed class SmartInteractiveCachedTokenTests
     {
         var store = new InMemoryFhirAuthorizationCodeTokenStore();
         await store.SaveAsync(
-            $"smart|{SourceId}",
+            $"smart|{SourceId}|default",
             new StoredOAuthToken("expired", "refresh-1", DateTimeOffset.UtcNow.AddMinutes(-5)),
             CancellationToken.None);
         var provider = new SmartAuthorizationCodeTokenProvider(new HttpClient(new ThrowingHandler()), store);
