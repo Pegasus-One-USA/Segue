@@ -84,6 +84,17 @@ export const routes: Routes = [
           import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES),
       },
 
+      // EHR Endpoints directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      {
+        path: 'ehr-endpoints',
+        canActivate: [permissionGuard],
+        data: { permissions: ['configuration.write'] },
+        loadComponent: () =>
+          import('./ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component').then(
+            m => m.EhrEndpointListComponent
+          ),
+      },
+
       // User Account pages
       {
         path: 'profile',
