@@ -106,6 +106,7 @@ builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHan
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services
     .AddFHIRBridgeApplication()
+    .AddPatientStandaloneApplicationServices()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
     .AddWorkflowCore()
     .AddWorkflowInfrastructure()

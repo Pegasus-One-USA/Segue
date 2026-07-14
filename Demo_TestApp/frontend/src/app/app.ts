@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-standalone';
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
 import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
+import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
 
 const BACKEND_BASE_URL = 'http://localhost:5500';
 const DEMO_TYPE_STORAGE_KEY = 'hb_demo_type';
@@ -54,7 +55,7 @@ interface LoginResponse {
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, PatientStandaloneComponent, LaunchProviderInAppComponent, LaunchStandaloneProviderComponent],
+  imports: [FormsModule, PatientStandaloneComponent, LaunchProviderInAppComponent, LaunchStandaloneProviderComponent, LaunchStandalonePatientComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
