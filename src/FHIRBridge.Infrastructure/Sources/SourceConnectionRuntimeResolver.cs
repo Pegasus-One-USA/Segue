@@ -161,6 +161,36 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         await patientContextProvider.DiscardTokenAsync(source, cancellationToken);
     }
 
+    // Reuses the exact same resolution ResolveAsync uses for a real run, then asks the dispatched token provider
+    // (CompositeFhirAccessTokenProvider, routed by ApplicationType) whether it can produce a usable access token
+    // right now — the same check GetAccessTokenAsync performs on every real fetch, just without going on to
+    // actually search for resources. For an interactive source this is a cache lookup (silently refreshing via the
+    // refresh token if the cached access token has merely expired); it only returns false when a genuinely fresh
+    // interactive sign-in is required.
+    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    {
+        if (_accessTokenProvider is null)
+        {
+            return false;
+        }
+
+        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken);
+        if (source is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// Layers a Backend System retrieval configuration's search criteria, incremental cursor, sort, and
     /// include/revinclude settings onto the node-config search-parameters string. Returns the original string

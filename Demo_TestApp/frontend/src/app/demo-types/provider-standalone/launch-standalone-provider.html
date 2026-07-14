@@ -20,118 +20,130 @@
     </header>
 
     <section class="standalone-section">
-      @if (hasEpicToken()) {
-        @if (launchError()) {
-          <p class="error-banner">
-            The workflow FHIRBridge triggered after sign-in failed to complete ({{ launchError() }}). Check
-            FHIRBridge's Execution History for this run's error detail.
-          </p>
-        } @else {
-          <mat-card class="fetch-card" appearance="outlined">
-            <mat-card-content>
-              <mat-icon class="fetch-card__icon">check_circle</mat-icon>
-              <p>Signed in to Epic. Ready to fetch the patient list.</p>
-
-              <div class="token-status-row">
-                <span class="token-status token-status--valid">
-                  Token Valid
-                  @if (lastConfirmedValidUtc(); as confirmedAt) {
-                    <span class="token-status__meta">(last confirmed {{ confirmedAt | date:'short' }})</span>
-                  }
-                </span>
-                <button type="button" class="reset-token-btn" (click)="resetToken()">Reset Token</button>
-              </div>
-
-              <div class="name-filter">
-                <input
-                  type="text"
-                  class="name-filter__input"
-                  placeholder="Search criteria (optional) — e.g. active=true, identifier=MRN12345, family=Smith&given=John, birthdate=1990-01-01"
-                  [value]="patientSearchCriteria()"
-                  (input)="patientSearchCriteria.set($any($event.target).value)"
-                />
-              </div>
-
-              <button
-                type="button"
-                class="connect-btn"
-                [disabled]="isFetchingPatientList() || isResolvingPatientContext()"
-                (click)="fetchPatientList()"
-              >
-                @if (isFetchingPatientList() || isResolvingPatientContext()) {
-                  <mat-spinner diameter="18"></mat-spinner>
-                } @else {
-                  Fetch Patient List
-                }
-              </button>
-
-              @if (patientListError()) {
-                <p class="error-banner">{{ patientListError() }}</p>
-              }
-              @if (patientList(); as patients) {
-                @if (patients.length > 0) {
-                  <ul class="patient-list">
-                    @for (patient of patients; track patient.id) {
-                      <li class="patient-list__row">
-                        <span class="patient-list__name">{{ patient.name }}</span>
-                        @if (patient.birthDate) {
-                          <span class="patient-list__dob">DOB: {{ patient.birthDate }}</span>
-                        }
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="fetch-card__success">No patients matched that search.</p>
-                }
-              }
-            </mat-card-content>
-          </mat-card>
-        }
-      } @else if (isLoadingHospitals()) {
-        <div class="loading-container">
-          <mat-spinner diameter="40"></mat-spinner>
-        </div>
-      } @else {
-        <span class="token-status token-status--invalid">Token Invalid — sign in required</span>
-
-        <p class="subtitle">Select a hospital to sign in to Epic.</p>
-
-        <input
-          type="search"
-          class="hospital-search"
-          placeholder="Search hospitals by name…"
-          [value]="searchQuery()"
-          (input)="onSearchChange($any($event.target).value)"
-        />
-
-        @if (hospitalSelectError()) {
-          <p class="error-banner">{{ hospitalSelectError() }}</p>
-        }
-
-        <div class="hospital-list">
-          @for (hospital of hospitals(); track hospital.id) {
-            <button
-              type="button"
-              class="hospital-row"
-              [disabled]="!!selectingHospitalId()"
-              (click)="selectHospital(hospital)"
-            >
-              @if (selectingHospitalId() === hospital.id) {
-                <mat-spinner diameter="18"></mat-spinner>
-              } @else {
-                <mat-icon>local_hospital</mat-icon>
-              }
-              <span class="hospital-row__text">
-                <span class="hospital-row__name">{{ hospital.name }}</span>
-                <span class="hospital-row__url">{{ hospital.fhirBaseUrl }}</span>
-              </span>
-              <mat-icon class="hospital-row__chevron">chevron_right</mat-icon>
-            </button>
-          } @empty {
-            <p class="subtitle">No Epic sandbox endpoints match your search.</p>
-          }
-        </div>
+      @if (launchError()) {
+        <p class="error-banner">
+          The workflow FHIRBridge triggered after sign-in failed to complete ({{ launchError() }}). Check
+          FHIRBridge's Execution History for this run's error detail.
+        </p>
       }
+
+      <mat-card class="fetch-card" appearance="outlined">
+        <mat-card-content>
+          <div class="token-status-row">
+            <span
+              class="token-status"
+              [class.token-status--valid]="hasEpicToken()"
+              [class.token-status--invalid]="!hasEpicToken()"
+            >
+              {{ hasEpicToken() ? 'Token Valid' : 'Not signed in yet' }}
+              @if (hasEpicToken() && lastConfirmedValidUtc(); as confirmedAt) {
+                <span class="token-status__meta">(last confirmed {{ confirmedAt | date:'short' }})</span>
+              }
+            </span>
+            @if (hasEpicToken()) {
+              <button type="button" class="reset-token-btn" (click)="resetToken()">Reset Token</button>
+            }
+          </div>
+
+          <div class="hospital-picker">
+            <p class="step-label">1. Select hospital</p>
+
+            <input
+              type="search"
+              class="hospital-search"
+              placeholder="Search hospitals by name…"
+              [value]="hospitalSearchQuery()"
+              (input)="onHospitalSearchChange($any($event.target).value)"
+            />
+
+            @if (hospitalSelectError()) {
+              <p class="error-banner">{{ hospitalSelectError() }}</p>
+            }
+
+            @if (isLoadingHospitals()) {
+              <div class="loading-container">
+                <mat-spinner diameter="32"></mat-spinner>
+              </div>
+            } @else {
+              <div class="hospital-list">
+                @for (hospital of hospitals(); track hospital.id) {
+                  <button
+                    type="button"
+                    class="hospital-row"
+                    [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
+                    [disabled]="isRedirectingToEpic()"
+                    (click)="chooseHospital(hospital)"
+                  >
+                    <span class="hospital-row__text">
+                      <span class="hospital-row__name">{{ hospital.name }}</span>
+                      <span class="hospital-row__url">{{ hospital.fhirBaseUrl }}</span>
+                    </span>
+                    @if (selectedHospitalId() === hospital.id) {
+                      <span class="hospital-row__chevron">✓</span>
+                    }
+                  </button>
+                } @empty {
+                  <p class="subtitle">No Epic sandbox endpoints match your search.</p>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="name-filter">
+            <label class="step-label" for="search-criteria-input">2. Search criteria (optional)</label>
+            <input
+              id="search-criteria-input"
+              type="text"
+              class="name-filter__input"
+              placeholder="e.g. active=true, identifier=MRN12345, family=Smith&given=John, birthdate=1990-01-01"
+              [value]="patientSearchCriteria()"
+              (input)="patientSearchCriteria.set($any($event.target).value)"
+            />
+          </div>
+
+          <p class="step-label">3. Fetch patient list</p>
+          <button
+            type="button"
+            class="connect-btn"
+            [disabled]="isFetchingPatientList() || isResolvingPatientContext() || isRedirectingToEpic()"
+            (click)="fetchPatientList()"
+          >
+            <span class="connect-btn__content">
+              @if (isResolvingPatientContext()) {
+                <mat-spinner diameter="18"></mat-spinner>
+                <span>Checking session…</span>
+              } @else if (isFetchingPatientList()) {
+                <mat-spinner diameter="18"></mat-spinner>
+              } @else if (isRedirectingToEpic()) {
+                <mat-spinner diameter="18"></mat-spinner>
+                <span>Redirecting to Epic…</span>
+              } @else {
+                <span>Fetch Patient List</span>
+              }
+            </span>
+          </button>
+
+          @if (patientListError()) {
+            <p class="error-banner">{{ patientListError() }}</p>
+          }
+          @if (patientList(); as patients) {
+            @if (patients.length > 0) {
+              <ul class="patient-list">
+                @for (patient of patients; track patient.id) {
+                  <li class="patient-list__row">
+                    <span class="patient-list__name">{{ patient.name }}</span>
+                    @if (patient.birthDate) {
+                      <span class="patient-list__dob">DOB: {{ patient.birthDate }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="fetch-card__success">No patients matched that search.</p>
+            }
+          }
+        </mat-card-content>
+      </mat-card>
     </section>
   </div>
 </div>

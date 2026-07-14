@@ -256,12 +256,17 @@ public sealed class OAuthController : ControllerBase
         // third-party app that opened the EHR launch, rather than leaving it on this bare JSON response — the run
         // id lets that app fetch its result (see GetWorkflowRunLaunchResult on WorkflowEndpoints). A run that was
         // attempted but threw still redirects back (with an error marker instead of a run id) so the app is never
-        // stranded here with no way to tell the user anything went wrong.
+        // stranded here with no way to tell the user anything went wrong. A run that was deliberately never
+        // attempted (WorkflowRunSkipped — a Standalone/patient-standalone sign-in with no launch context; see
+        // InteractiveSourceAuthorizationService.CompleteAsync) redirects with a neutral "signed in" marker instead:
+        // the token exchange itself succeeded, there is just nothing to report as failed.
         if (!string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
         {
             var returnUrl = result.WorkflowRunId is { } workflowRunId
                 ? QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "workflowRunId", workflowRunId.ToString())
-                : QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "launchError", "workflow_failed");
+                : result.WorkflowRunSkipped
+                    ? QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "signedIn", "1")
+                    : QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "launchError", "workflow_failed");
             return Redirect(returnUrl);
         }
 

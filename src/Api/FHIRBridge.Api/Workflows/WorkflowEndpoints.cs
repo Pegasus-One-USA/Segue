@@ -480,6 +480,48 @@ public static class WorkflowEndpoints
             return Results.Ok(new { discarded = true });
         });
 
+        // Cheaply reports whether a real /run against this workflow's source connection would currently succeed
+        // authentication-wise, WITHOUT running any pipeline — no WorkflowRun row, no orchestrator, no Epic API call
+        // in the common case (see HasValidTokenAsync). Lets a caller decide "redirect to interactive sign-in" vs.
+        // "just fetch" up front, instead of learning it only from a failed /run attempt. Anonymous, matching
+        // /run and /discard-token's own posture.
+        group.MapGet("/workflows/{workflowId:guid}/token-status", async (
+            Guid workflowId,
+            string? patientId,
+            IWorkflowDefinitionStore store,
+            ISourceConnectionRuntimeResolver? sourceResolver,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (sourceResolver is null)
+            {
+                return Results.Ok(new { hasValidToken = false });
+            }
+
+            Guid? sourceConnectionId = null;
+            foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId))
+                {
+                    sourceConnectionId = sourceId;
+                    break;
+                }
+            }
+
+            if (sourceConnectionId is null)
+            {
+                return Results.Ok(new { hasValidToken = false });
+            }
+
+            var hasValidToken = await sourceResolver.HasValidTokenAsync(sourceConnectionId.Value, patientId, cancellationToken);
+            return Results.Ok(new { hasValidToken });
+        });
+
         // Per-node checkpoint (docs/backend/05-workflow-node-checkpoints-plan.md §3.5). Admin-only: generates the
         // opaque URL for a node that already has CheckpointUrlEnabled set. Hitting the returned URL (anonymous,
         // below) runs only that node's ancestor closure and returns a run id.
