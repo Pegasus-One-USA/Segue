@@ -45,7 +45,8 @@ public sealed class EhrEndpointService : IEhrEndpointService
             request.Name,
             request.FhirBaseUrl,
             request.FormatType,
-            request.Status);
+            request.Status,
+            request.EndpointType);
 
         await _repository.AddAsync(endpoint, cancellationToken);
         await AuditAsync("EhrEndpointCreated", $"EHR endpoint '{request.Name}' added.", cancellationToken);
@@ -63,7 +64,8 @@ public sealed class EhrEndpointService : IEhrEndpointService
             request.Name,
             request.FhirBaseUrl,
             request.FormatType,
-            request.Status);
+            request.Status,
+            request.EndpointType);
 
         await _repository.UpdateAsync(endpoint, cancellationToken);
         await AuditAsync("EhrEndpointUpdated", $"EHR endpoint '{request.Name}' updated.", cancellationToken);
