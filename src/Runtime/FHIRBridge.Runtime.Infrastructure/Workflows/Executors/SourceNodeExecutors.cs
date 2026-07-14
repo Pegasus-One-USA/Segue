@@ -157,7 +157,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var sourceConnectionId = ReadStringConfiguration(node, "sourceConnectionId");
         if (_sourceResolver is not null && Guid.TryParse(sourceConnectionId, out var connectionId))
         {
-            source = await _sourceResolver.ResolveAsync(connectionId, searchParameters, context.TargetPatientId, cancellationToken);
+            source = await _sourceResolver.ResolveAsync(
+                connectionId,
+                searchParameters,
+                context.TargetPatientId,
+                cancellationToken,
+                context.PatientSearchCriteria);
         }
 
         // Fallback: an inline source configuration embedded in node config (used by the route→graph projection).

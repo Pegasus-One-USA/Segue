@@ -52,6 +52,7 @@ export interface WorkflowDefinitionRequest {
   nodes: WorkflowNodeRequest[];
   edges: WorkflowEdgeRequest[];
   trigger?: WorkflowTriggerRequest | null;
+  isPubliclyLaunchable?: boolean;
 }
 
 /** Workflow-level schedule (Backend-Systems workflows). Omit / Manual = run on demand. Matches the backend DTO. */
@@ -79,6 +80,7 @@ export interface WorkflowDefinitionDto {
   version: number;
   isEnabled: boolean;
   isActive?: boolean;
+  isPubliclyLaunchable?: boolean;
   nodes: WorkflowNodeDto[];
   edges: WorkflowEdgeDto[];
 }
@@ -226,6 +228,7 @@ export interface WorkflowSummary {
   sourceSystemType: string | null;  // Epic | Cerner | Sample | ...
   applicationType: string | null;   // Backend | EhrLaunch | Standalone | Patient
   hasDestination: boolean;
+  isPubliclyLaunchable: boolean;
 }
 
 export interface WorkflowLaunchUrl {
@@ -329,6 +332,16 @@ export class WorkflowApiService {
 
   deactivate(workflowId: string): Observable<WorkflowDefinitionDto> {
     return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.deactivate(workflowId), {});
+  }
+
+  /** Opts the workflow into the anonymous public-standalone-url mint endpoint a third-party app's hospital picker
+   *  calls (see OAuthController.GetPublicWorkflowStandaloneUrl) — required before that endpoint honors it. */
+  enablePublicLaunch(workflowId: string): Observable<WorkflowDefinitionDto> {
+    return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.enablePublicLaunch(workflowId), {});
+  }
+
+  disablePublicLaunch(workflowId: string): Observable<WorkflowDefinitionDto> {
+    return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.disablePublicLaunch(workflowId), {});
   }
 
   delete(workflowId: string): Observable<void> {

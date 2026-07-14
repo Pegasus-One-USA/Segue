@@ -37,7 +37,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         Guid sourceConnectionId,
         string? searchParameters,
         string? targetPatientId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? patientSearchCriteria = null)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -110,7 +111,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             Since: retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } lastSync }
                 ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
                 : null,
-            TargetPatientId: targetPatientId);
+            TargetPatientId: targetPatientId,
+            PatientSearchCriteria: patientSearchCriteria);
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME
@@ -127,6 +129,36 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         return config;
+    }
+
+    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    {
+        if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
+        {
+            return;
+        }
+
+        var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+        if (sourceConnection is null)
+        {
+            return;
+        }
+
+        // Only what BuildStoreKey/the strategy dispatch need — no secrets/base URL required to discard a cache entry.
+        var source = new FhirSourceConfiguration(
+            SourceType: default,
+            Name: sourceConnection.Name,
+            BaseUrl: null,
+            TokenEndpoint: null,
+            ClientId: null,
+            KeyId: null,
+            PrivateKeyPem: null,
+            Scopes: [],
+            SourceConnectionId: sourceConnection.Id,
+            ApplicationType: sourceConnection.ApplicationType,
+            TargetPatientId: targetPatientId);
+
+        await patientContextProvider.DiscardTokenAsync(source, cancellationToken);
     }
 
     /// <summary>

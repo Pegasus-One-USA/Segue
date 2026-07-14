@@ -184,6 +184,36 @@ export class WorkflowListComponent implements OnInit {
     });
   }
 
+  /** Opts a workflow in/out of the anonymous public-standalone-url mint endpoint (see OAuthController.
+   *  GetPublicWorkflowStandaloneUrl) — the only gate letting a third-party app's own hospital picker mint a
+   *  working Epic-login link for it without a FHIRBridge admin session. */
+  onTogglePublicLaunch(row: WorkflowSummary): void {
+    if (this.rowBusyId()) return;
+    this.rowBusyId.set(row.workflowId);
+    const enabling = !row.isPubliclyLaunchable;
+    const call = enabling ? this.api.enablePublicLaunch(row.workflowId) : this.api.disablePublicLaunch(row.workflowId);
+    call.subscribe({
+      next: () => {
+        this.rowBusyId.set(null);
+        this.summaries.update(rows =>
+          rows.map(w =>
+            w.workflowId === row.workflowId ? { ...w, isPubliclyLaunchable: enabling } : w,
+          ),
+        );
+        this.toast.success(
+          enabling ? 'Public launch enabled' : 'Public launch disabled',
+          enabling
+            ? `"${row.name}" can now be launched anonymously by a third-party app's hospital picker.`
+            : `"${row.name}" can no longer be launched anonymously.`,
+        );
+      },
+      error: err => {
+        this.rowBusyId.set(null);
+        this.toast.error('Update failed', this.messageOf(err, 'Could not change the public-launch state.'));
+      },
+    });
+  }
+
   askDelete(row: WorkflowSummary): void {
     this.confirmDelete.set(row);
   }

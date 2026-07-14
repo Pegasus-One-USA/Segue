@@ -36,7 +36,7 @@ interface PatientCard {
   styleUrl: './patient-standalone.scss'
 })
 export class PatientStandaloneComponent {
-  readonly role = input<'Admin' | 'Patient' | null>(null);
+  readonly role = input<string | null>(null);
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
 

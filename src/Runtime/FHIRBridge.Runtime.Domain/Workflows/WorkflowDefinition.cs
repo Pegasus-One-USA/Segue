@@ -5,7 +5,7 @@ public sealed class WorkflowDefinition
     private readonly List<WorkflowNode> _nodes = [];
     private readonly List<WorkflowEdge> _edges = [];
 
-    public WorkflowDefinition(Guid id, string name, int version, bool isEnabled = true)
+    public WorkflowDefinition(Guid id, string name, int version, bool isEnabled = true, bool isPubliclyLaunchable = false)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -21,6 +21,7 @@ public sealed class WorkflowDefinition
         Name = name.Trim();
         Version = version;
         IsEnabled = isEnabled;
+        IsPubliclyLaunchable = isPubliclyLaunchable;
     }
 
     public Guid Id { get; }
@@ -32,6 +33,12 @@ public sealed class WorkflowDefinition
     public bool IsEnabled { get; private set; }
 
     public bool IsActive => IsEnabled;
+
+    /// <summary>Admin-opted-in gate for the anonymous public-standalone-url mint endpoint (see OAuthController.
+    /// GetPublicWorkflowStandaloneUrl) — without it, any caller who knew this workflow's id could otherwise mint a
+    /// working Epic-login link for it, since minting itself needs no PHI and no session. Default false: a workflow
+    /// only becomes externally launchable by an explicit admin action, never implicitly.</summary>
+    public bool IsPubliclyLaunchable { get; private set; }
 
     /// <summary>Workflow-level scheduling metadata (null ⇒ manual / launched). Read by the Worker to fire schedules.</summary>
     public WorkflowTrigger? Trigger { get; private set; }
@@ -83,7 +90,7 @@ public sealed class WorkflowDefinition
     /// Used only for in-flight execution — never persisted — so it deliberately does not go through AddNode/AddEdge.</summary>
     public WorkflowDefinition WithNodesAndEdges(IReadOnlyCollection<WorkflowNode> nodes, IReadOnlyCollection<WorkflowEdge> edges)
     {
-        var projected = new WorkflowDefinition(Id, Name, Version, IsEnabled);
+        var projected = new WorkflowDefinition(Id, Name, Version, IsEnabled, IsPubliclyLaunchable);
         projected._nodes.AddRange(nodes);
         projected._edges.AddRange(edges);
         return projected;
@@ -107,4 +114,8 @@ public sealed class WorkflowDefinition
     public void Activate() => IsEnabled = true;
 
     public void Deactivate() => IsEnabled = false;
+
+    public void EnablePublicLaunch() => IsPubliclyLaunchable = true;
+
+    public void DisablePublicLaunch() => IsPubliclyLaunchable = false;
 }

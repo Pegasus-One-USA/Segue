@@ -251,30 +251,47 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     }
 
     /// <summary>
-    /// <summary>
-    /// Scopes the search to the launched patient when the token grant carries a patient context (interactive SMART
-    /// launches). Without this, a provider such as Epic rejects an unscoped <c>Patient</c> search. The launched
-    /// patient targets its own resource by <c>_id</c>; every other resource type is filtered by <c>patient</c>.
-    /// Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left
-    /// untouched.
+    /// Scopes the search to a known patient — the SMART launch's own context when the token grant carries one
+    /// (<c>launch/patient</c> flows), falling back to the request-time <see cref="FhirSourceConfiguration.TargetPatientId"/>
+    /// otherwise (e.g. a patient the caller picked from a prior name search, via WorkflowRunRequest.PatientId — see
+    /// WorkflowExecutionContext). Without one of these, a provider such as Epic rejects an unscoped <c>Patient</c>
+    /// search. The known patient targets its own resource by <c>_id</c>; every other resource type is filtered by
+    /// <c>patient</c>. Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>)
+    /// are left untouched.
     /// </summary>
     private async Task<string?> ApplyPatientScopeAsync(
         string resourceType,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken)
     {
-        if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
+        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
+
+        // A request-time raw search criteria string (e.g. "active=true", "identifier=MRN12345",
+        // "family=Smith&given=John", "birthdate=1990-01-01" — from a third-party app's own free-text search box,
+        // threaded via WorkflowRunRequest → WorkflowExecutionContext) takes precedence over any launched-patient
+        // context for the Patient resource type only — the caller is explicitly filtering by their own criteria,
+        // possibly not the same patient (or not yet knowing which one) last logged in via an interactive launch, so
+        // auto-scoping to that launch's _id would silently ignore the search the caller asked for. Passed through
+        // as-is (not parsed/validated) — any FHIR search parameter the target server accepts is valid here.
+        if (isPatientResource && !string.IsNullOrWhiteSpace(source.PatientSearchCriteria))
         {
-            return source.SearchParameters;
+            var criteria = source.PatientSearchCriteria.Trim().TrimStart('?').TrimStart('&');
+            return string.IsNullOrWhiteSpace(query) ? criteria : $"{query}&{criteria}";
         }
 
-        var patientId = await patientContextProvider.GetPatientContextAsync(source, cancellationToken);
+        string? patientId = null;
+        if (_accessTokenProvider is IFhirPatientContextProvider patientContextProvider)
+        {
+            patientId = await patientContextProvider.GetPatientContextAsync(source, cancellationToken);
+        }
+
+        patientId ??= source.TargetPatientId;
         if (string.IsNullOrWhiteSpace(patientId))
         {
             return source.SearchParameters;
         }
 
-        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
         if (ContainsQueryParameter(query, "patient") ||
             ContainsQueryParameter(query, "subject") ||
             ContainsQueryParameter(query, "_id"))
@@ -282,7 +299,6 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             return source.SearchParameters;
         }
 
-        var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
         var scope = isPatientResource ? $"_id={patientId}" : $"patient={patientId}";
         return string.IsNullOrWhiteSpace(query) ? scope : $"{query}&{scope}";
     }

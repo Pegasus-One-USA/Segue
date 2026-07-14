@@ -11,6 +11,7 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 
 builder.Services.AddDbContext<HealthAppDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddSingleton<SessionStore>();
+builder.Services.AddSingleton<EpicSessionStore>();
 builder.Services.AddHttpClient("Workflow");
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => policy
     .WithOrigins(allowedFrontendOrigin)
@@ -283,6 +284,49 @@ app.MapGet("/api/patients", async (HttpContext http, SessionStore sessions, Heal
     return Results.Ok(cards);
 });
 
+// Provider_Standalone's "is my Epic session still good" indicator, kept entirely within this app — no FHIRBridge
+// changes needed. FHIRBridge never discloses the raw Epic token to third-party apps, so this deliberately does NOT
+// try to hold one either; it just remembers which patient/workflow this HealthApp user last successfully launched
+// (from FHIRBridge's own launch-result) and the last time a real fetch through FHIRBridge actually confirmed it
+// still worked. That's a "last known good" signal, not a live guarantee — the actual authority remains attempting
+// the real /run call, which the frontend already does and falls back gracefully from if this turns out stale.
+app.MapPost("/api/epic-session", (EpicSessionRequest request, HttpContext http, SessionStore sessions, EpicSessionStore epicSessions) =>
+{
+    if (!TryGetSession(http, sessions, out var userId, out _))
+    {
+        return Results.Unauthorized();
+    }
+
+    epicSessions.Set(userId, request.PatientId, request.WorkflowId, DateTime.UtcNow);
+    return Results.Ok();
+});
+
+app.MapGet("/api/epic-session/status", (HttpContext http, SessionStore sessions, EpicSessionStore epicSessions) =>
+{
+    if (!TryGetSession(http, sessions, out var userId, out _))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!epicSessions.TryGet(userId, out var patientId, out var workflowId, out var lastConfirmedValidUtc))
+    {
+        return Results.Ok(new { hasSession = false, patientId = (string?)null, workflowId = (string?)null, lastConfirmedValidUtc = (DateTime?)null });
+    }
+
+    return Results.Ok(new { hasSession = true, patientId, workflowId, lastConfirmedValidUtc = (DateTime?)lastConfirmedValidUtc });
+});
+
+app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, EpicSessionStore epicSessions) =>
+{
+    if (!TryGetSession(http, sessions, out var userId, out _))
+    {
+        return Results.Unauthorized();
+    }
+
+    epicSessions.Remove(userId);
+    return Results.Ok();
+});
+
 app.Run();
 
 // Uniform fallback for any field a record doesn't have — a row written directly by a FHIRBridge SQL
@@ -344,6 +388,10 @@ static bool TryGetSession(HttpContext http, SessionStore sessions, out int userI
 
 record LoginRequest(string Email, string Password);
 record SaveSettingsRequest(string WorkflowUrl);
+// PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
+// launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
+// already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.
+record EpicSessionRequest(string? PatientId, string WorkflowId);
 record ResourceEnvelope(string ResourceType, string ResourceId, string Payload);
 record ResourcesEnvelope(List<ResourceEnvelope> Resources);
 
@@ -388,4 +436,36 @@ sealed class SessionStore
     }
 
     public void Remove(string sessionId) => _sessions.TryRemove(sessionId, out _);
+}
+
+/// <summary>
+/// In-memory only, keyed by HealthApp userId — mirrors SessionStore's own pattern. Never holds the actual Epic
+/// token (FHIRBridge doesn't disclose it to third-party apps); just the last patient/workflow this user launched
+/// and when a real fetch through FHIRBridge last confirmed that session still works. Wiped on backend restart —
+/// acceptable here since it forces a fresh, honest re-check rather than showing stale confidence.
+/// </summary>
+sealed class EpicSessionStore
+{
+    private readonly ConcurrentDictionary<int, (string? PatientId, string WorkflowId, DateTime LastConfirmedValidUtc)> _sessions = new();
+
+    public void Set(int userId, string? patientId, string workflowId, DateTime lastConfirmedValidUtc) =>
+        _sessions[userId] = (patientId, workflowId, lastConfirmedValidUtc);
+
+    public bool TryGet(int userId, out string? patientId, out string workflowId, out DateTime lastConfirmedValidUtc)
+    {
+        if (_sessions.TryGetValue(userId, out var entry))
+        {
+            patientId = entry.PatientId;
+            workflowId = entry.WorkflowId;
+            lastConfirmedValidUtc = entry.LastConfirmedValidUtc;
+            return true;
+        }
+
+        patientId = null;
+        workflowId = string.Empty;
+        lastConfirmedValidUtc = default;
+        return false;
+    }
+
+    public void Remove(int userId) => _sessions.TryRemove(userId, out _);
 }

@@ -8,6 +8,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -239,7 +240,8 @@ public static class WorkflowEndpoints
                     resolvedSourceId,
                     sourceSystemType,
                     applicationType?.ToString(),
-                    hasDestination));
+                    hasDestination,
+                    workflow.IsPubliclyLaunchable));
             }
 
             return Results.Ok(summaries
@@ -429,10 +431,53 @@ public static class WorkflowEndpoints
                 request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
-                targetPatientId: request?.PatientId);
+                targetPatientId: request?.PatientId,
+                patientSearchCriteria: request?.PatientSearchCriteria);
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             return Results.Ok(result);
+        });
+
+        // Discards FHIRBridge's cached token for this workflow's source connection (both the given patientId's slot,
+        // if any, and the unscoped "default" slot) — the next /run or launch requires a genuinely fresh interactive
+        // sign-in. Does not call Epic/the authorization server itself; the token remains technically valid there
+        // until it naturally expires, it is just no longer usable from FHIRBridge. Anonymous, matching /run's own
+        // posture — a third-party app's own "Reset Token" action calls this directly.
+        group.MapPost("/workflows/{workflowId:guid}/discard-token", async (
+            Guid workflowId,
+            string? patientId,
+            IWorkflowDefinitionStore store,
+            ISourceConnectionRuntimeResolver? sourceResolver,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (sourceResolver is null)
+            {
+                return Results.Ok(new { discarded = false });
+            }
+
+            Guid? sourceConnectionId = null;
+            foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId))
+                {
+                    sourceConnectionId = sourceId;
+                    break;
+                }
+            }
+
+            if (sourceConnectionId is null)
+            {
+                return Results.Ok(new { discarded = false });
+            }
+
+            await sourceResolver.DiscardTokenAsync(sourceConnectionId.Value, patientId, cancellationToken);
+            return Results.Ok(new { discarded = true });
         });
 
         // Per-node checkpoint (docs/backend/05-workflow-node-checkpoints-plan.md §3.5). Admin-only: generates the
@@ -731,6 +776,42 @@ public static class WorkflowEndpoints
             return Results.Ok(workflow);
         });
 
+        // Opts a workflow into (or out of) the anonymous public-standalone-url mint endpoint (see OAuthController.
+        // GetPublicWorkflowStandaloneUrl) — required before that endpoint will mint a launch context for it.
+        // Explicitly admin-gated: this is the only thing standing between "any caller who knows this workflowId"
+        // and a working Epic-login link for it.
+        group.MapPost("/workflows/{workflowId:guid}/enable-public-launch", async (
+            Guid workflowId,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            workflow.EnablePublicLaunch();
+            await store.SaveAsync(workflow, cancellationToken);
+            return Results.Ok(workflow);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        group.MapPost("/workflows/{workflowId:guid}/disable-public-launch", async (
+            Guid workflowId,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            workflow.DisablePublicLaunch();
+            await store.SaveAsync(workflow, cancellationToken);
+            return Results.Ok(workflow);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         // Permanently delete a workflow definition (and its nodes/edges/config). The referenced source/destination/
         // mapping records are NOT deleted — they may be shared with other workflows/routes. Admin-only.
         group.MapDelete("/workflows/{workflowId:guid}", async (
@@ -867,7 +948,7 @@ public static class WorkflowEndpoints
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request)
     {
-        var workflow = new WorkflowDefinition(workflowId, request.Name, version: 1, request.IsEnabled);
+        var workflow = new WorkflowDefinition(workflowId, request.Name, version: 1, request.IsEnabled, request.IsPubliclyLaunchable);
         var nodeIdsByClientId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var nodeRequest in request.Nodes)
