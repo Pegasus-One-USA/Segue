@@ -5,9 +5,28 @@ import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-standalone';
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
+import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
 
 const BACKEND_BASE_URL = 'http://localhost:5500';
 const DEMO_TYPE_STORAGE_KEY = 'hb_demo_type';
+
+// A direct EHR-launch redirect (Epic calling this app's registered launch URL) lands on this exact path
+// with ?iss=&launch= already on the URL — lock the Login Type from the path itself, no dropdown/?DemoType=
+// param needed. Not a seeded DemoType row: it's purely a display label for this entry point, reusing
+// LaunchProviderInAppComponent (the "DemoType2" component) since the EHR-launch exchange logic is identical.
+const PROVIDER_STANDALONE_PATH = '/launchproviderinapp';
+const PROVIDER_STANDALONE_NAME = 'Provider_InApp';
+
+// True SMART Standalone Launch (provider-initiated, not EHR-initiated): a real "Provider_Standalone" DemoType
+// row selected from the dropdown. Unlike PROVIDER_STANDALONE_PATH above, there's no incoming iss/launch to
+// detect — the redirect below is purely "send this Login Type to its own screen after login."
+const STANDALONE_PROVIDER_PATH = '/launchinstandaloneprovider';
+const STANDALONE_PROVIDER_NAME = 'Provider_Standalone';
+
+// Patient_Standalone gets its own dedicated path too, same reasoning as the two above — every Login Type
+// lands on its own URL after login rather than sharing whatever path the login screen itself was served from.
+const PATIENT_STANDALONE_PATH = '/launchpatientstandalone';
+const PATIENT_STANDALONE_NAME = 'Patient_Standalone';
 
 interface DemoType {
   id: number;
@@ -21,7 +40,7 @@ interface LoginResponse {
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, PatientStandaloneComponent, LaunchProviderInAppComponent],
+  imports: [FormsModule, PatientStandaloneComponent, LaunchProviderInAppComponent, LaunchStandaloneProviderComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -64,9 +83,23 @@ export class App implements OnInit {
   }
 
   private async loadDemoTypes(): Promise<void> {
+    // Locks onto Provider_InApp from either signal: the app already sitting on /launchproviderinapp, or an
+    // incoming EHR launch's ?iss=&launch= params landing on some other path (e.g. Epic's app registration
+    // still points at the bare root) — either way this is a provider in-app launch, not a dropdown pick.
+    const hasLaunchParams = !!this.route.snapshot.queryParamMap.get('iss')
+      && !!this.route.snapshot.queryParamMap.get('launch');
+    if (window.location.pathname.toLowerCase() === PROVIDER_STANDALONE_PATH || hasLaunchParams) {
+      this.lockedDemoTypeName.set(PROVIDER_STANDALONE_NAME);
+      this.onDemoTypeChange(PROVIDER_STANDALONE_NAME);
+    }
+
     try {
       const demoTypes = await firstValueFrom(this.http.get<DemoType[]>(`${BACKEND_BASE_URL}/api/demo-types`));
       this.demoTypes.set(demoTypes);
+
+      if (this.lockedDemoTypeName()) {
+        return; // Path-based lock above already decided the Login Type.
+      }
 
       const requestedParam = this.route.snapshot.queryParamMap.get('DemoType');
       const requestedId = requestedParam !== null ? Number(requestedParam) : null;
@@ -104,6 +137,27 @@ export class App implements OnInit {
 
       this.role.set(response.role);
       this.loggedIn.set(true);
+
+      // Provider in-app launches must land on /launchproviderinapp so LaunchProviderInAppComponent's own
+      // ngOnInit (which reads iss/launch and hands off to FHIRBridge) actually runs — whatever path the
+      // login screen itself was served from. Preserves the query string (iss/launch) across the hop.
+      if (this.selectedDemoType() === PROVIDER_STANDALONE_NAME
+        && window.location.pathname.toLowerCase() !== PROVIDER_STANDALONE_PATH) {
+        window.location.href = PROVIDER_STANDALONE_PATH + window.location.search;
+      }
+
+      // Same reasoning for the true-standalone flow: land on its own screen so LaunchStandaloneProviderComponent
+      // can show the hospital list (or, on the way back from Epic, the Fetch Patient List button).
+      if (this.selectedDemoType() === STANDALONE_PROVIDER_NAME
+        && window.location.pathname.toLowerCase() !== STANDALONE_PROVIDER_PATH) {
+        window.location.href = STANDALONE_PROVIDER_PATH + window.location.search;
+      }
+
+      // Patient_Standalone lands on its own path too — never launchproviderinapp or launchinstandaloneprovider.
+      if (this.selectedDemoType() === PATIENT_STANDALONE_NAME
+        && window.location.pathname.toLowerCase() !== PATIENT_STANDALONE_PATH) {
+        window.location.href = PATIENT_STANDALONE_PATH + window.location.search;
+      }
     } catch {
       this.loginError.set('Invalid email or password.');
     }

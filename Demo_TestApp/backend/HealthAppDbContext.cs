@@ -6,6 +6,8 @@ public static class UserRoles
 {
     public const string Admin = "Admin";
     public const string Patient = "Patient";
+    public const string ProviderStandalone = "ProviderStandalone";
+    public const string ProviderInApp = "ProviderInApp";
 }
 
 // Passwords are stored in plain text — this is dummy demo data, not a real account store.
@@ -121,6 +123,20 @@ public sealed class HealthAppDbContext : DbContext
                 Email = "patient@healthapp.local",
                 Password = "Patient@123",
                 Role = UserRoles.Patient
+            },
+            new UserEntity
+            {
+                Id = 3,
+                Email = "providerstandalone@healthapp.local",
+                Password = "Provider@123",
+                Role = UserRoles.ProviderStandalone
+            },
+            new UserEntity
+            {
+                Id = 5,
+                Email = "providerInApp@healthapp.local",
+                Password = "Provider@123",
+                Role = UserRoles.ProviderInApp
             });
 
         modelBuilder.Entity<HospitalEntity>().HasData(
@@ -133,8 +149,8 @@ public sealed class HealthAppDbContext : DbContext
         modelBuilder.Entity<DemoTypeEntity>().ToTable("DemoType");
         modelBuilder.Entity<DemoTypeEntity>().HasData(
             new DemoTypeEntity { Id = 1, Name = "Patient_Standalone" },
-            new DemoTypeEntity { Id = 2, Name = "DemoType2" },
-            new DemoTypeEntity { Id = 3, Name = "DemoType3" });
+            new DemoTypeEntity { Id = 2, Name = "Provider_Standalone" },
+            new DemoTypeEntity { Id = 3, Name = "Provider_InApp" });
 
         var seedTimestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var seedFields = PatientFieldExtractor.Extract(PatientSeedData.CamilaLopezJson);

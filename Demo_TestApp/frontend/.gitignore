@@ -44,3 +44,4 @@ Thumbs.db
 
 # Local secrets — the FHIRBridge launch-context token is a credential, not a checked-in constant.
 src/app/demo-types/demo-type-2/core/config/launch.config.ts
+src/app/demo-types/provider-standalone/core/config/standalone-launch.config.ts

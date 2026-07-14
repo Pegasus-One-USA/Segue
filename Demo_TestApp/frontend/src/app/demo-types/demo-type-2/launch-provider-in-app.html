@@ -33,6 +33,11 @@
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
       </div>
+    } @else if (launchError()) {
+      <p class="error-banner">
+        The workflow FHIRBridge triggered for this launch failed to complete, so there is no patient data to
+        show ({{ launchError() }}). Check FHIRBridge's Execution History for this run's error detail.
+      </p>
     } @else if (patient(); as p) {
       <div class="patient-cards-grid">
         <mat-card class="patient-card" appearance="outlined">

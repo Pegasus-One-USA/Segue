@@ -80,11 +80,15 @@ public interface IInteractiveSourceAuthorizationService
 /// <summary>
 /// Which source connection was authorized once the callback completes. For a workflow-triggered launch,
 /// <see cref="WorkflowRunId"/> carries the resulting run id and <see cref="PostLaunchRedirectUri"/> carries where the
-/// caller should redirect the browser (the source's configured PostLaunchRedirectUri) instead of returning JSON —
-/// both are null when no workflow run was triggered or no redirect URI is configured.
+/// caller should redirect the browser (the source's configured PostLaunchRedirectUri) instead of returning JSON.
+/// <see cref="WorkflowRunFailed"/> is set when a workflow run was attempted but threw — the caller still redirects
+/// (if a PostLaunchRedirectUri is configured), just with an error marker instead of a run id, so a third-party app
+/// is never stranded on this endpoint's bare JSON response. All three are false/null when no workflow run was
+/// triggered at all (a plain sign-in) or no redirect URI is configured.
 /// </summary>
 public sealed record InteractiveAuthorizationResult(
     Guid SourceConnectionId,
     string SourceName,
     Guid? WorkflowRunId = null,
-    string? PostLaunchRedirectUri = null);
+    string? PostLaunchRedirectUri = null,
+    bool WorkflowRunFailed = false);

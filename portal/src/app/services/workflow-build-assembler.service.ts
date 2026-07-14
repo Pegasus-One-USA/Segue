@@ -280,7 +280,14 @@ export class WorkflowBuildAssemblerService {
     if (resources.length > 1) this.lastUnmappedResources.push(...resources.slice(1));
 
     const primaryRows = rows.filter(row => row.resource === primary);
-    const destinationObject = primaryRows[0]?.target || this.targetForResource(destFields, primary) || primary;
+    const baseDestinationObject = primaryRows[0]?.target || this.targetForResource(destFields, primary) || primary;
+    // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
+    // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
+    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. No explicit ;key=
+    // override: the writer's own default key (SourceResourceId) matches that label's "by source id" semantics.
+    const destinationObject = destFields['dest_writeMode'] === 'upsert'
+      ? `${baseDestinationObject};mode=upsert`
+      : baseDestinationObject;
 
     const fields: MappingFieldRequest[] = primaryRows.map(row => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the

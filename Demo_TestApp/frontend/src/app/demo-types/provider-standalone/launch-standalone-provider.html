@@ -1,0 +1,60 @@
+<div class="fullscreen-shell">
+  <header class="fullscreen-shell__topbar">
+    <div class="title-group">
+      <span class="fullscreen-shell__title">HealthApp</span>
+      <span class="login-type-badge">{{ loginTypeLabel() }}</span>
+    </div>
+    <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+    </button>
+  </header>
+
+  <div class="launch-page">
+    <header class="page-header">
+      <h1>Launch In Standalone Provider</h1>
+      <p class="subtitle">This page simulates a provider launching FHIRBridge directly, outside the EHR.</p>
+    </header>
+
+    <section class="standalone-section">
+      @if (hasEpicToken()) {
+        @if (launchError()) {
+          <p class="error-banner">
+            The workflow FHIRBridge triggered after sign-in failed to complete ({{ launchError() }}). Check
+            FHIRBridge's Execution History for this run's error detail.
+          </p>
+        } @else {
+          <mat-card class="fetch-card" appearance="outlined">
+            <mat-card-content>
+              <mat-icon class="fetch-card__icon">check_circle</mat-icon>
+              <p>Signed in to Epic. Ready to fetch the patient list.</p>
+              <button type="button" class="connect-btn" (click)="fetchPatientList()">
+                Fetch Patient List
+              </button>
+            </mat-card-content>
+          </mat-card>
+        }
+      } @else if (isLoadingHospitals()) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+      } @else {
+        <p class="subtitle">Select a hospital to sign in to Epic (currently all resolve to the Epic sandbox).</p>
+        <div class="hospital-list">
+          @for (hospital of hospitals(); track hospital.id) {
+            <button type="button" class="hospital-row" (click)="selectHospital(hospital)">
+              <mat-icon>local_hospital</mat-icon>
+              <span class="hospital-row__name">{{ hospital.name }}</span>
+              <mat-icon class="hospital-row__chevron">chevron_right</mat-icon>
+            </button>
+          } @empty {
+            <p class="subtitle">No hospitals configured.</p>
+          }
+        </div>
+      }
+    </section>
+  </div>
+</div>

@@ -211,11 +211,14 @@ public sealed class OAuthController : ControllerBase
 
         // A workflow-triggered launch with a configured PostLaunchRedirectUri hands the browser back to the
         // third-party app that opened the EHR launch, rather than leaving it on this bare JSON response — the run
-        // id lets that app fetch its result (see GetWorkflowRunLaunchResult on WorkflowEndpoints).
-        if (result.WorkflowRunId is { } workflowRunId && !string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
+        // id lets that app fetch its result (see GetWorkflowRunLaunchResult on WorkflowEndpoints). A run that was
+        // attempted but threw still redirects back (with an error marker instead of a run id) so the app is never
+        // stranded here with no way to tell the user anything went wrong.
+        if (!string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
         {
-            var returnUrl = QueryHelpers.AddQueryString(
-                result.PostLaunchRedirectUri, "workflowRunId", workflowRunId.ToString());
+            var returnUrl = result.WorkflowRunId is { } workflowRunId
+                ? QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "workflowRunId", workflowRunId.ToString())
+                : QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "launchError", "workflow_failed");
             return Redirect(returnUrl);
         }
 
