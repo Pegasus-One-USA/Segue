@@ -212,7 +212,7 @@
        shown/hidden by whatever @if lives *inside* the wrapping component, so ngOnInit (where the form's
        prefill happens) would only ever run once, at page load, and never again on a later View/Edit click. -->
   @if (wiz.isOpen() && wiz.wizardMode() === 'entity') {
-    <div class="sc-modal-backdrop" (click)="onModalBackdropClick($event)">
+    <div class="sc-modal-backdrop" tabindex="0" (click)="onModalBackdropClick($event)" (keydown.escape)="wiz.close()">
       <div class="sc-modal-panel">
         <app-epic-audience-form (cancelled)="wiz.close()" />
       </div>
