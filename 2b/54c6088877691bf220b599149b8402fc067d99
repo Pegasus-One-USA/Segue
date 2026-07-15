@@ -1,0 +1,109 @@
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.html
+  s_a409deae72e076::t_b049079f6ff217 133-145,153-215
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_a409deae72e076::t_e98b814a7af29a 517-581
+  s_a409deae72e076::t_9fb49e87da057f 7
+  s_a409deae72e076::t_c0a7b7a41fee2c 72-93
+  s_a409deae72e076::t_aa387798dc5732 121-207
+  s_a409deae72e076::t_4a284388af8b24 493-496
+  s_a409deae72e076::t_49727fee848a49 711-713
+  s_a409deae72e076::t_7371a3f3dd26d9 248-255
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/config/standalone-launch.config.ts
+  s_4b14330bd85f4b::t_d24acebd792be4 12-16
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.scss
+  s_a409deae72e076::t_62decff4ae8e2b 274,279-297,311-405
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/core/services/patient.service.ts
+  s_feb502e6f689cc::t_2301d90542624d 57-60,63
+  s_feb502e6f689cc::t_31f13fe5600921 1,3
+  s_feb502e6f689cc::t_faa012284df41f 54-56,71-87
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts
+  s_feb502e6f689cc::t_71bcede9434862 31,34-40,46-47,58
+  s_feb502e6f689cc::t_4591d624746c48 65-73
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_a409deae72e076::t_cbd2e4b64b622d 93
+  s_a409deae72e076::t_bc68ca0cc50a64 54
+  s_a409deae72e076::t_8ec7863c913d30 105,109-132
+  s_2b3e33386ac39d::t_b8fd689d2b4dec 133-134
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.html
+  s_4b14330bd85f4b::t_dceedcd242a88c 121-133,141-203
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.scss
+  s_4b14330bd85f4b::t_1c2f0665c01a47 254-272,286-380
+  s_4b14330bd85f4b::t_98c532ad916c1e 249
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_4b14330bd85f4b::t_e5d900f3de096d 59-80
+  s_4b14330bd85f4b::t_3bcdbdc53a3e84 229,232,239,241,248,251,257,260
+  s_4b14330bd85f4b::t_c614950e835a5d 6-9
+  s_4b14330bd85f4b::t_4ce589c73c9a67 125-211
+Demo_TestApp/frontend/src/app/app.config.ts
+  s_feb502e6f689cc::t_5e200588cffff3 4,17
+  s_feb502e6f689cc::t_0426ff6571604c 12-16
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_4b14330bd85f4b::t_5d6aed46efb125 308-332
+  s_2b3e33386ac39d::t_c8b11d2115defb 307
+  s_4b14330bd85f4b::t_5f6aabb3727214 61
+Demo_TestApp/frontend/src/app/app.ts
+  s_feb502e6f689cc::t_25c22b61cad4c2 77
+  s_feb502e6f689cc::t_6794a48db8c3da 108-112,116
+  s_feb502e6f689cc::t_243f3fce4a42b0 130
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_4b14330bd85f4b::t_d31e23a8119e6c 191-195,198,201-207
+  s_4b14330bd85f4b::t_fb133a44900a75 155-161
+  s_4b14330bd85f4b::t_4ecf36ea64ac28 196-197,199-200
+  s_2b3e33386ac39d::t_fd48d75e281930 253
+  s_4b14330bd85f4b::t_edeabebc083e39 254-264
+  s_4b14330bd85f4b::t_740686bd698237 265-298
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_4b14330bd85f4b::t_35c1d74c4c53bb 249-258,261-263,265-276,278-287,289-302
+  s_4b14330bd85f4b::t_80b2abe932d4a4 9,12
+  s_4b14330bd85f4b::t_42552e5dcdc3a3 217-220
+  s_4b14330bd85f4b::t_5e7090dd0a1242 225-227
+  s_4b14330bd85f4b::t_09d0b2d5f4d209 41-48
+  s_4b14330bd85f4b::t_d40bb649839fed 236
+  s_4b14330bd85f4b::t_3141fabaed748f 243-248,259-260,264,277,288
+  s_4b14330bd85f4b::t_68cbe0a3b38f07 306,308,317,323,329-332,344
+  s_4b14330bd85f4b::t_87eb907f6fb025 405-407
+  s_4b14330bd85f4b::t_8497b95d9de5f2 412
+  s_4b14330bd85f4b::t_5bbf128ca8ab43 204-205,209
+  s_4b14330bd85f4b::t_312601dbfc9922 15
+  s_4b14330bd85f4b::t_1ffdb7bc61fa1b 379,383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "2b54c6088877691bf220b599149b8402fc067d99",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_4b14330bd85f4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54cc0bc2-875e-41fe-96eb-396e788fab65",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_a409deae72e076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28612c90-fdda-4b51-bba3-9958b4cd6e21",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_feb502e6f689cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6177f340-dd2a-4109-b596-92a45610c603",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
