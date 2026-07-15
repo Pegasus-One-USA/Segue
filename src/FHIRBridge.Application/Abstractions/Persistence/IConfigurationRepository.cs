@@ -14,6 +14,12 @@ public interface IConfigurationRepository
     Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct);
     Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct);
     Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct);
+    Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken);
+
+    /// <summary>Case-insensitive name uniqueness check across non-soft-deleted source connections. When
+    /// <paramref name="excludeId"/> is set (an update in progress), that connection's own row is excluded so it
+    /// doesn't collide with itself.</summary>
+    Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
 
     // ── Destinations ──────────────────────────────────────────────────────────
     Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct);

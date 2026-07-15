@@ -53,7 +53,7 @@ public sealed class ConfigurationService : IConfigurationService
         CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
-        ValidateSourceConnectionRequest(request);
+        await ValidateSourceConnectionRequestAsync(request, excludeId: null, cancellationToken);
         var sourceConnection = new SourceConnection(
             request.Name,
             request.SourceSystemType,
@@ -75,12 +75,20 @@ public sealed class ConfigurationService : IConfigurationService
         return ConfigurationMapper.ToDto(sourceConnection);
     }
 
+    public async Task<SourceConnectionDto?> GetSourceConnectionByIdAsync(
+        Guid sourceConnectionId,
+        CancellationToken cancellationToken)
+    {
+        var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+        return sourceConnection is null ? null : ConfigurationMapper.ToDto(sourceConnection);
+    }
+
     public async Task<SourceConnectionDto> UpdateSourceConnectionAsync(
         Guid sourceConnectionId,
         CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
-        ValidateSourceConnectionRequest(request);
+        await ValidateSourceConnectionRequestAsync(request, sourceConnectionId, cancellationToken);
         var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
         var oldValue = SerializeSnapshot(ConfigurationMapper.ToDto(sourceConnection));
         sourceConnection.Update(
@@ -126,6 +134,20 @@ public sealed class ConfigurationService : IConfigurationService
             isEnabled.ToString());
 
         return ConfigurationMapper.ToDto(sourceConnection);
+    }
+
+    public async Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+    {
+        var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+
+        await _repository.DeleteSourceConnectionAsync(sourceConnection, cancellationToken);
+        await RecordConfigurationAuditAsync(
+            ModuleSourceConnection,
+            "Deleted",
+            sourceConnection.Id,
+            sourceConnection.Name,
+            $"Source connection deleted for {sourceConnection.SourceSystemType}.",
+            cancellationToken);
     }
 
     public async Task<WebhookConfigurationDto> AddWebhookConfigurationAsync(
@@ -634,7 +656,10 @@ public sealed class ConfigurationService : IConfigurationService
         }
     }
 
-    private static void ValidateSourceConnectionRequest(CreateSourceConnectionRequest request)
+    private async Task ValidateSourceConnectionRequestAsync(
+        CreateSourceConnectionRequest request,
+        Guid? excludeId,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -644,6 +669,11 @@ public sealed class ConfigurationService : IConfigurationService
         if (string.IsNullOrWhiteSpace(request.BaseUrl))
         {
             throw new InvalidOperationException("Source FHIR base URL is required.");
+        }
+
+        if (await _repository.ExistsWithNameAsync(request.Name, excludeId, cancellationToken))
+        {
+            throw new InvalidOperationException($"A source connection named '{request.Name}' already exists.");
         }
 
         if (request.SourceSystemType == SourceSystemType.Epic)
