@@ -108,6 +108,22 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     }
 
     /// <summary>
+    /// Clears both the request-time <see cref="FhirSourceConfiguration.TargetPatientId"/> slot (if set) and the
+    /// unscoped "default" slot every save also writes to (see ExchangeAuthorizationCodeAsync/RefreshAsync) — so a
+    /// caller that doesn't know (or isn't scoped to) a specific patient still fully discards whichever token this
+    /// source's most recent interactive sign-in produced. Does not call the authorization server; the token remains
+    /// technically valid at Epic/etc. until it naturally expires, it is just no longer usable from FHIRBridge.
+    /// </summary>
+    public async Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        await _tokenStore.RemoveAsync(BuildStoreKey(source, null), cancellationToken);
+        if (!string.IsNullOrWhiteSpace(source.TargetPatientId))
+        {
+            await _tokenStore.RemoveAsync(BuildStoreKey(source, source.TargetPatientId), cancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Builds the authorization-endpoint URL the user is redirected to, returning the PKCE code verifier that must be
     /// retained (alongside <paramref name="state"/>) to complete <see cref="ExchangeAuthorizationCodeAsync"/>.
     /// </summary>

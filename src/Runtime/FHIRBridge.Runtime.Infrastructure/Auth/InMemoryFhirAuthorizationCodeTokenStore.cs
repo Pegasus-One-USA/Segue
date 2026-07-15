@@ -24,4 +24,10 @@ public sealed class InMemoryFhirAuthorizationCodeTokenStore : IFhirAuthorization
         _tokens[key] = token;
         return Task.CompletedTask;
     }
+
+    public Task RemoveAsync(string key, CancellationToken cancellationToken)
+    {
+        _tokens.TryRemove(key, out _);
+        return Task.CompletedTask;
+    }
 }

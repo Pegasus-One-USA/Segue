@@ -33,4 +33,9 @@ public sealed record PendingAuthorization(
     // The base URL actually used to issue this authorization (the source connection's own, or an EhrEndpoint
     // override), carried through to the callback so the token exchange/save records the same value — the token
     // exchange builds its own FhirSourceConfiguration from scratch and has no other way to know which URL was used.
-    string? ResolvedBaseUrl = null);
+    string? ResolvedBaseUrl = null,
+    // True only for an EHR launch (a non-null `launch` token was issued alongside the authorize request), meaning
+    // Epic itself established a patient context before the redirect. False for Standalone/patient-standalone
+    // sign-ins, which have no upfront patient context at all — the callback uses this to decide whether its own
+    // auto-triggered convenience run has any chance of succeeding (see CompleteAsync).
+    bool HasLaunchContext = false);

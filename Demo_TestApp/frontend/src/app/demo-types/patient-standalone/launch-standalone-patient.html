@@ -1,0 +1,137 @@
+<div class="fullscreen-shell">
+  <header class="fullscreen-shell__topbar">
+    <div class="title-group">
+      <span class="fullscreen-shell__title">HealthApp</span>
+      <span class="login-type-badge">{{ loginTypeLabel() }}</span>
+    </div>
+    <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+    </button>
+  </header>
+
+  <div class="launch-page">
+    <header class="page-header">
+      <h1>Launch In Standalone Patient</h1>
+      <p class="subtitle">This page simulates a patient launching FHIRBridge directly from their own hospital's MyChart, outside any EHR/provider context.</p>
+    </header>
+
+    <section class="standalone-section">
+      @if (launchError()) {
+        <p class="error-banner">
+          The workflow FHIRBridge triggered after sign-in failed to complete ({{ launchError() }}). Check
+          FHIRBridge's Execution History for this run's error detail.
+        </p>
+      }
+
+      <mat-card class="fetch-card" appearance="outlined">
+        <mat-card-content>
+          <div class="token-status-row">
+            <span
+              class="token-status"
+              [class.token-status--valid]="hasMyChartToken()"
+              [class.token-status--invalid]="!hasMyChartToken()"
+            >
+              {{ hasMyChartToken() ? 'Token Valid' : 'Not signed in yet' }}
+              @if (hasMyChartToken() && lastConfirmedValidUtc(); as confirmedAt) {
+                <span class="token-status__meta">(last confirmed {{ confirmedAt | date:'short' }})</span>
+              }
+            </span>
+            @if (hasMyChartToken()) {
+              <button type="button" class="reset-token-btn" (click)="resetToken()">Reset Token</button>
+            }
+          </div>
+
+          <div class="hospital-picker">
+            <p class="step-label">1. Select hospital</p>
+
+            <input
+              type="search"
+              class="hospital-search"
+              placeholder="Search hospitals by name…"
+              [value]="hospitalSearchQuery()"
+              (input)="onHospitalSearchChange($any($event.target).value)"
+            />
+
+            @if (hospitalSelectError()) {
+              <p class="error-banner">{{ hospitalSelectError() }}</p>
+            }
+
+            @if (isLoadingHospitals()) {
+              <div class="loading-container">
+                <mat-spinner diameter="32"></mat-spinner>
+              </div>
+            } @else {
+              <div class="hospital-list">
+                @for (hospital of hospitals(); track hospital.id) {
+                  <button
+                    type="button"
+                    class="hospital-row"
+                    [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
+                    [disabled]="isRedirectingToMyChart()"
+                    (click)="chooseHospital(hospital)"
+                  >
+                    <span class="hospital-row__text">
+                      <span class="hospital-row__name">{{ hospital.name }}</span>
+                      <span class="hospital-row__url">{{ hospital.fhirBaseUrl }}</span>
+                    </span>
+                    @if (selectedHospitalId() === hospital.id) {
+                      <span class="hospital-row__chevron">✓</span>
+                    }
+                  </button>
+                } @empty {
+                  <p class="subtitle">No MyChart endpoints match your search.</p>
+                }
+              </div>
+            }
+          </div>
+
+          <p class="step-label">2. Connect and fetch your record</p>
+          <button
+            type="button"
+            class="connect-btn"
+            [disabled]="isFetchingPatient() || isResolvingPatientContext() || isRedirectingToMyChart()"
+            (click)="fetchPatient()"
+          >
+            <span class="connect-btn__content">
+              @if (isResolvingPatientContext()) {
+                <mat-spinner diameter="18"></mat-spinner>
+                <span>Checking session…</span>
+              } @else if (isFetchingPatient()) {
+                <mat-spinner diameter="18"></mat-spinner>
+              } @else if (isRedirectingToMyChart()) {
+                <mat-spinner diameter="18"></mat-spinner>
+                <span>Redirecting to MyChart…</span>
+              } @else {
+                <span>Connect Get Data</span>
+              }
+            </span>
+          </button>
+
+          @if (patientError()) {
+            <p class="error-banner">{{ patientError() }}</p>
+          }
+          @if (fetchedPatients(); as patients) {
+            @if (patients.length > 0) {
+              <ul class="patient-list">
+                @for (patient of patients; track patient.id) {
+                  <li class="patient-list__row">
+                    <span class="patient-list__name">{{ patient.name }}</span>
+                    @if (patient.birthDate) {
+                      <span class="patient-list__dob">DOB: {{ patient.birthDate }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="fetch-card__success">No patient record was returned for this launch.</p>
+            }
+          }
+        </mat-card-content>
+      </mat-card>
+    </section>
+  </div>
+</div>

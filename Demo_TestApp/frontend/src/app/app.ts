@@ -6,9 +6,20 @@ import { firstValueFrom } from 'rxjs';
 import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-standalone';
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
 import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
+import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
 
 const BACKEND_BASE_URL = 'http://localhost:5500';
 const DEMO_TYPE_STORAGE_KEY = 'hb_demo_type';
+
+// Embedded EHR launches round-trip this tab through FHIRBridge + Epic and back to this same origin via a full
+// top-level navigation *inside the iframe* Epic embeds this app in (see LaunchProviderInAppComponent.ngOnInit).
+// hb_session is SameSite=Lax with no Secure flag, so on that return leg the browser won't send it back — Lax
+// cookies are excluded from requests made in a cross-site iframe context, even though the navigation looks
+// top-level from inside the frame. That made restoreSession()'s cookie check fail after every embedded launch,
+// re-showing the login screen and forcing a second login for a session that was already established. sessionStorage
+// isn't subject to that restriction (it's plain per-origin storage, not a cookie sent on requests), so mirror the
+// logged-in role there at login and trust it first on restore — sidesteps the blocked cookie read entirely.
+const AUTH_ROLE_STORAGE_KEY = 'hb_auth_role';
 
 // A direct EHR-launch redirect (Epic calling this app's registered launch URL) lands on this exact path
 // with ?iss=&launch= already on the URL — lock the Login Type from the path itself, no dropdown/?DemoType=
@@ -33,20 +44,24 @@ interface DemoType {
   name: string;
 }
 
+// The backend seeds four roles (Admin, Patient, ProviderStandalone, ProviderInApp — see HealthAppDbContext.cs) —
+// this app only ever does an `=== 'Admin'`-style string comparison against it (see PatientStandaloneComponent),
+// so there's no real union to enumerate here; typing it narrowly before caused ProviderStandalone/ProviderInApp
+// logins to fail the restoreSession() sessionStorage check below.
 interface LoginResponse {
   email: string;
-  role: 'Admin' | 'Patient';
+  role: string;
 }
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, PatientStandaloneComponent, LaunchProviderInAppComponent, LaunchStandaloneProviderComponent],
+  imports: [FormsModule, PatientStandaloneComponent, LaunchProviderInAppComponent, LaunchStandaloneProviderComponent, LaunchStandalonePatientComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App implements OnInit {
   protected readonly loggedIn = signal(false);
-  protected readonly role = signal<'Admin' | 'Patient' | null>(null);
+  protected readonly role = signal<string | null>(null);
   protected readonly loginEmail = signal('');
   protected readonly loginPassword = signal('');
   protected readonly loginError = signal('');
@@ -71,12 +86,20 @@ export class App implements OnInit {
   }
 
   private async restoreSession(): Promise<void> {
+    const storedRole = sessionStorage.getItem(AUTH_ROLE_STORAGE_KEY);
+    if (storedRole) {
+      this.role.set(storedRole);
+      this.loggedIn.set(true);
+      return;
+    }
+
     try {
       const response = await firstValueFrom(
         this.http.get<LoginResponse>(`${BACKEND_BASE_URL}/api/session`, { withCredentials: true })
       );
       this.role.set(response.role);
       this.loggedIn.set(true);
+      sessionStorage.setItem(AUTH_ROLE_STORAGE_KEY, response.role);
     } catch {
       // No valid session cookie — stay on the login screen.
     }
@@ -137,6 +160,7 @@ export class App implements OnInit {
 
       this.role.set(response.role);
       this.loggedIn.set(true);
+      sessionStorage.setItem(AUTH_ROLE_STORAGE_KEY, response.role);
 
       // Provider in-app launches must land on /launchproviderinapp so LaunchProviderInAppComponent's own
       // ngOnInit (which reads iss/launch and hands off to FHIRBridge) actually runs — whatever path the
@@ -165,6 +189,7 @@ export class App implements OnInit {
 
   async logout(): Promise<void> {
     await firstValueFrom(this.http.post(`${BACKEND_BASE_URL}/api/logout`, {}, { withCredentials: true }));
+    sessionStorage.removeItem(AUTH_ROLE_STORAGE_KEY);
     this.loggedIn.set(false);
     this.role.set(null);
     this.loginEmail.set('');

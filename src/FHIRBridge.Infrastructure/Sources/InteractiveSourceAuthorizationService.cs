@@ -446,7 +446,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 // Carries whichever base URL this authorize request actually used (the connection's own, or a
                 // resolved EhrEndpoint override) through to CompleteAsync — the token exchange there builds its own
                 // FhirSourceConfiguration from scratch and has no other way to learn which URL was used.
-                ResolvedBaseUrl: source.BaseUrl),
+                ResolvedBaseUrl: source.BaseUrl,
+                HasLaunchContext: launch is not null),
             cancellationToken);
 
         return new Uri(request.AuthorizationUrl);
@@ -509,6 +510,14 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         Guid? workflowRunId = null;
         var workflowRunFailed = false;
+        // A workflow-bound sign-in with no launch context (Standalone/patient-standalone — no `launch` token was
+        // ever issued, see IssueAuthorizationAsync) has nothing for this convenience run to search with: it fires
+        // before the caller's own page has even reloaded, so it always hits Epic's "requires demographics or _id"
+        // business rule. Firing it anyway costs a real Epic API call and an always-failing WorkflowRun row for zero
+        // benefit — the caller (e.g. Demo_TestApp's LaunchStandaloneProviderComponent) is expected to run its own
+        // criteria-scoped fetch once it reloads. An EHR launch (HasLaunchContext true) keeps firing it as before,
+        // since Epic hands over a real patient context there and the run has a genuine chance of finding data.
+        var skipWorkflowTrigger = pending.WorkflowId is not null && !pending.HasLaunchContext;
         if (pending.RouteId is { } routeId)
         {
             // Deliberately NOT the request token: the callback's caller is the provider's browser, which may
@@ -516,7 +525,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             // die with the connection.
             await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None);
         }
-        else if (pending.WorkflowId is { } workflowId)
+        else if (pending.WorkflowId is { } workflowId && !skipWorkflowTrigger)
         {
             // Same reasoning as the route path above — the run must survive the browser disconnecting/redirecting
             // while it's still in flight, so it uses CancellationToken.None rather than the request's token.
@@ -527,13 +536,17 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         // Redirect back to the third-party app whenever a run was attempted (success or failure) and a redirect
         // URI is configured — only a plain sign-in with no bound workflow (nothing attempted) falls through to
-        // the bare JSON response, since there is nothing for the caller to fetch or be told about either way.
-        var postLaunchRedirectUri = workflowRunId is not null || workflowRunFailed
+        // the bare JSON response, since there is nothing for the caller to fetch or be told about either way. A
+        // skipped-on-purpose workflow trigger (see skipWorkflowTrigger above) still redirects: something IS bound,
+        // the caller still needs the round trip back to run its own fetch, we just chose not to attempt the
+        // convenience run ourselves.
+        var postLaunchRedirectUri = workflowRunId is not null || workflowRunFailed || skipWorkflowTrigger
             ? sourceConnection.Interactive?.PostLaunchRedirectUri
             : null;
 
         return new InteractiveAuthorizationResult(
-            pending.SourceConnectionId, pending.SourceName, workflowRunId, postLaunchRedirectUri, workflowRunFailed);
+            pending.SourceConnectionId, pending.SourceName, workflowRunId, postLaunchRedirectUri, workflowRunFailed,
+            WorkflowRunSkipped: skipWorkflowTrigger);
     }
 
     // After a launch completes, run every enabled pipeline route bound to the launched source — the launch establishes

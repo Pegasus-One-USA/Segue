@@ -1,4 +1,6 @@
 using FHIRBridge.Application.Abstractions.Sources;
+using FHIRBridge.Application.Services;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,10 +19,17 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class OAuthController : ControllerBase
 {
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
+    private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
+    private readonly IEhrEndpointService _ehrEndpointService;
 
-    public OAuthController(IInteractiveSourceAuthorizationService authorizationService)
+    public OAuthController(
+        IInteractiveSourceAuthorizationService authorizationService,
+        IWorkflowDefinitionStore workflowDefinitionStore,
+        IEhrEndpointService ehrEndpointService)
     {
         _authorizationService = authorizationService;
+        _workflowDefinitionStore = workflowDefinitionStore;
+        _ehrEndpointService = ehrEndpointService;
     }
 
     /// <summary>
@@ -92,6 +101,40 @@ public sealed class OAuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetWorkflowLaunchUrl(Guid workflowId, [FromQuery] Guid? ehrEndpointId, CancellationToken cancellationToken)
     {
+        var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId);
+        return Ok(BuildLaunchResponse(applicationType, context));
+    }
+
+    /// <summary>
+    /// Anonymous counterpart to <see cref="GetWorkflowLaunchUrl"/>, for a third-party app whose own end user picks a
+    /// hospital before launching (e.g. Demo_TestApp's Provider_Standalone hospital picker, backed by the
+    /// ehr-epic-endpoints listing). Only mints a context for a workflow the admin has explicitly opted in via
+    /// <c>POST /workflows/{workflowId}/enable-public-launch</c> — <see cref="WorkflowDefinition.IsPubliclyLaunchable"/>
+    /// is the only gate standing between "any caller who knows this workflowId" and a working Epic-login link for
+    /// it, since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must
+    /// resolve to an EndpointType.Epic row — the same restricted set the public picker listing exposes, never a
+    /// specific customer's live MyChart production instance.
+    /// </summary>
+    [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
+    [HttpGet("workflows/{workflowId:guid}/public-standalone-url")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPublicWorkflowStandaloneUrl(
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, CancellationToken cancellationToken)
+    {
+        var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
+        if (workflow is null || !workflow.IsPubliclyLaunchable)
+        {
+            return NotFound();
+        }
+
+        if (!await _ehrEndpointService.IsEpicEndpointAsync(ehrEndpointId, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
         var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId);
         return Ok(BuildLaunchResponse(applicationType, context));
@@ -213,12 +256,17 @@ public sealed class OAuthController : ControllerBase
         // third-party app that opened the EHR launch, rather than leaving it on this bare JSON response — the run
         // id lets that app fetch its result (see GetWorkflowRunLaunchResult on WorkflowEndpoints). A run that was
         // attempted but threw still redirects back (with an error marker instead of a run id) so the app is never
-        // stranded here with no way to tell the user anything went wrong.
+        // stranded here with no way to tell the user anything went wrong. A run that was deliberately never
+        // attempted (WorkflowRunSkipped — a Standalone/patient-standalone sign-in with no launch context; see
+        // InteractiveSourceAuthorizationService.CompleteAsync) redirects with a neutral "signed in" marker instead:
+        // the token exchange itself succeeded, there is just nothing to report as failed.
         if (!string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
         {
             var returnUrl = result.WorkflowRunId is { } workflowRunId
                 ? QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "workflowRunId", workflowRunId.ToString())
-                : QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "launchError", "workflow_failed");
+                : result.WorkflowRunSkipped
+                    ? QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "signedIn", "1")
+                    : QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "launchError", "workflow_failed");
             return Redirect(returnUrl);
         }
 

@@ -26,6 +26,10 @@ public abstract class SourceApplicationStrategyBase : ISourceApplicationStrategy
     public virtual Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         Task.FromResult<string?>(null);
 
+    /// <summary>No-op by default (nothing cached to discard); interactive strategies override to clear their token store entry.</summary>
+    public virtual Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
     public SourceApplicationValidationResult Validate(FhirSourceConfiguration source)
     {
         ArgumentNullException.ThrowIfNull(source);

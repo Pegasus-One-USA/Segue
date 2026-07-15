@@ -19,4 +19,12 @@ public interface IFhirPatientContextProvider
     /// the caller needing to specify it again.
     /// </summary>
     Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Discards the cached token(s) for this source (both the request-time <see cref="FhirSourceConfiguration.TargetPatientId"/>
+    /// slot, if set, and the unscoped "default" slot) so a later access-token request finds nothing cached and
+    /// requires a fresh interactive sign-in. Does not revoke the token at the authorization server — only clears
+    /// FHIRBridge's own cache.
+    /// </summary>
+    Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
 }

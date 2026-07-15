@@ -148,6 +148,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("EndpointType")
+                        .HasColumnType("int");
+
                     b.Property<string>("FhirBaseUrl")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -1428,6 +1431,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("IsPubliclyLaunchable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime?>("LastTriggeredOnUtc")
                         .HasColumnType("datetime2");
