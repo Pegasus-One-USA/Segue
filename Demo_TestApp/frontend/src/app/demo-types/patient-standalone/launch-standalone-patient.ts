@@ -6,10 +6,13 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {
   FetchedPatient,
   MyChartEndpoint,
+  PatientDetail,
   PatientStandaloneLaunchService,
   extractFetchedPatients,
+  extractPatientDetail,
   indicatesReAuthorizationNeeded,
 } from './core/services/patient-standalone-launch.service';
+import { PATIENT_DETAIL_WORKFLOW_ID, PATIENT_WORKFLOW_ID } from './core/config/standalone-launch.config';
 
 @Component({
   selector: 'app-launch-standalone-patient',
@@ -34,6 +37,14 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly isFetchingPatient = signal(false);
   readonly patientError = signal<string | null>(null);
   readonly fetchedPatients = signal<FetchedPatient[] | null>(null);
+
+  // Detail section (Patient/Observation/Condition) for whichever row was last clicked in fetchedPatients — a
+  // second, patient-scoped /run triggered on click, reusing the same already-valid token from the list fetch
+  // rather than a fresh sign-in. Cleared whenever a new list fetch replaces fetchedPatients.
+  readonly selectedPatientId = signal<string | null>(null);
+  readonly isFetchingPatientDetail = signal(false);
+  readonly patientDetailError = signal<string | null>(null);
+  readonly patientDetail = signal<PatientDetail | null>(null);
 
   // True while a remembered session is still being checked (on load) or a just-completed launch's patientId is
   // still being resolved from /launch-result — gates the Connect button so a click can't race ahead of patientId
@@ -190,12 +201,12 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.isFetchingPatient.set(true);
     this.patientError.set(null);
     try {
-      if (!(await this.hasValidToken())) {
-        await this.needsReAuthorization();
+      if (!(await this.hasValidToken(PATIENT_WORKFLOW_ID))) {
+        await this.needsReAuthorization(PATIENT_WORKFLOW_ID);
         return;
       }
 
-      const result = await this.launchService.run(this.patientId);
+      const result = await this.launchService.run(PATIENT_WORKFLOW_ID, this.patientId);
 
       if (result.workflowRun.status === 'Succeeded') {
         this.fetchedPatients.set(extractFetchedPatients(result));
@@ -203,11 +214,17 @@ export class LaunchStandalonePatientComponent implements OnInit {
         // Clears any stale "workflow_failed" banner from FHIRBridge's own no-criteria convenience run — that run
         // failing is an expected, benign artifact of the Standalone launch flow, not a real problem.
         this.launchError.set(null);
+        // A fresh list invalidates whatever detail section was open for a row from the previous list.
+        this.selectedPatientId.set(null);
+        this.patientDetail.set(null);
+        this.patientDetailError.set(null);
         void this.rememberSession();
         return;
       }
 
-      await this.handleFetchFailure(result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.');
+      await this.handleFetchFailure(
+        result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.', PATIENT_WORKFLOW_ID,
+      );
     } catch (err) {
       // A failure resolved before the run even starts (e.g. no token cached at all, or an expired one) throws past
       // the orchestrator and surfaces here as an HttpErrorResponse with a bare {error: "..."} body.
@@ -216,18 +233,79 @@ export class LaunchStandalonePatientComponent implements OnInit {
         : null;
       await this.handleFetchFailure(
         backendMessage ?? 'Could not reach FHIRBridge to trigger the workflow. Check your connection and try again.',
+        PATIENT_WORKFLOW_ID,
       );
     } finally {
       this.isFetchingPatient.set(false);
     }
   }
 
+  // Clicking a patient row triggers a second, patient-scoped /run against PATIENT_DETAIL_WORKFLOW_ID — a
+  // deliberately different workflow from the one that produced the list (PATIENT_WORKFLOW_ID), each with its own
+  // public-launch opt-in. Still reuses whatever token that workflow's own source connection already has cached, not
+  // an unconditional fresh sign-in — same token-status-then-run shape as fetchPatient() above, so an out-of-band
+  // token revocation (or this workflow simply never having been signed into yet) is handled the same way (redirect
+  // to MyChart) rather than silently failing.
+  async viewPatientDetail(patient: FetchedPatient): Promise<void> {
+    if (this.isFetchingPatientDetail() || this.isRedirectingToMyChart()) {
+      return;
+    }
+
+    this.selectedPatientId.set(patient.id);
+    this.isFetchingPatientDetail.set(true);
+    this.patientDetailError.set(null);
+    this.patientDetail.set(null);
+    try {
+      if (!(await this.hasValidToken(PATIENT_DETAIL_WORKFLOW_ID))) {
+        await this.needsReAuthorization(PATIENT_DETAIL_WORKFLOW_ID);
+        return;
+      }
+
+      const result = await this.launchService.run(PATIENT_DETAIL_WORKFLOW_ID, patient.id);
+
+      if (result.workflowRun.status === 'Succeeded') {
+        const detail = extractPatientDetail(result, patient.id);
+        this.patientDetail.set(detail);
+        if (!detail) {
+          this.patientDetailError.set('FHIRBridge did not return any resources for this patient.');
+        }
+        return;
+      }
+
+      const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization(PATIENT_DETAIL_WORKFLOW_ID);
+        return;
+      }
+      this.patientDetailError.set(errorMessage);
+    } catch (err) {
+      const backendMessage = err instanceof HttpErrorResponse && typeof err.error?.error === 'string'
+        ? err.error.error
+        : null;
+      const errorMessage = backendMessage
+        ?? 'Could not reach FHIRBridge to fetch this patient\'s detail. Check your connection and try again.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization(PATIENT_DETAIL_WORKFLOW_ID);
+        return;
+      }
+      this.patientDetailError.set(errorMessage);
+    } finally {
+      this.isFetchingPatientDetail.set(false);
+    }
+  }
+
+  closePatientDetail(): void {
+    this.selectedPatientId.set(null);
+    this.patientDetail.set(null);
+    this.patientDetailError.set(null);
+  }
+
   // Cheap pre-check: does FHIRBridge currently have (or can it silently refresh) a usable token, without running
   // any pipeline? Defaults to "assume valid" on any error so a broken check never blocks the flow — the real /run
   // call right after is always the authoritative test either way.
-  private async hasValidToken(): Promise<boolean> {
+  private async hasValidToken(workflowId: string): Promise<boolean> {
     try {
-      return await this.launchService.hasValidToken(this.patientId);
+      return await this.launchService.hasValidToken(workflowId, this.patientId);
     } catch {
       return true;
     }
@@ -236,19 +314,22 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // Interprets the fetch failure: if it genuinely means "no usable token", delegates to needsReAuthorization().
   // Any other failure just shows the message and leaves state intact so the user can retry without redoing the
   // whole OAuth round trip.
-  private async handleFetchFailure(errorMessage: string): Promise<void> {
+  private async handleFetchFailure(errorMessage: string, workflowId: string): Promise<void> {
     if (!indicatesReAuthorizationNeeded(errorMessage)) {
       this.patientError.set(errorMessage);
       return;
     }
 
-    await this.needsReAuthorization();
+    await this.needsReAuthorization(workflowId);
   }
 
   // Clears the stale local/FHIRBridge state and redirects to MyChart using whichever hospital the user already
   // selected above — the "if not valid, goto MyChart, grant access, fetch data and display" leg. If the user hasn't
   // selected a hospital yet, there's nothing to redirect to, so this just asks them to pick one instead of guessing.
-  private async needsReAuthorization(): Promise<void> {
+  // workflowId is whichever workflow's token-status/run call discovered the problem (PATIENT_WORKFLOW_ID for the
+  // list, PATIENT_DETAIL_WORKFLOW_ID for a per-patient detail click) — the mint call below must target that same
+  // workflow, since each has its own independent public-launch opt-in and (potentially) its own source connection.
+  private async needsReAuthorization(workflowId: string): Promise<void> {
     void this.forgetSession();
     this.patientId = null;
     this.hasMyChartToken.set(false);
@@ -260,7 +341,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       return;
     }
 
-    await this.redirectToMyChart(selectedHospital);
+    await this.redirectToMyChart(selectedHospital, workflowId);
   }
 
   onHospitalSearchChange(value: string): void {
@@ -295,11 +376,11 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // Mints a launch context for the pre-selected hospital via FHIRBridge's anonymous public-patient-standalone-url
   // endpoint, and hands the browser off to MyChart's real authorization page. Must be a full top-level navigation,
   // not an HttpClient call: FHIRBridge's endpoint 302s onward, which an XHR/fetch can't complete interactively.
-  private async redirectToMyChart(endpoint: MyChartEndpoint): Promise<void> {
+  private async redirectToMyChart(endpoint: MyChartEndpoint, workflowId: string): Promise<void> {
     this.isRedirectingToMyChart.set(true);
     this.hospitalSelectError.set(null);
     try {
-      const result = await this.launchService.mintLaunchUrl(endpoint.id);
+      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id);
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);
@@ -321,11 +402,14 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.fetchedPatients.set(null);
     this.patientError.set(null);
     this.hasMyChartToken.set(false);
+    this.selectedPatientId.set(null);
+    this.patientDetail.set(null);
+    this.patientDetailError.set(null);
   }
 
   private async discardFhirBridgeToken(): Promise<void> {
     try {
-      await this.launchService.discardToken(this.patientId);
+      await this.launchService.discardToken(PATIENT_WORKFLOW_ID, this.patientId);
     } catch {
       // Non-fatal — worst case FHIRBridge's cache still has the old token, which the next /run attempt would just
       // successfully reuse (same as if Reset Token had never been clicked); nothing is left in a broken state.

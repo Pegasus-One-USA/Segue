@@ -58,6 +58,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
 
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
         var searchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
+        searchParameters = ApplyDefaultObservationCategory(resourceType, searchParameters);
         var resources = new List<ResourceEnvelope>();
         var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, searchParameters);
         var maxPages = source.MaxPages <= 0 ? 1 : source.MaxPages;
@@ -301,6 +302,32 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
 
         var scope = isPatientResource ? $"_id={patientId}" : $"patient={patientId}";
         return string.IsNullOrWhiteSpace(query) ? scope : $"{query}&{scope}";
+    }
+
+    /// <summary>
+    /// Epic (enforcing the underlying US Core profile) rejects an <c>Observation</c> search with neither
+    /// <c>category</c> nor <c>code</c> present — "Must have either code or category." Defaults to every standard US
+    /// Core Observation category so an otherwise-unscoped Observation fetch still succeeds and returns the full
+    /// breadth of a patient's observations, rather than requiring every caller to separately know and supply this
+    /// Epic/US-Core-specific requirement. A caller-supplied <c>category</c> or <c>code</c> (however that search
+    /// parameter reached <paramref name="searchParameters"/> — connection-level SearchParameters, PatientSearchCriteria,
+    /// etc.) is left untouched. Every other resource type is unaffected.
+    /// </summary>
+    private static string? ApplyDefaultObservationCategory(string resourceType, string? searchParameters)
+    {
+        if (!string.Equals(resourceType, "Observation", StringComparison.OrdinalIgnoreCase))
+        {
+            return searchParameters;
+        }
+
+        var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        if (ContainsQueryParameter(query, "category") || ContainsQueryParameter(query, "code"))
+        {
+            return searchParameters;
+        }
+
+        const string defaultCategories = "social-history,vital-signs,imaging,laboratory,procedure,survey,exam,therapy,activity";
+        return string.IsNullOrWhiteSpace(query) ? $"category={defaultCategories}" : $"{query}&category={defaultCategories}";
     }
 
     /// <summary>

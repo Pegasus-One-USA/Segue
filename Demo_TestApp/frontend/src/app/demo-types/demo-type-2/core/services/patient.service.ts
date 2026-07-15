@@ -1,7 +1,6 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
-import { Observable, catchError, delay, map, of } from 'rxjs';
+import { Observable, catchError, delay, map, of, throwError } from 'rxjs';
 import { Patient } from '../models/patient.model';
 import { MOCK_PATIENT } from '../mock-data/patient.mock';
 import { FHIRBRIDGE_BASE_URL } from '../config/launch.config';
@@ -47,16 +46,21 @@ interface FhirExtension {
 @Injectable({ providedIn: 'root' })
 export class PatientService {
   private readonly http = inject(HttpClient);
-  private readonly route = inject(ActivatedRoute);
 
   /**
    * Returns the patient context for the current launch. When the page was reached via FHIRBridge's post-launch
    * redirect (?workflowRunId=...), fetches the raw Patient resource FHIRBridge's Epic source node retrieved for
    * that run (the same data the "Execution History" screen shows) and binds directly from its FHIR shape. Falls
-   * back to mock data when there's no launch context at all, or if the fetch fails.
+   * back to mock data only when there's no launch context at all (the page was opened directly, not via a real
+   * EHR launch) — a real launch that fails to produce patient data errors out instead of masking the failure
+   * behind mock data that looks like a working demo (see launch-provider-in-app.ts's launchError handling).
+   *
+   * Reads workflowRunId straight off window.location.search rather than ActivatedRoute: this app has no
+   * <router-outlet> (see app.routes.ts), so ActivatedRoute.snapshot isn't reliably populated by the time this
+   * root-provided singleton is constructed and called.
    */
   getPatient(): Observable<Patient> {
-    const workflowRunId = this.route.snapshot.queryParamMap.get('workflowRunId');
+    const workflowRunId = new URLSearchParams(window.location.search).get('workflowRunId');
     if (!workflowRunId) {
       return of(MOCK_PATIENT).pipe(delay(600));
     }
@@ -64,8 +68,23 @@ export class PatientService {
     return this.http
       .get<LaunchResultResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/runs/${workflowRunId}/launch-result`)
       .pipe(
-        map((response) => (response.patient ? this.toPatient(response.patient) : MOCK_PATIENT)),
-        catchError(() => of(MOCK_PATIENT)),
+        map((response) => {
+          if (!response.patient) {
+            throw new Error(
+              `FHIRBridge's run ${workflowRunId} completed but returned no Patient resource — check Execution History for this run.`,
+            );
+          }
+          return this.toPatient(response.patient);
+        }),
+        catchError((error: unknown) => {
+          const detail =
+            error instanceof HttpErrorResponse
+              ? `${error.status || 'network error'} calling ${FHIRBRIDGE_BASE_URL}`
+              : error instanceof Error
+                ? error.message
+                : 'unknown error';
+          return throwError(() => new Error(`Failed to load this launch's patient data (${detail}).`));
+        }),
       );
   }
 

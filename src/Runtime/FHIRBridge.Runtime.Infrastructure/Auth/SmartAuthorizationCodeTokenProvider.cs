@@ -51,8 +51,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             throw new InvalidOperationException($"{ProviderName} requires a client id.");
         }
 
-        var key = BuildStoreKey(source, source.TargetPatientId);
-        var stored = await _tokenStore.GetAsync(key, cancellationToken);
+        var (key, stored) = await GetStoredTokenAsync(source, cancellationToken);
         if (stored is null)
         {
             throw new InvalidOperationException(
@@ -91,7 +90,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     /// </summary>
     public async Task<string?> GetPatientContextAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
-        var stored = await _tokenStore.GetAsync(BuildStoreKey(source, source.TargetPatientId), cancellationToken);
+        var (_, stored) = await GetStoredTokenAsync(source, cancellationToken);
         return stored?.Patient;
     }
 
@@ -103,8 +102,34 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     /// </summary>
     public async Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
-        var stored = await _tokenStore.GetAsync(BuildStoreKey(source, source.TargetPatientId), cancellationToken);
+        var (_, stored) = await GetStoredTokenAsync(source, cancellationToken);
         return stored?.ResolvedBaseUrl;
+    }
+
+    /// <summary>
+    /// Looks up this source's cached token, preferring the patient-specific slot (see <see cref="BuildStoreKey"/>)
+    /// but falling back to the unscoped "default" slot when a <see cref="FhirSourceConfiguration.TargetPatientId"/>
+    /// is set and nothing is cached under it yet. This is the common case for a non-patient-context connection
+    /// (e.g. Provider/Backend Standalone): the sign-in itself never establishes a specific patient (no <c>patient</c>
+    /// claim comes back), so only "default" is ever populated — every subsequent per-patient search (via
+    /// WorkflowRunRequest.PatientId, purely to scope the FHIR query itself) would otherwise look like "no token"
+    /// and wrongly force a fresh interactive sign-in. Returns the key the token was actually found under, so a
+    /// caller that goes on to refresh an expired token updates the same slot it read from.
+    /// </summary>
+    private async Task<(string Key, StoredOAuthToken? Token)> GetStoredTokenAsync(
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var key = BuildStoreKey(source, source.TargetPatientId);
+        var stored = await _tokenStore.GetAsync(key, cancellationToken);
+        if (stored is not null || string.IsNullOrWhiteSpace(source.TargetPatientId))
+        {
+            return (key, stored);
+        }
+
+        var defaultKey = BuildStoreKey(source, null);
+        var defaultStored = await _tokenStore.GetAsync(defaultKey, cancellationToken);
+        return (defaultKey, defaultStored);
     }
 
     /// <summary>

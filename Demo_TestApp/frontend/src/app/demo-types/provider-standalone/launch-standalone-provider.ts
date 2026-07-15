@@ -4,7 +4,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
-import { FHIRBRIDGE_BASE_URL, STANDALONE_WORKFLOW_ID } from './core/config/standalone-launch.config';
+import { FHIRBRIDGE_BASE_URL, STANDALONE_DETAIL_WORKFLOW_ID, STANDALONE_WORKFLOW_ID } from './core/config/standalone-launch.config';
 
 /** Matches FHIRBridge's PublicEhrEpicEndpointDto (GET /api/v1/ehr-epic-endpoints) — anonymous, EndpointType=Epic
  *  rows only (the vendor's own shared sandbox, never a real customer's MyChart instance). */
@@ -69,6 +69,28 @@ interface PatientListEntry {
   birthDate: string | null;
 }
 
+interface ObservationDetail {
+  id: string;
+  effectiveDateTime: string | null;
+  status: string | null;
+  codeDisplay: string | null;
+}
+
+interface ConditionDetail {
+  codeDisplay: string | null;
+  subjectReference: string | null;
+  resourceType: string;
+}
+
+interface PatientDetail {
+  id: string;
+  firstName: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  observations: ObservationDetail[];
+  conditions: ConditionDetail[];
+}
+
 /** Pulls the displayable Patient rows out of a /run response's raw EpicSourceNode output — a name search can match
  *  more than one patient, unlike the single-patient flow this screen otherwise deals in. */
 function extractPatientList(result: WorkflowRunResponse): PatientListEntry[] {
@@ -94,6 +116,93 @@ function extractPatientList(result: WorkflowRunResponse): PatientListEntry[] {
       }
       return { id: resource.resourceId, name, birthDate };
     });
+}
+
+// FHIR references are typically "Patient/{id}", occasionally a full URL ending the same way — match on the
+// trailing segment rather than requiring an exact "Patient/{id}" string.
+function referenceMatchesPatientId(reference: string | undefined, patientId: string): boolean {
+  return !!reference && reference.split('/').pop() === patientId;
+}
+
+/** Pulls this patient's own Patient/Observation/Condition resources out of a patient-scoped /run response against
+ *  STANDALONE_DETAIL_WORKFLOW_ID (see viewPatientDetail — called with patientId already fixed to the clicked list
+ *  row, so the source node's own resources are already scoped to that one patient; the subject-reference filter
+ *  below is still applied defensively rather than assumed). Returns null if the response didn't include a matching
+ *  Patient resource at all (e.g. a malformed or empty run). */
+function extractPatientDetail(result: WorkflowRunResponse, patientId: string): PatientDetail | null {
+  const sourceOutput = Object.values(result.outputsByNodeId ?? {}).find(output => output.nodeType === 'EpicSourceNode');
+  const resources = sourceOutput?.payload?.resources ?? [];
+
+  const patientResource = resources.find(resource => resource.resourceType === 'Patient' && resource.resourceId === patientId)
+    ?? resources.find(resource => resource.resourceType === 'Patient');
+  if (!patientResource) {
+    return null;
+  }
+
+  let firstName: string | null = null;
+  let birthDate: string | null = null;
+  let gender: string | null = null;
+  try {
+    const parsed = JSON.parse(patientResource.payload) as {
+      name?: Array<{ given?: string[] }>;
+      birthDate?: string;
+      gender?: string;
+    };
+    firstName = parsed.name?.[0]?.given?.join(' ') ?? null;
+    birthDate = parsed.birthDate ?? null;
+    gender = parsed.gender ?? null;
+  } catch {
+    // Malformed Patient payload — still show the Observation/Condition sections below with whatever parsed.
+  }
+
+  const observations: ObservationDetail[] = resources
+    .filter(resource => resource.resourceType === 'Observation')
+    .map((resource): ObservationDetail | null => {
+      try {
+        const parsed = JSON.parse(resource.payload) as {
+          subject?: { reference?: string };
+          effectiveDateTime?: string;
+          status?: string;
+          code?: { coding?: Array<{ display?: string }> };
+        };
+        if (!referenceMatchesPatientId(parsed.subject?.reference, patientId)) {
+          return null;
+        }
+        return {
+          id: resource.resourceId,
+          effectiveDateTime: parsed.effectiveDateTime ?? null,
+          status: parsed.status ?? null,
+          codeDisplay: parsed.code?.coding?.[0]?.display ?? null,
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((observation): observation is ObservationDetail => observation !== null);
+
+  const conditions: ConditionDetail[] = resources
+    .filter(resource => resource.resourceType === 'Condition')
+    .map((resource): ConditionDetail | null => {
+      try {
+        const parsed = JSON.parse(resource.payload) as {
+          subject?: { reference?: string };
+          code?: { coding?: Array<{ display?: string }> };
+        };
+        if (!referenceMatchesPatientId(parsed.subject?.reference, patientId)) {
+          return null;
+        }
+        return {
+          codeDisplay: parsed.code?.coding?.[0]?.display ?? null,
+          subjectReference: parsed.subject?.reference ?? null,
+          resourceType: 'Condition',
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((condition): condition is ConditionDetail => condition !== null);
+
+  return { id: patientId, firstName, birthDate, gender, observations, conditions };
 }
 
 /** Two distinct phrasings from SmartAuthorizationCodeTokenProvider both mean "no usable token at all, a fresh
@@ -135,6 +244,14 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   readonly isFetchingPatientList = signal(false);
   readonly patientListError = signal<string | null>(null);
   readonly patientList = signal<PatientListEntry[] | null>(null);
+
+  // Detail section (Patient/Observation/Condition) for whichever row was last clicked in patientList — a second,
+  // patient-scoped /run against STANDALONE_DETAIL_WORKFLOW_ID, reusing the same already-valid token from the list
+  // fetch rather than a fresh sign-in. Cleared whenever a new list fetch replaces patientList.
+  readonly selectedPatientId = signal<string | null>(null);
+  readonly isFetchingPatientDetail = signal(false);
+  readonly patientDetailError = signal<string | null>(null);
+  readonly patientDetail = signal<PatientDetail | null>(null);
 
   // True while a remembered session is still being checked (on load) or a just-completed launch's patientId is
   // still being resolved from /launch-result — gates the "Fetch Patient List" button so a click can't race ahead of
@@ -373,6 +490,10 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         // ngOnInit) — that run failing is an expected, benign artifact of the Standalone launch flow, not a real
         // problem, and showing it alongside a successful, criteria-scoped patient list would be misleading.
         this.launchError.set(null);
+        // A fresh list invalidates whatever detail section was open for a row from the previous list.
+        this.selectedPatientId.set(null);
+        this.patientDetail.set(null);
+        this.patientDetailError.set(null);
         void this.rememberEpicSession();
         return;
       }
@@ -391,6 +512,71 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     } finally {
       this.isFetchingPatientList.set(false);
     }
+  }
+
+  // Clicking a patient row triggers a second, patient-scoped /run against STANDALONE_DETAIL_WORKFLOW_ID — a
+  // deliberately different workflow from the one that produced the list (STANDALONE_WORKFLOW_ID), sending patientId
+  // (not patientSearchCriteria) so FhirSourceConnectorBase.ApplyPatientScopeAsync auto-scopes every resource type:
+  // _id={patientId} for Patient, patient={patientId} for Observation/Condition/etc. Reuses whatever token the list
+  // fetch's sign-in already established (same source connection as STANDALONE_WORKFLOW_ID), not an unconditional
+  // fresh sign-in — same token-status-then-run shape as fetchPatientList() above.
+  async viewPatientDetail(patient: PatientListEntry): Promise<void> {
+    if (this.isFetchingPatientDetail() || this.isRedirectingToEpic()) {
+      return;
+    }
+
+    this.selectedPatientId.set(patient.id);
+    this.isFetchingPatientDetail.set(true);
+    this.patientDetailError.set(null);
+    this.patientDetail.set(null);
+    try {
+      if (!(await this.hasValidToken())) {
+        await this.needsReAuthorization();
+        return;
+      }
+
+      const result = await firstValueFrom(
+        this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${STANDALONE_DETAIL_WORKFLOW_ID}/run`, {
+          patientId: patient.id,
+          patientSearchCriteria: null,
+        }),
+      );
+
+      if (result.workflowRun.status === 'Succeeded') {
+        const detail = extractPatientDetail(result, patient.id);
+        this.patientDetail.set(detail);
+        if (!detail) {
+          this.patientDetailError.set('FHIRBridge did not return any resources for this patient.');
+        }
+        return;
+      }
+
+      const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization();
+        return;
+      }
+      this.patientDetailError.set(errorMessage);
+    } catch (err) {
+      const backendMessage = err instanceof HttpErrorResponse && typeof err.error?.error === 'string'
+        ? err.error.error
+        : null;
+      const errorMessage = backendMessage
+        ?? 'Could not reach FHIRBridge to fetch this patient\'s detail. Check your connection and try again.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization();
+        return;
+      }
+      this.patientDetailError.set(errorMessage);
+    } finally {
+      this.isFetchingPatientDetail.set(false);
+    }
+  }
+
+  closePatientDetail(): void {
+    this.selectedPatientId.set(null);
+    this.patientDetail.set(null);
+    this.patientDetailError.set(null);
   }
 
   // Cheap pre-check: does FHIRBridge currently have (or can it silently refresh) a usable token, without running
@@ -522,6 +708,9 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     this.patientList.set(null);
     this.patientListError.set(null);
     this.hasEpicToken.set(false);
+    this.selectedPatientId.set(null);
+    this.patientDetail.set(null);
+    this.patientDetailError.set(null);
   }
 
   private async discardFhirBridgeToken(): Promise<void> {

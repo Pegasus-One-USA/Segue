@@ -1,7 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-standalone';
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
@@ -75,7 +74,7 @@ export class App implements OnInit {
   // dropdown and shows the resolved name instead, so a link can pre-select the Login Type for the user.
   protected readonly lockedDemoTypeName = signal<string | null>(null);
 
-  constructor(private readonly http: HttpClient, private readonly route: ActivatedRoute) {}
+  constructor(private readonly http: HttpClient) {}
 
   ngOnInit(): void {
     // The OAuth "Connect Get Data" flow opens the workflow URL in a new tab; when it redirects back the
@@ -106,11 +105,15 @@ export class App implements OnInit {
   }
 
   private async loadDemoTypes(): Promise<void> {
+    // Read query params straight off window.location.search rather than ActivatedRoute: this app has no
+    // <router-outlet> (see app.routes.ts), so ActivatedRoute.snapshot isn't reliably populated by the time this
+    // root component's ngOnInit runs.
+    const params = new URLSearchParams(window.location.search);
+
     // Locks onto Provider_InApp from either signal: the app already sitting on /launchproviderinapp, or an
     // incoming EHR launch's ?iss=&launch= params landing on some other path (e.g. Epic's app registration
     // still points at the bare root) — either way this is a provider in-app launch, not a dropdown pick.
-    const hasLaunchParams = !!this.route.snapshot.queryParamMap.get('iss')
-      && !!this.route.snapshot.queryParamMap.get('launch');
+    const hasLaunchParams = !!params.get('iss') && !!params.get('launch');
     if (window.location.pathname.toLowerCase() === PROVIDER_STANDALONE_PATH || hasLaunchParams) {
       this.lockedDemoTypeName.set(PROVIDER_STANDALONE_NAME);
       this.onDemoTypeChange(PROVIDER_STANDALONE_NAME);
@@ -124,7 +127,7 @@ export class App implements OnInit {
         return; // Path-based lock above already decided the Login Type.
       }
 
-      const requestedParam = this.route.snapshot.queryParamMap.get('DemoType');
+      const requestedParam = params.get('DemoType');
       const requestedId = requestedParam !== null ? Number(requestedParam) : null;
       const matched = requestedId !== null && Number.isFinite(requestedId)
         ? demoTypes.find((type) => type.id === requestedId)

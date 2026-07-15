@@ -9,3 +9,8 @@
 // placeholder once that opt-in has been done; until then "Select hospital" will 404.
 export const FHIRBRIDGE_BASE_URL = 'http://localhost:5000';
 export const PATIENT_WORKFLOW_ID = '5930ff91-9235-4ef1-8e94-8752651d4d2a';
+
+// A separate, dedicated workflow for the per-patient detail fetch (triggered by clicking a row in the fetched
+// patient list) — deliberately not PATIENT_WORKFLOW_ID. Same public-launch/ApplicationType.Patient opt-in
+// requirements apply to this workflow independently.
+export const PATIENT_DETAIL_WORKFLOW_ID = 'dc666cee-f674-400f-a4b5-c826e3f4c3a0';

@@ -130,17 +130,88 @@
             @if (patients.length > 0) {
               <ul class="patient-list">
                 @for (patient of patients; track patient.id) {
-                  <li class="patient-list__row">
-                    <span class="patient-list__name">{{ patient.name }}</span>
-                    @if (patient.birthDate) {
-                      <span class="patient-list__dob">DOB: {{ patient.birthDate }}</span>
-                    }
+                  <li>
+                    <button
+                      type="button"
+                      class="patient-list__row"
+                      [class.patient-list__row--selected]="selectedPatientId() === patient.id"
+                      [disabled]="isFetchingPatientDetail() || isRedirectingToEpic()"
+                      (click)="viewPatientDetail(patient)"
+                    >
+                      <span class="patient-list__name">{{ patient.name }}</span>
+                      @if (patient.birthDate) {
+                        <span class="patient-list__dob">DOB: {{ patient.birthDate }}</span>
+                      }
+                    </button>
                   </li>
                 }
               </ul>
             } @else {
               <p class="fetch-card__success">No patients matched that search.</p>
             }
+          }
+
+          @if (selectedPatientId()) {
+            <div class="patient-detail">
+              <div class="patient-detail__header">
+                <span class="step-label">Patient detail</span>
+                <button type="button" class="icon-btn" (click)="closePatientDetail()" aria-label="Close patient detail">✕</button>
+              </div>
+
+              @if (isFetchingPatientDetail()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="28"></mat-spinner>
+                </div>
+              } @else if (patientDetailError()) {
+                <p class="error-banner">{{ patientDetailError() }}</p>
+              } @else if (patientDetail(); as detail) {
+                <section class="patient-detail__section">
+                  <h3>Patient</h3>
+                  <dl class="patient-detail__fields">
+                    <div><dt>First Name</dt><dd>{{ detail.firstName ?? '—' }}</dd></div>
+                    <div><dt>Birth Date</dt><dd>{{ detail.birthDate ?? '—' }}</dd></div>
+                    <div><dt>Gender</dt><dd>{{ detail.gender ?? '—' }}</dd></div>
+                  </dl>
+                </section>
+
+                <section class="patient-detail__section">
+                  <h3>Observations</h3>
+                  @if (detail.observations.length > 0) {
+                    <ul class="patient-detail__list">
+                      @for (observation of detail.observations; track observation.id) {
+                        <li>
+                          <span class="patient-detail__list-primary">{{ observation.codeDisplay ?? '(no code)' }}</span>
+                          <span class="patient-detail__list-secondary">
+                            {{ observation.status ?? '—' }}
+                            @if (observation.effectiveDateTime) {
+                              · {{ observation.effectiveDateTime }}
+                            }
+                          </span>
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="subtitle">No observations for this patient.</p>
+                  }
+                </section>
+
+                <section class="patient-detail__section">
+                  <h3>Conditions</h3>
+                  @if (detail.conditions.length > 0) {
+                    <ul class="patient-detail__list">
+                      @for (condition of detail.conditions; track $index) {
+                        <li>
+                          <span class="patient-detail__list-primary">{{ condition.codeDisplay ?? '(no code)' }}</span>
+                          <span class="patient-detail__list-secondary">{{ condition.resourceType }}</span>
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="subtitle">No conditions for this patient.</p>
+                  }
+                </section>
+              }
+            </div>
           }
         </mat-card-content>
       </mat-card>
