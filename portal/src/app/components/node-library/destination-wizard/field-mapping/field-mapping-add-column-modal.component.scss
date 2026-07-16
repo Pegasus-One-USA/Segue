@@ -55,11 +55,11 @@
   &:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12);
+    box-shadow: 0 0 0 3px var(--color-primary-mid);
   }
 
   &:disabled {
-    background: #F1F5F9;
+    background: var(--color-side);
     color: var(--color-muted-2);
     cursor: not-allowed;
   }
@@ -69,9 +69,9 @@
   margin: 0;
   padding: 8px 10px;
   font-size: 13px;
-  color: #991B1B;
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  color: var(--color-error-strong);
+  background: var(--color-error-soft);
+  border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
   border-radius: 6px;
 }
 
