@@ -106,6 +106,17 @@ export const routes: Routes = [
           ),
       },
 
+      // Destination Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      {
+        path: 'destination-connections',
+        canActivate: [permissionGuard],
+        data: { permissions: ['configuration.write'] },
+        loadComponent: () =>
+          import('./destination-connections/pages/destination-connection-list/destination-connection-list.component').then(
+            m => m.DestinationConnectionListComponent
+          ),
+      },
+
       // User Account pages
       {
         path: 'profile',

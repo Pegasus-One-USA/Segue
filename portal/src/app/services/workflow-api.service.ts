@@ -162,6 +162,7 @@ export interface CreateDestinationConfigurationRequest {
   secretName: string;
   target?: string | null;
   inlineSecret?: string | null;               // raw connstr / sftp:// URI — provisioned encrypted server-side
+  connectionMetadataJson?: string | null;     // non-secret dest_* fields, JSON — lets a later "existing" pick repopulate
 }
 
 export interface MappingFieldRequest {

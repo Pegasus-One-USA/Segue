@@ -216,7 +216,10 @@ public sealed class WorkflowGraphLaunchTests
         public Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) => Task.FromResult(_sources);
         public Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct) => Task.FromResult(_sources.FirstOrDefault(x => x.Id == id));
         public Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) => Task.FromResult(_destinations);
+        public Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken ct) =>
+            Task.FromResult(new PagedResult<DestinationConfiguration>(_destinations, _destinations.Count, page, pageSize));
         public Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct) => Task.FromResult(_destinations.FirstOrDefault(x => x.Id == id));
+        public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken ct) => Task.FromResult(false);
         public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) => Task.FromResult(_mappings);
         public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) => Task.FromResult(_mappings.FirstOrDefault(x => x.Id == id));
         public Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) => Task.FromResult(_routes);
@@ -234,6 +237,7 @@ public sealed class WorkflowGraphLaunchTests
         public Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
+        public Task RemoveDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddRouteAsync(ResourcePipelineRoute e, CancellationToken ct) => throw new NotSupportedException();

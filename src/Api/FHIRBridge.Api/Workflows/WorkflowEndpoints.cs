@@ -306,6 +306,29 @@ public static class WorkflowEndpoints
             return Results.Ok(usedSourceConnectionIds);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
+        // Destination Connections page: which destination ids are referenced by at least one workflow's Destination
+        // node right now — used to block Delete on a connection a workflow still depends on, independent of whether
+        // that workflow has ever actually run (see HasDestinationExecutionHistoryAsync for the run-history gate,
+        // which is a different signal). Mirrors source-connection-usage above exactly, one category over.
+        group.MapGet("/workflows/destination-usage", async (
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var workflows = await store.ListAsync(cancellationToken);
+
+            var usedDestinationIds = workflows
+                .SelectMany(workflow => workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+                .Select(node => TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId)
+                    ? destinationId
+                    : (Guid?)null)
+                .Where(destinationId => destinationId is not null)
+                .Select(destinationId => destinationId!.Value)
+                .Distinct()
+                .ToArray();
+
+            return Results.Ok(usedDestinationIds);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         // "View destination data": resolve the workflow's destination node → its created destination + target table
         // and read back a capped row sample so the UI can show what the pipeline wrote. Admin-only.
         group.MapGet("/workflows/{workflowId:guid}/destination-data", async (

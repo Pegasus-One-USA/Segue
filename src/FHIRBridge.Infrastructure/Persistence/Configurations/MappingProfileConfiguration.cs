@@ -19,6 +19,7 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.Property(x => x.IsEnabled).IsRequired();
 
         builder.HasIndex(x => x.SourceConnectionId);
+        builder.HasIndex(x => x.DestinationId);
 
         builder.HasOne<SourceConnection>()
             .WithMany()

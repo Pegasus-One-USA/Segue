@@ -197,6 +197,19 @@ public sealed class ConfigurationsController : ControllerBase
         return Ok(destinationConfiguration);
     }
 
+    [HttpDelete("destinations/{destinationId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeleteDestinationConfiguration(
+        Guid destinationId,
+        CancellationToken cancellationToken)
+    {
+        await _configurationService.DeleteDestinationConfigurationAsync(destinationId, cancellationToken);
+        return NoContent();
+    }
+
     // ── Mapping profiles ──────────────────────────────────────────────────────
 
     [HttpPost("mapping-profiles")]
