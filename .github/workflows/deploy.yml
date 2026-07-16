@@ -5,6 +5,11 @@ name: Deploy
 # the VM; the deploy job runs on a self-hosted runner installed on the VM itself (see
 # deploy/windows/README.md), so no inbound network access to the VM is required.
 #
+# Matches the Kestrel-native / YARP Gateway architecture in Documents/Kestrel-Gateway-Deployment-Setup.html:
+# FHIRBridge.Gateway is the only public-facing process (binds 80/443, proxies /api/** and /swagger/**
+# to FHIRBridge.Api, serves the portal's static build directly). FHIRBridge.Api and FHIRBridge.Worker
+# are internal-only. All three run as Windows Services.
+#
 # Recommended hardening (one-time, in repo Settings > Environments): add required reviewers to the
 # "production" environment so the deploy job pauses for an approval click before it runs.
 on:
@@ -33,11 +38,17 @@ jobs:
       - name: Restore
         run: dotnet restore FHIRBridge.sln
 
-      - name: Publish Api (win-x64, framework-dependent)
+      - name: Publish Api (win-x64, framework-dependent, loopback-only)
         run: >
           dotnet publish src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
           -c Release -r win-x64 --self-contained false
           -o publish/Api
+
+      - name: Publish Gateway (win-x64, framework-dependent, public entry point)
+        run: >
+          dotnet publish src/Gateway/FHIRBridge.Gateway/FHIRBridge.Gateway.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/Gateway
 
       - name: Publish Worker (win-x64, framework-dependent)
         run: >
@@ -51,15 +62,15 @@ jobs:
           npm ci
           npm run build -- --configuration production
 
-      - name: Merge portal build into Api wwwroot
+      - name: Stage portal build (served by the Gateway, not the Api)
         run: |
-          mkdir -p publish/Api/wwwroot
-          cp -r portal/dist/fhirbridge-ui/browser/. publish/Api/wwwroot/
+          mkdir -p publish/Portal
+          cp -r portal/dist/fhirbridge-ui/browser/. publish/Portal/
 
       - name: Package deploy artifact
         run: |
           cd publish
-          zip -r ../fhirbridge-deploy.zip Api Worker
+          zip -r ../fhirbridge-deploy.zip Api Gateway Worker Portal
 
       - uses: actions/upload-artifact@v4
         with:
