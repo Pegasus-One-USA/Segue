@@ -14,12 +14,12 @@
     <label class="fm-addcol-field">
       <span class="text-label">Column name<span class="req">*</span></span>
       <input
+        #nameInput
         class="fm-addcol-input"
         [value]="columnName()"
         (input)="onColumnNameInput($any($event.target).value)"
         placeholder="e.g. MiddleName"
         [disabled]="submitting()"
-        autofocus
       />
     </label>
 

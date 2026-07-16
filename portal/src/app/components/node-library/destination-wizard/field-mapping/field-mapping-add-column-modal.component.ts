@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, ViewChild, input, output, signal } from '@angular/core';
 
 export interface FmAddColumnSubmit {
   columnName: string;
@@ -29,7 +29,9 @@ export const FM_ADD_COLUMN_DATA_TYPES: readonly string[] = [
   templateUrl: './field-mapping-add-column-modal.component.html',
   styleUrl: './field-mapping-add-column-modal.component.scss',
 })
-export class FieldMappingAddColumnModalComponent {
+export class FieldMappingAddColumnModalComponent implements AfterViewInit {
+  @ViewChild('nameInput') private readonly nameInput?: ElementRef<HTMLInputElement>;
+
   readonly tableName = input.required<string>();
   readonly submitting = input<boolean>(false);
   readonly error = input<string | null>(null);
@@ -43,6 +45,10 @@ export class FieldMappingAddColumnModalComponent {
 
   canSubmit(): boolean {
     return this.columnName().trim().length > 0 && !this.submitting();
+  }
+
+  ngAfterViewInit(): void {
+    this.nameInput?.nativeElement.focus();
   }
 
   onColumnNameInput(value: string): void { this.columnName.set(value); }

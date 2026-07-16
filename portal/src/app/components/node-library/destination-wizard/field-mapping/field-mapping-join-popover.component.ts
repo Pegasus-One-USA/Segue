@@ -23,7 +23,7 @@ export class FieldMappingJoinPopoverComponent {
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
-  readonly close = output<void>();
+  readonly closed = output<void>();
 
   readonly draft = signal<MappingRow | null>(null);
 
@@ -115,9 +115,9 @@ export class FieldMappingJoinPopoverComponent {
 
   onRemove(): void { this.remove.emit(); }
 
-  onClose(): void { this.close.emit(); }
+  onClose(): void { this.closed.emit(); }
 
   onKeydown(ev: KeyboardEvent): void {
-    if (ev.key === 'Escape') { ev.preventDefault(); this.close.emit(); }
+    if (ev.key === 'Escape') { ev.preventDefault(); this.closed.emit(); }
   }
 }
