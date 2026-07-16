@@ -9,16 +9,43 @@
           <path d="M8 12h8M12 8v8" stroke="#00A89D" stroke-width="2.2" stroke-linecap="round"/>
         </svg>
       </div>
-      <span class="eaf-topbar-title">Epic Configuration</span>
+      <span class="eaf-topbar-title">{{ wiz.wizardMode() === 'entity' ? 'Source Configuration' : 'Epic Configuration' }}</span>
       @if (discStatus() === 'done') {
         <span class="eaf-connected-badge">✓ Endpoints resolved</span>
       }
     </div>
-    <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+    <!-- "Back to library" only makes sense inside Pipeline Builder's Node Library — the Source Connections page
+         has no library to go back to; its own footer Cancel/Close button already covers dismissing the form. -->
+    @if (wiz.wizardMode() !== 'entity') {
+      <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+    }
   </div>
 
   <!-- ── Scrollable form body ───────────────────────────────────────────────── -->
   <div class="eaf-body">
+
+    <!-- ═══════════ SECTION 0: EHR ═══════════════════════════════════════════ -->
+    <!-- Entity mode only (Source Connections page) — Pipeline Builder's canvas-mode Epic editor stays exactly
+         as it was; it has no vendor concept, only Epic. -->
+    @if (wiz.wizardMode() === 'entity') {
+      <div class="eaf-section">
+        <div class="eaf-grid">
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-ehrType">EHR <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-ehrType" class="eaf-select"
+                      [value]="wiz.ehrType()"
+                      [disabled]="isReadonly"
+                      (change)="wiz.setEhrType($any($event.target).value)">
+                @for (opt of ehrOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
 
     <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
     <div class="eaf-section">
@@ -84,7 +111,7 @@
               <input id="eaf-epicBaseUrl" class="eaf-input" type="url" formControlName="epicBaseUrl"
                      placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4" />
               <button class="eaf-discover-btn" type="button"
-                      [disabled]="discStatus() === 'loading'"
+                      [disabled]="discStatus() === 'loading' || isReadonly"
                       (click)="runDiscover()">
                 @if (discStatus() === 'loading') {
                   <span class="eaf-spin"></span>&nbsp;Discovering…
@@ -307,6 +334,7 @@
                   <input type="checkbox"
                          [checked]="selectedResources().length === resources.length"
                          [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
+                         [disabled]="isReadonly"
                          (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
                   <span>Select all</span>
                 </label>
@@ -315,7 +343,7 @@
                 <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
                   <input type="checkbox"
                          [checked]="selectedResources().includes(r)"
-                         [disabled]="isEditing"
+                         [disabled]="isEditing || isReadonly"
                          (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
                   <span class="eaf-res-name">{{ r }}</span>
                 </label>
@@ -510,7 +538,7 @@
 
         <div class="eaf-test-row">
           <button class="eaf-test-btn" type="button"
-                  [disabled]="testStatus() === 'running'"
+                  [disabled]="testStatus() === 'running' || isReadonly"
                   (click)="runTestConnection()">
             @if (testStatus() === 'running') {
               <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
@@ -631,6 +659,7 @@
                           <label class="eaf-weekday-chip" [class.eaf-weekday-chip--checked]="selectedWeekdays().includes(opt.value)">
                             <input type="checkbox"
                                    [checked]="selectedWeekdays().includes(opt.value)"
+                                   [disabled]="isReadonly"
                                    (change)="toggleWeekday(opt.value); form.get(field.key)?.markAsTouched()" />
                             <span>{{ opt.label }}</span>
                           </label>
@@ -643,6 +672,7 @@
                           <input type="checkbox"
                                  [checked]="selectedRetrievalResourceTypes(field.key).length === resources.length"
                                  [indeterminate]="selectedRetrievalResourceTypes(field.key).length > 0 && selectedRetrievalResourceTypes(field.key).length < resources.length"
+                                 [disabled]="isReadonly"
                                  (change)="toggleAllRetrievalResources(field.key, resources); form.get(field.key)?.markAsTouched()" />
                           <span>Select all</span>
                         </label>
@@ -650,6 +680,7 @@
                           <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedRetrievalResourceTypes(field.key).includes(r)">
                             <input type="checkbox"
                                    [checked]="selectedRetrievalResourceTypes(field.key).includes(r)"
+                                   [disabled]="isReadonly"
                                    (change)="toggleRetrievalResource(field.key, r); form.get(field.key)?.markAsTouched()" />
                             <span class="eaf-res-name">{{ r }}</span>
                           </label>
@@ -737,10 +768,12 @@
 
   <!-- ── Sticky footer ─────────────────────────────────────────────────────── -->
   <div class="eaf-footer">
-    <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">Cancel</button>
-    <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
-      {{ isEditing ? '✓ Update' : '✓ Add to Pipeline' }}
-    </button>
+    <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
+    @if (!isReadonly) {
+      <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
+        {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Pipeline') }}
+      </button>
+    }
   </div>
 
 </div>

@@ -264,6 +264,30 @@ public static class WorkflowEndpoints
                 .ToArray());
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
+        // Source Connections page: which source-connection ids are referenced by at least one workflow's Source
+        // node right now — used to block Edit/Delete on a connection a workflow still depends on. Deliberately
+        // returns every referencing connection across every workflow (not just one per workflow, unlike
+        // /workflows/summary's launch-precedence resolvedSourceId), since a workflow can have more than one
+        // Source node and any of them being wired to this connection should still count as "in use."
+        group.MapGet("/workflows/source-connection-usage", async (
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var workflows = await store.ListAsync(cancellationToken);
+
+            var usedSourceConnectionIds = workflows
+                .SelectMany(workflow => workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Source))
+                .Select(node => TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId)
+                    ? sourceId
+                    : (Guid?)null)
+                .Where(sourceId => sourceId is not null)
+                .Select(sourceId => sourceId!.Value)
+                .Distinct()
+                .ToArray();
+
+            return Results.Ok(usedSourceConnectionIds);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         // "View destination data": resolve the workflow's destination node → its created destination + target table
         // and read back a capped row sample so the UI can show what the pipeline wrote. Admin-only.
         group.MapGet("/workflows/{workflowId:guid}/destination-data", async (

@@ -130,6 +130,8 @@ public static class RbacSeedData
             "Add or edit a source connection for a vendor with no dedicated permission group of its own.",
             PermissionGroupCode.SourceConnections,
             PermissionActionCode.Edit),
+        new("View the list of source connections.", PermissionGroupCode.SourceConnections, PermissionActionCode.View),
+        new("Delete a source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Delete),
 
         // User module permissions.
         new("Invite a new user to the organization.", PermissionGroupCode.User, PermissionActionCode.Invite),

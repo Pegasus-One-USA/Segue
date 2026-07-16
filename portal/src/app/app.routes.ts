@@ -95,6 +95,17 @@ export const routes: Routes = [
           ),
       },
 
+      // Source Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      {
+        path: 'source-connections',
+        canActivate: [permissionGuard],
+        data: { permissions: ['sourceconnections.view'] },
+        loadComponent: () =>
+          import('./source-connections/pages/source-connection-list/source-connection-list.component').then(
+            m => m.SourceConnectionListComponent
+          ),
+      },
+
       // User Account pages
       {
         path: 'profile',
