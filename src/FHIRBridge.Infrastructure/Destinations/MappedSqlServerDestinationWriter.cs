@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
@@ -16,7 +15,7 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
 /// </summary>
-public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
+public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
 {
     // System-managed columns the writer always emits. A mapping field targeting one of these is ignored (the
     // system value wins) so the generated CREATE TABLE / INSERT never declares a column twice.
@@ -409,15 +408,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         };
     }
 
-    private static string ValidateIdentifier(string identifier)
-    {
-        if (!SqlIdentifierRegex().IsMatch(identifier))
-        {
-            throw new InvalidOperationException($"'{identifier}' is not a valid SQL identifier.");
-        }
-
-        return identifier;
-    }
+    private static string ValidateIdentifier(string identifier) => SqlIdentifier.Validate(identifier);
 
     private static string GetSqlType(MappingValueType valueType)
     {
@@ -432,9 +423,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             _ => "NVARCHAR(MAX)"
         };
     }
-
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
-    private static partial Regex SqlIdentifierRegex();
 
     private sealed record SqlDestinationTarget(
         string SchemaName,

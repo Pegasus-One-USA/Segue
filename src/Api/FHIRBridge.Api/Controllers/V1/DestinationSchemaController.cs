@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
@@ -38,4 +39,53 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] DestinationConnectionProbeRequest request,
         CancellationToken cancellationToken)
         => Ok(await _schemaService.ProbeSchemaAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Executes a real ALTER TABLE against an ad-hoc SQL Server / Azure SQL connection. Always returns 200 —
+    /// failures (bad connection, invalid identifier/type, column already exists, etc.) come back as
+    /// <c>success:false</c> + <c>error</c> so the mapping canvas can surface them inline.
+    /// </summary>
+    [HttpPost("schema/add-column")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Add a column to a destination table via a real ALTER TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> AddColumn(
+        [FromBody] AddColumnRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.AddColumnAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Executes a real CREATE TABLE (single auto-increment Id primary key) against an ad-hoc SQL Server /
+    /// Azure SQL connection. Always returns 200 — failures (bad connection, table already exists, etc.)
+    /// come back as <c>success:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("schema/create-table")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Create a new destination table via a real CREATE TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CreateTable(
+        [FromBody] CreateTableRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.CreateTableAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Executes a real, irreversible ALTER TABLE ... DROP COLUMN against an ad-hoc SQL Server / Azure SQL
+    /// connection — permanently deletes the column and any data in it. Always returns 200 — failures come
+    /// back as <c>success:false</c> + <c>error</c>. Confirming this with the user is the caller's
+    /// responsibility; this endpoint executes unconditionally once called.
+    /// </summary>
+    [HttpPost("schema/drop-column")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Permanently drop a column from a destination table via a real ALTER TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DropColumn(
+        [FromBody] DropColumnRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.DropColumnAsync(request, cancellationToken));
 }

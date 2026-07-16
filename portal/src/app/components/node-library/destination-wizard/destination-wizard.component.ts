@@ -7,8 +7,11 @@ import {
 } from '@angular/forms';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
-import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
+import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
+import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
+import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow } from './field-mapping/field-mapping-model';
+import { ToastService } from '../../../services/toast.service';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -86,19 +89,6 @@ export const DEST_RESOURCE_DEFS: Record<string, ResourceDef> = {
   },
 };
 
-export interface MappingRow {
-  resource:   string;
-  fieldLabel: string;
-  fhirPath:   string;
-  targetName: string;
-  tableName:  string;
-  // Catalog-derived metadata carried through to the build so the mapping engine gets correct,
-  // array-aware JSONPaths instead of a guessed conversion.
-  jsonPath?:  string;
-  valueType?: string;
-  arrays?:    string[];
-}
-
 /** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
 function genericResourceDef(r: string): ResourceDef {
   return {
@@ -118,7 +108,7 @@ function genericResourceDef(r: string): ResourceDef {
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, FieldMappingCanvasComponent],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
 })
@@ -126,6 +116,7 @@ export class DestinationWizardComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly catalogSvc = inject(MappingCatalogService);
+  private readonly toast = inject(ToastService);
 
   // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
@@ -136,6 +127,12 @@ export class DestinationWizardComponent implements OnInit {
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
   readonly sourceResources = input<string[]>([]);
+  // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
+  // the × while a group's mapping canvas is open) — any change triggers the matching action here.
+  readonly exitMappingRequest = input<number>(0);
+  readonly saveMappingRequest = input<number>(0);
+  private _lastExitTrigger = 0;
+  private _lastSaveTrigger = 0;
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
@@ -144,6 +141,13 @@ export class DestinationWizardComponent implements OnInit {
   // mid-wizard, and warn before discarding progress if the user switches anyway.
   readonly stepChange     = output<number>();
   readonly progressChange = output<boolean>();
+
+  // Lets the parent hide its own sidebar while a specific group's mapping canvas is open, so the
+  // canvas gets the full dialog width instead of sharing it with the node picker rail.
+  readonly mappingCanvasActive = output<boolean>();
+  // Lets the parent show "Map fields — {group}" in its own header in place of "Node Library" while
+  // the canvas is open — null means "show your normal title", since no group is active.
+  readonly mappingCanvasTitle = output<string | null>();
 
   // ── step state ────────────────────────────────────────────────────────────
   readonly step        = signal(1);
@@ -203,6 +207,81 @@ export class DestinationWizardComponent implements OnInit {
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
+  // ── extra target tables (child tables added alongside a group's primary table) ──
+  // Keyed by data-group name; each entry is a list of additional already-probed SQL
+  // table full-names the user chose to also map into for that same group's canvas
+  // (e.g. mapping Patient's Contact array into a real dbo.PatientContact table).
+  // Existing tables only — no schema authoring (no "create a new table").
+  readonly extraTablesByGroup = signal<Record<string, string[]>>({});
+
+  extraTablesFor(group: string): string[] { return this.extraTablesByGroup()[group] ?? []; }
+
+  /** The canvas computes and emits the new desired list directly (add: appended, remove: filtered) —
+   *  this just stores it and cleans up any mappings that targeted a table that's no longer in the list. */
+  onExtraTablesChange(tables: string[]): void {
+    const g = this.activeMappingGroup();
+    if (!g) return;
+    const removed = this.extraTablesFor(g).filter(t => !tables.includes(t));
+    this.extraTablesByGroup.update(m => ({ ...m, [g]: tables }));
+    if (removed.length) {
+      this.mappingRows.update(rows => rows.filter(r => !(r.resource === g && removed.includes(r.tableName))));
+    }
+  }
+
+  /** Column names of any already-probed SQL table by its full name — used for extra target tables. */
+  readonly columnsForTableFn = (tableFullName: string): string[] => {
+    const table = this.sqlTables().find(t => t.fullName === tableFullName);
+    return table ? table.columns.map(c => c.name) : [];
+  };
+
+  /** Already-probed tables not yet used as this group's primary or extra targets — offered in "+ Add a table". */
+  readonly availableTablesToAddFn = (group: string): string[] => {
+    const used = new Set([this.targetFor(group), ...this.extraTablesFor(group)]);
+    return this.sqlTables().map(t => t.fullName).filter(t => !used.has(t));
+  };
+
+  /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
+  readonly connectionInfo = computed<DestinationProbeRequest | null>(() => {
+    if (!this.isSql()) return null;
+    const v = this.sqlForm.value;
+    return {
+      destinationType: 'SqlServer',
+      server: v.server ?? '',
+      database: v.database ?? '',
+      authentication: v.auth ?? 'sql-auth',
+      username: v.username ?? undefined,
+      password: v.password ?? undefined,
+      trustServerCertificate: true,
+      encrypt: true,
+    };
+  });
+
+  /** A column was really added via the canvas's Add Column modal — append it to the known schema locally. */
+  onColumnAdded(e: { tableName: string; column: DestinationColumn }): void {
+    this.sqlTables.update(tables => tables.map(t =>
+      t.fullName === e.tableName ? { ...t, columns: [...t.columns, e.column] } : t
+    ));
+  }
+
+  /** A table was really created via the canvas's "+ Add a table" flow — register its known initial schema. */
+  onTableCreated(tableFullName: string): void {
+    if (this.sqlTables().some(t => t.fullName === tableFullName)) return;
+    const dotIndex = tableFullName.indexOf('.');
+    const schemaName = dotIndex >= 0 ? tableFullName.slice(0, dotIndex) : 'dbo';
+    const tableName = dotIndex >= 0 ? tableFullName.slice(dotIndex + 1) : tableFullName;
+    this.sqlTables.update(tables => [...tables, {
+      schemaName, tableName, fullName: tableFullName,
+      columns: [{ name: 'Id', dataType: 'bigint', mappingValueType: 'Integer', isNullable: false, maxLength: null }],
+    }]);
+  }
+
+  /** A column was really dropped via the canvas's delete-column flow — remove it from the known schema. */
+  onColumnDropped(e: { tableName: string; column: string }): void {
+    this.sqlTables.update(tables => tables.map(t =>
+      t.fullName === e.tableName ? { ...t, columns: t.columns.filter(c => c.name !== e.column) } : t
+    ));
+  }
+
   // ── computed helpers ──────────────────────────────────────────────────────
   readonly isSql        = computed(() => this.destType() === 'sql');
   readonly destLabel    = computed(() => this.destType() === 'sql' ? 'SQL Server' : 'CSV');
@@ -234,6 +313,22 @@ export class DestinationWizardComponent implements OnInit {
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
+    effect(() => this.mappingCanvasActive.emit(this.activeMappingGroup() !== null));
+    effect(() => {
+      const g = this.activeMappingGroup();
+      this.mappingCanvasTitle.emit(g ? `Map fields — ${g}` : null);
+    });
+
+    // Header-level Close/Save trigger counters — react only on an actual increment, never on the
+    // initial read (both start at 0, so the first effect run must not fire either action).
+    effect(() => {
+      const v = this.exitMappingRequest();
+      if (v !== this._lastExitTrigger) { this._lastExitTrigger = v; if (v > 0) this.requestExitMapping(); }
+    });
+    effect(() => {
+      const v = this.saveMappingRequest();
+      if (v !== this._lastSaveTrigger) { this._lastSaveTrigger = v; if (v > 0) this.saveGroupMapping(); }
+    });
 
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
     // over the built-in fallback once loaded. Deduped via _requested so this effect never re-fetches.
@@ -312,11 +407,68 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
     if (this.step() < this.TOTAL_STEPS) {
+      // Leaving Data groups (2) always lands on the group-selection screen, never resuming
+      // whichever group's canvas was open last time — even if the user had drilled in before.
+      if (this.step() === 2) this.selectedGroupForMapping.set(null);
       this.step.update(x => x + 1);
       this._hasProgressed.set(true);
     } else {
       this._save();
     }
+  }
+
+  // ── Step 3: data-group selection screen ────────────────────────────────────
+  // Step 3 no longer opens the mapping canvas directly — it first shows a list of the data groups
+  // chosen in Step 2, and only opens the (unmodified) canvas, scoped to one resource at a time, once
+  // the user clicks "Map" on a row. The canvas's own `resources` input already accepts an arbitrary
+  // subset, so scoping it to one group needs no change to the canvas itself.
+  private readonly selectedGroupForMapping = signal<string | null>(null);
+
+  // Guards against a stale selection if the user returns to Step 2 and deselects the group they were
+  // mapping — falls back to the selection screen rather than showing a canvas for an unselected group.
+  readonly activeMappingGroup = computed(() => {
+    const g = this.selectedGroupForMapping();
+    return g && this.resourceKeys().includes(g) ? g : null;
+  });
+
+  // Snapshot of mappingRows/targetByResource taken the moment a group's canvas opens, so "Close" can
+  // discard whatever changed during this session (confirmed first) while "Save" just keeps it.
+  private mappingRowsSnapshot: MappingRow[] | null = null;
+  private targetByResourceSnapshot: Record<string, string> | null = null;
+  readonly pendingExitConfirm = signal(false);
+
+  openGroupMapping(resource: string): void {
+    this.mappingRowsSnapshot = structuredClone(this.mappingRows());
+    this.targetByResourceSnapshot = structuredClone(this.targetByResource());
+    this.selectedGroupForMapping.set(resource);
+  }
+
+  private closeGroupMapping(): void {
+    this.mappingRowsSnapshot = null;
+    this.targetByResourceSnapshot = null;
+    this.selectedGroupForMapping.set(null);
+  }
+
+  /** "Save" below the canvas — keeps whatever's mapped so far and returns to the group list. */
+  saveGroupMapping(): void {
+    const group = this.activeMappingGroup();
+    this.closeGroupMapping();
+    if (group) this.toast.success('Mapping saved', `${group} mapping progress saved.`);
+  }
+
+  /** "Close" below the canvas — always confirms first, since it discards unsaved changes. */
+  requestExitMapping(): void { this.pendingExitConfirm.set(true); }
+  cancelExitMapping(): void { this.pendingExitConfirm.set(false); }
+
+  onExitConfirmBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelExitMapping();
+  }
+
+  confirmExitMapping(): void {
+    if (this.mappingRowsSnapshot) this.mappingRows.set(this.mappingRowsSnapshot);
+    if (this.targetByResourceSnapshot) this.targetByResource.set(this.targetByResourceSnapshot);
+    this.pendingExitConfirm.set(false);
+    this.closeGroupMapping();
   }
 
   back(): void {
@@ -388,47 +540,6 @@ export class DestinationWizardComponent implements OnInit {
     );
   }
 
-  // ── mapping rows ──────────────────────────────────────────────────────────
-  rowsForResource(r: string): MappingRow[] {
-    return this.mappingRows().filter(row => row.resource === r);
-  }
-
-  updateRow(i: number, field: 'targetName', val: string): void {
-    this.mappingRows.update(rows => {
-      const next = [...rows];
-      next[i] = { ...next[i], [field]: val };
-      return next;
-    });
-  }
-
-  // Adds one empty mapping row for the resource — defaults to the first field
-  // not already mapped, so repeated clicks step through the catalog.
-  addRow(resource: string): void {
-    const fields = this.availableFields(resource);
-    if (!fields.length) return;
-    const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
-    const next = fields.find(f => !used.has(f.label)) ?? fields[0];
-    const row: MappingRow = {
-      resource,
-      fieldLabel: next.label,
-      fhirPath:   next.path,
-      targetName: this.destType() === 'sql' ? next.sqlColumn : next.csvColumn,
-      tableName:  this.targetFor(resource),
-      jsonPath:   next.jsonPath,
-      valueType:  next.valueType,
-      arrays:     next.arrays,
-    };
-    this.mappingRows.update(rows => [...rows, row]);
-  }
-
-  removeRow(row: MappingRow): void {
-    this.mappingRows.update(rows => {
-      const i = rows.indexOf(row);
-      if (i < 0) return rows;
-      return [...rows.slice(0, i), ...rows.slice(i + 1)];
-    });
-  }
-
   // ── per-resource target (file name / table) ────────────────────────────────
   targetFor(r: string): string { return this.targetByResource()[r] ?? ''; }
 
@@ -442,30 +553,18 @@ export class DestinationWizardComponent implements OnInit {
     return this.catalogByResource()[r] ?? this.defFor(r).fields;
   }
 
-  changeBusinessField(i: number, label: string): void {
-    this.mappingRows.update(rows => {
-      const next = [...rows];
-      const row  = next[i];
-      const f    = this.availableFields(row.resource).find(x => x.label === label);
-      next[i] = {
-        ...row,
-        fieldLabel: label,
-        fhirPath:   f?.path ?? row.fhirPath,
-        targetName: f ? (this.destType() === 'sql' ? f.sqlColumn : f.csvColumn) : row.targetName,
-        jsonPath:   f?.jsonPath,
-        valueType:  f?.valueType,
-        arrays:     f?.arrays,
-      };
-      return next;
-    });
-  }
+  // Stable references for the field-mapping-canvas's function inputs — declared once so the child
+  // component doesn't see a new function identity (and re-render) on every change-detection tick.
+  readonly availableFieldsFn = (r: string): ResourceFieldDef[] => this.availableFields(r);
+  readonly columnsForResourceTargetFn = (r: string): string[] => this.columnsForResourceTarget(r);
 
   // ── private ───────────────────────────────────────────────────────────────
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
   private _rebuildRows(resources: string[], type: 'sql' | 'csv'): void {
-    const targets = { ...this.targetByResource() };
+    const oldTargets = this.targetByResource();
+    const targets = { ...oldTargets };
     for (const r of resources) {
       if (targets[r]) continue;
       // Seed the per-resource target once; preserve any value the user has already typed.
@@ -476,7 +575,12 @@ export class DestinationWizardComponent implements OnInit {
     this.mappingRows.update(rows =>
       rows
         .filter(row => resources.includes(row.resource))
-        .map(row => ({ ...row, tableName: targets[row.resource] ?? row.tableName }))
+        .map(row => {
+          // Only re-sync rows that were on the resource's OLD primary table — never touch rows on an
+          // extra/child table, which the resource's primary-target rename doesn't affect.
+          const wasOnPrimary = row.tableName === (oldTargets[row.resource] ?? row.tableName);
+          return wasOnPrimary ? { ...row, tableName: targets[row.resource] ?? row.tableName } : row;
+        })
     );
   }
 
@@ -515,22 +619,19 @@ export class DestinationWizardComponent implements OnInit {
     if (f['dest_targets']) {
       try { this.targetByResource.set(JSON.parse(f['dest_targets'])); } catch { /* ignore malformed */ }
     }
+    if (f['dest_extraTables']) {
+      try { this.extraTablesByGroup.set(JSON.parse(f['dest_extraTables'])); } catch { /* ignore malformed */ }
+    }
+    if (f['dest_mappings_v2']) {
+      try {
+        this.mappingRows.set(JSON.parse(f['dest_mappings_v2']) as MappingRow[]);
+        return;
+      } catch { /* fall through to the legacy loader below */ }
+    }
     if (f['dest_mappings']) {
       try {
-        const saved = JSON.parse(f['dest_mappings']) as {
-          resource: string; field: string; path: string; target: string; column: string;
-          jsonPath?: string; valueType?: string; arrays?: string[];
-        }[];
-        this.mappingRows.set(saved.map(m => ({
-          resource:   m.resource,
-          fieldLabel: m.field,
-          fhirPath:   m.path,
-          targetName: m.column,
-          tableName:  m.target,
-          jsonPath:   m.jsonPath,
-          valueType:  m.valueType,
-          arrays:     m.arrays,
-        })));
+        const saved = JSON.parse(f['dest_mappings']) as LegacyMappingRow[];
+        this.mappingRows.set(saved.map(migrateLegacyRow));
       } catch { /* ignore malformed */ }
     }
   }
@@ -574,22 +675,14 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     // Persist per-resource targets + the actual field mappings (previously discarded).
+    // dest_mappings keeps the legacy flat shape (one entry per row, primary/first source only) so
+    // workflow-build-assembler.service.ts keeps working unmodified; dest_mappings_v2 round-trips the
+    // full rich shape (joins, instance selection) so re-opening the wizard restores them exactly.
     config['dest_mappingCount'] = String(this.mappingRows().length);
-    config['dest_targets']  = JSON.stringify(this.targetByResource());
-    config['dest_mappings'] = JSON.stringify(
-      this.mappingRows().map(r => ({
-        resource: r.resource,
-        field:    r.fieldLabel,
-        path:     r.fhirPath,
-        target:   this.targetByResource()[r.resource] ?? r.tableName,
-        column:   r.targetName,
-        // Array-aware catalog metadata (present for catalog-picked fields) so the build gets the
-        // correct JSONPath instead of a guessed conversion.
-        jsonPath:  r.jsonPath,
-        valueType: r.valueType,
-        arrays:    r.arrays,
-      })),
-    );
+    config['dest_targets']      = JSON.stringify(this.targetByResource());
+    config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
+    config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource()));
+    config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
 
     this.saved.emit({
       attachNode:  this.attachNode(),

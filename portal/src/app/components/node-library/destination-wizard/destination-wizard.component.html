@@ -1,36 +1,39 @@
 <div class="dw">
 
-  <!-- ── Top bar ──────────────────────────────────────────────────────────── -->
-  <div class="dw-topbar">
-    <div class="dw-topbar-left">
-      <div class="dw-icon-wrap">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity=".15"/>
-          <path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
-    </div>
-    <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
-  </div>
-
-  <!-- ── Step indicator ───────────────────────────────────────────────────── -->
-  <div class="dw-stepper">
-    @for (label of STEP_LABELS; track $index) {
-      <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
-        <div class="dw-step-num">
-          @if (isStepDone($index + 1)) { ✓ } @else { {{ $index + 1 }} }
+  <!-- ── Top bar + step indicator ── hidden while a group's mapping canvas is open; the outer
+       Node Library header shows "Map fields — {group}" instead, and Close/Save below the canvas
+       are the only navigation needed there. ── -->
+  @if (!activeMappingGroup()) {
+    <div class="dw-topbar">
+      <div class="dw-topbar-left">
+        <div class="dw-icon-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity=".15"/>
+            <path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
         </div>
-        <span class="dw-step-label">{{ label }}</span>
+        <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
       </div>
-      @if ($index < STEP_LABELS.length - 1) {
-        <div class="dw-step-line" [class.done]="isStepDone($index + 1)"></div>
+      <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+    </div>
+
+    <div class="dw-stepper">
+      @for (label of STEP_LABELS; track $index) {
+        <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
+          <div class="dw-step-num">
+            @if (isStepDone($index + 1)) { ✓ } @else { {{ $index + 1 }} }
+          </div>
+          <span class="dw-step-label">{{ label }}</span>
+        </div>
+        @if ($index < STEP_LABELS.length - 1) {
+          <div class="dw-step-line" [class.done]="isStepDone($index + 1)"></div>
+        }
       }
-    }
-  </div>
+    </div>
+  }
 
   <!-- ── Body ─────────────────────────────────────────────────────────────── -->
-  <div class="dw-body">
+  <div class="dw-body" [class.dw-body--canvas]="!!activeMappingGroup()">
 
     <!-- ═══ STEP 1: Configure ═══════════════════════════════════════════════ -->
     @if (isStepActive(1)) {
@@ -203,8 +206,8 @@
               @if (isResourceSelected(r)) { ✓ }
             </div>
             <div class="dw-rc-body">
-              <strong class="dw-rc-name">{{ r }}</strong>
-              <span class="dw-rc-scope">{{ 'user/' + r + '.read' }}</span>
+              <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
+              <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
             </div>
           </button>
         }
@@ -218,99 +221,60 @@
 
     <!-- ═══ STEP 3: Map fields ════════════════════════════════════════════ -->
     @if (isStepActive(3)) {
-      <div class="dw-section-head">
-        <span class="dw-section-num">3</span>
-        <span class="dw-section-title">Map fields</span>
-        <span class="dw-section-hint">
-          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : 'Map FHIR paths to CSV file columns.' }}
-        </span>
-      </div>
-
-      @for (r of resourceKeys(); track r) {
-        <div class="dw-mapping-group">
-          <div class="dw-mapping-group-head">
-            <strong>{{ r }}</strong>
-            <span class="dw-mapping-target-inline">
-              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : 'File name' }}</label>
-              @if (hasSqlTables()) {
-                <div class="dw-select-wrap">
-                  <select class="dw-select dw-target-select"
-                          [attr.id]="'dw-target-' + r"
-                          [value]="targetFor(r)"
-                          (change)="updateTarget(r, $any($event.target).value)">
-                    <option value="" disabled [selected]="!targetFor(r)">Select a table…</option>
-                    @for (t of sqlTableOptions(); track t) { <option [value]="t" [selected]="t === targetFor(r)">{{ t }}</option> }
-                  </select>
-                </div>
-              } @else {
-                <input
-                  class="dw-map-input dw-target-input"
-                  [attr.id]="'dw-target-' + r"
-                  [value]="targetFor(r)"
-                  (input)="updateTarget(r, $any($event.target).value)"
-                  [placeholder]="isSql() ? 'dbo.Patient' : 'patients.csv'"
-                />
-              }
-            </span>
-            <button type="button" class="dw-btn dw-add-field" (click)="addRow(r)">+ Add field</button>
-          </div>
-          <table class="dw-map-table">
-            <thead>
-              <tr>
-                <th>Business field</th>
-                <th>FHIR path</th>
-                <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
-                <th class="dw-map-actions" aria-label="Actions"></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of rowsForResource(r); track $index) {
-                <tr>
-                  <td>
-                    <div class="dw-select-wrap">
-                      <select
-                        class="dw-select"
-                        [value]="row.fieldLabel"
-                        (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
-                      >
-                        @for (f of availableFields(r); track f.path) {
-                          <option [value]="f.label" [selected]="f.label === row.fieldLabel">{{ f.label }}</option>
-                        }
-                      </select>
-                    </div>
-                  </td>
-                  <td class="dw-mono">{{ row.fhirPath }}</td>
-                  <td>
-                    @if (hasSqlTables() && columnsForResourceTarget(r).length) {
-                      <div class="dw-select-wrap">
-                        <select class="dw-select"
-                                [value]="row.targetName"
-                                (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
-                          <option value="" disabled [selected]="!row.targetName">Select a column…</option>
-                          @for (c of columnsForResourceTarget(r); track c) { <option [value]="c" [selected]="c === row.targetName">{{ c }}</option> }
-                        </select>
-                      </div>
-                    } @else {
-                      <input
-                        class="dw-map-input"
-                        [value]="row.targetName"
-                        (input)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)"
-                      />
-                    }
-                  </td>
-                  <td class="dw-map-actions">
-                    <button type="button" class="dw-row-remove" title="Remove field" (click)="removeRow(row)">✕</button>
-                  </td>
-                </tr>
-              }
-              @if (rowsForResource(r).length === 0) {
-                <tr class="dw-map-empty">
-                  <td [attr.colspan]="4">No fields mapped yet — click <strong>+ Add field</strong> to add one.</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+      @if (!activeMappingGroup()) {
+        <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
+        <div class="dw-section-head">
+          <span class="dw-section-num">3</span>
+          <span class="dw-section-title">Map fields</span>
+          <span class="dw-section-hint">Choose a data group to map.</span>
         </div>
+
+        <table class="data-table dw-groups-table">
+          <thead class="data-table__header">
+            <tr>
+              <th>Data group</th>
+              <th class="dw-groups-actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of resourceKeys(); track r) {
+              <tr class="data-table__row">
+                <td class="dw-groups-name">{{ r }}</td>
+                <td class="dw-groups-actions">
+                  <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">Map</button>
+                </td>
+              </tr>
+            }
+            @if (resourceKeys().length === 0) {
+              <tr><td colspan="2" class="dw-groups-empty">No data groups selected — go back to Step 2 to choose some.</td></tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <!-- ── Mapping canvas, scoped to the one selected group ── the outer Node Library header
+             shows "Map fields — {group}" in place of its own title, so no title repeats here. ── -->
+        <app-field-mapping-canvas
+          class="dw-mapping-canvas-full"
+          [resources]="[activeMappingGroup()!]"
+          [destType]="destType()"
+          [mappingRows]="mappingRows()"
+          [targetByResource]="targetByResource()"
+          [availableFields]="availableFieldsFn"
+          [columnsForResourceTarget]="columnsForResourceTargetFn"
+          [hasSqlTables]="hasSqlTables()"
+          [sqlTableOptions]="sqlTableOptions()"
+          [csvDelimiterKey]="csvForm.value.delimiter ?? 'comma'"
+          [extraTables]="extraTablesFor(activeMappingGroup()!)"
+          [columnsForTable]="columnsForTableFn"
+          [availableTablesToAdd]="availableTablesToAddFn"
+          [connectionInfo]="connectionInfo()"
+          (mappingRowsChange)="mappingRows.set($event)"
+          (targetByResourceChange)="targetByResource.set($event)"
+          (extraTablesChange)="onExtraTablesChange($event)"
+          (columnAdded)="onColumnAdded($event)"
+          (tableCreated)="onTableCreated($event)"
+          (columnDropped)="onColumnDropped($event)"
+        />
       }
     }
 
@@ -382,23 +346,46 @@
 
   </div><!-- /dw-body -->
 
-  <!-- ── Footer ───────────────────────────────────────────────────────────── -->
-  <div class="dw-footer">
-    <button class="dw-btn" type="button" (click)="cancel()">Cancel</button>
-    <div class="dw-footer-right">
-      <span class="dw-step-info">Step {{ step() }} of {{ TOTAL_STEPS }}</span>
-      <button class="dw-btn" type="button" [disabled]="step() === 1" (click)="back()">Back</button>
-      <button
-        class="dw-btn dw-btn--primary"
-        type="button"
-        [disabled]="isNextDisabled() || probeState() === 'testing'"
-        (click)="next()"
-      >
-        @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }
-        @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
-        @else { Next }
-      </button>
+  <!-- ── Footer ── hidden while a group's mapping canvas is open; Close/Save below the
+       canvas are the only exit points there, so the step Cancel/Back/Next controls would
+       just be redundant (and "Next"/"Back" would skip past the canvas state entirely). ── -->
+  @if (!activeMappingGroup()) {
+    <div class="dw-footer">
+      <button class="dw-btn" type="button" (click)="cancel()">Cancel</button>
+      <div class="dw-footer-right">
+        <span class="dw-step-info">Step {{ step() }} of {{ TOTAL_STEPS }}</span>
+        <button class="dw-btn" type="button" [disabled]="step() === 1" (click)="back()">Back</button>
+        <button
+          class="dw-btn dw-btn--primary"
+          type="button"
+          [disabled]="isNextDisabled() || probeState() === 'testing'"
+          (click)="next()"
+        >
+          @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }
+          @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
+          @else { Next }
+        </button>
+      </div>
     </div>
-  </div>
+  }
+
+  <!-- ── Confirm before discarding an in-progress group mapping ─────────────── -->
+  @if (pendingExitConfirm()) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onExitConfirmBackdropClick($event)"
+         (keydown.escape)="cancelExitMapping()">
+      <div class="dw-confirm-dialog">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">Exit mapping for {{ activeMappingGroup() }}?</h3>
+        <p class="dw-confirm-body">
+          Any changes made since you opened this group's mapping will be discarded.
+        </p>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelExitMapping()">Keep editing</button>
+          <button type="button" class="btn btn-danger" (click)="confirmExitMapping()">Exit without saving</button>
+        </div>
+      </div>
+    </div>
+  }
 
 </div>

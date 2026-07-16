@@ -144,6 +144,10 @@ export class NodeLibraryDialogComponent {
 
   toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
 
+  // ── maximize / restore ─────────────────────────────────────────────────────
+  readonly isMaximized = signal(false);
+  toggleMaximize(): void { this.isMaximized.update(v => !v); }
+
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
   readonly destWizardType   = signal<'sql' | 'csv' | null>(null);
@@ -163,6 +167,21 @@ export class NodeLibraryDialogComponent {
   // lock the other destination type out mid-wizard and warn before discarding.
   readonly destWizardStep         = signal(1);
   readonly destWizardHasProgressed = signal(false);
+
+  // True while the destination wizard has a specific data group's mapping canvas open — hides the
+  // node-picker sidebar entirely so the canvas gets the full dialog width.
+  readonly destMappingCanvasActive = signal(false);
+  // "Map fields — {group}" while a group's canvas is open; null shows the normal "Node Library" title.
+  readonly destMappingTitle = signal<string | null>(null);
+
+  // Header-level Close/Save (shown in place of the maximize icon's neighboring × while a group's
+  // canvas is open) trigger the wizard's own methods via an incrementing counter input, since a
+  // template reference variable on <app-destination-wizard> isn't reachable from here — it's declared
+  // inside a conditional @if/@else branch, out of scope for the sibling header buttons.
+  readonly exitMappingTrigger = signal(0);
+  readonly saveMappingTrigger = signal(0);
+  bumpExitMappingTrigger(): void { this.exitMappingTrigger.update(v => v + 1); }
+  bumpSaveMappingTrigger(): void { this.saveMappingTrigger.update(v => v + 1); }
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | null>(null);
 
   private readonly destTypeLocked = computed(() =>
@@ -393,6 +412,8 @@ export class NodeLibraryDialogComponent {
     this.destEditNode.set(null);
     this.destWizardStep.set(1);
     this.destWizardHasProgressed.set(false);
+    this.destMappingCanvasActive.set(false);
+    this.destMappingTitle.set(null);
     this.showDestWizard.set(true);
   }
 
@@ -407,6 +428,8 @@ export class NodeLibraryDialogComponent {
     this.destEditNode.set(node);
     this.destWizardStep.set(1);
     this.destWizardHasProgressed.set(false);
+    this.destMappingCanvasActive.set(false);
+    this.destMappingTitle.set(null);
     this.showDestWizard.set(true);
   }
 
@@ -423,6 +446,8 @@ export class NodeLibraryDialogComponent {
     this.destEditNode.set(null);
     this.destWizardStep.set(1);
     this.destWizardHasProgressed.set(false);
+    this.destMappingCanvasActive.set(false);
+    this.destMappingTitle.set(null);
   }
 
   // ── add to pipeline (fallback for items without an auto-open form) ───────
@@ -466,6 +491,8 @@ export class NodeLibraryDialogComponent {
     this.destEditNode.set(null);
     this.destWizardStep.set(1);
     this.destWizardHasProgressed.set(false);
+    this.destMappingCanvasActive.set(false);
+    this.destMappingTitle.set(null);
     this.pendingDestSwitch.set(null);
     this.wiz.close();
   }

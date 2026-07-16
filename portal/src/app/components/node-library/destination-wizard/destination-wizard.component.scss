@@ -1,5 +1,6 @@
 /* ── Wrapper ──────────────────────────────────────────────────────────────── */
 .dw {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -134,6 +135,14 @@
   &::-webkit-scrollbar { width: 5px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+}
+
+// The full-canvas mapping view has no other step content sharing .dw-body — the default 20px top
+// padding just shows up as a bare empty strip above the canvas's own toolbar. Trimmed way down here so
+// the canvas (flex: 1 below) claims that space instead, without affecting the other steps' spacing.
+.dw-body--canvas {
+  padding: 4px 16px 8px;
+  overflow-y: hidden;
 }
 
 /* ── Section head ─────────────────────────────────────────────────────────── */
@@ -308,11 +317,19 @@
   }
 }
 
+.dw-rc-body {
+  min-width: 0;
+  flex: 1;
+}
+
 .dw-rc-name {
   display: block;
   font-size: 13px;
   font-weight: 700;
   color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dw-rc-scope {
@@ -321,6 +338,94 @@
   color: var(--color-muted-2);
   font-family: ui-monospace, Consolas, monospace;
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Data group selection screen (Step 3, before a group is chosen) ─────────── */
+.dw-groups-table {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dw-groups-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.dw-groups-actions-col { width: 100px; }
+
+.dw-groups-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dw-groups-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+
+/* The mapping canvas itself, once a group is chosen — fills the remaining Step 3 space. */
+.dw-mapping-canvas-full {
+  flex: 1;
+  min-height: 0;
+}
+
+
+/* ── Confirm before discarding an in-progress group mapping ─────────────────── */
+.dw-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+}
+
+.dw-confirm-dialog {
+  width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dw-confirm-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--color-warning);
+}
+
+.dw-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.dw-confirm-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.dw-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 /* ── Mapping table ────────────────────────────────────────────────────────── */

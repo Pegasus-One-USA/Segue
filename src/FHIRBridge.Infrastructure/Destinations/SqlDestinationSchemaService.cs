@@ -1,4 +1,7 @@
 using System.Data.Common;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -13,12 +16,16 @@ using Npgsql;
 namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
-/// Reads the live table/column schema for a relational destination so the mapping UI can offer real column pickers.
-/// Provider-aware: SQL Server / Azure SQL, PostgreSQL, and MySQL are introspected via <c>information_schema.columns</c>.
-/// Non-relational destinations return an empty schema (the UI falls back to FHIR default tables).
+/// Reads the live table/column schema for a relational destination so the mapping UI can offer real column pickers,
+/// and executes additive DDL (ALTER TABLE ADD COLUMN / CREATE TABLE) for the mapping canvas's schema-authoring
+/// affordances. Schema reads are provider-aware (SQL Server / Azure SQL, PostgreSQL, MySQL); DDL execution is
+/// SQL Server / Azure SQL only. Non-relational destinations return an empty schema (the UI falls back to FHIR
+/// default tables).
 /// </summary>
-public sealed class SqlDestinationSchemaService : IDestinationSchemaService
+public sealed partial class SqlDestinationSchemaService : IDestinationSchemaService
 {
+    private const string ModuleDestinationSchema = "DestinationSchema";
+
     private const string InformationSchemaSql = """
         SELECT table_schema, table_name, column_name, data_type, is_nullable, character_maximum_length
         FROM information_schema.columns
@@ -28,13 +35,19 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
+    private readonly IUserActivityAuditService _userActivityAuditService;
+    private readonly ICurrentUserService _currentUserService;
 
     public SqlDestinationSchemaService(
         IConfigurationRepository repository,
-        ISecretProvider secretProvider)
+        ISecretProvider secretProvider,
+        IUserActivityAuditService userActivityAuditService,
+        ICurrentUserService currentUserService)
     {
         _repository = repository;
         _secretProvider = secretProvider;
+        _userActivityAuditService = userActivityAuditService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<DestinationSchemaDto> GetSchemaAsync(
@@ -86,6 +99,298 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             return new DestinationSchemaProbeDto(false, exception.Message, []);
         }
     }
+
+    public async Task<SchemaMutationResultDto> AddColumnAsync(
+        AddColumnRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        {
+            return new SchemaMutationResultDto(
+                false, $"Destination type '{request.Connection.DestinationType}' does not support column creation.");
+        }
+
+        string schemaName, tableName, columnName, normalizedDataType;
+        int? maxLength;
+        string connectionString;
+        try
+        {
+            (schemaName, tableName) = SplitTableName(request.TableName);
+            columnName = SqlIdentifier.Validate(request.ColumnName);
+            (normalizedDataType, maxLength) = ValidateDataType(request.DataType);
+            connectionString = BuildConnectionString(request.Connection);
+        }
+        catch (Exception exception)
+        {
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        bool tableCreated;
+        try
+        {
+            await using var connection = await OpenConnectionAsync(
+                request.Connection.DestinationType, connectionString, cancellationToken);
+
+            // Adding a column to a resource's default table shouldn't require a separate "create the
+            // table first" step — auto-create it (bare Id PK) so "Add column" is self-sufficient, same
+            // as "Add table" already is.
+            tableCreated = !await TableExistsAsync(connection, schemaName, tableName, cancellationToken);
+            if (tableCreated)
+            {
+                await CreateBareTableAsync(connection, schemaName, tableName, cancellationToken);
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                ALTER TABLE [{schemaName}].[{tableName}]
+                ADD [{columnName}] {normalizedDataType} {(request.IsNullable ? "NULL" : "NOT NULL")};
+                """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // Column already exists, permission denied, etc. are expected UI outcomes.
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        if (tableCreated)
+        {
+            await RecordSchemaAuditAsync(
+                "TableCreated",
+                $"Table '{schemaName}.{tableName}' auto-created for a new column.",
+                cancellationToken);
+        }
+
+        await RecordSchemaAuditAsync(
+            "ColumnAdded",
+            $"Column '{columnName}' ({normalizedDataType}) added to table '{schemaName}.{tableName}'.",
+            cancellationToken);
+
+        var typeFamily = normalizedDataType.Split('(')[0];
+        var column = new DestinationColumnSchemaDto(
+            columnName, normalizedDataType, MapSqlServerType(typeFamily), request.IsNullable, maxLength);
+        return new SchemaMutationResultDto(true, null, column);
+    }
+
+    public async Task<SchemaMutationResultDto> CreateTableAsync(
+        CreateTableRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        {
+            return new SchemaMutationResultDto(
+                false, $"Destination type '{request.Connection.DestinationType}' does not support table creation.");
+        }
+
+        string schemaName, tableName, connectionString;
+        try
+        {
+            (schemaName, tableName) = SplitTableName(request.TableName);
+            connectionString = BuildConnectionString(request.Connection);
+        }
+        catch (Exception exception)
+        {
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(
+                request.Connection.DestinationType, connectionString, cancellationToken);
+
+            if (await TableExistsAsync(connection, schemaName, tableName, cancellationToken))
+            {
+                return new SchemaMutationResultDto(false, $"Table '{schemaName}.{tableName}' already exists.");
+            }
+
+            await CreateBareTableAsync(connection, schemaName, tableName, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        await RecordSchemaAuditAsync(
+            "TableCreated",
+            $"Table '{schemaName}.{tableName}' created.",
+            cancellationToken);
+
+        return new SchemaMutationResultDto(true, null);
+    }
+
+    public async Task<SchemaMutationResultDto> DropColumnAsync(
+        DropColumnRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        {
+            return new SchemaMutationResultDto(
+                false, $"Destination type '{request.Connection.DestinationType}' does not support dropping columns.");
+        }
+
+        string schemaName, tableName, columnName, connectionString;
+        try
+        {
+            (schemaName, tableName) = SplitTableName(request.TableName);
+            columnName = SqlIdentifier.Validate(request.ColumnName);
+            connectionString = BuildConnectionString(request.Connection);
+        }
+        catch (Exception exception)
+        {
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(
+                request.Connection.DestinationType, connectionString, cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                ALTER TABLE [{schemaName}].[{tableName}]
+                DROP COLUMN [{columnName}];
+                """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // Table/column missing, column has a constraint/index depending on it, permission denied,
+            // etc. are expected UI outcomes.
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        await RecordSchemaAuditAsync(
+            "ColumnDropped",
+            $"Column '{columnName}' permanently dropped from table '{schemaName}.{tableName}'.",
+            cancellationToken);
+
+        return new SchemaMutationResultDto(true, null);
+    }
+
+    private static async Task<bool> TableExistsAsync(
+        DbConnection connection, string schemaName, string tableName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT OBJECT_ID(N'[{schemaName}].[{tableName}]', N'U');";
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is not null and not DBNull;
+    }
+
+    /// <summary>Creates the schema (if missing) and a bare table with just an auto-increment Id primary key.</summary>
+    private static async Task CreateBareTableAsync(
+        DbConnection connection, string schemaName, string tableName, CancellationToken cancellationToken)
+    {
+        await using var createSchemaCommand = connection.CreateCommand();
+        createSchemaCommand.CommandText = $"""
+            IF SCHEMA_ID(N'{schemaName}') IS NULL
+            BEGIN
+                EXEC(N'CREATE SCHEMA [{schemaName}]')
+            END
+            """;
+        await createSchemaCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var createTableCommand = connection.CreateCommand();
+        createTableCommand.CommandText = $"""
+            CREATE TABLE [{schemaName}].[{tableName}]
+            (
+                Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_Id PRIMARY KEY
+            );
+            """;
+        await createTableCommand.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task RecordSchemaAuditAsync(string action, string message, CancellationToken cancellationToken)
+    {
+        var user = _currentUserService.CurrentUser;
+        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
+        await _userActivityAuditService.RecordAsync(
+            new RecordUserActivityRequest(
+                UserId: userId,
+                UserEmail: user.AuditName,
+                Category: UserActivityCategories.Configuration,
+                Activity: message,
+                Status: UserActivityStatuses.Success,
+                IpAddress: user.IpAddress,
+                UserAgent: user.UserAgent,
+                CorrelationId: user.CorrelationId,
+                Module: ModuleDestinationSchema,
+                Action: action),
+            cancellationToken);
+    }
+
+    private static bool IsSqlServerFamily(DestinationType type)
+        => type is DestinationType.SqlServer or DestinationType.AzureSql;
+
+    private static (string SchemaName, string TableName) SplitTableName(string tableName)
+    {
+        var parts = tableName.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts switch
+        {
+            [var table] => ("dbo", SqlIdentifier.Validate(table)),
+            [var schema, var table] => (SqlIdentifier.Validate(schema), SqlIdentifier.Validate(table)),
+            _ => throw new InvalidOperationException($"'{tableName}' must be either TableName or SchemaName.TableName.")
+        };
+    }
+
+    /// <summary>
+    /// Allowlists+normalizes a destination column data type against a curated set of SQL Server types — the
+    /// injection boundary for the type portion of DDL, since a type name can't be parameterized either.
+    /// Returns the normalized type text plus, for sized string types, the resolved max length.
+    /// </summary>
+    private static (string NormalizedType, int? MaxLength) ValidateDataType(string dataType)
+    {
+        var trimmed = dataType.Trim();
+
+        if (FixedDataTypes.Contains(trimmed))
+        {
+            return (trimmed.ToLowerInvariant(), null);
+        }
+
+        var sizedMatch = SizedStringTypeRegex().Match(trimmed);
+        if (sizedMatch.Success)
+        {
+            var family = sizedMatch.Groups[1].Value.ToLowerInvariant();
+            var size = sizedMatch.Groups[2].Value.ToLowerInvariant();
+            if (size == "max")
+            {
+                return ($"{family}(max)", null);
+            }
+
+            var length = int.Parse(size, CultureInfo.InvariantCulture);
+            if (length is < 1 or > 4000)
+            {
+                throw new InvalidOperationException($"'{dataType}' length must be between 1 and 4000, or MAX.");
+            }
+
+            return ($"{family}({length})", length);
+        }
+
+        var decimalMatch = DecimalTypeRegex().Match(trimmed);
+        if (decimalMatch.Success)
+        {
+            var family = decimalMatch.Groups[1].Value.ToLowerInvariant();
+            var precision = int.Parse(decimalMatch.Groups[2].Value, CultureInfo.InvariantCulture);
+            var scale = int.Parse(decimalMatch.Groups[3].Value, CultureInfo.InvariantCulture);
+            if (precision is < 1 or > 38 || scale < 0 || scale > precision)
+            {
+                throw new InvalidOperationException($"'{dataType}' precision/scale is out of range.");
+            }
+
+            return ($"{family}({precision},{scale})", null);
+        }
+
+        throw new InvalidOperationException($"'{dataType}' is not an allowed data type.");
+    }
+
+    private static readonly HashSet<string> FixedDataTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "int", "bigint", "smallint", "tinyint", "bit", "date", "datetime2", "time", "uniqueidentifier", "float", "real"
+    };
+
+    [GeneratedRegex(@"^(nvarchar|varchar|char|nchar)\((max|\d{1,4})\)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SizedStringTypeRegex();
+
+    [GeneratedRegex(@"^(decimal|numeric)\((\d{1,2}),\s*(\d{1,2})\)$", RegexOptions.IgnoreCase)]
+    private static partial Regex DecimalTypeRegex();
 
     private async Task<List<DestinationTableSchemaDto>> ReadSchemaAsync(
         DestinationType type,

@@ -1,0 +1,223 @@
+// position: fixed (relative to the browser viewport, not .fm-viewport) so this can never get clipped by
+// the canvas's own overflow: hidden — previously, tall content (several joined sources, an approximation
+// warning, etc.) could push this past the canvas's clipped bounds, hiding the footer buttons and the
+// resize handle entirely, with nothing left to grab. top/left come from the component's
+// @HostBinding (drag-by-header), not fixed values here.
+:host {
+  position: fixed;
+  z-index: 50;
+}
+
+.fm-popover {
+  position: relative;
+  width: 328px;
+  min-width: 280px;
+  max-width: min(640px, 90vw);
+  height: auto;
+  min-height: 220px;
+  max-height: 85vh;
+  resize: both;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  // `resize` technically allows any non-visible overflow per spec, but `hidden` doesn't reliably show
+  // the drag handle across browsers in practice — `auto` does. No visible scrollbar appears here since
+  // this element never actually overflows itself (its own content is exactly head+body+footer); the
+  // body's own `overflow: auto` below is what handles content that doesn't fit.
+  overflow: auto;
+
+  // Native resize handles are barely visible against a light background — draw an explicit grip so
+  // the affordance is actually discoverable. Purely cosmetic (pointer-events: none): the browser's own
+  // resize hit-area in this same corner still does the real work.
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    width: 13px;
+    height: 13px;
+    pointer-events: none;
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--color-muted-2) 0 1.5px,
+      transparent 1.5px 4px
+    );
+  }
+}
+
+.fm-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+
+  &:active { cursor: grabbing; }
+}
+
+.fm-popover-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.fm-popover-icon-btn {
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+
+  &:hover { color: var(--color-ink); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); border-radius: var(--radius-sm); }
+}
+
+.fm-popover-body {
+  padding: var(--space-2) var(--space-8) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.fm-popover-hint {
+  font-size: 13px;
+  color: var(--color-ink-2);
+  line-height: 1.5;
+}
+
+.fm-popover-section { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.fm-popover-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+
+.fm-popover-chips { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.fm-popover-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary-mid);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-6);
+
+  button {
+    background: none;
+    border: none;
+    color: var(--color-primary-dark);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 2px;
+
+    &:disabled { opacity: 0.3; cursor: default; }
+    &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary); }
+  }
+}
+
+.fm-popover-chip-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-primary-dark);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fm-popover-input, .fm-popover-select {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: var(--space-2) var(--space-4);
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-mid);
+  }
+}
+
+.fm-popover-input--sm { width: 60px; }
+
+.fm-popover-inline-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: 12px;
+  color: var(--color-ink-2);
+}
+
+.fm-popover-criteria {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.fm-popover-caveat {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4) var(--space-6);
+}
+
+.fm-popover-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-shrink: 0;
+  padding: var(--space-6) var(--space-8);
+  border-top: 1px solid var(--color-border);
+}
+
+.fm-popover-remove {
+  background: none;
+  border: none;
+  color: var(--color-error);
+  cursor: pointer;
+  font-size: 13px;
+  padding: var(--space-2) var(--space-1);
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-error-soft); border-radius: var(--radius-sm); }
+}
+
+.fm-popover-save {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-base);
+  padding: var(--space-2) var(--space-8);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-base);
+
+  &:hover { background: var(--color-primary-dark); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-popover-save { transition: none; }
+}

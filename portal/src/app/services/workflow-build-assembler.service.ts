@@ -25,6 +25,10 @@ interface DestMappingRow {
   jsonPath?: string;       // e.g. "$.name[*].given[*]"
   valueType?: string;      // String | Integer | Decimal | Boolean | Date | DateTime | Json
   arrays?: string[];       // array-ancestor fhir paths
+  // Stamped by field-mapping-model.ts#resolveArrayPolicy — present on every row created by the visual
+  // field-mapping canvas; absent on rows saved before that feature existed (pre-migration dest_mappings).
+  arrayPolicy?: string;
+  approximated?: boolean;
 }
 
 /**
@@ -39,6 +43,9 @@ interface DestMappingRow {
  *  - Wizard field paths are FHIR element paths ("Patient.name.family"); the executor wants JSONPath. We do a best-effort
  *    conversion (strip the resource prefix, prefix "$."). Simple scalars like id map cleanly; deep arrays may not populate.
  *  - Epic source auth is mapped best-effort from the wizard; trusted issuers / private-key secret are not fully captured.
+ *  - Multi-source joins, nth-instance, criteria-match, and CSV-aggregate array selection (all authorable in the visual
+ *    field-mapping canvas) have no ArrayPolicy equivalent; the wizard sends the best-effort primary source with
+ *    FirstItem and stamps `approximated: true` on the row so the UI can flag it — see field-mapping-model.ts#resolveArrayPolicy.
  */
 @Injectable({ providedIn: 'root' })
 export class WorkflowBuildAssemblerService {
@@ -291,13 +298,13 @@ export class WorkflowBuildAssemblerService {
       return {
         targetField: row.column,
         jsonPath,
-        valueType: row.valueType ?? this.valueTypeFor(row.path),
+        valueType: row.arrayPolicy === 'StoreJson' ? 'Json' : (row.valueType ?? this.valueTypeFor(row.path)),
         isRequired: false,
         defaultValue: null,
         format: null,
-        // A flat destination column takes the first match when the path crosses an array; multi-value
-        // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
-        arrayPolicy: isArrayPath ? 'FirstItem' : 'Scalar',
+        // The field-mapping canvas stamps arrayPolicy explicitly (see resolveArrayPolicy); rows saved
+        // before that feature existed fall back to the original naive default below.
+        arrayPolicy: row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'),
         arrayAncestors: arrays.length > 0 ? arrays : null,
       };
     });

@@ -1,0 +1,204 @@
+<div class="fm-canvas">
+  <div class="fm-toolbar">
+    <span class="fm-toolbar-destbadge">{{ destType() === 'sql' ? '🗄️' : '📄' }} {{ destTypeLabel() }}</span>
+    <span class="fm-toolbar-count">{{ mappingRows().length }} field mapping{{ mappingRows().length === 1 ? '' : 's' }}</span>
+    <span class="fm-toolbar-spacer"></span>
+    <button type="button" class="fm-toolbar-btn" (click)="openDrawer()">⤢ Preview output</button>
+  </div>
+
+  <div
+    class="fm-viewport"
+    #viewport
+    [class.fm-viewport--panning]="panning()"
+    (pointerdown)="onViewportPointerDown($event)"
+    (pointermove)="onViewportPointerMove($event)"
+    (pointerup)="onViewportPointerUp($event)"
+    (pointercancel)="onViewportPointerUp($event)"
+    (wheel)="onViewportWheel($event)"
+  >
+    <div class="fm-canvas-inner" #canvasInner [style.transform]="transformStyle()">
+      <app-field-mapping-source-tree
+        [forest]="forest()"
+        [isCollapsed]="isCollapsedFn"
+        [isMapped]="isMappedFn"
+        [isArmed]="isArmedFn"
+        [x]="sourcePosition().x"
+        [y]="sourcePosition().y"
+        (toggleCollapse)="onToggleCollapse($event)"
+        (armToggle)="onArmToggle($event)"
+        (dragStart)="onSourceDragStart($event)"
+        (dragMove)="onSourceDragMove($event)"
+        (dragEnd)="onSourceDragEnd($event)"
+        (positionChange)="onSourcePositionChange($event)"
+      />
+
+      @for (card of targetCards(); track card.tableName; let i = $index) {
+        <app-field-mapping-target-card
+          [resource]="card.resource"
+          [tableName]="card.tableName"
+          [isExtra]="card.isExtra"
+          [destType]="destType()"
+          [targetValue]="targetFor(card.resource)"
+          [hasSqlTables]="hasSqlTables()"
+          [sqlTableOptions]="sqlTableOptions()"
+          [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
+          [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+          [isArmed]="!!armedId()"
+          [isApproximated]="isApproximatedFn"
+          [x]="positionForKey(card.tableName, i).x"
+          [y]="positionForKey(card.tableName, i).y"
+          (targetChange)="onTargetChange(card.resource, $event)"
+          (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
+          (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
+          (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+          (positionChange)="onCardPositionChange(card.tableName, $event)"
+          (removeTable)="onRemoveExtraTable(card.tableName)"
+          (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+        />
+      }
+
+      <app-field-mapping-wires
+        [rows]="mappingRows()"
+        [resourceColorVar]="resourceColorVarFn"
+        [isApproximated]="isApproximatedFn"
+        [tempWire]="dragTempWire()"
+        (wireClick)="onWireClick($event)"
+      />
+    </div>
+
+    <!-- ── Chrome that must stay a constant screen size regardless of canvas zoom — siblings of the
+         transformed .fm-canvas-inner, never descendants of it. ── -->
+    @if (popoverRow(); as row) {
+      <app-field-mapping-join-popover
+        [row]="row"
+        (save)="onPopoverSave($event)"
+        (remove)="onPopoverRemove()"
+        (close)="closePopover()"
+      />
+    }
+
+    @if (resources()[0]; as primaryResource) {
+      @if (!drawerOpen()) {
+      <div class="fm-add-table-slot">
+        @if (hasSqlTables() && !creatingNewTable()) {
+          <select
+            class="fm-add-table-select"
+            [value]="''"
+            (change)="onAddTableSelectChange(primaryResource, $any($event.target).value); $any($event.target).value = ''"
+          >
+            <option value="" disabled selected>＋ Add a table from your database…</option>
+            @for (t of availableTablesToAdd()(primaryResource); track t) {
+              <option [value]="t">{{ t }}</option>
+            }
+            <option [value]="createNewTableOption">✎ Create a new table…</option>
+          </select>
+        } @else {
+          <div class="fm-add-table-new-row">
+            <input
+              class="fm-add-table-select"
+              placeholder="＋ Add a table — type a name and press Enter…"
+              (keydown.enter)="onCreateExtraTable(primaryResource, $any($event.target).value); $any($event.target).value = ''"
+            />
+            @if (hasSqlTables()) {
+              <button
+                type="button"
+                class="fm-add-table-cancel"
+                title="Back to existing tables"
+                aria-label="Back to existing tables"
+                (click)="creatingNewTable.set(false)"
+              >✕</button>
+            }
+          </div>
+        }
+      </div>
+      }
+    }
+
+    <app-zoom-dock
+      [zoomPercent]="zoomPercent()"
+      [showFit]="true"
+      (zoomIn)="zoomIn()"
+      (zoomOut)="zoomOut()"
+      (reset)="resetView()"
+      (fit)="fitToView()"
+    />
+  </div>
+
+  <app-field-mapping-list
+    [rows]="mappingRows()"
+    [resources]="resources()"
+    [forest]="forest()"
+    [tablesForResource]="tablesForResourceFn"
+    [columnsFor]="columnsForResourceTableFn"
+    [targetByResource]="targetByResource()"
+    [isApproximated]="isApproximatedFn"
+    (addRow)="onListAddRow($event)"
+    (removeRow)="onListRemoveRow($event)"
+    (editRow)="onEditRow($event)"
+  />
+
+  <app-field-mapping-preview-drawer
+    [open]="drawerOpen()"
+    [resources]="resources()"
+    [rows]="mappingRows()"
+    [destType]="destType()"
+    [targetByResource]="targetByResource()"
+    [csvDelimiterKey]="csvDelimiterKey()"
+    (closed)="closeDrawer()"
+  />
+
+  @if (addColumnTarget(); as t) {
+    <app-field-mapping-add-column-modal
+      [tableName]="t.tableName"
+      [submitting]="addColumnSubmitting()"
+      [error]="addColumnError()"
+      (submitted)="submitAddColumn($event)"
+      (cancelled)="closeAddColumnModal()"
+    />
+  }
+
+  @if (pendingRemoveTable(); as tableName) {
+    <div
+      class="fm-remove-confirm-backdrop"
+      tabindex="0"
+      (click)="cancelRemoveTable()"
+      (keydown.escape)="cancelRemoveTable()"
+    >
+      <div class="fm-remove-confirm-dialog" (click)="$event.stopPropagation()">
+        <div class="fm-remove-confirm-icon">⚠</div>
+        <h3 class="fm-remove-confirm-title">Remove {{ tableName }}?</h3>
+        <p class="fm-remove-confirm-body">
+          Any mappings already made onto this table will be discarded.
+        </p>
+        <div class="fm-remove-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelRemoveTable()">Cancel</button>
+          <button type="button" class="btn btn-danger" (click)="confirmRemoveTable()">Remove table</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (pendingDropColumn(); as target) {
+    <div
+      class="fm-remove-confirm-backdrop"
+      tabindex="0"
+      (click)="cancelDropColumn()"
+      (keydown.escape)="cancelDropColumn()"
+    >
+      <div class="fm-remove-confirm-dialog" (click)="$event.stopPropagation()">
+        <div class="fm-remove-confirm-icon fm-remove-confirm-icon--danger">🗑</div>
+        <h3 class="fm-remove-confirm-title">Permanently delete "{{ target.column }}"?</h3>
+        <p class="fm-remove-confirm-body">
+          This runs a real <strong>ALTER TABLE ... DROP COLUMN</strong> against {{ target.tableName }}.
+          The column and any data in it will be gone for good — this cannot be undone.
+        </p>
+        <div class="fm-remove-confirm-actions">
+          <button type="button" class="btn btn-secondary" [disabled]="dropColumnSubmitting()" (click)="cancelDropColumn()">Cancel</button>
+          <button type="button" class="btn btn-danger" [disabled]="dropColumnSubmitting()" (click)="confirmDropColumn()">
+            {{ dropColumnSubmitting() ? 'Deleting…' : 'Permanently delete' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

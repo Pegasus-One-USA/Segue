@@ -1,0 +1,87 @@
+<div class="fm-target-card" [style.left.px]="x()" [style.top.px]="y()">
+  <div
+    class="fm-target-head"
+    (pointerdown)="onHeadPointerDown($event)"
+    (pointermove)="onHeadPointerMove($event)"
+    (pointerup)="onHeadPointerUp($event)"
+  >
+    <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : 'file' }}</span>
+    <span class="fm-target-name">{{ tableName() || resource() }}</span>
+    @if (isExtra()) {
+      <button type="button" class="fm-target-remove" aria-label="Remove this table" title="Remove this table" (click)="removeTable.emit()">✕</button>
+    }
+  </div>
+
+  @if (!isExtra()) {
+    <div class="fm-target-select-row">
+      <label class="fm-target-select-label" [attr.for]="'fm-target-' + resource()">{{ targetLabel() }}</label>
+      @if (hasSqlTables()) {
+        <div class="fm-select-wrap">
+          <select
+            class="fm-select"
+            [attr.id]="'fm-target-' + resource()"
+            [value]="targetValue()"
+            (change)="onTargetInput($any($event.target).value)"
+          >
+            <option value="" disabled [selected]="!targetValue()">Select a table…</option>
+            @for (t of sqlTableOptions(); track t) {
+              <option [value]="t" [selected]="t === targetValue()">{{ t }}</option>
+            }
+          </select>
+        </div>
+      } @else {
+        <input
+          class="fm-input"
+          [attr.id]="'fm-target-' + resource()"
+          [value]="targetValue()"
+          (input)="onTargetInput($any($event.target).value)"
+          [placeholder]="destType() === 'sql' ? 'dbo.Patient' : 'patients.csv'"
+        />
+      }
+    </div>
+  }
+
+  <div class="fm-target-rows">
+    @for (col of columns(); track col) {
+      <div
+        #columnRow
+        class="fm-target-row"
+        [class.fm-target-row--mapped]="!!rowForColumn()(col)"
+        [class.fm-target-row--armed-target]="isArmed()"
+        role="button"
+        tabindex="0"
+        [attr.aria-label]="col + (rowForColumn()(col) ? ', mapped' : ', unmapped')"
+        [attr.data-fm-drop]="resource() + '::' + tableName() + '::' + col"
+        (keydown)="onColumnKeydown(col, $event)"
+      >
+        <span class="fm-target-port" aria-hidden="true"></span>
+        <span class="fm-target-colname">{{ col }}</span>
+        @if ((rowForColumn()(col)?.sources?.length ?? 0) > 1) {
+          <span class="fm-target-tag">×{{ rowForColumn()(col)?.sources?.length }}</span>
+        } @else if (rowForColumn()(col)?.mode === 'childJson') {
+          <span class="fm-target-tag">JSON</span>
+        }
+        @if (rowForColumn()(col) && isApproximated()(rowForColumn()(col)!)) {
+          <span class="fm-target-caveat" title="Preview only — not yet enforced by the pipeline engine">⚠</span>
+        }
+        <button
+          type="button"
+          class="fm-target-col-delete"
+          aria-label="Delete this column"
+          title="Delete this column"
+          (click)="deleteColumn.emit(col)"
+        >🗑</button>
+      </div>
+    }
+    @if (destType() === 'sql') {
+      <div class="fm-target-row fm-target-row--add">
+        <button type="button" class="fm-target-add-btn" (click)="openAddColumn.emit()">＋ Add column</button>
+      </div>
+    } @else {
+      <div class="fm-target-row fm-target-row--add">
+        <span class="fm-target-colname">＋ Add column</span>
+        <input class="fm-target-add-input" placeholder="new column name" (keydown)="onNewColumnKeydown($event)" />
+      </div>
+    }
+  </div>
+</div>
