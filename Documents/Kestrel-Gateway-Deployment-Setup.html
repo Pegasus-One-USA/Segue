@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kestrel-Native Hosting Setup (YARP Gateway) — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 16px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 110px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.bad { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); display: block; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Kestrel-Native Hosting Setup (YARP Gateway)</h1>
+    <p class="subtitle">FHIRBridge API &amp; Portal &mdash; moving off IIS to a cross-platform Kestrel/YARP deployment, first stood up on a domain-less Windows Server</p>
+    <div class="meta">
+      <div><strong>Branch</strong> main_Prod_Deployment_Prep</div>
+      <div><strong>Scope</strong> FHIRBridge.Api + FHIRBridge.Gateway (.NET 9) + Portal (Angular 20)</div>
+      <div><strong>Target</strong> Windows Server now, same model portable to Linux later</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#why">Why Kestrel + YARP instead of IIS</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#code-changes">Code changes made</a></li>
+      <li><a href="#server-layout">Server folder layout</a></li>
+      <li><a href="#setup-steps">Setup steps, in order</a></li>
+      <li><a href="#errors">Errors faced &amp; corrections</a></li>
+      <li><a href="#open-items">Open items / still verifying</a></li>
+      <li><a href="#verification">Verification checklist</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    The goal was to host the FHIRBridge API and Portal UI on a Windows Server today, using a
+    deployment mechanism that would carry over to a Linux server later without redesigning
+    anything. That ruled out IIS (Windows-only) in favor of running everything as plain Kestrel
+    processes, with the previously-empty <code>FHIRBridge.Gateway</code> (YARP) project built out
+    as the single public entry point in front of the API and the portal's static files. The server
+    itself is a domain-less internal/local Windows Server (Azure VM), so TLS uses a self-signed
+    certificate for now, with a clear path to a real Let's&nbsp;Encrypt certificate (via the
+    already-staged <code>win-acme</code> tool) once a domain is registered.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">2</div><div class="label">apps hosted (API + Portal, via one Gateway)</div></div>
+    <div class="card"><div class="num">6</div><div class="label">files changed/added in the repo</div></div>
+    <div class="card"><div class="num">1</div><div class="label">real code bug found &amp; fixed (Angular prod build)</div></div>
+    <div class="card"><div class="num">~20</div><div class="label">deployment issues diagnosed &amp; resolved</div></div>
+  </div>
+
+  <h2 id="why"><span class="num">2.</span>Why Kestrel + YARP instead of IIS</h2>
+  <p>
+    The initial plan was a conventional IIS deployment (ASP.NET Core Hosting Bundle, IIS sites,
+    <code>web.config</code>, win-acme wired into IIS bindings). That was reworked once the actual
+    requirement surfaced: the same deployment approach needs to work on Linux too, and IIS simply
+    doesn't exist there. Kestrel is built into ASP.NET Core on every platform, and YARP (a .NET
+    reverse proxy that itself runs on Kestrel) was already scaffolded in this repo as
+    <code>FHIRBridge.Gateway</code> &mdash; unused, but exactly the right shape for this. Building
+    that out means the <em>entire</em> stack (API, Gateway, and the portal's static files served
+    through it) is nothing but Kestrel processes, identical on Windows and Linux; only the process
+    supervisor (Windows Service vs. systemd) and the TLS certificate tooling (win-acme vs. certbot)
+    differ per OS.
+  </p>
+
+  <h2 id="architecture"><span class="num">3.</span>Architecture</h2>
+  <p>Single public entry point, path-based routing, one domain, one certificate:</p>
+  <ul class="feature-list">
+    <li><strong>FHIRBridge.Gateway</strong> binds the public ports (80/443) and is the only internet-facing process.</li>
+    <li><strong>Requests to <code>/api/**</code></strong> are reverse-proxied via YARP to <code>FHIRBridge.Api</code>, which binds to loopback only (<code>127.0.0.1:5000</code>) &mdash; set via <code>ASPNETCORE_URLS</code> on the service, not in code, so local <code>dotnet run</code> is unaffected.</li>
+    <li><strong>Requests to <code>/swagger/**</code></strong> are also proxied to the same API cluster, gated behind a <code>Swagger:Enabled</code> config flag (temporarily on in Production, per an explicit request &mdash; trivially switched back off later, no redeploy needed).</li>
+    <li><strong>Everything else</strong> is served as static files from the portal's production build, with SPA fallback to <code>index.html</code> for any non-file, non-API path (Angular client-side routing).</li>
+    <li><strong>Cross-platform process hosting:</strong> both <code>FHIRBridge.Api</code> and <code>FHIRBridge.Gateway</code> call <code>UseWindowsService().UseSystemd()</code> right after <code>WebApplication.CreateBuilder(args)</code> &mdash; no-ops unless actually launched by that OS's service manager, so the same published output runs as a Windows Service today or a systemd unit later.</li>
+  </ul>
+  <div class="callout">
+    <strong>Same-origin by design</strong>
+    Because the portal is served by the same Gateway/origin as <code>/api/**</code>, the portal's
+    production <code>apiBase</code> is simply empty &mdash; every API call becomes a relative path
+    (<code>/api/v1/...</code>), which is same-origin and needs no CORS configuration in production at all.
+  </div>
+
+  <h2 id="code-changes"><span class="num">4.</span>Code changes made</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">src/Gateway/FHIRBridge.Gateway/Program.cs</td>
+      <td class="status"><span class="pill pill-new">Rewritten</span></td>
+      <td class="why">Was a 5-line placeholder. Now wires Serilog (via the shared <code>FHIRBridge.Observability</code> helper, same pattern as the API), <code>UseWindowsService()/UseSystemd()</code>, YARP (<code>AddReverseProxy().LoadFromConfig(...)</code>), a static-file branch with SPA fallback for every non-<code>/api</code> path, and <code>MapReverseProxy()</code>.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/Gateway/FHIRBridge.Gateway/appsettings.json</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why"><code>ReverseProxy</code> routes/clusters for <code>/api/**</code> and <code>/swagger/**</code> &rarr; <code>http://127.0.0.1:5000/</code>, plus a <code>StaticFiles:RootPath</code> setting.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/Gateway/FHIRBridge.Gateway/appsettings.Development.json</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Local-dev override so the Gateway can be smoke-tested with <code>dotnet run</code> against a locally built portal, before ever touching a server.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/Gateway/FHIRBridge.Gateway/FHIRBridge.Gateway.csproj</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>Microsoft.Extensions.Hosting.WindowsServices</code> and <code>Microsoft.Extensions.Hosting.Systemd</code> package references.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Same two hosting packages added.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/Api/FHIRBridge.Api/Program.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>UseWindowsService().UseSystemd()</code>. Added a <code>Swagger:Enabled</code> config toggle (defaults on in Development, off otherwise) replacing the old hard <code>IsDevelopment()</code> gate, and exempted <code>/swagger/**</code> from the strict Content-Security-Policy header so Swagger UI's inline scripts/styles aren't blocked when it's turned on in Production.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/angular.json</td>
+      <td class="status"><span class="pill pill-deleted">Bug fix</span></td>
+      <td class="why">The <code>production</code> build configuration was missing <code>fileReplacements</code> to swap <code>environment.ts</code> &rarr; <code>environment.prod.ts</code>. Every "production" build had silently been using the <em>dev</em> environment file the whole time. This is the root cause of the CORS/login failures documented below &mdash; see <a href="#err-corsbug">4.3</a>.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/environments/environment.prod.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why"><code>apiBase</code> confirmed empty (same-origin through the Gateway), with a comment explaining why, replacing a stale <code>TODO</code>.</td>
+    </tr>
+  </table>
+
+  <h2 id="server-layout"><span class="num">5.</span>Server folder layout</h2>
+  <p>Everything self-contained under <code>C:\inetpub</code>, matching how the team wanted the server organized:</p>
+  <pre><code>C:\inetpub\tools\win-acme.v2.2.9.1701.x64.trimmed\   &lt;- staged for later, once a domain exists
+C:\inetpub\FHIRBridge-certs\                          &lt;- gateway.pfx (self-signed for now)
+C:\inetpub\dataprotection-keys\
+C:\inetpub\wwwroot\fhirbridge-api\
+C:\inetpub\wwwroot\fhirbridge-gateway\
+C:\inetpub\wwwroot\fhirbridge-portal\</code></pre>
+
+  <h2 id="setup-steps"><span class="num">6.</span>Setup steps, in order</h2>
+
+  <h3>6.1 &mdash; Prerequisites</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Install the .NET 9 ASP.NET Core Runtime</strong><span>Not the Hosting Bundle &mdash; there's no IIS in this model. Also requires the separate plain .NET Runtime (Microsoft.NETCore.App) &mdash; see <a href="#err-runtime">7.1</a>.</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Firewall</strong><span>Allow inbound 80/443 if reachable from other machines on the LAN. <code>FHIRBridge.Api</code> stays loopback-only regardless.</span></div></div>
+  </div>
+
+  <h3>6.2 &mdash; Build, publish, copy</h3>
+  <pre><code>dotnet publish src/Api/FHIRBridge.Api -c Release -o C:\deploy\fhirbridge-api
+dotnet publish src/Gateway/FHIRBridge.Gateway -c Release -o C:\deploy\fhirbridge-gateway
+cd portal; npm ci; npm run build   # -&gt; portal/dist/fhirbridge-ui/browser</code></pre>
+  <p>Copy each output into its matching <code>C:\inetpub\wwwroot\fhirbridge-*</code> folder on the server.</p>
+
+  <h3>6.3 &mdash; Self-signed certificate (no domain needed yet)</h3>
+  <pre><code>$cert = New-SelfSignedCertificate `
+  -DnsName "localhost", "&lt;server-hostname&gt;", "&lt;server-lan-ip&gt;" `
+  -CertStoreLocation "cert:\LocalMachine\My" `
+  -NotAfter (Get-Date).AddYears(5)
+
+$pwd = ConvertTo-SecureString -String "&lt;pfx-password&gt;" -Force -AsPlainText
+Export-PfxCertificate -Cert $cert -FilePath "C:\inetpub\FHIRBridge-certs\gateway.pfx" -Password $pwd</code></pre>
+  <p>The SAN list must include whatever hostname/IP ends up in the browser's address bar, or you get a name-mismatch warning on top of the expected self-signed one.</p>
+
+  <h3>6.4 &mdash; Production config</h3>
+  <p><code>C:\inetpub\wwwroot\fhirbridge-api\appsettings.Production.json</code>:</p>
+  <pre><code>{
+  "ConnectionStrings": { "FHIRBridgeDb": "Server=&lt;sql-host&gt;;Database=FHIRBridge;User Id=...;Password=...;TrustServerCertificate=True;Encrypt=True" },
+  "Authentication": { "SigningKey": "&lt;long random secret&gt;" },
+  "DataProtection": { "KeyRingPath": "C:\\inetpub\\dataprotection-keys" },
+  "Swagger": { "Enabled": true },
+  "AllowedHosts": "*"
+}</code></pre>
+  <p><code>C:\inetpub\wwwroot\fhirbridge-gateway\appsettings.Production.json</code>:</p>
+  <pre><code>{
+  "ReverseProxy": {
+    "Routes": {
+      "api-route": { "ClusterId": "api-cluster", "Match": { "Path": "/api/{**catch-all}" } },
+      "swagger-route": { "ClusterId": "api-cluster", "Match": { "Path": "/swagger/{**catch-all}" } }
+    },
+    "Clusters": { "api-cluster": { "Destinations": { "destination1": { "Address": "http://127.0.0.1:5000/" } } } }
+  },
+  "StaticFiles": { "RootPath": "C:\\inetpub\\wwwroot\\fhirbridge-portal" },
+  "Kestrel": {
+    "Endpoints": {
+      "Http": { "Url": "http://0.0.0.0:80" },
+      "Https": { "Url": "https://0.0.0.0:443", "Certificate": { "Path": "C:\\inetpub\\FHIRBridge-certs\\gateway.pfx" } }
+    }
+  },
+  "AllowedHosts": "*"
+}</code></pre>
+  <div class="callout warn">
+    <strong>Filename matters</strong>
+    ASP.NET Core only auto-loads files named exactly <code>appsettings.json</code> and
+    <code>appsettings.{Environment}.json</code>. A file named anything else (e.g.
+    <code>API-Server-AppSetting.json</code>) is silently never loaded &mdash; see <a href="#err-filename">7.6</a>.
+  </div>
+  <p>The PFX password is <em>not</em> stored in this file &mdash; it's set via an environment variable on the service (next step) so it isn't sitting in plaintext config.</p>
+
+  <h3>6.5 &mdash; Register as Windows Services</h3>
+  <pre><code>New-Service -Name "FHIRBridge.Api" -BinaryPathName '"C:\inetpub\wwwroot\fhirbridge-api\FHIRBridge.Api.exe"' -DisplayName "FHIRBridge API" -StartupType Automatic
+New-Service -Name "FHIRBridge.Gateway" -BinaryPathName '"C:\inetpub\wwwroot\fhirbridge-gateway\FHIRBridge.Gateway.exe"' -DisplayName "FHIRBridge Gateway" -StartupType Automatic
+
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\FHIRBridge.Api" -Name Environment -Value ([string[]]@(
+  "ASPNETCORE_ENVIRONMENT=Production",
+  "ASPNETCORE_URLS=http://127.0.0.1:5000"
+)) -Type MultiString
+
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\FHIRBridge.Gateway" -Name Environment -Value ([string[]]@(
+  "ASPNETCORE_ENVIRONMENT=Production",
+  "Kestrel__Endpoints__Https__Certificate__Password=&lt;pfx-password&gt;"
+)) -Type MultiString
+
+Restart-Service FHIRBridge.Api
+Restart-Service FHIRBridge.Gateway</code></pre>
+  <p>Grant the service account read/write on <code>C:\inetpub\dataprotection-keys</code> and <code>C:\inetpub\FHIRBridge-certs</code>.</p>
+
+  <h3>6.6 &mdash; First-run setup</h3>
+  <p>
+    The database schema self-provisions on boot (EF Core migrations run automatically, and
+    <code>IRbacBootstrapper</code> seeds the permission catalog and system roles idempotently every
+    startup) &mdash; but by design, <strong>no admin user is seeded from config</strong>. The very
+    first SuperAdmin is created interactively:
+  </p>
+  <pre><code>https://localhost/setup</code></pre>
+  <p>This route is one-shot &mdash; once any user exists, it locks itself out and any further attempt returns an error.</p>
+
+  <h2 id="errors"><span class="num">7.</span>Errors faced &amp; corrections</h2>
+  <p class="section-intro">In the order they actually came up, grouped by theme.</p>
+
+  <h3 id="err-runtime">7.1 &mdash; Runtime &amp; Windows Service issues</h3>
+  <table class="file-table">
+    <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr>
+      <td class="why"><code>Restart-Service</code> failed: <em>"Cannot start service ... on computer '.'"</em> (generic SCM error, no detail)</td>
+      <td class="why">The Service Control Manager's error is a wrapper &mdash; it never shows the real exception.</td>
+      <td class="why">Run the published <code>.exe</code> directly in a console (bypasses SCM, behaves like a normal console app) to see the actual startup exception.</td>
+    </tr>
+    <tr>
+      <td class="why"><em>"You must install or update .NET to run this application"</em> &mdash; needed <code>Microsoft.NETCore.App 9.0.0</code>, only <code>10.0.10</code> present</td>
+      <td class="why">App targets <code>net9.0</code>; .NET doesn't roll forward across major versions by default.</td>
+      <td class="why">Installed the ASP.NET Core Runtime 9.0.18 (matching the app's TFM), side-by-side with the existing 10.0.10.</td>
+    </tr>
+    <tr>
+      <td class="why">Downloaded runtime installer, ran <code>dotnet.exe</code> from the extracted folder &mdash; appeared to do nothing</td>
+      <td class="why">Downloaded the <strong>zip/binaries archive</strong>, not the installer &mdash; a portable copy that doesn't register anything system-wide; running its bare <code>dotnet.exe</code> with no args just prints usage and exits.</td>
+      <td class="why">Re-downloaded the actual <strong>installer</strong> (a single <code>.exe</code>, not a folder) and ran that.</td>
+    </tr>
+    <tr>
+      <td class="why">Same "install .NET" error persisted even after installing the ASP.NET Core Runtime</td>
+      <td class="why">The ASP.NET Core Runtime installer didn't bring its <code>Microsoft.NETCore.App</code> dependency along this time (normally bundled together).</td>
+      <td class="why">Separately installed the plain <strong>.NET Runtime 9.0.18</strong> (<code>dotnet-runtime-9.0.18-win-x64.exe</code>).</td>
+    </tr>
+    <tr>
+      <td class="why"><code>Set-ItemProperty ... -Name Environment -Value @(...)</code> threw <em>"RegistryKey.SetValue does not support arrays of type 'Object[]'"</em></td>
+      <td class="why">PowerShell built the array literal as generic <code>Object[]</code>, but <code>REG_MULTI_SZ</code> needs a real <code>String[]</code>.</td>
+      <td class="why">Explicit <code>[string[]]@(...)</code> cast plus <code>-Type MultiString</code>.</td>
+    </tr>
+    <tr>
+      <td class="why">Startup warning: <em>"No XML encryptor configured. Key may be persisted to storage in unencrypted form"</em></td>
+      <td class="why">Data Protection key ring persisted to disk as plaintext XML, with no encryption-at-rest layer.</td>
+      <td class="why">Recommended <code>.ProtectKeysWithDpapi(protectToLocalMachine: true)</code> &mdash; machine-level DPAPI is right for a single Windows Server, and <code>protectToLocalMachine</code> specifically matters since the app runs interactively (current user) during testing but as a Windows Service (different identity) in production.</td>
+    </tr>
+  </table>
+
+  <h3>7.2 &mdash; Port &amp; process conflicts</h3>
+  <table class="file-table">
+    <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr>
+      <td class="why">API failed to bind port 5000: <code>SocketException 10013</code> ("forbidden by its access permissions")</td>
+      <td class="why">Another already-running process (one of several stray leftover <code>dotnet.exe</code> processes) already held the port.</td>
+      <td class="why">Identified via <code>netstat -ano</code>, freed the port before retrying.</td>
+    </tr>
+    <tr>
+      <td class="why"><code>FHIRBridge.Gateway</code> service showed <code>Stopped</code> immediately after starting</td>
+      <td class="why">Port 80 was already <code>LISTENING</code> under PID 4 (<code>System</code>/HTTP.sys) &mdash; IIS's default site, pre-installed on this Azure Windows Server image, auto-bound to port 80.</td>
+      <td class="why"><code>Stop-Service W3SVC -Force; Set-Service W3SVC -StartupType Disabled</code>, since IIS isn't used in this design at all.</td>
+    </tr>
+    <tr>
+      <td class="why"><code>Invoke-WebRequest https://localhost/</code> &rarr; <em>"Unable to connect to the remote server"</em></td>
+      <td class="why">Gateway genuinely wasn't running yet at that point &mdash; both services had failed to start earlier in the sequence (runtime issue, then the port-80 conflict).</td>
+      <td class="why">Confirmed via <code>Get-Service</code> + <code>netstat</code>, then started both services properly once the underlying issues above were fixed.</td>
+    </tr>
+  </table>
+
+  <h3>7.3 &mdash; TLS / browser testing quirks</h3>
+  <table class="file-table">
+    <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr>
+      <td class="why"><code>Invoke-WebRequest -SkipCertificateCheck</code> &rarr; <em>"A parameter cannot be found"</em></td>
+      <td class="why"><code>-SkipCertificateCheck</code> only exists in PowerShell 7+; this server runs Windows PowerShell 5.1.</td>
+      <td class="why">Override <code>[System.Net.ServicePointManager]::ServerCertificateValidationCallback</code> for the session instead (session-scoped &mdash; must be re-applied in any new console window).</td>
+    </tr>
+    <tr>
+      <td class="why">Same cert bypass reapplied but request still failed: <em>"underlying connection was closed: unexpected error on a send"</em></td>
+      <td class="why">The bypass had been set in a <em>different</em> PowerShell window/session than the one running the test.</td>
+      <td class="why">Re-ran the two <code>ServicePointManager</code> override lines in the same session as the test (or switched to real <code>curl.exe -k</code>, which doesn't depend on session state).</td>
+    </tr>
+  </table>
+
+  <h3 id="err-corsbug">7.4 &mdash; Application-level bugs found</h3>
+  <table class="file-table">
+    <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr>
+      <td class="why">Gateway crashed on start: <code>System.ArgumentException: The path must be absolute. (Parameter 'root')</code></td>
+      <td class="why"><code>PhysicalFileProvider</code> requires an absolute path; the local-dev <code>StaticFiles:RootPath</code> config value was relative.</td>
+      <td class="why">Resolve the configured path via <code>Path.GetFullPath(...)</code> before constructing the provider &mdash; works for both relative (dev) and absolute (prod) values.</td>
+    </tr>
+    <tr>
+      <td class="why">Browser console: <em>CORS policy blocked</em> requests to <code>http://localhost:5000/api/v1/config</code> and <code>/auth/setup-status</code> from origin <code>https://localhost</code></td>
+      <td class="why"><strong>Real, pre-existing bug</strong> in <code>portal/angular.json</code>: the <code>production</code> build configuration was missing <code>fileReplacements</code> to swap in <code>environment.prod.ts</code>. Every "production" build had silently kept using the <em>dev</em> environment file (<code>apiBase: 'http://localhost:5000'</code>) the whole time, regardless of any edits made to <code>environment.prod.ts</code> itself.</td>
+      <td class="why">Added the missing <code>fileReplacements</code> entry to <code>angular.json</code>. Verified by inspecting the rebuilt bundle directly &mdash; confirmed the environment chunk now bundles <code>{production:true, apiBase:""}</code>.</td>
+    </tr>
+    <tr>
+      <td class="why"><code>https://localhost/swagger/index.html</code> loaded the Angular login page instead of Swagger UI, with the same CORS-looking errors</td>
+      <td class="why">Gateway's YARP route only proxied <code>/api/**</code>; a request to <code>/swagger/**</code> fell through to the static-file branch, which serves <code>index.html</code> for any unmatched path (the SPA fallback) &mdash; it was never reaching the API at all.</td>
+      <td class="why">Added a second YARP route for <code>/swagger/{**catch-all}</code> pointed at the same API cluster.</td>
+    </tr>
+  </table>
+
+  <h3 id="err-filename">7.5 &mdash; Configuration mistakes</h3>
+  <table class="file-table">
+    <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr>
+      <td class="why">Recurring <em>"Bad Request &ndash; Invalid Hostname" / "HTTP Error 400. The request hostname is invalid."</em> on <code>/api/v1/config</code> and <code>/setup-status</code>, through the Gateway</td>
+      <td class="why">Kestrel's own Host-header validation, driven by <code>AllowedHosts: "localhost"</code> in the base <code>appsettings.json</code> &mdash; rejected because the browser's actual <code>Host</code> header didn't match that literal string exactly. Reproduced and confirmed empirically (same request with a matching <code>Host</code> header succeeded; YARP itself was confirmed to forward the original <code>Host</code> header correctly, ruling out the proxy as the cause).</td>
+      <td class="why"><code>"AllowedHosts": "*"</code> in <code>appsettings.Production.json</code> &mdash; safe here since Gateway is the only thing that talks to this loopback-only API directly.</td>
+    </tr>
+    <tr id="err-filename">
+      <td class="why">Production config edits appeared to have no effect at all</td>
+      <td class="why">The two override files were named <code>API-Server-AppSetting.json</code> and <code>Gateway-appsetting.json</code> &mdash; ASP.NET Core only auto-loads <code>appsettings.json</code> / <code>appsettings.{Environment}.json</code> by exact name, so neither file was ever actually being loaded.</td>
+      <td class="why">Renamed both to <code>appsettings.Production.json</code> in their respective app folders.</td>
+    </tr>
+    <tr>
+      <td class="why">Even after renaming, the added <code>swagger-route</code> still didn't work</td>
+      <td class="why">JSON indentation bug: <code>swagger-route</code> was nested as a sibling of <code>Routes</code>/<code>Clusters</code> directly under <code>ReverseProxy</code>, instead of <em>inside</em> <code>Routes</code>. Confirmed by parsing the file: <code>ReverseProxy</code> keys came back as <code>['Routes', 'swagger-route', 'Clusters']</code>. YARP only reads routes from <code>ReverseProxy:Routes:*</code>, so it was silently ignored.</td>
+      <td class="why">Corrected the nesting so <code>swagger-route</code> sits inside the <code>Routes</code> object alongside <code>api-route</code>.</td>
+    </tr>
+    <tr>
+      <td class="why">Draft production config files had <code>SigningKey</code>, <code>DataProtection:KeyRingPath</code> still empty, and <code>AllowedHosts</code> still <code>"localhost"</code> despite intending to override them</td>
+      <td class="why">The files were essentially a copy of the base <code>appsettings.json</code> with only the connection string filled in &mdash; the other intended overrides were never actually added.</td>
+      <td class="why">Filled in the generated signing key, the key-ring path, <code>AllowedHosts: "*"</code>, and the <code>Swagger:Enabled</code> flag explicitly.</td>
+    </tr>
+  </table>
+
+  <h2 id="open-items"><span class="num">8.</span>Open items / still verifying</h2>
+  <div class="callout warn">
+    <strong><code>FHIRBridge.Api.exe</code> appeared to hang with zero console output</strong>
+    Most likely cause: the very first thing that runs at boot is the Epic endpoint directory
+    seeder's outbound HTTPS call to <code>https://open.epic.com/Endpoints/R4</code>, wrapped in a
+    Polly resilience/retry pipeline that only logs <em>after</em> an attempt completes &mdash; if
+    outbound internet access from this VM is blocked (NSG/firewall silently dropping packets rather
+    than actively refusing), nothing prints until the retries exhaust (the seeder is deliberately
+    designed to log a warning and continue rather than block startup forever, so this should
+    self-resolve within roughly 30&ndash;60 seconds). Diagnostic steps handed off: check
+    <code>Get-NetTCPConnection -OwningProcess &lt;pid&gt;</code> for a stuck <code>SynSent</code>
+    connection, or capture a live thread stack with <code>dotnet-dump collect</code> /
+    <code>clrstack -all</code> for a definitive answer. Not yet confirmed which it was.
+  </div>
+  <div class="callout warn">
+    <strong>Database connection appeared to still read from <code>appsettings.Development.json</code> values</strong>
+    Most likely cause: <code>ASPNETCORE_ENVIRONMENT=Production</code> is session-scoped when set via
+    <code>$env:...</code> and doesn't persist across PowerShell windows &mdash; a fresh console
+    without it re-set would fall through to a different value. Diagnostic steps handed off:
+    check for a persisted machine/user-level <code>ASPNETCORE_ENVIRONMENT</code> override, confirm
+    the current session's value, and confirm the Windows Service's registry <code>Environment</code>
+    value actually stuck. Not yet confirmed which it was.
+  </div>
+
+  <h2 id="verification"><span class="num">9.</span>Verification checklist</h2>
+  <ul class="feature-list">
+    <li><strong>Build:</strong> <code>dotnet build FHIRBridge.sln</code> succeeds with the new hosting packages; <code>npm run build</code> succeeds in <code>portal/</code>.</li>
+    <li><strong>Local smoke test (before touching the server):</strong> Api on <code>127.0.0.1:5000</code> + Gateway on a dev port, side by side &mdash; root path serves the portal's <code>index.html</code>, an unknown Angular route still returns <code>index.html</code> (not 404), and <code>/api/v1/auth/login</code> proxies through with a real response from the API (not a proxy error).</li>
+    <li><strong>Production bundle check:</strong> after the <code>angular.json</code> fix, inspected the built JS bundle directly to confirm the environment chunk bundles <code>{production:true, apiBase:""}</code> rather than the dev URL.</li>
+    <li><strong>End-to-end on the server:</strong> <code>https://&lt;host&gt;/</code> loads the login page with no CORS errors in the console; <code>https://&lt;host&gt;/swagger/index.html</code> reaches real Swagger UI; <code>https://&lt;host&gt;/setup</code> creates the first SuperAdmin successfully.</li>
+  </ul>
+
+  <footer>
+    FHIRBridge &middot; Kestrel-native hosting setup documentation &middot; branch <code>main_Prod_Deployment_Prep</code>
+  </footer>
+
+</div>
+</body>
+</html>
