@@ -1,0 +1,33 @@
+deploy/windows/README.md
+  s_d6653b6b7d4145::t_f425ace7fe67a5 1-87
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_d6653b6b7d4145::t_70037e4a17da48 11
+  s_d6653b6b7d4145::t_2a0a5dc7b861cf 16-19
+src/Api/FHIRBridge.Api/Program.cs
+  s_d6653b6b7d4145::t_3209a6b01bc92a 28-30
+  s_d6653b6b7d4145::t_d630947bb322da 287-292
+  s_d6653b6b7d4145::t_7e681a06ff6825 366-370
+  s_d6653b6b7d4145::t_473afb738b4e03 314-320
+deploy/windows/Deploy-FHIRBridge.ps1
+  s_d6653b6b7d4145::t_a116ee54c943be 1-120
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  s_d6653b6b7d4145::t_a56327b00bdab3 20
+.github/workflows/deploy.yml
+  s_d6653b6b7d4145::t_b3bf98f853e062 1-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "4bab945e0dd715d50d7c17b729e270089980189c",
+  "prompts": {},
+  "sessions": {
+    "s_d6653b6b7d4145": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f1f01c0-0b78-48bd-8c60-7a2a868b28f5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
