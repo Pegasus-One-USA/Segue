@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule, FormBuilder, Validators, ValidatorFn, AbstractControl, ValidationErrors } from '@angular/forms';
-import { WizardService } from '../../../services/wizard.service';
+import { WizardService, APPLICATION_TYPE_TO_AUDIENCE, AUTHENTICATION_TYPE_TO_AUTH_METHOD } from '../../../services/wizard.service';
 import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
 import { ToastService } from '../../../services/toast.service';
 import { EPIC_ENV } from '../../../data/epic-environments.data';
@@ -12,6 +12,8 @@ import { AppKey } from '../../../models/epic-app.model';
 import { FullDiscoveredValues } from '../models/epic-config.model';
 import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../models/audience-field-config.data';
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
+import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
+import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 
 export type { EpicAudience };
 
@@ -334,11 +336,21 @@ export class EpicAudienceFormComponent implements OnInit {
   private  readonly toast      = inject(ToastService);
   private  readonly fb         = inject(FormBuilder);
   private  readonly destroyRef = inject(DestroyRef);
+  private  readonly sourceConnectionSvc = inject(ISourceConnectionService);
 
   protected readonly ehrOptions = EHR_OPTIONS;
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
   protected get isReadonly(): boolean { return this.wiz.readonlyMode(); }
+
+  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
+  protected readonly sourceMode = signal<'new' | 'existing'>('new');
+  protected readonly existingConnections = signal<SourceConnectionModel[]>([]);
+  protected readonly loadingExisting = signal(false);
+  protected readonly selectedExistingId = signal<string | null>(null);
+  /** Only offered when creating a brand-new canvas node — editing an existing node already has its own data, and
+   *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
+  protected readonly showSourcePicker = computed(() => this.wiz.wizardMode() === 'canvas' && !this.isEditing);
 
   // Resource Type list: auto-detected from the source's /metadata after Discover; falls back to the static list.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
@@ -979,6 +991,140 @@ export class EpicAudienceFormComponent implements OnInit {
   protected isRetrievalFieldInvalid(field: RetrievalFieldDef): boolean {
     const ctrl = this.form.get(field.key);
     return !!ctrl && ctrl.touched && ctrl.invalid;
+  }
+
+  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
+  protected onSourceModeChange(mode: 'new' | 'existing'): void {
+    this.sourceMode.set(mode);
+    if (mode === 'new') {
+      this.resetToBlankNewSource();
+      return;
+    }
+    if (this.existingConnections().length === 0 && !this.loadingExisting()) {
+      this.loadingExisting.set(true);
+      this.sourceConnectionSvc.getAll().subscribe({
+        next: connections => {
+          this.existingConnections.set(connections.filter(c => c.sourceSystemType === 'Epic'));
+          this.loadingExisting.set(false);
+        },
+        error: () => {
+          this.loadingExisting.set(false);
+          this.toast.show('Failed to load', 'Could not load existing Epic source connections.', 'error');
+        },
+      });
+    }
+  }
+
+  /** Switching back to "New Source" after a clone must undo it — otherwise the form silently keeps whatever
+   *  the last-selected existing connection populated, even though the picker now reads "New Source". */
+  private resetToBlankNewSource(): void {
+    this.selectedExistingId.set(null);
+    this.form.reset();
+    this.discoveredResourceTypes.set([]);
+    this.discStatus.set('idle');
+    this.discValues.set(null);
+    this.discoveredScopes.set([]);
+    this.scopeVersionAuto.set(false);
+    this.authMethodAuto.set(false);
+    this.testStatus.set('idle');
+    this.wiz.trustedIssuers.set('');
+
+    this.prevAudience = this.audience();
+    this.lockRetrievalMethodIfOneShot();
+    this.syncValidators();
+    this.syncRetrievalValidators();
+  }
+
+  protected onExistingConnectionSelected(id: string): void {
+    this.selectedExistingId.set(id);
+    const dto = this.existingConnections().find(c => c.id === id);
+    if (dto) this.populateFormFromSourceConnection(dto);
+  }
+
+  /** Name + Base URL alone can collide (e.g. two connections both literally named "Epic" against the same
+   *  sandbox URL, one EHR Launch and one Standalone) — append audience + a Client ID suffix so the dropdown
+   *  always has something to visually tell them apart by. */
+  protected existingConnectionLabel(conn: SourceConnectionModel): string {
+    const audience = (conn.applicationType && APPLICATION_TYPE_TO_AUDIENCE[conn.applicationType]) || null;
+    const audienceLabel = audience ? ` · ${audience}` : '';
+    const clientIdSuffix = conn.authentication?.clientId ? ` · …${conn.authentication.clientId.slice(-6)}` : '';
+    return `${conn.name} — ${conn.baseUrl}${audienceLabel}${clientIdSuffix}`;
+  }
+
+  /**
+   * Clones a persisted SourceConnection's data into this (still-unsaved) canvas node's form — lets a new
+   * pipeline node start from an already-configured connection instead of re-entering everything by hand.
+   * Mirrors WizardService.openEntity()'s field mapping, but patches the reactive form directly: this is canvas
+   * mode, so there's no backend entity id to attach to — the cloned values just become this new node's own,
+   * independently editable, canvas fields once Save is clicked.
+   */
+  private populateFormFromSourceConnection(dto: SourceConnectionModel): void {
+    const audience = ((dto.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType])
+      || 'provider-ehr-launch') as EpicAudience;
+    const authMethod = AUTHENTICATION_TYPE_TO_AUTH_METHOD[dto.authentication?.authenticationType ?? 'None'] ?? 'secret';
+    const retrieval = dto.retrieval;
+
+    const retrievalResourceKeyByMethod: Record<string, string> = {
+      subscription: 'subscriptionResourceType',
+      webhook: 'webhookResourceType',
+      'search-rest': 'searchRestResourceType',
+      'bulk-export': 'bulkExportResourceType',
+    };
+    const retrievalResourceKey = retrieval ? retrievalResourceKeyByMethod[retrieval.retrievalMethod] : undefined;
+
+    this.form.patchValue({
+      audience,
+      environment: 'sandbox',
+      appName: dto.name,
+      epicBaseUrl: dto.baseUrl,
+      tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
+      clientId: dto.authentication?.clientId ?? '',
+      authMethod,
+      jwtKid: dto.authentication?.keyId ?? '',
+      privateKeyRef: dto.authentication?.privateKeyKeyVaultName ?? '',
+      privateKeySecretName: dto.authentication?.privateKeySecretName ?? '',
+      // Required for EHR-Launch/Standalone audiences, but neither is guaranteed to be persisted on the source
+      // connection being cloned (e.g. LaunchUrl is NULL on plenty of real rows, and EHR-Launch connections never
+      // persist a resource-type selection server-side at all) — fall back to whatever the form already holds
+      // (ngOnInit's own sensible defaults) rather than blanking a required field out and silently failing Save.
+      launchUrl: dto.interactive?.launchUrl || this.form.controls.launchUrl.value,
+      callbackUrl: dto.interactive?.redirectUris?.[0] ?? this.form.controls.callbackUrl.value,
+      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : this.form.controls.resources.value,
+      retrievalMethod: (retrieval?.retrievalMethod as RetrievalMethod) ?? '',
+      searchCriteria: retrieval?.searchCriteria ?? '',
+      incrementalCursor: retrieval?.incrementalSyncEnabled ?? false,
+      pageSize: retrieval?.pageSize != null ? String(retrieval.pageSize) : this.form.controls.pageSize.value,
+      sortOrder: retrieval?.sortOrder ?? '',
+      includeLinked: retrieval?.includeParameters?.join(',') ?? '',
+      revIncludeLinked: retrieval?.revIncludeParameters?.join(',') ?? '',
+      retryPolicy: retrieval?.retryPolicy ?? this.form.controls.retryPolicy.value,
+      timeoutSeconds: retrieval?.timeoutSeconds != null ? String(retrieval.timeoutSeconds) : this.form.controls.timeoutSeconds.value,
+      maxRecordsPerRun: retrieval?.maxRecordsPerRun != null ? String(retrieval.maxRecordsPerRun) : '',
+      exportScope: retrieval?.exportScope ?? '',
+      groupId: retrieval?.groupId ?? '',
+      patientIdList: retrieval?.patientIds?.join(', ') ?? '',
+      fhirOutputFormat: retrieval?.outputFormat ?? this.form.controls.fhirOutputFormat.value,
+    });
+
+    if (retrievalResourceKey && retrieval?.resourceTypes?.length) {
+      this.form.get(retrievalResourceKey)?.setValue([...retrieval.resourceTypes]);
+    }
+
+    this.wiz.trustedIssuers.set(dto.interactive?.trustedIssuers?.join(', ') ?? '');
+    this.discoveredResourceTypes.set(retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : []);
+
+    this.prevAudience = audience;
+    this.lockRetrievalMethodIfOneShot();
+    this.syncValidators();
+    this.syncRetrievalValidators();
+
+    this.toast.show('Loaded', `Copied configuration from "${dto.name}".`);
+
+    // SourceConnection only ever persists a Token Endpoint — there's no Authorization Endpoint column at all
+    // (nothing to clone it from) — so run real SMART discovery against the cloned Base URL instead of faking
+    // discStatus 'done'/an "Auto-populated" badge for data that was never actually saved. This also re-confirms
+    // Token Endpoint live and refreshes the discovered (available) resource type list for this source right now.
+    this.runDiscover();
   }
 
   protected runDiscover(): void {

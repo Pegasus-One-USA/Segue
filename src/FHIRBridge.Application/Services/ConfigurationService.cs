@@ -100,6 +100,13 @@ public sealed class ConfigurationService : IConfigurationService
             ConfigurationMapper.ToDomain(request.Interactive),
             ConfigurationMapper.ToDomain(request.Retrieval));
 
+        // Mapped immediately after Update(), before SaveChangesAsync — Update() reassigns brand-new owned-value-
+        // object instances (Authentication/Interactive/Retrieval) onto this tracked entity, and EF Core's post-save
+        // fixup for a *replaced* owned reference leaves that navigation null on this in-memory instance afterward
+        // (the new values still land correctly in the database; only this object's own property goes stale/null).
+        // Mapping now, while the in-memory state is still guaranteed intact, sidesteps that entirely.
+        var updatedDto = ConfigurationMapper.ToDto(sourceConnection);
+
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
             ModuleSourceConnection,
@@ -109,9 +116,9 @@ public sealed class ConfigurationService : IConfigurationService
             $"Source connection updated for {request.SourceSystemType}.",
             cancellationToken,
             oldValue,
-            SerializeSnapshot(ConfigurationMapper.ToDto(sourceConnection)));
+            SerializeSnapshot(updatedDto));
 
-        return ConfigurationMapper.ToDto(sourceConnection);
+        return updatedDto;
     }
 
     public async Task<SourceConnectionDto> SetSourceConnectionEnabledAsync(
@@ -242,6 +249,12 @@ public sealed class ConfigurationService : IConfigurationService
             secretReference,
             request.Target);
 
+        // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
+        // UpdateSourceConnectionAsync: Update() reassigns a brand-new owned SecretReference instance, and EF
+        // Core's post-save fixup for a replaced owned reference can leave that navigation null on this in-memory
+        // instance afterward (the database write itself is unaffected).
+        var updatedDto = ConfigurationMapper.ToDto(destinationConfiguration);
+
         await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
             ModuleDestination,
@@ -251,9 +264,9 @@ public sealed class ConfigurationService : IConfigurationService
             $"Destination configuration {destinationConfiguration.Name} updated for {request.DestinationType}.",
             cancellationToken,
             oldValue,
-            SerializeSnapshot(ConfigurationMapper.ToDto(destinationConfiguration)));
+            SerializeSnapshot(updatedDto));
 
-        return ConfigurationMapper.ToDto(destinationConfiguration);
+        return updatedDto;
     }
 
     public async Task<DestinationConfigurationDto> SetDestinationConfigurationEnabledAsync(
@@ -319,6 +332,12 @@ public sealed class ConfigurationService : IConfigurationService
             request.DestinationObject,
             request.Fields.Select(ConfigurationMapper.ToDomain));
 
+        // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
+        // UpdateSourceConnectionAsync: Update() replaces the entire owned Fields collection, and EF Core's
+        // post-save fixup for replaced owned collections can leave stale/null state on this in-memory instance
+        // afterward (the database write itself is unaffected).
+        var updatedDto = ConfigurationMapper.ToDto(mappingProfile);
+
         await _repository.UpdateMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
             ModuleMappingProfile,
@@ -328,9 +347,9 @@ public sealed class ConfigurationService : IConfigurationService
             $"Mapping profile {mappingProfile.Name} updated for {mappingProfile.ResourceType}.",
             cancellationToken,
             oldValue,
-            SerializeSnapshot(ConfigurationMapper.ToDto(mappingProfile)));
+            SerializeSnapshot(updatedDto));
 
-        return ConfigurationMapper.ToDto(mappingProfile);
+        return updatedDto;
     }
 
     public async Task<MappingProfileDto> SetMappingProfileEnabledAsync(
