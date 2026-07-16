@@ -1,0 +1,162 @@
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_ad046c49c0eb63::t_1bae55574b1976 35,39,43,47,51-58
+  s_ad046c49c0eb63::t_beedca0a1235db 32-34
+  s_ad046c49c0eb63::t_1a343a55c4bece 36-38
+  s_ad046c49c0eb63::t_309f04f0679df1 40-42
+  s_ad046c49c0eb63::t_cc536596fde086 44-46
+  s_ad046c49c0eb63::t_acf97b0c56cc0f 48-50
+  s_ad046c49c0eb63::t_ef114d23fbfb62 59
+  s_ad046c49c0eb63::t_390bd83b09c5f1 1-31
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_ad046c49c0eb63::t_38524e9b5e4661 81-93,116,131,135,141,147,154,160,164,169,186,216
+  s_ad046c49c0eb63::t_3a8c5abd8a564b 60-62
+  s_ad046c49c0eb63::t_c631ac7f15e861 189
+  s_ad046c49c0eb63::t_a8259b88e377b0 57-59
+  s_ad046c49c0eb63::t_47365449fd2e2c 63-65,78-80
+  s_ad046c49c0eb63::t_3d945a2995c216 94-96,113-115
+  s_ad046c49c0eb63::t_6837f3d8cab0d1 117-119,128-130
+  s_ad046c49c0eb63::t_8986976d251f81 132-134
+  s_ad046c49c0eb63::t_1c001404391bea 136-140
+  s_ad046c49c0eb63::t_38bbef0db8705b 142-146
+  s_ad046c49c0eb63::t_5a015bf27a5842 148-153
+  s_ad046c49c0eb63::t_3ea15e9b79a34b 155-159
+  s_ad046c49c0eb63::t_91de89cc6476f0 161-163
+  s_ad046c49c0eb63::t_c65f233bf2f44e 165-168
+  s_ad046c49c0eb63::t_a81bea55ed2768 170-172,183-185
+  s_ad046c49c0eb63::t_79739c28ebc4c5 187-188
+  s_ad046c49c0eb63::t_a603bb7b45d892 190-192,213-215
+  s_ad046c49c0eb63::t_4c1de56c5d7da1 217
+  s_ad046c49c0eb63::t_995849df97c5d5 1-56,66-77,97-112,120-127,173-182,193-212
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_ad046c49c0eb63::t_3b6c6f209025f9 119-124
+  s_ad046c49c0eb63::t_b1e76d70e407da 116-118
+  s_ad046c49c0eb63::t_26ee56f94185e6 125-127
+  s_ad046c49c0eb63::t_4d27bdd46754af 1-115,128-167
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260716095423_AddDestinationConfigurationConnectionMetadata.cs
+  s_ad046c49c0eb63::t_3999dcbc6aa3c5 1-28
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_ad046c49c0eb63::t_f177f407bb746e 133
+  s_ad046c49c0eb63::t_415bc9c8f5ddc9 8-9,14-15,211-225,294-300,305-307,331-334,399-525,735-760
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_ad046c49c0eb63::t_8e1011ffd07e69 1,7,10,14,18,28,31,40-58
+  s_ad046c49c0eb63::t_13192ecf83dd43 2-6
+  s_ad046c49c0eb63::t_a9304b98ebe551 8-9
+  s_ad046c49c0eb63::t_cade5fbb90d33b 11-13
+  s_ad046c49c0eb63::t_40ead928aabebc 15-17
+  s_ad046c49c0eb63::t_e852812b4a2e64 19-21,25-27
+  s_ad046c49c0eb63::t_9459da1a3f26a3 29-30
+  s_ad046c49c0eb63::t_1d0049d05b6ac5 32-34,37-39
+  s_ad046c49c0eb63::t_0f3d0b99f978b6 22-24,35-36
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_ad046c49c0eb63::t_b014f82a96ed28 117-126
+  s_ad046c49c0eb63::t_dd2d0f2160d2f4 154-160
+  s_ad046c49c0eb63::t_e1b15eb8a74203 14
+  s_ad046c49c0eb63::t_68a539569034d5 11-13
+  s_ad046c49c0eb63::t_32165ec7658b39 15-17,114-116
+  s_ad046c49c0eb63::t_5627bece2984bf 127-129,151-153
+  s_ad046c49c0eb63::t_47e41d2c5d710d 161-163
+  s_ad046c49c0eb63::t_c697eba5877cdb 1-10,18-113,130-150,164-179
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_ad046c49c0eb63::t_7aaac0faa6e613 36-50
+  s_ad046c49c0eb63::t_ad976f3f2a6424 33-35
+  s_ad046c49c0eb63::t_5f19dc6e184451 51-53
+  s_ad046c49c0eb63::t_56beb665581b07 1-32,54-66
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260716095423_AddDestinationConfigurationConnectionMetadata.Designer.cs
+  s_ad046c49c0eb63::t_3999dcbc6aa3c5 1-2341
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_644fecc7fd9c31::t_338648e8b405e0 42-74
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_644fecc7fd9c31::t_dbb7bdd5c4c852 578-583
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_ad046c49c0eb63::t_fb7ebb0c889833 84-86,321-322
+portal/src/app/app.routes.ts
+  s_644fecc7fd9c31::t_8f448c85f2a489 109-119
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_ad046c49c0eb63::t_90a6b1113b3923 351-357,1014,1026-1042,1284-1294,1297,1311
+portal/src/app/core/api-endpoints.ts
+  s_ad046c49c0eb63::t_91bf834ac8bbec 73-82
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_644fecc7fd9c31::t_50a714763771cb 32
+portal/src/app/services/destination-schema.service.ts
+  s_644fecc7fd9c31::t_eee179fe12266d 39-51,64-68
+portal/src/app/services/workflow-api.service.ts
+  s_ad046c49c0eb63::t_b33e208490f06b 163
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_ad046c49c0eb63::t_4945263f497bab 72-83,240,251,255-270
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_644fecc7fd9c31::t_5298883cf64137 5-6,23,25,28,47-73
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_f2f93ba65001a5::t_95ee1320ac1e5c 164-176
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_644fecc7fd9c31::t_7812002c609dc0 19,21-23,26,45-55
+src/Api/FHIRBridge.Api/GlobalExceptionHandlingMiddleware.cs
+  s_644fecc7fd9c31::t_cda0e962ac3c77 36
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_ad046c49c0eb63::t_b1ae78b47f0a42 291-313
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_644fecc7fd9c31::t_094af1dba1cc0f 2,27,31-38,61-65
+src/FHIRBridge.Application/DTOs/CreateDestinationConfigurationRequest.cs
+  s_ad046c49c0eb63::t_9aaa3e8520ce18 14-18
+src/FHIRBridge.Application/DTOs/DestinationConfigurationDto.cs
+  s_ad046c49c0eb63::t_18956844d7c3b2 12-15
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_ad046c49c0eb63::t_794ca79cf52703 121-122
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_ad046c49c0eb63::t_6a943307553389 219-220,234-247,265-266,310-339
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_644fecc7fd9c31::t_f1197d8ec93b4c 1,28-29,34-37
+src/FHIRBridge.Domain/Entities/DestinationConfiguration.cs
+  s_ad046c49c0eb63::t_bf28eec7056b16 17-18,25,33-41,48-49,55
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f2f93ba65001a5::t_8db0fbd0cf52f9 231
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  s_a409deae72e076::t_8f3122a7ced42c 5,81-116
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_644fecc7fd9c31::t_a3eafb58d699ac 22
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_644fecc7fd9c31::t_52e596a04ef80f 60-97,110-130
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_644fecc7fd9c31::t_922ffd0fef3af1 60-90,109-119
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_644fecc7fd9c31::t_87ac855b2a1ce7 219-220,222,240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "dca497d436a221fdda300fba13e33fc77b0279df",
+  "prompts": {},
+  "sessions": {
+    "s_644fecc7fd9c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ec4bc93-2412-410a-a053-a07dd4aec293",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a409deae72e076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28612c90-fdda-4b51-bba3-9958b4cd6e21",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_ad046c49c0eb63": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2579ef54-a5b3-410f-8f28-f0a9346e39ac",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f2f93ba65001a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ebf3a9e9-c63e-4460-a691-84e5d0bbb05a",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
