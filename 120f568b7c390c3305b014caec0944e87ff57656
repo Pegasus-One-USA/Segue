@@ -1,0 +1,71 @@
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_f2f93ba65001a5::t_ab3b9bef9fa40d 24,29-30,35
+  s_f2f93ba65001a5::t_4842aca56fe957 130-133,137-139,145-147,153-157,219-220,224-227,244-245,249-252,272-275,278,284,289-294
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicInteractiveTokenProvider.cs
+  s_f2f93ba65001a5::t_ab3b9bef9fa40d 2
+  s_f2f93ba65001a5::t_688dd1a75b131b 18-20
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_f2f93ba65001a5::t_ab3b9bef9fa40d 8
+  s_f2f93ba65001a5::t_d4cde893a7233c 51,159-173
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_f2f93ba65001a5::t_ea10e39af769f2 1-176
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_f2f93ba65001a5::t_ab3b9bef9fa40d 8-9
+  s_f2f93ba65001a5::t_b25295a466b800 33,39-40,46,172-180,185,300-305
+src/FHIRBridge.Application/Services/ScopeGeneratorService.cs
+  s_f2f93ba65001a5::t_ab3b9bef9fa40d 11
+  s_f2f93ba65001a5::t_d10c9f9e052008 41-51
+tests/FHIRBridge.UnitTests/Sources/EpicSourceConnectionScopeSyncServiceTests.cs
+  s_f2f93ba65001a5::t_6bafd3a116d4ec 61
+  s_f2f93ba65001a5::t_4cc4bc92bf1c9b 158
+  s_f2f93ba65001a5::t_ebf9dcc30932e2 1-34,44-60,62-157,159-182
+  s_f2f93ba65001a5::t_33aea0e1fb4864 35-43
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_f2f93ba65001a5::t_ab3b9bef9fa40d 2,24,28-29,33
+  s_f2f93ba65001a5::t_aedb2c294587a2 94-125
+src/FHIRBridge.Application/Abstractions/Sources/IEpicSourceConnectionScopeSyncService.cs
+  s_f2f93ba65001a5::t_a91bb70582e491 1-22
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/HealowAuthorizationCodeTokenProvider.cs
+  s_f2f93ba65001a5::t_ab3b9bef9fa40d 2
+  s_f2f93ba65001a5::t_068161f7f16c28 17-19
+Demo_TestApp/frontend/src/app/app.ts
+  s_f2f93ba65001a5::t_7f98308670b865 194-199
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_f2f93ba65001a5::t_7b742acd899c4d 344-348
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_f2f93ba65001a5::t_e4d59a3e6a8608 261,274-296
+portal/src/app/services/scope-builder.service.ts
+  s_f2f93ba65001a5::t_64209aa3001f3b 14-24
+portal/src/app/services/workflow-api.service.ts
+  s_f2f93ba65001a5::t_e0f5bc598112c6 212-215
+src/Api/FHIRBridge.Api/Workflows/WorkflowBuildModels.cs
+  s_f2f93ba65001a5::t_f311b3bf889cf8 64-67,72-73
+src/FHIRBridge.Domain/Entities/SourceConnection.cs
+  s_f2f93ba65001a5::t_4bbbca05ec869b 88-97
+src/FHIRBridge.Domain/ValueObjects/SourceAuthenticationConfiguration.cs
+  s_f2f93ba65001a5::t_0481f7b6e9ac14 36-39
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f2f93ba65001a5::t_e6a9a26a3ef025 336
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_f2f93ba65001a5::t_fbc3b228f7f488 239-248,257,343-352,362,445-450,455-457,497-502,552-554
+tests/FHIRBridge.UnitTests/Scopes/ScopeGeneratorServiceTests.cs
+  s_f2f93ba65001a5::t_5f15584767b595 25,29-30
+src/Api/FHIRBridge.Api/Program.cs
+  s_f2f93ba65001a5::t_a473e3db1e94a5 112-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "120f568b7c390c3305b014caec0944e87ff57656",
+  "prompts": {},
+  "sessions": {
+    "s_f2f93ba65001a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ebf3a9e9-c63e-4460-a691-84e5d0bbb05a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
