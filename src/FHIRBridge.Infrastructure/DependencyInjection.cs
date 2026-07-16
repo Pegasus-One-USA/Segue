@@ -333,6 +333,7 @@ public static class DependencyInjection
         services.AddScoped<ISourceConnectionTestService, SourceConnectionTestService>();
         services.AddSingleton<ILaunchTokenProtector, DataProtectionLaunchTokenProtector>();
         services.AddScoped<IInteractiveSourceAuthorizationService, InteractiveSourceAuthorizationService>();
+        services.AddScoped<IEpicSourceConnectionScopeSyncService, EpicSourceConnectionScopeSyncService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
         services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();

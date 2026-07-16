@@ -209,6 +209,10 @@ export interface WorkflowBuildResult {
   sourceConnectionIds: Record<string, string>;
   destinationIds: Record<string, string>;
   mappingProfileIds: Record<string, string>;
+  // Keyed by source connection id (as a string) — each connection's Epic OAuth scopes as they stand right after
+  // this save, derived from every pipeline's destination resource selections (not just this one). Absent for any
+  // connection that isn't interactive (e.g. Backend Services), since those aren't resource-picker driven.
+  syncedScopesBySourceConnectionId?: Record<string, string[]>;
 }
 
 // ── Workflow-list screen (GET /workflows/summary) ──────────────────────────────

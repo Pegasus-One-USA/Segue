@@ -5,6 +5,8 @@ using System.Text.Json.Serialization;
 using System.Web;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
@@ -28,17 +30,20 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     private readonly IFhirAuthorizationCodeTokenStore _tokenStore;
     private readonly IFhirAccessTokenAuditSink _auditSink;
     private readonly IBackendServicesJwtFactory? _jwtFactory;
+    private readonly ILogger _logger;
 
     public SmartAuthorizationCodeTokenProvider(
         HttpClient httpClient,
         IFhirAuthorizationCodeTokenStore tokenStore,
         IFhirAccessTokenAuditSink? auditSink = null,
-        IBackendServicesJwtFactory? jwtFactory = null)
+        IBackendServicesJwtFactory? jwtFactory = null,
+        ILogger<SmartAuthorizationCodeTokenProvider>? logger = null)
     {
         _httpClient = httpClient;
         _tokenStore = tokenStore;
         _auditSink = auditSink ?? new NoOpFhirAccessTokenAuditSink();
         _jwtFactory = jwtFactory;
+        _logger = (ILogger?)logger ?? NullLogger.Instance;
     }
 
     /// <summary>Human-readable provider name used in messages, audit actions, and the token-store key prefix.</summary>
@@ -164,11 +169,20 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         }
 
         var codeVerifier = Pkce.CreateCodeVerifier();
+        var isEhrLaunch = launch is not null;
+        var resolvedScope = ResolveScopes(source, isEhrLaunch);
+        _logger.LogInformation(
+            "[Step 4/6] {Provider} BuildAuthorizationRequest: sourceConnectionId={SourceConnectionId} " +
+            "inputScopes=[{InputScopes}] isEhrLaunch={IsEhrLaunch} resolvedScope=\"{ResolvedScope}\" " +
+            "usedFallbackDefault={UsedFallbackDefault}",
+            ProviderName, source.SourceConnectionId, string.Join(' ', source.Scopes), isEhrLaunch, resolvedScope,
+            source.Scopes.Count == 0);
+
         var query = HttpUtility.ParseQueryString(string.Empty);
         query["response_type"] = "code";
         query["client_id"] = source.ClientId!;
         query["redirect_uri"] = redirectUri;
-        query["scope"] = ResolveScopes(source, isEhrLaunch: launch is not null);
+        query["scope"] = resolvedScope;
         query["state"] = state;
         query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
         query["code_challenge_method"] = "S256";
@@ -282,6 +296,12 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             {
                 await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
             }
+
+            // token.Patient is a FHIR resource id, not logged in full elsewhere in this line — only its presence is
+            // logged (never the value) to avoid writing patient identifiers into the log stream.
+            _logger.LogInformation(
+                "[Step 6/6] {Provider} {Action} succeeded: grantedScope=\"{GrantedScope}\" hasPatientContext={HasPatientContext} expiresInSeconds={ExpiresInSeconds}",
+                ProviderName, action, token.Scope, !string.IsNullOrWhiteSpace(token.Patient), token.ExpiresInSeconds);
 
             var expiresIn = token.ExpiresInSeconds > 0 ? token.ExpiresInSeconds : DefaultExpiresInSeconds;
             var stored = new StoredOAuthToken(

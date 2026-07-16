@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -47,6 +48,7 @@ public static class WorkflowEndpoints
             WorkflowBuildRequest request,
             IConfigurationService configurationService,
             IWorkflowDefinitionStore store,
+            IEpicSourceConnectionScopeSyncService scopeSyncService,
             CancellationToken cancellationToken) =>
         {
             // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
@@ -154,7 +156,21 @@ public static class WorkflowEndpoints
             var workflow = BuildWorkflow(request.WorkflowId ?? Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(workflow, cancellationToken);
 
-            var result = new WorkflowBuildResult(workflow.Id, sourceIds, destinationIds, mappingIds);
+            // Re-derive each referenced source connection's OAuth scopes from what every pipeline sharing it
+            // actually consumes downstream, now that this save may have changed a destination's resource selection
+            // (or introduced/removed a workflow referencing the connection). Distinct: the same connection can be
+            // wired to more than one source node spec in a single build request.
+            var syncedScopes = new Dictionary<Guid, IReadOnlyList<string>>();
+            foreach (var sourceConnectionId in sourceIds.Values.Distinct())
+            {
+                var scopes = await scopeSyncService.SyncAsync(sourceConnectionId, cancellationToken);
+                if (scopes is not null)
+                {
+                    syncedScopes[sourceConnectionId] = scopes;
+                }
+            }
+
+            var result = new WorkflowBuildResult(workflow.Id, sourceIds, destinationIds, mappingIds, syncedScopes);
             return Results.Created($"/api/v1/workflows/{workflow.Id}", result);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 

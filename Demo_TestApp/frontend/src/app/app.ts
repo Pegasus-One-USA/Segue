@@ -191,7 +191,12 @@ export class App implements OnInit {
   }
 
   async logout(): Promise<void> {
-    await firstValueFrom(this.http.post(`${BACKEND_BASE_URL}/api/logout`, {}, { withCredentials: true }));
+    try {
+      await firstValueFrom(this.http.post(`${BACKEND_BASE_URL}/api/logout`, {}, { withCredentials: true }));
+    } catch {
+      // Non-fatal — even if the backend is unreachable (or the session was already gone server-side), the user
+      // still needs to be logged out of this app locally rather than stuck on a dead "logged in" screen.
+    }
     sessionStorage.removeItem(AUTH_ROLE_STORAGE_KEY);
     this.loggedIn.set(false);
     this.role.set(null);

@@ -236,6 +236,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken, baseUrl);
             var clientId = RequireClientId(sourceConnection);
 
+            var persistedScopes = sourceConnection.Authentication.Scopes;
+            var patientSelectionMethod = sourceConnection.Interactive?.PatientSelectionMethod;
+            var resolvedScopes = ApplyPatientSelection(persistedScopes, patientSelectionMethod);
+            _logger.LogInformation(
+                "[Step 2/6] StartInteractiveFromContextAsync: sourceConnectionId={SourceConnectionId} " +
+                "applicationType={ApplicationType} persistedScopes=[{PersistedScopes}] " +
+                "patientSelectionMethod={PatientSelectionMethod} resolvedScopes=[{ResolvedScopes}] launch=null",
+                sourceConnection.Id, sourceConnection.ApplicationType, string.Join(' ', persistedScopes),
+                patientSelectionMethod, string.Join(' ', resolvedScopes));
+
             var source = new FhirSourceConfiguration(
                 SourceType: MapSourceType(sourceConnection.SourceSystemType),
                 Name: sourceConnection.Name,
@@ -244,9 +254,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 ClientId: clientId,
                 KeyId: null,
                 PrivateKeyPem: null,
-                Scopes: ApplyPatientSelection(
-                    sourceConnection.Authentication.Scopes,
-                    sourceConnection.Interactive?.PatientSelectionMethod),
+                Scopes: resolvedScopes,
                 SourceConnectionId: sourceConnection.Id,
                 AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
@@ -332,6 +340,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken, baseUrl);
         var clientId = RequireClientId(sourceConnection);
 
+        var persistedScopes = sourceConnection.Authentication.Scopes;
+        var patientSelectionMethod = sourceConnection.Interactive?.PatientSelectionMethod;
+        var resolvedScopes = ApplyPatientSelection(persistedScopes, patientSelectionMethod);
+        _logger.LogInformation(
+            "[Step 2/6] StartStandaloneCoreAsync: sourceConnectionId={SourceConnectionId} " +
+            "applicationType={ApplicationType} persistedScopes=[{PersistedScopes}] " +
+            "patientSelectionMethod={PatientSelectionMethod} resolvedScopes=[{ResolvedScopes}] launch=null",
+            sourceConnection.Id, sourceConnection.ApplicationType, string.Join(' ', persistedScopes),
+            patientSelectionMethod, string.Join(' ', resolvedScopes));
+
         var source = new FhirSourceConfiguration(
             SourceType: MapSourceType(sourceConnection.SourceSystemType),
             Name: sourceConnection.Name,
@@ -341,9 +359,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             ClientId: clientId,
             KeyId: null,
             PrivateKeyPem: null,
-            Scopes: ApplyPatientSelection(
-                sourceConnection.Authentication.Scopes,
-                sourceConnection.Interactive?.PatientSelectionMethod),
+            Scopes: resolvedScopes,
             SourceConnectionId: sourceConnection.Id,
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
@@ -426,10 +442,19 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     {
         // Prefer a registered redirect URI (must match the EHR registration exactly); fall back to the request-derived one.
         var effectiveRedirectUri = sourceConnection.Interactive?.RedirectUris.FirstOrDefault() ?? requestedRedirectUri;
+        _logger.LogInformation(
+            "[Step 3/6] IssueAuthorizationAsync: sourceConnectionId={SourceConnectionId} " +
+            "configuredRedirectUri={ConfiguredRedirectUri} requestedRedirectUri={RequestedRedirectUri} " +
+            "effectiveRedirectUri={EffectiveRedirectUri} launch={Launch}",
+            sourceConnection.Id, sourceConnection.Interactive?.RedirectUris.FirstOrDefault(), requestedRedirectUri,
+            effectiveRedirectUri, launch);
 
         var nonce = CreateNonce();
         var state = _launchTokenProtector.ProtectState(nonce);
         var request = _authorizationFlow.BuildAuthorizationRequest(source, effectiveRedirectUri, state, launch);
+        _logger.LogInformation(
+            "[Step 4/6] BuildAuthorizationRequest produced: sourceConnectionId={SourceConnectionId} authorizationUrl={AuthorizationUrl}",
+            sourceConnection.Id, request.AuthorizationUrl);
 
         await _stateStore.SaveAsync(
             nonce,
@@ -468,6 +493,12 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var pending = await _stateStore.TakeAsync(nonce, cancellationToken)
             ?? throw new InvalidOperationException("The authorization state is unknown or has already been used.");
+
+        _logger.LogInformation(
+            "[Step 5/6] CompleteAsync: sourceConnectionId={SourceConnectionId} sourceName={SourceName} " +
+            "redirectUri={RedirectUri} routeId={RouteId} workflowId={WorkflowId} hasLaunchContext={HasLaunchContext}",
+            pending.SourceConnectionId, pending.SourceName, pending.RedirectUri, pending.RouteId, pending.WorkflowId,
+            pending.HasLaunchContext);
 
         // Re-load the source to resolve confidential-client credentials for the token exchange. Secrets are resolved
         // here (not carried in the pending state) so they are never persisted in the short-lived authorization store.
@@ -518,6 +549,9 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         // criteria-scoped fetch once it reloads. An EHR launch (HasLaunchContext true) keeps firing it as before,
         // since Epic hands over a real patient context there and the run has a genuine chance of finding data.
         var skipWorkflowTrigger = pending.WorkflowId is not null && !pending.HasLaunchContext;
+        _logger.LogInformation(
+            "[Step 5/6] CompleteAsync token exchange succeeded for {SourceConnectionId}; skipWorkflowTrigger={SkipWorkflowTrigger}",
+            pending.SourceConnectionId, skipWorkflowTrigger);
         if (pending.RouteId is { } routeId)
         {
             // Deliberately NOT the request token: the callback's caller is the provider's browser, which may

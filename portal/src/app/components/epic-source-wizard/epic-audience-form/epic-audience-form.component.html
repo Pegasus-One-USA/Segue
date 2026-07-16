@@ -341,6 +341,11 @@
                 @if (unsupportedScopes().length) {
                   <p class="eaf-hint">⚠ Not advertised by this endpoint's discovery: {{ unsupportedScopes().join(', ') }}</p>
                 }
+                <p class="eaf-hint">
+                  This preview reflects only the resource types picked here. If this connection is shared by other
+                  pipelines, the scopes actually requested from Epic are kept in sync with every pipeline's
+                  destination selections after you save — they may end up broader than this preview.
+                </p>
               </div>
             }
           } @else {
