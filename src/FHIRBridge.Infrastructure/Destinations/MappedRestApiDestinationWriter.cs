@@ -16,10 +16,11 @@ public sealed class MappedRestApiDestinationWriter : IConfiguredDestinationWrite
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         var endpoint = destination.Target;
@@ -34,6 +35,6 @@ public sealed class MappedRestApiDestinationWriter : IConfiguredDestinationWrite
             await MappedDestinationSerialization.PostJsonAsync(httpClient, endpoint, record, cancellationToken);
         }
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 }

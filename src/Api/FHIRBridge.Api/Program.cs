@@ -257,6 +257,8 @@ app.UseExceptionHandler(errorApp =>
             .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
         if (feature?.Error is null) return;
 
+        app.Logger.LogError(feature.Error, "Unhandled exception on {Path}.", context.Request.Path);
+
         var (status, message) = MapException(feature.Error);
         context.Response.StatusCode  = status;
         context.Response.ContentType = "application/json";

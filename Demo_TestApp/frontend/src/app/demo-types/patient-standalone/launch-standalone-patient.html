@@ -146,6 +146,47 @@
                 <button type="button" class="icon-btn" (click)="closePatientDetail()" aria-label="Close patient detail">✕</button>
               </div>
 
+              <button
+                type="button"
+                class="connect-btn"
+                [disabled]="isDownloadingPatientInfo() || isRedirectingToMyChart()"
+                (click)="downloadPatientInformation()"
+              >
+                <span class="connect-btn__content">
+                  @if (isDownloadingPatientInfo()) {
+                    <mat-spinner diameter="18"></mat-spinner>
+                    <span>Preparing download…</span>
+                  } @else {
+                    <span>Download Patient Information</span>
+                  }
+                </span>
+              </button>
+              @if (downloadError()) {
+                <p class="error-banner">{{ downloadError() }}</p>
+              }
+
+              <button
+                type="button"
+                class="connect-btn"
+                [disabled]="isEmailingPatientInfo() || isRedirectingToMyChart()"
+                (click)="emailPatientInformation()"
+              >
+                <span class="connect-btn__content">
+                  @if (isEmailingPatientInfo()) {
+                    <mat-spinner diameter="18"></mat-spinner>
+                    <span>Sending email…</span>
+                  } @else {
+                    <span>Email Patient Information</span>
+                  }
+                </span>
+              </button>
+              @if (emailSuccess()) {
+                <p class="fetch-card__success">Email sent.</p>
+              }
+              @if (emailError()) {
+                <p class="error-banner">{{ emailError() }}</p>
+              }
+
               @if (isFetchingPatientDetail()) {
                 <div class="loading-container">
                   <mat-spinner diameter="28"></mat-spinner>

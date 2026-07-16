@@ -31,10 +31,11 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         var baseUrl = (destination.Target ?? await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken)).TrimEnd('/');
@@ -49,7 +50,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             response.EnsureSuccessStatusCode();
         }
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 
     /// <summary>

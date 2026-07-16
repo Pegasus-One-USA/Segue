@@ -71,9 +71,16 @@ public sealed class PipelineRunsController : ControllerBase
             return Accepted(new { status = "queued", mode = "bulk-export", messageId });
         }
 
+        // This is the one call path with an HTTP response to carry a Download-mode destination's bytes back
+        // through — every other trigger (schedule, webhook, queued/bulk run) leaves this false by default.
         var pipelineRun = await _configuredPipelineService.StartAsync(
-            request,
+            request with { AllowInlineDownload = true },
             cancellationToken);
+
+        if (pipelineRun.InlineDownload is { } file)
+        {
+            return File(file.Content, file.ContentType, file.FileName);
+        }
 
         return Created($"/api/v1/pipeline-runs/{pipelineRun.Id}", pipelineRun);
     }

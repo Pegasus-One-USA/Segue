@@ -41,7 +41,7 @@ public sealed class DestinationExecutionHistoryGateTests
             _repository.Object,
             Mock.Of<ISourceCapabilityRepository>(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
-            Mock.Of<IOperationalAuditService>(),
+            Mock.Of<IUserActivityAuditService>(),
             currentUser.Object,
             Mock.Of<ISecretWriter>());
     }

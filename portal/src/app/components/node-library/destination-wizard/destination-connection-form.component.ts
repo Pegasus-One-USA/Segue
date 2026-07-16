@@ -43,8 +43,7 @@ export class DestinationConnectionFormComponent {
 
   readonly csvForm = this.fb.group({
     name: ['', [Validators.required]],
-    storageType: ['sftp', [Validators.required]],
-    folder: ['', [Validators.required]],
+    deliveryMode: ['download', [Validators.required]],
     filePattern: ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
     delimiter: ['comma', []],
     encoding: ['utf-8', []],
@@ -55,6 +54,13 @@ export class DestinationConnectionFormComponent {
     sftpAuthType: ['password', []],
     sftpPassword: ['', []],
     sftpRemoteFolder: ['', []],
+    // ── Email-only fields ─────────────────────────────────────────────────────
+    emailTo: ['', []],
+    emailCc: ['', []],
+    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
+    emailBodyTemplate: ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
+    // ── Download-link-only field ─────────────────────────────────────────────
+    downloadLinkExpiryMinutes: [60, []],
   });
 
   readonly sqlTables = signal<DestinationTable[]>([]);
@@ -62,8 +68,8 @@ export class DestinationConnectionFormComponent {
   readonly probeError = signal<string | null>(null);
 
   constructor() {
-    this._syncSftpValidators(this.csvForm.controls.storageType.value);
-    this.csvForm.controls.storageType.valueChanges.subscribe(v => this._syncSftpValidators(v));
+    this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
+    this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
 
     effect(() => {
       const config = this.initialConfig();
@@ -81,7 +87,7 @@ export class DestinationConnectionFormComponent {
         } else {
           this.sqlForm.enable({ emitEvent: false });
           this.csvForm.enable({ emitEvent: false });
-          this._syncSftpValidators(this.csvForm.controls.storageType.value);
+          this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
         }
       });
     });
@@ -93,7 +99,7 @@ export class DestinationConnectionFormComponent {
 
   canTestConnection(): boolean {
     if (this.isReadOnly()) return false;
-    return this.isSql() || this.csvForm.controls.storageType.value === 'sftp';
+    return this.isSql() || this.csvForm.controls.deliveryMode.value === 'sftp';
   }
 
   testConnection(): void {
@@ -125,18 +131,24 @@ export class DestinationConnectionFormComponent {
     } else {
       const v = this.csvForm.getRawValue();
       config['dest_name'] = v.name ?? '';
-      config['dest_storageType'] = v.storageType ?? '';
-      config['dest_folder'] = v.folder ?? '';
+      config['dest_deliveryMode'] = v.deliveryMode ?? 'download';
       config['dest_filePattern'] = v.filePattern ?? '';
       config['dest_delimiter'] = v.delimiter ?? 'comma';
       config['dest_encoding'] = v.encoding ?? 'utf-8';
-      if (v.storageType === 'sftp') {
+      if (v.deliveryMode === 'sftp') {
         config['dest_sftpHost'] = v.sftpHost ?? '';
         config['dest_sftpPort'] = String(v.sftpPort ?? 22);
         config['dest_sftpUsername'] = v.sftpUsername ?? '';
         config['dest_sftpAuthType'] = v.sftpAuthType ?? 'password';
         config['dest_sftpPassword'] = v.sftpPassword ?? '';
         config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
+      } else if (v.deliveryMode === 'email') {
+        config['dest_emailTo'] = v.emailTo ?? '';
+        config['dest_emailCc'] = v.emailCc ?? '';
+        config['dest_emailSubjectTemplate'] = v.emailSubjectTemplate ?? '';
+        config['dest_emailBodyTemplate'] = v.emailBodyTemplate ?? '';
+      } else if (v.deliveryMode === 'downloadUrl') {
+        config['dest_downloadLinkExpiryMinutes'] = String(v.downloadLinkExpiryMinutes ?? 60);
       }
     }
     return config;
@@ -213,8 +225,7 @@ export class DestinationConnectionFormComponent {
     } else {
       this.csvForm.patchValue({
         name: f['dest_name'] || '',
-        storageType: f['dest_storageType'] || 'sftp',
-        folder: f['dest_folder'] || '',
+        deliveryMode: f['dest_deliveryMode'] || 'download',
         filePattern: f['dest_filePattern'] || '{resource}_{yyyyMMdd_HHmmss}.csv',
         delimiter: f['dest_delimiter'] || 'comma',
         encoding: f['dest_encoding'] || 'utf-8',
@@ -224,12 +235,18 @@ export class DestinationConnectionFormComponent {
         sftpAuthType: f['dest_sftpAuthType'] || 'password',
         sftpPassword: f['dest_sftpPassword'] || '',
         sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
+        emailTo: f['dest_emailTo'] || '',
+        emailCc: f['dest_emailCc'] || '',
+        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailBodyTemplate:
+          f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
+        downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
       });
     }
   }
 
-  private _syncSftpValidators(storageType: string | null): void {
-    const isSftp = storageType === 'sftp';
+  private _syncDeliveryModeValidators(deliveryMode: string | null): void {
+    const isSftp = deliveryMode === 'sftp';
     (['sftpHost', 'sftpUsername', 'sftpPassword', 'sftpRemoteFolder'] as const).forEach(name => {
       const ctrl = this.csvForm.get(name)!;
       ctrl.setValidators(isSftp ? [Validators.required] : []);
@@ -238,5 +255,15 @@ export class DestinationConnectionFormComponent {
     const port = this.csvForm.get('sftpPort')!;
     port.setValidators(isSftp ? [Validators.required, Validators.min(1), Validators.max(65535)] : []);
     port.updateValueAndValidity({ emitEvent: false });
+
+    const isEmail = deliveryMode === 'email';
+    const emailTo = this.csvForm.get('emailTo')!;
+    emailTo.setValidators(isEmail ? [Validators.required] : []);
+    emailTo.updateValueAndValidity({ emitEvent: false });
+
+    const isDownloadUrl = deliveryMode === 'downloadUrl';
+    const expiry = this.csvForm.get('downloadLinkExpiryMinutes')!;
+    expiry.setValidators(isDownloadUrl ? [Validators.required, Validators.min(1), Validators.max(10080)] : []);
+    expiry.updateValueAndValidity({ emitEvent: false });
   }
 }

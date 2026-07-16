@@ -44,15 +44,16 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
     protected virtual string QualifiedName(string schema, string table)
         => string.IsNullOrEmpty(schema) ? Quote(table) : $"{Quote(schema)}.{Quote(table)}";
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -75,7 +76,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 
     private async Task EnsureTableAsync(

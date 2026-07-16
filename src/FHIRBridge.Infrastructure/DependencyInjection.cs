@@ -15,6 +15,7 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Infrastructure.Audit;
 using FHIRBridge.Infrastructure.Destinations;
+using FHIRBridge.Infrastructure.Destinations.Delivery;
 using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Infrastructure.Health;
 using FHIRBridge.Infrastructure.Messaging;
@@ -227,6 +228,21 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IConfiguredDestinationWriterFactory, ConfiguredDestinationWriterFactory>();
+
+        // Generated-file delivery strategies (Download/Email/SFTP/Download-link) — currently used by the CSV writer
+        // only, but format-agnostic so future Excel/PDF/XML writers reuse the same four without new plumbing.
+        services.AddScoped<DownloadDeliveryStrategy>();
+        services.AddScoped<EmailDeliveryStrategy>();
+        services.AddScoped<SftpDeliveryStrategy>();
+        services.AddScoped<DownloadUrlDeliveryStrategy>();
+        foreach (var registration in ArtifactDeliveryStrategyFactory.DefaultRegistrations)
+        {
+            services.AddSingleton(registration);
+        }
+
+        services.AddScoped<IArtifactDeliveryStrategyFactory, ArtifactDeliveryStrategyFactory>();
+        services.Configure<GeneratedFileDownloadOptions>(configuration.GetSection("GeneratedFileDownload"));
+        services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
         // Read-back of a capped row sample from a relational destination table ("View destination data").
