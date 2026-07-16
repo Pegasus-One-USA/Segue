@@ -1,0 +1,33 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.html
+  s_f2e735b2ad7f17::t_4f286649d40a24 17
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_f2e735b2ad7f17::t_510900003d96cb 118,121
+  s_f2e735b2ad7f17::t_b5be5ae5bdc6f2 26
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_f2e735b2ad7f17::t_f98be65ceae75d 230
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.scss
+  s_f2e735b2ad7f17::t_f1b35d5ab06c4d 71
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_f2e735b2ad7f17::t_83f288d47df4cd 188
+  s_f2e735b2ad7f17::t_6e3c1f4dec8299 167
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_f2e735b2ad7f17::t_1e2e318202e963 32-34
+  s_f2e735b2ad7f17::t_d6381e5ea4570a 1
+  s_f2e735b2ad7f17::t_bdcb51f6bd6845 50-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "8b766000c0a9b72fcaa47a68946505b42c82074f",
+  "prompts": {},
+  "sessions": {
+    "s_f2e735b2ad7f17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4add3300-65d3-4739-b657-bd4a95e31c89",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
