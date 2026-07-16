@@ -10,9 +10,13 @@ public interface IConfigurationService
 {
     Task<SourceConnectionDto> AddSourceConnectionAsync(CreateSourceConnectionRequest request, CancellationToken cancellationToken);
 
+    Task<SourceConnectionDto?> GetSourceConnectionByIdAsync(Guid sourceConnectionId, CancellationToken cancellationToken);
+
     Task<SourceConnectionDto> UpdateSourceConnectionAsync(Guid sourceConnectionId, CreateSourceConnectionRequest request, CancellationToken cancellationToken);
 
     Task<SourceConnectionDto> SetSourceConnectionEnabledAsync(Guid sourceConnectionId, bool isEnabled, CancellationToken cancellationToken);
+
+    Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken);
 
     Task<WebhookConfigurationDto> AddWebhookConfigurationAsync(CreateWebhookConfigurationRequest request, CancellationToken cancellationToken);
 

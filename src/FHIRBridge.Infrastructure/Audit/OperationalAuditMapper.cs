@@ -27,7 +27,8 @@ internal static class OperationalAuditMapper
             request.ResourceCount,
             Truncate(request.TriggeredBy, TriggeredByMaxLength),
             Truncate(request.CorrelationId, CorrelationIdMaxLength),
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            request.Severity);
     }
 
     public static OperationalAuditLogDto ToDto(OperationalAuditLog auditLog)
@@ -46,7 +47,8 @@ internal static class OperationalAuditMapper
             auditLog.ResourceCount,
             auditLog.TriggeredBy,
             auditLog.CorrelationId,
-            auditLog.OccurredOnUtc);
+            auditLog.OccurredOnUtc,
+            auditLog.Severity);
     }
 
     private static string TruncateRequired(string value, int maxLength)

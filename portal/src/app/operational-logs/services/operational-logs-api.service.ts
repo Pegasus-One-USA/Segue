@@ -17,6 +17,7 @@ export class OperationalLogsApiService {
     if (filter.resourceType) params = params.set('resourceType', filter.resourceType);
     if (filter.action) params = params.set('action', filter.action);
     if (filter.status) params = params.set('status', filter.status);
+    if (filter.severity) params = params.set('severity', filter.severity);
     if (filter.search) params = params.set('search', filter.search);
 
     return this.http.get<PagedResult<OperationalLog>>(OPERATIONAL_LOGS_ENDPOINTS.list, { params });

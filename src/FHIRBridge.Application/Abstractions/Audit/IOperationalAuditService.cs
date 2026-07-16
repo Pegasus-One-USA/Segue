@@ -25,4 +25,5 @@ public sealed record OperationalAuditLogFilter(
     string? ResourceType,
     string? Action,
     string? Status,
-    string? Search);
+    string? Search,
+    string? Severity = null);

@@ -31,12 +31,13 @@ export class OperationalLogsListComponent implements OnInit, OnDestroy {
   readonly searchQuery = signal('');
   readonly statusFilter = signal('');
   readonly actionFilter = signal('');
+  readonly severityFilter = signal('');
   readonly pageIndex = signal(0);
   readonly pageSize = signal(10);
   readonly loading = signal(false);
   readonly result = signal<PagedResult<OperationalLog>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
 
-  readonly displayedCols = ['index', 'action', 'resourceType', 'status', 'message', 'triggeredBy', 'occurredOnUtc'];
+  readonly displayedCols = ['index', 'severity', 'action', 'resourceType', 'status', 'message', 'triggeredBy', 'occurredOnUtc'];
 
   ngOnInit(): void {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
@@ -69,6 +70,7 @@ export class OperationalLogsListComponent implements OnInit, OnDestroy {
     this.api.list({
       status: this.statusFilter() || undefined,
       action: this.actionFilter() || undefined,
+      severity: this.severityFilter() || undefined,
       search: this.searchQuery() || undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
@@ -84,11 +86,13 @@ export class OperationalLogsListComponent implements OnInit, OnDestroy {
   onSearch(val: string): void { this.search$.next(val); }
   onStatusInput(val: string): void { this.status$.next(val); }
   onActionInput(val: string): void { this.action$.next(val); }
+  onSeverity(val: string): void { this.severityFilter.set(val); this.pageIndex.set(0); this.load(); }
 
   reset(): void {
     this.searchQuery.set('');
     this.statusFilter.set('');
     this.actionFilter.set('');
+    this.severityFilter.set('');
     this.pageIndex.set(0);
     this.load();
   }
@@ -107,5 +111,9 @@ export class OperationalLogsListComponent implements OnInit, OnDestroy {
 
   statusClass(status: string): string {
     return 'status-' + status.toLowerCase();
+  }
+
+  severityClass(severity: string): string {
+    return 'severity-' + severity.toLowerCase();
   }
 }

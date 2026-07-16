@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -102,6 +103,108 @@ public sealed class LineageTrackingWorkflowNodeExecutorTests
         await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
 
         recorded.Should().ContainSingle(r => r.Action == "ResourceAccessed");
+    }
+
+    // P2: node-level Operational Log narration + failure logging, sharing this decorator's one wrap point with lineage.
+    [Fact]
+    public async Task Source_node_records_information_narration_with_fetched_count_on_success()
+    {
+        var (tracker, _) = CreateTracker();
+        var (auditService, recorded) = CreateAuditService();
+        var inner = new FakeExecutor(WorkflowNodeTypes.EpicSource, (_, node, _) => new WorkflowNodeOutput(
+            node.Id, node.NodeType,
+            new ResourceBatch([new ResourceEnvelope("Patient", "p1", "{}"), new ResourceEnvelope("Patient", "p2", "{}")]),
+            WorkflowDataContract.ResourceBatch));
+        var decorator = new LineageTrackingWorkflowNodeExecutor(inner, tracker.Object, auditService.Object);
+        var node = BuildNode(WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source);
+
+        await decorator.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        recorded.Should().ContainSingle(r =>
+            r.Severity == OperationalLogSeverities.Information
+            && r.Action == "NodeExecutionCompleted"
+            && r.Message.Contains("Fetched 2 resource(s)"));
+    }
+
+    [Fact]
+    public async Task Destination_node_records_information_narration_with_write_count_on_success()
+    {
+        var (tracker, _) = CreateTracker();
+        var (auditService, recorded) = CreateAuditService();
+        var inner = new FakeExecutor(WorkflowNodeTypes.SqlServerDestination, (_, node, _) => new WorkflowNodeOutput(
+            node.Id, node.NodeType, new DestinationWriteResult("dest-1", 42, DateTimeOffset.UtcNow),
+            WorkflowDataContract.DestinationWriteResult));
+        var decorator = new LineageTrackingWorkflowNodeExecutor(inner, tracker.Object, auditService.Object);
+        var node = BuildNode(WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination);
+
+        await decorator.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        recorded.Should().ContainSingle(r =>
+            r.Severity == OperationalLogSeverities.Information
+            && r.Message.Contains("Wrote 42 row(s) to destination"));
+    }
+
+    [Fact]
+    public async Task Mapping_node_records_information_narration_with_mapped_record_count_on_success()
+    {
+        var (tracker, _) = CreateTracker();
+        var (auditService, recorded) = CreateAuditService();
+        var mappedRecords = new MappedRecordBatch(
+            [new MappedDestinationRecord(Guid.NewGuid(), "Patient", "dbo.Patient", "p1", new Dictionary<string, object?>())]);
+        var inner = new FakeExecutor(WorkflowNodeTypes.Mapping, (_, node, _) => new WorkflowNodeOutput(
+            node.Id, node.NodeType, mappedRecords, WorkflowDataContract.MappedRecordBatch));
+        var decorator = new LineageTrackingWorkflowNodeExecutor(inner, tracker.Object, auditService.Object);
+        var node = BuildNode(WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform);
+
+        await decorator.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        recorded.Should().ContainSingle(r => r.Message.Contains("Processed 1 record(s)"));
+    }
+
+    [Fact]
+    public async Task Analytics_node_records_no_narration_on_success()
+    {
+        var (tracker, _) = CreateTracker();
+        var (auditService, recorded) = CreateAuditService();
+        var inner = new FakeExecutor(WorkflowNodeTypes.HedisMeasureReport, (_, node, _) => new WorkflowNodeOutput(
+            node.Id, node.NodeType, new ResourceBatch([new ResourceEnvelope("Patient", "p1", "{}")]), WorkflowDataContract.ResourceBatch));
+        var decorator = new LineageTrackingWorkflowNodeExecutor(inner, tracker.Object, auditService.Object);
+        var node = BuildNode(WorkflowNodeTypes.HedisMeasureReport, WorkflowNodeCategory.Analytics);
+
+        await decorator.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        recorded.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Node_that_throws_records_an_error_entry_and_rethrows_without_recording_lineage()
+    {
+        var (tracker, lineageRecorded) = CreateTracker();
+        var (auditService, recorded) = CreateAuditService();
+        var inner = new FakeExecutor(WorkflowNodeTypes.EpicSource, (_, _, _) =>
+            throw new InvalidOperationException("connector unreachable"));
+        var decorator = new LineageTrackingWorkflowNodeExecutor(inner, tracker.Object, auditService.Object);
+        var node = BuildNode(WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source);
+
+        var act = () => decorator.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("connector unreachable");
+        lineageRecorded.Should().BeEmpty();
+        recorded.Should().ContainSingle(r =>
+            r.Severity == OperationalLogSeverities.Error
+            && r.Action == "NodeExecutionFailed"
+            && r.Message.Contains("connector unreachable"));
+    }
+
+    private static (Mock<IOperationalAuditService> AuditService, List<RecordOperationalAuditLogRequest> Recorded) CreateAuditService()
+    {
+        var recorded = new List<RecordOperationalAuditLogRequest>();
+        var auditService = new Mock<IOperationalAuditService>();
+        auditService.Setup(x => x.RecordAsync(It.IsAny<RecordOperationalAuditLogRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<RecordOperationalAuditLogRequest, CancellationToken>((request, _) => recorded.Add(request))
+            .Returns(Task.CompletedTask);
+
+        return (auditService, recorded);
     }
 
     private static (Mock<ILineageTracker> Tracker, List<ResourceLineageRecord> Recorded) CreateTracker()

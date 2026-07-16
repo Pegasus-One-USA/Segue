@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -19,10 +20,16 @@ namespace FHIRBridge.Application.Services;
 /// </summary>
 public sealed class ConfigurationService : IConfigurationService
 {
+    private const string ModuleSourceConnection = "SourceConnection";
+    private const string ModuleWebhook = "Webhook";
+    private const string ModuleDestination = "Destination";
+    private const string ModuleMappingProfile = "MappingProfile";
+    private const string ModuleResourceRoute = "ResourceRoute";
+
     private readonly IConfigurationRepository _repository;
     private readonly ISourceCapabilityRepository _capabilityRepository;
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
-    private readonly IOperationalAuditService _auditService;
+    private readonly IUserActivityAuditService _userActivityAuditService;
     private readonly ICurrentUserService _currentUserService;
     private readonly ISecretWriter _secretWriter;
 
@@ -30,14 +37,14 @@ public sealed class ConfigurationService : IConfigurationService
         IConfigurationRepository repository,
         ISourceCapabilityRepository capabilityRepository,
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
-        IOperationalAuditService auditService,
+        IUserActivityAuditService userActivityAuditService,
         ICurrentUserService currentUserService,
         ISecretWriter secretWriter)
     {
         _repository = repository;
         _capabilityRepository = capabilityRepository;
         _capabilityDiscoveryService = capabilityDiscoveryService;
-        _auditService = auditService;
+        _userActivityAuditService = userActivityAuditService;
         _currentUserService = currentUserService;
         _secretWriter = secretWriter;
     }
@@ -46,7 +53,7 @@ public sealed class ConfigurationService : IConfigurationService
         CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
-        ValidateSourceConnectionRequest(request);
+        await ValidateSourceConnectionRequestAsync(request, excludeId: null, cancellationToken);
         var sourceConnection = new SourceConnection(
             request.Name,
             request.SourceSystemType,
@@ -58,12 +65,22 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.AddSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
+            ModuleSourceConnection,
+            "Created",
             sourceConnection.Id,
-            "SourceConnectionConfigured",
+            sourceConnection.Name,
             $"Source connection configured for {request.SourceSystemType}.",
             cancellationToken);
 
         return ConfigurationMapper.ToDto(sourceConnection);
+    }
+
+    public async Task<SourceConnectionDto?> GetSourceConnectionByIdAsync(
+        Guid sourceConnectionId,
+        CancellationToken cancellationToken)
+    {
+        var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+        return sourceConnection is null ? null : ConfigurationMapper.ToDto(sourceConnection);
     }
 
     public async Task<SourceConnectionDto> UpdateSourceConnectionAsync(
@@ -71,8 +88,9 @@ public sealed class ConfigurationService : IConfigurationService
         CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
-        ValidateSourceConnectionRequest(request);
+        await ValidateSourceConnectionRequestAsync(request, sourceConnectionId, cancellationToken);
         var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        var oldValue = SerializeSnapshot(ConfigurationMapper.ToDto(sourceConnection));
         sourceConnection.Update(
             request.Name,
             request.SourceSystemType,
@@ -84,10 +102,14 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
+            ModuleSourceConnection,
+            "Updated",
             sourceConnection.Id,
-            "SourceConnectionUpdated",
+            sourceConnection.Name,
             $"Source connection updated for {request.SourceSystemType}.",
-            cancellationToken);
+            cancellationToken,
+            oldValue,
+            SerializeSnapshot(ConfigurationMapper.ToDto(sourceConnection)));
 
         return ConfigurationMapper.ToDto(sourceConnection);
     }
@@ -102,12 +124,30 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
+            ModuleSourceConnection,
+            isEnabled ? "Activated" : "Deactivated",
             sourceConnection.Id,
-            isEnabled ? "SourceConnectionActivated" : "SourceConnectionDeactivated",
+            sourceConnection.Name,
             $"Source connection {sourceConnection.Name} was {(isEnabled ? "activated" : "deactivated")}.",
-            cancellationToken);
+            cancellationToken,
+            (!isEnabled).ToString(),
+            isEnabled.ToString());
 
         return ConfigurationMapper.ToDto(sourceConnection);
+    }
+
+    public async Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+    {
+        var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+
+        await _repository.DeleteSourceConnectionAsync(sourceConnection, cancellationToken);
+        await RecordConfigurationAuditAsync(
+            ModuleSourceConnection,
+            "Deleted",
+            sourceConnection.Id,
+            sourceConnection.Name,
+            $"Source connection deleted for {sourceConnection.SourceSystemType}.",
+            cancellationToken);
     }
 
     public async Task<WebhookConfigurationDto> AddWebhookConfigurationAsync(
@@ -123,8 +163,10 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.AddWebhookAsync(webhookConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            webhookConfiguration.SourceConnectionId,
-            "WebhookConfigured",
+            ModuleWebhook,
+            "Created",
+            webhookConfiguration.Id,
+            webhookConfiguration.Name,
             $"Webhook configuration saved for {request.ResourceType}.",
             cancellationToken);
 
@@ -141,10 +183,14 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateWebhookAsync(webhookConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            webhookConfiguration.SourceConnectionId,
-            isEnabled ? "WebhookActivated" : "WebhookDeactivated",
+            ModuleWebhook,
+            isEnabled ? "Activated" : "Deactivated",
+            webhookConfiguration.Id,
+            webhookConfiguration.Name,
             $"Webhook configuration {webhookConfiguration.Name} was {(isEnabled ? "activated" : "deactivated")}.",
-            cancellationToken);
+            cancellationToken,
+            (!isEnabled).ToString(),
+            isEnabled.ToString());
 
         return ConfigurationMapper.ToDto(webhookConfiguration);
     }
@@ -167,8 +213,10 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.AddDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            null,
-            "DestinationConfigured",
+            ModuleDestination,
+            "Created",
+            destinationConfiguration.Id,
+            destinationConfiguration.Name,
             $"Destination configuration created for {request.DestinationType}.",
             cancellationToken);
 
@@ -181,6 +229,7 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        var oldValue = SerializeSnapshot(ConfigurationMapper.ToDto(destinationConfiguration));
         var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
         if (!string.IsNullOrWhiteSpace(request.InlineSecret))
         {
@@ -195,10 +244,14 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            null,
-            "DestinationUpdated",
+            ModuleDestination,
+            "Updated",
+            destinationConfiguration.Id,
+            destinationConfiguration.Name,
             $"Destination configuration {destinationConfiguration.Name} updated for {request.DestinationType}.",
-            cancellationToken);
+            cancellationToken,
+            oldValue,
+            SerializeSnapshot(ConfigurationMapper.ToDto(destinationConfiguration)));
 
         return ConfigurationMapper.ToDto(destinationConfiguration);
     }
@@ -213,10 +266,14 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
-            null,
-            isEnabled ? "DestinationActivated" : "DestinationDeactivated",
+            ModuleDestination,
+            isEnabled ? "Activated" : "Deactivated",
+            destinationConfiguration.Id,
+            destinationConfiguration.Name,
             $"Destination configuration {destinationConfiguration.Name} was {(isEnabled ? "activated" : "deactivated")}.",
-            cancellationToken);
+            cancellationToken,
+            (!isEnabled).ToString(),
+            isEnabled.ToString());
 
         return ConfigurationMapper.ToDto(destinationConfiguration);
     }
@@ -236,8 +293,10 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.AddMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
-            null,
-            "MappingProfileConfigured",
+            ModuleMappingProfile,
+            "Created",
+            mappingProfile.Id,
+            mappingProfile.Name,
             $"Mapping profile configured for {mappingProfile.ResourceType}.",
             cancellationToken);
 
@@ -251,6 +310,7 @@ public sealed class ConfigurationService : IConfigurationService
     {
         await EnsureSourceSupportsResourceTypeAsync(request.SourceConnectionId, request.ResourceType, cancellationToken);
         var mappingProfile = await GetMappingProfileRequiredAsync(mappingProfileId, cancellationToken);
+        var oldValue = SerializeSnapshot(ConfigurationMapper.ToDto(mappingProfile));
         mappingProfile.Update(
             request.Name,
             request.ResourceType,
@@ -261,10 +321,14 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
-            null,
-            "MappingProfileUpdated",
+            ModuleMappingProfile,
+            "Updated",
+            mappingProfile.Id,
+            mappingProfile.Name,
             $"Mapping profile {mappingProfile.Name} updated for {mappingProfile.ResourceType}.",
-            cancellationToken);
+            cancellationToken,
+            oldValue,
+            SerializeSnapshot(ConfigurationMapper.ToDto(mappingProfile)));
 
         return ConfigurationMapper.ToDto(mappingProfile);
     }
@@ -279,10 +343,14 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
-            null,
-            isEnabled ? "MappingProfileActivated" : "MappingProfileDeactivated",
+            ModuleMappingProfile,
+            isEnabled ? "Activated" : "Deactivated",
+            mappingProfile.Id,
+            mappingProfile.Name,
             $"Mapping profile {mappingProfile.Name} was {(isEnabled ? "activated" : "deactivated")}.",
-            cancellationToken);
+            cancellationToken,
+            (!isEnabled).ToString(),
+            isEnabled.ToString());
 
         return ConfigurationMapper.ToDto(mappingProfile);
     }
@@ -305,8 +373,10 @@ public sealed class ConfigurationService : IConfigurationService
 
         var resourceType = await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown";
         await RecordConfigurationAuditAsync(
-            await ResolveSourceConnectionIdAsync(route, cancellationToken),
-            "ResourceConfigured",
+            ModuleResourceRoute,
+            "Created",
+            route.Id,
+            resourceType,
             $"Resource route saved for {resourceType}.",
             cancellationToken);
 
@@ -326,10 +396,14 @@ public sealed class ConfigurationService : IConfigurationService
         }
 
         await RecordConfigurationAuditAsync(
+            ModuleResourceRoute,
+            isEnabled ? "Activated" : "Deactivated",
             null,
-            isEnabled ? "ResourceActivated" : "ResourceDeactivated",
+            resourceType,
             $"Routes for resource type {resourceType} were {(isEnabled ? "activated" : "deactivated")}.",
-            cancellationToken);
+            cancellationToken,
+            (!isEnabled).ToString(),
+            isEnabled.ToString());
 
         return await BuildResourceGroupDtoAsync(resourceType, cancellationToken);
     }
@@ -351,10 +425,13 @@ public sealed class ConfigurationService : IConfigurationService
         await ApplyResourceMappingsAsync(route, request, cancellationToken);
 
         await _repository.AddRouteAsync(route, cancellationToken);
+        var addedResourceType = await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown";
         await RecordConfigurationAuditAsync(
-            await ResolveSourceConnectionIdAsync(route, cancellationToken),
-            "ResourceRouteConfigured",
-            $"Resource route configured for {await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown"}.",
+            ModuleResourceRoute,
+            "Created",
+            route.Id,
+            addedResourceType,
+            $"Resource route configured for {addedResourceType}.",
             cancellationToken);
 
         return ConfigurationMapper.ToDto(route);
@@ -367,6 +444,7 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         var route = await GetRouteRequiredAsync(routeId, cancellationToken);
+        var oldValue = SerializeSnapshot(ConfigurationMapper.ToDto(route));
         route.Update(
             request.IngestionMode,
             request.WebhookConfigurationId,
@@ -378,11 +456,16 @@ public sealed class ConfigurationService : IConfigurationService
         await ApplyResourceMappingsAsync(route, request, cancellationToken);
 
         await _repository.UpdateRouteAsync(route, cancellationToken);
+        var updatedResourceType = await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown";
         await RecordConfigurationAuditAsync(
-            await ResolveSourceConnectionIdAsync(route, cancellationToken),
-            "ResourceRouteUpdated",
-            $"Resource route {route.Id} updated for {await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown"}.",
-            cancellationToken);
+            ModuleResourceRoute,
+            "Updated",
+            route.Id,
+            updatedResourceType,
+            $"Resource route {route.Id} updated for {updatedResourceType}.",
+            cancellationToken,
+            oldValue,
+            SerializeSnapshot(ConfigurationMapper.ToDto(route)));
 
         return ConfigurationMapper.ToDto(route);
     }
@@ -397,11 +480,16 @@ public sealed class ConfigurationService : IConfigurationService
         route.SetEnabled(isEnabled);
 
         await _repository.UpdateRouteAsync(route, cancellationToken);
+        var enabledResourceType = await ResolveResourceTypeAsync(route, cancellationToken) ?? "Unknown";
         await RecordConfigurationAuditAsync(
-            await ResolveSourceConnectionIdAsync(route, cancellationToken),
-            isEnabled ? "ResourceRouteActivated" : "ResourceRouteDeactivated",
+            ModuleResourceRoute,
+            isEnabled ? "Activated" : "Deactivated",
+            route.Id,
+            enabledResourceType,
             $"Resource route {route.Id} was {(isEnabled ? "activated" : "deactivated")}.",
-            cancellationToken);
+            cancellationToken,
+            (!isEnabled).ToString(),
+            isEnabled.ToString());
 
         return ConfigurationMapper.ToDto(route);
     }
@@ -460,12 +548,6 @@ public sealed class ConfigurationService : IConfigurationService
     {
         var mapping = await _repository.GetMappingProfileAsync(route.MappingProfileId, cancellationToken);
         return mapping?.ResourceType;
-    }
-
-    private async Task<Guid?> ResolveSourceConnectionIdAsync(ResourcePipelineRoute route, CancellationToken cancellationToken)
-    {
-        var mapping = await _repository.GetMappingProfileAsync(route.MappingProfileId, cancellationToken);
-        return mapping?.SourceConnectionId;
     }
 
     private async Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesForResourceTypeAsync(
@@ -574,7 +656,10 @@ public sealed class ConfigurationService : IConfigurationService
         }
     }
 
-    private static void ValidateSourceConnectionRequest(CreateSourceConnectionRequest request)
+    private async Task ValidateSourceConnectionRequestAsync(
+        CreateSourceConnectionRequest request,
+        Guid? excludeId,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -584,6 +669,11 @@ public sealed class ConfigurationService : IConfigurationService
         if (string.IsNullOrWhiteSpace(request.BaseUrl))
         {
             throw new InvalidOperationException("Source FHIR base URL is required.");
+        }
+
+        if (await _repository.ExistsWithNameAsync(request.Name, excludeId, cancellationToken))
+        {
+            throw new InvalidOperationException($"A source connection named '{request.Name}' already exists.");
         }
 
         if (request.SourceSystemType == SourceSystemType.Epic)
@@ -725,26 +815,36 @@ public sealed class ConfigurationService : IConfigurationService
             $"{fieldName} must be an absolute HTTPS URL (plain HTTP is allowed only for loopback addresses).");
     }
 
-    private Task RecordConfigurationAuditAsync(
-        Guid? sourceConnectionId,
+    private async Task RecordConfigurationAuditAsync(
+        string module,
         string action,
+        Guid? entityId,
+        string? entityName,
         string message,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? oldValue = null,
+        string? newValue = null)
     {
-        return _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                null,
-                null,
-                sourceConnectionId,
-                null,
-                null,
-                null,
-                action,
-                "Completed",
-                message,
-                null,
-                _currentUserService.CurrentUser.AuditName,
-                null),
+        var user = _currentUserService.CurrentUser;
+        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
+        await _userActivityAuditService.RecordAsync(
+            new RecordUserActivityRequest(
+                UserId: userId,
+                UserEmail: user.AuditName,
+                Category: UserActivityCategories.Configuration,
+                Activity: message,
+                Status: UserActivityStatuses.Success,
+                EntityName: entityName,
+                EntityId: entityId,
+                IpAddress: user.IpAddress,
+                UserAgent: user.UserAgent,
+                CorrelationId: user.CorrelationId,
+                Module: module,
+                Action: action,
+                OldValue: oldValue,
+                NewValue: newValue),
             cancellationToken);
     }
+
+    private static string SerializeSnapshot<T>(T dto) => JsonSerializer.Serialize(dto);
 }

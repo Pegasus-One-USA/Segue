@@ -34,6 +34,25 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct) =>
         _db.SaveChangesAsync(ct);
 
+    public Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken)
+    {
+        // SourceConnection is ISoftDeletable: AuditingSaveChangesInterceptor converts this Remove into a soft
+        // delete (IsDeleted/DeletedBy/DeletedOnUtc) rather than issuing a physical DELETE.
+        _db.SourceConnections.Remove(sourceConnection);
+        return _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        var query = _db.SourceConnections.Where(x => x.Name.ToUpper() == name.ToUpper());
+        if (excludeId is { } id)
+        {
+            query = query.Where(x => x.Id != id);
+        }
+
+        return await query.AnyAsync(cancellationToken);
+    }
+
     // ── Destinations ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) =>
         await _db.DestinationConfigurations.OrderBy(x => x.Name).ToListAsync(ct);

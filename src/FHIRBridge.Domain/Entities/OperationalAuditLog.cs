@@ -21,7 +21,8 @@ public sealed class OperationalAuditLog : Entity<Guid>
         int? resourceCount,
         string? triggeredBy,
         string? correlationId,
-        DateTime occurredOnUtc)
+        DateTime occurredOnUtc,
+        string severity)
     {
         Id = Guid.NewGuid();
         PipelineRunId = pipelineRunId;
@@ -37,6 +38,7 @@ public sealed class OperationalAuditLog : Entity<Guid>
         TriggeredBy = triggeredBy;
         CorrelationId = correlationId;
         OccurredOnUtc = occurredOnUtc;
+        Severity = severity;
     }
 
     public Guid? PipelineRunId { get; private set; }
@@ -52,4 +54,5 @@ public sealed class OperationalAuditLog : Entity<Guid>
     public string? TriggeredBy { get; private set; }
     public string? CorrelationId { get; private set; }
     public DateTime OccurredOnUtc { get; private set; }
+    public string Severity { get; private set; } = default!;
 }

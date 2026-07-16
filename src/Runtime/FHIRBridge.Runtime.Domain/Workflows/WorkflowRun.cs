@@ -10,7 +10,8 @@ public sealed class WorkflowRun
         DateTimeOffset startedAt,
         string? triggeredBy = null,
         string? triggerType = null,
-        Guid? targetNodeId = null)
+        Guid? targetNodeId = null,
+        int workflowDefinitionVersion = 1)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -19,6 +20,7 @@ public sealed class WorkflowRun
 
         Id = id == Guid.Empty ? Guid.NewGuid() : id;
         WorkflowDefinitionId = workflowDefinitionId;
+        WorkflowDefinitionVersion = workflowDefinitionVersion;
         StartedAt = startedAt;
         Status = WorkflowRunStatus.Running;
         TriggeredBy = triggeredBy;
@@ -29,6 +31,10 @@ public sealed class WorkflowRun
     public Guid Id { get; }
 
     public Guid WorkflowDefinitionId { get; }
+
+    /// <summary>The workflow definition's <c>Version</c> at the moment this run started — so a run can always be
+    /// traced back to the exact version that produced it, even after the definition is edited again.</summary>
+    public int WorkflowDefinitionVersion { get; }
 
     public DateTimeOffset StartedAt { get; }
 

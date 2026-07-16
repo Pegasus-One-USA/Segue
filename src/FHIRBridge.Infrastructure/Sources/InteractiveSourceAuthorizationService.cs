@@ -39,6 +39,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     private readonly ILaunchTokenProtector _launchTokenProtector;
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly IOperationalAuditService _auditService;
+    private readonly IUserActivityAuditService _userActivityAuditService;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<InteractiveSourceAuthorizationService> _logger;
 
@@ -58,6 +59,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         ILaunchTokenProtector launchTokenProtector,
         IConfiguredPipelineService pipelineService,
         IOperationalAuditService auditService,
+        IUserActivityAuditService userActivityAuditService,
         ICurrentUserService currentUserService,
         ILogger<InteractiveSourceAuthorizationService> logger,
         IRankedWorkflowOrchestrator? workflowOrchestrator = null,
@@ -73,6 +75,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _launchTokenProtector = launchTokenProtector;
         _pipelineService = pipelineService;
         _auditService = auditService;
+        _userActivityAuditService = userActivityAuditService;
         _currentUserService = currentUserService;
         _logger = logger;
         _workflowOrchestrator = workflowOrchestrator;
@@ -536,8 +539,27 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             throw;
         }
 
-        await RecordAuditAsync(pending.SourceConnectionId, "InteractiveAuthorizationCompleted", "Completed",
-            $"Interactive OAuth sign-in completed for {pending.SourceName}.", cancellationToken);
+        // Business-level event — the one moment in this flow worth surfacing on the Activity Feed. The many
+        // "Started"/"Rejected"/"Triggered" actions elsewhere in this file stay operational-only (RecordAuditAsync):
+        // they fire for anonymous third-party EHR-launch traffic too, which isn't a business event a portal user
+        // would recognize as "something I did."
+        var user = _currentUserService.CurrentUser;
+        var userId = Guid.TryParse(user.ExternalUserId, out var parsedUserId) ? parsedUserId : (Guid?)null;
+        await _userActivityAuditService.RecordAsync(
+            new RecordUserActivityRequest(
+                UserId: userId,
+                UserEmail: user.AuditName,
+                Category: UserActivityCategories.Authentication,
+                Activity: $"OAuth connection authorized for {pending.SourceName}",
+                Status: UserActivityStatuses.Success,
+                EntityName: pending.SourceName,
+                EntityId: pending.SourceConnectionId,
+                IpAddress: user.IpAddress,
+                UserAgent: user.UserAgent,
+                CorrelationId: user.CorrelationId,
+                Module: "SourceConnection",
+                Action: "OAuthAuthorized"),
+            cancellationToken);
 
         Guid? workflowRunId = null;
         var workflowRunFailed = false;

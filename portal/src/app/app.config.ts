@@ -19,6 +19,8 @@ import { IRoleService } from './user-management/services/i-role.service';
 import { ApiRoleService } from './user-management/services/api-role.service';
 import { IEhrEndpointService } from './ehr-endpoints/services/i-ehr-endpoint.service';
 import { ApiEhrEndpointService } from './ehr-endpoints/services/api-ehr-endpoint.service';
+import { ISourceConnectionService } from './source-connections/services/i-source-connection.service';
+import { ApiSourceConnectionService } from './source-connections/services/api-source-connection.service';
 
 function initApp(auth: AuthService, appInit: AppInitService) {
   // Resolve the first-run setup flag FIRST, then decide what to do with any stored session:
@@ -45,6 +47,7 @@ export const appConfig: ApplicationConfig = {
     { provide: IUserService, useClass: ApiUserService },
     { provide: IRoleService, useClass: ApiRoleService },
     { provide: IEhrEndpointService, useClass: ApiEhrEndpointService },
+    { provide: ISourceConnectionService, useClass: ApiSourceConnectionService },
 
     // ── Restore session on app start ──────────────────────────────────────────
     {

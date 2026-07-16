@@ -39,6 +39,20 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         return Task.CompletedTask;
     }
 
+    public Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken)
+    {
+        _sources.TryRemove(sourceConnection.Id, out _);
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        var exists = _sources.Values.Any(x =>
+            string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) &&
+            (excludeId is null || x.Id != excludeId));
+        return Task.FromResult(exists);
+    }
+
     // ── Destinations ──────────────────────────────────────────────────────────
     public Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<DestinationConfiguration>>(_destinations.Values.OrderBy(x => x.Name).ToList());

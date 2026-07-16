@@ -27,7 +27,8 @@ public sealed class InMemoryOperationalAuditService : IOperationalAuditService
             request.ResourceCount,
             request.TriggeredBy,
             request.CorrelationId,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            request.Severity);
 
         lock (_gate)
         {
@@ -81,6 +82,11 @@ public sealed class InMemoryOperationalAuditService : IOperationalAuditService
             if (!string.IsNullOrWhiteSpace(filter.Status))
             {
                 query = query.Where(x => x.Status == filter.Status);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.Severity))
+            {
+                query = query.Where(x => x.Severity == filter.Severity);
             }
 
             if (!string.IsNullOrWhiteSpace(filter.Search))

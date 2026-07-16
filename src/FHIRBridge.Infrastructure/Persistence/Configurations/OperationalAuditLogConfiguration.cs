@@ -18,7 +18,9 @@ public sealed class OperationalAuditLogConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.TriggeredBy).HasMaxLength(320);
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
         builder.Property(x => x.OccurredOnUtc).IsRequired();
+        builder.Property(x => x.Severity).HasMaxLength(20).IsRequired().HasDefaultValue("Information");
 
         builder.HasIndex(x => x.OccurredOnUtc);
+        builder.HasIndex(x => x.Severity);
     }
 }

@@ -25,11 +25,16 @@ public sealed class UserActivityAuditLogConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.SessionId).HasMaxLength(100);
         builder.Property(x => x.FailureReason).HasMaxLength(500);
         builder.Property(x => x.Severity).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.Module).HasMaxLength(100);
+        builder.Property(x => x.Action).HasMaxLength(100);
+        builder.Property(x => x.OldValue).HasMaxLength(4000);
+        builder.Property(x => x.NewValue).HasMaxLength(4000);
         builder.Property(x => x.PreviousHash).HasMaxLength(128);
         builder.Property(x => x.EntryHash).HasMaxLength(128).IsRequired();
         builder.Property(x => x.OccurredOnUtc).IsRequired();
 
         builder.HasIndex(x => x.UserId);
         builder.HasIndex(x => x.OccurredOnUtc);
+        builder.HasIndex(x => x.Module);
     }
 }

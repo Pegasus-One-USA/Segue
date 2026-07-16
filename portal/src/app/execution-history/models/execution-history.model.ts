@@ -15,6 +15,7 @@ export interface RouteExecution {
   triggerType: string | null;
   nodeRunCount: number;
   errorMessage: string | null;
+  workflowDefinitionVersion: number;
 }
 
 export interface PagedResult<T> {

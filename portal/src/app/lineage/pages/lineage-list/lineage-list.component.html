@@ -183,6 +183,35 @@
         } @else {
           <div class="drawer-loading">No chain steps found for this resource.</div>
         }
+
+        <h4 class="drawer-section-title">Field-Level Lineage</h4>
+        @if (fieldsLoading()) {
+          <div class="drawer-loading">Loading field detail…</div>
+        } @else if (fields().length > 0) {
+          <table class="field-lineage-table">
+            <thead>
+              <tr>
+                <th>Source Field</th>
+                <th>Transform</th>
+                <th>Destination Column</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (field of fields(); track $index) {
+                <tr>
+                  <td class="field-source">{{ field.sourceFieldPath }}</td>
+                  <td><span class="transform-badge">{{ field.transformationType }}</span></td>
+                  <td class="field-dest">{{ field.destinationObject }}.{{ field.destinationColumn }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="drawer-loading">
+            No field-level detail recorded for this resource — either it wasn't produced by a Mapping node, or
+            field-level lineage wasn't enabled (<code>FieldLineage:Enabled</code>) when it ran.
+          </div>
+        }
       </div>
     </div>
   }

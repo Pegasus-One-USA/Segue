@@ -53,6 +53,16 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 entry.State = EntityState.Modified;
                 softDeletable.ApplyDeleted(actor, now);
             }
+            else if (entry.State == EntityState.Deleted && entry.Metadata.IsOwned())
+            {
+                // Remove() cascades EntityState.Deleted onto an aggregate's owned sub-entities (e.g.
+                // SourceConnection.Authentication) too. Converting only the root to a soft-delete Modified above
+                // leaves those owned entries still Deleted — and since an owned type sharing its owner's table has
+                // no separate row to delete, EF folds that into the same UPDATE by nulling its columns, which
+                // throws for any required (NOT NULL) owned property. Untracked-as-unchanged instead: a soft delete
+                // must never touch the owned data at all, required or not.
+                entry.State = EntityState.Unchanged;
+            }
 
             if (entry.Entity is IAuditableEntity auditable)
             {

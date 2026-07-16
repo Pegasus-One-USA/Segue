@@ -17,18 +17,20 @@ public sealed class RoleManagementService : IRoleManagementService
         SeededSecurityIds.AuditRoleId
     ];
 
+    private const string ModuleRole = "Role";
+
     private readonly IUserAccessRepository _repository;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IOperationalAuditService _auditService;
+    private readonly IUserActivityAuditService _userActivityAuditService;
 
     public RoleManagementService(
         IUserAccessRepository repository,
         ICurrentUserService currentUserService,
-        IOperationalAuditService auditService)
+        IUserActivityAuditService userActivityAuditService)
     {
         _repository = repository;
         _currentUserService = currentUserService;
-        _auditService = auditService;
+        _userActivityAuditService = userActivityAuditService;
     }
 
     public async Task<IReadOnlyList<RoleDto>> GetRolesAsync(CancellationToken cancellationToken)
@@ -105,7 +107,7 @@ public sealed class RoleManagementService : IRoleManagementService
         var role = new Role(Guid.NewGuid(), request.Name.Trim(), request.Description.Trim());
         await _repository.AddRoleAsync(role, cancellationToken);
         await _repository.SetRolePermissionsAsync(role.Id, request.PermissionIds, cancellationToken);
-        await AuditAsync("RoleCreated", $"Role created: {role.Name}.", cancellationToken);
+        await AuditAsync("Created", role.Id, role.Name, $"Role created: {role.Name}.", cancellationToken);
 
         return await ToDtoAsync(role, cancellationToken);
     }
@@ -132,10 +134,18 @@ public sealed class RoleManagementService : IRoleManagementService
             throw new InvalidOperationException("A role with this name already exists.");
         }
 
+        var oldValue = $"{role.Name} / {role.Description}";
         role.Update(request.Name.Trim(), request.Description.Trim());
         await _repository.UpdateRoleAsync(role, cancellationToken);
         await _repository.SetRolePermissionsAsync(role.Id, request.PermissionIds, cancellationToken);
-        await AuditAsync("RoleUpdated", $"Role updated: {role.Name}.", cancellationToken);
+        await AuditAsync(
+            "Updated",
+            role.Id,
+            role.Name,
+            $"Role updated: {role.Name}.",
+            cancellationToken,
+            oldValue,
+            $"{role.Name} / {role.Description}");
 
         return await ToDtoAsync(role, cancellationToken);
     }
@@ -163,7 +173,7 @@ public sealed class RoleManagementService : IRoleManagementService
         }
 
         await _repository.DeleteRoleAsync(role, cancellationToken);
-        await AuditAsync("RoleDeleted", $"Role deleted: {role.Name}.", cancellationToken);
+        await AuditAsync("Deleted", role.Id, role.Name, $"Role deleted: {role.Name}.", cancellationToken);
     }
 
     public async Task<RoleDto> AddRolePermissionsAsync(
@@ -181,7 +191,13 @@ public sealed class RoleManagementService : IRoleManagementService
             await _repository.AddRolePermissionAsync(roleId, permissionId, cancellationToken);
         }
 
-        await AuditAsync("RolePermissionsAdded", $"Permissions added to role: {role.Name}.", cancellationToken);
+        await AuditAsync(
+            "PermissionsAdded",
+            role.Id,
+            role.Name,
+            $"Permissions added to role: {role.Name}.",
+            cancellationToken,
+            newValue: string.Join(",", request.PermissionIds.Distinct()));
 
         return await ToDtoAsync(role, cancellationToken);
     }
@@ -200,7 +216,13 @@ public sealed class RoleManagementService : IRoleManagementService
         }
 
         await _repository.RemoveRolePermissionAsync(roleId, permissionId, cancellationToken);
-        await AuditAsync("RolePermissionRemoved", $"Permission removed from role: {role.Name}.", cancellationToken);
+        await AuditAsync(
+            "PermissionRemoved",
+            role.Id,
+            role.Name,
+            $"Permission removed from role: {role.Name}.",
+            cancellationToken,
+            oldValue: permissionId.ToString());
     }
 
     private async Task<RoleDto> ToDtoAsync(Role role, CancellationToken cancellationToken)
@@ -234,22 +256,33 @@ public sealed class RoleManagementService : IRoleManagementService
         }
     }
 
-    private async Task AuditAsync(string action, string message, CancellationToken cancellationToken)
+    private async Task AuditAsync(
+        string action,
+        Guid? entityId,
+        string? entityName,
+        string message,
+        CancellationToken cancellationToken,
+        string? oldValue = null,
+        string? newValue = null)
     {
-        await _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                action,
-                "Completed",
-                message,
-                null,
-                _currentUserService.CurrentUser.AuditName,
-                null),
+        var user = _currentUserService.CurrentUser;
+        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
+        await _userActivityAuditService.RecordAsync(
+            new RecordUserActivityRequest(
+                UserId: userId,
+                UserEmail: user.AuditName,
+                Category: UserActivityCategories.Authorization,
+                Activity: message,
+                Status: UserActivityStatuses.Success,
+                EntityName: entityName,
+                EntityId: entityId,
+                IpAddress: user.IpAddress,
+                UserAgent: user.UserAgent,
+                CorrelationId: user.CorrelationId,
+                Module: ModuleRole,
+                Action: action,
+                OldValue: oldValue,
+                NewValue: newValue),
             cancellationToken);
     }
 

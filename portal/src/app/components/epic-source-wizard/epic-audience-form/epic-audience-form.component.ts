@@ -10,8 +10,25 @@ import { EPIC_ENV } from '../../../data/epic-environments.data';
 import { EnvKey } from '../../../models/epic-env.model';
 import { AppKey } from '../../../models/epic-app.model';
 import { FullDiscoveredValues } from '../models/epic-config.model';
+import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../models/audience-field-config.data';
+import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 
-export type EpicAudience = 'provider-ehr-launch' | 'provider-standalone' | 'backend-system' | 'patient';
+export type { EpicAudience };
+
+/** EHR/vendor selector options — values must be exact SourceSystemType enum member names (see
+ *  src/FHIRBridge.Domain/Enums/SourceSystemType.cs), since the backend deserializes this field as a string enum.
+ *  NewEHR / NewEHRTwo are internal placeholder enum members with no real vendor identity and are omitted. */
+export const EHR_OPTIONS: { value: EhrVendor; label: string }[] = [
+  { value: 'Epic',               label: 'Epic' },
+  { value: 'Cerner',             label: 'Oracle Health (Cerner)' },
+  { value: 'Athenahealth',       label: 'Athenahealth' },
+  { value: 'MeditechGreenfield', label: 'Meditech' },
+  { value: 'Healow',             label: 'eClinicalWorks (Healow)' },
+  { value: 'Allscripts',         label: 'Allscripts' },
+  { value: 'GenericFhir',        label: 'Generic FHIR' },
+  { value: 'Hl7v2',              label: 'HL7 v2' },
+  { value: 'Sample',             label: 'Sample' },
+];
 
 const FHIR_RESOURCES = [
   'Patient', 'Encounter', 'Observation', 'Condition', 'MedicationRequest',
@@ -71,48 +88,6 @@ function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 
   if (scopesSupported.some(s => suffix(s) === 'read' || suffix(s) === 'write')) return 'v1';
   return null;
 }
-
-// ── Per-audience field visibility/requirement registry ─────────────────────────
-// Adding a new audience means adding one entry here — no template/validator edits.
-// All four audiences now show a connection form; only the redirect/launch/retrieval
-// shape differs between them.
-interface AudienceFieldConfig {
-  showLaunchUrl: boolean;
-  showRedirect: boolean;
-  showCdsHooks: boolean;
-  /** Whether this app's registered EHR launch-display setting (Embedded/External Browser/Sidebar) applies.
-   *  Only meaningful for the EHR-launch audience — FHIRBridge doesn't control this behavior, the EHR does; this
-   *  just records how the app was registered there. */
-  showLaunchDisplayMode: boolean;
-  /** Whether the retrieval-method section applies at all. */
-  showRetrieval: boolean;
-  /**
-   * How much of the retrieval section this audience gets:
-   * - 'none': no retrieval section (EHR launch / patient — data arrives via the SMART launch context).
-   * - 'oneshot': a curated Search REST subset (Resource Types, Search Criteria, Max Results, Include Related
-   *   Resources) for a user-initiated, single fetch — no scheduler, since there's no recurring run to schedule.
-   * - 'automated': the full retrieval method picker + config (Backend System) for unattended, recurring execution.
-   */
-  retrievalScope: 'none' | 'oneshot' | 'automated';
-  /** Whether the shared Resource Type picker (Section 5) applies. False for Backend System,
-   *  where Resource Type instead lives inside the selected retrieval method's own config —
-   *  never both, to avoid showing two Resource Type pickers at once. */
-  showResourcePicker: boolean;
-  /** 'readonly' = auto-populated Redirect URI (providers); 'editable' = mandatory Callback URL (patient). */
-  redirectMode: 'readonly' | 'editable';
-  redirectLabel: string;
-  scopePrefix: 'user' | 'patient' | 'system';
-  /** Interactive audiences add openid/fhirUser/offline_access/launch to the scope string; Backend System does not. */
-  includeInteractiveScopes: boolean;
-}
-
-const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {
-  // CDS Hooks removed from the UI (not required) — flag kept for future use but disabled everywhere.
-  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, retrievalScope: 'none',     showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: true },
-  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: true,  retrievalScope: 'oneshot',  showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: false },
-  'patient':             { showLaunchUrl: false, showRedirect: true,  showCdsHooks: false, showRetrieval: false, retrievalScope: 'none',     showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Callback URL', scopePrefix: 'patient', includeInteractiveScopes: true,  showLaunchDisplayMode: false },
-  'backend-system':      { showLaunchUrl: false, showRedirect: false, showCdsHooks: false, showRetrieval: true,  retrievalScope: 'automated', showResourcePicker: false, redirectMode: 'readonly', redirectLabel: '',             scopePrefix: 'system',  includeInteractiveScopes: false, showLaunchDisplayMode: false },
-};
 
 // ── Data Retrieval Method registry (Backend System only) ───────────────────────
 // Adding a new method means adding one entry here — the dropdown, the field list,
@@ -359,6 +334,11 @@ export class EpicAudienceFormComponent implements OnInit {
   private  readonly toast      = inject(ToastService);
   private  readonly fb         = inject(FormBuilder);
   private  readonly destroyRef = inject(DestroyRef);
+
+  protected readonly ehrOptions = EHR_OPTIONS;
+  /** True only when opened in read-only View mode from the Source Connections page — disables every control and
+   *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
+  protected get isReadonly(): boolean { return this.wiz.readonlyMode(); }
 
   // Resource Type list: auto-detected from the source's /metadata after Discover; falls back to the static list.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
@@ -721,6 +701,12 @@ export class EpicAudienceFormComponent implements OnInit {
     this.form.controls.fullRefreshRecurrence.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncRetrievalValidators());
+
+    // View mode (Source Connections page): lock every reactive-form control. Applied last so it wins over the
+    // enable/disable calls the audience/runMode subscriptions above may have just issued during pre-population.
+    if (this.isReadonly) {
+      this.form.disable({ emitEvent: false });
+    }
   }
 
   /**

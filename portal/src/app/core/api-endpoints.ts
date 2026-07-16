@@ -59,6 +59,15 @@ export const EHR_ENDPOINTS_ENDPOINTS = {
   byId: (id: string) => `${API_V1_BASE}/ehr-endpoints/${id}`,
 };
 
+// ─── Source Connections (ConfigurationsController — api/v1/source-connections) ─
+export const SOURCE_CONNECTIONS_ENDPOINTS = {
+  list: `${API_V1_BASE}/source-connections`,
+  byId: (id: string) => `${API_V1_BASE}/source-connections/${id}`,
+  // WorkflowEndpoints, not ConfigurationsController — the usage check has to walk every workflow's Source
+  // nodes, which only the Runtime workflow store can answer.
+  usage: `${API_V1_BASE}/workflows/source-connection-usage`,
+};
+
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
 export const DESTINATION_ENDPOINTS = {
   schemaPreview: `${API_V1_BASE}/destinations/schema-preview`,
@@ -101,8 +110,9 @@ export const OPERATIONAL_LOGS_ENDPOINTS = {
 
 // ─── Governance: resource lineage / chain of custody (LineageController — api/v1/lineage) ────
 export const LINEAGE_ENDPOINTS = {
-  list:  `${API_V1_BASE}/lineage/entries`,
-  chain: `${API_V1_BASE}/lineage`,
+  list:   `${API_V1_BASE}/lineage/entries`,
+  chain:  `${API_V1_BASE}/lineage`,
+  fields: `${API_V1_BASE}/lineage/fields`,
 };
 
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────
