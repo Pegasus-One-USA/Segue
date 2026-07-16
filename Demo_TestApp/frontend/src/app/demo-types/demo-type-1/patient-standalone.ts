@@ -3,9 +3,10 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
-const BACKEND_BASE_URL = 'http://localhost:5500';
-const FHIRBRIDGE_BASE_URL = 'http://localhost:5000';
+const BACKEND_BASE_URL = environment.healthAppBase;
+const FHIRBRIDGE_BASE_URL = environment.fhirbridgeBase;
 
 interface Hospital {
   id: string;

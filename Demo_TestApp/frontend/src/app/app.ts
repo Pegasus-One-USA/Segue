@@ -6,8 +6,9 @@ import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-sta
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
 import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
 import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
+import { environment } from '../environments/environment';
 
-const BACKEND_BASE_URL = 'http://localhost:5500';
+const BACKEND_BASE_URL = environment.healthAppBase;
 const DEMO_TYPE_STORAGE_KEY = 'hb_demo_type';
 
 // Embedded EHR launches round-trip this tab through FHIRBridge + Epic and back to this same origin via a full

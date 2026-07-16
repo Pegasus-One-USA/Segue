@@ -7,7 +7,9 @@
 // for any workflow that isn't explicitly opted in, refuses any workflow whose ApplicationType isn't Patient, and
 // only accepts an ehrEndpointId from the same MyChart-only set the hospital picker itself lists — replace the
 // placeholder once that opt-in has been done; until then "Select hospital" will 404.
-export const FHIRBRIDGE_BASE_URL = 'http://localhost:5000';
+import { environment } from '../../../../../environments/environment';
+
+export const FHIRBRIDGE_BASE_URL = environment.fhirbridgeBase;
 export const PATIENT_WORKFLOW_ID = '5930ff91-9235-4ef1-8e94-8752651d4d2a';
 
 // A separate, dedicated workflow for the per-patient detail fetch (triggered by clicking a row in the fetched

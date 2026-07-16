@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { FHIRBRIDGE_BASE_URL, PATIENT_WORKFLOW_ID } from '../config/standalone-launch.config';
+import { environment } from '../../../../../environments/environment';
 
 // Kept only for rememberSession's "which workflow was this launch for" bookkeeping — the token/run/mint/discard
 // calls below all take an explicit workflowId parameter instead, since the list fetch and the per-patient detail
@@ -92,7 +93,7 @@ export interface EpicSessionStatusResponse {
 // last launched, centrally, without requiring any FHIRBridge change. Same mechanism Provider Standalone already
 // reuses (EpicSessionStore is keyed purely by HealthApp userId, so a distinct Patient Standalone demo login has its
 // own row with no collision).
-const HEALTHAPP_BACKEND_BASE_URL = 'http://localhost:5500';
+const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
 
 /** Pulls the displayable Patient rows out of a /run response's raw Source node output. A Patient Standalone launch
  *  typically resolves to exactly one patient (the signed-in user), but this stays list-shaped in case more than one

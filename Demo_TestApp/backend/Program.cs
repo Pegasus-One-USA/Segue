@@ -3,7 +3,18 @@ using System.Text.Json;
 using HealthAppBackend;
 using Microsoft.EntityFrameworkCore;
 
-var builder = WebApplication.CreateBuilder(args);
+// Where the Demo frontend's build output lives — UseDefaultFiles()/UseStaticFiles()/
+// MapFallbackToFile() below all resolve against WebRootPath automatically. Read from an env var
+// (rather than full IConfiguration, which isn't available yet at this point) so deployments can
+// point it at any folder — a sibling directory, not just one nested under this app's own content
+// root — without a code change. Defaults to a "portal" folder next to the app for local/dev use.
+// Accepts either a relative or absolute path; ASP.NET Core uses an absolute value as-is.
+var webRootPath = Environment.GetEnvironmentVariable("DEMOAPP_PORTAL_PATH") ?? "portal";
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, WebRootPath = webRootPath });
+
+// No-ops unless actually launched by that OS's service manager — lets the same published
+// output run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
+builder.Host.UseWindowsService().UseSystemd();
 
 var allowedFrontendOrigin = builder.Configuration["AllowedFrontendOrigin"] ?? "http://localhost:5501";
 var connectionString = builder.Configuration.GetConnectionString("Default")
@@ -39,6 +50,12 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 }
 
+// Serves the Angular build copied into wwwroot/ at deploy time — this backend hosts its own
+// frontend (same origin), so the app's hb_session cookie (SameSite=Lax) works without any
+// cross-origin complications.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseCors("Frontend");
 
 if (app.Environment.IsDevelopment())
@@ -49,8 +66,6 @@ if (app.Environment.IsDevelopment())
 
 const string SessionCookieName = "hb_session";
 var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
-app.MapGet("/", () => "HealthApp backend is running.");
 
 // Public — populates the "Login Type" dropdown on the login screen, before any session exists.
 app.MapGet("/api/demo-types", async (HealthAppDbContext db) =>
@@ -344,6 +359,12 @@ app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, Epi
     epicSessions.Remove(userId);
     return Results.Ok();
 });
+
+// SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
+// index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback
+// endpoints are always lowest-priority, so this can't shadow the /api/* routes above regardless of
+// registration order.
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

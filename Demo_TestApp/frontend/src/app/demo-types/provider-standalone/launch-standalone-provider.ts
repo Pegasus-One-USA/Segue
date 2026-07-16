@@ -5,6 +5,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
 import { FHIRBRIDGE_BASE_URL, STANDALONE_DETAIL_WORKFLOW_ID, STANDALONE_WORKFLOW_ID } from './core/config/standalone-launch.config';
+import { environment } from '../../../environments/environment';
 
 /** Matches FHIRBridge's PublicEhrEpicEndpointDto (GET /api/v1/ehr-epic-endpoints) — anonymous, EndpointType=Epic
  *  rows only (the vendor's own shared sandbox, never a real customer's MyChart instance). */
@@ -215,7 +216,7 @@ function indicatesReAuthorizationNeeded(message: string): boolean {
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge — remembers which patient/workflow this HealthApp user
 // last launched, centrally (survives across browsers/devices for the same login, unlike the old sessionStorage-only
 // approach), without requiring any FHIRBridge change. See EpicSessionStatusResponse.
-const HEALTHAPP_BACKEND_BASE_URL = 'http://localhost:5500';
+const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
 
 // Carries the in-progress search box value across the full-page redirect to Epic and back, so the auto-fetch that
 // follows a fresh sign-in (see ngOnInit) replays the same search the user was trying to run when the token turned
