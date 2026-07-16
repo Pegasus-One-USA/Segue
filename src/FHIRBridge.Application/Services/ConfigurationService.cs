@@ -100,6 +100,13 @@ public sealed class ConfigurationService : IConfigurationService
             ConfigurationMapper.ToDomain(request.Interactive),
             ConfigurationMapper.ToDomain(request.Retrieval));
 
+        // Mapped immediately after Update(), before SaveChangesAsync — Update() reassigns brand-new owned-value-
+        // object instances (Authentication/Interactive/Retrieval) onto this tracked entity, and EF Core's post-save
+        // fixup for a *replaced* owned reference leaves that navigation null on this in-memory instance afterward
+        // (the new values still land correctly in the database; only this object's own property goes stale/null).
+        // Mapping now, while the in-memory state is still guaranteed intact, sidesteps that entirely.
+        var updatedDto = ConfigurationMapper.ToDto(sourceConnection);
+
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
         await RecordConfigurationAuditAsync(
             ModuleSourceConnection,
@@ -109,9 +116,9 @@ public sealed class ConfigurationService : IConfigurationService
             $"Source connection updated for {request.SourceSystemType}.",
             cancellationToken,
             oldValue,
-            SerializeSnapshot(ConfigurationMapper.ToDto(sourceConnection)));
+            SerializeSnapshot(updatedDto));
 
-        return ConfigurationMapper.ToDto(sourceConnection);
+        return updatedDto;
     }
 
     public async Task<SourceConnectionDto> SetSourceConnectionEnabledAsync(
@@ -209,7 +216,8 @@ public sealed class ConfigurationService : IConfigurationService
             request.Name,
             request.DestinationType,
             secretReference,
-            request.Target);
+            request.Target,
+            request.ConnectionMetadataJson);
 
         await _repository.AddDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
@@ -221,6 +229,20 @@ public sealed class ConfigurationService : IConfigurationService
             cancellationToken);
 
         return ConfigurationMapper.ToDto(destinationConfiguration);
+    }
+
+    public async Task<PagedResult<DestinationConfigurationDto>> GetDestinationConfigurationsPagedAsync(
+        DestinationFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _repository.GetDestinationsPagedAsync(filter, page, pageSize, cancellationToken);
+        return new PagedResult<DestinationConfigurationDto>(
+            result.Items.Select(ConfigurationMapper.ToDto).ToList(),
+            result.TotalCount,
+            result.Page,
+            result.PageSize);
     }
 
     public async Task<DestinationConfigurationDto> UpdateDestinationConfigurationAsync(
@@ -240,7 +262,14 @@ public sealed class ConfigurationService : IConfigurationService
             request.Name,
             request.DestinationType,
             secretReference,
-            request.Target);
+            request.Target,
+            request.ConnectionMetadataJson ?? destinationConfiguration.ConnectionMetadataJson);
+
+        // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
+        // UpdateSourceConnectionAsync: Update() reassigns a brand-new owned SecretReference instance, and EF
+        // Core's post-save fixup for a replaced owned reference can leave that navigation null on this in-memory
+        // instance afterward (the database write itself is unaffected).
+        var updatedDto = ConfigurationMapper.ToDto(destinationConfiguration);
 
         await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
         await RecordConfigurationAuditAsync(
@@ -251,9 +280,9 @@ public sealed class ConfigurationService : IConfigurationService
             $"Destination configuration {destinationConfiguration.Name} updated for {request.DestinationType}.",
             cancellationToken,
             oldValue,
-            SerializeSnapshot(ConfigurationMapper.ToDto(destinationConfiguration)));
+            SerializeSnapshot(updatedDto));
 
-        return ConfigurationMapper.ToDto(destinationConfiguration);
+        return updatedDto;
     }
 
     public async Task<DestinationConfigurationDto> SetDestinationConfigurationEnabledAsync(
@@ -276,6 +305,36 @@ public sealed class ConfigurationService : IConfigurationService
             isEnabled.ToString());
 
         return ConfigurationMapper.ToDto(destinationConfiguration);
+    }
+
+    public async Task DeleteDestinationConfigurationAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        await EnsureDestinationHasNoExecutionHistoryAsync(destinationConfiguration, "deleted", cancellationToken);
+
+        await _repository.RemoveDestinationAsync(destinationConfiguration, cancellationToken);
+        await RecordConfigurationAuditAsync(
+            ModuleDestination,
+            "Deleted",
+            destinationConfiguration.Id,
+            destinationConfiguration.Name,
+            $"Destination configuration {destinationConfiguration.Name} was deleted.",
+            cancellationToken);
+    }
+
+    public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken cancellationToken) =>
+        _repository.HasDestinationExecutionHistoryAsync(destinationId, cancellationToken);
+
+    private async Task EnsureDestinationHasNoExecutionHistoryAsync(
+        DestinationConfiguration destinationConfiguration,
+        string attemptedAction,
+        CancellationToken cancellationToken)
+    {
+        if (await _repository.HasDestinationExecutionHistoryAsync(destinationConfiguration.Id, cancellationToken))
+        {
+            throw new BusinessRuleException(
+                $"Destination configuration '{destinationConfiguration.Name}' cannot be {attemptedAction} because it has pipeline execution history. View only.");
+        }
     }
 
     public async Task<MappingProfileDto> AddMappingProfileAsync(
@@ -319,6 +378,12 @@ public sealed class ConfigurationService : IConfigurationService
             request.DestinationObject,
             request.Fields.Select(ConfigurationMapper.ToDomain));
 
+        // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
+        // UpdateSourceConnectionAsync: Update() replaces the entire owned Fields collection, and EF Core's
+        // post-save fixup for replaced owned collections can leave stale/null state on this in-memory instance
+        // afterward (the database write itself is unaffected).
+        var updatedDto = ConfigurationMapper.ToDto(mappingProfile);
+
         await _repository.UpdateMappingProfileAsync(mappingProfile, cancellationToken);
         await RecordConfigurationAuditAsync(
             ModuleMappingProfile,
@@ -328,9 +393,9 @@ public sealed class ConfigurationService : IConfigurationService
             $"Mapping profile {mappingProfile.Name} updated for {mappingProfile.ResourceType}.",
             cancellationToken,
             oldValue,
-            SerializeSnapshot(ConfigurationMapper.ToDto(mappingProfile)));
+            SerializeSnapshot(updatedDto));
 
-        return ConfigurationMapper.ToDto(mappingProfile);
+        return updatedDto;
     }
 
     public async Task<MappingProfileDto> SetMappingProfileEnabledAsync(

@@ -9,4 +9,7 @@ public sealed record DestinationConfigurationDto(
     string KeyVaultName,
     string SecretName,
     string? Target,
-    bool IsEnabled);
+    bool IsEnabled,
+    // Non-secret connection fields as a flat JSON object — see DestinationConfiguration.ConnectionMetadataJson.
+    // Lets a caller reusing this row via "Existing" repopulate its form without ever seeing the actual secret.
+    string? ConnectionMetadataJson = null);

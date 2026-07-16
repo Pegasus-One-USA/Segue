@@ -41,4 +41,8 @@ public interface ISourceApplicationStrategy
     /// types that never override it (Backend Services).
     /// </summary>
     Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
+
+    /// <summary>Discards any cached token for this source (no-op for types that acquire tokens on demand rather than
+    /// caching an interactive session, e.g. Backend Services).</summary>
+    Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
 }

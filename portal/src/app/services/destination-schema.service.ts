@@ -36,6 +36,19 @@ export interface DestinationProbeRequest {
   connectionString?: string;
 }
 
+export interface SftpConnectionTestRequest {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  remoteFolder?: string;
+}
+
+export interface ConnectionTestResult {
+  connected: boolean;
+  error: string | null;
+}
+
 /**
  * Tests a relational destination connection and loads its tables/columns for the pipeline builder's
  * table/column pickers. Backed by POST /api/v1/destinations/schema-preview (auth token attached by the
@@ -47,5 +60,10 @@ export class DestinationSchemaService {
 
   probe(request: DestinationProbeRequest): Observable<DestinationSchemaProbe> {
     return this.http.post<DestinationSchemaProbe>(DESTINATION_ENDPOINTS.schemaPreview, request);
+  }
+
+  /** Tests an ad-hoc SFTP connection for a CSV destination (storageType 'sftp'). */
+  testSftp(request: SftpConnectionTestRequest): Observable<ConnectionTestResult> {
+    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.sftpTest, request);
   }
 }

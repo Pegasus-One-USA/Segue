@@ -165,12 +165,24 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
         var searchParameters = ReadStringConfiguration(node, "searchParameters");
 
+        // The wizard-authored, human-readable "Resources" field (e.g. "Patient, Observation, Condition") is this
+        // node's own, per-workflow declaration of what it fetches — two workflows can share one SourceConnection
+        // (and so one set of granted scopes) while each still fetching a different, deliberately narrower or wider
+        // subset. Takes priority over anything resolved from the connection below, since that's connection-wide and
+        // can't express a per-workflow difference the way this node-level field can.
+        var configuredResources = ParseCommaSeparatedResourceTypes(ReadStringConfiguration(node, "Resources"));
+
         // Option A: prefer a real SourceConnection referenced by id (base URL + auth + token resolved live at run time).
         FhirSourceConfiguration? source = null;
         var sourceConnectionId = ReadStringConfiguration(node, "sourceConnectionId");
         if (_sourceResolver is not null && Guid.TryParse(sourceConnectionId, out var connectionId))
         {
-            source = await _sourceResolver.ResolveAsync(connectionId, searchParameters, context.TargetPatientId, cancellationToken);
+            source = await _sourceResolver.ResolveAsync(
+                connectionId,
+                searchParameters,
+                context.TargetPatientId,
+                cancellationToken,
+                context.PatientSearchCriteria);
         }
 
         // Fallback: an inline source configuration embedded in node config (used by the route→graph projection).
@@ -189,10 +201,23 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
         var client = _sourceClientFactory.Create(_sourceType);
 
-        // A Backend System Search REST retrieval config carries its own resource-type list (potentially several
-        // types under one connection); fall back to the single node-config resourceType otherwise — unchanged
-        // behavior for the route→graph projection and any hand-authored node config.
-        var resourceTypes = source.ResourceTypes is { Count: > 0 } configured ? configured : [resourceType];
+        // Below configuredResources in priority: a Backend System Search REST retrieval config carries its own
+        // resource-type list on the connection itself (potentially several types under one connection with no
+        // per-node "Resources" field at all — the route→graph projection path) — an explicit admin choice there, so
+        // it wins over the scope-derived guess when set. Otherwise derive the list from the connection's own granted
+        // SMART scopes (e.g. "patient/Observation.rs" -> "Observation") rather than silently defaulting to a single
+        // resource type: the scopes are the authoritative record of what this connection is actually authorized to
+        // fetch, so deriving from them can't drift out of sync the way a separately hand-maintained resource-type
+        // list can. Only falls back to the single node-config resourceType when nothing above has anything to say
+        // (e.g. a non-interactive/no-scope source) — unchanged behavior for the route→graph projection and any
+        // hand-authored node config.
+        var resourceTypes = configuredResources is { Count: > 0 }
+            ? configuredResources
+            : source.ResourceTypes is { Count: > 0 } configured
+                ? configured
+                : DeriveResourceTypesFromScopes(source.Scopes) is { Count: > 0 } fromScopes
+                    ? fromScopes
+                    : [resourceType];
 
         // A source configured for bulk export ($export) pulls each resource type via the Bulk Data flow instead of a
         // paged search — same downstream envelope projection, so the rest of the DAG is identical. Every other source
@@ -240,6 +265,52 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 // without duplicating this resolution logic.
                 ["retrievalMethod"] = useBulkExport ? "bulk-export" : "search-rest"
             });
+    }
+
+    /// <summary>
+    /// Parses the wizard-authored, comma-separated "Resources" node config field (e.g.
+    /// <c>"Patient, Observation, Condition"</c>) into a trimmed, non-empty resource-type list. Returns an empty list
+    /// (not a single-element list of whitespace) for a null/blank field, so callers can cleanly fall through to the
+    /// next priority.
+    /// </summary>
+    private static IReadOnlyList<string> ParseCommaSeparatedResourceTypes(string? raw) =>
+        string.IsNullOrWhiteSpace(raw)
+            ? []
+            : raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// Extracts the distinct FHIR resource types a set of granted SMART scopes actually covers, in the standard
+    /// clinical scope shape <c>{context}/{ResourceType}.{permissions}</c> (SMART v1 <c>patient/Observation.rs</c> or
+    /// v2 granular <c>patient/Observation.read</c>; <c>user/</c>/<c>system/</c> contexts too). Non-resource scopes
+    /// (<c>openid</c>, <c>fhirUser</c>, <c>offline_access</c>, <c>launch</c>, <c>launch/patient</c>, ...) are skipped
+    /// — their segment after the slash isn't a capitalized FHIR resource type name, which every real resource-scope
+    /// segment is (<c>Patient</c>, <c>Observation</c>, ...). Order-preserving and de-duplicated so the derived list
+    /// is stable across calls for the same scope set.
+    /// </summary>
+    private static IReadOnlyList<string> DeriveResourceTypesFromScopes(IReadOnlyCollection<string> scopes)
+    {
+        var resourceTypes = new List<string>();
+        foreach (var scope in scopes)
+        {
+            var slashIndex = scope.IndexOf('/');
+            if (slashIndex < 0 || slashIndex == scope.Length - 1)
+            {
+                continue;
+            }
+
+            var afterSlash = scope[(slashIndex + 1)..];
+            var dotIndex = afterSlash.IndexOf('.');
+            var candidate = dotIndex >= 0 ? afterSlash[..dotIndex] : afterSlash;
+
+            if (candidate.Length > 0
+                && char.IsUpper(candidate[0])
+                && !resourceTypes.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+            {
+                resourceTypes.Add(candidate);
+            }
+        }
+
+        return resourceTypes;
     }
 
     /// <summary>

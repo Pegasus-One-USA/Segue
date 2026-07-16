@@ -110,12 +110,21 @@ builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHan
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services
     .AddFHIRBridgeApplication()
+    .AddPatientStandaloneApplicationServices()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
     .AddWorkflowCore()
-    .AddWorkflowInfrastructure()
-    // Scenario A: back the graph engine's stores with SQL (must follow AddWorkflowCore to win the registration).
-    // Scenario B: also wires the launch-graph projection/resolver + feature flag (default OFF).
-    .AddWorkflowSqlPersistence(builder.Configuration);
+    .AddWorkflowInfrastructure();
+
+// Scenario A: back the graph engine's stores with SQL (must follow AddWorkflowCore to win the registration).
+// Scenario B: also wires the launch-graph projection/resolver + feature flag (default OFF). Gated the same way
+// AddFHIRBridgeInfrastructure gates its own EF registrations: no connection string (e.g. the integration-test
+// host) means FHIRBridgeDbContext itself is never registered, so wiring SQL-backed stores here would leave
+// IWorkflowDefinitionStore unresolvable the moment anything actually depends on it. AddWorkflowCore()'s
+// InMemoryWorkflowDefinitionStore stays the registration in that case.
+if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("FHIRBridgeDb")))
+{
+    builder.Services.AddWorkflowSqlPersistence(builder.Configuration);
+}
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>

@@ -151,6 +151,17 @@
                   >{{ w.status === 'Enabled' ? '⏸' : '▶' }}</button>
 
                   <button
+                    class="btn-icon"
+                    type="button"
+                    [class.btn-icon--active]="w.isPubliclyLaunchable"
+                    [disabled]="rowBusyId() === w.workflowId"
+                    [title]="w.isPubliclyLaunchable
+                      ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously. Click to revoke.'
+                      : 'Not publicly launchable. Click to let a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
+                    (click)="onTogglePublicLaunch(w)"
+                  >{{ w.isPubliclyLaunchable ? '🌐' : '🔒' }}</button>
+
+                  <button
                     class="btn-icon btn-icon--danger"
                     type="button"
                     [disabled]="rowBusyId() === w.workflowId"

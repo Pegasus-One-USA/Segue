@@ -258,6 +258,7 @@ export class WorkflowBuilderComponent implements OnInit {
         const verb = isUpdate ? 'Synced' : 'Created';
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
+        this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
         this.workflowBusy.set(false);
         this.resetCanvasAndWorkflowState();
       },
@@ -268,6 +269,29 @@ export class WorkflowBuilderComponent implements OnInit {
         this.workflowBusy.set(false);
       },
     });
+  }
+
+  // Surfaces what actually changed on the shared Epic connection(s) this save touched — its real scopes are
+  // derived server-side from every pipeline's destination resource picks, not just this one, so a save here can
+  // silently change what another pipeline's next sign-in requests. Making that visible beats leaving it invisible.
+  private announceSyncedScopes(syncedScopes: Record<string, string[]> | undefined): void {
+    const entries = Object.entries(syncedScopes ?? {});
+    if (!entries.length) {
+      return;
+    }
+
+    const resourceScopePattern = /^[a-z]+\/[A-Za-z]+\.[a-z]+$/;
+    for (const [, scopes] of entries) {
+      const resourceTypes = scopes
+        .filter(scope => resourceScopePattern.test(scope))
+        .map(scope => scope.split('/')[1].split('.')[0]);
+      if (resourceTypes.length) {
+        this.toast.show(
+          'Epic scopes synced',
+          `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every pipeline currently using it).`,
+        );
+      }
+    }
   }
 
   onLoadWorkflow(): void {

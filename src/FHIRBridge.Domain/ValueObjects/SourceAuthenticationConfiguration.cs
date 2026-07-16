@@ -33,4 +33,8 @@ public sealed class SourceAuthenticationConfiguration
     public SecretReference? ClientSecret { get; private set; }
     public SecretReference? PrivateKey { get; private set; }
     public string? KeyId { get; private set; }
+
+    /// <summary>Returns a copy with only <see cref="Scopes"/> replaced — everything else carries over unchanged.</summary>
+    public SourceAuthenticationConfiguration WithScopes(string[] scopes) => new(
+        AuthenticationType, ClientId, TokenEndpoint, scopes, ClientSecret, PrivateKey, KeyId);
 }

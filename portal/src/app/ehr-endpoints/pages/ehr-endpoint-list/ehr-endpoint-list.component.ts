@@ -43,7 +43,7 @@ export class EhrEndpointListComponent implements OnInit {
 
   readonly endpoints = signal<EhrEndpoint[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'vendor', 'fhirBaseUrl', 'status', 'actions'];
+  readonly displayedCols = ['index', 'name', 'vendor', 'endpointType', 'fhirBaseUrl', 'status', 'actions'];
 
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();

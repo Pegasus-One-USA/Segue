@@ -1,4 +1,5 @@
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Abstractions.Persistence;
 
@@ -10,6 +11,14 @@ namespace FHIRBridge.Application.Abstractions.Persistence;
 public interface IEhrEndpointRepository
 {
     Task<IReadOnlyList<EhrEndpoint>> GetAllAsync(CancellationToken cancellationToken);
+
+    /// <summary>Filtered at the query level (not GetAllAsync + in-memory filter) — the MyChart directory alone is
+    /// already in the hundreds of rows, and callers of this (e.g. the anonymous ehr-epic-endpoints listing) only
+    /// ever want the handful of Epic-sandbox rows. <paramref name="search"/>, when given, is a case-insensitive
+    /// contains-match on Name, applied in the same query (not an in-memory filter after the fact) so it still scales
+    /// once this is pointed at a larger directory.</summary>
+    Task<IReadOnlyList<EhrEndpoint>> GetByEndpointTypeAsync(
+        EhrEndpointType endpointType, string? search, CancellationToken cancellationToken);
 
     Task<EhrEndpoint?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

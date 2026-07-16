@@ -17,6 +17,7 @@ public sealed class EhrEndpointConfiguration : IEntityTypeConfiguration<EhrEndpo
         builder.Property(x => x.FhirBaseUrl).HasMaxLength(500).IsRequired();
         builder.Property(x => x.FormatType).HasMaxLength(20).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.EndpointType).IsRequired();
 
         // Unique per vendor, not globally — different vendors could coincidentally reuse an id scheme. Filtered to
         // non-deleted rows so a re-added endpoint can reuse the same (Vendor, VendorEndpointId) as one a user

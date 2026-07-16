@@ -69,11 +69,18 @@ export class WorkflowBuildAssemblerService {
 
     for (const destNode of graph.nodes.filter(node => this.isDestinationNode(node))) {
       const destFields = this.fieldsFor(destNode.id, nodesById);
-      destinations.push({
-        nodeId: destNode.id,
-        destination: this.buildDestination(destFields, destNode),
-        existingId: destFields['destinationId'] || null,
-      });
+
+      // destinationResolved: the wizard selected an existing connection and left it untouched — its destinationId/
+      // secretKeyVaultName/secretName/target are already final on the node's own config (see
+      // DestinationWizardComponent._save()), so this destination is skipped here entirely. No create, no update —
+      // a connection another workflow also points at can't be mutated by this save.
+      if (destFields['destinationResolved'] !== 'true') {
+        destinations.push({
+          nodeId: destNode.id,
+          destination: this.buildDestination(destFields, destNode),
+          existingId: destFields['destinationId'] || null,
+        });
+      }
 
       const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
       const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
@@ -230,6 +237,7 @@ export class WorkflowBuildAssemblerService {
         secretName,
         target: null,
         inlineSecret: this.buildSqlConnectionString(fields),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, true),
       };
     }
 
@@ -240,7 +248,24 @@ export class WorkflowBuildAssemblerService {
       secretName,
       target: fields['dest_filePattern'] || null,
       inlineSecret: this.buildSftpUri(fields),
+      connectionMetadataJson: this.buildConnectionMetadata(fields, false),
     };
+  }
+
+  /** Non-secret dest_* fields as a flat JSON object — everything above EXCEPT dest_password/dest_sftpPassword,
+   *  which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri), never here. Mirrors
+   *  destination-connection-secret.util.ts's buildConnectionMetadata — duplicated rather than imported for the
+   *  same reason buildSqlConnectionString/buildSftpUri are (see that file's own header comment). */
+  private buildConnectionMetadata(f: Record<string, string>, isSql: boolean): string {
+    const keys = isSql
+      ? ['dest_name', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode']
+      : ['dest_name', 'dest_storageType', 'dest_folder', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
+         'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder'];
+    const metadata: Record<string, string> = {};
+    for (const key of keys) {
+      if (f[key] !== undefined) metadata[key] = f[key];
+    }
+    return JSON.stringify(metadata);
   }
 
   private buildSqlConnectionString(f: Record<string, string>): string {
@@ -280,7 +305,14 @@ export class WorkflowBuildAssemblerService {
     if (resources.length > 1) this.lastUnmappedResources.push(...resources.slice(1));
 
     const primaryRows = rows.filter(row => row.resource === primary);
-    const destinationObject = primaryRows[0]?.target || this.targetForResource(destFields, primary) || primary;
+    const baseDestinationObject = primaryRows[0]?.target || this.targetForResource(destFields, primary) || primary;
+    // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
+    // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
+    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. No explicit ;key=
+    // override: the writer's own default key (SourceResourceId) matches that label's "by source id" semantics.
+    const destinationObject = destFields['dest_writeMode'] === 'upsert'
+      ? `${baseDestinationObject};mode=upsert`
+      : baseDestinationObject;
 
     const fields: MappingFieldRequest[] = primaryRows.map(row => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the

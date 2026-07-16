@@ -239,6 +239,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken, baseUrl);
             var clientId = RequireClientId(sourceConnection);
 
+            var persistedScopes = sourceConnection.Authentication.Scopes;
+            var patientSelectionMethod = sourceConnection.Interactive?.PatientSelectionMethod;
+            var resolvedScopes = ApplyPatientSelection(persistedScopes, patientSelectionMethod);
+            _logger.LogInformation(
+                "[Step 2/6] StartInteractiveFromContextAsync: sourceConnectionId={SourceConnectionId} " +
+                "applicationType={ApplicationType} persistedScopes=[{PersistedScopes}] " +
+                "patientSelectionMethod={PatientSelectionMethod} resolvedScopes=[{ResolvedScopes}] launch=null",
+                sourceConnection.Id, sourceConnection.ApplicationType, string.Join(' ', persistedScopes),
+                patientSelectionMethod, string.Join(' ', resolvedScopes));
+
             var source = new FhirSourceConfiguration(
                 SourceType: MapSourceType(sourceConnection.SourceSystemType),
                 Name: sourceConnection.Name,
@@ -247,9 +257,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 ClientId: clientId,
                 KeyId: null,
                 PrivateKeyPem: null,
-                Scopes: ApplyPatientSelection(
-                    sourceConnection.Authentication.Scopes,
-                    sourceConnection.Interactive?.PatientSelectionMethod),
+                Scopes: resolvedScopes,
                 SourceConnectionId: sourceConnection.Id,
                 AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
@@ -335,6 +343,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         var smartConfiguration = await DiscoverEndpointsAsync(sourceConnection.Id, cancellationToken, baseUrl);
         var clientId = RequireClientId(sourceConnection);
 
+        var persistedScopes = sourceConnection.Authentication.Scopes;
+        var patientSelectionMethod = sourceConnection.Interactive?.PatientSelectionMethod;
+        var resolvedScopes = ApplyPatientSelection(persistedScopes, patientSelectionMethod);
+        _logger.LogInformation(
+            "[Step 2/6] StartStandaloneCoreAsync: sourceConnectionId={SourceConnectionId} " +
+            "applicationType={ApplicationType} persistedScopes=[{PersistedScopes}] " +
+            "patientSelectionMethod={PatientSelectionMethod} resolvedScopes=[{ResolvedScopes}] launch=null",
+            sourceConnection.Id, sourceConnection.ApplicationType, string.Join(' ', persistedScopes),
+            patientSelectionMethod, string.Join(' ', resolvedScopes));
+
         var source = new FhirSourceConfiguration(
             SourceType: MapSourceType(sourceConnection.SourceSystemType),
             Name: sourceConnection.Name,
@@ -344,9 +362,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             ClientId: clientId,
             KeyId: null,
             PrivateKeyPem: null,
-            Scopes: ApplyPatientSelection(
-                sourceConnection.Authentication.Scopes,
-                sourceConnection.Interactive?.PatientSelectionMethod),
+            Scopes: resolvedScopes,
             SourceConnectionId: sourceConnection.Id,
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
@@ -429,10 +445,19 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     {
         // Prefer a registered redirect URI (must match the EHR registration exactly); fall back to the request-derived one.
         var effectiveRedirectUri = sourceConnection.Interactive?.RedirectUris.FirstOrDefault() ?? requestedRedirectUri;
+        _logger.LogInformation(
+            "[Step 3/6] IssueAuthorizationAsync: sourceConnectionId={SourceConnectionId} " +
+            "configuredRedirectUri={ConfiguredRedirectUri} requestedRedirectUri={RequestedRedirectUri} " +
+            "effectiveRedirectUri={EffectiveRedirectUri} launch={Launch}",
+            sourceConnection.Id, sourceConnection.Interactive?.RedirectUris.FirstOrDefault(), requestedRedirectUri,
+            effectiveRedirectUri, launch);
 
         var nonce = CreateNonce();
         var state = _launchTokenProtector.ProtectState(nonce);
         var request = _authorizationFlow.BuildAuthorizationRequest(source, effectiveRedirectUri, state, launch);
+        _logger.LogInformation(
+            "[Step 4/6] BuildAuthorizationRequest produced: sourceConnectionId={SourceConnectionId} authorizationUrl={AuthorizationUrl}",
+            sourceConnection.Id, request.AuthorizationUrl);
 
         await _stateStore.SaveAsync(
             nonce,
@@ -449,7 +474,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 // Carries whichever base URL this authorize request actually used (the connection's own, or a
                 // resolved EhrEndpoint override) through to CompleteAsync — the token exchange there builds its own
                 // FhirSourceConfiguration from scratch and has no other way to learn which URL was used.
-                ResolvedBaseUrl: source.BaseUrl),
+                ResolvedBaseUrl: source.BaseUrl,
+                HasLaunchContext: launch is not null),
             cancellationToken);
 
         return new Uri(request.AuthorizationUrl);
@@ -470,6 +496,12 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var pending = await _stateStore.TakeAsync(nonce, cancellationToken)
             ?? throw new InvalidOperationException("The authorization state is unknown or has already been used.");
+
+        _logger.LogInformation(
+            "[Step 5/6] CompleteAsync: sourceConnectionId={SourceConnectionId} sourceName={SourceName} " +
+            "redirectUri={RedirectUri} routeId={RouteId} workflowId={WorkflowId} hasLaunchContext={HasLaunchContext}",
+            pending.SourceConnectionId, pending.SourceName, pending.RedirectUri, pending.RouteId, pending.WorkflowId,
+            pending.HasLaunchContext);
 
         // Re-load the source to resolve confidential-client credentials for the token exchange. Secrets are resolved
         // here (not carried in the pending state) so they are never persisted in the short-lived authorization store.
@@ -530,6 +562,18 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             cancellationToken);
 
         Guid? workflowRunId = null;
+        var workflowRunFailed = false;
+        // A workflow-bound sign-in with no launch context (Standalone/patient-standalone — no `launch` token was
+        // ever issued, see IssueAuthorizationAsync) has nothing for this convenience run to search with: it fires
+        // before the caller's own page has even reloaded, so it always hits Epic's "requires demographics or _id"
+        // business rule. Firing it anyway costs a real Epic API call and an always-failing WorkflowRun row for zero
+        // benefit — the caller (e.g. Demo_TestApp's LaunchStandaloneProviderComponent) is expected to run its own
+        // criteria-scoped fetch once it reloads. An EHR launch (HasLaunchContext true) keeps firing it as before,
+        // since Epic hands over a real patient context there and the run has a genuine chance of finding data.
+        var skipWorkflowTrigger = pending.WorkflowId is not null && !pending.HasLaunchContext;
+        _logger.LogInformation(
+            "[Step 5/6] CompleteAsync token exchange succeeded for {SourceConnectionId}; skipWorkflowTrigger={SkipWorkflowTrigger}",
+            pending.SourceConnectionId, skipWorkflowTrigger);
         if (pending.RouteId is { } routeId)
         {
             // Deliberately NOT the request token: the callback's caller is the provider's browser, which may
@@ -537,19 +581,28 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             // die with the connection.
             await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None);
         }
-        else if (pending.WorkflowId is { } workflowId)
+        else if (pending.WorkflowId is { } workflowId && !skipWorkflowTrigger)
         {
             // Same reasoning as the route path above — the run must survive the browser disconnecting/redirecting
             // while it's still in flight, so it uses CancellationToken.None rather than the request's token.
-            workflowRunId = await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, CancellationToken.None);
+            var triggerResult = await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, CancellationToken.None);
+            workflowRunId = triggerResult.WorkflowRunId;
+            workflowRunFailed = triggerResult.Failed;
         }
 
-        var postLaunchRedirectUri = workflowRunId is not null
+        // Redirect back to the third-party app whenever a run was attempted (success or failure) and a redirect
+        // URI is configured — only a plain sign-in with no bound workflow (nothing attempted) falls through to
+        // the bare JSON response, since there is nothing for the caller to fetch or be told about either way. A
+        // skipped-on-purpose workflow trigger (see skipWorkflowTrigger above) still redirects: something IS bound,
+        // the caller still needs the round trip back to run its own fetch, we just chose not to attempt the
+        // convenience run ourselves.
+        var postLaunchRedirectUri = workflowRunId is not null || workflowRunFailed || skipWorkflowTrigger
             ? sourceConnection.Interactive?.PostLaunchRedirectUri
             : null;
 
         return new InteractiveAuthorizationResult(
-            pending.SourceConnectionId, pending.SourceName, workflowRunId, postLaunchRedirectUri);
+            pending.SourceConnectionId, pending.SourceName, workflowRunId, postLaunchRedirectUri, workflowRunFailed,
+            WorkflowRunSkipped: skipWorkflowTrigger);
     }
 
     // After a launch completes, run every enabled pipeline route bound to the launched source — the launch establishes
@@ -632,9 +685,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     }
 
     // Workflow launch: run the referenced workflow graph once the token is stored (mirrors TriggerRouteRunAsync;
-    // a run failure is audited but does not fail the sign-in, since the token is already persisted). Returns the
-    // resulting run id (null on failure) so the caller can redirect the browser to it once the run settles.
-    private async Task<Guid?> TriggerWorkflowRunAsync(Guid sourceConnectionId, Guid workflowId, CancellationToken cancellationToken)
+    // a run failure is audited but does not fail the sign-in, since the token is already persisted). Returns
+    // Failed=true (not just a null run id) on failure so the caller can still redirect the browser back to the
+    // third-party app with an error marker, instead of leaving it stranded on this endpoint's bare JSON response.
+    private async Task<WorkflowRunTriggerResult> TriggerWorkflowRunAsync(Guid sourceConnectionId, Guid workflowId, CancellationToken cancellationToken)
     {
         try
         {
@@ -657,7 +711,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 $"Workflow '{workflow.Name}' ({result.WorkflowRun.NodeRuns.Count} node run(s)) triggered by EHR launch for source {sourceConnectionId}.",
                 cancellationToken);
 
-            return result.WorkflowRun.Id;
+            return new WorkflowRunTriggerResult(result.WorkflowRun.Id, Failed: false);
         }
         catch (Exception exception)
         {
@@ -670,9 +724,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             await RecordAuditAsync(sourceConnectionId, "EhrLaunchWorkflowTriggerFailed", "Failed",
                 exception.Message, cancellationToken);
 
-            return null;
+            return new WorkflowRunTriggerResult(WorkflowRunId: null, Failed: true);
         }
     }
+
+    private readonly record struct WorkflowRunTriggerResult(Guid? WorkflowRunId, bool Failed);
 
     // Resolves the source connection a workflow launches against — the (first) source node's referenced sourceConnectionId.
     private async Task<SourceConnection> ResolveWorkflowSourceAsync(Guid workflowId, CancellationToken cancellationToken)

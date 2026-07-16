@@ -99,4 +99,19 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
 
         return Task.FromResult<string?>(null);
     }
+
+    /// <summary>
+    /// Discards any cached token via the same registry dispatch as token acquisition: interactive application-type
+    /// strategies clear their token store entry; all other grants (which mint tokens on demand rather than caching
+    /// an interactive session) have nothing to discard.
+    /// </summary>
+    public Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        if (source.ApplicationType is { } applicationType)
+        {
+            return _applicationStrategies.Resolve(applicationType).DiscardTokenAsync(source, cancellationToken);
+        }
+
+        return Task.CompletedTask;
+    }
 }

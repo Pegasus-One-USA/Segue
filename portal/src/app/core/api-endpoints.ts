@@ -70,8 +70,16 @@ export const SOURCE_CONNECTIONS_ENDPOINTS = {
 
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
 export const DESTINATION_ENDPOINTS = {
-  schemaPreview: `${API_V1_BASE}/destinations/schema-preview`,
-  schema:        (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
+  list:                `${API_V1_BASE}/destinations`,
+  paged:               `${API_V1_BASE}/destinations/paged`,
+  byId:                (id: string) => `${API_V1_BASE}/destinations/${id}`,
+  hasExecutionHistory: (id: string) => `${API_V1_BASE}/destinations/${id}/has-execution-history`,
+  schemaPreview:       `${API_V1_BASE}/destinations/schema-preview`,
+  schema:              (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
+  sftpTest:            `${API_V1_BASE}/destinations/sftp-test`,
+  // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
+  // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
+  usage:               `${API_V1_BASE}/workflows/destination-usage`,
 };
 
 // ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
@@ -128,6 +136,8 @@ export const WORKFLOW_ENDPOINTS = {
   runs:            (id: string) => `${API_V1_BASE}/workflows/${id}/runs`,
   activate:        (id: string) => `${API_V1_BASE}/workflows/${id}/activate`,
   deactivate:      (id: string) => `${API_V1_BASE}/workflows/${id}/deactivate`,
+  enablePublicLaunch:  (id: string) => `${API_V1_BASE}/workflows/${id}/enable-public-launch`,
+  disablePublicLaunch: (id: string) => `${API_V1_BASE}/workflows/${id}/disable-public-launch`,
   copy:            (id: string) => `${API_V1_BASE}/workflows/${id}/copy`,
   launchUrl:       (id: string) => `${API_V1_BASE}/workflows/${id}/launch-url`,
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,

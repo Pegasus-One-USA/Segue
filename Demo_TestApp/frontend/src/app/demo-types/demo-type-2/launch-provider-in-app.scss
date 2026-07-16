@@ -1,0 +1,130 @@
+.fullscreen-shell {
+  min-height: 100vh;
+  background: #fff;
+
+  &__topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  &__title {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-primary-dark);
+  }
+}
+
+.launch-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  background: #ffffff;
+}
+
+.page-header {
+  margin-bottom: 32px;
+
+  h1 {
+    margin: 0;
+    color: #0d47a1;
+    font-weight: 600;
+    font-size: 28px;
+  }
+
+  .subtitle {
+    margin: 4px 0 16px;
+    color: #607d8b;
+  }
+}
+
+.status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-chip {
+  --mdc-chip-container-height: 32px;
+  background-color: #eceff1 !important;
+  font-size: 13px;
+}
+
+.status-chip--connected {
+  background-color: #e8f5e9 !important;
+  color: #2e7d32;
+}
+
+.status-dot {
+  color: #2e7d32;
+  font-size: 12px;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.patient-section {
+  min-height: 120px;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.patient-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.patient-card {
+  background-color: #fafafa;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.08);
+
+  mat-icon[mat-card-avatar] {
+    color: #0d47a1;
+    background: transparent;
+  }
+}
+
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eceff1;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.field-label {
+  color: #607d8b;
+  font-size: 13px;
+}
+
+.field-value {
+  color: #263238;
+  font-weight: 500;
+  text-align: right;
+}
+
+// Groups one repeated entry (one address, one emergency contact, …) when a section has more than one row.
+.address-block {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid #eceff1;
+
+  &:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+}

@@ -1,4 +1,5 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -20,13 +21,16 @@ public sealed class ConfigurationsController : ControllerBase
 {
     private readonly IConfigurationService _configurationService;
     private readonly IAuthorizationService _authorizationService;
+    private readonly IEpicSourceConnectionScopeSyncService _scopeSyncService;
 
     public ConfigurationsController(
         IConfigurationService configurationService,
-        IAuthorizationService authorizationService)
+        IAuthorizationService authorizationService,
+        IEpicSourceConnectionScopeSyncService scopeSyncService)
     {
         _configurationService = configurationService;
         _authorizationService = authorizationService;
+        _scopeSyncService = scopeSyncService;
     }
 
     // ── Source connections ────────────────────────────────────────────────────
@@ -85,6 +89,38 @@ public sealed class ConfigurationsController : ControllerBase
             cancellationToken);
 
         return Ok(sourceConnection);
+    }
+
+    /// <summary>
+    /// Recomputes one source connection's OAuth scopes from what its pipelines actually consume right now (the
+    /// union of every destination's selected resource types, across every workflow referencing it) and persists the
+    /// result. A no-op (returns null scopes) for non-interactive (Backend Services) connections. Use this to force a
+    /// resync without waiting for the next workflow save that references the connection.
+    /// </summary>
+    [HttpPost("source-connections/{sourceConnectionId:guid}/sync-scopes")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SyncSourceConnectionScopes(
+        Guid sourceConnectionId,
+        CancellationToken cancellationToken)
+    {
+        var scopes = await _scopeSyncService.SyncAsync(sourceConnectionId, cancellationToken);
+        return Ok(new { sourceConnectionId, scopes });
+    }
+
+    /// <summary>
+    /// One-time (or as-needed) backfill: resyncs every interactive source connection's scopes to match actual
+    /// pipeline usage. Intended for correcting connections that drifted under the old behavior (each source node's
+    /// own resource selection overwriting the shared connection on save, independent of what other pipelines
+    /// sharing that connection actually need) before this sync-on-save behavior existed. Safe to re-run.
+    /// </summary>
+    [HttpPost("source-connections/scopes/sync-all")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> SyncAllSourceConnectionScopes(CancellationToken cancellationToken)
+    {
+        var changedConnectionIds = await _scopeSyncService.SyncAllAsync(cancellationToken);
+        return Ok(new { changedConnectionIds });
     }
 
     // ── Webhooks ──────────────────────────────────────────────────────────────
@@ -159,6 +195,19 @@ public sealed class ConfigurationsController : ControllerBase
             cancellationToken);
 
         return Ok(destinationConfiguration);
+    }
+
+    [HttpDelete("destinations/{destinationId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeleteDestinationConfiguration(
+        Guid destinationId,
+        CancellationToken cancellationToken)
+    {
+        await _configurationService.DeleteDestinationConfigurationAsync(destinationId, cancellationToken);
+        return NoContent();
     }
 
     // ── Mapping profiles ──────────────────────────────────────────────────────

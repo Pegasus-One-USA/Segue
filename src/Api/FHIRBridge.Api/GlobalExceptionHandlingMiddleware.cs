@@ -33,6 +33,7 @@ public sealed class GlobalExceptionHandlingMiddleware
         var statusCode = exception switch
         {
             NotFoundException => HttpStatusCode.NotFound,
+            BusinessRuleException => HttpStatusCode.Conflict,
             InvalidOperationException => HttpStatusCode.BadRequest,
             ArgumentException => HttpStatusCode.BadRequest,
             _ => HttpStatusCode.InternalServerError

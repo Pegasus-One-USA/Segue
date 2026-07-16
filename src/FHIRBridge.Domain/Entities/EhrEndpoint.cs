@@ -16,7 +16,14 @@ public sealed class EhrEndpoint : AuditableChildEntity<Guid>
     {
     }
 
-    public EhrEndpoint(SourceSystemType vendor, string vendorEndpointId, string name, string fhirBaseUrl, string formatType, string status)
+    public EhrEndpoint(
+        SourceSystemType vendor,
+        string vendorEndpointId,
+        string name,
+        string fhirBaseUrl,
+        string formatType,
+        string status,
+        EhrEndpointType endpointType = EhrEndpointType.MyChart)
     {
         Id = Guid.NewGuid();
         Vendor = vendor;
@@ -25,9 +32,17 @@ public sealed class EhrEndpoint : AuditableChildEntity<Guid>
         FhirBaseUrl = fhirBaseUrl;
         FormatType = formatType;
         Status = status;
+        EndpointType = endpointType;
     }
 
-    public void Update(SourceSystemType vendor, string vendorEndpointId, string name, string fhirBaseUrl, string formatType, string status)
+    public void Update(
+        SourceSystemType vendor,
+        string vendorEndpointId,
+        string name,
+        string fhirBaseUrl,
+        string formatType,
+        string status,
+        EhrEndpointType endpointType = EhrEndpointType.MyChart)
     {
         Vendor = vendor;
         VendorEndpointId = vendorEndpointId;
@@ -35,6 +50,7 @@ public sealed class EhrEndpoint : AuditableChildEntity<Guid>
         FhirBaseUrl = fhirBaseUrl;
         FormatType = formatType;
         Status = status;
+        EndpointType = endpointType;
     }
 
     /// <summary>Which EHR vendor's directory this row came from (the vendor axis — same enum SourceConnection uses).</summary>
@@ -46,4 +62,7 @@ public sealed class EhrEndpoint : AuditableChildEntity<Guid>
     public string FhirBaseUrl { get; private set; } = default!;
     public string FormatType { get; private set; } = default!;
     public string Status { get; private set; } = default!;
+
+    /// <summary>Vendor sandbox vs a specific customer's production instance — see <see cref="EhrEndpointType"/>.</summary>
+    public EhrEndpointType EndpointType { get; private set; }
 }
