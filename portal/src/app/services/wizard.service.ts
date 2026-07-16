@@ -19,7 +19,7 @@ export type WizardMode = 'canvas' | 'entity';
 /** Backend ApplicationType enum member name ↔ the wizard's EpicAudience string. Null/undefined maps to
  *  'provider-ehr-launch' — ApplicationType is nullable server-side for legacy connections created before this
  *  field existed, where the grant is inferred from vendor/credentials rather than an explicit audience. */
-const APPLICATION_TYPE_TO_AUDIENCE: Record<string, string> = {
+export const APPLICATION_TYPE_TO_AUDIENCE: Record<string, string> = {
   Backend:    'backend-system',
   EhrLaunch:  'provider-ehr-launch',
   Standalone: 'provider-standalone',
@@ -36,7 +36,7 @@ const AUDIENCE_TO_APPLICATION_TYPE: Record<string, string> = {
  *  credentials stored) must map to 'public', not 'secret' — otherwise a connection with no authentication
  *  configured at all renders as if a Client Secret were required/expected. ApiKey has no direct equivalent in
  *  this form; 'secret' is the closest fit (some stored credential value), not a precise mapping. */
-const AUTHENTICATION_TYPE_TO_AUTH_METHOD: Record<string, 'public' | 'secret' | 'jwt'> = {
+export const AUTHENTICATION_TYPE_TO_AUTH_METHOD: Record<string, 'public' | 'secret' | 'jwt'> = {
   None:                  'public',
   SmartBackendServices:  'jwt',
   OAuthClientCredentials: 'secret',
