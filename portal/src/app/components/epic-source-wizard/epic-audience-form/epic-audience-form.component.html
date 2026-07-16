@@ -47,6 +47,52 @@
       </div>
     }
 
+    <!-- ═══════════ SECTION 0b: New Source / Existing Source ══════════════════ -->
+    <!-- Canvas-mode create only — editing an existing node already has its own data, and entity mode's Create
+         flow has no "clone from existing" need yet. -->
+    @if (showSourcePicker()) {
+      <div class="eaf-section">
+        <div class="eaf-grid">
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-sourceMode">Source</label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-sourceMode" class="eaf-select"
+                      [value]="sourceMode()"
+                      (change)="onSourceModeChange($any($event.target).value)">
+                <option value="new">New Source</option>
+                <option value="existing">Existing Source</option>
+              </select>
+            </div>
+            <p class="eaf-hint">Start from scratch, or copy the configuration of a source connection you've already set up.</p>
+          </div>
+
+          @if (sourceMode() === 'existing') {
+            <div class="eaf-field">
+              <label class="eaf-label" for="eaf-existingConnection">Existing Epic Connection</label>
+              <div class="eaf-select-wrap">
+                <select id="eaf-existingConnection" class="eaf-select"
+                        [disabled]="loadingExisting()"
+                        [value]="selectedExistingId() ?? ''"
+                        (change)="onExistingConnectionSelected($any($event.target).value)">
+                  <option value="" disabled>
+                    {{ loadingExisting() ? 'Loading…' : '— Select a connection —' }}
+                  </option>
+                  @for (conn of existingConnections(); track conn.id) {
+                    <option [value]="conn.id">{{ existingConnectionLabel(conn) }}</option>
+                  }
+                </select>
+              </div>
+              @if (!loadingExisting() && existingConnections().length === 0) {
+                <p class="eaf-hint">No existing Epic source connections found.</p>
+              } @else {
+                <p class="eaf-hint">Selecting a connection copies all of its fields below — they're editable afterward and independent of the original.</p>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
     <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
     <div class="eaf-section">
       <div class="eaf-section-head">
