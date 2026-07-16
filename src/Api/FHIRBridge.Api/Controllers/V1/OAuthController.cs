@@ -1,4 +1,6 @@
 using FHIRBridge.Application.Abstractions.Sources;
+using FHIRBridge.Application.Services;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,10 +19,20 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class OAuthController : ControllerBase
 {
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
+    private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
+    private readonly IEhrEndpointService _ehrEndpointService;
+    private readonly ILogger<OAuthController> _logger;
 
-    public OAuthController(IInteractiveSourceAuthorizationService authorizationService)
+    public OAuthController(
+        IInteractiveSourceAuthorizationService authorizationService,
+        IWorkflowDefinitionStore workflowDefinitionStore,
+        IEhrEndpointService ehrEndpointService,
+        ILogger<OAuthController> logger)
     {
         _authorizationService = authorizationService;
+        _workflowDefinitionStore = workflowDefinitionStore;
+        _ehrEndpointService = ehrEndpointService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -98,6 +110,54 @@ public sealed class OAuthController : ControllerBase
     }
 
     /// <summary>
+    /// Anonymous counterpart to <see cref="GetWorkflowLaunchUrl"/>, for a third-party app whose own end user picks a
+    /// hospital before launching (e.g. Demo_TestApp's Provider_Standalone hospital picker, backed by the
+    /// ehr-epic-endpoints listing). Only mints a context for a workflow the admin has explicitly opted in via
+    /// <c>POST /workflows/{workflowId}/enable-public-launch</c> — <see cref="WorkflowDefinition.IsPubliclyLaunchable"/>
+    /// is the only gate standing between "any caller who knows this workflowId" and a working Epic-login link for
+    /// it, since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must
+    /// resolve to an EndpointType.Epic row — the same restricted set the public picker listing exposes, never a
+    /// specific customer's live MyChart production instance.
+    /// </summary>
+    [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
+    [HttpGet("workflows/{workflowId:guid}/public-standalone-url")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPublicWorkflowStandaloneUrl(
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation(
+            "[Step 1/6] public-standalone-url requested: workflowId={WorkflowId} ehrEndpointId={EhrEndpointId}",
+            workflowId, ehrEndpointId);
+
+        var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
+        if (workflow is null || !workflow.IsPubliclyLaunchable)
+        {
+            _logger.LogWarning(
+                "[Step 1/6] public-standalone-url rejected: workflowId={WorkflowId} found={Found} isPubliclyLaunchable={IsPubliclyLaunchable}",
+                workflowId, workflow is not null, workflow?.IsPubliclyLaunchable);
+            return NotFound();
+        }
+
+        if (!await _ehrEndpointService.IsEpicEndpointAsync(ehrEndpointId, cancellationToken))
+        {
+            _logger.LogWarning(
+                "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known Epic endpoint",
+                ehrEndpointId);
+            return NotFound();
+        }
+
+        var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId);
+        var response = BuildLaunchResponse(applicationType, context);
+        _logger.LogInformation(
+            "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",
+            workflowId, applicationType, response);
+        return Ok(response);
+    }
+
+    /// <summary>
     /// The SMART EHR-launch entry point registered with the EHR for a specific pipeline route. The route is
     /// carried in the encrypted <paramref name="context"/> segment — no raw GUIDs in the URL. The EHR appends the
     /// issuer (<c>iss</c>) + opaque <c>launch</c> token; on callback the resolved route is run for the launched
@@ -156,8 +216,14 @@ public sealed class OAuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> StandaloneLaunch(string context, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("[Step 2/6] /oauth/standalone/{{context}} hit — starting StartStandaloneFromContextAsync");
+
         var authorizationUrl = await _authorizationService.StartStandaloneFromContextAsync(
             context, BuildCallbackUri(), cancellationToken);
+
+        _logger.LogInformation(
+            "[Step 2/6] /oauth/standalone/{{context}} redirecting browser to EHR authorize URL: {AuthorizationUrl}",
+            authorizationUrl);
 
         return Redirect(authorizationUrl.ToString());
     }
@@ -175,8 +241,14 @@ public sealed class OAuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AuthorizeFromContext(string context, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("[Step 2/6] /oauth/authorize/{{context}} hit — starting StartInteractiveFromContextAsync");
+
         var authorizationUrl = await _authorizationService.StartInteractiveFromContextAsync(
             context, BuildCallbackUri(), cancellationToken);
+
+        _logger.LogInformation(
+            "[Step 2/6] /oauth/authorize/{{context}} redirecting browser to EHR authorize URL: {AuthorizationUrl}",
+            authorizationUrl);
 
         return Redirect(authorizationUrl.ToString());
     }
@@ -197,25 +269,45 @@ public sealed class OAuthController : ControllerBase
         [FromQuery(Name = "error_description")] string? errorDescription,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation(
+            "[Step 5/6] /oauth/callback hit: hasCode={HasCode} hasState={HasState} error={Error} errorDescription={ErrorDescription}",
+            !string.IsNullOrWhiteSpace(code), !string.IsNullOrWhiteSpace(state), error, errorDescription);
+
         if (!string.IsNullOrWhiteSpace(error))
         {
+            _logger.LogWarning("[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription}", error, errorDescription);
             return BadRequest(new { error, error_description = errorDescription });
         }
 
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
         {
+            _logger.LogWarning("[Step 5/6] /oauth/callback missing code or state — cannot complete the exchange.");
             return BadRequest(new { error = "invalid_request", error_description = "Missing authorization code or state." });
         }
 
         var result = await _authorizationService.CompleteAsync(state, code, cancellationToken);
+        _logger.LogInformation(
+            "[Step 6/6] /oauth/callback completed: sourceConnectionId={SourceConnectionId} source={Source} " +
+            "workflowRunId={WorkflowRunId} workflowRunFailed={WorkflowRunFailed} workflowRunSkipped={WorkflowRunSkipped} " +
+            "postLaunchRedirectUri={PostLaunchRedirectUri}",
+            result.SourceConnectionId, result.SourceName, result.WorkflowRunId, result.WorkflowRunFailed,
+            result.WorkflowRunSkipped, result.PostLaunchRedirectUri);
 
         // A workflow-triggered launch with a configured PostLaunchRedirectUri hands the browser back to the
         // third-party app that opened the EHR launch, rather than leaving it on this bare JSON response — the run
-        // id lets that app fetch its result (see GetWorkflowRunLaunchResult on WorkflowEndpoints).
-        if (result.WorkflowRunId is { } workflowRunId && !string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
+        // id lets that app fetch its result (see GetWorkflowRunLaunchResult on WorkflowEndpoints). A run that was
+        // attempted but threw still redirects back (with an error marker instead of a run id) so the app is never
+        // stranded here with no way to tell the user anything went wrong. A run that was deliberately never
+        // attempted (WorkflowRunSkipped — a Standalone/patient-standalone sign-in with no launch context; see
+        // InteractiveSourceAuthorizationService.CompleteAsync) redirects with a neutral "signed in" marker instead:
+        // the token exchange itself succeeded, there is just nothing to report as failed.
+        if (!string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
         {
-            var returnUrl = QueryHelpers.AddQueryString(
-                result.PostLaunchRedirectUri, "workflowRunId", workflowRunId.ToString());
+            var returnUrl = result.WorkflowRunId is { } workflowRunId
+                ? QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "workflowRunId", workflowRunId.ToString())
+                : result.WorkflowRunSkipped
+                    ? QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "signedIn", "1")
+                    : QueryHelpers.AddQueryString(result.PostLaunchRedirectUri, "launchError", "workflow_failed");
             return Redirect(returnUrl);
         }
 

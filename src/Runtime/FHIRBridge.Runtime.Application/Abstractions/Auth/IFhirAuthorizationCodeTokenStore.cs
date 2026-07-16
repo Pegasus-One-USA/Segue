@@ -12,4 +12,9 @@ public interface IFhirAuthorizationCodeTokenStore
     Task<StoredOAuthToken?> GetAsync(string key, CancellationToken cancellationToken);
 
     Task SaveAsync(string key, StoredOAuthToken token, CancellationToken cancellationToken);
+
+    /// <summary>Discards a stored token so it can never be read/refreshed again — the next access-token request for
+    /// this key will see no stored token and require a fresh interactive sign-in. Does not attempt to revoke the
+    /// token at the authorization server itself.</summary>
+    Task RemoveAsync(string key, CancellationToken cancellationToken);
 }

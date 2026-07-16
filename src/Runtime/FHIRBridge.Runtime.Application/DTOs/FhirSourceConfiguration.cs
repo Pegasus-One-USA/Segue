@@ -46,4 +46,11 @@ public sealed record FhirSourceConfiguration(
     // against the same interactive (Standalone/EhrLaunch/Patient) source connection. Null means "whichever session
     // logged in most recently" (the pre-existing, single-slot behavior) — every caller that doesn't set this
     // behaves exactly as before.
-    string? TargetPatientId = null);
+    string? TargetPatientId = null,
+    // Request-time raw Patient search criteria, threaded from WorkflowRunRequest through WorkflowExecutionContext —
+    // lets a third-party app's own search UI filter which patients a Patient-resource search matches (e.g.
+    // "active=true", "identifier=MRN12345", "family=Smith&given=John", "birthdate=1990-01-01", "_count=100"),
+    // instead of relying on the EHR's own interactive patient picker. Passed through to the Patient resource type's
+    // search as-is (FhirSourceConnectorBase.ApplyPatientScopeAsync); every other configured resource type is
+    // unaffected. Null/blank (the default) preserves existing behavior for every caller that doesn't set it.
+    string? PatientSearchCriteria = null);

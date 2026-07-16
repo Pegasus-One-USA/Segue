@@ -1,4 +1,5 @@
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
 
@@ -14,8 +15,9 @@ public sealed class EpicInteractiveTokenProvider : SmartAuthorizationCodeTokenPr
         HttpClient httpClient,
         IFhirAuthorizationCodeTokenStore tokenStore,
         IFhirAccessTokenAuditSink? auditSink = null,
-        IBackendServicesJwtFactory? jwtFactory = null)
-        : base(httpClient, tokenStore, auditSink, jwtFactory)
+        IBackendServicesJwtFactory? jwtFactory = null,
+        ILogger<SmartAuthorizationCodeTokenProvider>? logger = null)
+        : base(httpClient, tokenStore, auditSink, jwtFactory, logger)
     {
     }
 

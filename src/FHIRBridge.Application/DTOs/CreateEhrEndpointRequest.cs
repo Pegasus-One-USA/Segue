@@ -8,4 +8,5 @@ public sealed record CreateEhrEndpointRequest(
     string Name,
     string FhirBaseUrl,
     string FormatType,
-    string Status);
+    string Status,
+    EhrEndpointType EndpointType = EhrEndpointType.MyChart);

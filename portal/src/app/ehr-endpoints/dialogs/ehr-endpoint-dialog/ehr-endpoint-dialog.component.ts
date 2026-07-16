@@ -10,7 +10,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
-import { EhrEndpoint, EhrEndpointRequest, EhrVendor } from '../../models/ehr-endpoint.model';
+import { EhrEndpoint, EhrEndpointRequest, EhrEndpointType, EhrVendor } from '../../models/ehr-endpoint.model';
 
 export interface EhrEndpointDialogData {
   endpoint?: EhrEndpoint;
@@ -28,6 +28,11 @@ export const EHR_VENDOR_OPTIONS: { value: EhrVendor; label: string }[] = [
   { value: 'Sample',             label: 'Sample (sandbox)' },
   { value: 'NewEHR',             label: 'New EHR' },
   { value: 'NewEHRTwo',          label: 'New EHR (2)' },
+];
+
+export const EHR_ENDPOINT_TYPE_OPTIONS: { value: EhrEndpointType; label: string }[] = [
+  { value: 'MyChart', label: 'MyChart (customer production instance)' },
+  { value: 'Epic',    label: 'Epic (vendor sandbox)' },
 ];
 
 @Component({
@@ -55,6 +60,7 @@ export class EhrEndpointDialogComponent {
 
   readonly isEdit       = !!this.data?.endpoint;
   readonly vendorOptions = EHR_VENDOR_OPTIONS;
+  readonly endpointTypeOptions = EHR_ENDPOINT_TYPE_OPTIONS;
   readonly submitted    = signal(false);
   readonly saving       = signal(false);
   readonly errorMessage = signal<string | null>(null);
@@ -83,6 +89,10 @@ export class EhrEndpointDialogComponent {
     status: [
       this.data?.endpoint?.status ?? 'active',
       [Validators.required, Validators.maxLength(50)],
+    ],
+    endpointType: [
+      this.data?.endpoint?.endpointType ?? ('MyChart' as EhrEndpointType),
+      [Validators.required],
     ],
   });
 

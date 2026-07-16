@@ -91,6 +91,14 @@
             </td>
           </ng-container>
 
+          <!-- Endpoint Type Column -->
+          <ng-container matColumnDef="endpointType">
+            <th mat-header-cell *matHeaderCellDef>Endpoint Type</th>
+            <td mat-cell *matCellDef="let e">
+              <span class="vendor-badge">{{ e.endpointType }}</span>
+            </td>
+          </ng-container>
+
           <!-- FHIR Base URL Column -->
           <ng-container matColumnDef="fhirBaseUrl">
             <th mat-header-cell *matHeaderCellDef>FHIR Base URL</th>

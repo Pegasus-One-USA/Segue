@@ -22,12 +22,12 @@ public sealed class ScopeGeneratorServiceTests
     }
 
     [Fact]
-    public void Standalone_v1_uses_read_suffix_and_launch_patient()
+    public void Standalone_v1_uses_read_suffix_and_no_launch_scope()
     {
         var result = _sut.Generate(ApplicationType.Standalone, ["Patient"], "v1", false, null);
 
-        result.Scopes.Should().Contain("launch/patient").And.Contain("user/Patient.read");
-        result.Scopes.Should().NotContain("launch");
+        result.Scopes.Should().Contain("user/Patient.read");
+        result.Scopes.Should().NotContain("launch").And.NotContain("launch/patient");
     }
 
     [Fact]

@@ -20,6 +20,7 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
         builder.Property(x => x.Name).HasMaxLength(400).IsRequired();
         builder.Property(x => x.Version).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.IsPubliclyLaunchable).IsRequired().HasDefaultValue(false);
 
         // Computed convenience alias over IsEnabled — not a stored column.
         builder.Ignore(x => x.IsActive);
