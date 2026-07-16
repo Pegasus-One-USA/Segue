@@ -57,6 +57,37 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     public Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<DestinationConfiguration>>(_destinations.Values.OrderBy(x => x.Name).ToList());
 
+    public Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(
+        DestinationFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken ct)
+    {
+        var query = _destinations.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            query = query.Where(x => x.Name.Contains(filter.Search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (filter.DestinationType.HasValue)
+        {
+            query = query.Where(x => x.DestinationType == filter.DestinationType.Value);
+        }
+
+        if (filter.IsEnabled.HasValue)
+        {
+            query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        var ordered = query.OrderBy(x => x.Name).ToList();
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+        var items = ordered.Skip(skip).Take(take).ToList();
+
+        return Task.FromResult(new PagedResult<DestinationConfiguration>(items, ordered.Count, page, take));
+    }
+
     public Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct)
     {
         _destinations.TryGetValue(id, out var e);
@@ -74,6 +105,17 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         _destinations[e.Id] = e;
         return Task.CompletedTask;
     }
+
+    public Task RemoveDestinationAsync(DestinationConfiguration e, CancellationToken ct)
+    {
+        _destinations.TryRemove(e.Id, out _);
+        return Task.CompletedTask;
+    }
+
+    // No in-memory store tracks pipeline run executions (they're only ever persisted against a real DbContext),
+    // so there is never any recorded history to block a delete/edit against in this mode.
+    public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken ct) =>
+        Task.FromResult(false);
 
     // ── Mapping profiles ──────────────────────────────────────────────────────
     public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) =>

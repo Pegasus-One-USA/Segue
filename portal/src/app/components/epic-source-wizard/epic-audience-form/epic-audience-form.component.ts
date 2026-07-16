@@ -348,6 +348,13 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly existingConnections = signal<SourceConnectionModel[]>([]);
   protected readonly loadingExisting = signal(false);
   protected readonly selectedExistingId = signal<string | null>(null);
+  /** Every saved source connection's name (all vendors, not just Epic — getAll() returns everything, this
+   *  component just filters existingConnections down to Epic for the dropdown). Cloning from "Existing Source"
+   *  always creates a brand-new connection (see populateFormFromSourceConnection's own comment: canvas mode has
+   *  no entity id to attach to), so save() must dedupe the cloned name here — otherwise Name is copied verbatim
+   *  and the create call collides with "A source connection named '<name>' already exists." on the very save
+   *  that's supposed to clone it. */
+  private _allConnectionNames = new Set<string>();
   /** Only offered when creating a brand-new canvas node — editing an existing node already has its own data, and
    *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
   protected readonly showSourcePicker = computed(() => this.wiz.wizardMode() === 'canvas' && !this.isEditing);
@@ -1004,6 +1011,7 @@ export class EpicAudienceFormComponent implements OnInit {
       this.loadingExisting.set(true);
       this.sourceConnectionSvc.getAll().subscribe({
         next: connections => {
+          this._allConnectionNames = new Set(connections.map(c => c.name));
           this.existingConnections.set(connections.filter(c => c.sourceSystemType === 'Epic'));
           this.loadingExisting.set(false);
         },
@@ -1013,6 +1021,23 @@ export class EpicAudienceFormComponent implements OnInit {
         },
       });
     }
+  }
+
+  /**
+   * Resolves a unique name for the cloned connection. When the user typed their own distinct name, it's used
+   * as-is (forceSuffix false) — only a genuine collision gets a -1/-2/... suffix appended. When the name was left
+   * as whatever was cloned in (forceSuffix true), a suffix is always appended, since the original connection
+   * already holds that exact name.
+   */
+  private _resolveUniqueSourceName(desiredName: string, forceSuffix: boolean): string {
+    if (!forceSuffix && !this._allConnectionNames.has(desiredName)) return desiredName;
+    let suffix = 1;
+    let candidate = `${desiredName}-${suffix}`;
+    while (this._allConnectionNames.has(candidate)) {
+      suffix++;
+      candidate = `${desiredName}-${suffix}`;
+    }
+    return candidate;
   }
 
   /** Switching back to "New Source" after a clone must undo it — otherwise the form silently keeps whatever
@@ -1256,9 +1281,20 @@ export class EpicAudienceFormComponent implements OnInit {
     const emitRecurrence = v.runMode === 'full'
       || (this.retrievalMethod() === 'bulk-export' && v.exportScope !== '' && v.exportScope !== 'patient');
 
+    // Cloning from "Existing Source" always creates a brand-new connection (see populateFormFromSourceConnection's
+    // comment). If the user left Name exactly as cloned, it collides with the original unless suffixed; if they
+    // typed their own distinct name, honor it as-is (only deduped on an actual collision) rather than silently
+    // suffixing a name they deliberately chose.
+    let resolvedName = v.appName ?? 'Epic';
+    if (this.sourceMode() === 'existing') {
+      const original = this.existingConnections().find(c => c.id === this.selectedExistingId());
+      const nameWasEdited = !!original && resolvedName !== original.name;
+      resolvedName = this._resolveUniqueSourceName(resolvedName, !nameWasEdited);
+    }
+
     this.wiz.setAppKey(appKeyMap[aud]);
     this.wiz.setEnv(envKey);
-    this.wiz.stepName.set(v.appName ?? 'Epic');
+    this.wiz.stepName.set(resolvedName);
     this.wiz.baseUrl.set(v.epicBaseUrl ?? '');
     this.wiz.token.set(v.tokenEndpoint ?? '');
     this.wiz.authorize.set(v.authzEndpoint ?? '');
@@ -1272,7 +1308,7 @@ export class EpicAudienceFormComponent implements OnInit {
     this.wiz.resources.set(cfg.showResourcePicker ? (v.resources ?? []) : this.activeRetrievalResourceTypes());
 
     this.wiz.save({
-      stepName:    v.appName ?? 'Epic',
+      stepName:    resolvedName,
       baseUrl:     v.epicBaseUrl ?? '',
       token:       v.tokenEndpoint ?? '',
       authorize:   v.authzEndpoint ?? '',
