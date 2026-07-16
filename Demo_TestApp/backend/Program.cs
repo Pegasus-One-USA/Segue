@@ -18,6 +18,18 @@ builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => poli
     .AllowAnyHeader()
     .AllowAnyMethod()
     .AllowCredentials()));
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo
+    {
+        Title = "HealthApp Demo Backend",
+        Version = "v1",
+        Description = "Third-party demo client backend — calls a configured Workflow URL (FHIRBridge or a stand-in) " +
+            "and ingests the returned FHIR resources into its own database. Session auth uses an HttpOnly cookie " +
+            "(hb_session), not a bearer token — exercise the /api/login endpoint first via 'Try it out'."
+    });
+});
 
 var app = builder.Build();
 
@@ -28,6 +40,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("Frontend");
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 const string SessionCookieName = "hb_session";
 var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
