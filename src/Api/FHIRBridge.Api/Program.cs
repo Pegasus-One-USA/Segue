@@ -25,9 +25,9 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// No-ops unless actually launched by that OS's service manager — lets the same published
-// output run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
-builder.Host.UseWindowsService().UseSystemd();
+// No-op unless the process is actually started by the Windows Service Control Manager (e.g. `dotnet run`
+// and console execution are unaffected) — lets the same published output run standalone or as a service.
+builder.Host.UseWindowsService(options => options.ServiceName = "FHIRBridge.Api");
 
 builder.Host.UseSerilog((context, loggerConfig) =>
     loggerConfig.ConfigureFhirBridge(context.Configuration, "FHIRBridge.Api"));
@@ -284,7 +284,12 @@ app.Use(async (context, next) =>
     headers["X-Permitted-Cross-Domain-Policies"] = "none";
     if (!app.Environment.IsDevelopment() && !(swaggerEnabled && context.Request.Path.StartsWithSegments("/swagger")))
     {
-        headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+        // /api responses carry no renderable content, so lock them down completely. Everything else is the
+        // portal's static build (see wwwroot, served below) — it needs 'self' to load its own JS/CSS/fonts,
+        // where 'none' would blank-page the SPA.
+        headers["Content-Security-Policy"] = context.Request.Path.StartsWithSegments("/api")
+            ? "default-src 'none'; frame-ancestors 'none'"
+            : "default-src 'self'; frame-ancestors 'none'; base-uri 'self'";
     }
 
     await next();
@@ -305,6 +310,13 @@ if (swaggerEnabled)
 
 BootstrapDatabase(app);
 SyncDiscoveredPermissions(app);
+
+// Serves the Angular portal's production build when it's been copied into wwwroot (see deploy/windows) —
+// a no-op in local dev, where wwwroot doesn't exist and the portal runs separately via `ng serve`.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+app.MapHealthChecks("/health");
 
 app.UseCors("Portal");
 app.UseAuthentication();
@@ -350,6 +362,11 @@ if (app.Configuration.GetValue("RateLimiting:Enabled", true))
 }
 app.MapControllers();
 app.MapWorkflowEndpoints();
+
+// Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
+// and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html
+// isn't present (local dev, portal running separately).
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

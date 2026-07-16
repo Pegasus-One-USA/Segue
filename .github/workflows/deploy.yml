@@ -1,0 +1,91 @@
+name: Deploy
+
+# Manual production deploy: click "Run workflow" on this workflow in the Actions tab (or
+# `gh workflow run deploy.yml`). The build job runs on a GitHub-hosted runner and never touches
+# the VM; the deploy job runs on a self-hosted runner installed on the VM itself (see
+# deploy/windows/README.md), so no inbound network access to the VM is required.
+#
+# Recommended hardening (one-time, in repo Settings > Environments): add required reviewers to the
+# "production" environment so the deploy job pauses for an approval click before it runs.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build-publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Restore
+        run: dotnet restore FHIRBridge.sln
+
+      - name: Publish Api (win-x64, framework-dependent)
+        run: >
+          dotnet publish src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/Api
+
+      - name: Publish Worker (win-x64, framework-dependent)
+        run: >
+          dotnet publish src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/Worker
+
+      - name: Build portal
+        working-directory: portal
+        run: |
+          npm ci
+          npm run build -- --configuration production
+
+      - name: Merge portal build into Api wwwroot
+        run: |
+          mkdir -p publish/Api/wwwroot
+          cp -r portal/dist/fhirbridge-ui/browser/. publish/Api/wwwroot/
+
+      - name: Package deploy artifact
+        run: |
+          cd publish
+          zip -r ../fhirbridge-deploy.zip Api Worker
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fhirbridge-deploy
+          path: fhirbridge-deploy.zip
+          retention-days: 14
+
+  deploy:
+    name: deploy-to-vm
+    needs: build
+    runs-on: [self-hosted, Windows, fhirbridge-vm]
+    environment: production
+    steps:
+      # Needed for deploy/windows/Deploy-FHIRBridge.ps1 — not for the app binaries, those come from the artifact.
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: fhirbridge-deploy
+
+      - name: Expand artifact
+        shell: pwsh
+        run: Expand-Archive -Path fhirbridge-deploy.zip -DestinationPath extracted -Force
+
+      - name: Run deploy script
+        shell: pwsh
+        run: |
+          $artifactPath = (Resolve-Path extracted).Path
+          ./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath $artifactPath
