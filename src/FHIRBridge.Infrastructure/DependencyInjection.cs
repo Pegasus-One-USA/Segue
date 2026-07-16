@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Aggregation;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Audit;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Normalization;
@@ -14,6 +15,7 @@ using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Infrastructure.Audit;
+using FHIRBridge.Infrastructure.Caching;
 using FHIRBridge.Infrastructure.Destinations;
 using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Infrastructure.Health;
@@ -78,6 +80,10 @@ public static class DependencyInjection
         // Registered unconditionally — it has no DB dependency of its own.
         services.AddSingleton<IPhiFieldEncryptor, AesGcmPhiFieldEncryptor>();
 
+        // Registered unconditionally (before the in-memory/DB branch below) — it resolves
+        // IAllowedCorsOriginRepository lazily through a scope, so it works against either repository.
+        services.AddSingleton<IAllowedCorsOriginsCache, InProcessAllowedCorsOriginsCache>();
+
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -91,6 +97,7 @@ public static class DependencyInjection
             services.AddSingleton<IExecutionResourceHistoryRecorder, InMemoryExecutionResourceHistoryRecorder>();
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
+            services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
@@ -130,6 +137,7 @@ public static class DependencyInjection
             // is registering one more IEhrEndpointDirectorySeeder here; Program.cs runs every registered one.
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
             services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
+            services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();

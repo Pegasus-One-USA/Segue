@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
+using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Observability.Logging;
 using Microsoft.AspNetCore.DataProtection;
@@ -18,6 +19,7 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
@@ -154,23 +156,15 @@ builder.Services.AddAuthorization(options =>
             });
     }
 });
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("Portal", policy =>
-    {
-        var origins = builder.Configuration
-            .GetSection("Portal:AllowedOrigins")
-            .Get<string[]>() ?? ["http://localhost:4200", "https://localhost:4200"];
-
-        // Narrowed from AllowAnyHeader/AllowAnyMethod (HIPAA/SOC2 CC6.1): a credentialed
-        // CORS policy should expose only the verbs and headers the portal actually uses.
-        policy
-            .WithOrigins(origins)
-            .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-            .WithHeaders("Authorization", "Content-Type", "Accept", "X-Correlation-Id")
-            .AllowCredentials();
-    });
-});
+// The "Portal" policy is built per-request by DynamicPortalCorsPolicyProvider from
+// IAllowedCorsOriginsCache (Portal:AllowedOrigins config floor ∪ AllowedCorsOrigins DB rows), not a
+// fixed WithOrigins(...) list — so a SuperAdmin adding/removing an origin via the admin screen takes
+// effect on the next request, no restart. AddCors still registers CorsService; the provider below
+// replaces the default ICorsPolicyProvider it would otherwise register.
+builder.Services.AddCors();
+builder.Services.AddSingleton<ICorsPolicyProvider, DynamicPortalCorsPolicyProvider>();
+builder.Services.AddOptions<AllowedCorsOriginsOptions>()
+    .Configure(options => options.RequireHttps = !builder.Environment.IsDevelopment());
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {

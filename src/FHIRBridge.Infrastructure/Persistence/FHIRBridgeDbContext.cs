@@ -36,6 +36,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<ProvisionedSecret> ProvisionedSecrets => Set<ProvisionedSecret>();
     public DbSet<EhrEndpoint> EhrEndpoints => Set<EhrEndpoint>();
+    public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
