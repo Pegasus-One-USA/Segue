@@ -49,13 +49,9 @@
           </div>
         </section>
 
-        @if (errorMessage()) {
-          <p class="error-banner">{{ errorMessage() }}</p>
-        }
-
         <button type="button" class="link-btn" (click)="openRecords()">View All Records →</button>
 
-        <button type="button" class="connect-btn" (click)="openConnectFlow()" [disabled]="processing()">
+        <button type="button" class="connect-btn" (click)="openConnectFlow()">
           Connect Get Data
         </button>
       </main>
@@ -95,50 +91,6 @@
       </main>
     }
 
-    <!-- Hospital selector popup -->
-    @if (hospitalModalOpen()) {
-      <div class="sheet-backdrop" (click)="closeHospitalModal()">
-        <div class="sheet" (click)="$event.stopPropagation()">
-          <div class="sheet__handle"></div>
-          <div class="sheet__title">Select a Hospital</div>
-          <input
-            type="search"
-            class="hospital-search"
-            placeholder="Search hospitals..."
-            [value]="hospitalSearch()"
-            (input)="onHospitalSearch($any($event.target).value)"
-          />
-          <ul class="hospital-list">
-            @for (hospital of filteredHospitals(); track hospital.id) {
-              <li
-                class="hospital-row"
-                [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
-                (click)="selectHospital(hospital.id)"
-              >
-                <span class="hospital-row__name">{{ hospital.name }}</span>
-              </li>
-            } @empty {
-              <li class="hospital-empty">No hospitals matched your search.</li>
-            }
-          </ul>
-          <div class="sheet__actions">
-            <button type="button" class="btn-secondary" (click)="closeHospitalModal()">Cancel</button>
-            <button type="button" class="btn-primary" [disabled]="!selectedHospital()" (click)="process()">Process</button>
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- Processing overlay -->
-    @if (processing()) {
-      <div class="sheet-backdrop">
-        <div class="processing-card">
-          <div class="spinner"></div>
-          <div class="processing-card__step">{{ processingStep() }}</div>
-        </div>
-      </div>
-    }
-
     <!-- Admin workflow settings popup -->
     @if (settingsOpen()) {
       <div class="sheet-backdrop" (click)="closeSettings()">
@@ -148,6 +100,18 @@
           <label class="field">
             Workflow URL
             <input type="text" [ngModel]="workflowUrlDraft()" (ngModelChange)="workflowUrlDraft.set($event)" placeholder="https://..." />
+          </label>
+          <label class="field">
+            Patient Standalone Workflow Id (list)
+            <input type="text" [ngModel]="patientWorkflowIdDraft()" (ngModelChange)="patientWorkflowIdDraft.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            Patient Standalone Detail Workflow Id
+            <input type="text" [ngModel]="patientDetailWorkflowIdDraft()" (ngModelChange)="patientDetailWorkflowIdDraft.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            Patient Standalone Base URL
+            <input type="text" [ngModel]="patientBaseUrlDraft()" (ngModelChange)="patientBaseUrlDraft.set($event)" placeholder="http://localhost:5000" />
           </label>
           @if (settingsError()) {
             <p class="error-banner">{{ settingsError() }}</p>

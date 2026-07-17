@@ -4,14 +4,15 @@ import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { PATIENT_STANDALONE_PATH } from '../../core/routes';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
-const FHIRBRIDGE_BASE_URL = environment.fhirbridgeBase;
 
-interface Hospital {
-  id: string;
-  name: string;
-}
+// The real Patient Standalone launch flow (hospital picker + SMART OAuth redirect) lives on its own path/component
+// (see LaunchStandalonePatientComponent) — this dashboard mockup just hands off to it via a full page navigation.
+// DemoType=1 is Patient_Standalone's seeded row id (see HealthAppDbContext's DemoTypeEntity.HasData) — it's what
+// makes app.ts's loadDemoTypes() lock onto and select the Patient_Standalone Login Type once this lands there.
+const PATIENT_STANDALONE_LAUNCH_URL = `${PATIENT_STANDALONE_PATH}?DemoType=1`;
 
 interface PatientCard {
   resourceId: string;
@@ -55,27 +56,17 @@ export class PatientStandaloneComponent implements OnInit {
     steps: 6842,
   };
 
-  // Admin settings (workflow URL, persisted server-side)
+  // Admin settings (persisted server-side — see WorkflowSettingsEntity). PatientWorkflowId/PatientDetailWorkflowId/
+  // PatientBaseUrl are Patient Standalone's own FHIRBridge connection points, formerly a gitignored per-developer
+  // local file (standalone-launch.config.ts) — now editable here like WorkflowUrl already was. The two workflow
+  // ids are independent: the list fetch uses PatientWorkflowId, the per-patient detail fetch (clicking a row in
+  // the fetched list) uses PatientDetailWorkflowId, each with its own FHIRBridge public-launch opt-in.
   protected readonly settingsOpen = signal(false);
   protected readonly workflowUrlDraft = signal('');
+  protected readonly patientWorkflowIdDraft = signal('');
+  protected readonly patientDetailWorkflowIdDraft = signal('');
+  protected readonly patientBaseUrlDraft = signal('');
   protected readonly settingsError = signal('');
-
-  // Hospital picker (loaded from FHIRBridge's public EHR endpoint directory)
-  protected readonly hospitals = signal<Hospital[]>([]);
-  protected readonly hospitalModalOpen = signal(false);
-  protected readonly hospitalSearch = signal('');
-  protected readonly selectedHospitalId = signal<string | null>(null);
-  protected readonly selectedHospital = computed(() =>
-    this.hospitals().find((h) => h.id === this.selectedHospitalId()) ?? null
-  );
-  protected readonly filteredHospitals = computed(() => {
-    const query = this.hospitalSearch().trim().toLowerCase();
-    return this.hospitals().filter((h) => h.name.toLowerCase().includes(query));
-  });
-
-  protected readonly processing = signal(false);
-  protected readonly processingStep = signal('');
-  protected readonly errorMessage = signal('');
 
   // Records screen (card carousel over every ingested patient)
   protected readonly screen = signal<'home' | 'records'>('home');
@@ -126,9 +117,20 @@ export class PatientStandaloneComponent implements OnInit {
 
     try {
       const current = await firstValueFrom(
-        this.http.get<{ workflowUrl: string }>(`${BACKEND_BASE_URL}/api/settings`, { withCredentials: true })
+        this.http.get<{
+          workflowUrl: string;
+          patientWorkflowId: string;
+          patientDetailWorkflowId: string;
+          patientBaseUrl: string;
+        }>(
+          `${BACKEND_BASE_URL}/api/settings`,
+          { withCredentials: true }
+        )
       );
       this.workflowUrlDraft.set(current.workflowUrl);
+      this.patientWorkflowIdDraft.set(current.patientWorkflowId);
+      this.patientDetailWorkflowIdDraft.set(current.patientDetailWorkflowId);
+      this.patientBaseUrlDraft.set(current.patientBaseUrl);
       this.settingsOpen.set(true);
     } catch {
       this.settingsError.set('Could not load settings.');
@@ -144,7 +146,12 @@ export class PatientStandaloneComponent implements OnInit {
       await firstValueFrom(
         this.http.post(
           `${BACKEND_BASE_URL}/api/settings`,
-          { workflowUrl: this.workflowUrlDraft() },
+          {
+            workflowUrl: this.workflowUrlDraft(),
+            patientWorkflowId: this.patientWorkflowIdDraft(),
+            patientDetailWorkflowId: this.patientDetailWorkflowIdDraft(),
+            patientBaseUrl: this.patientBaseUrlDraft(),
+          },
           { withCredentials: true }
         )
       );
@@ -154,61 +161,8 @@ export class PatientStandaloneComponent implements OnInit {
     }
   }
 
-  async openConnectFlow(): Promise<void> {
-    this.errorMessage.set('');
-    this.selectedHospitalId.set(null);
-    this.hospitalSearch.set('');
-
-    try {
-      const hospitals = await firstValueFrom(
-        this.http.get<Hospital[]>(`${FHIRBRIDGE_BASE_URL}/api/v1/ehr-endpoints/public`)
-      );
-      this.hospitals.set(hospitals);
-      this.hospitalModalOpen.set(true);
-    } catch {
-      this.errorMessage.set('Could not load the hospital list.');
-    }
-  }
-
-  onHospitalSearch(value: string): void {
-    this.hospitalSearch.set(value);
-  }
-
-  selectHospital(id: string): void {
-    this.selectedHospitalId.set(id);
-  }
-
-  closeHospitalModal(): void {
-    this.hospitalModalOpen.set(false);
-  }
-
-  async process(): Promise<void> {
-    const hospital = this.selectedHospital();
-    if (!hospital) {
-      return;
-    }
-
-    this.hospitalModalOpen.set(false);
-    this.processing.set(true);
-    this.errorMessage.set('');
-    this.processingStep.set(`Opening workflow for ${hospital.name}...`);
-
-    try {
-      const settings = await firstValueFrom(
-        this.http.get<{ workflowUrl: string }>(`${BACKEND_BASE_URL}/api/workflow-url`, { withCredentials: true })
-      );
-
-      if (!settings.workflowUrl) {
-        this.errorMessage.set('No workflow URL is configured. Ask an admin to set one.');
-        return;
-      }
-
-      window.open(settings.workflowUrl, '_blank', 'noopener,noreferrer');
-    } catch {
-      this.errorMessage.set('Could not load the workflow URL.');
-    } finally {
-      this.processing.set(false);
-    }
+  openConnectFlow(): void {
+    window.location.href = PATIENT_STANDALONE_LAUNCH_URL;
   }
 
   async openRecords(): Promise<void> {

@@ -46,6 +46,11 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
+    // EnsureCreated() only creates the schema when the database doesn't exist yet — it does NOT add columns to an
+    // already-existing HealthAppDb. Adding a field to any entity here (e.g. WorkflowSettingsEntity) requires every
+    // dev/tester with a pre-existing local database to either drop it or manually ALTER TABLE the new column(s) in;
+    // otherwise the first request touching that entity throws SqlException: Invalid column name '...'. There are no
+    // EF migrations for this project (see HealthAppDbContext) — this app is not meant to model real schema evolution.
     var db = scope.ServiceProvider.GetRequiredService<HealthAppDbContext>();
     db.Database.EnsureCreated();
 }
@@ -152,21 +157,34 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         return Results.StatusCode(StatusCodes.Status403Forbidden);
     }
 
-    var settings = await db.WorkflowSettings.FindAsync(1);
-    return Results.Ok(new { workflowUrl = settings?.WorkflowUrl ?? string.Empty });
+    var settings = await GetWorkflowSettingsAsync(db);
+    return Results.Ok(new
+    {
+        workflowUrl = settings.WorkflowUrl,
+        patientWorkflowId = settings.PatientWorkflowId,
+        patientDetailWorkflowId = settings.PatientDetailWorkflowId,
+        patientBaseUrl = settings.PatientBaseUrl
+    });
 });
 
-// Read-only, any authenticated role — lets the Patient's "Process" button redirect the browser to the
-// admin-configured workflow URL without granting Patient access to the full (Admin-only) settings endpoint.
-app.MapGet("/api/workflow-url", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+// Read-only, any authenticated role — lets PatientStandaloneLaunchService resolve its FHIRBridge workflow ids +
+// base URL from the admin-configured settings (formerly a gitignored per-developer local file) without granting
+// Patient access to the full Admin settings endpoint. Two distinct workflow ids come back: one for the patient
+// list fetch, one for the per-patient detail fetch — each is its own independent FHIRBridge public-launch opt-in.
+app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
 {
     if (!TryGetSession(http, sessions, out _, out _))
     {
         return Results.Unauthorized();
     }
 
-    var settings = await db.WorkflowSettings.FindAsync(1);
-    return Results.Ok(new { workflowUrl = settings?.WorkflowUrl ?? string.Empty });
+    var settings = await GetWorkflowSettingsAsync(db);
+    return Results.Ok(new
+    {
+        workflowId = settings.PatientWorkflowId,
+        detailWorkflowId = settings.PatientDetailWorkflowId,
+        baseUrl = settings.PatientBaseUrl
+    });
 });
 
 app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -188,10 +206,22 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         db.WorkflowSettings.Add(settings);
     }
 
-    settings.WorkflowUrl = request.WorkflowUrl.Trim();
+    // .Trim() on a possibly-null field would NullReferenceException if a caller posts a body missing one of these
+    // (e.g. an old cached frontend bundle still posting the pre-PatientWorkflowId/PatientBaseUrl shape) — System.Text.Json
+    // deserializes a missing/null JSON property as null regardless of the record's non-nullable C# type.
+    settings.WorkflowUrl = request.WorkflowUrl?.Trim() ?? string.Empty;
+    settings.PatientWorkflowId = request.PatientWorkflowId?.Trim() ?? string.Empty;
+    settings.PatientDetailWorkflowId = request.PatientDetailWorkflowId?.Trim() ?? string.Empty;
+    settings.PatientBaseUrl = request.PatientBaseUrl?.Trim() ?? string.Empty;
     await db.SaveChangesAsync();
 
-    return Results.Ok(new { workflowUrl = settings.WorkflowUrl });
+    return Results.Ok(new
+    {
+        workflowUrl = settings.WorkflowUrl,
+        patientWorkflowId = settings.PatientWorkflowId,
+        patientDetailWorkflowId = settings.PatientDetailWorkflowId,
+        patientBaseUrl = settings.PatientBaseUrl
+    });
 });
 
 // Calls the admin-configured workflow URL, expects a { "Resources": [{ "ResourceType", "ResourceId",
@@ -368,6 +398,13 @@ app.MapFallbackToFile("index.html");
 
 app.Run();
 
+// Shared by every settings-reading endpoint (/api/settings, /api/patient-standalone-settings) so each one only
+// has to know its own response projection, not repeat the FindAsync(1)-and-default-if-missing lookup. Returns a
+// detached, never-null default row rather than modifying the seed data — callers that need to persist changes
+// (POST /api/settings) still do their own tracked FindAsync/Add.
+static async Task<WorkflowSettingsEntity> GetWorkflowSettingsAsync(HealthAppDbContext db) =>
+    await db.WorkflowSettings.FindAsync(1) ?? new WorkflowSettingsEntity { Id = 1 };
+
 // Uniform fallback for any field a record doesn't have — a row written directly by a FHIRBridge SQL
 // destination can leave most flattened columns (and even ResourceId/Payload) unset.
 const string NotAvailable = "N/A";
@@ -426,7 +463,7 @@ static bool TryGetSession(HttpContext http, SessionStore sessions, out int userI
 }
 
 record LoginRequest(string Email, string Password);
-record SaveSettingsRequest(string WorkflowUrl);
+record SaveSettingsRequest(string WorkflowUrl, string PatientWorkflowId, string PatientDetailWorkflowId, string PatientBaseUrl);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.

@@ -32,25 +32,6 @@ public sealed class EhrEndpointsController : ControllerBase
         return Ok(endpoints);
     }
 
-    /// <summary>
-    /// Unauthenticated, lean directory listing (id + name only, active endpoints only) for public-facing pickers —
-    /// e.g. a patient-facing demo app's "choose your hospital" screen — that have no FHIRBridge admin session.
-    /// </summary>
-    [HttpGet("public")]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(IReadOnlyList<PublicEhrEndpointDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ListPublic(CancellationToken cancellationToken)
-    {
-        // GetAllAsync already returns rows ordered by Name, so no re-sort is needed here.
-        var endpoints = await _service.GetAllAsync(cancellationToken);
-        var active = endpoints
-            .Where(e => string.Equals(e.Status, "active", StringComparison.OrdinalIgnoreCase))
-            .Select(e => new PublicEhrEndpointDto(e.Id, e.Name))
-            .ToArray();
-
-        return Ok(active);
-    }
-
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(EhrEndpointDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -45,7 +45,7 @@
     [loginTypeLabel]="selectedDemoType()"
     (logout)="logout()"
   ></app-launch-standalone-provider>
-} @else if (selectedDemoType() === 'Patient_Standalone') {
+} @else if (selectedDemoType() === 'Patient_Standalone' && isOnPatientStandaloneLaunchPath) {
   <app-launch-standalone-patient
     [loginTypeLabel]="selectedDemoType()"
     (logout)="logout()"
