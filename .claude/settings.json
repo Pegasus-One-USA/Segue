@@ -32,7 +32,10 @@
       "Bash(echo \"API: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html 2>/dev/null || echo down\\)\")",
       "Bash(echo \"Portal: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200/ 2>/dev/null || echo down\\)\")",
       "PowerShell($conn = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { \"5000 still held by $\\($conn.OwningProcess -join ','\\)\" } else { \"5000 free\" })",
-      "Bash(echo \"API: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html\\)\")"
+      "Bash(echo \"API: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(node scripts/lint-ratchet.mjs)",
+      "Bash(node scripts/check-tokens.mjs)"
     ]
   }
 }

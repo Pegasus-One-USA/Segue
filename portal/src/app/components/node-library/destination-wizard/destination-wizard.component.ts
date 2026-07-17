@@ -122,6 +122,11 @@ export class DestinationWizardComponent implements OnInit {
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
   private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
+  // Fields derived from a real FHIR JSON payload the user pasted via the canvas's "Load JSON payload"
+  // affordance — takes priority over both the backend catalog and the built-in fallback for that
+  // resource, since it mirrors data the user actually has rather than a generic field list.
+  private readonly payloadFieldsByResource = signal<Record<string, ResourceFieldDef[]>>({});
+
   readonly destType   = input.required<'sql' | 'csv'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
@@ -280,6 +285,12 @@ export class DestinationWizardComponent implements OnInit {
     this.sqlTables.update(tables => tables.map(t =>
       t.fullName === e.tableName ? { ...t, columns: t.columns.filter(c => c.name !== e.column) } : t
     ));
+  }
+
+  /** A real FHIR JSON payload was pasted and parsed via the canvas's "Load JSON payload" modal —
+   *  store its fields so the source tree for this resource mirrors the payload's actual shape. */
+  onSourcePayloadLoaded(e: { resource: string; fields: ResourceFieldDef[] }): void {
+    this.payloadFieldsByResource.update(m => ({ ...m, [e.resource]: e.fields }));
   }
 
   // ── computed helpers ──────────────────────────────────────────────────────
@@ -549,8 +560,9 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── business-field selection ───────────────────────────────────────────────
   availableFields(r: string): ResourceFieldDef[] {
-    // Prefer the array-aware backend catalog; fall back to the built-in defs until it loads (or if offline).
-    return this.catalogByResource()[r] ?? this.defFor(r).fields;
+    // Prefer a pasted real payload for this resource; then the array-aware backend catalog; fall back
+    // to the built-in defs until the catalog loads (or if offline).
+    return this.payloadFieldsByResource()[r] ?? this.catalogByResource()[r] ?? this.defFor(r).fields;
   }
 
   // Stable references for the field-mapping-canvas's function inputs — declared once so the child
@@ -622,6 +634,9 @@ export class DestinationWizardComponent implements OnInit {
     if (f['dest_extraTables']) {
       try { this.extraTablesByGroup.set(JSON.parse(f['dest_extraTables'])); } catch { /* ignore malformed */ }
     }
+    if (f['dest_sourcePayloadFields']) {
+      try { this.payloadFieldsByResource.set(JSON.parse(f['dest_sourcePayloadFields'])); } catch { /* ignore malformed */ }
+    }
     if (f['dest_mappings_v2']) {
       try {
         this.mappingRows.set(JSON.parse(f['dest_mappings_v2']) as MappingRow[]);
@@ -681,6 +696,7 @@ export class DestinationWizardComponent implements OnInit {
     config['dest_mappingCount'] = String(this.mappingRows().length);
     config['dest_targets']      = JSON.stringify(this.targetByResource());
     config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
+    config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
     config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource()));
     config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
 

@@ -13,6 +13,8 @@ import { FieldMappingListComponent } from './field-mapping-list.component';
 import { FieldMappingJoinPopoverComponent } from './field-mapping-join-popover.component';
 import { FieldMappingPreviewDrawerComponent } from './field-mapping-preview-drawer.component';
 import { FieldMappingAddColumnModalComponent, FmAddColumnSubmit } from './field-mapping-add-column-modal.component';
+import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
+import { parseSourcePayloadJson } from './field-mapping-payload.util';
 import { ZoomDockComponent } from '../../../canvas/zoom-dock/zoom-dock.component';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationSchemaService, DestinationColumn, DestinationProbeRequest } from '../../../../services/destination-schema.service';
@@ -45,6 +47,7 @@ export interface FmTargetCardSpec {
     FieldMappingJoinPopoverComponent,
     FieldMappingPreviewDrawerComponent,
     FieldMappingAddColumnModalComponent,
+    FieldMappingLoadPayloadModalComponent,
     ZoomDockComponent,
   ],
   providers: [FieldMappingAnchorService],
@@ -87,6 +90,8 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   readonly tableCreated = output<string>();
   /** A column was really dropped (DROP COLUMN succeeded) — the parent removes it from its own sqlTables(). */
   readonly columnDropped = output<{ tableName: string; column: string }>();
+  /** A JSON payload was successfully parsed — the parent stores these fields as the resource's source tree. */
+  readonly sourcePayloadLoaded = output<{ resource: string; fields: ResourceFieldDef[] }>();
 
   destTypeLabel(): string { return this.destType() === 'sql' ? 'SQL Server' : 'CSV File'; }
 
@@ -473,6 +478,42 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
         this.addColumnError.set(err?.error?.error ?? err?.message ?? 'Failed to add column.');
       },
     });
+  }
+
+  // ── load source payload (paste real FHIR JSON, rebuild the source tree from its actual shape) ──
+  readonly loadPayloadOpen = signal(false);
+  readonly loadPayloadError = signal<string | null>(null);
+
+  openLoadPayloadModal(): void {
+    this.loadPayloadOpen.set(true);
+    this.loadPayloadError.set(null);
+  }
+
+  closeLoadPayloadModal(): void {
+    this.loadPayloadOpen.set(false);
+    this.loadPayloadError.set(null);
+  }
+
+  submitLoadPayload(raw: string): void {
+    const resource = this.resources()[0];
+    if (!resource) return;
+
+    const result = parseSourcePayloadJson(resource, raw);
+    if (!result.ok) {
+      this.loadPayloadError.set(result.error);
+      return;
+    }
+
+    this.sourcePayloadLoaded.emit({ resource, fields: result.fields });
+    this.loadPayloadOpen.set(false);
+    this.loadPayloadError.set(null);
+    const count = `${result.fields.length} field${result.fields.length === 1 ? '' : 's'}`;
+    this.toast.success(
+      'Payload loaded',
+      result.declaredResourceType
+        ? `${count} found (pasted JSON declares resourceType "${result.declaredResourceType}").`
+        : `${count} found in the pasted ${resource} JSON.`,
+    );
   }
 
   // ── rank color per resource ─────────────────────────────────────────────
