@@ -1,0 +1,26 @@
+.github/workflows/deploy.yml
+  s_d6653b6b7d4145::t_bcd81baf5505dd 8-12,41,47-52,65,67-68,73
+deploy/windows/README.md
+  s_d6653b6b7d4145::t_566f569a5ad7d5 6-17,24-33,55-74,76-77,81-83,86-129,131-132,134-136,140,142-187,189,191,194-197
+deploy/windows/Deploy-FHIRBridge.ps1
+  s_d6653b6b7d4145::t_b059fc20874dee 3,7-16,19,22-26,28-31,37,40,43-44,100-105,107,109-111,113-119,121-131,134,136-137,145-160,164-178
+  s_d6653b6b7d4145::t_f1ffee7621a3b2 179
+src/Api/FHIRBridge.Api/Program.cs
+  s_d6653b6b7d4145::t_7b587a270f3429 28-30,287-289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "9b2f4d6a5fc7731a8c19a78a3eb735e8433c5e66",
+  "prompts": {},
+  "sessions": {
+    "s_d6653b6b7d4145": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f1f01c0-0b78-48bd-8c60-7a2a868b28f5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

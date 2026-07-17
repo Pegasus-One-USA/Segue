@@ -1,0 +1,101 @@
+portal/src/app/allowed-origins/dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component.scss
+  s_046f20fec1eaf7::t_410765de7d7f45 1-170
+src/FHIRBridge.Domain/Entities/AllowedCorsOrigin.cs
+  s_046f20fec1eaf7::t_2d3e5a40e89ab2 1-28
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.html
+  s_046f20fec1eaf7::t_73077bad03b262 1-98
+src/Api/FHIRBridge.Api/Program.cs
+  s_046f20fec1eaf7::t_6695afb5349fb1 4
+  s_046f20fec1eaf7::t_e6fd7e45d026cf 22,159-167
+src/FHIRBridge.Application/DTOs/CreateAllowedCorsOriginRequest.cs
+  s_046f20fec1eaf7::t_1fdf51b54bd447 1-3
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.scss
+  s_046f20fec1eaf7::t_a5fa63fa8770a1 1-98
+portal/src/app/app.routes.ts
+  s_046f20fec1eaf7::t_221cf17b60be92 4
+  s_046f20fec1eaf7::t_429c8556698eee 99-109
+portal/src/app/allowed-origins/services/api-allowed-cors-origin.service.ts
+  s_046f20fec1eaf7::t_e58b07d4369d1e 1-30
+portal/src/app/allowed-origins/dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component.ts
+  s_046f20fec1eaf7::t_133364520a9e31 1-4,6-76
+  s_046f20fec1eaf7::t_a8d81f6c9c8a2d 5
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_046f20fec1eaf7::t_094531f6cedd68 4
+  s_046f20fec1eaf7::t_021002f8f1267b 18,83-86,100,140
+src/FHIRBridge.Application/DTOs/AllowedCorsOriginDto.cs
+  s_046f20fec1eaf7::t_99efd9f91f3520 1-8
+src/FHIRBridge.Infrastructure/Persistence/Configurations/AllowedCorsOriginConfiguration.cs
+  s_046f20fec1eaf7::t_d66fbe7be03329 1-21
+src/Api/FHIRBridge.Api/Controllers/V1/AllowedCorsOriginsController.cs
+  s_046f20fec1eaf7::t_160e6797125b4e 1-53
+src/FHIRBridge.Application/Abstractions/Persistence/AllowedCorsOriginsOptions.cs
+  s_046f20fec1eaf7::t_a4409105824e93 1-11
+src/Api/FHIRBridge.Api/Cors/DynamicPortalCorsPolicyProvider.cs
+  s_046f20fec1eaf7::t_01dddc5e4dcabd 1-40
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.ts
+  s_046f20fec1eaf7::t_fe102735e68372 1-101
+portal/src/app/auth/guards/super-admin.guard.ts
+  s_046f20fec1eaf7::t_c2668e1e4a6179 1-15
+src/FHIRBridge.Infrastructure/Persistence/EfAllowedCorsOriginRepository.cs
+  s_046f20fec1eaf7::t_2c41b86d61346c 1-37
+src/FHIRBridge.Application/Services/IAllowedCorsOriginsService.cs
+  s_046f20fec1eaf7::t_65771043cbac50 1-12
+portal/src/app/allowed-origins/dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component.html
+  s_046f20fec1eaf7::t_fbba3f2dcfa9e1 1-84
+tests/FHIRBridge.UnitTests/SystemSettings/AllowedCorsOriginsServiceTests.cs
+  s_046f20fec1eaf7::t_a0f2b604a3c289 1-125
+src/FHIRBridge.Application/Mappings/AllowedCorsOriginMapper.cs
+  s_046f20fec1eaf7::t_64216eb3a0b913 1-15
+portal/src/app/allowed-origins/models/allowed-cors-origin.model.ts
+  s_046f20fec1eaf7::t_f5a18c14aa89b3 1-13
+src/FHIRBridge.Application/Abstractions/Persistence/IAllowedCorsOriginRepository.cs
+  s_046f20fec1eaf7::t_ccdd705f9c9736 1-16
+src/FHIRBridge.Infrastructure/Caching/InProcessAllowedCorsOriginsCache.cs
+  s_046f20fec1eaf7::t_287819b8237944 1-51
+src/FHIRBridge.Infrastructure/Persistence/InMemoryAllowedCorsOriginRepository.cs
+  s_046f20fec1eaf7::t_505088c9af1dfb 1-36
+tests/FHIRBridge.Api.IntegrationTests/Tests/AllowedCorsOriginsTests.cs
+  s_046f20fec1eaf7::t_bd59dfe1f771a3 1-150
+src/FHIRBridge.Application/Services/AllowedCorsOriginsService.cs
+  s_046f20fec1eaf7::t_c1ebbbe82f7acd 1-125
+portal/src/app/allowed-origins/services/i-allowed-cors-origin.service.ts
+  s_046f20fec1eaf7::t_06a5578e99b61a 1-8
+src/FHIRBridge.Application/Abstractions/Caching/IAllowedCorsOriginsCache.cs
+  s_046f20fec1eaf7::t_fbe05d3cfb8a4d 1-14
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_2b3e33386ac39d::t_6fdc405eec3717 25-75
+portal/src/app/app.config.ts
+  s_046f20fec1eaf7::t_2c464d4e46581d 24-25,53
+portal/src/app/core/api-endpoints.ts
+  s_046f20fec1eaf7::t_819e01240b6915 94-100
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_046f20fec1eaf7::t_96c39f8df1d64b 14-16,36,61
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_046f20fec1eaf7::t_e150dd846e9bcc 23
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_046f20fec1eaf7::t_bbe06576b1e3d7 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "b8847a01cf38c9b0b52e7ce2696880b929114b85",
+  "prompts": {},
+  "sessions": {
+    "s_046f20fec1eaf7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ee20a784-78f8-4a28-a4d2-63b23d3fc48d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
