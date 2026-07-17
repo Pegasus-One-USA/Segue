@@ -8,9 +8,15 @@ using FHIRBridge.Runtime.Infrastructure.Workflows;
 using FHIRBridge.Worker;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Serilog;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// No-ops unless actually launched by that OS's service manager — lets the same published output
+// run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
+builder.Services.AddWindowsService(options => options.ServiceName = "FHIRBridge.Worker");
+builder.Services.AddSystemd();
 
 // HostApplicationBuilder has no .Host.UseSerilog() (that's WebApplicationBuilder-only, via Serilog.AspNetCore) — build
 // the shared logger directly and register it as the logging provider instead.

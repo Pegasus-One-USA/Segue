@@ -6,8 +6,10 @@ import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-sta
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
 import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
 import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
+import { environment } from '../environments/environment';
+import { PATIENT_STANDALONE_PATH } from './core/routes';
 
-const BACKEND_BASE_URL = 'http://localhost:5500';
+const BACKEND_BASE_URL = environment.healthAppBase;
 const DEMO_TYPE_STORAGE_KEY = 'hb_demo_type';
 
 // Embedded EHR launches round-trip this tab through FHIRBridge + Epic and back to this same origin via a full
@@ -33,10 +35,12 @@ const PROVIDER_STANDALONE_NAME = 'Provider_InApp';
 const STANDALONE_PROVIDER_PATH = '/launchinstandaloneprovider';
 const STANDALONE_PROVIDER_NAME = 'Provider_Standalone';
 
-// Patient_Standalone gets its own dedicated path too, same reasoning as the two above — every Login Type
-// lands on its own URL after login rather than sharing whatever path the login screen itself was served from.
-const PATIENT_STANDALONE_PATH = '/launchpatientstandalone';
-const PATIENT_STANDALONE_NAME = 'Patient_Standalone';
+// Patient_Standalone login does NOT redirect to PATIENT_STANDALONE_PATH the way the two Login Types above do — it
+// lands on the demo-type-1 dashboard mockup like any other Login Type, and only reaches this path (and therefore
+// LaunchStandalonePatientComponent's real hospital-picker/OAuth flow) via that dashboard's own "Connect Get Data"
+// button doing a full-page navigation to PATIENT_STANDALONE_PATH + '?DemoType=1' (see
+// PatientStandaloneComponent.openConnectFlow). isOnPatientStandaloneLaunchPath (below) is what lets app.html tell
+// the two situations apart once selectedDemoType() is 'Patient_Standalone' either way.
 
 interface DemoType {
   id: number;
@@ -73,6 +77,13 @@ export class App implements OnInit {
   // Set when a `?DemoType=<id>` query param on the login URL matches a real DemoType row — hides the
   // dropdown and shows the resolved name instead, so a link can pre-select the Login Type for the user.
   protected readonly lockedDemoTypeName = signal<string | null>(null);
+
+  // Evaluated once at boot: this app never uses a real <router-outlet> (navigation is always a full page load via
+  // window.location.href), so the path can't change out from under a live component instance — a plain field is
+  // enough, no need for a signal. True only when this exact page load landed on PATIENT_STANDALONE_PATH (i.e. via
+  // the dashboard mockup's "Connect Get Data" redirect), as opposed to a fresh Patient_Standalone login that should
+  // show the dashboard mockup instead.
+  protected readonly isOnPatientStandaloneLaunchPath = window.location.pathname.toLowerCase() === PATIENT_STANDALONE_PATH;
 
   constructor(private readonly http: HttpClient) {}
 
@@ -180,11 +191,9 @@ export class App implements OnInit {
         window.location.href = STANDALONE_PROVIDER_PATH + window.location.search;
       }
 
-      // Patient_Standalone lands on its own path too — never launchproviderinapp or launchinstandaloneprovider.
-      if (this.selectedDemoType() === PATIENT_STANDALONE_NAME
-        && window.location.pathname.toLowerCase() !== PATIENT_STANDALONE_PATH) {
-        window.location.href = PATIENT_STANDALONE_PATH + window.location.search;
-      }
+      // Patient_Standalone deliberately does NOT redirect here — see the comment above PATIENT_STANDALONE_PATH.
+      // Logging in with it selected just lands on the demo-type-1 dashboard mockup at whatever path login itself
+      // was served from.
     } catch {
       this.loginError.set('Invalid email or password.');
     }

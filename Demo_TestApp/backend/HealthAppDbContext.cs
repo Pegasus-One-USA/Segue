@@ -83,6 +83,16 @@ public sealed class WorkflowSettingsEntity
 {
     public int Id { get; set; }
     public string WorkflowUrl { get; set; } = string.Empty;
+
+    // Patient Standalone's own FHIRBridge connection points — previously a gitignored, per-developer local file
+    // (Demo_TestApp/frontend's standalone-launch.config.ts); moved here so they're admin-configurable through the
+    // same "Workflow Settings" panel as WorkflowUrl above, with no frontend rebuild needed to change them.
+    // PatientWorkflowId drives the patient list fetch; PatientDetailWorkflowId is a second, independent workflow
+    // used only for the per-patient detail fetch (clicking a row in the fetched list) — each needs its own
+    // public-launch opt-in on the FHIRBridge side, so they're never the same id.
+    public string PatientWorkflowId { get; set; } = string.Empty;
+    public string PatientDetailWorkflowId { get; set; } = string.Empty;
+    public string PatientBaseUrl { get; set; } = string.Empty;
 }
 
 public sealed class HealthAppDbContext : DbContext
@@ -194,7 +204,10 @@ public sealed class HealthAppDbContext : DbContext
         modelBuilder.Entity<WorkflowSettingsEntity>().HasData(new WorkflowSettingsEntity
         {
             Id = 1,
-            WorkflowUrl = string.Empty
+            WorkflowUrl = string.Empty,
+            PatientWorkflowId = string.Empty,
+            PatientDetailWorkflowId = string.Empty,
+            PatientBaseUrl = "http://localhost:5000"
         });
     }
 }
