@@ -13,4 +13,5 @@ public sealed record EhrEndpointDto(
     DateTime CreatedOnUtc,
     string? CreatedBy,
     DateTime? ModifiedOnUtc,
-    string? ModifiedBy);
+    string? ModifiedBy,
+    EhrEndpointType EndpointType = EhrEndpointType.MyChart);

@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 
 namespace FHIRBridge.Application.Services;
@@ -10,9 +11,13 @@ public interface IConfigurationService
 {
     Task<SourceConnectionDto> AddSourceConnectionAsync(CreateSourceConnectionRequest request, CancellationToken cancellationToken);
 
+    Task<SourceConnectionDto?> GetSourceConnectionByIdAsync(Guid sourceConnectionId, CancellationToken cancellationToken);
+
     Task<SourceConnectionDto> UpdateSourceConnectionAsync(Guid sourceConnectionId, CreateSourceConnectionRequest request, CancellationToken cancellationToken);
 
     Task<SourceConnectionDto> SetSourceConnectionEnabledAsync(Guid sourceConnectionId, bool isEnabled, CancellationToken cancellationToken);
+
+    Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken);
 
     Task<WebhookConfigurationDto> AddWebhookConfigurationAsync(CreateWebhookConfigurationRequest request, CancellationToken cancellationToken);
 
@@ -20,9 +25,15 @@ public interface IConfigurationService
 
     Task<DestinationConfigurationDto> AddDestinationConfigurationAsync(CreateDestinationConfigurationRequest request, CancellationToken cancellationToken);
 
+    Task<PagedResult<DestinationConfigurationDto>> GetDestinationConfigurationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken cancellationToken);
+
     Task<DestinationConfigurationDto> UpdateDestinationConfigurationAsync(Guid destinationId, CreateDestinationConfigurationRequest request, CancellationToken cancellationToken);
 
     Task<DestinationConfigurationDto> SetDestinationConfigurationEnabledAsync(Guid destinationId, bool isEnabled, CancellationToken cancellationToken);
+
+    Task DeleteDestinationConfigurationAsync(Guid destinationId, CancellationToken cancellationToken);
+
+    Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken cancellationToken);
 
     Task<MappingProfileDto> AddMappingProfileAsync(CreateMappingProfileRequest request, CancellationToken cancellationToken);
 

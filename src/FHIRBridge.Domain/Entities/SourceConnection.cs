@@ -86,6 +86,16 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
     }
 
     /// <summary>
+    /// Replaces the requested OAuth scopes, leaving every other authentication field untouched. Used by
+    /// <c>IEpicSourceConnectionScopeSyncService</c> to keep scopes derived from actual pipeline usage rather than a
+    /// manually-curated value that can drift out of sync with what the connection's pipelines really consume.
+    /// </summary>
+    public void UpdateScopes(string[] scopes)
+    {
+        Authentication = Authentication.WithScopes(scopes);
+    }
+
+    /// <summary>
     /// PHI travels over this connection, so the endpoint must be encrypted in transit (HIPAA
     /// §164.312(e)). HTTPS is required; plain HTTP is permitted only for loopback addresses to
     /// support local development and integration tests.

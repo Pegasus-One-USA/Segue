@@ -52,6 +52,7 @@ export interface WorkflowDefinitionRequest {
   nodes: WorkflowNodeRequest[];
   edges: WorkflowEdgeRequest[];
   trigger?: WorkflowTriggerRequest | null;
+  isPubliclyLaunchable?: boolean;
 }
 
 /** Workflow-level schedule (Backend-Systems workflows). Omit / Manual = run on demand. Matches the backend DTO. */
@@ -79,6 +80,7 @@ export interface WorkflowDefinitionDto {
   version: number;
   isEnabled: boolean;
   isActive?: boolean;
+  isPubliclyLaunchable?: boolean;
   nodes: WorkflowNodeDto[];
   edges: WorkflowEdgeDto[];
 }
@@ -160,6 +162,7 @@ export interface CreateDestinationConfigurationRequest {
   secretName: string;
   target?: string | null;
   inlineSecret?: string | null;               // raw connstr / sftp:// URI — provisioned encrypted server-side
+  connectionMetadataJson?: string | null;     // non-secret dest_* fields, JSON — lets a later "existing" pick repopulate
 }
 
 export interface MappingFieldRequest {
@@ -207,6 +210,10 @@ export interface WorkflowBuildResult {
   sourceConnectionIds: Record<string, string>;
   destinationIds: Record<string, string>;
   mappingProfileIds: Record<string, string>;
+  // Keyed by source connection id (as a string) — each connection's Epic OAuth scopes as they stand right after
+  // this save, derived from every pipeline's destination resource selections (not just this one). Absent for any
+  // connection that isn't interactive (e.g. Backend Services), since those aren't resource-picker driven.
+  syncedScopesBySourceConnectionId?: Record<string, string[]>;
 }
 
 // ── Workflow-list screen (GET /workflows/summary) ──────────────────────────────
@@ -226,6 +233,7 @@ export interface WorkflowSummary {
   sourceSystemType: string | null;  // Epic | Cerner | Sample | ...
   applicationType: string | null;   // Backend | EhrLaunch | Standalone | Patient
   hasDestination: boolean;
+  isPubliclyLaunchable: boolean;
 }
 
 export interface WorkflowLaunchUrl {
@@ -329,6 +337,16 @@ export class WorkflowApiService {
 
   deactivate(workflowId: string): Observable<WorkflowDefinitionDto> {
     return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.deactivate(workflowId), {});
+  }
+
+  /** Opts the workflow into the anonymous public-standalone-url mint endpoint a third-party app's hospital picker
+   *  calls (see OAuthController.GetPublicWorkflowStandaloneUrl) — required before that endpoint honors it. */
+  enablePublicLaunch(workflowId: string): Observable<WorkflowDefinitionDto> {
+    return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.enablePublicLaunch(workflowId), {});
+  }
+
+  disablePublicLaunch(workflowId: string): Observable<WorkflowDefinitionDto> {
+    return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.disablePublicLaunch(workflowId), {});
   }
 
   delete(workflowId: string): Observable<void> {

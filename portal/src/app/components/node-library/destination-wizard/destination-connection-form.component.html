@@ -1,0 +1,210 @@
+@if (isSql()) {
+  <form [formGroup]="sqlForm" class="dw-form" autocomplete="off">
+    <div class="dw-grid-2">
+
+      <div class="dw-field" [class.dw-field--error]="sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched">
+        <label class="dw-label" for="dcf-name">Destination name <span class="dw-req">*</span></label>
+        <input id="dcf-name" class="dw-input" formControlName="name" placeholder="e.g. SQL Production" />
+        @if (sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched) {
+          <span class="dw-error">Destination name is required.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched">
+        <label class="dw-label" for="dcf-server">SQL Server <span class="dw-req">*</span></label>
+        <input id="dcf-server" class="dw-input" formControlName="server" placeholder="tcp:sql-prod.company.com,1433" />
+        @if (sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched) {
+          <span class="dw-error">SQL Server host is required.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
+        <label class="dw-label" for="dcf-database">Database <span class="dw-req">*</span></label>
+        <input id="dcf-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
+        @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
+          <span class="dw-error">Database name is required.</span>
+        }
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dcf-auth">Authentication <span class="dw-req">*</span></label>
+        <div class="dw-select-wrap">
+          <select id="dcf-auth" class="dw-select" formControlName="auth">
+            <option value="sql-auth">SQL Username / Password</option>
+            <option value="managed-identity">Managed Identity</option>
+            <option value="azure-ad">Azure AD</option>
+          </select>
+        </div>
+      </div>
+
+      @if (sqlForm.get('auth')!.value === 'sql-auth') {
+        <div class="dw-field">
+          <label class="dw-label" for="dcf-username">Username</label>
+          <input id="dcf-username" class="dw-input" formControlName="username" placeholder="e.g. sa" autocomplete="off" />
+        </div>
+        <div class="dw-field">
+          <label class="dw-label" for="dcf-password">Password</label>
+          <input id="dcf-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+        </div>
+      }
+
+      <div class="dw-field">
+        <label class="dw-label" for="dcf-schema">Schema</label>
+        <input id="dcf-schema" class="dw-input" formControlName="schema" placeholder="dbo" />
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dcf-writeMode">Write mode</label>
+        <div class="dw-select-wrap">
+          <select id="dcf-writeMode" class="dw-select" formControlName="writeMode">
+            <option value="upsert">Upsert by source id</option>
+            <option value="insert">Insert only</option>
+            <option value="update">Update only</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+  </form>
+
+  @if (canTestConnection()) {
+    <div class="dcf-actions">
+      <button type="button" class="dw-btn" [disabled]="probeState() === 'testing'" (click)="testConnection()">
+        {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+      </button>
+    </div>
+  }
+  @if (probeState() === 'testing') {
+    <div class="dw-callout dw-callout--info">Testing connection…</div>
+  }
+  @if (probeState() === 'error') {
+    <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+  }
+  @if (probeState() === 'ok') {
+    <div class="dw-callout dw-callout--info">Connected — {{ sqlTables().length }} table(s) found.</div>
+  }
+} @else {
+  <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
+    <div class="dw-grid-2">
+
+      <div class="dw-field" [class.dw-field--error]="csvForm.get('name')!.invalid && csvForm.get('name')!.touched">
+        <label class="dw-label" for="dcf-name">Destination name <span class="dw-req">*</span></label>
+        <input id="dcf-name" class="dw-input" formControlName="name" placeholder="e.g. CSV Export - SFTP" />
+        @if (csvForm.get('name')!.invalid && csvForm.get('name')!.touched) {
+          <span class="dw-error">Destination name is required.</span>
+        }
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dcf-storageType">Storage type <span class="dw-req">*</span></label>
+        <div class="dw-select-wrap">
+          <select id="dcf-storageType" class="dw-select" formControlName="storageType">
+            <option value="sftp">SFTP</option>
+            <option value="azure-blob">Azure Blob Storage</option>
+            <option value="aws-s3">AWS S3</option>
+            <option value="local">Local / Network Folder</option>
+            <option value="gcs">Google Cloud Storage</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched">
+        <label class="dw-label" for="dcf-folder">Base folder / container <span class="dw-req">*</span></label>
+        <input id="dcf-folder" class="dw-input" formControlName="folder" placeholder="/exports/fhirbridge" />
+        @if (csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched) {
+          <span class="dw-error">Base folder is required.</span>
+        }
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('filePattern')!.invalid && csvForm.get('filePattern')!.touched">
+        <label class="dw-label" for="dcf-filePattern">File name pattern <span class="dw-req">*</span></label>
+        <input id="dcf-filePattern" class="dw-input" formControlName="filePattern" placeholder="{resource}_{yyyyMMdd_HHmmss}.csv" />
+        @if (csvForm.get('filePattern')!.invalid && csvForm.get('filePattern')!.touched) {
+          <span class="dw-error">File name pattern is required.</span>
+        }
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dcf-delimiter">Delimiter</label>
+        <div class="dw-select-wrap">
+          <select id="dcf-delimiter" class="dw-select" formControlName="delimiter">
+            <option value="comma">Comma (,)</option>
+            <option value="pipe">Pipe (|)</option>
+            <option value="tab">Tab</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dcf-encoding">Encoding</label>
+        <div class="dw-select-wrap">
+          <select id="dcf-encoding" class="dw-select" formControlName="encoding">
+            <option value="utf-8">UTF-8</option>
+            <option value="utf-8-bom">UTF-8 with BOM</option>
+          </select>
+        </div>
+      </div>
+
+      @if (csvForm.get('storageType')!.value === 'sftp') {
+        <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched">
+          <label class="dw-label" for="dcf-sftpHost">SFTP host <span class="dw-req">*</span></label>
+          <input id="dcf-sftpHost" class="dw-input" formControlName="sftpHost" placeholder="sftp.company.com" />
+          @if (csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched) {
+            <span class="dw-error">SFTP host is required.</span>
+          }
+        </div>
+
+        <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPort')!.invalid && csvForm.get('sftpPort')!.touched">
+          <label class="dw-label" for="dcf-sftpPort">Port</label>
+          <input id="dcf-sftpPort" type="number" class="dw-input" formControlName="sftpPort" />
+        </div>
+
+        <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched">
+          <label class="dw-label" for="dcf-sftpUsername">Username <span class="dw-req">*</span></label>
+          <input id="dcf-sftpUsername" class="dw-input" formControlName="sftpUsername" autocomplete="off" />
+          @if (csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched) {
+            <span class="dw-error">SFTP username is required.</span>
+          }
+        </div>
+
+        <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched">
+          <label class="dw-label" for="dcf-sftpPassword">Password <span class="dw-req">*</span></label>
+          <input id="dcf-sftpPassword" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password" />
+          @if (csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched) {
+            <span class="dw-error">SFTP password is required.</span>
+          }
+        </div>
+
+        <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
+          <label class="dw-label" for="dcf-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
+          <input id="dcf-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
+          @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
+            <span class="dw-error">Remote folder is required.</span>
+          }
+        </div>
+      }
+
+    </div>
+  </form>
+
+  @if (canTestConnection()) {
+    <div class="dcf-actions">
+      <button type="button" class="dw-btn" [disabled]="probeState() === 'testing'" (click)="testConnection()">
+        {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+      </button>
+    </div>
+    @if (probeState() === 'testing') {
+      <div class="dw-callout dw-callout--info">Testing connection…</div>
+    }
+    @if (probeState() === 'error') {
+      <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+    }
+    @if (probeState() === 'ok') {
+      <div class="dw-callout dw-callout--info">Connected successfully.</div>
+    }
+  } @else if (csvForm.get('storageType')!.value !== 'sftp') {
+    <div class="dw-callout dw-callout--info">
+      Test Connection isn't available yet for this storage type.
+    </div>
+  }
+}

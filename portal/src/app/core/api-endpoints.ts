@@ -59,10 +59,30 @@ export const EHR_ENDPOINTS_ENDPOINTS = {
   byId: (id: string) => `${API_V1_BASE}/ehr-endpoints/${id}`,
 };
 
+// ─── Source Connections (ConfigurationsController — api/v1/source-connections) ─
+export const SOURCE_CONNECTIONS_ENDPOINTS = {
+  list: `${API_V1_BASE}/source-connections`,
+  byId: (id: string) => `${API_V1_BASE}/source-connections/${id}`,
+  // WorkflowEndpoints, not ConfigurationsController — the usage check has to walk every workflow's Source
+  // nodes, which only the Runtime workflow store can answer.
+  usage: `${API_V1_BASE}/workflows/source-connection-usage`,
+};
+
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
 export const DESTINATION_ENDPOINTS = {
-  schemaPreview: `${API_V1_BASE}/destinations/schema-preview`,
-  schema:        (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
+  list:                `${API_V1_BASE}/destinations`,
+  paged:               `${API_V1_BASE}/destinations/paged`,
+  byId:                (id: string) => `${API_V1_BASE}/destinations/${id}`,
+  hasExecutionHistory: (id: string) => `${API_V1_BASE}/destinations/${id}/has-execution-history`,
+  schemaPreview:       `${API_V1_BASE}/destinations/schema-preview`,
+  schema:              (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
+  sftpTest:            `${API_V1_BASE}/destinations/sftp-test`,
+  // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
+  // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
+  usage:               `${API_V1_BASE}/workflows/destination-usage`,
+  addColumn:     `${API_V1_BASE}/destinations/schema/add-column`,
+  createTable:   `${API_V1_BASE}/destinations/schema/create-table`,
+  dropColumn:    `${API_V1_BASE}/destinations/schema/drop-column`,
   addColumn:     `${API_V1_BASE}/destinations/schema/add-column`,
   createTable:   `${API_V1_BASE}/destinations/schema/create-table`,
   dropColumn:    `${API_V1_BASE}/destinations/schema/drop-column`,
@@ -122,6 +142,8 @@ export const WORKFLOW_ENDPOINTS = {
   runs:            (id: string) => `${API_V1_BASE}/workflows/${id}/runs`,
   activate:        (id: string) => `${API_V1_BASE}/workflows/${id}/activate`,
   deactivate:      (id: string) => `${API_V1_BASE}/workflows/${id}/deactivate`,
+  enablePublicLaunch:  (id: string) => `${API_V1_BASE}/workflows/${id}/enable-public-launch`,
+  disablePublicLaunch: (id: string) => `${API_V1_BASE}/workflows/${id}/disable-public-launch`,
   copy:            (id: string) => `${API_V1_BASE}/workflows/${id}/copy`,
   launchUrl:       (id: string) => `${API_V1_BASE}/workflows/${id}/launch-url`,
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,

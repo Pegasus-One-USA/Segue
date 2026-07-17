@@ -19,4 +19,5 @@ public sealed record WorkflowSummaryDto(
     Guid? SourceConnectionId,
     string? SourceSystemType,
     string? ApplicationType,
-    bool HasDestination);
+    bool HasDestination,
+    bool IsPubliclyLaunchable);

@@ -8,7 +8,8 @@ public sealed class WorkflowExecutionContext
         IReadOnlyDictionary<string, object?>? properties = null,
         string? triggeredBy = null,
         string? triggerType = null,
-        string? targetPatientId = null)
+        string? targetPatientId = null,
+        string? patientSearchCriteria = null)
     {
         WorkflowRunId = workflowRunId == Guid.Empty ? Guid.NewGuid() : workflowRunId;
         CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? WorkflowRunId.ToString("N") : correlationId;
@@ -16,6 +17,7 @@ public sealed class WorkflowExecutionContext
         TriggeredBy = triggeredBy;
         TriggerType = triggerType ?? "Manual";
         TargetPatientId = targetPatientId;
+        PatientSearchCriteria = patientSearchCriteria;
     }
 
     public Guid WorkflowRunId { get; }
@@ -35,4 +37,13 @@ public sealed class WorkflowExecutionContext
     /// logged-in session" behavior.
     /// </summary>
     public string? TargetPatientId { get; }
+
+    /// <summary>
+    /// Request-time raw Patient search criteria (e.g. "active=true", "identifier=MRN12345",
+    /// "family=Smith&amp;given=John", "birthdate=1990-01-01" — from a third-party app's own free-text search box).
+    /// A source node executor appends this to the Patient resource type's search only, as-is; every other
+    /// configured resource type is unaffected. Null/blank (the default for every existing trigger path) preserves
+    /// prior behavior.
+    /// </summary>
+    public string? PatientSearchCriteria { get; }
 }

@@ -39,6 +39,18 @@
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Endpoint Type</mat-label>
+        <mat-select formControlName="endpointType">
+          @for (option of endpointTypeOptions; track option.value) {
+            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+          }
+        </mat-select>
+        @if (hasError('endpointType', 'required')) {
+          <mat-error>Endpoint type is required.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
         <mat-label>Vendor Endpoint Id</mat-label>
         <input
           matInput

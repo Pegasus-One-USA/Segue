@@ -3,15 +3,34 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule, FormBuilder, Validators, ValidatorFn, AbstractControl, ValidationErrors } from '@angular/forms';
-import { WizardService } from '../../../services/wizard.service';
+import { WizardService, APPLICATION_TYPE_TO_AUDIENCE, AUTHENTICATION_TYPE_TO_AUTH_METHOD } from '../../../services/wizard.service';
 import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
 import { ToastService } from '../../../services/toast.service';
 import { EPIC_ENV } from '../../../data/epic-environments.data';
 import { EnvKey } from '../../../models/epic-env.model';
 import { AppKey } from '../../../models/epic-app.model';
 import { FullDiscoveredValues } from '../models/epic-config.model';
+import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../models/audience-field-config.data';
+import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
+import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
+import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 
-export type EpicAudience = 'provider-ehr-launch' | 'provider-standalone' | 'backend-system' | 'patient';
+export type { EpicAudience };
+
+/** EHR/vendor selector options — values must be exact SourceSystemType enum member names (see
+ *  src/FHIRBridge.Domain/Enums/SourceSystemType.cs), since the backend deserializes this field as a string enum.
+ *  NewEHR / NewEHRTwo are internal placeholder enum members with no real vendor identity and are omitted. */
+export const EHR_OPTIONS: { value: EhrVendor; label: string }[] = [
+  { value: 'Epic',               label: 'Epic' },
+  { value: 'Cerner',             label: 'Oracle Health (Cerner)' },
+  { value: 'Athenahealth',       label: 'Athenahealth' },
+  { value: 'MeditechGreenfield', label: 'Meditech' },
+  { value: 'Healow',             label: 'eClinicalWorks (Healow)' },
+  { value: 'Allscripts',         label: 'Allscripts' },
+  { value: 'GenericFhir',        label: 'Generic FHIR' },
+  { value: 'Hl7v2',              label: 'HL7 v2' },
+  { value: 'Sample',             label: 'Sample' },
+];
 
 const FHIR_RESOURCES = [
   'Patient', 'Encounter', 'Observation', 'Condition', 'MedicationRequest',
@@ -71,48 +90,6 @@ function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 
   if (scopesSupported.some(s => suffix(s) === 'read' || suffix(s) === 'write')) return 'v1';
   return null;
 }
-
-// ── Per-audience field visibility/requirement registry ─────────────────────────
-// Adding a new audience means adding one entry here — no template/validator edits.
-// All four audiences now show a connection form; only the redirect/launch/retrieval
-// shape differs between them.
-interface AudienceFieldConfig {
-  showLaunchUrl: boolean;
-  showRedirect: boolean;
-  showCdsHooks: boolean;
-  /** Whether this app's registered EHR launch-display setting (Embedded/External Browser/Sidebar) applies.
-   *  Only meaningful for the EHR-launch audience — FHIRBridge doesn't control this behavior, the EHR does; this
-   *  just records how the app was registered there. */
-  showLaunchDisplayMode: boolean;
-  /** Whether the retrieval-method section applies at all. */
-  showRetrieval: boolean;
-  /**
-   * How much of the retrieval section this audience gets:
-   * - 'none': no retrieval section (EHR launch / patient — data arrives via the SMART launch context).
-   * - 'oneshot': a curated Search REST subset (Resource Types, Search Criteria, Max Results, Include Related
-   *   Resources) for a user-initiated, single fetch — no scheduler, since there's no recurring run to schedule.
-   * - 'automated': the full retrieval method picker + config (Backend System) for unattended, recurring execution.
-   */
-  retrievalScope: 'none' | 'oneshot' | 'automated';
-  /** Whether the shared Resource Type picker (Section 5) applies. False for Backend System,
-   *  where Resource Type instead lives inside the selected retrieval method's own config —
-   *  never both, to avoid showing two Resource Type pickers at once. */
-  showResourcePicker: boolean;
-  /** 'readonly' = auto-populated Redirect URI (providers); 'editable' = mandatory Callback URL (patient). */
-  redirectMode: 'readonly' | 'editable';
-  redirectLabel: string;
-  scopePrefix: 'user' | 'patient' | 'system';
-  /** Interactive audiences add openid/fhirUser/offline_access/launch to the scope string; Backend System does not. */
-  includeInteractiveScopes: boolean;
-}
-
-const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {
-  // CDS Hooks removed from the UI (not required) — flag kept for future use but disabled everywhere.
-  'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, retrievalScope: 'none',     showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: true },
-  'provider-standalone': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: true,  retrievalScope: 'oneshot',  showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: false },
-  'patient':             { showLaunchUrl: false, showRedirect: true,  showCdsHooks: false, showRetrieval: false, retrievalScope: 'none',     showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Callback URL', scopePrefix: 'patient', includeInteractiveScopes: true,  showLaunchDisplayMode: false },
-  'backend-system':      { showLaunchUrl: false, showRedirect: false, showCdsHooks: false, showRetrieval: true,  retrievalScope: 'automated', showResourcePicker: false, redirectMode: 'readonly', redirectLabel: '',             scopePrefix: 'system',  includeInteractiveScopes: false, showLaunchDisplayMode: false },
-};
 
 // ── Data Retrieval Method registry (Backend System only) ───────────────────────
 // Adding a new method means adding one entry here — the dropdown, the field list,
@@ -359,6 +336,28 @@ export class EpicAudienceFormComponent implements OnInit {
   private  readonly toast      = inject(ToastService);
   private  readonly fb         = inject(FormBuilder);
   private  readonly destroyRef = inject(DestroyRef);
+  private  readonly sourceConnectionSvc = inject(ISourceConnectionService);
+
+  protected readonly ehrOptions = EHR_OPTIONS;
+  /** True only when opened in read-only View mode from the Source Connections page — disables every control and
+   *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
+  protected get isReadonly(): boolean { return this.wiz.readonlyMode(); }
+
+  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
+  protected readonly sourceMode = signal<'new' | 'existing'>('new');
+  protected readonly existingConnections = signal<SourceConnectionModel[]>([]);
+  protected readonly loadingExisting = signal(false);
+  protected readonly selectedExistingId = signal<string | null>(null);
+  /** Every saved source connection's name (all vendors, not just Epic — getAll() returns everything, this
+   *  component just filters existingConnections down to Epic for the dropdown). Cloning from "Existing Source"
+   *  always creates a brand-new connection (see populateFormFromSourceConnection's own comment: canvas mode has
+   *  no entity id to attach to), so save() must dedupe the cloned name here — otherwise Name is copied verbatim
+   *  and the create call collides with "A source connection named '<name>' already exists." on the very save
+   *  that's supposed to clone it. */
+  private _allConnectionNames = new Set<string>();
+  /** Only offered when creating a brand-new canvas node — editing an existing node already has its own data, and
+   *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
+  protected readonly showSourcePicker = computed(() => this.wiz.wizardMode() === 'canvas' && !this.isEditing);
 
   // Resource Type list: auto-detected from the source's /metadata after Discover; falls back to the static list.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
@@ -721,6 +720,12 @@ export class EpicAudienceFormComponent implements OnInit {
     this.form.controls.fullRefreshRecurrence.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncRetrievalValidators());
+
+    // View mode (Source Connections page): lock every reactive-form control. Applied last so it wins over the
+    // enable/disable calls the audience/runMode subscriptions above may have just issued during pre-population.
+    if (this.isReadonly) {
+      this.form.disable({ emitEvent: false });
+    }
   }
 
   /**
@@ -995,6 +1000,158 @@ export class EpicAudienceFormComponent implements OnInit {
     return !!ctrl && ctrl.touched && ctrl.invalid;
   }
 
+  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
+  protected onSourceModeChange(mode: 'new' | 'existing'): void {
+    this.sourceMode.set(mode);
+    if (mode === 'new') {
+      this.resetToBlankNewSource();
+      return;
+    }
+    if (this.existingConnections().length === 0 && !this.loadingExisting()) {
+      this.loadingExisting.set(true);
+      this.sourceConnectionSvc.getAll().subscribe({
+        next: connections => {
+          this._allConnectionNames = new Set(connections.map(c => c.name));
+          this.existingConnections.set(connections.filter(c => c.sourceSystemType === 'Epic'));
+          this.loadingExisting.set(false);
+        },
+        error: () => {
+          this.loadingExisting.set(false);
+          this.toast.show('Failed to load', 'Could not load existing Epic source connections.', 'error');
+        },
+      });
+    }
+  }
+
+  /**
+   * Resolves a unique name for the cloned connection. When the user typed their own distinct name, it's used
+   * as-is (forceSuffix false) — only a genuine collision gets a -1/-2/... suffix appended. When the name was left
+   * as whatever was cloned in (forceSuffix true), a suffix is always appended, since the original connection
+   * already holds that exact name.
+   */
+  private _resolveUniqueSourceName(desiredName: string, forceSuffix: boolean): string {
+    if (!forceSuffix && !this._allConnectionNames.has(desiredName)) return desiredName;
+    let suffix = 1;
+    let candidate = `${desiredName}-${suffix}`;
+    while (this._allConnectionNames.has(candidate)) {
+      suffix++;
+      candidate = `${desiredName}-${suffix}`;
+    }
+    return candidate;
+  }
+
+  /** Switching back to "New Source" after a clone must undo it — otherwise the form silently keeps whatever
+   *  the last-selected existing connection populated, even though the picker now reads "New Source". */
+  private resetToBlankNewSource(): void {
+    this.selectedExistingId.set(null);
+    this.form.reset();
+    this.discoveredResourceTypes.set([]);
+    this.discStatus.set('idle');
+    this.discValues.set(null);
+    this.discoveredScopes.set([]);
+    this.scopeVersionAuto.set(false);
+    this.authMethodAuto.set(false);
+    this.testStatus.set('idle');
+    this.wiz.trustedIssuers.set('');
+
+    this.prevAudience = this.audience();
+    this.lockRetrievalMethodIfOneShot();
+    this.syncValidators();
+    this.syncRetrievalValidators();
+  }
+
+  protected onExistingConnectionSelected(id: string): void {
+    this.selectedExistingId.set(id);
+    const dto = this.existingConnections().find(c => c.id === id);
+    if (dto) this.populateFormFromSourceConnection(dto);
+  }
+
+  /** Name + Base URL alone can collide (e.g. two connections both literally named "Epic" against the same
+   *  sandbox URL, one EHR Launch and one Standalone) — append audience + a Client ID suffix so the dropdown
+   *  always has something to visually tell them apart by. */
+  protected existingConnectionLabel(conn: SourceConnectionModel): string {
+    const audience = (conn.applicationType && APPLICATION_TYPE_TO_AUDIENCE[conn.applicationType]) || null;
+    const audienceLabel = audience ? ` · ${audience}` : '';
+    const clientIdSuffix = conn.authentication?.clientId ? ` · …${conn.authentication.clientId.slice(-6)}` : '';
+    return `${conn.name} — ${conn.baseUrl}${audienceLabel}${clientIdSuffix}`;
+  }
+
+  /**
+   * Clones a persisted SourceConnection's data into this (still-unsaved) canvas node's form — lets a new
+   * pipeline node start from an already-configured connection instead of re-entering everything by hand.
+   * Mirrors WizardService.openEntity()'s field mapping, but patches the reactive form directly: this is canvas
+   * mode, so there's no backend entity id to attach to — the cloned values just become this new node's own,
+   * independently editable, canvas fields once Save is clicked.
+   */
+  private populateFormFromSourceConnection(dto: SourceConnectionModel): void {
+    const audience = ((dto.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType])
+      || 'provider-ehr-launch') as EpicAudience;
+    const authMethod = AUTHENTICATION_TYPE_TO_AUTH_METHOD[dto.authentication?.authenticationType ?? 'None'] ?? 'secret';
+    const retrieval = dto.retrieval;
+
+    const retrievalResourceKeyByMethod: Record<string, string> = {
+      subscription: 'subscriptionResourceType',
+      webhook: 'webhookResourceType',
+      'search-rest': 'searchRestResourceType',
+      'bulk-export': 'bulkExportResourceType',
+    };
+    const retrievalResourceKey = retrieval ? retrievalResourceKeyByMethod[retrieval.retrievalMethod] : undefined;
+
+    this.form.patchValue({
+      audience,
+      environment: 'sandbox',
+      appName: dto.name,
+      epicBaseUrl: dto.baseUrl,
+      tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
+      clientId: dto.authentication?.clientId ?? '',
+      authMethod,
+      jwtKid: dto.authentication?.keyId ?? '',
+      privateKeyRef: dto.authentication?.privateKeyKeyVaultName ?? '',
+      privateKeySecretName: dto.authentication?.privateKeySecretName ?? '',
+      // Required for EHR-Launch/Standalone audiences, but neither is guaranteed to be persisted on the source
+      // connection being cloned (e.g. LaunchUrl is NULL on plenty of real rows, and EHR-Launch connections never
+      // persist a resource-type selection server-side at all) — fall back to whatever the form already holds
+      // (ngOnInit's own sensible defaults) rather than blanking a required field out and silently failing Save.
+      launchUrl: dto.interactive?.launchUrl || this.form.controls.launchUrl.value,
+      callbackUrl: dto.interactive?.redirectUris?.[0] ?? this.form.controls.callbackUrl.value,
+      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : this.form.controls.resources.value,
+      retrievalMethod: (retrieval?.retrievalMethod as RetrievalMethod) ?? '',
+      searchCriteria: retrieval?.searchCriteria ?? '',
+      incrementalCursor: retrieval?.incrementalSyncEnabled ?? false,
+      pageSize: retrieval?.pageSize != null ? String(retrieval.pageSize) : this.form.controls.pageSize.value,
+      sortOrder: retrieval?.sortOrder ?? '',
+      includeLinked: retrieval?.includeParameters?.join(',') ?? '',
+      revIncludeLinked: retrieval?.revIncludeParameters?.join(',') ?? '',
+      retryPolicy: retrieval?.retryPolicy ?? this.form.controls.retryPolicy.value,
+      timeoutSeconds: retrieval?.timeoutSeconds != null ? String(retrieval.timeoutSeconds) : this.form.controls.timeoutSeconds.value,
+      maxRecordsPerRun: retrieval?.maxRecordsPerRun != null ? String(retrieval.maxRecordsPerRun) : '',
+      exportScope: retrieval?.exportScope ?? '',
+      groupId: retrieval?.groupId ?? '',
+      patientIdList: retrieval?.patientIds?.join(', ') ?? '',
+      fhirOutputFormat: retrieval?.outputFormat ?? this.form.controls.fhirOutputFormat.value,
+    });
+
+    if (retrievalResourceKey && retrieval?.resourceTypes?.length) {
+      this.form.get(retrievalResourceKey)?.setValue([...retrieval.resourceTypes]);
+    }
+
+    this.wiz.trustedIssuers.set(dto.interactive?.trustedIssuers?.join(', ') ?? '');
+    this.discoveredResourceTypes.set(retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : []);
+
+    this.prevAudience = audience;
+    this.lockRetrievalMethodIfOneShot();
+    this.syncValidators();
+    this.syncRetrievalValidators();
+
+    this.toast.show('Loaded', `Copied configuration from "${dto.name}".`);
+
+    // SourceConnection only ever persists a Token Endpoint — there's no Authorization Endpoint column at all
+    // (nothing to clone it from) — so run real SMART discovery against the cloned Base URL instead of faking
+    // discStatus 'done'/an "Auto-populated" badge for data that was never actually saved. This also re-confirms
+    // Token Endpoint live and refreshes the discovered (available) resource type list for this source right now.
+    this.runDiscover();
+  }
+
   protected runDiscover(): void {
     const url = this.form.controls.epicBaseUrl.value.trim();
     if (!url) { this.toast.show('URL required', 'Enter Epic FHIR Base URL first.'); return; }
@@ -1124,9 +1281,20 @@ export class EpicAudienceFormComponent implements OnInit {
     const emitRecurrence = v.runMode === 'full'
       || (this.retrievalMethod() === 'bulk-export' && v.exportScope !== '' && v.exportScope !== 'patient');
 
+    // Cloning from "Existing Source" always creates a brand-new connection (see populateFormFromSourceConnection's
+    // comment). If the user left Name exactly as cloned, it collides with the original unless suffixed; if they
+    // typed their own distinct name, honor it as-is (only deduped on an actual collision) rather than silently
+    // suffixing a name they deliberately chose.
+    let resolvedName = v.appName ?? 'Epic';
+    if (this.sourceMode() === 'existing') {
+      const original = this.existingConnections().find(c => c.id === this.selectedExistingId());
+      const nameWasEdited = !!original && resolvedName !== original.name;
+      resolvedName = this._resolveUniqueSourceName(resolvedName, !nameWasEdited);
+    }
+
     this.wiz.setAppKey(appKeyMap[aud]);
     this.wiz.setEnv(envKey);
-    this.wiz.stepName.set(v.appName ?? 'Epic');
+    this.wiz.stepName.set(resolvedName);
     this.wiz.baseUrl.set(v.epicBaseUrl ?? '');
     this.wiz.token.set(v.tokenEndpoint ?? '');
     this.wiz.authorize.set(v.authzEndpoint ?? '');
@@ -1140,7 +1308,7 @@ export class EpicAudienceFormComponent implements OnInit {
     this.wiz.resources.set(cfg.showResourcePicker ? (v.resources ?? []) : this.activeRetrievalResourceTypes());
 
     this.wiz.save({
-      stepName:    v.appName ?? 'Epic',
+      stepName:    resolvedName,
       baseUrl:     v.epicBaseUrl ?? '',
       token:       v.tokenEndpoint ?? '',
       authorize:   v.authzEndpoint ?? '',

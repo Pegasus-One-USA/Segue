@@ -61,9 +61,13 @@ public sealed record MappingBuildSpec(
     IReadOnlyList<MappingFieldDto> Fields,
     Guid? ExistingId = null);
 
-/// <summary>Ids of everything created, keyed by the canvas node id each entity was attached to.</summary>
+/// <summary>Ids of everything created, keyed by the canvas node id each entity was attached to.
+/// <see cref="SyncedScopesBySourceConnectionId"/> reports each referenced source connection's OAuth scopes as they
+/// stand right after this save — derived from every pipeline's destination resource selections, not just this
+/// one — so the portal can show the admin what actually changed rather than leaving it invisible.</summary>
 public sealed record WorkflowBuildResult(
     Guid WorkflowId,
     IReadOnlyDictionary<string, Guid> SourceConnectionIds,
     IReadOnlyDictionary<string, Guid> DestinationIds,
-    IReadOnlyDictionary<string, Guid> MappingProfileIds);
+    IReadOnlyDictionary<string, Guid> MappingProfileIds,
+    IReadOnlyDictionary<Guid, IReadOnlyList<string>>? SyncedScopesBySourceConnectionId = null);

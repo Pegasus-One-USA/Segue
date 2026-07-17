@@ -81,6 +81,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ConnectionMetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
@@ -147,6 +150,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("EndpointType")
+                        .HasColumnType("int");
 
                     b.Property<string>("FhirBaseUrl")
                         .IsRequired()
@@ -314,6 +320,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DestinationId");
 
                     b.HasIndex("SourceConnectionId");
 
@@ -1510,6 +1518,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPubliclyLaunchable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTime?>("LastTriggeredOnUtc")
                         .HasColumnType("datetime2");
 
@@ -2007,8 +2020,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                             b1.Property<string>("Scopes")
                                 .IsRequired()
-                                .HasMaxLength(1000)
-                                .HasColumnType("nvarchar(1000)")
+                                .HasColumnType("nvarchar(max)")
                                 .HasColumnName("Scopes");
 
                             b1.Property<string>("TokenEndpoint")

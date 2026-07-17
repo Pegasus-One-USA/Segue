@@ -95,6 +95,28 @@ export const routes: Routes = [
           ),
       },
 
+      // Source Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      {
+        path: 'source-connections',
+        canActivate: [permissionGuard],
+        data: { permissions: ['sourceconnections.view'] },
+        loadComponent: () =>
+          import('./source-connections/pages/source-connection-list/source-connection-list.component').then(
+            m => m.SourceConnectionListComponent
+          ),
+      },
+
+      // Destination Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      {
+        path: 'destination-connections',
+        canActivate: [permissionGuard],
+        data: { permissions: ['configuration.write'] },
+        loadComponent: () =>
+          import('./destination-connections/pages/destination-connection-list/destination-connection-list.component').then(
+            m => m.DestinationConnectionListComponent
+          ),
+      },
+
       // User Account pages
       {
         path: 'profile',

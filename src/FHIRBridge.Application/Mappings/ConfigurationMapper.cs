@@ -118,7 +118,8 @@ public static class ConfigurationMapper
             destinationConfiguration.SecretReference.KeyVaultName,
             destinationConfiguration.SecretReference.SecretName,
             destinationConfiguration.Target,
-            destinationConfiguration.IsEnabled);
+            destinationConfiguration.IsEnabled,
+            destinationConfiguration.ConnectionMetadataJson);
     }
 
     public static MappingProfileDto ToDto(MappingProfile mappingProfile)

@@ -5,10 +5,14 @@ import {
 import {
   FormBuilder, Validators, ReactiveFormsModule,
 } from '@angular/forms';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
+import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
+import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
 import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow } from './field-mapping/field-mapping-model';
 import { ToastService } from '../../../services/toast.service';
@@ -116,7 +120,11 @@ export class DestinationWizardComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly catalogSvc = inject(MappingCatalogService);
+<<<<<<< .mine
   private readonly toast = inject(ToastService);
+=======
+  private readonly destinationConfigSvc = inject(DestinationConfigurationService);
+>>>>>>> .theirs
 
   // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
@@ -212,6 +220,7 @@ export class DestinationWizardComponent implements OnInit {
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
+<<<<<<< .mine
   // ── extra target tables (child tables added alongside a group's primary table) ──
   // Keyed by data-group name; each entry is a list of additional already-probed SQL
   // table full-names the user chose to also map into for that same group's canvas
@@ -293,6 +302,89 @@ export class DestinationWizardComponent implements OnInit {
     this.payloadFieldsByResource.update(m => ({ ...m, [e.resource]: e.fields }));
   }
 
+=======
+  // ── select an existing DestinationConfiguration instead of building a new one ───────────────
+  // Only offered when attaching a brand-new destination node (not when editing one already on the canvas —
+  // that node's fields already pin a connection, existing or otherwise). Excludes destinations that already
+  // have pipeline execution history: the workflow-build endpoint re-submits this step's form as an update
+  // against the chosen id, which the backend now rejects (409) once a destination has run history, since an
+  // update there would silently overwrite a record other routes depend on staying put.
+  readonly connectionMode = signal<'new' | 'existing'>('new');
+  readonly showConnectionModeToggle = computed(() => !this.editNode());
+  readonly existingOptions = signal<DestinationConfigurationDto[]>([]);
+  readonly existingOptionsLoading = signal(false);
+  readonly selectedExistingId = signal<string | null>(null);
+
+  private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
+  private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>>>>> .theirs
   // ── computed helpers ──────────────────────────────────────────────────────
   readonly isSql        = computed(() => this.destType() === 'sql');
   readonly destLabel    = computed(() => this.destType() === 'sql' ? 'SQL Server' : 'CSV');
@@ -377,11 +469,20 @@ export class DestinationWizardComponent implements OnInit {
 
   private _syncSftpValidators(storageType: string | null): void {
     const isSftp = storageType === 'sftp';
-    (['sftpHost', 'sftpUsername', 'sftpPassword', 'sftpRemoteFolder'] as const).forEach(name => {
+    // sftpPassword is a secret — selectExisting() deliberately never repopulates it (secrets never come back from
+    // the API), so requiring it here would permanently block reusing an existing SFTP connection unless the user
+    // types something just to satisfy validation. Reusing-as-is never sends a password anywhere (see _save()'s
+    // "unchanged" branch), so it doesn't need one; only a genuinely NEW connection (mode 'new', or an edited
+    // 'existing' one that forks) does.
+    const requirePassword = isSftp && this.connectionMode() === 'new';
+    (['sftpHost', 'sftpUsername', 'sftpRemoteFolder'] as const).forEach(name => {
       const ctrl = this.csvForm.get(name)!;
       ctrl.setValidators(isSftp ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
     });
+    const passwordCtrl = this.csvForm.get('sftpPassword')!;
+    passwordCtrl.setValidators(requirePassword ? [Validators.required] : []);
+    passwordCtrl.updateValueAndValidity({ emitEvent: false });
     const port = this.csvForm.get('sftpPort')!;
     port.setValidators(isSftp ? [Validators.required, Validators.min(1), Validators.max(65535)] : []);
     port.updateValueAndValidity({ emitEvent: false });
@@ -405,7 +506,10 @@ export class DestinationWizardComponent implements OnInit {
 
   isNextDisabled(): boolean {
     const s = this.step();
-    if (s === 1) return this.isSql() ? this.sqlForm.invalid : this.csvForm.invalid;
+    if (s === 1) {
+      if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
+      return this.isSql() ? this.sqlForm.invalid : this.csvForm.invalid;
+    }
     if (s === 2) return this.selectedResources().length === 0;
     return false;
   }
@@ -525,6 +629,133 @@ export class DestinationWizardComponent implements OnInit {
         this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
       },
     });
+  }
+
+  // ── select existing connection ───────────────────────────────────────────
+  setConnectionMode(mode: 'new' | 'existing'): void {
+    this.connectionMode.set(mode);
+    if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
+      this._loadExistingOptions();
+    }
+    if (!this.isSql()) this._syncSftpValidators(this.csvForm.value.storageType ?? null);
+  }
+
+  private _loadExistingOptions(): void {
+    this.existingOptionsLoading.set(true);
+    this.destinationConfigSvc
+      .getPaged({ isEnabled: true, page: 1, pageSize: 100 })
+      .pipe(
+        map(page => {
+          const wantedTypes = this.isSql() ? DestinationWizardComponent.SQL_TYPES : DestinationWizardComponent.CSV_TYPES;
+          return page.items.filter(item => wantedTypes.includes(item.destinationType));
+        }),
+        switchMap(candidates =>
+          candidates.length === 0
+            ? of([] as DestinationConfigurationDto[])
+            : forkJoin(
+                candidates.map(item =>
+                  this.destinationConfigSvc.hasExecutionHistory(item.id).pipe(
+                    map(res => (res.hasExecutionHistory ? null : item)),
+                    catchError(() => of(item)),
+                  ),
+                ),
+              ).pipe(map(results => results.filter((x): x is DestinationConfigurationDto => x !== null))),
+        ),
+      )
+      .subscribe({
+        next: options => {
+          this.existingOptions.set(options);
+          this.existingOptionsLoading.set(false);
+        },
+        error: () => this.existingOptionsLoading.set(false),
+      });
+  }
+
+  // Snapshot of the form's raw value taken right after selectExisting() patches it — compared against the current
+  // form value at save time (see hasExistingChanged) to decide "reuse as-is" vs "fork a new connection". Secret
+  // fields (password/sftpPassword) are part of this snapshot too, at their blank default — a user typing a new
+  // secret in counts as a change, same as editing any other field.
+  private _existingBaseline: Record<string, unknown> | null = null;
+
+  selectExisting(id: string): void {
+    this.selectedExistingId.set(id);
+    const selected = this.existingOptions().find(o => o.id === id);
+    if (!selected) return;
+
+    const metadata = this._parseConnectionMetadata(selected.connectionMetadataJson);
+
+    if (this.isSql()) {
+      this.sqlForm.patchValue({
+        name:      metadata['dest_name']      || selected.name,
+        server:    metadata['dest_server']    || '',
+        database:  metadata['dest_database']  || '',
+        auth:      metadata['dest_auth']      || 'sql-auth',
+        username:  metadata['dest_username']  || '',
+        password:  '',
+        schema:    metadata['dest_schema']    || 'dbo',
+        writeMode: metadata['dest_writeMode'] || 'upsert',
+      });
+      this._existingBaseline = this.sqlForm.getRawValue();
+    } else {
+      this.csvForm.patchValue({
+        name:             metadata['dest_name']             || selected.name,
+        storageType:      metadata['dest_storageType']      || 'sftp',
+        folder:           metadata['dest_folder']            || '',
+        filePattern:      metadata['dest_filePattern']       || selected.target || this.csvForm.value.filePattern,
+        delimiter:        metadata['dest_delimiter']         || 'comma',
+        encoding:         metadata['dest_encoding']          || 'utf-8',
+        sftpHost:         metadata['dest_sftpHost']          || '',
+        sftpPort:         metadata['dest_sftpPort'] ? Number(metadata['dest_sftpPort']) : 22,
+        sftpUsername:     metadata['dest_sftpUsername']      || '',
+        sftpAuthType:     metadata['dest_sftpAuthType']      || 'password',
+        sftpPassword:     '',
+        sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
+      });
+      this._existingBaseline = this.csvForm.getRawValue();
+    }
+  }
+
+  private _parseConnectionMetadata(json: string | null | undefined): Record<string, string> {
+    if (!json) return {};
+    try {
+      const parsed = JSON.parse(json) as unknown;
+      return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, string>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** True once the user has edited any connection field away from what selectExisting() just patched in — the
+   *  save-time signal for "fork a new connection" vs "reuse this one untouched" (see _save()). Secret fields
+   *  (password/sftpPassword) are excluded on both sides: selectExisting() always leaves them blank (secrets never
+   *  come back from the API), so a real password typed in there to satisfy validation — or just out of habit —
+   *  must not by itself count as "changed". Reusing as-is never sends whatever was typed there anywhere; forking
+   *  (because something ELSE changed) does use it, same as a brand-new connection. */
+  hasExistingChanged(): boolean {
+    if (!this._existingBaseline) return false;
+    const secretKeys = new Set(['password', 'sftpPassword']);
+    const strip = (v: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.csvForm.getRawValue();
+    return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
+  }
+
+  /**
+   * Resolves a unique name for a forked connection. When the user typed their own distinct name, it's used as-is
+   * (forceSuffix false) — only a genuine collision gets a -1/-2/... suffix appended. When the name was left
+   * untouched (forceSuffix true, desiredName === the original's own name), a suffix is always appended, since the
+   * original itself already holds that exact name.
+   */
+  private _resolveUniqueName(desiredName: string, forceSuffix: boolean): string {
+    const taken = new Set(this.existingOptions().map(o => o.name));
+    if (!forceSuffix && !taken.has(desiredName)) return desiredName;
+    let suffix = 1;
+    let candidate = `${desiredName}-${suffix}`;
+    while (taken.has(candidate)) {
+      suffix++;
+      candidate = `${desiredName}-${suffix}`;
+    }
+    return candidate;
   }
 
   hasSqlTables(): boolean {
@@ -686,6 +917,32 @@ export class DestinationWizardComponent implements OnInit {
         config['dest_sftpAuthType']     = v.sftpAuthType     ?? 'password';
         config['dest_sftpPassword']     = v.sftpPassword     ?? '';
         config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
+      }
+    }
+
+    // Reusing an existing DestinationConfiguration — three outcomes depending on what, if anything, the form
+    // still differs from what selectExisting() patched in:
+    //  - Untouched: wire the node straight to the already-saved record (id + its real secret reference/target).
+    //    destinationResolved tells workflow-build-assembler.service.ts to skip this node entirely — no create,
+    //    no update, so a connection another workflow also points at can never be mutated by this save.
+    //  - Edited, name left alone: fork it as a new, independent connection named "<original>-1" (deduped),
+    //    since the original itself already holds the unsuffixed name.
+    //  - Edited, name also changed by hand: honor that name as typed (only deduped on an actual collision) rather
+    //    than silently suffixing a name the user deliberately chose.
+    if (this.connectionMode() === 'existing' && this.selectedExistingId()) {
+      const selected = this.existingOptions().find(o => o.id === this.selectedExistingId());
+      if (selected && !this.hasExistingChanged()) {
+        config['destinationId'] = selected.id;
+        config['secretKeyVaultName'] = selected.keyVaultName;
+        config['secretName'] = selected.secretName;
+        if (selected.target) config['target'] = selected.target;
+        config['destinationResolved'] = 'true';
+      } else if (selected) {
+        const currentName = (config['dest_name'] || selected.name).trim();
+        const nameWasEdited = currentName !== selected.name;
+        config['dest_name'] = nameWasEdited
+          ? this._resolveUniqueName(currentName, false)
+          : this._resolveUniqueName(selected.name, true);
       }
     }
 

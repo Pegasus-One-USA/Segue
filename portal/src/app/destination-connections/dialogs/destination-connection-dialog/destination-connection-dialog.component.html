@@ -1,0 +1,105 @@
+<h2 mat-dialog-title>
+  @if (isCreate) { New Connection }
+  @else if (isView) { View Connection — {{ data.destination?.name }} }
+  @else { Edit Connection — {{ data.destination?.name }} }
+</h2>
+
+<mat-dialog-content class="dcd-content">
+
+  @if (isView) {
+    <div class="dcd-view-grid">
+      <div class="dcd-view-field">
+        <span class="dcd-view-label">Name</span>
+        <span class="dcd-view-value">{{ data.destination?.name }}</span>
+      </div>
+      <div class="dcd-view-field">
+        <span class="dcd-view-label">Type</span>
+        <span class="dcd-view-value">{{ data.destination?.destinationType }}</span>
+      </div>
+      <div class="dcd-view-field">
+        <span class="dcd-view-label">Target</span>
+        <span class="dcd-view-value">{{ data.destination?.target || '—' }}</span>
+      </div>
+      <div class="dcd-view-field">
+        <span class="dcd-view-label">Enabled</span>
+        <span class="dcd-view-value">{{ data.destination?.isEnabled ? 'Yes' : 'No' }}</span>
+      </div>
+    </div>
+    <p class="dcd-hint">
+      This connection has pipeline execution history, so it can only be viewed — editing or deleting it is
+      disabled to protect that history's integrity.
+    </p>
+  } @else if (isCreate) {
+
+    @if (!chosenType()) {
+      <p class="dcd-hint">Choose a connection type to continue.</p>
+      <div class="dcd-type-choice">
+        <button type="button" class="dcd-type-card" (click)="chooseType('sql')">
+          <strong>SQL Server</strong>
+          <span>Write mapped records into a relational table.</span>
+        </button>
+        <button type="button" class="dcd-type-card" (click)="chooseType('csv')">
+          <strong>CSV</strong>
+          <span>Write mapped records as delimited files (local, SFTP, or blob storage).</span>
+        </button>
+      </div>
+    } @else {
+      <app-destination-connection-form [destType]="chosenType()!" mode="create" />
+    }
+
+  } @else {
+    <!-- Edit -->
+    <form [formGroup]="metaForm" class="dcd-meta-form">
+      <div class="dcd-meta-field">
+        <label for="dcd-name">Name</label>
+        <input id="dcd-name" formControlName="name" />
+      </div>
+      <div class="dcd-meta-field">
+        <label for="dcd-target">Target</label>
+        <input id="dcd-target" formControlName="target" placeholder="e.g. dbo.Patients or export file pattern" />
+      </div>
+      <div class="dcd-meta-field">
+        <span class="dcd-view-label">Type</span>
+        <span class="dcd-view-value">{{ data.destination?.destinationType }}</span>
+      </div>
+    </form>
+
+    @if (unsupportedType()) {
+      <p class="dcd-hint">
+        This connection's type isn't editable via this screen yet — only its name and target can be changed.
+      </p>
+    } @else {
+      <label class="dcd-replace-toggle">
+        <input type="checkbox" [checked]="replaceSecret()" (change)="toggleReplaceSecret()" />
+        Replace connection secret (server/credentials, folder, etc.)
+      </label>
+      @if (replaceSecret()) {
+        <p class="dcd-hint">
+          Enter the full connection details below — they'll replace the existing secret. Leaving this
+          collapsed keeps the current connection secret unchanged.
+        </p>
+        <app-destination-connection-form [destType]="chosenType()!" mode="edit" />
+      }
+    }
+  }
+
+  @if (errorMessage()) {
+    <p class="dcd-error">{{ errorMessage() }}</p>
+  }
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">{{ isView ? 'Close' : 'Cancel' }}</button>
+  @if (!isView) {
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="saving() || (isCreate && !chosenType())"
+      (click)="save()"
+    >
+      {{ saving() ? 'Saving…' : 'Save' }}
+    </button>
+  }
+</mat-dialog-actions>

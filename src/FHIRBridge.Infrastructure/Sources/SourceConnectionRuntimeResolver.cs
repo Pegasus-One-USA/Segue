@@ -37,7 +37,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         Guid sourceConnectionId,
         string? searchParameters,
         string? targetPatientId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? patientSearchCriteria = null)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -110,7 +111,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             Since: retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } lastSync }
                 ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
                 : null,
-            TargetPatientId: targetPatientId);
+            TargetPatientId: targetPatientId,
+            PatientSearchCriteria: patientSearchCriteria);
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME
@@ -127,6 +129,66 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         return config;
+    }
+
+    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    {
+        if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
+        {
+            return;
+        }
+
+        var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+        if (sourceConnection is null)
+        {
+            return;
+        }
+
+        // Only what BuildStoreKey/the strategy dispatch need — no secrets/base URL required to discard a cache entry.
+        var source = new FhirSourceConfiguration(
+            SourceType: default,
+            Name: sourceConnection.Name,
+            BaseUrl: null,
+            TokenEndpoint: null,
+            ClientId: null,
+            KeyId: null,
+            PrivateKeyPem: null,
+            Scopes: [],
+            SourceConnectionId: sourceConnection.Id,
+            ApplicationType: sourceConnection.ApplicationType,
+            TargetPatientId: targetPatientId);
+
+        await patientContextProvider.DiscardTokenAsync(source, cancellationToken);
+    }
+
+    // Reuses the exact same resolution ResolveAsync uses for a real run, then asks the dispatched token provider
+    // (CompositeFhirAccessTokenProvider, routed by ApplicationType) whether it can produce a usable access token
+    // right now — the same check GetAccessTokenAsync performs on every real fetch, just without going on to
+    // actually search for resources. For an interactive source this is a cache lookup (silently refreshing via the
+    // refresh token if the cached access token has merely expired); it only returns false when a genuinely fresh
+    // interactive sign-in is required.
+    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    {
+        if (_accessTokenProvider is null)
+        {
+            return false;
+        }
+
+        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken);
+        if (source is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

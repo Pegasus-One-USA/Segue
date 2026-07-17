@@ -80,6 +80,9 @@ public sealed class PatientScopedSearchTests
 
         public Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
             Task.FromResult<string?>(null);
+
+        public Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 
     private sealed class CapturingHandler : HttpMessageHandler

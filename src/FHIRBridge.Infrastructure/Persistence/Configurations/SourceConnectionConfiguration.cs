@@ -84,11 +84,15 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
                 .HasMaxLength(200)
                 .HasColumnName("KeyId");
 
+            // No HasMaxLength: a Backend System source's scope string carries one "system/{ResourceType}.rs" entry
+            // per selected resource type, and that selection can be seeded from live SMART discovery against the
+            // real source's CapabilityStatement — which for Epic routinely advertises 50-100+ resource types, not
+            // just this app's ~12-entry static default list. 1000 chars truncates real-world scope lists; there's
+            // no app-level cap that would make any other finite length safe either, so this is nvarchar(max).
             var scopesProperty = authentication.Property(x => x.Scopes)
                 .HasConversion(
                     value => string.Join(' ', value),
                     value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                .HasMaxLength(1000)
                 .HasColumnName("Scopes");
 
             scopesProperty.Metadata.SetValueComparer(new ValueComparer<string[]>(

@@ -17,5 +17,6 @@ public static class EhrEndpointMapper
             endpoint.CreatedOnUtc,
             endpoint.CreatedBy,
             endpoint.ModifiedOnUtc,
-            endpoint.ModifiedBy);
+            endpoint.ModifiedBy,
+            endpoint.EndpointType);
 }

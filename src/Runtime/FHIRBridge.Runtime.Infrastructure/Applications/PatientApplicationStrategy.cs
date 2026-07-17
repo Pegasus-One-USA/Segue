@@ -43,6 +43,9 @@ public sealed class PatientApplicationStrategy : SourceApplicationStrategyBase
     public override Task<string?> GetResolvedBaseUrlAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.GetResolvedBaseUrlAsync(source, cancellationToken);
 
+    public override Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        _interactive.DiscardTokenAsync(source, cancellationToken);
+
     protected override void ValidateCore(FhirSourceConfiguration source, List<string> errors)
     {
         RequireClientId(source, errors);

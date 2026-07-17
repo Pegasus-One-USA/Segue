@@ -1,0 +1,205 @@
+// Material theming for the DemoType2 "Launch Provider In App" screen only — defines the --mat-sys-* tokens
+// Material components read for color; deliberately not touching `body` so the existing phone-mockup views
+// (and their own --color-* tokens below) keep their current look.
+@use '@angular/material' as mat;
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+}
+
+/* Design tokens mirrored from the FHIRBridge portal (portal/src/styles.scss), but with a blue primary
+   instead of the portal's teal — a deliberate visual cue that this is the separate demo app, not FHIRBridge itself. */
+:root {
+  --color-primary:      #2563EB;
+  --color-primary-dark: #1D4ED8;
+  --color-primary-soft: #EFF6FF;
+  --color-primary-mid:  #BFDBFE;
+  --color-secondary:    #0EA5E9;
+  --color-on-primary:   #FFFFFF;
+
+  --color-success:      #10B981;
+  --color-success-soft: #ECFDF5;
+  --color-success-strong: #065F46;
+  --color-warning:      #F59E0B;
+  --color-warning-soft: #FFF4E5;
+  --color-warning-strong: #92400E;
+  --color-error:        #EF4444;
+  --color-error-soft:   #FEF2F2;
+  --color-error-strong: #991B1B;
+  --color-info:         #3B7FFF;
+  --color-info-soft:    #EFF6FF;
+
+  --color-ink:    #1A202C;
+  --color-ink-2:  #374151;
+  --color-muted:  #64748B;
+  --color-muted-2: #94A3B8;
+  --color-border: #E2E8F0;
+  --color-border-input: #CBD5E1;
+  --color-bg:     #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-side:   #F8FAFC;
+
+  --radius-sm:    6px;
+  --radius-base:  8px;
+  --radius-md:    10px;
+  --radius-card:  14px;
+  --radius-modal: 18px;
+  --radius-pill:  999px;
+
+  --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.22);
+
+  --font-family: Inter, 'Segoe UI', system-ui, Arial, sans-serif;
+
+  --transition-fast: 100ms ease;
+  --transition-base: 150ms ease;
+  --transition-slow: 200ms ease;
+}
+
+* , *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-family);
+  color: var(--color-ink);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+// Shared across the login shell and every DemoType screen — kept global rather than duplicated
+// per-component since Angular's per-component style encapsulation would otherwise require copying
+// these into each DemoType folder.
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-side);
+  color: var(--color-ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.login-type-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error-banner {
+  background: var(--color-error-soft);
+  color: var(--color-error-strong);
+  border-radius: var(--radius-base);
+  padding: 10px 14px;
+  font-size: 13px;
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  margin-bottom: 12px;
+
+  input, select {
+    padding: 9px 12px;
+    font-size: 14px;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    color: var(--color-ink);
+    background: var(--color-surface);
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+  }
+}
+
+.connect-btn {
+  margin-top: auto;
+  width: 100%;
+  padding: 14px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--transition-base), transform var(--transition-fast);
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+  }
+}

@@ -73,4 +73,7 @@ public sealed class DistributedFhirAuthorizationCodeTokenStore : IFhirAuthorizat
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl },
             cancellationToken);
     }
+
+    public Task RemoveAsync(string key, CancellationToken cancellationToken) =>
+        _cache.RemoveAsync(KeyPrefix + key, cancellationToken);
 }

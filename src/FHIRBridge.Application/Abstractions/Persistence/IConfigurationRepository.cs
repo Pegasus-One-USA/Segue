@@ -1,4 +1,5 @@
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Abstractions.Persistence;
 
@@ -14,12 +15,27 @@ public interface IConfigurationRepository
     Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct);
     Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct);
     Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct);
+    Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken);
+
+    /// <summary>Case-insensitive name uniqueness check across non-soft-deleted source connections. When
+    /// <paramref name="excludeId"/> is set (an update in progress), that connection's own row is excluded so it
+    /// doesn't collide with itself.</summary>
+    Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
 
     // ── Destinations ──────────────────────────────────────────────────────────
     Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct);
+    Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken ct);
     Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct);
     Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct);
     Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct);
+    Task RemoveDestinationAsync(DestinationConfiguration e, CancellationToken ct);
+
+    /// <summary>
+    /// True if any <see cref="PipelineRunRouteExecution"/> exists for a <see cref="MappingProfile"/> that targets
+    /// this destination. There is no FK/navigation for this chain (destinations, mappings, and executions are all
+    /// flat/independent), so it is resolved as two queries rather than a single join.
+    /// </summary>
+    Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken ct);
 
     // ── Mapping profiles ──────────────────────────────────────────────────────
     Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct);
@@ -42,3 +58,8 @@ public interface IConfigurationRepository
     // ── EHR endpoints (read-only directory, populated by EpicEndpointDirectorySeeder) ──────────────
     Task<EhrEndpoint?> GetEhrEndpointAsync(Guid id, CancellationToken ct);
 }
+
+public sealed record DestinationFilter(
+    string? Search,
+    DestinationType? DestinationType,
+    bool? IsEnabled);

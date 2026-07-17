@@ -55,7 +55,7 @@ export interface CreateTableRequest {
   tableName: string;
 }
 
-/** Permanently drops a column via a real ALTER TABLE ... DROP COLUMN â€” irreversible, data included. */
+/** Permanently drops a column via a real ALTER TABLE ... DROP COLUMN — irreversible, data included. */
 export interface DropColumnRequest {
   connection: DestinationProbeRequest;
   tableName: string;

@@ -8,7 +8,7 @@ namespace FHIRBridge.Application.Services;
 /// <list type="bullet">
 ///   <item>Prefix by application type: <c>user/</c> (EHR launch / standalone), <c>patient/</c> (patient), <c>system/</c> (backend).</item>
 ///   <item>Suffix by SMART scope version: <c>.rs</c> (v2 granular read+search) or <c>.read</c> (v1 coarse).</item>
-///   <item>Interactive types add <c>openid fhirUser offline_access</c> plus <c>launch</c> (EHR launch) or <c>launch/patient</c> (standalone/patient). Backend adds none of these.</item>
+///   <item>Interactive types add <c>openid fhirUser offline_access</c> plus <c>launch</c> (EHR launch) or <c>launch/patient</c> (patient only). Provider Standalone adds neither. Backend adds none of these.</item>
 /// </list>
 /// When <c>scopes_supported</c> is supplied, each generated resource scope is checked against it (exact or wildcard
 /// match) and any unsupported ones are reported — never silently dropped, so the caller decides.
@@ -38,7 +38,17 @@ public sealed class ScopeGeneratorService : IScopeGeneratorService
             scopes.Add("openid");
             scopes.Add("fhirUser");
             scopes.Add("offline_access");
-            scopes.Add(applicationType == ApplicationType.EhrLaunch ? "launch" : "launch/patient");
+            // 'launch' honors an EHR-supplied launch context; 'launch/patient' asks the EHR to show its own
+            // patient picker. Provider Standalone needs neither — it gets direct user-level access and does its
+            // own patient search inside FHIRBridge.
+            if (applicationType is ApplicationType.EhrLaunch)
+            {
+                scopes.Add("launch");
+            }
+            else if (applicationType is ApplicationType.Patient)
+            {
+                scopes.Add("launch/patient");
+            }
         }
 
         var resourceScopes = resourceTypes

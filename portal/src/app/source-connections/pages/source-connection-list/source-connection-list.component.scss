@@ -1,0 +1,180 @@
+@use '../../../_list-page' as *;
+
+// ─── Epic Configuration modal ──────────────────────────────────────────────────
+// <app-epic-audience-form> assumes it's sitting inside NodeLibraryDialogComponent's sized shell (.nld /
+// .nld-detail--form): its sticky topbar/footer only pin correctly within a bounded, independently-scrolling
+// box. Reproduce that sizing here rather than relying on a generic unsized modal wrapper.
+.sc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.sc-modal-panel {
+  width: min(92vw, 1100px);
+  height: min(88vh, 740px);
+  background: var(--color-surface);
+  border-radius: var(--radius-2xl, 18px);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  app-epic-audience-form {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+// ─── Action Buttons ───────────────────────────────────────────────────────────
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-base);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-base);
+
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
+  &:active:not([disabled]) { background: var(--color-primary-dark); }
+  &[disabled] { opacity: 0.5; cursor: not-allowed; }
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 0;
+}
+
+// ─── Column widths ────────────────────────────────────────────────────────────
+.col-actions {
+  width: 130px;
+  text-align: right;
+}
+
+// ─── Cell elements ────────────────────────────────────────────────────────────
+.cell-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.endpoint-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: var(--color-primary);
+  }
+}
+
+.cell-url {
+  font-size: 13px;
+  color: var(--color-muted);
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.vendor-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-success-soft);
+  border: 1px solid var(--color-success);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-success);
+  white-space: nowrap;
+  text-transform: capitalize;
+
+  &--inactive {
+    background: var(--color-side);
+    border-color: var(--color-border);
+    color: var(--color-muted);
+  }
+}
+
+// ─── Action buttons ───────────────────────────────────────────────────────────
+.actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+// Each action gets its own soft-tinted "chip" background at rest (not just on hover)
+// so the actions read as distinct, colorful controls rather than plain icons.
+%action-chip {
+  width:         32px;
+  height:        32px;
+  border-radius: 50%;
+  transition:    background var(--transition-base), color var(--transition-base), opacity var(--transition-base);
+
+  mat-icon { font-size: 17px; height: 17px; width: 17px; }
+
+  &[disabled] { opacity: 0.35; }
+}
+
+.btn-view {
+  @extend %action-chip;
+  background: var(--color-side);
+  color:      var(--color-ink-2);
+
+  &:hover:not([disabled]) { background: var(--color-ink-2); color: var(--color-on-primary); }
+}
+
+.btn-edit {
+  @extend %action-chip;
+  background: var(--color-primary-soft);
+  color:      var(--color-primary);
+
+  &:hover:not([disabled]) { background: var(--color-primary); color: var(--color-on-primary); }
+}
+
+.btn-delete {
+  @extend %action-chip;
+  background: var(--color-error-soft);
+  color:      var(--color-error);
+
+  &:hover:not([disabled]) { background: var(--color-error); color: var(--color-on-primary); }
+}
