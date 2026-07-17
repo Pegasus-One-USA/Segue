@@ -21,6 +21,7 @@ using FHIRBridge.Runtime.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Exceptions;
 using FHIRBridge.SharedKernel.Observability;
 using Microsoft.Extensions.Logging;
+using System.IO.Compression;
 using System.Text.Json.Nodes;
 
 namespace FHIRBridge.Infrastructure.Pipeline;
@@ -132,6 +133,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var extractedCount = 0;
         var mappedCount = 0;
         var writtenCount = 0;
+        var inlineDownloads = new List<GeneratedFileDto>();
+        var downloadUrls = new List<string>();
 
         var config = await LoadConfigurationAsync(cancellationToken);
         var scheduledAtUtc = request.ScheduledAtUtc ?? DateTime.UtcNow;
@@ -143,6 +146,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             : request.RunDueSchedulesOnly
                 ? "Scheduled"
                 : "Manual";
+
+        // Only the synchronous, non-bulk-export API trigger (PipelineRunsController.Start) sets AllowInlineDownload —
+        // schedules, dispatched/queued runs, and webhooks have no HTTP response to carry Download-mode bytes back
+        // through, so a Download-mode CSV destination reached from those paths fails loudly instead of silently.
+        var runStartedAtUtc = new DateTimeOffset(startedOnUtc, TimeSpan.Zero);
 
         await RecordAuditAsync(
             pipelineRunId,
@@ -316,6 +324,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
                 foreach (var route in routeGroup)
                 {
+                    var writeContext = new PipelineWriteContext(
+                        request.AllowInlineDownload,
+                        route.MappingProfile.Name,
+                        runStartedAtUtc);
+
                     var result = await ExecuteRouteAsync(
                         config,
                         pipelineRunId,
@@ -326,10 +339,20 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         triggerType,
                         request.CorrelationId,
                         errors,
+                        writeContext,
                         cancellationToken);
 
                     mappedCount += result.MappedCount;
                     writtenCount += result.WrittenCount;
+                    if (result.InlineDownload is not null)
+                    {
+                        inlineDownloads.Add(result.InlineDownload);
+                    }
+
+                    if (result.DownloadUrl is not null)
+                    {
+                        downloadUrls.Add(result.DownloadUrl);
+                    }
                 }
             }
         }
@@ -345,6 +368,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             request.TriggeredBy,
             triggerType,
             request.CorrelationId,
+            CombineInlineDownloads(inlineDownloads),
+            downloadUrls,
             cancellationToken);
     }
 
@@ -358,6 +383,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var errors = new List<string>();
         var mappedCount = 0;
         var writtenCount = 0;
+        var inlineDownloads = new List<GeneratedFileDto>();
+        var downloadUrls = new List<string>();
+        var runStartedAtUtc = new DateTimeOffset(startedOnUtc, TimeSpan.Zero);
 
         var config = await LoadConfigurationAsync(cancellationToken);
         var webhookConfiguration = GetRequired(
@@ -427,6 +455,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             foreach (var route in webhookRoutes)
             {
+                // Webhook-triggered runs never have an HTTP caller waiting to consume Download-mode bytes (the
+                // caller here is the webhook sender, not a CSV consumer) — always false, never derived from a flag.
+                var writeContext = new PipelineWriteContext(
+                    AllowInlineDelivery: false,
+                    route.MappingProfile.Name,
+                    runStartedAtUtc);
+
                 var result = await ExecuteRouteAsync(
                     config,
                     pipelineRunId,
@@ -437,10 +472,20 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     triggerType,
                     request.CorrelationId,
                     errors,
+                    writeContext,
                     cancellationToken);
 
                 mappedCount += result.MappedCount;
                 writtenCount += result.WrittenCount;
+                if (result.InlineDownload is not null)
+                {
+                    inlineDownloads.Add(result.InlineDownload);
+                }
+
+                if (result.DownloadUrl is not null)
+                {
+                    downloadUrls.Add(result.DownloadUrl);
+                }
             }
         }
 
@@ -455,6 +500,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             request.TriggeredBy,
             triggerType,
             request.CorrelationId,
+            CombineInlineDownloads(inlineDownloads),
+            downloadUrls,
             cancellationToken);
     }
 
@@ -468,6 +515,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         string? triggerType,
         string? correlationId,
         List<string> errors,
+        PipelineWriteContext writeContext,
         CancellationToken cancellationToken)
     {
         // Source, destination, and resource type are all owned by the route's mapping profile.
@@ -571,11 +619,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
 
             var destinationWriter = _destinationWriterFactory.Create(destination.DestinationType);
-            var writtenCount = await destinationWriter.WriteAsync(
+            var writeResult = await destinationWriter.WriteAsync(
                 destination,
                 mappingProfile,
                 mappedRecords,
+                writeContext,
                 cancellationToken);
+            var writtenCount = writeResult.Count;
 
             if (writtenCount > 0)
             {
@@ -617,7 +667,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 DateTime.UtcNow,
                 cancellationToken);
 
-            return new RouteExecutionResult(mappedRecords.Count, writtenCount);
+            return new RouteExecutionResult(
+                mappedRecords.Count,
+                writtenCount,
+                writeResult.InlineDownload is { } inlineFile
+                    ? new GeneratedFileDto(inlineFile.FileName, inlineFile.ContentType, inlineFile.Content)
+                    : null,
+                writeResult.DownloadUrl);
         }
         catch (Exception exception)
         {
@@ -766,6 +822,37 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return preparedResources;
     }
 
+    /// <summary>
+    /// A run normally produces at most one Download-mode file (one destination reached via a manual "Run Now").
+    /// If more than one route in the same run happened to write one, they're zipped together rather than silently
+    /// dropping all but the first.
+    /// </summary>
+    private static GeneratedFileDto? CombineInlineDownloads(IReadOnlyList<GeneratedFileDto> files)
+    {
+        if (files.Count == 0)
+        {
+            return null;
+        }
+
+        if (files.Count == 1)
+        {
+            return files[0];
+        }
+
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var file in files)
+            {
+                var entry = archive.CreateEntry(file.FileName);
+                using var entryStream = entry.Open();
+                entryStream.Write(file.Content);
+            }
+        }
+
+        return new GeneratedFileDto("download.zip", "application/zip", buffer.ToArray());
+    }
+
     private async Task<ConfiguredPipelineRunDto> CompleteRunAsync(
         Guid pipelineRunId,
         IReadOnlyList<string> resourceTypes,
@@ -777,6 +864,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         string? triggeredBy,
         string? triggerType,
         string? correlationId,
+        GeneratedFileDto? inlineDownload,
+        IReadOnlyList<string> downloadUrls,
         CancellationToken cancellationToken)
     {
         var status = errors.Count == 0
@@ -814,7 +903,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             completedOnUtc,
             IsEnabled: true,
             TriggeredBy: triggeredBy,
-            TriggerType: triggerType);
+            TriggerType: triggerType,
+            InlineDownload: inlineDownload,
+            DownloadUrls: downloadUrls.Count == 0 ? null : downloadUrls);
 
         await _pipelineRunRepository.AddAsync(pipelineRun, cancellationToken);
 
@@ -1011,7 +1102,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         int ExecutionOrder,
         string? SearchParameters);
 
-    private sealed record RouteExecutionResult(int MappedCount, int WrittenCount);
+    private sealed record RouteExecutionResult(
+        int MappedCount,
+        int WrittenCount,
+        GeneratedFileDto? InlineDownload = null,
+        string? DownloadUrl = null);
 
     private sealed class NoOpLineageTracker : ILineageTracker
     {

@@ -243,11 +243,14 @@ export class WorkflowBuildAssemblerService {
 
     return {
       name,
-      destinationType: 'Sftp',
+      // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson field
+      // (dest_deliveryMode), not the DestinationType — previously this always hardcoded 'Sftp' regardless of the
+      // chosen delivery mode, producing a broken empty-host sftp:// secret for every other mode.
+      destinationType: 'Csv',
       keyVaultName: 'workflow-secrets',
       secretName,
       target: fields['dest_filePattern'] || null,
-      inlineSecret: this.buildSftpUri(fields),
+      inlineSecret: fields['dest_deliveryMode'] === 'sftp' ? this.buildSftpUri(fields) : '',
       connectionMetadataJson: this.buildConnectionMetadata(fields, false),
     };
   }
@@ -259,8 +262,10 @@ export class WorkflowBuildAssemblerService {
   private buildConnectionMetadata(f: Record<string, string>, isSql: boolean): string {
     const keys = isSql
       ? ['dest_name', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode']
-      : ['dest_name', 'dest_storageType', 'dest_folder', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
-         'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder'];
+      : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
+         'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
+         'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
+         'dest_downloadLinkExpiryMinutes'];
     const metadata: Record<string, string> = {};
     for (const key of keys) {
       if (f[key] !== undefined) metadata[key] = f[key];

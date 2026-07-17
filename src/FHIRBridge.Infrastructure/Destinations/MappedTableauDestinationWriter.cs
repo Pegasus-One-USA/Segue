@@ -21,15 +21,16 @@ public sealed class MappedTableauDestinationWriter : IConfiguredDestinationWrite
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var target = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -43,7 +44,7 @@ public sealed class MappedTableauDestinationWriter : IConfiguredDestinationWrite
                 await MappedDestinationSerialization.PostJsonAsync(httpClient, target, record, cancellationToken);
             }
 
-            return records.Count;
+            return new DestinationWriteResult(records.Count);
         }
 
         var fileName = MappedDestinationSerialization.BuildFileName(destination, mappingProfile, "csv");
@@ -54,6 +55,6 @@ public sealed class MappedTableauDestinationWriter : IConfiguredDestinationWrite
             httpClient,
             cancellationToken);
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 }

@@ -49,6 +49,9 @@ export interface WorkflowRunResponse {
   outputsByNodeId?: Record<string, {
     nodeType: string;
     payload?: { resources?: Array<{ resourceType: string; resourceId: string; payload: string }> };
+    // Only a CSV destination node using Download-URL delivery populates downloadUrl (see
+    // DestinationNodeExecutor.ExecuteAsync) — absent for every other node type/delivery mode.
+    metadata?: { downloadUrl?: string | null };
   }>;
 }
 
@@ -226,6 +229,14 @@ export function extractPatientDetail(result: WorkflowRunResponse, patientId: str
  *  interactive sign-in is required." */
 export function indicatesReAuthorizationNeeded(message: string): boolean {
   return message.includes('Re-authorize the source') || message.includes('has no authorized token');
+}
+
+/** Pulls the signed download link out of a /run response for a workflow whose CSV destination uses Download-URL
+ *  delivery — null if no destination node produced one (wrong delivery mode, or zero records written). */
+export function extractDownloadUrl(result: WorkflowRunResponse): string | null {
+  const destinationOutput = Object.values(result.outputsByNodeId ?? {})
+    .find(output => typeof output.metadata?.downloadUrl === 'string');
+  return (destinationOutput?.metadata?.downloadUrl as string | undefined) ?? null;
 }
 
 @Injectable()

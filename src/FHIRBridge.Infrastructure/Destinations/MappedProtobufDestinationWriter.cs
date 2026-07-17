@@ -35,15 +35,16 @@ public sealed class MappedProtobufDestinationWriter : IConfiguredDestinationWrit
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var target = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -64,7 +65,7 @@ public sealed class MappedProtobufDestinationWriter : IConfiguredDestinationWrit
         await MappedDestinationSerialization.WriteTextTargetAsync(
             target, "fhirbridge_mapped_record.proto", ProtoSchema, httpClient, cancellationToken);
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 
     private static byte[] EncodeRecord(MappedDestinationRecord record)

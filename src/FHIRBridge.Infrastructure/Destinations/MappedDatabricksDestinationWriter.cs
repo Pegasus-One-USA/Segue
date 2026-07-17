@@ -20,15 +20,16 @@ public sealed class MappedDatabricksDestinationWriter : IConfiguredDestinationWr
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var secret = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -53,7 +54,7 @@ public sealed class MappedDatabricksDestinationWriter : IConfiguredDestinationWr
             cancellationToken);
 
         response.EnsureSuccessStatusCode();
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 
     private static string ResolveTableName(

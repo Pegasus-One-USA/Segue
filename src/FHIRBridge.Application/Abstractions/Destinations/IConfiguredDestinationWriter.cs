@@ -5,9 +5,10 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 
 public interface IConfiguredDestinationWriter
 {
-    Task<int> WriteAsync(
+    Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken);
 }
