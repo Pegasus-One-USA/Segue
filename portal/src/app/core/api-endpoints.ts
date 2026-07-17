@@ -91,6 +91,13 @@ export const MAPPING_ENDPOINTS = {
     `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`,
 };
 
+// ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──
+// SuperAdmin-only: widens which browser origins the API's Portal CORS policy allows.
+export const CORS_ORIGINS_ENDPOINTS = {
+  list: `${API_V1_BASE}/system/allowed-origins`,
+  byId: (id: string) => `${API_V1_BASE}/system/allowed-origins/${id}`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,

@@ -566,7 +566,15 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.isRedirectingToMyChart.set(true);
     this.hospitalSelectError.set(null);
     try {
-      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id);
+      // callerId tells FHIRBridge's OAuthController.Callback to redirect the browser straight back to this exact
+      // page (see ngOnInit) once the token exchange completes, instead of falling back to the source connection's
+      // static PostLaunchRedirectUri — see InteractiveSourceAuthorizationService.CompleteAsync, where a caller-
+      // supplied callerId always wins over that DB field. Origin + pathname only (no existing query/hash): the
+      // callback appends its own workflowRunId/launchError/signedIn marker on top, and ngOnInit strips whatever
+      // query string is present anyway. FHIRBridge validates the origin against Portal:AllowedOrigins before
+      // honoring it (CallerIdOriginValidator) — this page's origin must be listed there.
+      const callerId = `${window.location.origin}${window.location.pathname}`;
+      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id, callerId);
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);

@@ -224,6 +224,78 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     });
 });
 
+// Provider_Standalone's own settings: the two FHIRBridge workflow ids its launch-standalone-provider screen calls
+// (list vs. detail — see WorkflowSettingsEntity). Kept separate from /api/settings above so saving one never
+// touches the other's WorkflowUrl. Gated on the ProviderStandalone role (not Admin) — this is the role that
+// actually logs into the Provider_Standalone demo type and sees the Settings gear button.
+app.MapGet("/api/provider-standalone-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+{
+    if (!TryGetSession(http, sessions, out _, out var role))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (role != UserRoles.ProviderStandalone)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    return Results.Ok(new
+    {
+        standaloneWorkflowId = settings?.StandaloneWorkflowId ?? string.Empty,
+        standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty
+    });
+});
+
+// Read-only, any authenticated role — lets launch-standalone-provider.ts's fetch/detail/redirect calls resolve the
+// configured workflow ids without needing the full settings endpoint's role check.
+app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+{
+    if (!TryGetSession(http, sessions, out _, out _))
+    {
+        return Results.Unauthorized();
+    }
+
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    return Results.Ok(new
+    {
+        standaloneWorkflowId = settings?.StandaloneWorkflowId ?? string.Empty,
+        standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty
+    });
+});
+
+app.MapPost("/api/provider-standalone-settings", async (
+    SaveProviderStandaloneSettingsRequest request, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+{
+    if (!TryGetSession(http, sessions, out _, out var role))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (role != UserRoles.ProviderStandalone)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    if (settings is null)
+    {
+        settings = new WorkflowSettingsEntity { Id = 1 };
+        db.WorkflowSettings.Add(settings);
+    }
+
+    settings.StandaloneWorkflowId = request.StandaloneWorkflowId.Trim();
+    settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId.Trim();
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new
+    {
+        standaloneWorkflowId = settings.StandaloneWorkflowId,
+        standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId
+    });
+});
+
 // Calls the admin-configured workflow URL, expects a { "Resources": [{ "ResourceType", "ResourceId",
 // "Payload" }] } body back, and upserts each resource into the local Patients table — demonstrating the
 // app fetching real data through FHIRBridge and storing it in its own database.
@@ -464,6 +536,7 @@ static bool TryGetSession(HttpContext http, SessionStore sessions, out int userI
 
 record LoginRequest(string Email, string Password);
 record SaveSettingsRequest(string WorkflowUrl, string PatientWorkflowId, string PatientDetailWorkflowId, string PatientBaseUrl);
+record SaveProviderStandaloneSettingsRequest(string StandaloneWorkflowId, string StandaloneDetailWorkflowId);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.

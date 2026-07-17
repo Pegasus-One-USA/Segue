@@ -403,6 +403,69 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     }
 
     [Fact]
+    public async Task CompleteAsync_prefers_the_callers_callerId_over_the_connections_static_post_launch_redirect_uri()
+    {
+        // Same source connection, two different launches: one supplies a callerId (captured at mint time and
+        // carried in the pending authorization), the other doesn't. The caller-supplied one must win so two apps
+        // sharing this connection each land back on their own address.
+        var source = SeedEpicSource(interactive: new SourceInteractiveConfiguration(
+            [], null, [], postLaunchRedirectUri: "https://static.example.com/back"));
+        const string nonce = "nonce-caller-id";
+        await _stateStore.SaveAsync(nonce, new PendingAuthorization(
+            source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
+            "verifier-1", "https://app/cb", "https://auth.example.com/token", "client-1",
+            WorkflowId: Guid.NewGuid(), HasLaunchContext: false, CallerId: "https://healthapp.example.com/callback"),
+            CancellationToken.None);
+        _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
+                It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("access-token");
+
+        var result = await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
+
+        result.PostLaunchRedirectUri.Should().Be("https://healthapp.example.com/callback");
+    }
+
+    [Fact]
+    public async Task CompleteAsync_falls_back_to_the_static_post_launch_redirect_uri_when_no_caller_id_was_supplied()
+    {
+        var source = SeedEpicSource(interactive: new SourceInteractiveConfiguration(
+            [], null, [], postLaunchRedirectUri: "https://static.example.com/back"));
+        const string nonce = "nonce-static-fallback";
+        await _stateStore.SaveAsync(nonce, new PendingAuthorization(
+            source.Id, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic, "Epic Standalone",
+            "verifier-1", "https://app/cb", "https://auth.example.com/token", "client-1",
+            WorkflowId: Guid.NewGuid(), HasLaunchContext: false),
+            CancellationToken.None);
+        _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
+                It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("access-token");
+
+        var result = await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
+
+        result.PostLaunchRedirectUri.Should().Be("https://static.example.com/back");
+    }
+
+    [Fact]
+    public async Task StartInteractiveFromContextAsync_carries_the_context_callerId_into_the_pending_authorization()
+    {
+        var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, []));
+        SetupDiscovery();
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns((FhirSourceConfiguration _, string _, string state, string? _) =>
+                new SmartAuthorizationRequest($"https://auth.example.com/authorize?state={state}", "verifier-1", state));
+
+        var context = _protector.ProtectContext(routeId, callerId: "https://healthapp.example.com/callback");
+
+        var url = await Service().StartInteractiveFromContextAsync(context, "https://fallback/callback", CancellationToken.None);
+
+        var state = System.Web.HttpUtility.ParseQueryString(url.Query)["state"]!;
+        var nonce = _protector.UnprotectState(state)!;
+        var pending = await _stateStore.TakeAsync(nonce, CancellationToken.None);
+        pending!.CallerId.Should().Be("https://healthapp.example.com/callback");
+    }
+
+    [Fact]
     public async Task StartEhrLaunchAsync_forwards_the_launch_token_for_a_trusted_issuer()
     {
         var source = SeedEpicSource(interactive: new SourceInteractiveConfiguration(

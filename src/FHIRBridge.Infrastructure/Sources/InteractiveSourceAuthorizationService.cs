@@ -84,11 +84,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _graphExecutionOptions = graphExecutionOptions?.Value ?? new WorkflowGraphExecutionOptions();
     }
 
-    public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null) =>
-        _launchTokenProtector.ProtectContext(routeId, ehrEndpointId);
+    public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null) =>
+        _launchTokenProtector.ProtectContext(routeId, ehrEndpointId, callerId);
 
-    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null) =>
-        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId);
+    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null) =>
+        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId);
 
     public async Task<Uri> StartAsync(
         Guid sourceConnectionId,
@@ -119,7 +119,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
         var authorizationUrl = await IssueAuthorizationAsync(
-            source, sourceConnection, launch: null, routeId: null, workflowId: null, requestedRedirectUri: redirectUri, cancellationToken);
+            source, sourceConnection, launch: null, routeId: null, workflowId: null, requestedRedirectUri: redirectUri,
+            callerId: null, cancellationToken);
 
         await RecordAuditAsync(sourceConnectionId, "InteractiveAuthorizationStarted", "Started",
             $"Interactive OAuth sign-in started for {sourceConnection.Name}.", cancellationToken);
@@ -137,7 +138,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         try
         {
             var sourceConnection = await GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
-            return await StartEhrLaunchCoreAsync(sourceConnection, issuer, launch, redirectUri, routeId: null, workflowId: null, cancellationToken);
+            return await StartEhrLaunchCoreAsync(sourceConnection, issuer, launch, redirectUri, routeId: null, workflowId: null, callerId: null, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -167,7 +168,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
                 resolvedSourceConnectionId = workflowSource.Id;
                 return await StartEhrLaunchCoreAsync(
-                    workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId, cancellationToken);
+                    workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId,
+                    callerId: context.CallerId, cancellationToken);
             }
 
             if (context.RouteId is { } contextRouteId)
@@ -175,7 +177,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
                 resolvedSourceConnectionId = sourceConnection.Id;
                 return await StartEhrLaunchCoreAsync(
-                    sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null, cancellationToken);
+                    sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null,
+                    callerId: context.CallerId, cancellationToken);
             }
 
             throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -262,7 +265,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
             var authorizationUrl = await IssueAuthorizationAsync(
-                source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
+                source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
+                callerId: context.CallerId, cancellationToken);
 
             await RecordAuditAsync(sourceConnection.Id, "InteractiveAuthorizationStarted", "Started",
                 ehrEndpoint is null
@@ -309,14 +313,14 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             {
                 var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
                 resolvedSourceConnectionId = workflowSource.Id;
-                return await StartStandaloneCoreAsync(workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, cancellationToken);
+                return await StartStandaloneCoreAsync(workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, context.CallerId, cancellationToken);
             }
 
             if (context.RouteId is { } contextRouteId)
             {
                 var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
                 resolvedSourceConnectionId = sourceConnection.Id;
-                return await StartStandaloneCoreAsync(sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, cancellationToken);
+                return await StartStandaloneCoreAsync(sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, context.CallerId, cancellationToken);
             }
 
             throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -334,6 +338,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         Guid? routeId,
         Guid? workflowId,
         EhrEndpoint? ehrEndpoint,
+        string? callerId,
         CancellationToken cancellationToken)
     {
         // A resolved hospital/organization endpoint overrides the connection's own configured base URL — discovery
@@ -367,7 +372,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
         var authorizationUrl = await IssueAuthorizationAsync(
-            source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
+            source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
+            callerId: callerId, cancellationToken);
 
         await RecordAuditAsync(sourceConnection.Id, "StandaloneAuthorizationStarted", "Started",
             ehrEndpoint is null
@@ -392,6 +398,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string redirectUri,
         Guid? routeId,
         Guid? workflowId,
+        string? callerId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(launch))
@@ -424,7 +431,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
 
         var authorizationUrl = await IssueAuthorizationAsync(
-            source, sourceConnection, launch, routeId, workflowId, requestedRedirectUri: redirectUri, cancellationToken);
+            source, sourceConnection, launch, routeId, workflowId, requestedRedirectUri: redirectUri,
+            callerId: callerId, cancellationToken);
 
         await RecordAuditAsync(sourceConnection.Id, "EhrLaunchAuthorizationStarted", "Started",
             $"EHR launch started for {sourceConnection.Name} (iss {issuer}).", cancellationToken);
@@ -441,6 +449,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         Guid? routeId,
         Guid? workflowId,
         string requestedRedirectUri,
+        string? callerId,
         CancellationToken cancellationToken)
     {
         // Prefer a registered redirect URI (must match the EHR registration exactly); fall back to the request-derived one.
@@ -475,7 +484,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 // resolved EhrEndpoint override) through to CompleteAsync — the token exchange there builds its own
                 // FhirSourceConfiguration from scratch and has no other way to learn which URL was used.
                 ResolvedBaseUrl: source.BaseUrl,
-                HasLaunchContext: launch is not null),
+                HasLaunchContext: launch is not null,
+                CallerId: callerId),
             cancellationToken);
 
         return new Uri(request.AuthorizationUrl);
@@ -595,9 +605,12 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         // the bare JSON response, since there is nothing for the caller to fetch or be told about either way. A
         // skipped-on-purpose workflow trigger (see skipWorkflowTrigger above) still redirects: something IS bound,
         // the caller still needs the round trip back to run its own fetch, we just chose not to attempt the
-        // convenience run ourselves.
+        // convenience run ourselves. The caller-supplied callerId (captured at launch-url mint time, see
+        // BuildWorkflowLaunchContextToken/BuildLaunchContextToken) wins over the connection's static
+        // PostLaunchRedirectUri when one was supplied for this specific launch, so two apps sharing one connection
+        // each land back on their own address instead of whichever one the connection happens to be configured with.
         var postLaunchRedirectUri = workflowRunId is not null || workflowRunFailed || skipWorkflowTrigger
-            ? sourceConnection.Interactive?.PostLaunchRedirectUri
+            ? pending.CallerId ?? sourceConnection.Interactive?.PostLaunchRedirectUri
             : null;
 
         return new InteractiveAuthorizationResult(

@@ -93,6 +93,14 @@ public sealed class WorkflowSettingsEntity
     public string PatientWorkflowId { get; set; } = string.Empty;
     public string PatientDetailWorkflowId { get; set; } = string.Empty;
     public string PatientBaseUrl { get; set; } = string.Empty;
+
+    // The two FHIRBridge workflow ids Provider_Standalone's launch-standalone-provider screen needs — "Fetch
+    // Patient List" and "Patient Detail" are deliberately separate workflows (see
+    // launch-standalone-provider.ts's fetchPatientList/viewPatientDetail), so each gets its own settable id here
+    // rather than reusing WorkflowUrl, which is an unrelated, single opaque webhook URL for the Patient_Standalone
+    // demo type.
+    public string StandaloneWorkflowId { get; set; } = string.Empty;
+    public string StandaloneDetailWorkflowId { get; set; } = string.Empty;
 }
 
 public sealed class HealthAppDbContext : DbContext
@@ -207,7 +215,9 @@ public sealed class HealthAppDbContext : DbContext
             WorkflowUrl = string.Empty,
             PatientWorkflowId = string.Empty,
             PatientDetailWorkflowId = string.Empty,
-            PatientBaseUrl = "http://localhost:5000"
+            PatientBaseUrl = "http://localhost:5000",
+            StandaloneWorkflowId = string.Empty,
+            StandaloneDetailWorkflowId = string.Empty
         });
     }
 }
