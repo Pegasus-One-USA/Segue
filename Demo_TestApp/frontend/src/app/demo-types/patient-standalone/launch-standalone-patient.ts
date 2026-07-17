@@ -15,8 +15,6 @@ import {
 import {
   CSV_EMAIL_EXPORT_WORKFLOW_ID,
   CSV_EXPORT_WORKFLOW_ID,
-  PATIENT_DETAIL_WORKFLOW_ID,
-  PATIENT_WORKFLOW_ID,
 } from './core/config/standalone-launch.config';
 
 @Component({
