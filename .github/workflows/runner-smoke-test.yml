@@ -12,22 +12,22 @@ jobs:
     runs-on: [self-hosted, Windows, fhirbridge-vm]
     steps:
       - name: Runner identity
-        shell: pwsh
+        shell: powershell
         run: |
           Write-Host "Hostname: $(hostname)"
           Write-Host "User: $(whoami)"
           Write-Host "OS: $([System.Environment]::OSVersion.VersionString)"
 
       - name: ASP.NET Core / .NET runtimes installed
-        shell: pwsh
+        shell: powershell
         run: dotnet --list-runtimes
 
       - name: Outbound HTTPS to GitHub (from within an Actions job, not just an interactive session)
-        shell: pwsh
+        shell: powershell
         run: curl.exe -s -o NUL -w "github.com -> HTTP %{http_code}`n" https://github.com
 
       - name: Deploy target folders present?
-        shell: pwsh
+        shell: powershell
         run: |
           $paths = @(
             "C:\inetpub\wwwroot\fhirbridge-api",
@@ -42,7 +42,7 @@ jobs:
           }
 
       - name: appsettings.Production.json present? (never checked into git, must exist by hand)
-        shell: pwsh
+        shell: powershell
         run: |
           $files = @(
             "C:\inetpub\wwwroot\fhirbridge-api\appsettings.Production.json",
@@ -55,5 +55,5 @@ jobs:
           }
 
       - name: Ports currently in use (80, 5000, 5500) — sanity check before the first real deploy
-        shell: pwsh
+        shell: powershell
         run: Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 80,5000,5500 } | Format-Table LocalAddress,LocalPort,OwningProcess -AutoSize

@@ -120,11 +120,11 @@ jobs:
           name: fhirbridge-deploy
 
       - name: Expand artifact
-        shell: pwsh
+        shell: powershell
         run: Expand-Archive -Path fhirbridge-deploy.zip -DestinationPath extracted -Force
 
       - name: Run deploy script
-        shell: pwsh
+        shell: powershell
         run: |
           $artifactPath = (Resolve-Path extracted).Path
           ./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath $artifactPath
