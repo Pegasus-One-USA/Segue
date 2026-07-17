@@ -26,14 +26,6 @@ public sealed class HospitalEntity
     public int OrganizationId { get; set; }
 }
 
-// Drives the "Login Type" dropdown on the full-screen login page. The selected name determines which
-// component/UI the app loads post-login (e.g. "Patient_Standalone" loads the existing mobile view).
-public sealed class DemoTypeEntity
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-}
-
 // Demographic columns are populated at ingestion time (see Program.cs POST /api/workflow/run) by flattening
 // Payload through PatientFieldExtractor, so reads never need to re-parse the raw FHIR JSON.
 public sealed class PatientEntity
@@ -120,8 +112,6 @@ public sealed class HealthAppDbContext : DbContext
 
     public DbSet<HospitalEntity> Hospitals => Set<HospitalEntity>();
 
-    public DbSet<DemoTypeEntity> DemoTypes => Set<DemoTypeEntity>();
-
     public DbSet<PatientEntity> Patients => Set<PatientEntity>();
 
     public DbSet<WorkflowSettingsEntity> WorkflowSettings => Set<WorkflowSettingsEntity>();
@@ -170,12 +160,6 @@ public sealed class HealthAppDbContext : DbContext
             new HospitalEntity { Id = 3, Name = "Lakeview Community Health", OrganizationId = 9012 },
             new HospitalEntity { Id = 4, Name = "Mercy Regional Medical Center", OrganizationId = 6740 },
             new HospitalEntity { Id = 5, Name = "Cedar Grove Hospital", OrganizationId = 1183 });
-
-        modelBuilder.Entity<DemoTypeEntity>().ToTable("DemoType");
-        modelBuilder.Entity<DemoTypeEntity>().HasData(
-            new DemoTypeEntity { Id = 1, Name = "Patient_Standalone" },
-            new DemoTypeEntity { Id = 2, Name = "Provider_Standalone" },
-            new DemoTypeEntity { Id = 3, Name = "Provider_InApp" });
 
         var seedTimestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var seedFields = PatientFieldExtractor.Extract(PatientSeedData.CamilaLopezJson);

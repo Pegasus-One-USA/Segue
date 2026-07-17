@@ -12,9 +12,6 @@
           <span class="login-type-badge">{{ loginTypeLabel() }}</span>
         </div>
         <div class="app-topbar__actions">
-          @if (role() === 'Admin') {
-            <button type="button" class="icon-btn" (click)="openSettings()" aria-label="Workflow settings">⚙</button>
-          }
           <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -89,39 +86,6 @@
           <p class="error-banner">No patient records yet — use "Connect Get Data" to fetch some.</p>
         }
       </main>
-    }
-
-    <!-- Admin workflow settings popup -->
-    @if (settingsOpen()) {
-      <div class="sheet-backdrop" (click)="closeSettings()">
-        <div class="sheet" (click)="$event.stopPropagation()">
-          <div class="sheet__handle"></div>
-          <div class="sheet__title">Workflow Settings</div>
-          <label class="field">
-            Workflow URL
-            <input type="text" [ngModel]="workflowUrlDraft()" (ngModelChange)="workflowUrlDraft.set($event)" placeholder="https://..." />
-          </label>
-          <label class="field">
-            Patient Standalone Workflow Id (list)
-            <input type="text" [ngModel]="patientWorkflowIdDraft()" (ngModelChange)="patientWorkflowIdDraft.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-          </label>
-          <label class="field">
-            Patient Standalone Detail Workflow Id
-            <input type="text" [ngModel]="patientDetailWorkflowIdDraft()" (ngModelChange)="patientDetailWorkflowIdDraft.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-          </label>
-          <label class="field">
-            Patient Standalone Base URL
-            <input type="text" [ngModel]="patientBaseUrlDraft()" (ngModelChange)="patientBaseUrlDraft.set($event)" placeholder="http://localhost:5000" />
-          </label>
-          @if (settingsError()) {
-            <p class="error-banner">{{ settingsError() }}</p>
-          }
-          <div class="sheet__actions">
-            <button type="button" class="btn-secondary" (click)="closeSettings()">Cancel</button>
-            <button type="button" class="btn-primary" (click)="saveSettings()">Save</button>
-          </div>
-        </div>
-      </div>
     }
   </div>
 </div>

@@ -1,0 +1,83 @@
+<div class="fullscreen-shell">
+  <header class="fullscreen-shell__topbar">
+    <div class="title-group">
+      <span class="fullscreen-shell__title">HealthApp</span>
+      <span class="login-type-badge">{{ loginTypeLabel() }}</span>
+    </div>
+    <div class="fullscreen-shell__actions">
+      <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="settings-page">
+    <header class="page-header">
+      <h1>Workflow Settings</h1>
+      <p class="subtitle">FHIRBridge connection points for every demo experience, in one place.</p>
+    </header>
+
+    @if (isLoading()) {
+      <p>Loading current settings…</p>
+    } @else {
+      @if (loadError()) {
+        <p class="error-banner">{{ loadError() }}</p>
+      }
+
+      <section class="settings-section">
+        <h2>Patient_Standalone (Role: Patient)</h2>
+        <label class="field">
+          Workflow URL
+          <input type="text" [ngModel]="workflowUrl()" (ngModelChange)="workflowUrl.set($event)" placeholder="https://..." />
+        </label>
+        <label class="field">
+          Patient Standalone Workflow Id (list)
+          <input type="text" [ngModel]="patientWorkflowId()" (ngModelChange)="patientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label class="field">
+          Patient Standalone Detail Workflow Id
+          <input type="text" [ngModel]="patientDetailWorkflowId()" (ngModelChange)="patientDetailWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label class="field">
+          Patient Standalone Base URL
+          <input type="text" [ngModel]="patientBaseUrl()" (ngModelChange)="patientBaseUrl.set($event)" placeholder="http://localhost:5000" />
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h2>Provider_Standalone (Role: ProviderStandalone)</h2>
+        <label class="field">
+          Fetch Patient List Workflow Id
+          <input type="text" [ngModel]="standaloneWorkflowId()" (ngModelChange)="standaloneWorkflowId.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
+        </label>
+        <label class="field">
+          Patient Detail Workflow Id
+          <input type="text" [ngModel]="standaloneDetailWorkflowId()" (ngModelChange)="standaloneDetailWorkflowId.set($event)" placeholder="e.g. dc666cee-f674-400f-a4b5-c826e3f4c3a0" />
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h2>Provider_InApp (Role: ProviderInApp)</h2>
+        <label class="field">
+          FHIRBridge Launch Context
+          <input type="text" [ngModel]="providerLaunchContext()" (ngModelChange)="providerLaunchContext.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
+        </label>
+      </section>
+
+      @if (saveError()) {
+        <p class="error-banner">{{ saveError() }}</p>
+      }
+      @if (saved()) {
+        <p class="success-banner">Settings saved.</p>
+      }
+
+      <div class="settings-actions">
+        <button type="button" class="btn-primary" (click)="saveSettings()">Save All Settings</button>
+      </div>
+    }
+  </div>
+</div>

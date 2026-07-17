@@ -1,6 +1,5 @@
 import { Component, NgZone, OnInit, input, output, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -241,27 +240,22 @@ const PENDING_SEARCH_STORAGE_KEY = 'hb_pending_patient_search';
 @Component({
   selector: 'app-launch-standalone-provider',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatCardModule, MatProgressSpinnerModule],
+  imports: [DatePipe, MatCardModule, MatProgressSpinnerModule],
   templateUrl: './launch-standalone-provider.html',
   styleUrl: './launch-standalone-provider.scss',
 })
 export class LaunchStandaloneProviderComponent implements OnInit {
   readonly loginTypeLabel = input('');
-  readonly role = input<string | null>(null);
   readonly logout = output<void>();
 
-  // Admin-editable via the Settings gear button (see openSettings/saveSettings) — persisted on Demo_TestApp's own
-  // backend (WorkflowSettingsEntity), read at runtime rather than baked in at build time. Falls back to whatever's
-  // in standalone-launch.config.ts (the pre-existing, gitignored, compile-time mechanism) until an admin sets these
-  // through the UI, so a repo that already filled in that file keeps working unchanged.
+  // Admin-editable via the unified Admin Settings screen (see AdminSettingsComponent) — persisted on
+  // Demo_TestApp's own backend (WorkflowSettingsEntity), read at runtime rather than baked in at build time.
+  // Falls back to whatever's in standalone-launch.config.ts (the pre-existing, gitignored, compile-time
+  // mechanism) until an admin sets these through the UI, so a repo that already filled in that file keeps
+  // working unchanged.
   private standaloneWorkflowId = STANDALONE_WORKFLOW_ID;
   private standaloneDetailWorkflowId = STANDALONE_DETAIL_WORKFLOW_ID;
   private workflowIdsLoadPromise: Promise<void> | null = null;
-
-  readonly settingsOpen = signal(false);
-  readonly settingsError = signal('');
-  readonly standaloneWorkflowIdDraft = signal('');
-  readonly standaloneDetailWorkflowIdDraft = signal('');
 
   // Purely informational badge — never gates whether the Fetch button is shown. The real, authoritative check is
   // always the next actual /run attempt (see fetchPatientList); this is just a "last known good" hint carried over
@@ -324,7 +318,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     // InteractiveSourceAuthorizationService.CompleteAsync's skipWorkflowTrigger, which is the common case for this
     // component). All three only ever appear once the token exchange itself has already succeeded. Read straight
     // off window.location rather than ActivatedRoute: this app never uses a real <router-outlet> for this content
-    // (app.html renders it via a plain selectedDemoType() @if/@else-if), so ActivatedRoute here is only ever
+    // (app.html renders it via a plain role() @if/@else-if), so ActivatedRoute here is only ever
     // reflecting the root route's state, which depends on Angular Router's own async initialization having
     // settled — a race that, on the exact page load right after this full-page redirect back from Epic, could read
     // back an empty query param map before the Router catches up, silently skipping the auto-fetch branch below
@@ -336,7 +330,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     if (workflowRunId || launchError || signedIn) {
       // Consume these once, then strip them from the visible URL — a native History API call, not Angular Router
       // navigation. This app doesn't use <router-outlet> for this content (app.html renders it via a plain
-      // selectedDemoType() @if/@else-if, not routing), so a router.navigate() here has no component tree to target
+      // role() @if/@else-if, not routing), so a router.navigate() here has no component tree to target
       // and risks re-resolving routes/guards this component was never meant to drive. Without stripping the query
       // string at all, though, it stays on the address bar forever — a later Ctrl+F5 (or just revisiting this URL)
       // would re-run this exact branch every time, re-triggering an auto-fetch even after Reset Token deliberately
@@ -476,53 +470,6 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     } catch {
       // Non-fatal — falls back to whatever's in standalone-launch.config.ts (possibly still the placeholder,
       // which isConfiguredWorkflowId's callers below already guard against).
-    }
-  }
-
-  async openSettings(): Promise<void> {
-    this.settingsError.set('');
-    try {
-      const current = await firstValueFrom(
-        this.http.get<ProviderStandaloneWorkflowIds>(
-          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-standalone-settings`,
-          { withCredentials: true },
-        ),
-      );
-      this.standaloneWorkflowIdDraft.set(current.standaloneWorkflowId);
-      this.standaloneDetailWorkflowIdDraft.set(current.standaloneDetailWorkflowId);
-      this.settingsOpen.set(true);
-    } catch {
-      this.settingsError.set('Could not load settings.');
-    }
-  }
-
-  closeSettings(): void {
-    this.settingsOpen.set(false);
-  }
-
-  async saveSettings(): Promise<void> {
-    try {
-      const saved = await firstValueFrom(
-        this.http.post<ProviderStandaloneWorkflowIds>(
-          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-standalone-settings`,
-          {
-            standaloneWorkflowId: this.standaloneWorkflowIdDraft().trim(),
-            standaloneDetailWorkflowId: this.standaloneDetailWorkflowIdDraft().trim(),
-          },
-          { withCredentials: true },
-        ),
-      );
-      // Memoized as already-loaded so a later fetch never re-hits the network only to get the same values back.
-      this.workflowIdsLoadPromise = Promise.resolve();
-      if (isConfiguredWorkflowId(saved.standaloneWorkflowId)) {
-        this.standaloneWorkflowId = saved.standaloneWorkflowId;
-      }
-      if (isConfiguredWorkflowId(saved.standaloneDetailWorkflowId)) {
-        this.standaloneDetailWorkflowId = saved.standaloneDetailWorkflowId;
-      }
-      this.settingsOpen.set(false);
-    } catch {
-      this.settingsError.set('Could not save settings.');
     }
   }
 

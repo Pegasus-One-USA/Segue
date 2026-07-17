@@ -1,6 +1,5 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, input, output, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -12,8 +11,7 @@ import { PatientService } from './core/services/patient.service';
 import { FHIRBRIDGE_BASE_URL, PROVIDER_LAUNCH_CONTEXT } from './core/config/launch.config';
 import { environment } from '../../../environments/environment';
 
-/** Matches Demo_TestApp's GET /api/provider-in-app-settings and /api/provider-in-app-launch-context responses
- *  (also the POST /api/provider-in-app-settings response). */
+/** Matches Demo_TestApp's GET /api/provider-in-app-launch-context response. */
 interface ProviderInAppLaunchContext {
   providerLaunchContext: string;
 }
@@ -30,29 +28,24 @@ const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
 @Component({
   selector: 'app-launch-provider-in-app',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatCardModule, MatChipsModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [DatePipe, MatCardModule, MatChipsModule, MatIconModule, MatProgressSpinnerModule],
   templateUrl: './launch-provider-in-app.html',
   styleUrl: './launch-provider-in-app.scss'
 })
 export class LaunchProviderInAppComponent implements OnInit {
   readonly loginTypeLabel = input('');
-  readonly role = input<string | null>(null);
   readonly logout = output<void>();
 
   readonly patient = signal<Patient | null>(null);
   readonly isPatientLoading = signal(true);
   readonly launchError = signal<string | null>(null);
 
-  // Admin-editable via the Settings gear button (see openSettings/saveSettings) — persisted on Demo_TestApp's own
-  // backend (WorkflowSettingsEntity), read at runtime rather than baked in at build time. Falls back to whatever's
-  // in launch.config.ts (the pre-existing, gitignored, compile-time mechanism) until an admin sets this through
-  // the UI, so a repo that already filled in that file keeps working unchanged.
+  // Admin-editable via the unified Admin Settings screen (see AdminSettingsComponent) — persisted on
+  // Demo_TestApp's own backend (WorkflowSettingsEntity), read at runtime rather than baked in at build time.
+  // Falls back to whatever's in launch.config.ts (the pre-existing, gitignored, compile-time mechanism) until
+  // an admin sets this through the UI, so a repo that already filled in that file keeps working unchanged.
   private providerLaunchContext = PROVIDER_LAUNCH_CONTEXT;
   private launchContextLoadPromise: Promise<void> | null = null;
-
-  readonly settingsOpen = signal(false);
-  readonly settingsError = signal('');
-  readonly providerLaunchContextDraft = signal('');
 
   readonly age = computed(() => {
     const dateOfBirth = this.patient()?.dateOfBirth;
@@ -88,46 +81,6 @@ export class LaunchProviderInAppComponent implements OnInit {
     } catch {
       // Non-fatal — falls back to whatever's in launch.config.ts (possibly still the placeholder, which every
       // caller below already guards against via isConfiguredValue).
-    }
-  }
-
-  async openSettings(): Promise<void> {
-    this.settingsError.set('');
-    try {
-      const current = await firstValueFrom(
-        this.http.get<ProviderInAppLaunchContext>(
-          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-settings`,
-          { withCredentials: true },
-        ),
-      );
-      this.providerLaunchContextDraft.set(current.providerLaunchContext);
-      this.settingsOpen.set(true);
-    } catch {
-      this.settingsError.set('Could not load settings.');
-    }
-  }
-
-  closeSettings(): void {
-    this.settingsOpen.set(false);
-  }
-
-  async saveSettings(): Promise<void> {
-    try {
-      const saved = await firstValueFrom(
-        this.http.post<ProviderInAppLaunchContext>(
-          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-settings`,
-          { providerLaunchContext: this.providerLaunchContextDraft().trim() },
-          { withCredentials: true },
-        ),
-      );
-      // Memoized as already-loaded so a later use never re-hits the network only to get the same value back.
-      this.launchContextLoadPromise = Promise.resolve();
-      if (isConfiguredValue(saved.providerLaunchContext)) {
-        this.providerLaunchContext = saved.providerLaunchContext;
-      }
-      this.settingsOpen.set(false);
-    } catch {
-      this.settingsError.set('Could not save settings.');
     }
   }
 
