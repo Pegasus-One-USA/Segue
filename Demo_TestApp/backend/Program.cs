@@ -296,6 +296,75 @@ app.MapPost("/api/provider-standalone-settings", async (
     });
 });
 
+// Provider_InApp's own setting: the single FHIRBridge launch-context token its launch-provider-in-app screen
+// hands to /api/v1/oauth/launch/{context} (see WorkflowSettingsEntity). Kept separate from the endpoints above
+// since this demo type needs only one token, not a list/detail pair. Gated on the ProviderInApp role — this is
+// the role that actually logs into the Provider_InApp demo type and sees the Settings gear button.
+app.MapGet("/api/provider-in-app-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+{
+    if (!TryGetSession(http, sessions, out _, out var role))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (role != UserRoles.ProviderInApp)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    return Results.Ok(new
+    {
+        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty
+    });
+});
+
+// Read-only, any authenticated role — lets launch-provider-in-app.ts's EHR-launch redirect resolve the
+// configured launch-context token without needing the full settings endpoint's role check. Must be awaited
+// BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
+app.MapGet("/api/provider-in-app-launch-context", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+{
+    if (!TryGetSession(http, sessions, out _, out _))
+    {
+        return Results.Unauthorized();
+    }
+
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    return Results.Ok(new
+    {
+        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty
+    });
+});
+
+app.MapPost("/api/provider-in-app-settings", async (
+    SaveProviderInAppSettingsRequest request, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+{
+    if (!TryGetSession(http, sessions, out _, out var role))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (role != UserRoles.ProviderInApp)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    if (settings is null)
+    {
+        settings = new WorkflowSettingsEntity { Id = 1 };
+        db.WorkflowSettings.Add(settings);
+    }
+
+    settings.ProviderLaunchContext = request.ProviderLaunchContext.Trim();
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new
+    {
+        providerLaunchContext = settings.ProviderLaunchContext
+    });
+});
+
 // Calls the admin-configured workflow URL, expects a { "Resources": [{ "ResourceType", "ResourceId",
 // "Payload" }] } body back, and upserts each resource into the local Patients table — demonstrating the
 // app fetching real data through FHIRBridge and storing it in its own database.
@@ -537,6 +606,7 @@ static bool TryGetSession(HttpContext http, SessionStore sessions, out int userI
 record LoginRequest(string Email, string Password);
 record SaveSettingsRequest(string WorkflowUrl, string PatientWorkflowId, string PatientDetailWorkflowId, string PatientBaseUrl);
 record SaveProviderStandaloneSettingsRequest(string StandaloneWorkflowId, string StandaloneDetailWorkflowId);
+record SaveProviderInAppSettingsRequest(string ProviderLaunchContext);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.

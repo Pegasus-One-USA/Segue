@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -16,8 +15,6 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAccessTokenIssuer _accessTokenIssuer;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IOperationalAuditService _auditService;
-    private readonly IUserActivityAuditService _activityAuditService;
     private readonly IEmailSender _emailSender;
     private readonly ITotpService _totpService;
     private readonly LocalAuthOptions _localAuthOptions;
@@ -27,8 +24,6 @@ public sealed class LocalAuthService : ILocalAuthService
         IPasswordHasher passwordHasher,
         IAccessTokenIssuer accessTokenIssuer,
         ICurrentUserService currentUserService,
-        IOperationalAuditService auditService,
-        IUserActivityAuditService activityAuditService,
         IEmailSender emailSender,
         ITotpService totpService,
         IOptions<LocalAuthOptions> localAuthOptions)
@@ -37,8 +32,6 @@ public sealed class LocalAuthService : ILocalAuthService
         _passwordHasher = passwordHasher;
         _accessTokenIssuer = accessTokenIssuer;
         _currentUserService = currentUserService;
-        _auditService = auditService;
-        _activityAuditService = activityAuditService;
         _emailSender = emailSender;
         _totpService = totpService;
         _localAuthOptions = localAuthOptions.Value;
@@ -55,9 +48,6 @@ public sealed class LocalAuthService : ILocalAuthService
         // repeated attempts don't extend the window silently.
         if (user is not null && user.IsLockedOut(DateTime.UtcNow))
         {
-            await AuditAsync("LocalLogin", "Locked", $"Local login blocked (account locked) for {email}.", email, cancellationToken);
-            await RecordActivityAsync("LoginLocked", UserActivityStatuses.Denied, email, user.Id,
-                UserActivitySeverities.Warning, "Account is temporarily locked due to failed login attempts.", cancellationToken);
             throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
         }
 
@@ -76,9 +66,6 @@ public sealed class LocalAuthService : ILocalAuthService
                 await _repository.UpdateUserAsync(user, cancellationToken);
             }
 
-            await AuditAsync("LocalLogin", "Failed", $"Local login failed for {email}.", email, cancellationToken);
-            await RecordActivityAsync("LoginFailed", UserActivityStatuses.Failed, email, user?.Id,
-                UserActivitySeverities.Warning, "Invalid email or password.", cancellationToken);
             throw new InvalidOperationException("Invalid email or password.");
         }
 
@@ -94,9 +81,6 @@ public sealed class LocalAuthService : ILocalAuthService
             var challengeExpiresOnUtc = DateTime.UtcNow.AddMinutes(5);
             user.SetMfaChallengeToken(challengeToken, challengeExpiresOnUtc);
             await _repository.UpdateUserAsync(user, cancellationToken);
-            await AuditAsync("LocalLogin", "MfaChallengeIssued", $"MFA challenge issued for {email}.", email, cancellationToken);
-            await RecordActivityAsync("LoginMfaChallengeIssued", UserActivityStatuses.Success, email, user.Id,
-                UserActivitySeverities.Information, null, cancellationToken);
 
             return LocalLoginResponse.MfaRequired(challengeToken, challengeExpiresOnUtc);
         }
@@ -119,7 +103,6 @@ public sealed class LocalAuthService : ILocalAuthService
 
         if (user.IsLockedOut(DateTime.UtcNow))
         {
-            await AuditAsync("LocalLogin", "Locked", $"MFA completion blocked (account locked) for {user.Email}.", user.Email, cancellationToken);
             throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
         }
 
@@ -130,7 +113,6 @@ public sealed class LocalAuthService : ILocalAuthService
         {
             user.ClearMfaChallengeToken();
             await _repository.UpdateUserAsync(user, cancellationToken);
-            await AuditAsync("LocalLogin", "Denied", $"MFA completion blocked (account disabled) for {user.Email}.", user.Email, cancellationToken);
             throw new InvalidOperationException("This account is disabled.");
         }
 
@@ -140,9 +122,6 @@ public sealed class LocalAuthService : ILocalAuthService
             user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
                 TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
             await _repository.UpdateUserAsync(user, cancellationToken);
-            await AuditAsync("LocalLogin", "MfaFailed", $"MFA challenge failed for {user.Email}.", user.Email, cancellationToken);
-            await RecordActivityAsync("LoginMfaFailed", UserActivityStatuses.Failed, user.Email, user.Id,
-                UserActivitySeverities.Warning, "Invalid MFA code.", cancellationToken);
             throw new InvalidOperationException("A valid MFA code is required.");
         }
 
@@ -150,14 +129,11 @@ public sealed class LocalAuthService : ILocalAuthService
         return await FinishSuccessfulLoginAsync(user, cancellationToken);
     }
 
-    /// <summary>Shared tail of a successful local login: records the login, audits it, and issues a session.</summary>
+    /// <summary>Shared tail of a successful local login: records the login and issues a session.</summary>
     private async Task<LocalLoginResponse> FinishSuccessfulLoginAsync(User user, CancellationToken cancellationToken)
     {
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("LocalLogin", "Completed", $"Local login completed for {user.Email}.", user.Email, cancellationToken);
-        await RecordActivityAsync("Login", UserActivityStatuses.Success, user.Email, user.Id,
-            UserActivitySeverities.Information, null, cancellationToken);
 
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
@@ -186,9 +162,6 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("PasswordChanged", "Completed", "Local password changed.", user.Email, cancellationToken);
-        await RecordActivityAsync("PasswordChanged", UserActivityStatuses.Success, user.Email, user.Id,
-            UserActivitySeverities.Information, null, cancellationToken);
 
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
@@ -201,7 +174,6 @@ public sealed class LocalAuthService : ILocalAuthService
         var user = await _repository.GetUserByEmailAsync(email, cancellationToken);
         if (user is null || !user.IsLocalLoginEnabled || !user.IsEnabled)
         {
-            await AuditAsync("ForgotPassword", "Accepted", $"Password reset requested for {email}.", email, cancellationToken);
             return new ForgotPasswordResponse(true, null, null);
         }
 
@@ -209,7 +181,6 @@ public sealed class LocalAuthService : ILocalAuthService
         var expiresOnUtc = DateTime.UtcNow.AddMinutes(30);
         user.SetPasswordResetToken(_passwordHasher.Hash(token), expiresOnUtc);
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("ForgotPassword", "Accepted", $"Password reset token generated for {email}.", email, cancellationToken);
 
         await _emailSender.SendAsync(
             email,
@@ -240,9 +211,6 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("PasswordReset", "Completed", $"Password reset completed for {email}.", email, cancellationToken);
-        await RecordActivityAsync("PasswordReset", UserActivityStatuses.Success, email, user.Id,
-            UserActivitySeverities.Warning, null, cancellationToken);
     }
 
     public async Task<LocalLoginResponse> RefreshTokenAsync(
@@ -267,8 +235,6 @@ public sealed class LocalAuthService : ILocalAuthService
             throw new InvalidOperationException("Refresh token is invalid or expired.");
         }
 
-        await AuditAsync("TokenRefreshed", "Completed", $"Token refreshed for {user.Email}.", user.Email, cancellationToken);
-
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
 
@@ -283,9 +249,6 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("SsoLogin", "Completed", $"SSO login completed for {user.Email}.", user.Email, cancellationToken);
-        await RecordActivityAsync("Login", UserActivityStatuses.Success, user.Email, user.Id,
-            UserActivitySeverities.Information, null, cancellationToken);
 
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
@@ -306,30 +269,6 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.ClearRefreshToken();
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("Logout", "Completed", $"User logged out: {user.Email}.", user.Email, cancellationToken);
-    }
-
-    private Task RecordActivityAsync(
-        string activity,
-        string status,
-        string? email,
-        Guid? userId,
-        string severity,
-        string? failureReason,
-        CancellationToken cancellationToken)
-    {
-        return _activityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: email ?? _currentUserService.CurrentUser.AuditName,
-                Category: UserActivityCategories.Authentication,
-                Activity: activity,
-                Status: status,
-                EntityName: nameof(User),
-                EntityId: userId,
-                FailureReason: failureReason,
-                Severity: severity),
-            cancellationToken);
     }
 
     private async Task<LocalLoginResponse> CreateLoginResponseAsync(
@@ -400,30 +339,6 @@ public sealed class LocalAuthService : ILocalAuthService
         }
 
         return [..result];
-    }
-
-    private async Task AuditAsync(
-        string action,
-        string status,
-        string message,
-        string? triggeredBy,
-        CancellationToken cancellationToken)
-    {
-        await _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                action,
-                status,
-                message,
-                null,
-                triggeredBy ?? _currentUserService.CurrentUser.AuditName,
-                null),
-            cancellationToken);
     }
 
     private static string NormalizeEmail(string email)

@@ -1,7 +1,5 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
@@ -16,25 +14,14 @@ public sealed class AllowedCorsOriginsServiceTests
 {
     private readonly Mock<IAllowedCorsOriginRepository> _repository = new();
     private readonly Mock<IAllowedCorsOriginsCache> _cache = new();
-    private readonly Mock<IUserActivityAuditService> _auditService = new();
-    private readonly Mock<ICurrentUserService> _currentUserService = new();
-
-    public AllowedCorsOriginsServiceTests()
-    {
-        _currentUserService
-            .Setup(x => x.CurrentUser)
-            .Returns(new CurrentUserInfo(Guid.NewGuid().ToString(), "admin@test.local", "Admin", ["SuperAdmin"], true));
-    }
 
     private AllowedCorsOriginsService Service(bool requireHttps = true) => new(
         _repository.Object,
         _cache.Object,
-        _auditService.Object,
-        _currentUserService.Object,
         Options.Create(new AllowedCorsOriginsOptions { RequireHttps = requireHttps }));
 
     [Fact]
-    public async Task AddAsync_valid_https_origin_persists_audits_and_invalidates_cache()
+    public async Task AddAsync_valid_https_origin_persists_and_invalidates_cache()
     {
         _repository.Setup(x => x.ExistsAsync("https://portal.example.com", It.IsAny<CancellationToken>())).ReturnsAsync(false);
 
@@ -43,7 +30,6 @@ public sealed class AllowedCorsOriginsServiceTests
 
         result.OriginUrl.Should().Be("https://portal.example.com");
         _repository.Verify(x => x.AddAsync(It.IsAny<AllowedCorsOrigin>(), It.IsAny<CancellationToken>()), Times.Once);
-        _auditService.Verify(x => x.RecordAsync(It.IsAny<RecordUserActivityRequest>(), It.IsAny<CancellationToken>()), Times.Once);
         _cache.Verify(x => x.Invalidate(), Times.Once);
     }
 
@@ -101,7 +87,7 @@ public sealed class AllowedCorsOriginsServiceTests
     }
 
     [Fact]
-    public async Task DeleteAsync_existing_origin_deletes_audits_and_invalidates_cache()
+    public async Task DeleteAsync_existing_origin_deletes_and_invalidates_cache()
     {
         var origin = new AllowedCorsOrigin("https://portal.example.com", null);
         _repository.Setup(x => x.GetByIdAsync(origin.Id, It.IsAny<CancellationToken>())).ReturnsAsync(origin);
@@ -109,7 +95,6 @@ public sealed class AllowedCorsOriginsServiceTests
         await Service().DeleteAsync(origin.Id, CancellationToken.None);
 
         _repository.Verify(x => x.DeleteAsync(origin, It.IsAny<CancellationToken>()), Times.Once);
-        _auditService.Verify(x => x.RecordAsync(It.IsAny<RecordUserActivityRequest>(), It.IsAny<CancellationToken>()), Times.Once);
         _cache.Verify(x => x.Invalidate(), Times.Once);
     }
 

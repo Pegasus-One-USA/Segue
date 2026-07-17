@@ -101,6 +101,13 @@ public sealed class WorkflowSettingsEntity
     // demo type.
     public string StandaloneWorkflowId { get; set; } = string.Empty;
     public string StandaloneDetailWorkflowId { get; set; } = string.Empty;
+
+    // Provider_InApp's single FHIRBridge launch-context token — previously a gitignored, per-developer local file
+    // (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts); moved here so it's admin-configurable
+    // through its own Settings gear (see launch-provider-in-app.ts) with no frontend rebuild needed to change it.
+    // Unlike Provider_Standalone, this demo type needs only one token: it drives a single EHR-launch exchange
+    // (FHIRBridge's /api/v1/oauth/launch/{context}), not a separate list/detail workflow pair.
+    public string ProviderLaunchContext { get; set; } = string.Empty;
 }
 
 public sealed class HealthAppDbContext : DbContext

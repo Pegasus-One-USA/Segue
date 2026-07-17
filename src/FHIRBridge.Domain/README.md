@@ -28,9 +28,6 @@ Configuration is single-org and flat: `SourceConnection`, `WebhookConfiguration`
 - **`SourceCapabilityProfile`** — a point-in-time snapshot of a source's CapabilityStatement (`/metadata`): supported `CapabilityResource`s, configured scopes, raw JSON, discovery timestamp. A standalone entity so discovery refreshes independently. `SupportsResourceType` gates whether a mapping may bind to a type.
 - **`WebhookConfiguration`** — a per-source, per-resource-type inbound webhook endpoint (`Path`, `ResourceType`, enable flag).
 - **`ConfiguredPipelineRunRecord`** (`Entity<Guid>`) — a completed run's outcome: status, resource-type list, extracted/mapped/written counts, errors, timing, and `TriggeredBy`/`TriggerType` (Manual/Scheduled/Webhook/Bulk).
-- **`OperationalAuditLog`** (`Entity<Guid>`) — immutable PHI-free system/pipeline event with full FK context (run, route, source, destination, mapping), action/status/message, resource count, correlation id.
-- **`ResourceLineageEntry`** (`Entity<Guid>`) — one step in a resource's chain of custody (access → normalize → de-id → output); PHI-free, purgeable under retention.
-- **`UserActivityAuditLog`** (`Entity<Guid>`) — append-only end-user action record sealed into a SHA-256 hash chain (`PreviousHash` + `EntryHash` via `SealChain`) for HIPAA §164.312(b)/(c) tamper evidence.
 - **RBAC:** **`User`** (external id, local-login hash, lockout/MFA/password-reset state), **`Role`** (system vs. custom), **`Permission`** (categorized, system flag), and join entities **`RolePermission`**, **`UserRole`** (role assignment). Each join carries an `IsEnabled` soft-disable flag.
 
 ### ValueObjects/
@@ -61,5 +58,5 @@ The Domain layer will remain the stable contract at the center of the platform. 
 - Grow the **configuration entities** with richer governance invariants (data-residency enforcement, retention-window validation, schedule/time-zone rules) while keeping all mutation behind intention-revealing methods.
 - Expand the **FHIR vocabulary** (`SupportedFhirResourceTypes` / `PatientCompartmentResourceTypes`) toward fuller FHIR R4 coverage, aligned with the generated `fhir-r4-catalog.json` consumed by the Application layer, and tighten capability-gating so a mapping can only bind to a resource type its source actually exposes.
 - Deepen the **mapping value objects** to support full N-level array materialization (`ArrayPolicy`, `Cardinality`, `ArrayAncestors`) and terminology-aware field binding (system/code JSON paths feeding the terminology services).
-- Harden the **RBAC and audit model** for compliance — the hash-chained `UserActivityAuditLog`, immutable `OperationalAuditLog`, and purgeable `ResourceLineageEntry` together give HIPAA-grade who/what/when traceability with PHI strictly excluded from the domain.
+- Harden the **RBAC model** for compliance — role/permission grants and soft-disable flags give clear who-can-access-what boundaries with PHI strictly excluded from the domain.
 - Stay infrastructure-free so it can be unit-tested in isolation and reused unchanged across the API, scheduling Worker, and gateway hosts.

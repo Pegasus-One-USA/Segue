@@ -1,7 +1,5 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
@@ -12,25 +10,17 @@ namespace FHIRBridge.Application.Services;
 
 public sealed class AllowedCorsOriginsService : IAllowedCorsOriginsService
 {
-    private const string Module = "SystemSettings";
-
     private readonly IAllowedCorsOriginRepository _repository;
     private readonly IAllowedCorsOriginsCache _cache;
-    private readonly IUserActivityAuditService _userActivityAuditService;
-    private readonly ICurrentUserService _currentUserService;
     private readonly bool _requireHttps;
 
     public AllowedCorsOriginsService(
         IAllowedCorsOriginRepository repository,
         IAllowedCorsOriginsCache cache,
-        IUserActivityAuditService userActivityAuditService,
-        ICurrentUserService currentUserService,
         IOptions<AllowedCorsOriginsOptions> options)
     {
         _repository = repository;
         _cache = cache;
-        _userActivityAuditService = userActivityAuditService;
-        _currentUserService = currentUserService;
         _requireHttps = options.Value.RequireHttps;
     }
 
@@ -52,7 +42,6 @@ public sealed class AllowedCorsOriginsService : IAllowedCorsOriginsService
 
         var origin = new AllowedCorsOrigin(normalizedOrigin, request.Label?.Trim());
         await _repository.AddAsync(origin, cancellationToken);
-        await AuditAsync("AllowedCorsOriginAdded", origin.Id, normalizedOrigin, cancellationToken);
         _cache.Invalidate();
 
         return AllowedCorsOriginMapper.ToDto(origin);
@@ -64,7 +53,6 @@ public sealed class AllowedCorsOriginsService : IAllowedCorsOriginsService
             ?? throw new NotFoundException(nameof(AllowedCorsOrigin), id);
 
         await _repository.DeleteAsync(origin, cancellationToken);
-        await AuditAsync("AllowedCorsOriginRemoved", origin.Id, origin.OriginUrl, cancellationToken);
         _cache.Invalidate();
     }
 
@@ -99,27 +87,5 @@ public sealed class AllowedCorsOriginsService : IAllowedCorsOriginsService
         }
 
         return uri.GetLeftPart(UriPartial.Authority);
-    }
-
-    private async Task AuditAsync(string action, Guid entityId, string originUrl, CancellationToken cancellationToken)
-    {
-        var user = _currentUserService.CurrentUser;
-        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
-
-        await _userActivityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: user.AuditName,
-                Category: UserActivityCategories.Administration,
-                Activity: $"{action}: {originUrl}",
-                Status: UserActivityStatuses.Success,
-                EntityName: nameof(AllowedCorsOrigin),
-                EntityId: entityId,
-                IpAddress: user.IpAddress,
-                UserAgent: user.UserAgent,
-                CorrelationId: user.CorrelationId,
-                Module: Module,
-                Action: action),
-            cancellationToken);
     }
 }

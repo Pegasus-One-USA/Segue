@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -20,8 +19,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
     private readonly ISecretProvider _secretProvider;
     private readonly IFhirAccessTokenProvider _accessTokenProvider;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IOperationalAuditService _auditService;
-    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<SourceConnectionTestService> _logger;
 
     public SourceConnectionTestService(
@@ -29,16 +26,12 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         ISecretProvider secretProvider,
         IFhirAccessTokenProvider accessTokenProvider,
         IHttpClientFactory httpClientFactory,
-        IOperationalAuditService auditService,
-        ICurrentUserService currentUserService,
         ILogger<SourceConnectionTestService> logger)
     {
         _configurationRepository = configurationRepository;
         _secretProvider = secretProvider;
         _accessTokenProvider = accessTokenProvider;
         _httpClientFactory = httpClientFactory;
-        _auditService = auditService;
-        _currentUserService = currentUserService;
         _logger = logger;
     }
 
@@ -49,22 +42,9 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
         var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken)
             ?? throw new NotFoundException("SourceConnection", sourceConnectionId);
 
-        await RecordAuditAsync(
-            sourceConnectionId,
-            "SourceConnectionTestStarted",
-            "Started",
-            $"Source connection test started for {sourceConnection.SourceSystemType}.",
-            cancellationToken);
-
         if (!sourceConnection.IsEnabled)
         {
             const string message = "Source connection is disabled and cannot be tested.";
-            await RecordAuditAsync(
-                sourceConnectionId,
-                "SourceConnectionTestSkipped",
-                "Skipped",
-                message,
-                cancellationToken);
 
             return new SourceConnectionTestResultDto(
                 sourceConnectionId,
@@ -90,13 +70,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
                 _ => throw new NotSupportedException($"Source connection test is not implemented for {sourceConnection.SourceSystemType}.")
             };
 
-            await RecordAuditAsync(
-                sourceConnectionId,
-                result.IsSuccessful ? "SourceConnectionTestCompleted" : "SourceConnectionTestFailed",
-                result.Status,
-                result.Message,
-                cancellationToken);
-
             return result;
         }
         catch (Exception exception)
@@ -105,13 +78,6 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
                 exception,
                 "Source connection test failed for source {SourceConnectionId}.",
                 sourceConnectionId);
-
-            await RecordAuditAsync(
-                sourceConnectionId,
-                "SourceConnectionTestFailed",
-                "Failed",
-                exception.Message,
-                cancellationToken);
 
             return new SourceConnectionTestResultDto(
                 sourceConnectionId,
@@ -199,29 +165,5 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
             1,
             sourceConnection.Id,
             ApplicationType: sourceConnection.ApplicationType);
-    }
-
-    private Task RecordAuditAsync(
-        Guid sourceConnectionId,
-        string action,
-        string status,
-        string message,
-        CancellationToken cancellationToken)
-    {
-        return _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                null,
-                null,
-                sourceConnectionId,
-                null,
-                null,
-                null,
-                action,
-                status,
-                message,
-                null,
-                _currentUserService.CurrentUser.AuditName,
-                null),
-            cancellationToken);
     }
 }

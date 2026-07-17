@@ -45,13 +45,11 @@ public static class SystemRoleDefaultPermissions
                 Id(PermissionGroupCode.Workflow, PermissionActionCode.Run),
                 Id(PermissionGroupCode.Workflow, PermissionActionCode.View),
                 Id(PermissionGroupCode.Payload, PermissionActionCode.View),
-                Id(PermissionGroupCode.AuditLogs, PermissionActionCode.Read),
                 Id(PermissionGroupCode.Report, PermissionActionCode.View)
             ],
 
             [SeededSecurityIds.AuditRoleId] =
             [
-                Id(PermissionGroupCode.AuditLogs, PermissionActionCode.Read),
                 Id(PermissionGroupCode.Workflow, PermissionActionCode.View),
                 Id(PermissionGroupCode.Report, PermissionActionCode.View)
             ]

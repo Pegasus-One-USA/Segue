@@ -1,5 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
-using FHIRBridge.Application.DTOs;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.DTOs;
@@ -157,7 +155,7 @@ public sealed class SourceNodeExecutorCohortTests
     }
 
     [Fact]
-    public async Task System_scoped_bulk_export_is_left_unscoped_and_audit_warns()
+    public async Task System_scoped_bulk_export_is_left_unscoped()
     {
         var sourceConnectionId = Guid.NewGuid();
         var source = new FhirSourceConfiguration(
@@ -184,17 +182,10 @@ public sealed class SourceNodeExecutorCohortTests
                 return Task.FromResult<IReadOnlyList<ResourceEnvelope>>([new ResourceEnvelope("Observation", "o1", "{}", null, null)]);
             });
 
-        var recorded = new List<RecordOperationalAuditLogRequest>();
-        var auditService = new Mock<IOperationalAuditService>();
-        auditService
-            .Setup(x => x.RecordAsync(It.IsAny<RecordOperationalAuditLogRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<RecordOperationalAuditLogRequest, CancellationToken>((request, _) => recorded.Add(request))
-            .Returns(Task.CompletedTask);
-
         var clientFactory = new Mock<IFhirSourceClientFactory>();
         clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(new Mock<IFhirSourceClient>().Object);
 
-        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object, auditService.Object);
+        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
         var node = BuildNode(sourceConnectionId, "Patient,Observation");
         var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
 
@@ -203,8 +194,6 @@ public sealed class SourceNodeExecutorCohortTests
         capturedObservationRequest.Should().NotBeNull();
         capturedObservationRequest!.Scope.Should().Be(BulkExportScope.System);
         capturedObservationRequest.PatientIds.Should().BeNull();
-
-        recorded.Should().ContainSingle(r => r.Action == "BulkExportNotCohortScoped");
     }
 
     private static WorkflowNode BuildNode(Guid sourceConnectionId, string resources)

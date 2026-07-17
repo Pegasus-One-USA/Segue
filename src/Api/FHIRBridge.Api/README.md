@@ -31,8 +31,6 @@
 - **WebhookIngestionController** (`api/v1/webhooks/{webhookConfigurationId}/ingest`) — `[AllowAnonymous]` `POST` accepting a raw FHIR JSON payload; runs inline (202 with the run) or enqueues for the Worker when `WebhookIngestion:Async` is enabled.
 - **ObservabilityController** (`api/v1/observability`) — `GET metrics`.
 - **InsightsController** (`api/v1/insights`) — `GET measure-report`, `GET anomalies`.
-- **LineageController** (`api/v1/lineage`) — `GET` data-lineage records.
-- **OperationalAuditLogsController** (`api/v1/audit-logs`) — `GET` operational/user-activity audit log entries.
 - **RolesController** (`api/v1/roles`) — list roles, list permissions, create/update/delete role.
 - **UsersController** (`api/v1/users`) — list/create/update users.
 - **SubscriptionsController** (`api/v1/subscriptions`) — create/delete FHIR subscriptions.

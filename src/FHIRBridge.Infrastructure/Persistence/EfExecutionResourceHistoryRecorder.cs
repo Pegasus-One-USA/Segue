@@ -13,8 +13,7 @@ namespace FHIRBridge.Infrastructure.Persistence;
 /// Durable, EF-backed fetch/normalize/map/store history per resource. <see cref="PipelineRunResourceRecord.FetchedJson"/>,
 /// <see cref="PipelineRunResourceRecord.NormalizedJson"/>, and <see cref="PipelineRunResourceRecord.MappedValuesJson"/>
 /// are encrypted with <see cref="IPhiFieldEncryptor"/> before they touch the entity, so the PHI they carry is
-/// encrypted at rest. Implements <see cref="IPurgeableStore"/> so it is swept by the existing retention purge job
-/// alongside <c>EfLineageStore</c>.
+/// encrypted at rest. Implements <see cref="IPurgeableStore"/> so it is swept by the existing retention purge job.
 /// </summary>
 public sealed class EfExecutionResourceHistoryRecorder : IExecutionResourceHistoryRecorder, IPurgeableStore
 {

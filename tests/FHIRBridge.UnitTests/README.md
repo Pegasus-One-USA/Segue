@@ -21,7 +21,7 @@ This project verifies the behavior of FHIRBridge's core "control" stack: the dom
 - **Infrastructure / persistence (`FHIRBridge.Infrastructure`)**
   - EF Core `DbContext` configuration: entity type configurations, relationships, owned types, indexes, and query filters (e.g. soft-delete global filters).
   - Repository implementations and `SaveChanges` behavior, validated against the **InMemory** provider.
-  - The `AuditingSaveChangesInterceptor` (audit-stamp population) and hash-chained `UserActivityAuditLog` write path.
+  - The `AuditingSaveChangesInterceptor` (audit-stamp population and soft-delete conversion).
   - Configuration binding via `Microsoft.Extensions.Configuration` for options classes consumed by infrastructure services.
 - **Observability (`FHIRBridge.Observability`)**
   - Smoke-level checks of telemetry/logging helpers, activity sources, and metric registration that the core stack depends on.

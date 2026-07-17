@@ -37,6 +37,7 @@
   </main>
 } @else if (selectedDemoType() === 'DemoType2' || selectedDemoType() === 'Provider_InApp') {
   <app-launch-provider-in-app
+    [role]="role()"
     [loginTypeLabel]="selectedDemoType()"
     (logout)="logout()"
   ></app-launch-provider-in-app>

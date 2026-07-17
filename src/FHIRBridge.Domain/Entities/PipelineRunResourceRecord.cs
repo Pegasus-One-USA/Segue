@@ -21,10 +21,10 @@ public static class PipelineResourceWriteStatus
 
 /// <summary>
 /// Full fetch/normalize/map/store history for one resource within one <see cref="PipelineRunRouteExecution"/>.
-/// Unlike <see cref="ResourceLineageEntry"/> (deliberately PHI-free ids/timestamps), this record holds the actual
-/// payloads at each stage so a run's history can answer "what was fetched, what was mapped, what was stored" —
-/// so <see cref="FetchedJson"/>, <see cref="NormalizedJson"/>, and <see cref="MappedValuesJson"/> are encrypted at
-/// rest via <c>IPhiFieldEncryptor</c> (applied as an EF value converter) and purged under the retention policy.
+/// This record holds the actual payloads at each stage so a run's history can answer "what was fetched, what
+/// was mapped, what was stored" — so <see cref="FetchedJson"/>, <see cref="NormalizedJson"/>, and
+/// <see cref="MappedValuesJson"/> are encrypted at rest via <c>IPhiFieldEncryptor</c> (applied as an EF value
+/// converter) and purged under the retention policy.
 /// </summary>
 public sealed class PipelineRunResourceRecord : Entity<Guid>
 {
