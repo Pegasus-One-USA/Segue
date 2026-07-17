@@ -23,6 +23,22 @@ src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase
   "base_commit_sha": "a2883249ebaf8f68110076378db2093c8b102766",
   "prompts": {},
   "sessions": {
+    "s_046f20fec1eaf7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ee20a784-78f8-4a28-a4d2-63b23d3fc48d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
     "s_bc8477f0441329": {
       "agent_id": {
         "tool": "claude",
