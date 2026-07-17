@@ -1,36 +1,137 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, input, output, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { firstValueFrom } from 'rxjs';
 import { Patient } from './core/models/patient.model';
 import { PatientService } from './core/services/patient.service';
 import { FHIRBRIDGE_BASE_URL, PROVIDER_LAUNCH_CONTEXT } from './core/config/launch.config';
+import { environment } from '../../../environments/environment';
+
+/** Matches Demo_TestApp's GET /api/provider-in-app-settings and /api/provider-in-app-launch-context responses
+ *  (also the POST /api/provider-in-app-settings response). */
+interface ProviderInAppLaunchContext {
+  providerLaunchContext: string;
+}
+
+// A blank/placeholder token is indistinguishable from a real one syntactically — FHIRBridge's own launch
+// endpoint would 404 on either, so both are treated as "ask an admin to set one" rather than attempted.
+function isConfiguredValue(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0 && !value.includes('REPLACE_WITH_REAL');
+}
+
+// HealthApp's own backend (Demo_TestApp), not FHIRBridge.
+const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
 
 @Component({
   selector: 'app-launch-provider-in-app',
   standalone: true,
-  imports: [DatePipe, MatCardModule, MatChipsModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [DatePipe, FormsModule, MatCardModule, MatChipsModule, MatIconModule, MatProgressSpinnerModule],
   templateUrl: './launch-provider-in-app.html',
   styleUrl: './launch-provider-in-app.scss'
 })
 export class LaunchProviderInAppComponent implements OnInit {
   readonly loginTypeLabel = input('');
+  readonly role = input<string | null>(null);
   readonly logout = output<void>();
 
   readonly patient = signal<Patient | null>(null);
   readonly isPatientLoading = signal(true);
   readonly launchError = signal<string | null>(null);
 
+  // Admin-editable via the Settings gear button (see openSettings/saveSettings) — persisted on Demo_TestApp's own
+  // backend (WorkflowSettingsEntity), read at runtime rather than baked in at build time. Falls back to whatever's
+  // in launch.config.ts (the pre-existing, gitignored, compile-time mechanism) until an admin sets this through
+  // the UI, so a repo that already filled in that file keeps working unchanged.
+  private providerLaunchContext = PROVIDER_LAUNCH_CONTEXT;
+  private launchContextLoadPromise: Promise<void> | null = null;
+
+  readonly settingsOpen = signal(false);
+  readonly settingsError = signal('');
+  readonly providerLaunchContextDraft = signal('');
+
   readonly age = computed(() => {
     const dateOfBirth = this.patient()?.dateOfBirth;
     return dateOfBirth ? this.calculateAge(dateOfBirth) : null;
   });
 
-  constructor(private readonly patientService: PatientService) {}
+  constructor(
+    private readonly patientService: PatientService,
+    private readonly http: HttpClient,
+  ) {}
 
-  ngOnInit(): void {
+  // Loads the admin-configured launch-context token exactly once per component lifetime (memoized via
+  // launchContextLoadPromise) — ngOnInit awaits this before ever building the redirect URL, so a launch can
+  // never race ahead and use the config-file fallback by accident.
+  private ensureLaunchContextLoaded(): Promise<void> {
+    if (!this.launchContextLoadPromise) {
+      this.launchContextLoadPromise = this.loadLaunchContext();
+    }
+    return this.launchContextLoadPromise;
+  }
+
+  private async loadLaunchContext(): Promise<void> {
+    try {
+      const current = await firstValueFrom(
+        this.http.get<ProviderInAppLaunchContext>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-launch-context`,
+          { withCredentials: true },
+        ),
+      );
+      if (isConfiguredValue(current.providerLaunchContext)) {
+        this.providerLaunchContext = current.providerLaunchContext;
+      }
+    } catch {
+      // Non-fatal — falls back to whatever's in launch.config.ts (possibly still the placeholder, which every
+      // caller below already guards against via isConfiguredValue).
+    }
+  }
+
+  async openSettings(): Promise<void> {
+    this.settingsError.set('');
+    try {
+      const current = await firstValueFrom(
+        this.http.get<ProviderInAppLaunchContext>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-settings`,
+          { withCredentials: true },
+        ),
+      );
+      this.providerLaunchContextDraft.set(current.providerLaunchContext);
+      this.settingsOpen.set(true);
+    } catch {
+      this.settingsError.set('Could not load settings.');
+    }
+  }
+
+  closeSettings(): void {
+    this.settingsOpen.set(false);
+  }
+
+  async saveSettings(): Promise<void> {
+    try {
+      const saved = await firstValueFrom(
+        this.http.post<ProviderInAppLaunchContext>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-settings`,
+          { providerLaunchContext: this.providerLaunchContextDraft().trim() },
+          { withCredentials: true },
+        ),
+      );
+      // Memoized as already-loaded so a later use never re-hits the network only to get the same value back.
+      this.launchContextLoadPromise = Promise.resolve();
+      if (isConfiguredValue(saved.providerLaunchContext)) {
+        this.providerLaunchContext = saved.providerLaunchContext;
+      }
+      this.settingsOpen.set(false);
+    } catch {
+      this.settingsError.set('Could not save settings.');
+    }
+  }
+
+  async ngOnInit(): Promise<void> {
     // Read query params straight off the browser URL rather than via ActivatedRoute: this app has no
     // <router-outlet> (see app.routes.ts) — components are swapped by signals, not route activation — so
     // ActivatedRoute.snapshot is only reliably populated once the Router's own (asynchronous) initial
@@ -46,8 +147,9 @@ export class LaunchProviderInAppComponent implements OnInit {
     const iss = params.get('iss');
     const launch = params.get('launch');
     if (iss && launch) {
+      await this.ensureLaunchContextLoaded();
       const launchUrl =
-        `${FHIRBRIDGE_BASE_URL}/api/v1/oauth/launch/${PROVIDER_LAUNCH_CONTEXT}` +
+        `${FHIRBRIDGE_BASE_URL}/api/v1/oauth/launch/${this.providerLaunchContext}` +
         `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}`;
       window.location.href = launchUrl;
       return;
