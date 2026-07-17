@@ -359,6 +359,15 @@ export class EpicAudienceFormComponent implements OnInit {
    *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
   protected readonly showSourcePicker = computed(() => this.wiz.wizardMode() === 'canvas' && !this.isEditing);
 
+  // Snapshot of the form's raw value taken once discovery settles after populateFormFromSourceConnection() patches
+  // it in — compared against the current form value at save time (hasExistingChanged) to decide "reuse as-is" vs
+  // "fork a new connection", mirroring destination-wizard.component.ts's _existingBaseline/hasExistingChanged.
+  private _existingBaseline: Record<string, unknown> | null = null;
+  // Discovery (runDiscover) can still auto-patch scopeVersion/authMethod/discoveredResourceTypes after the clone's
+  // patchValue call returns, so the baseline is captured once discovery's async next/error handler actually runs —
+  // snapshotting immediately would make those auto-detected values look like user edits on every single clone.
+  private _awaitingBaselineSnapshot = false;
+
   // Resource Type list: auto-detected from the source's /metadata after Discover; falls back to the static list.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
   protected get resources(): string[] {
@@ -1044,6 +1053,8 @@ export class EpicAudienceFormComponent implements OnInit {
    *  the last-selected existing connection populated, even though the picker now reads "New Source". */
   private resetToBlankNewSource(): void {
     this.selectedExistingId.set(null);
+    this._existingBaseline = null;
+    this._awaitingBaselineSnapshot = false;
     this.form.reset();
     this.discoveredResourceTypes.set([]);
     this.discStatus.set('idle');
@@ -1149,7 +1160,20 @@ export class EpicAudienceFormComponent implements OnInit {
     // (nothing to clone it from) — so run real SMART discovery against the cloned Base URL instead of faking
     // discStatus 'done'/an "Auto-populated" badge for data that was never actually saved. This also re-confirms
     // Token Endpoint live and refreshes the discovered (available) resource type list for this source right now.
+    // The baseline snapshot (for hasExistingChanged) is taken once this settles, not here — see runDiscover().
+    this._awaitingBaselineSnapshot = true;
     this.runDiscover();
+  }
+
+  /** True once the user has edited any field away from what populateFormFromSourceConnection() cloned in (as
+   *  re-confirmed by discovery) — the save-time signal for "fork a new connection" vs "reuse this one untouched"
+   *  (see save()). clientSecret is excluded on both sides: it's never populated by the clone (secrets never come
+   *  back from the API), so typing one in to satisfy validation must not by itself count as "changed". */
+  protected hasExistingChanged(): boolean {
+    if (!this._existingBaseline) return false;
+    const strip = (v: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(v).filter(([key]) => key !== 'clientSecret'));
+    return JSON.stringify(strip(this.form.getRawValue())) !== JSON.stringify(strip(this._existingBaseline));
   }
 
   protected runDiscover(): void {
@@ -1219,13 +1243,23 @@ export class EpicAudienceFormComponent implements OnInit {
         } else {
           this.toast.show('Discovery complete', `Resolved endpoints + ${result.resourceTypes.length} resource types.`);
         }
+        this._captureBaselineIfAwaiting();
       },
       error: (err) => {
         this.discStatus.set('error');
         const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Check the URL or enter endpoints manually.';
         this.toast.show('Discovery failed', typeof msg === 'string' ? msg : 'Check the URL or enter endpoints manually.');
+        this._captureBaselineIfAwaiting();
       },
     });
+  }
+
+  /** Captures the hasExistingChanged() baseline once discovery settles after a clone — see the
+   *  _awaitingBaselineSnapshot comment on populateFormFromSourceConnection(). No-op outside that flow. */
+  private _captureBaselineIfAwaiting(): void {
+    if (!this._awaitingBaselineSnapshot) return;
+    this._awaitingBaselineSnapshot = false;
+    this._existingBaseline = this.form.getRawValue();
   }
 
   protected runTestConnection(): void {
@@ -1281,15 +1315,25 @@ export class EpicAudienceFormComponent implements OnInit {
     const emitRecurrence = v.runMode === 'full'
       || (this.retrievalMethod() === 'bulk-export' && v.exportScope !== '' && v.exportScope !== 'patient');
 
-    // Cloning from "Existing Source" always creates a brand-new connection (see populateFormFromSourceConnection's
-    // comment). If the user left Name exactly as cloned, it collides with the original unless suffixed; if they
-    // typed their own distinct name, honor it as-is (only deduped on an actual collision) rather than silently
-    // suffixing a name they deliberately chose.
+    // "Existing Source" has two outcomes depending on whether the form still matches what
+    // populateFormFromSourceConnection() cloned in (as re-confirmed by discovery):
+    //  - Untouched: wire the node straight to the already-saved connection (its real id) —
+    //    resolvedSourceConnectionId tells workflow-build-assembler.service.ts to skip this node
+    //    entirely, so a connection another workflow also points at can never be mutated by this save.
+    //  - Edited: fork it as a new, independent connection. If the user left Name exactly as cloned,
+    //    it collides with the original unless suffixed; if they typed their own distinct name, honor
+    //    it as-is (only deduped on an actual collision) rather than silently suffixing a chosen name.
     let resolvedName = v.appName ?? 'Epic';
+    let resolvedSourceConnectionId: string | null = null;
     if (this.sourceMode() === 'existing') {
       const original = this.existingConnections().find(c => c.id === this.selectedExistingId());
-      const nameWasEdited = !!original && resolvedName !== original.name;
-      resolvedName = this._resolveUniqueSourceName(resolvedName, !nameWasEdited);
+      if (original && !this.hasExistingChanged()) {
+        resolvedName = original.name;
+        resolvedSourceConnectionId = original.id;
+      } else {
+        const nameWasEdited = !!original && resolvedName !== original.name;
+        resolvedName = this._resolveUniqueSourceName(resolvedName, !nameWasEdited);
+      }
     }
 
     this.wiz.setAppKey(appKeyMap[aud]);
@@ -1373,6 +1417,13 @@ export class EpicAudienceFormComponent implements OnInit {
         'Retry policy':              v.retryPolicy ?? '',
         'Timeout (seconds)':         v.timeoutSeconds ?? '',
         'Max records per run':       v.maxRecordsPerRun ?? '',
+      } : {}),
+      // Reused-as-is "Existing Source" pick (see resolvedSourceConnectionId above): tells
+      // WorkflowBuildAssemblerService.assemble() to skip this node's Sources spec entirely and let the backend
+      // resolve sourceConnectionId straight off this node's own config, same as destinationResolved for destinations.
+      ...(resolvedSourceConnectionId ? {
+        sourceConnectionId: resolvedSourceConnectionId,
+        sourceConnectionResolved: 'true',
       } : {}),
     });
 

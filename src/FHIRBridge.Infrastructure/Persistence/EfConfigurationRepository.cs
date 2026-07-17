@@ -31,8 +31,20 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         await _db.SaveChangesAsync(ct);
     }
 
-    public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct) =>
-        _db.SaveChangesAsync(ct);
+    public async Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct)
+    {
+        await _db.SaveChangesAsync(ct);
+
+        // Update() reassigns brand-new owned-value-object instances (Authentication/Interactive/Retrieval, and
+        // Authentication's own nested owned ClientSecret/PrivateKey) onto this tracked entity. EF Core's post-save
+        // fixup for a *replaced* owned reference leaves orphaned entries for the old owned instances in the change
+        // tracker — detaching just the root entity doesn't remove those nested orphans. A later Get*Async for the
+        // same id within this same scoped DbContext (e.g. /workflows/build's Mappings step resolving a source it
+        // just updated in the Sources step) resolves via the identity map into that corrupted state and
+        // NullReferenceExceptions inside EF's navigation fixup. Clearing the whole tracker is the workaround EF
+        // Core itself recommends for this scenario; every read after this point re-materializes fresh from the DB.
+        _db.ChangeTracker.Clear();
+    }
 
     public Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken)
     {
@@ -104,8 +116,15 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         await _db.SaveChangesAsync(ct);
     }
 
-    public Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct) =>
-        _db.SaveChangesAsync(ct);
+    public async Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct)
+    {
+        await _db.SaveChangesAsync(ct);
+
+        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() reassigns a
+        // brand-new owned SecretReference) — clear the tracker so a later Get*Async for this id within the same
+        // request's DbContext re-materializes cleanly instead of hitting the corrupted tracked entry/orphans.
+        _db.ChangeTracker.Clear();
+    }
 
     public Task RemoveDestinationAsync(DestinationConfiguration e, CancellationToken ct)
     {
@@ -141,8 +160,15 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         await _db.SaveChangesAsync(ct);
     }
 
-    public Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct) =>
-        _db.SaveChangesAsync(ct);
+    public async Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct)
+    {
+        await _db.SaveChangesAsync(ct);
+
+        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() replaces the
+        // entire owned Fields collection) — clear the tracker so a later Get*Async for this id within the same
+        // request's DbContext re-materializes cleanly instead of hitting the corrupted tracked entry/orphans.
+        _db.ChangeTracker.Clear();
+    }
 
     // ── Resource pipeline routes ──────────────────────────────────────────────
     public async Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) =>

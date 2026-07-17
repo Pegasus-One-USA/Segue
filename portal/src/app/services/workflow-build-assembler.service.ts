@@ -17,14 +17,14 @@ import {
 interface DestMappingRow {
   resource: string;
   field: string;
-  path: string;    // FHIR element path captured by the wizard (e.g. "Patient.name.family")
-  target: string;  // destination table / file (e.g. "dbo.Patient")
-  column: string;  // destination column
+  path: string; // FHIR element path captured by the wizard (e.g. "Patient.name.family")
+  target: string; // destination table / file (e.g. "dbo.Patient")
+  column: string; // destination column
   // Array-aware metadata stamped by the wizard from the backend FHIR catalog. When present these are
   // authoritative; when absent (offline/degraded) we fall back to the naive path conversion below.
-  jsonPath?: string;       // e.g. "$.name[*].given[*]"
-  valueType?: string;      // String | Integer | Decimal | Boolean | Date | DateTime | Json
-  arrays?: string[];       // array-ancestor fhir paths
+  jsonPath?: string; // e.g. "$.name[*].given[*]"
+  valueType?: string; // String | Integer | Decimal | Boolean | Date | DateTime | Json
+  arrays?: string[]; // array-ancestor fhir paths
 }
 
 /**
@@ -48,26 +48,42 @@ export class WorkflowBuildAssemblerService {
   /** Resources selected on a destination but NOT wired into the build (surfaced to the user as a caveat). */
   readonly lastUnmappedResources: string[] = [];
 
-  assemble(name: string, trigger?: WorkflowTriggerRequest | null): WorkflowBuildRequest {
+  assemble(
+    name: string,
+    trigger?: WorkflowTriggerRequest | null,
+  ): WorkflowBuildRequest {
     this.lastUnmappedResources.length = 0;
 
     const graph = this.mapper.toRequest(name, trigger);
-    const nodesById = new Map(graph.nodes.map(node => [node.id, node]));
+    const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 
     const sourceNodeIds = new Set(
-      graph.nodes.filter(node => this.isSourceNode(node)).map(node => node.id),
+      graph.nodes
+        .filter((node) => this.isSourceNode(node))
+        .map((node) => node.id),
     );
 
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
       const fields = this.fieldsFor(id, nodesById);
-      sources.push({ nodeId: id, source: this.buildSource(fields), existingId: fields['sourceConnectionId'] || null });
+      // Existing-source pick left untouched (see EpicAudienceFormComponent.save()'s resolvedSourceConnectionId) —
+      // skip entirely, no create/update. Mirrors destinationResolved below: a connection another workflow also
+      // points at can't be mutated by this save, and the backend resolves sourceConnectionId straight off this
+      // node's own config for the Mappings step regardless.
+      if (fields['sourceConnectionResolved'] === 'true') continue;
+      sources.push({
+        nodeId: id,
+        source: this.buildSource(fields),
+        existingId: fields['sourceConnectionId'] || null,
+      });
     }
 
     const destinations: DestinationBuildSpec[] = [];
     const mappings: MappingBuildSpec[] = [];
 
-    for (const destNode of graph.nodes.filter(node => this.isDestinationNode(node))) {
+    for (const destNode of graph.nodes.filter((node) =>
+      this.isDestinationNode(node),
+    )) {
       const destFields = this.fieldsFor(destNode.id, nodesById);
 
       // destinationResolved: the wizard selected an existing connection and left it untouched — its destinationId/
@@ -83,21 +99,37 @@ export class WorkflowBuildAssemblerService {
       }
 
       const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
-      const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
+      const sourceNodeId = this.sourceFeeding(
+        mappingNodeId ?? destNode.id,
+        graph,
+        sourceNodeIds,
+      );
       if (!mappingNodeId || !sourceNodeId) continue;
 
       const mappingFields = this.fieldsFor(mappingNodeId, nodesById);
-      const mappingSpec = this.buildMapping(mappingNodeId, sourceNodeId, destNode.id, destFields);
-      if (mappingSpec) mappings.push({ ...mappingSpec, existingId: mappingFields['mappingProfileId'] || null });
+      const mappingSpec = this.buildMapping(
+        mappingNodeId,
+        sourceNodeId,
+        destNode.id,
+        destFields,
+      );
+      if (mappingSpec)
+        mappings.push({
+          ...mappingSpec,
+          existingId: mappingFields['mappingProfileId'] || null,
+        });
     }
 
     return { ...graph, sources, destinations, mappings };
   }
 
   // ── source ────────────────────────────────────────────────────────────────
-  private buildSource(fields: Record<string, string>): CreateSourceConnectionRequest {
+  private buildSource(
+    fields: Record<string, string>,
+  ): CreateSourceConnectionRequest {
     const connector = fields['Connector'] ?? fields['__name'] ?? '';
-    const isSample = /sample/i.test(connector) || /sample/i.test(fields['__name'] ?? '');
+    const isSample =
+      /sample/i.test(connector) || /sample/i.test(fields['__name'] ?? '');
 
     if (isSample) {
       return {
@@ -113,21 +145,33 @@ export class WorkflowBuildAssemblerService {
     // Epic (best-effort from the Epic source wizard fields).
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const appType = this.applicationTypeFor(fields);
-    const interactive = appType === 'Backend' ? null : {
-      redirectUris: [fields['Redirect URI'] || 'http://localhost:5000/api/v1/oauth/callback'],
-      launchUrl: fields['Launch URL'] || null,
-      trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
-      patientSelectionMethod: null,
-      // Only meaningful for EHR launch — the wizard only shows/populates this field for that audience.
-      launchDisplayMode: appType === 'EhrLaunch' ? (fields['Launch display mode'] || null) : null,
-    };
+    const interactive =
+      appType === 'Backend'
+        ? null
+        : {
+            redirectUris: [
+              fields['Redirect URI'] ||
+                'http://localhost:5000/api/v1/oauth/callback',
+            ],
+            launchUrl: fields['Launch URL'] || null,
+            trustedIssuers: (fields['Trusted issuers'] ?? '')
+              .split(/[\s,]+/)
+              .filter(Boolean),
+            patientSelectionMethod: null,
+            // Only meaningful for EHR launch — the wizard only shows/populates this field for that audience.
+            launchDisplayMode:
+              appType === 'EhrLaunch'
+                ? fields['Launch display mode'] || null
+                : null,
+          };
 
     return {
       name: fields['__name'] || 'Epic',
       sourceSystemType: 'Epic',
       baseUrl: fields['FHIR base URL'] || '',
       authentication: {
-        authenticationType: appType === 'Backend' ? 'SmartBackendServices' : 'None',
+        authenticationType:
+          appType === 'Backend' ? 'SmartBackendServices' : 'None',
         clientId: fields['Client ID'] || fields['Active client ID'] || null,
         tokenEndpoint: fields['Token endpoint'] || null,
         scopes,
@@ -141,7 +185,10 @@ export class WorkflowBuildAssemblerService {
       interactive,
       // Provider Standalone gets a curated Search REST subset too (Resource Types/Search Criteria/Max Results/
       // Include Related Resources — no scheduler, since it's a user-initiated one-shot fetch, not automated).
-      retrieval: appType === 'Backend' || appType === 'Standalone' ? this.buildRetrieval(fields) : null,
+      retrieval:
+        appType === 'Backend' || appType === 'Standalone'
+          ? this.buildRetrieval(fields)
+          : null,
     };
   }
 
@@ -152,15 +199,23 @@ export class WorkflowBuildAssemblerService {
     // connection as Standalone (requesting user/ clinician scopes instead of patient/, which is why Epic rendered
     // Hyperspace instead of MyChart for patient-facing sources).
     switch (fields['App key']) {
-      case 'provider-ehr-launch': return 'EhrLaunch';
-      case 'provider-standalone': return 'Standalone';
-      case 'patient-standalone': return 'Patient';
-      case 'backend-system': return 'Backend';
+      case 'provider-ehr-launch':
+        return 'EhrLaunch';
+      case 'provider-standalone':
+        return 'Standalone';
+      case 'patient-standalone':
+        return 'Patient';
+      case 'backend-system':
+        return 'Backend';
     }
 
     // Fallback for connections saved before 'App key' was captured — patient checked before standalone since
     // "Patient (standalone)" contains "standalone" as a substring.
-    const ctx = (fields['App context'] ?? fields['Epic audience'] ?? '').toLowerCase();
+    const ctx = (
+      fields['App context'] ??
+      fields['Epic audience'] ??
+      ''
+    ).toLowerCase();
     if (ctx.includes('ehr')) return 'EhrLaunch';
     if (ctx.includes('patient')) return 'Patient';
     if (ctx.includes('standalone')) return 'Standalone';
@@ -171,32 +226,45 @@ export class WorkflowBuildAssemblerService {
    *  Mode/scheduler fields are never populated so they simply come through as null/default) — maps the wizard's
    *  Retrieval Configuration fields onto the backend's retrieval DTO. Returns null when no retrieval method was
    *  chosen (e.g. the connection is still being drafted). */
-  private buildRetrieval(fields: Record<string, string>): SourceRetrievalConfigurationRequest | null {
+  private buildRetrieval(
+    fields: Record<string, string>,
+  ): SourceRetrievalConfigurationRequest | null {
     const retrievalMethod = fields['Retrieval method key'];
     if (!retrievalMethod) return null;
 
     const splitList = (raw: string | undefined): string[] =>
-      (raw ?? '').split(',').map(v => v.trim()).filter(Boolean);
+      (raw ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
     const toPositiveNumber = (raw: string | undefined): number | null => {
       const n = Number(raw);
       return raw && Number.isFinite(n) && n > 0 ? n : null;
     };
 
     const includeParameters = splitList(fields['Include (_include)']);
-    const revIncludeParameters = splitList(fields['Reverse include (_revinclude)']);
+    const revIncludeParameters = splitList(
+      fields['Reverse include (_revinclude)'],
+    );
     // Standalone hides the retrieval method's own Resource Type control and reuses the shared Resource Type &
     // Scopes picker (Section 5, saved under 'Resources') instead — fall back to that when the retrieval-specific
     // one is empty, which it always is for Standalone.
     const retrievalResourceTypes = splitList(fields['Retrieval resource type']);
-    const resourceTypes = retrievalResourceTypes.length ? retrievalResourceTypes : splitList(fields['Resources']);
+    const resourceTypes = retrievalResourceTypes.length
+      ? retrievalResourceTypes
+      : splitList(fields['Resources']);
 
     // Patient ID list is a free-text area — accept comma- or newline-separated ids.
     const patientIds = (fields['Patient ID / list'] ?? '')
-      .split(/[\s,]+/).map(v => v.trim()).filter(Boolean);
+      .split(/[\s,]+/)
+      .map((v) => v.trim())
+      .filter(Boolean);
     const exportScope = fields['Export scope'] || null;
     // The wizard uses short tokens; $export's _outputFormat expects the registered MIME type. Both ndjson variants
     // map to application/fhir+ndjson (gzip is negotiated via transport encoding, not a distinct _outputFormat value).
-    const outputFormat = (fields['FHIR output format'] ?? '').startsWith('ndjson')
+    const outputFormat = (fields['FHIR output format'] ?? '').startsWith(
+      'ndjson',
+    )
       ? 'application/fhir+ndjson'
       : null;
 
@@ -208,14 +276,17 @@ export class WorkflowBuildAssemblerService {
       pageSize: toPositiveNumber(fields['Page size (_count)']),
       sortOrder: fields['Sort (_sort)'] || null,
       includeParameters: includeParameters.length ? includeParameters : null,
-      revIncludeParameters: revIncludeParameters.length ? revIncludeParameters : null,
+      revIncludeParameters: revIncludeParameters.length
+        ? revIncludeParameters
+        : null,
       retryPolicy: fields['Retry policy'] || null,
       timeoutSeconds: toPositiveNumber(fields['Timeout (seconds)']),
       maxRecordsPerRun: toPositiveNumber(fields['Max records per run']),
       // Bulk Data $export settings — only meaningful when retrievalMethod === 'bulk-export'.
       exportScope,
-      groupId: exportScope === 'group' ? (fields['Group ID'] || null) : null,
-      patientIds: exportScope === 'patient' && patientIds.length ? patientIds : null,
+      groupId: exportScope === 'group' ? fields['Group ID'] || null : null,
+      patientIds:
+        exportScope === 'patient' && patientIds.length ? patientIds : null,
       outputFormat,
     };
   }
@@ -225,15 +296,24 @@ export class WorkflowBuildAssemblerService {
     fields: Record<string, string>,
     node: WorkflowNodeRequest,
   ): CreateDestinationConfigurationRequest {
-    const isSql = node.nodeType.includes('SqlServer') || (fields['__transformId'] ?? '') === 'dest-sqlserver';
-    const name = fields['dest_name'] || (isSql ? 'SQL Destination' : 'File Destination');
-    const secretName = `dest-${this.slug(name)}-${this.shortId()}`;
+    const isSql =
+      node.nodeType.includes('SqlServer') ||
+      (fields['__transformId'] ?? '') === 'dest-sqlserver';
+    const name =
+      fields['dest_name'] || (isSql ? 'SQL Destination' : 'File Destination');
+    // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
+    // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
+    // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
+    // instead of minting a brand-new name every save, which only ever inserts a new row and orphans the old one.
+    const keyVaultName = fields['secretKeyVaultName'] || 'workflow-secrets';
+    const secretName =
+      fields['secretName'] || `dest-${this.slug(name)}-${this.shortId()}`;
 
     if (isSql) {
       return {
         name,
         destinationType: 'SqlServer',
-        keyVaultName: 'workflow-secrets',
+        keyVaultName,
         secretName,
         target: null,
         inlineSecret: this.buildSqlConnectionString(fields),
@@ -247,10 +327,11 @@ export class WorkflowBuildAssemblerService {
       // (dest_deliveryMode), not the DestinationType — previously this always hardcoded 'Sftp' regardless of the
       // chosen delivery mode, producing a broken empty-host sftp:// secret for every other mode.
       destinationType: 'Csv',
-      keyVaultName: 'workflow-secrets',
+      keyVaultName,
       secretName,
       target: fields['dest_filePattern'] || null,
-      inlineSecret: fields['dest_deliveryMode'] === 'sftp' ? this.buildSftpUri(fields) : '',
+      inlineSecret:
+        fields['dest_deliveryMode'] === 'sftp' ? this.buildSftpUri(fields) : '',
       connectionMetadataJson: this.buildConnectionMetadata(fields, false),
     };
   }
@@ -259,13 +340,37 @@ export class WorkflowBuildAssemblerService {
    *  which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri), never here. Mirrors
    *  destination-connection-secret.util.ts's buildConnectionMetadata — duplicated rather than imported for the
    *  same reason buildSqlConnectionString/buildSftpUri are (see that file's own header comment). */
-  private buildConnectionMetadata(f: Record<string, string>, isSql: boolean): string {
+  private buildConnectionMetadata(
+    f: Record<string, string>,
+    isSql: boolean,
+  ): string {
     const keys = isSql
-      ? ['dest_name', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode']
-      : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
-         'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
-         'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
-         'dest_downloadLinkExpiryMinutes'];
+      ? [
+          'dest_name',
+          'dest_server',
+          'dest_database',
+          'dest_auth',
+          'dest_username',
+          'dest_schema',
+          'dest_writeMode',
+        ]
+      : [
+          'dest_name',
+          'dest_deliveryMode',
+          'dest_filePattern',
+          'dest_delimiter',
+          'dest_encoding',
+          'dest_sftpHost',
+          'dest_sftpPort',
+          'dest_sftpUsername',
+          'dest_sftpAuthType',
+          'dest_sftpRemoteFolder',
+          'dest_emailTo',
+          'dest_emailCc',
+          'dest_emailSubjectTemplate',
+          'dest_emailBodyTemplate',
+          'dest_downloadLinkExpiryMinutes',
+        ];
     const metadata: Record<string, string> = {};
     for (const key of keys) {
       if (f[key] !== undefined) metadata[key] = f[key];
@@ -278,7 +383,10 @@ export class WorkflowBuildAssemblerService {
     const database = f['dest_database'] ?? '';
     const parts = [`Server=${server}`, `Database=${database}`];
     if ((f['dest_auth'] ?? 'sql-auth') === 'sql-auth') {
-      parts.push(`User Id=${f['dest_username'] ?? ''}`, `Password=${f['dest_password'] ?? ''}`);
+      parts.push(
+        `User Id=${f['dest_username'] ?? ''}`,
+        `Password=${f['dest_password'] ?? ''}`,
+      );
     } else {
       parts.push('Authentication=Active Directory Default');
     }
@@ -291,7 +399,11 @@ export class WorkflowBuildAssemblerService {
     const pass = encodeURIComponent(f['dest_sftpPassword'] ?? '');
     const host = f['dest_sftpHost'] ?? '';
     const port = f['dest_sftpPort'] ?? '22';
-    const folder = (f['dest_sftpRemoteFolder'] ?? f['dest_folder'] ?? '').replace(/^\/+/, '');
+    const folder = (
+      f['dest_sftpRemoteFolder'] ??
+      f['dest_folder'] ??
+      ''
+    ).replace(/^\/+/, '');
     return `sftp://${user}:${pass}@${host}:${port}/${folder}`;
   }
 
@@ -303,23 +415,28 @@ export class WorkflowBuildAssemblerService {
     destFields: Record<string, string>,
   ): MappingBuildSpec | null {
     const rows = this.parseMappingRows(destFields['dest_mappings']);
-    const resources = [...new Set(rows.map(row => row.resource))];
+    const resources = [...new Set(rows.map((row) => row.resource))];
     if (resources.length === 0) return null;
 
     const primary = resources[0];
-    if (resources.length > 1) this.lastUnmappedResources.push(...resources.slice(1));
+    if (resources.length > 1)
+      this.lastUnmappedResources.push(...resources.slice(1));
 
-    const primaryRows = rows.filter(row => row.resource === primary);
-    const baseDestinationObject = primaryRows[0]?.target || this.targetForResource(destFields, primary) || primary;
+    const primaryRows = rows.filter((row) => row.resource === primary);
+    const baseDestinationObject =
+      primaryRows[0]?.target ||
+      this.targetForResource(destFields, primary) ||
+      primary;
     // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
     // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
     // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. No explicit ;key=
     // override: the writer's own default key (SourceResourceId) matches that label's "by source id" semantics.
-    const destinationObject = destFields['dest_writeMode'] === 'upsert'
-      ? `${baseDestinationObject};mode=upsert`
-      : baseDestinationObject;
+    const destinationObject =
+      destFields['dest_writeMode'] === 'upsert'
+        ? `${baseDestinationObject};mode=upsert`
+        : baseDestinationObject;
 
-    const fields: MappingFieldRequest[] = primaryRows.map(row => {
+    const fields: MappingFieldRequest[] = primaryRows.map((row) => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
       const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, primary);
@@ -360,9 +477,15 @@ export class WorkflowBuildAssemblerService {
     }
   }
 
-  private targetForResource(fields: Record<string, string>, resource: string): string | null {
+  private targetForResource(
+    fields: Record<string, string>,
+    resource: string,
+  ): string | null {
     try {
-      const targets = JSON.parse(fields['dest_targets'] ?? '{}') as Record<string, string>;
+      const targets = JSON.parse(fields['dest_targets'] ?? '{}') as Record<
+        string,
+        string
+      >;
       return targets[resource] ?? null;
     } catch {
       return null;
@@ -383,8 +506,18 @@ export class WorkflowBuildAssemblerService {
 
   private valueTypeFor(path: string): string {
     const p = path.toLowerCase();
-    if (p.includes('birthdate') || p.includes('onset') || /date($|[^t])/.test(p)) return 'Date';
-    if (p.includes('datetime') || p.includes('period') || p.includes('effective')) return 'DateTime';
+    if (
+      p.includes('birthdate') ||
+      p.includes('onset') ||
+      /date($|[^t])/.test(p)
+    )
+      return 'Date';
+    if (
+      p.includes('datetime') ||
+      p.includes('period') ||
+      p.includes('effective')
+    )
+      return 'DateTime';
     return 'String';
   }
 
@@ -397,8 +530,11 @@ export class WorkflowBuildAssemblerService {
     return node.nodeType.endsWith('DestinationNode');
   }
 
-  private mappingNodeFeeding(destNodeId: string, graph: WorkflowBuildRequest): string | null {
-    const edge = graph.edges.find(e => e.toNodeId === destNodeId);
+  private mappingNodeFeeding(
+    destNodeId: string,
+    graph: WorkflowBuildRequest,
+  ): string | null {
+    const edge = graph.edges.find((e) => e.toNodeId === destNodeId);
     return edge?.fromNodeId ?? null;
   }
 
@@ -412,22 +548,32 @@ export class WorkflowBuildAssemblerService {
     while (current && !seen.has(current)) {
       if (sourceNodeIds.has(current)) return current;
       seen.add(current);
-      current = graph.edges.find(e => e.toNodeId === current)?.fromNodeId ?? null;
+      current =
+        graph.edges.find((e) => e.toNodeId === current)?.fromNodeId ?? null;
     }
     // Fallback: the first source in the graph (linear single-source pipelines).
     return [...sourceNodeIds][0] ?? null;
   }
 
-  private fieldsFor(nodeId: string, nodesById: Map<string, WorkflowNodeRequest>): Record<string, string> {
+  private fieldsFor(
+    nodeId: string,
+    nodesById: Map<string, WorkflowNodeRequest>,
+  ): Record<string, string> {
     // Prefer the live store node fields; fall back to the serialized config on the graph node.
     const storeNode = this.store.byId(nodeId);
     if (storeNode) return storeNode.fields;
     const node = nodesById.get(nodeId);
     if (!node?.configurationJson) return {};
     try {
-      const parsed = JSON.parse(node.configurationJson) as Record<string, unknown>;
+      const parsed = JSON.parse(node.configurationJson) as Record<
+        string,
+        unknown
+      >;
       return Object.fromEntries(
-        Object.entries(parsed).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]),
+        Object.entries(parsed).map(([k, v]) => [
+          k,
+          typeof v === 'string' ? v : JSON.stringify(v),
+        ]),
       );
     } catch {
       return {};
@@ -435,7 +581,13 @@ export class WorkflowBuildAssemblerService {
   }
 
   private slug(value: string): string {
-    return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'dest';
+    return (
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 24) || 'dest'
+    );
   }
 
   private shortId(): string {
