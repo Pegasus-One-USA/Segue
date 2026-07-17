@@ -1,9 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using FHIRBridge.Api.Auditing;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Application.Abstractions.Destinations;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -35,15 +33,10 @@ public static class WorkflowEndpoints
         group.MapPost("/workflows", async (
             WorkflowDefinitionRequest request,
             IWorkflowDefinitionStore store,
-            IUserActivityAuditService activityAuditService,
-            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var workflow = BuildWorkflow(Guid.NewGuid(), request);
             await store.SaveAsync(workflow, cancellationToken);
-            await RecordWorkflowActivityAsync(
-                activityAuditService, currentUserService, "Created", $"Workflow '{workflow.Name}' created",
-                workflow.Id, workflow.Name, cancellationToken);
             return Results.Created($"/api/v1/workflows/{workflow.Id}", workflow);
         });
 
@@ -55,8 +48,6 @@ public static class WorkflowEndpoints
             IConfigurationService configurationService,
             IWorkflowDefinitionStore store,
             IEpicSourceConnectionScopeSyncService scopeSyncService,
-            IUserActivityAuditService activityAuditService,
-            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
@@ -169,9 +160,6 @@ public static class WorkflowEndpoints
             var workflow = BuildWorkflow(
                 request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
-            await RecordWorkflowActivityAsync(
-                activityAuditService, currentUserService, "Built", $"Workflow '{workflow.Name}' built",
-                workflow.Id, workflow.Name, cancellationToken);
 
             // Re-derive each referenced source connection's OAuth scopes from what every pipeline sharing it
             // actually consumes downstream, now that this save may have changed a destination's resource selection
@@ -413,16 +401,11 @@ public static class WorkflowEndpoints
             Guid workflowId,
             WorkflowDefinitionRequest request,
             IWorkflowDefinitionStore store,
-            IUserActivityAuditService activityAuditService,
-            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var existing = await store.GetAsync(workflowId, cancellationToken);
             var workflow = BuildWorkflow(workflowId, request, (existing?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
-            await RecordWorkflowActivityAsync(
-                activityAuditService, currentUserService, "Updated", $"Workflow '{workflow.Name}' updated",
-                workflow.Id, workflow.Name, cancellationToken);
             return Results.Ok(workflow);
         });
 
@@ -435,8 +418,6 @@ public static class WorkflowEndpoints
             Guid workflowId,
             CopyWorkflowRequest request,
             IWorkflowDefinitionStore store,
-            IUserActivityAuditService activityAuditService,
-            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var name = request.Name?.Trim();
@@ -480,9 +461,6 @@ public static class WorkflowEndpoints
             var definitionRequest = new WorkflowDefinitionRequest(name, IsEnabled: false, nodeRequests, edgeRequests, triggerRequest);
             var copy = BuildWorkflow(Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(copy, cancellationToken);
-            await RecordWorkflowActivityAsync(
-                activityAuditService, currentUserService, "Copied", $"Workflow '{copy.Name}' copied from '{source.Name}'",
-                copy.Id, copy.Name, cancellationToken, oldValue: source.Name, newValue: copy.Name);
 
             return Results.Created($"/api/v1/workflows/{copy.Id}", copy);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
@@ -508,7 +486,6 @@ public static class WorkflowEndpoints
             WorkflowRunRequest? request,
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
-            IUserActivityAuditService activityAuditService,
             ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
@@ -849,9 +826,7 @@ public static class WorkflowEndpoints
                 run.WorkflowDefinitionVersion));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
-        // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads, so
-        // every call is itself audited — via .AuditDataAccess below, the same mechanism used for the Configured
-        // Pipeline's equivalent endpoint (PipelineRunsController.GetRouteExecutionResources).
+        // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads.
         group.MapGet("/workflow-runs/{runId:guid}/resources", async (
             Guid runId,
             int? page,
@@ -867,14 +842,11 @@ public static class WorkflowEndpoints
 
             return Results.Ok(result);
         })
-        .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin)
-        .AuditDataAccess("Workflow", "ExecutionDetailViewed", "runId");
+        .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapPost("/workflows/{workflowId:guid}/activate", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
-            IUserActivityAuditService activityAuditService,
-            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -885,17 +857,12 @@ public static class WorkflowEndpoints
 
             workflow.Activate();
             await store.SaveAsync(workflow, cancellationToken);
-            await RecordWorkflowActivityAsync(
-                activityAuditService, currentUserService, "Published", $"Workflow '{workflow.Name}' published",
-                workflow.Id, workflow.Name, cancellationToken);
             return Results.Ok(workflow);
         });
 
         group.MapPost("/workflows/{workflowId:guid}/deactivate", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
-            IUserActivityAuditService activityAuditService,
-            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -906,9 +873,6 @@ public static class WorkflowEndpoints
 
             workflow.Deactivate();
             await store.SaveAsync(workflow, cancellationToken);
-            await RecordWorkflowActivityAsync(
-                activityAuditService, currentUserService, "Deactivated", $"Workflow '{workflow.Name}' deactivated",
-                workflow.Id, workflow.Name, cancellationToken);
             return Results.Ok(workflow);
         });
 
@@ -953,8 +917,6 @@ public static class WorkflowEndpoints
         group.MapDelete("/workflows/{workflowId:guid}", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
-            IUserActivityAuditService activityAuditService,
-            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -964,49 +926,10 @@ public static class WorkflowEndpoints
             }
 
             await store.DeleteAsync(workflowId, cancellationToken);
-            await RecordWorkflowActivityAsync(
-                activityAuditService, currentUserService, "Deleted", $"Workflow '{workflow.Name}' deleted",
-                workflowId, workflow.Name, cancellationToken);
             return Results.NoContent();
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         return endpoints;
-    }
-
-    // Business-level "something happened" event for the Activity Feed — distinct from the technical/operational
-    // trail the Runtime engine's node executors and lineage tracker already write. One call site per workflow
-    // lifecycle action (create/update/publish/deactivate/copy/delete/run) rather than logging every intermediate step.
-    private static Task RecordWorkflowActivityAsync(
-        IUserActivityAuditService activityAuditService,
-        ICurrentUserService currentUserService,
-        string action,
-        string activity,
-        Guid workflowId,
-        string? workflowName,
-        CancellationToken cancellationToken,
-        string status = UserActivityStatuses.Success,
-        string? oldValue = null,
-        string? newValue = null)
-    {
-        var user = currentUserService.CurrentUser;
-        var userId = Guid.TryParse(user.ExternalUserId, out var parsedUserId) ? parsedUserId : (Guid?)null;
-        return activityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: user.AuditName,
-                Category: UserActivityCategories.Configuration,
-                Activity: activity,
-                Status: status,
-                EntityName: workflowName,
-                EntityId: workflowId,
-                IpAddress: user.IpAddress,
-                UserAgent: user.UserAgent,
-                CorrelationId: user.CorrelationId,
-                Module: "Workflow",
-                Action: action,
-                OldValue: oldValue,
-                NewValue: newValue),
-            cancellationToken);
     }
 
     // Sums the "count" metadata every Source-category node executor reports (see SourceNodeExecutor), and flags

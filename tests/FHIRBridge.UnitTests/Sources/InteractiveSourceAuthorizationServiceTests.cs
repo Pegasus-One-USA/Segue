@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.Abstractions.Security;
@@ -28,8 +27,6 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     private readonly Mock<ISecretProvider> _secretProvider = new();
     private readonly ILaunchTokenProtector _protector = new DataProtectionLaunchTokenProtector(new EphemeralDataProtectionProvider());
     private readonly Mock<IConfiguredPipelineService> _pipeline = new();
-    private readonly Mock<IOperationalAuditService> _audit = new();
-    private readonly Mock<IUserActivityAuditService> _activityAudit = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
 
     public InteractiveSourceAuthorizationServiceTests()
@@ -46,8 +43,6 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _secretProvider.Object,
         _protector,
         _pipeline.Object,
-        _audit.Object,
-        _activityAudit.Object,
         _currentUser.Object,
         NullLogger<InteractiveSourceAuthorizationService>.Instance);
 

@@ -11,8 +11,5 @@
 DELETE FROM [UserRoles];   -- FK -> Users (must go first)
 DELETE FROM [Users];
 
--- Optional deeper wipe (uncomment to also clear the audit/lineage/run history):
--- DELETE FROM [UserActivityAuditLogs];
--- DELETE FROM [OperationalAuditLogs];
--- DELETE FROM [ResourceLineageEntries];
+-- Optional deeper wipe (uncomment to also clear run history):
 -- DELETE FROM [ConfiguredPipelineRuns];

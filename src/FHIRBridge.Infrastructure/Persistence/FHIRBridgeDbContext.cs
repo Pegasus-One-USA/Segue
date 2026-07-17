@@ -22,11 +22,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<ConfiguredPipelineRunRecord> ConfiguredPipelineRuns => Set<ConfiguredPipelineRunRecord>();
     public DbSet<PipelineRunRouteExecution> PipelineRunRouteExecutions => Set<PipelineRunRouteExecution>();
     public DbSet<PipelineRunResourceRecord> PipelineRunResourceRecords => Set<PipelineRunResourceRecord>();
-    public DbSet<OperationalAuditLog> OperationalAuditLogs => Set<OperationalAuditLog>();
-    public DbSet<ResourceLineageEntry> ResourceLineageEntries => Set<ResourceLineageEntry>();
-    public DbSet<FieldLineageEntry> FieldLineageEntries => Set<FieldLineageEntry>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
-    public DbSet<UserActivityAuditLog> UserActivityAuditLogs => Set<UserActivityAuditLog>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Permission> Permissions => Set<Permission>();
@@ -85,35 +81,4 @@ public sealed class FHIRBridgeDbContext : DbContext
         modelBuilder.Entity<TEntity>().HasQueryFilter(e => !e.IsDeleted);
     }
 
-    public override int SaveChanges(bool acceptAllChangesOnSuccess)
-    {
-        GuardAppendOnlyLogs();
-        return base.SaveChanges(acceptAllChangesOnSuccess);
-    }
-
-    public override Task<int> SaveChangesAsync(
-        bool acceptAllChangesOnSuccess,
-        CancellationToken cancellationToken = default)
-    {
-        GuardAppendOnlyLogs();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-    }
-
-    /// <summary>
-    /// Enforces the HIPAA append-only retention requirement: audit rows (operational + user-activity) may be
-    /// inserted but never updated or deleted through the application. Attempts to do so fail fast rather than
-    /// silently mutating history.
-    /// </summary>
-    private void GuardAppendOnlyLogs()
-    {
-        foreach (var entry in ChangeTracker.Entries())
-        {
-            if (entry.Entity is OperationalAuditLog or UserActivityAuditLog &&
-                entry.State is EntityState.Modified or EntityState.Deleted)
-            {
-                throw new InvalidOperationException(
-                    "Audit logs are append-only and cannot be modified or deleted (HIPAA retention requirement).");
-            }
-        }
-    }
 }

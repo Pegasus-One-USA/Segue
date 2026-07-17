@@ -1,6 +1,4 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
@@ -12,17 +10,10 @@ namespace FHIRBridge.Application.Services;
 public sealed class EhrEndpointService : IEhrEndpointService
 {
     private readonly IEhrEndpointRepository _repository;
-    private readonly IOperationalAuditService _auditService;
-    private readonly ICurrentUserService _currentUserService;
 
-    public EhrEndpointService(
-        IEhrEndpointRepository repository,
-        IOperationalAuditService auditService,
-        ICurrentUserService currentUserService)
+    public EhrEndpointService(IEhrEndpointRepository repository)
     {
         _repository = repository;
-        _auditService = auditService;
-        _currentUserService = currentUserService;
     }
 
     public async Task<IReadOnlyList<EhrEndpointDto>> GetAllAsync(CancellationToken cancellationToken)
@@ -71,7 +62,6 @@ public sealed class EhrEndpointService : IEhrEndpointService
             request.EndpointType);
 
         await _repository.AddAsync(endpoint, cancellationToken);
-        await AuditAsync("EhrEndpointCreated", $"EHR endpoint '{request.Name}' added.", cancellationToken);
 
         return EhrEndpointMapper.ToDto(endpoint);
     }
@@ -90,7 +80,6 @@ public sealed class EhrEndpointService : IEhrEndpointService
             request.EndpointType);
 
         await _repository.UpdateAsync(endpoint, cancellationToken);
-        await AuditAsync("EhrEndpointUpdated", $"EHR endpoint '{request.Name}' updated.", cancellationToken);
 
         return EhrEndpointMapper.ToDto(endpoint);
     }
@@ -99,29 +88,11 @@ public sealed class EhrEndpointService : IEhrEndpointService
     {
         var endpoint = await GetRequiredAsync(id, cancellationToken);
         await _repository.DeleteAsync(endpoint, cancellationToken);
-        await AuditAsync("EhrEndpointDeleted", $"EHR endpoint '{endpoint.Name}' deleted.", cancellationToken);
     }
 
     private async Task<EhrEndpoint> GetRequiredAsync(Guid id, CancellationToken cancellationToken) =>
         await _repository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException("EhrEndpoint", id);
-
-    private Task AuditAsync(string action, string message, CancellationToken cancellationToken) =>
-        _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                action,
-                "Completed",
-                message,
-                null,
-                _currentUserService.CurrentUser.AuditName,
-                null),
-            cancellationToken);
 
     private static void ValidateRequest(CreateEhrEndpointRequest request)
     {

@@ -13,15 +13,11 @@
     </div>
   </div>
 
-  <!-- Pipeline table + Activity Feed side by side -->
-  <div class="grid-2col">
-    <app-pipeline-table
-      [runs]="runs()"
-      (runClicked)="onActionClick($event)"
-      (editClicked)="onActionClick($event)"
-      (logsClicked)="onActionClick($event)"
-    />
-    <app-activity-feed [events]="activity()" />
-  </div>
+  <app-pipeline-table
+    [runs]="runs()"
+    (runClicked)="onActionClick($event)"
+    (editClicked)="onActionClick($event)"
+    (logsClicked)="onActionClick($event)"
+  />
 
 </div>

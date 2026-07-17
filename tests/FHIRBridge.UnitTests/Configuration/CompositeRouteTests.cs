@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
@@ -22,16 +21,12 @@ public sealed class CompositeRouteTests
     private readonly InMemoryConfigurationRepository _repository = new();
     private readonly InMemorySourceCapabilityRepository _capabilityRepository = new();
     private readonly Mock<ISourceCapabilityDiscoveryService> _discovery = new();
-    private readonly Mock<IUserActivityAuditService> _activityAudit = new();
-    private readonly Mock<ICurrentUserService> _currentUser = new();
     private readonly ConfigurationService _sut;
 
     public CompositeRouteTests()
     {
-        _currentUser.SetupGet(x => x.CurrentUser)
-            .Returns(new CurrentUserInfo("admin", "admin@example.com", "Admin", ["Administrator"], true));
         _sut = new ConfigurationService(
-            _repository, _capabilityRepository, _discovery.Object, _activityAudit.Object, _currentUser.Object,
+            _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>());
     }
 

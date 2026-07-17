@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -30,10 +29,6 @@ public sealed class DestinationExecutionHistoryGateTests
 
     public DestinationExecutionHistoryGateTests()
     {
-        var currentUser = new Mock<ICurrentUserService>();
-        currentUser.SetupGet(x => x.CurrentUser)
-            .Returns(new CurrentUserInfo("admin", "admin@example.com", "Admin", ["Administrator"], true));
-
         _repository.Setup(x => x.GetDestinationAsync(_destination.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(_destination);
 
@@ -41,8 +36,6 @@ public sealed class DestinationExecutionHistoryGateTests
             _repository.Object,
             Mock.Of<ISourceCapabilityRepository>(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
-            Mock.Of<IUserActivityAuditService>(),
-            currentUser.Object,
             Mock.Of<ISecretWriter>());
     }
 

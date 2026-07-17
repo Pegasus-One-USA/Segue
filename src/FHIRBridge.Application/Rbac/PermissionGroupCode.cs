@@ -28,9 +28,6 @@ public enum PermissionGroupCode
     [PermissionGroup("30000000-0000-0000-0000-000000000002", PermissionCategoryCode.Platform, "Pipeline")]
     Pipeline = 5,
 
-    [PermissionGroup("30000000-0000-0000-0000-000000000003", PermissionCategoryCode.Platform, "Audit Logs")]
-    AuditLogs = 6,
-
     [PermissionGroup("30000000-0000-0000-0000-000000000009", PermissionCategoryCode.Platform, "Source Connections")]
     SourceConnections = 7,
 
