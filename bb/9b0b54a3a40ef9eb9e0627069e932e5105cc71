@@ -1,0 +1,25 @@
+portal/src/app/services/destination-schema.service.ts
+  s_f2e735b2ad7f17::t_e10a74d4a1b73c 58,65-77,80-83,104-108
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_f2e735b2ad7f17::t_1380f1e529a5cc 20,22-24,27,95-105
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorRetryTests.cs
+  s_f2e735b2ad7f17::t_73f073dec76025 35,92
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  s_f2e735b2ad7f17::t_4e5033075b257a 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "bb9b0b54a3a40ef9eb9e0627069e932e5105cc71",
+  "prompts": {},
+  "sessions": {
+    "s_f2e735b2ad7f17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4add3300-65d3-4739-b657-bd4a95e31c89",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
