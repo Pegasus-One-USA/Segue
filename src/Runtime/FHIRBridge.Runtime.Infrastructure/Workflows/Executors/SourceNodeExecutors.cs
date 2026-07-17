@@ -225,17 +225,43 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
             && _bulkExportClient is not null;
 
+        // Extract "Patient" first (regardless of where it falls in the wizard-authored order) so its resulting ids
+        // become a cohort every sibling resource type is scoped to below — without this, a multi-resource selection
+        // (e.g. Patient + Observation) would fetch Observation completely unscoped against the whole tenant.
+        var executionOrder = resourceTypes
+            .OrderBy(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ToList();
+
+        IReadOnlyList<string>? cohortPatientIds = null;
         var resources = new List<ResourceEnvelope>();
-        foreach (var type in resourceTypes)
+        foreach (var type in executionOrder)
         {
+            var isPatientType = string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase);
+
             IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page = useBulkExport
-                ? await _bulkExportClient!.ExportAsync(BuildBulkExportRequest(source, type), source, cancellationToken)
-                : await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken);
+                ? await _bulkExportClient!.ExportAsync(
+                    await BuildBulkExportRequestAsync(
+                        source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
+                    source,
+                    cancellationToken)
+                : isPatientType || cohortPatientIds is not { Count: > 0 }
+                    ? await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken)
+                    : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
 
             resources.AddRange(page.Select(resource => new ResourceEnvelope(
                 resource.ResourceType,
                 resource.ResourceId ?? string.Empty,
                 resource.RawJson)));
+
+            if (isPatientType)
+            {
+                cohortPatientIds = page
+                    .Select(resource => resource.ResourceId)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id!)
+                    .Distinct()
+                    .ToList();
+            }
         }
 
         if (source.MaxRecords is { } maxRecords && resources.Count > maxRecords)
@@ -263,8 +289,39 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 // Reflects what actually ran (bulk client available and configured), not just what was configured —
                 // lets a caller (e.g. the /run endpoint's Activity Feed summary) label a run as a Bulk Export
                 // without duplicating this resolution logic.
-                ["retrievalMethod"] = useBulkExport ? "bulk-export" : "search-rest"
+                ["retrievalMethod"] = useBulkExport ? "bulk-export" : "search-rest",
+                // Non-null only when "Patient" was among this node's resource types — how many patients its own
+                // extraction found, and so how many sibling resource types (Observation, Condition, ...) got scoped
+                // to. Absent/zero means every other resource type in this node ran unscoped (no Patient selected).
+                ["cohortSize"] = cohortPatientIds?.Count
             });
+    }
+
+    /// <summary>
+    /// Batches a cohort-scoped search: <see cref="FhirSourceConfiguration.PatientIds"/> is OR'd into a single
+    /// <c>patient=</c> parameter by <c>FhirSourceConnectorBase.ApplyPatientScopeAsync</c>, but most FHIR servers
+    /// (Epic included) cap how many comma-separated reference values one request reasonably supports — so the
+    /// cohort is split into fixed-size batches, each run through the existing per-type retry/timeout wrapper, and
+    /// the pages concatenated. A cohort at or under one batch still makes exactly one request, unchanged.
+    /// </summary>
+    private const int CohortBatchSize = 50;
+
+    private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> SearchCohortScopedAsync(
+        IFhirSourceClient client,
+        string resourceType,
+        FhirSourceConfiguration source,
+        IReadOnlyList<string> cohortPatientIds,
+        Guid workflowRunId,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
+        foreach (var batch in cohortPatientIds.Chunk(CohortBatchSize))
+        {
+            var batchSource = source with { PatientIds = batch, TargetPatientId = null };
+            results.AddRange(await SearchWithPolicyAsync(client, resourceType, batchSource, workflowRunId, cancellationToken));
+        }
+
+        return results;
     }
 
     /// <summary>
@@ -408,16 +465,52 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
     // Projects the resolved source's bulk-export settings onto a $export request for one resource type — mirrors the
     // configured-pipeline plane so a graph run and a route run scope the export identically. Scope drives which id
-    // narrows the export (Group id vs patient list); System carries neither.
-    private static FhirBulkExportRequest BuildBulkExportRequest(FhirSourceConfiguration source, string resourceType)
+    // narrows the export (Group id vs patient list); System carries neither. When this node's own Patient
+    // extraction discovered a cohort (cohortPatientIds), an unset or already-Patient-scoped export is narrowed to
+    // it. System/Group scope can't be narrowed to an ad hoc cohort by $export semantics — left as configured, but
+    // flagged via the operational audit log so an unexpectedly-broad export is traceable rather than silent.
+    private async Task<FhirBulkExportRequest> BuildBulkExportRequestAsync(
+        FhirSourceConfiguration source,
+        string resourceType,
+        IReadOnlyList<string>? cohortPatientIds,
+        Guid workflowRunId,
+        CancellationToken cancellationToken)
     {
-        var scope = BulkExportScopes.Parse(source.ExportScope);
+        var configuredScope = BulkExportScopes.Parse(source.ExportScope);
+        var hasCohort = cohortPatientIds is { Count: > 0 };
+
+        // An unset ExportScope parses to System (BulkExportScopes.Parse's default), indistinguishable from an
+        // explicit "system" — but only an *explicit* System/Group choice should be left un-narrowed below; an
+        // unset scope should still pick up the cohort like the Patient-scope branch does.
+        var explicitlyUnscopable = hasCohort
+            && !string.IsNullOrWhiteSpace(source.ExportScope)
+            && configuredScope is BulkExportScope.System or BulkExportScope.Group;
+
+        if (explicitlyUnscopable)
+        {
+            await RecordRetryOutcomeAsync(
+                workflowRunId, source, resourceType, OperationalLogSeverities.Warning,
+                "BulkExportNotCohortScoped", "Unscoped",
+                $"Bulk export for {resourceType} ran at {configuredScope} scope, which cannot be narrowed to the " +
+                $"{cohortPatientIds!.Count}-patient cohort discovered by this run's Patient extraction.",
+                cancellationToken);
+
+            return new FhirBulkExportRequest(
+                configuredScope,
+                GroupId: configuredScope == BulkExportScope.Group ? source.GroupId : null,
+                ResourceTypes: [resourceType],
+                Since: source.Since,
+                PatientIds: null,
+                OutputFormat: source.OutputFormat);
+        }
+
+        var effectiveScope = hasCohort ? BulkExportScope.Patient : configuredScope;
         return new FhirBulkExportRequest(
-            scope,
-            GroupId: scope == BulkExportScope.Group ? source.GroupId : null,
+            effectiveScope,
+            GroupId: effectiveScope == BulkExportScope.Group ? source.GroupId : null,
             ResourceTypes: [resourceType],
             Since: source.Since,
-            PatientIds: scope == BulkExportScope.Patient ? source.PatientIds : null,
+            PatientIds: effectiveScope == BulkExportScope.Patient ? (cohortPatientIds ?? source.PatientIds) : null,
             OutputFormat: source.OutputFormat);
     }
 
