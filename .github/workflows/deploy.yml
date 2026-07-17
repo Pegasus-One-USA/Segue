@@ -13,7 +13,19 @@ name: Deploy
 # Recommended hardening (one-time, in repo Settings > Environments): add required reviewers to the
 # "production" environment so the deploy job pauses for an approval click before it runs.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      target:
+        description: >
+          production = the folders/services/ports you already deployed by hand (C:\inetpub\wwwroot\fhirbridge-*,
+          ports 80/443/5000). test = a fully separate copy under C:\inetpub\wwwroot\test\fhirbridge-*, different
+          service names, different ports — never touches the production deploy.
+        type: choice
+        required: true
+        default: test
+        options:
+          - production
+          - test
 
 permissions:
   contents: read
@@ -82,7 +94,9 @@ jobs:
     name: deploy-to-vm
     needs: build
     runs-on: [self-hosted, Windows, fhirbridge-vm]
-    environment: production
+    # Selecting "test" above deploys under a "test" GitHub Environment (no approval gate unless you add
+    # one) instead of "production" — keeps the two visibly separate in the Actions UI too.
+    environment: ${{ inputs.target }}
     steps:
       # Needed for deploy/windows/Deploy-FHIRBridge.ps1 — not for the app binaries, those come from the artifact.
       - uses: actions/checkout@v4
@@ -95,8 +109,22 @@ jobs:
         shell: pwsh
         run: Expand-Archive -Path fhirbridge-deploy.zip -DestinationPath extracted -Force
 
-      - name: Run deploy script
+      - name: Run deploy script (production — same paths/ports/services as the manual deploy)
+        if: ${{ inputs.target == 'production' }}
         shell: pwsh
         run: |
           $artifactPath = (Resolve-Path extracted).Path
           ./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath $artifactPath
+
+      - name: Run deploy script (test — separate folders, service names, and ports)
+        if: ${{ inputs.target == 'test' }}
+        shell: pwsh
+        run: |
+          $artifactPath = (Resolve-Path extracted).Path
+          ./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath $artifactPath `
+            -DeployRoot "C:\inetpub\wwwroot\test" `
+            -ApiServiceName "FHIRBridge.Api.Test" `
+            -GatewayServiceName "FHIRBridge.Gateway.Test" `
+            -WorkerServiceName "FHIRBridge.Worker.Test" `
+            -ApiHealthCheckUrl "http://127.0.0.1:5100/health" `
+            -GatewayHealthCheckUrl "http://localhost:8080/"

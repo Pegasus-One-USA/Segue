@@ -133,22 +133,81 @@ an environment variable on the service instead (step 6), so it isn't sitting in 
 
 Grant the service account read/write on `C:\inetpub\dataprotection-keys` and `C:\FHIRBridge-certs`.
 
-## 5. First deploy
+## 5. Testing CI/CD without touching your manual deployment
 
-Go to the **Actions** tab → **Deploy** workflow → **Run workflow**. This:
+The **Run workflow** dialog asks for a `target`: `production` or `test`.
+
+- **`production`** uses the exact same folders, service names, and ports as the manual deployment
+  you already did (`C:\inetpub\wwwroot\fhirbridge-*`, ports 80/443/5000). Running this will stop
+  and replace those same services.
+- **`test`** deploys a fully separate, parallel copy that never touches the production one:
+
+  | | production | test |
+  |---|---|---|
+  | Folders | `C:\inetpub\wwwroot\fhirbridge-{api,gateway,worker,portal}` | `C:\inetpub\wwwroot\test\fhirbridge-{api,gateway,worker,portal}` |
+  | Service names | `FHIRBridge.Api` / `.Gateway` / `.Worker` | `FHIRBridge.Api.Test` / `.Gateway.Test` / `.Worker.Test` |
+  | Api port (loopback) | `127.0.0.1:5000` | `127.0.0.1:5100` |
+  | Gateway ports (public) | `80` / `443` | `8080` / `8443` |
+
+  These live as `-DeployRoot`, `-ApiServiceName`, etc. arguments in `deploy.yml`'s `deploy` job —
+  change the numbers there if `8080`/`8443`/`5100` collide with something else already running on
+  the VM.
+
+Before running with `test` for the first time, provision its own config the same way you did for
+production (step 4), just under the `test` paths and ports instead:
+
+`C:\inetpub\wwwroot\test\fhirbridge-api\appsettings.Production.json` — same as production's, plus
+whatever DB you want the test instance to use (the same database is fine for a first smoke test).
+
+`C:\inetpub\wwwroot\test\fhirbridge-gateway\appsettings.Production.json`:
+```json
+{
+  "ReverseProxy": {
+    "Routes": {
+      "api-route": { "ClusterId": "api-cluster", "Match": { "Path": "/api/{**catch-all}" } },
+      "swagger-route": { "ClusterId": "api-cluster", "Match": { "Path": "/swagger/{**catch-all}" } }
+    },
+    "Clusters": { "api-cluster": { "Destinations": { "destination1": { "Address": "http://127.0.0.1:5100/" } } } }
+  },
+  "StaticFiles": { "RootPath": "C:\\inetpub\\wwwroot\\test\\fhirbridge-portal" },
+  "Kestrel": {
+    "Endpoints": {
+      "Http": { "Url": "http://0.0.0.0:8080" },
+      "Https": { "Url": "https://0.0.0.0:8443", "Certificate": { "Path": "C:\\FHIRBridge-certs\\gateway.pfx" } }
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+The same self-signed cert from step 3 works fine here too — a cert isn't tied to a port.
+
+Since the very first deploy to a target creates its Windows Services (via `New-Service`), the
+loopback URL/environment name for `FHIRBridge.Api.Test` and the cert password for
+`FHIRBridge.Gateway.Test` still need to be set once via the registry, same as step 6 below but
+against the `.Test` service names and `5100`/cert-password values.
+
+If the test Gateway needs to be reachable from other machines on the LAN (not just from the VM
+itself), open `8080`/`8443` in the firewall the same way `80`/`443` were opened for production.
+
+## 6. First deploy
+
+Go to the **Actions** tab → **Deploy** workflow → **Run workflow**, choose `production` or `test`.
+This:
 
 1. Builds the Api, Gateway, Worker (`dotnet publish`, win-x64, framework-dependent) and the Angular
-   portal (`ng build --configuration production`) on a GitHub-hosted runner.
-2. Ships all four to the self-hosted runner on the VM, which mirrors each into
-   `C:\inetpub\wwwroot\fhirbridge-{api,gateway,worker,portal}` (preserving each service's
-   `appsettings.Production.json`), creates the three Windows Services if they don't exist yet,
-   starts Api and Worker first, mirrors the Portal's static files, then starts the Gateway last.
-3. Health-checks the Api directly over loopback (`http://127.0.0.1:5000/health`) and confirms the
-   Gateway itself answers on plain HTTP (`http://localhost/`).
+   portal (`ng build --configuration production`) on a GitHub-hosted runner — identical build for
+   either target.
+2. Ships all four to the self-hosted runner on the VM, which mirrors each into the chosen target's
+   folders (preserving each service's `appsettings.Production.json`), creates the three Windows
+   Services if they don't exist yet, starts Api and Worker first, mirrors the Portal's static
+   files, then starts the Gateway last.
+3. Health-checks the Api directly over loopback and confirms the Gateway itself answers on plain
+   HTTP — against whichever ports the chosen target uses.
 
-The very first run creates all three services for you; after that it's just start/stop/replace.
+The very first run against a given target creates all three of its services for you; after that
+it's just start/stop/replace.
 
-## 6. Register the services (first run only, if the workflow's own New-Service ever needs redoing)
+## 7. Register the services (first run only, if the workflow's own New-Service ever needs redoing)
 
 The deploy script creates services automatically on first deploy. If you ever need to do it by
 hand (e.g. after a `sc.exe delete`), the environment variables below are what make loopback
@@ -176,7 +235,7 @@ Restart-Service FHIRBridge.Api, FHIRBridge.Worker, FHIRBridge.Gateway
 `Set-ItemProperty` needs an explicit `[string[]]` cast — PowerShell otherwise builds a generic
 `Object[]`, which `RegistryKey.SetValue` rejects for a `REG_MULTI_SZ` value.
 
-## 7. First-run setup
+## 8. First-run setup
 
 The database schema self-provisions on boot (EF Core migrations run automatically, and the RBAC
 bootstrapper seeds the permission catalog idempotently every startup) — but **no admin user is
@@ -188,7 +247,7 @@ https://<host>/setup
 
 This route is one-shot — once any user exists, it locks itself out.
 
-## 8. Optional: require an approval click before deploying
+## 9. Optional: require an approval click before deploying
 
 By default `workflow_dispatch` already requires a manual click to start the workflow. If you also
 want a **second** approval gate right before the deploy job touches the VM: **Settings →
