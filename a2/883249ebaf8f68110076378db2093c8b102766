@@ -1,0 +1,35 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_bc8477f0441329::t_46c92e2a9a5db5 245,248-249
+  s_bc8477f0441329::t_b7824c53152a37 482-489
+  s_bc8477f0441329::t_782720229d5dbd 468-477,479-481,490-507,509-510,513
+  s_bc8477f0441329::t_d298bee6405b5a 228-235,237,239-240,242,246-247,255-264,325-326
+  s_bc8477f0441329::t_e1e03c0398deb7 243-244
+  s_bc8477f0441329::t_4834751c5e3b2b 292-296,300-324
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_bc8477f0441329::t_739ba96ba28b34 69-104
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs
+  s_bc8477f0441329::t_6925a7d1ee874a 1
+  s_bc8477f0441329::t_a81db5f4918863 2
+  s_bc8477f0441329::t_bdc00eb77ad8b9 118-209
+  s_bc8477f0441329::t_c267794e8df94b 3-33,35-91,93-117,210-216
+  s_bc8477f0441329::t_d8f457d7e3e487 34,92
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_bc8477f0441329::t_a115579fd1b3ac 294-298,301-308,311
+  s_bc8477f0441329::t_4d614926c7d4a8 258-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "a2883249ebaf8f68110076378db2093c8b102766",
+  "prompts": {},
+  "sessions": {
+    "s_bc8477f0441329": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "44e058de-5344-4044-9726-485b90e65d4f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
