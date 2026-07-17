@@ -55,18 +55,32 @@ export interface CreateTableRequest {
   tableName: string;
 }
 
-/** Permanently drops a column via a real ALTER TABLE ... DROP COLUMN — irreversible, data included. */
+/** Permanently drops a column via a real ALTER TABLE ... DROP COLUMN â€” irreversible, data included. */
 export interface DropColumnRequest {
   connection: DestinationProbeRequest;
   tableName: string;
   columnName: string;
 }
 
+export interface SftpConnectionTestRequest {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  remoteFolder?: string;
+}
+
+export interface ConnectionTestResult {
+  connected: boolean;
+  error: string | null;
+}
+
 /**
  * Tests a relational destination connection and loads its tables/columns for the pipeline builder's
- * table/column pickers, and executes real schema-authoring DDL (ALTER TABLE / CREATE TABLE) for the
- * mapping canvas's "add column" / "add table" affordances. Backed by DestinationSchemaController
- * (auth token attached by the global auth interceptor).
+ * table/column pickers, executes real schema-authoring DDL (ALTER TABLE / CREATE TABLE) for the mapping
+ * canvas's "add column" / "add table" affordances, and tests ad-hoc SFTP connections for CSV
+ * destinations. Backed by DestinationSchemaController (auth token attached by the global auth
+ * interceptor).
  */
 @Injectable({ providedIn: 'root' })
 export class DestinationSchemaService {
@@ -86,5 +100,10 @@ export class DestinationSchemaService {
 
   dropColumn(request: DropColumnRequest): Observable<SchemaMutationResult> {
     return this.http.post<SchemaMutationResult>(DESTINATION_ENDPOINTS.dropColumn, request);
+  }
+
+  /** Tests an ad-hoc SFTP connection for a CSV destination (storageType 'sftp'). */
+  testSftp(request: SftpConnectionTestRequest): Observable<ConnectionTestResult> {
+    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.sftpTest, request);
   }
 }

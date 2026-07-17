@@ -17,10 +17,14 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class DestinationSchemaController : ControllerBase
 {
     private readonly IDestinationSchemaService _schemaService;
+    private readonly ICsvDestinationConnectionTestService _csvConnectionTestService;
 
-    public DestinationSchemaController(IDestinationSchemaService schemaService)
+    public DestinationSchemaController(
+        IDestinationSchemaService schemaService,
+        ICsvDestinationConnectionTestService csvConnectionTestService)
     {
         _schemaService = schemaService;
+        _csvConnectionTestService = csvConnectionTestService;
     }
 
     /// <summary>Tables/columns of an already-saved relational destination.</summary>
@@ -88,4 +92,15 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] DropColumnRequest request,
         CancellationToken cancellationToken)
         => Ok(await _schemaService.DropColumnAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc SFTP connection for a CSV destination (storageType 'sftp'). Always returns 200 —
+    /// connection failures come back as <c>connected:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("sftp-test")]
+    [ProducesResponseType(typeof(ConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestSftpConnection(
+        [FromBody] SftpConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _csvConnectionTestService.TestSftpConnectionAsync(request, cancellationToken));
 }

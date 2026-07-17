@@ -83,9 +83,6 @@ export const DESTINATION_ENDPOINTS = {
   addColumn:     `${API_V1_BASE}/destinations/schema/add-column`,
   createTable:   `${API_V1_BASE}/destinations/schema/create-table`,
   dropColumn:    `${API_V1_BASE}/destinations/schema/drop-column`,
-  addColumn:     `${API_V1_BASE}/destinations/schema/add-column`,
-  createTable:   `${API_V1_BASE}/destinations/schema/create-table`,
-  dropColumn:    `${API_V1_BASE}/destinations/schema/drop-column`,
 };
 
 // ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────

@@ -120,11 +120,8 @@ export class DestinationWizardComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly catalogSvc = inject(MappingCatalogService);
-<<<<<<< .mine
   private readonly toast = inject(ToastService);
-=======
   private readonly destinationConfigSvc = inject(DestinationConfigurationService);
->>>>>>> .theirs
 
   // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
@@ -220,7 +217,6 @@ export class DestinationWizardComponent implements OnInit {
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
-<<<<<<< .mine
   // ── extra target tables (child tables added alongside a group's primary table) ──
   // Keyed by data-group name; each entry is a list of additional already-probed SQL
   // table full-names the user chose to also map into for that same group's canvas
@@ -302,7 +298,6 @@ export class DestinationWizardComponent implements OnInit {
     this.payloadFieldsByResource.update(m => ({ ...m, [e.resource]: e.fields }));
   }
 
-=======
   // ── select an existing DestinationConfiguration instead of building a new one ───────────────
   // Only offered when attaching a brand-new destination node (not when editing one already on the canvas —
   // that node's fields already pin a connection, existing or otherwise). Excludes destinations that already
@@ -318,73 +313,6 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
->>>>>>> .theirs
   // ── computed helpers ──────────────────────────────────────────────────────
   readonly isSql        = computed(() => this.destType() === 'sql');
   readonly destLabel    = computed(() => this.destType() === 'sql' ? 'SQL Server' : 'CSV');

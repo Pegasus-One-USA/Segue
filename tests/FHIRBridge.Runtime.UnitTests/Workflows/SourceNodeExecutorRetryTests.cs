@@ -32,7 +32,7 @@ public sealed class SourceNodeExecutorRetryTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         var callCount = 0;
@@ -89,7 +89,7 @@ public sealed class SourceNodeExecutorRetryTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         var client = new Mock<IFhirSourceClient>();
