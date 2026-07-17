@@ -32,8 +32,9 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // Deliberately a fixed redirect to the app root, not window.history.back(): a real MyChart sign-in round trip
   // pushes several history entries (dashboard → this page → the external MyChart login page → back here), so one
   // history.back() would land on the external MyChart page rather than the demo-type-1 dashboard this component is
-  // always reached from. The root path re-renders that dashboard directly (selectedDemoType is still
-  // 'Patient_Standalone' in sessionStorage, and app.html's isOnPatientStandaloneLaunchPath check is false there).
+  // always reached from. The root path re-renders that dashboard directly (the Patient role persists in
+  // sessionStorage — see app.ts's AUTH_ROLE_STORAGE_KEY — and app.html's isOnPatientStandaloneLaunchPath check is
+  // false there).
   goHome(): void {
     window.location.href = '/';
   }
@@ -119,7 +120,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
     // common case for a Patient Standalone sign-in with no upfront search criteria). All three only ever appear
     // once the token exchange itself has already succeeded. Read straight off window.location rather than
     // ActivatedRoute: this app never uses a real <router-outlet> for this content (app.html renders it via a plain
-    // selectedDemoType() @if/@else-if), so ActivatedRoute here could race Angular Router's own async
+    // role() @if/@else-if), so ActivatedRoute here could race Angular Router's own async
     // initialization on the exact page load right after this full-page redirect back from MyChart. This read is
     // synchronous and needs no config, so it happens before loadConfig() even starts.
     const params = new URLSearchParams(window.location.search);

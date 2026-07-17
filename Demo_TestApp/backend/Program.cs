@@ -72,17 +72,6 @@ if (app.Environment.IsDevelopment())
 const string SessionCookieName = "hb_session";
 var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-// Public — populates the "Login Type" dropdown on the login screen, before any session exists.
-app.MapGet("/api/demo-types", async (HealthAppDbContext db) =>
-{
-    var demoTypes = await db.DemoTypes
-        .OrderBy(t => t.Id)
-        .Select(t => new { t.Id, t.Name })
-        .ToListAsync();
-
-    return Results.Ok(demoTypes);
-});
-
 app.MapPost("/api/login", async (LoginRequest request, HealthAppDbContext db, SessionStore sessions, HttpContext http) =>
 {
     var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
@@ -163,7 +152,10 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         workflowUrl = settings.WorkflowUrl,
         patientWorkflowId = settings.PatientWorkflowId,
         patientDetailWorkflowId = settings.PatientDetailWorkflowId,
-        patientBaseUrl = settings.PatientBaseUrl
+        patientBaseUrl = settings.PatientBaseUrl,
+        standaloneWorkflowId = settings.StandaloneWorkflowId,
+        standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
+        providerLaunchContext = settings.ProviderLaunchContext
     });
 });
 
@@ -213,6 +205,9 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.PatientWorkflowId = request.PatientWorkflowId?.Trim() ?? string.Empty;
     settings.PatientDetailWorkflowId = request.PatientDetailWorkflowId?.Trim() ?? string.Empty;
     settings.PatientBaseUrl = request.PatientBaseUrl?.Trim() ?? string.Empty;
+    settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
+    settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
+    settings.ProviderLaunchContext = request.ProviderLaunchContext?.Trim() ?? string.Empty;
     await db.SaveChangesAsync();
 
     return Results.Ok(new
@@ -220,31 +215,10 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         workflowUrl = settings.WorkflowUrl,
         patientWorkflowId = settings.PatientWorkflowId,
         patientDetailWorkflowId = settings.PatientDetailWorkflowId,
-        patientBaseUrl = settings.PatientBaseUrl
-    });
-});
-
-// Provider_Standalone's own settings: the two FHIRBridge workflow ids its launch-standalone-provider screen calls
-// (list vs. detail — see WorkflowSettingsEntity). Kept separate from /api/settings above so saving one never
-// touches the other's WorkflowUrl. Gated on the ProviderStandalone role (not Admin) — this is the role that
-// actually logs into the Provider_Standalone demo type and sees the Settings gear button.
-app.MapGet("/api/provider-standalone-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
-{
-    if (!TryGetSession(http, sessions, out _, out var role))
-    {
-        return Results.Unauthorized();
-    }
-
-    if (role != UserRoles.ProviderStandalone)
-    {
-        return Results.StatusCode(StatusCodes.Status403Forbidden);
-    }
-
-    var settings = await db.WorkflowSettings.FindAsync(1);
-    return Results.Ok(new
-    {
-        standaloneWorkflowId = settings?.StandaloneWorkflowId ?? string.Empty,
-        standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty
+        patientBaseUrl = settings.PatientBaseUrl,
+        standaloneWorkflowId = settings.StandaloneWorkflowId,
+        standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
+        providerLaunchContext = settings.ProviderLaunchContext
     });
 });
 
@@ -265,60 +239,6 @@ app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, Ses
     });
 });
 
-app.MapPost("/api/provider-standalone-settings", async (
-    SaveProviderStandaloneSettingsRequest request, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
-{
-    if (!TryGetSession(http, sessions, out _, out var role))
-    {
-        return Results.Unauthorized();
-    }
-
-    if (role != UserRoles.ProviderStandalone)
-    {
-        return Results.StatusCode(StatusCodes.Status403Forbidden);
-    }
-
-    var settings = await db.WorkflowSettings.FindAsync(1);
-    if (settings is null)
-    {
-        settings = new WorkflowSettingsEntity { Id = 1 };
-        db.WorkflowSettings.Add(settings);
-    }
-
-    settings.StandaloneWorkflowId = request.StandaloneWorkflowId.Trim();
-    settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId.Trim();
-    await db.SaveChangesAsync();
-
-    return Results.Ok(new
-    {
-        standaloneWorkflowId = settings.StandaloneWorkflowId,
-        standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId
-    });
-});
-
-// Provider_InApp's own setting: the single FHIRBridge launch-context token its launch-provider-in-app screen
-// hands to /api/v1/oauth/launch/{context} (see WorkflowSettingsEntity). Kept separate from the endpoints above
-// since this demo type needs only one token, not a list/detail pair. Gated on the ProviderInApp role — this is
-// the role that actually logs into the Provider_InApp demo type and sees the Settings gear button.
-app.MapGet("/api/provider-in-app-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
-{
-    if (!TryGetSession(http, sessions, out _, out var role))
-    {
-        return Results.Unauthorized();
-    }
-
-    if (role != UserRoles.ProviderInApp)
-    {
-        return Results.StatusCode(StatusCodes.Status403Forbidden);
-    }
-
-    var settings = await db.WorkflowSettings.FindAsync(1);
-    return Results.Ok(new
-    {
-        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty
-    });
-});
-
 // Read-only, any authenticated role — lets launch-provider-in-app.ts's EHR-launch redirect resolve the
 // configured launch-context token without needing the full settings endpoint's role check. Must be awaited
 // BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
@@ -333,35 +253,6 @@ app.MapGet("/api/provider-in-app-launch-context", async (HttpContext http, Sessi
     return Results.Ok(new
     {
         providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty
-    });
-});
-
-app.MapPost("/api/provider-in-app-settings", async (
-    SaveProviderInAppSettingsRequest request, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
-{
-    if (!TryGetSession(http, sessions, out _, out var role))
-    {
-        return Results.Unauthorized();
-    }
-
-    if (role != UserRoles.ProviderInApp)
-    {
-        return Results.StatusCode(StatusCodes.Status403Forbidden);
-    }
-
-    var settings = await db.WorkflowSettings.FindAsync(1);
-    if (settings is null)
-    {
-        settings = new WorkflowSettingsEntity { Id = 1 };
-        db.WorkflowSettings.Add(settings);
-    }
-
-    settings.ProviderLaunchContext = request.ProviderLaunchContext.Trim();
-    await db.SaveChangesAsync();
-
-    return Results.Ok(new
-    {
-        providerLaunchContext = settings.ProviderLaunchContext
     });
 });
 
@@ -604,9 +495,14 @@ static bool TryGetSession(HttpContext http, SessionStore sessions, out int userI
 }
 
 record LoginRequest(string Email, string Password);
-record SaveSettingsRequest(string WorkflowUrl, string PatientWorkflowId, string PatientDetailWorkflowId, string PatientBaseUrl);
-record SaveProviderStandaloneSettingsRequest(string StandaloneWorkflowId, string StandaloneDetailWorkflowId);
-record SaveProviderInAppSettingsRequest(string ProviderLaunchContext);
+record SaveSettingsRequest(
+    string WorkflowUrl,
+    string PatientWorkflowId,
+    string PatientDetailWorkflowId,
+    string PatientBaseUrl,
+    string StandaloneWorkflowId,
+    string StandaloneDetailWorkflowId,
+    string ProviderLaunchContext);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.

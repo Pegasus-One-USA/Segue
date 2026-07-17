@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -6,11 +6,11 @@ import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-sta
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
 import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
 import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
+import { AdminSettingsComponent } from './demo-types/admin-settings/admin-settings';
 import { environment } from '../environments/environment';
 import { PATIENT_STANDALONE_PATH } from './core/routes';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
-const DEMO_TYPE_STORAGE_KEY = 'hb_demo_type';
 
 // Embedded EHR launches round-trip this tab through FHIRBridge + Epic and back to this same origin via a full
 // top-level navigation *inside the iframe* Epic embeds this app in (see LaunchProviderInAppComponent.ngOnInit).
@@ -22,35 +22,37 @@ const DEMO_TYPE_STORAGE_KEY = 'hb_demo_type';
 // logged-in role there at login and trust it first on restore — sidesteps the blocked cookie read entirely.
 const AUTH_ROLE_STORAGE_KEY = 'hb_auth_role';
 
-// A direct EHR-launch redirect (Epic calling this app's registered launch URL) lands on this exact path
-// with ?iss=&launch= already on the URL — lock the Login Type from the path itself, no dropdown/?DemoType=
-// param needed. Not a seeded DemoType row: it's purely a display label for this entry point, reusing
-// LaunchProviderInAppComponent (the "DemoType2" component) since the EHR-launch exchange logic is identical.
-const PROVIDER_STANDALONE_PATH = '/launchproviderinapp';
-const PROVIDER_STANDALONE_NAME = 'Provider_InApp';
+// A direct EHR-launch redirect (Epic calling this app's registered launch URL) lands on this exact path with
+// ?iss=&launch= already on the URL. This is a URL-entry-point concern, independent of which Role eventually logs
+// in here — Epic gives no login context at all, so the app can't wait to learn a role before deciding to hand off
+// to LaunchProviderInAppComponent. isProviderInAppLaunch (below) captures that "wins regardless of role" override.
+const PROVIDER_IN_APP_PATH = '/launchproviderinapp';
 
-// True SMART Standalone Launch (provider-initiated, not EHR-initiated): a real "Provider_Standalone" DemoType
-// row selected from the dropdown. Unlike PROVIDER_STANDALONE_PATH above, there's no incoming iss/launch to
-// detect — the redirect below is purely "send this Login Type to its own screen after login."
-const STANDALONE_PROVIDER_PATH = '/launchinstandaloneprovider';
-const STANDALONE_PROVIDER_NAME = 'Provider_Standalone';
+// True SMART Standalone Launch (provider-initiated, not EHR-initiated): reached only by a ProviderStandalone-role
+// login. Unlike PROVIDER_IN_APP_PATH above, there's no incoming iss/launch to detect pre-login — the redirect in
+// login() below is purely "send this role to its own screen after login," so a reload lands back on the right
+// component.
+const PROVIDER_STANDALONE_PATH = '/launchinstandaloneprovider';
 
-// Patient_Standalone login does NOT redirect to PATIENT_STANDALONE_PATH the way the two Login Types above do — it
-// lands on the demo-type-1 dashboard mockup like any other Login Type, and only reaches this path (and therefore
+// Patient login does NOT redirect to PATIENT_STANDALONE_PATH the way the two roles above redirect — it lands on
+// the demo-type-1 dashboard mockup like Admin does, and only reaches this path (and therefore
 // LaunchStandalonePatientComponent's real hospital-picker/OAuth flow) via that dashboard's own "Connect Get Data"
-// button doing a full-page navigation to PATIENT_STANDALONE_PATH + '?DemoType=1' (see
-// PatientStandaloneComponent.openConnectFlow). isOnPatientStandaloneLaunchPath (below) is what lets app.html tell
-// the two situations apart once selectedDemoType() is 'Patient_Standalone' either way.
+// button doing a full-page navigation to PATIENT_STANDALONE_PATH (see PatientStandaloneComponent.openConnectFlow).
+// isOnPatientStandaloneLaunchPath (below) is what lets app.html tell the two situations apart once role() is
+// 'Patient' either way.
 
-interface DemoType {
-  id: number;
-  name: string;
-}
+// Friendly display labels for the header badge — purely cosmetic, derived from the authenticated role. Kept so
+// the on-screen badge text matches what it always has, even though there's no backing DemoType row anymore.
+const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  Admin: 'Admin',
+  Patient: 'Patient_Standalone',
+  ProviderStandalone: 'Provider_Standalone',
+  ProviderInApp: 'Provider_InApp',
+};
 
 // The backend seeds four roles (Admin, Patient, ProviderStandalone, ProviderInApp — see HealthAppDbContext.cs) —
-// this app only ever does an `=== 'Admin'`-style string comparison against it (see PatientStandaloneComponent),
-// so there's no real union to enumerate here; typing it narrowly before caused ProviderStandalone/ProviderInApp
-// logins to fail the restoreSession() sessionStorage check below.
+// this app only ever does an `=== 'Admin'`-style string comparison against it, so there's no real union to
+// enumerate here.
 interface LoginResponse {
   email: string;
   role: string;
@@ -58,7 +60,14 @@ interface LoginResponse {
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, PatientStandaloneComponent, LaunchProviderInAppComponent, LaunchStandaloneProviderComponent, LaunchStandalonePatientComponent],
+  imports: [
+    FormsModule,
+    PatientStandaloneComponent,
+    LaunchProviderInAppComponent,
+    LaunchStandaloneProviderComponent,
+    LaunchStandalonePatientComponent,
+    AdminSettingsComponent,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -69,20 +78,23 @@ export class App implements OnInit {
   protected readonly loginPassword = signal('');
   protected readonly loginError = signal('');
 
-  // Login Type (drives which DemoType component loads post-login); persisted in sessionStorage so it
-  // survives a page reload within the same browser tab/session.
-  protected readonly demoTypes = signal<DemoType[]>([]);
-  protected readonly selectedDemoType = signal(sessionStorage.getItem(DEMO_TYPE_STORAGE_KEY) ?? '');
-
-  // Set when a `?DemoType=<id>` query param on the login URL matches a real DemoType row — hides the
-  // dropdown and shows the resolved name instead, so a link can pre-select the Login Type for the user.
-  protected readonly lockedDemoTypeName = signal<string | null>(null);
+  protected readonly loginTypeLabel = computed(() => {
+    const role = this.role();
+    return role ? (ROLE_DISPLAY_NAMES[role] ?? role) : '';
+  });
 
   // Evaluated once at boot: this app never uses a real <router-outlet> (navigation is always a full page load via
-  // window.location.href), so the path can't change out from under a live component instance — a plain field is
-  // enough, no need for a signal. True only when this exact page load landed on PATIENT_STANDALONE_PATH (i.e. via
-  // the dashboard mockup's "Connect Get Data" redirect), as opposed to a fresh Patient_Standalone login that should
-  // show the dashboard mockup instead.
+  // window.location.href), so the path/query can't change out from under a live component instance — a plain field
+  // is enough, no need for a signal. True when this page load is an EHR-launch entry point (either the dedicated
+  // path, or Epic's iss/launch params landing on some other path), regardless of the eventual authenticated role.
+  protected readonly isProviderInAppLaunch = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return window.location.pathname.toLowerCase() === PROVIDER_IN_APP_PATH
+      || (!!params.get('iss') && !!params.get('launch'));
+  })();
+
+  // True only when this exact page load landed on PATIENT_STANDALONE_PATH (i.e. via the dashboard mockup's
+  // "Connect Get Data" redirect), as opposed to a fresh Patient login that should show the dashboard mockup instead.
   protected readonly isOnPatientStandaloneLaunchPath = window.location.pathname.toLowerCase() === PATIENT_STANDALONE_PATH;
 
   constructor(private readonly http: HttpClient) {}
@@ -92,7 +104,6 @@ export class App implements OnInit {
     // Angular app boots from scratch in that tab. Re-check the hb_session cookie (shared across tabs, unlike
     // this component's signals) so an already-logged-in user lands on the dashboard instead of the login screen.
     void this.restoreSession();
-    void this.loadDemoTypes();
   }
 
   private async restoreSession(): Promise<void> {
@@ -115,51 +126,6 @@ export class App implements OnInit {
     }
   }
 
-  private async loadDemoTypes(): Promise<void> {
-    // Read query params straight off window.location.search rather than ActivatedRoute: this app has no
-    // <router-outlet> (see app.routes.ts), so ActivatedRoute.snapshot isn't reliably populated by the time this
-    // root component's ngOnInit runs.
-    const params = new URLSearchParams(window.location.search);
-
-    // Locks onto Provider_InApp from either signal: the app already sitting on /launchproviderinapp, or an
-    // incoming EHR launch's ?iss=&launch= params landing on some other path (e.g. Epic's app registration
-    // still points at the bare root) — either way this is a provider in-app launch, not a dropdown pick.
-    const hasLaunchParams = !!params.get('iss') && !!params.get('launch');
-    if (window.location.pathname.toLowerCase() === PROVIDER_STANDALONE_PATH || hasLaunchParams) {
-      this.lockedDemoTypeName.set(PROVIDER_STANDALONE_NAME);
-      this.onDemoTypeChange(PROVIDER_STANDALONE_NAME);
-    }
-
-    try {
-      const demoTypes = await firstValueFrom(this.http.get<DemoType[]>(`${BACKEND_BASE_URL}/api/demo-types`));
-      this.demoTypes.set(demoTypes);
-
-      if (this.lockedDemoTypeName()) {
-        return; // Path-based lock above already decided the Login Type.
-      }
-
-      const requestedParam = params.get('DemoType');
-      const requestedId = requestedParam !== null ? Number(requestedParam) : null;
-      const matched = requestedId !== null && Number.isFinite(requestedId)
-        ? demoTypes.find((type) => type.id === requestedId)
-        : undefined;
-
-      if (matched) {
-        this.lockedDemoTypeName.set(matched.name);
-        this.onDemoTypeChange(matched.name);
-      } else if (!this.selectedDemoType() && demoTypes.length > 0) {
-        this.onDemoTypeChange(demoTypes[0].name);
-      }
-    } catch {
-      // Non-fatal — the Login Type dropdown is just empty; it doesn't gate login itself.
-    }
-  }
-
-  onDemoTypeChange(name: string): void {
-    this.selectedDemoType.set(name);
-    sessionStorage.setItem(DEMO_TYPE_STORAGE_KEY, name);
-  }
-
   async login(): Promise<void> {
     this.loginError.set('');
 
@@ -176,24 +142,22 @@ export class App implements OnInit {
       this.loggedIn.set(true);
       sessionStorage.setItem(AUTH_ROLE_STORAGE_KEY, response.role);
 
-      // Provider in-app launches must land on /launchproviderinapp so LaunchProviderInAppComponent's own
-      // ngOnInit (which reads iss/launch and hands off to FHIRBridge) actually runs — whatever path the
-      // login screen itself was served from. Preserves the query string (iss/launch) across the hop.
-      if (this.selectedDemoType() === PROVIDER_STANDALONE_NAME
-        && window.location.pathname.toLowerCase() !== PROVIDER_STANDALONE_PATH) {
-        window.location.href = PROVIDER_STANDALONE_PATH + window.location.search;
+      // ProviderInApp logins must land on PROVIDER_IN_APP_PATH so LaunchProviderInAppComponent's own ngOnInit
+      // (which reads iss/launch and hands off to FHIRBridge) actually runs — whatever path the login screen
+      // itself was served from. Preserves the query string (iss/launch) across the hop.
+      if (response.role === 'ProviderInApp' && window.location.pathname.toLowerCase() !== PROVIDER_IN_APP_PATH) {
+        window.location.href = PROVIDER_IN_APP_PATH + window.location.search;
       }
 
       // Same reasoning for the true-standalone flow: land on its own screen so LaunchStandaloneProviderComponent
       // can show the hospital list (or, on the way back from Epic, the Fetch Patient List button).
-      if (this.selectedDemoType() === STANDALONE_PROVIDER_NAME
-        && window.location.pathname.toLowerCase() !== STANDALONE_PROVIDER_PATH) {
-        window.location.href = STANDALONE_PROVIDER_PATH + window.location.search;
+      if (response.role === 'ProviderStandalone' && window.location.pathname.toLowerCase() !== PROVIDER_STANDALONE_PATH) {
+        window.location.href = PROVIDER_STANDALONE_PATH + window.location.search;
       }
 
-      // Patient_Standalone deliberately does NOT redirect here — see the comment above PATIENT_STANDALONE_PATH.
-      // Logging in with it selected just lands on the demo-type-1 dashboard mockup at whatever path login itself
-      // was served from.
+      // Patient and Admin deliberately do NOT redirect here — see the comment above PATIENT_STANDALONE_PATH.
+      // Logging in with either just lands on the demo-type-1 dashboard mockup / Admin settings screen at
+      // whatever path login itself was served from.
     } catch {
       this.loginError.set('Invalid email or password.');
     }

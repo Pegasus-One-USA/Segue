@@ -1,5 +1,4 @@
 import { Component, OnInit, computed, input, output, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -10,9 +9,10 @@ const BACKEND_BASE_URL = environment.healthAppBase;
 
 // The real Patient Standalone launch flow (hospital picker + SMART OAuth redirect) lives on its own path/component
 // (see LaunchStandalonePatientComponent) — this dashboard mockup just hands off to it via a full page navigation.
-// DemoType=1 is Patient_Standalone's seeded row id (see HealthAppDbContext's DemoTypeEntity.HasData) — it's what
-// makes app.ts's loadDemoTypes() lock onto and select the Patient_Standalone Login Type once this lands there.
-const PATIENT_STANDALONE_LAUNCH_URL = `${PATIENT_STANDALONE_PATH}?DemoType=1`;
+// The Patient role persists across that reload via sessionStorage (see app.ts's AUTH_ROLE_STORAGE_KEY), so no
+// query param is needed to re-select anything on the way back — app.html's isOnPatientStandaloneLaunchPath check
+// is all that's needed to tell the two situations apart once role() is 'Patient' either way.
+const PATIENT_STANDALONE_LAUNCH_URL = PATIENT_STANDALONE_PATH;
 
 interface PatientCard {
   resourceId: string;
@@ -34,12 +34,10 @@ interface PatientCard {
 
 @Component({
   selector: 'app-patient-standalone',
-  imports: [FormsModule],
   templateUrl: './patient-standalone.html',
   styleUrl: './patient-standalone.scss'
 })
 export class PatientStandaloneComponent implements OnInit {
-  readonly role = input<string | null>(null);
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
 
@@ -55,18 +53,6 @@ export class PatientStandaloneComponent implements OnInit {
     bloodPressureDiastolic: 76,
     steps: 6842,
   };
-
-  // Admin settings (persisted server-side — see WorkflowSettingsEntity). PatientWorkflowId/PatientDetailWorkflowId/
-  // PatientBaseUrl are Patient Standalone's own FHIRBridge connection points, formerly a gitignored per-developer
-  // local file (standalone-launch.config.ts) — now editable here like WorkflowUrl already was. The two workflow
-  // ids are independent: the list fetch uses PatientWorkflowId, the per-patient detail fetch (clicking a row in
-  // the fetched list) uses PatientDetailWorkflowId, each with its own FHIRBridge public-launch opt-in.
-  protected readonly settingsOpen = signal(false);
-  protected readonly workflowUrlDraft = signal('');
-  protected readonly patientWorkflowIdDraft = signal('');
-  protected readonly patientDetailWorkflowIdDraft = signal('');
-  protected readonly patientBaseUrlDraft = signal('');
-  protected readonly settingsError = signal('');
 
   // Records screen (card carousel over every ingested patient)
   protected readonly screen = signal<'home' | 'records'>('home');
@@ -109,55 +95,6 @@ export class PatientStandaloneComponent implements OnInit {
     const workflowRunId = this.route.snapshot.queryParamMap.get('workflowRunId');
     if (workflowRunId) {
       void this.openRecords();
-    }
-  }
-
-  async openSettings(): Promise<void> {
-    this.settingsError.set('');
-
-    try {
-      const current = await firstValueFrom(
-        this.http.get<{
-          workflowUrl: string;
-          patientWorkflowId: string;
-          patientDetailWorkflowId: string;
-          patientBaseUrl: string;
-        }>(
-          `${BACKEND_BASE_URL}/api/settings`,
-          { withCredentials: true }
-        )
-      );
-      this.workflowUrlDraft.set(current.workflowUrl);
-      this.patientWorkflowIdDraft.set(current.patientWorkflowId);
-      this.patientDetailWorkflowIdDraft.set(current.patientDetailWorkflowId);
-      this.patientBaseUrlDraft.set(current.patientBaseUrl);
-      this.settingsOpen.set(true);
-    } catch {
-      this.settingsError.set('Could not load settings.');
-    }
-  }
-
-  closeSettings(): void {
-    this.settingsOpen.set(false);
-  }
-
-  async saveSettings(): Promise<void> {
-    try {
-      await firstValueFrom(
-        this.http.post(
-          `${BACKEND_BASE_URL}/api/settings`,
-          {
-            workflowUrl: this.workflowUrlDraft(),
-            patientWorkflowId: this.patientWorkflowIdDraft(),
-            patientDetailWorkflowId: this.patientDetailWorkflowIdDraft(),
-            patientBaseUrl: this.patientBaseUrlDraft(),
-          },
-          { withCredentials: true }
-        )
-      );
-      this.settingsOpen.set(false);
-    } catch {
-      this.settingsError.set('Could not save settings.');
     }
   }
 

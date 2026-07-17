@@ -5,9 +5,6 @@
       <span class="login-type-badge">{{ loginTypeLabel() }}</span>
     </div>
     <div class="fullscreen-shell__actions">
-      @if (role() === 'ProviderStandalone') {
-        <button type="button" class="icon-btn" (click)="openSettings()" aria-label="Workflow settings">⚙</button>
-      }
       <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -222,29 +219,4 @@
       </mat-card>
     </section>
   </div>
-
-  <!-- Admin workflow settings popup -->
-  @if (settingsOpen()) {
-    <div class="sheet-backdrop" (click)="closeSettings()">
-      <div class="sheet" (click)="$event.stopPropagation()">
-        <div class="sheet__handle"></div>
-        <div class="sheet__title">Provider Standalone Workflow Settings</div>
-        <label class="field">
-          Fetch Patient List Workflow ID
-          <input type="text" [ngModel]="standaloneWorkflowIdDraft()" (ngModelChange)="standaloneWorkflowIdDraft.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
-        </label>
-        <label class="field">
-          Patient Detail Workflow ID
-          <input type="text" [ngModel]="standaloneDetailWorkflowIdDraft()" (ngModelChange)="standaloneDetailWorkflowIdDraft.set($event)" placeholder="e.g. dc666cee-f674-400f-a4b5-c826e3f4c3a0" />
-        </label>
-        @if (settingsError()) {
-          <p class="error-banner">{{ settingsError() }}</p>
-        }
-        <div class="sheet__actions">
-          <button type="button" class="btn-secondary" (click)="closeSettings()">Cancel</button>
-          <button type="button" class="btn-primary" (click)="saveSettings()">Save</button>
-        </div>
-      </div>
-    </div>
-  }
 </div>
