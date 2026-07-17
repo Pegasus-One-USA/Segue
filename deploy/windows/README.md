@@ -1,18 +1,45 @@
-# Deploying to the Windows VM
+# Deploying to the Windows Server
 
-One-time setup on the target VM, then every deploy is just clicking **Run workflow** on the
-[`Deploy`](../../.github/workflows/deploy.yml) workflow in the GitHub Actions tab.
+One-time setup on the target server, then every deploy is either clicking **Run workflow** on the
+[`Deploy`](../../.github/workflows/deploy.yml) workflow in the GitHub Actions tab, or pushing a
+commit whose message is exactly `Publish` to a branch listed in that workflow's `on.push.branches`
+(currently `main` — edit that list to change it).
 
-The VM is not reachable from the internet, so GitHub Actions can't SSH/WinRM into it. Instead the
-VM runs a **self-hosted GitHub Actions runner** that polls GitHub outbound — no inbound firewall
-rule needed at all.
+The server is not reachable from the internet, so GitHub Actions can't SSH/WinRM into it. Instead
+the server runs a **self-hosted GitHub Actions runner** that polls GitHub outbound — no inbound
+firewall rule needed for that.
 
-## 1. Prerequisites on the VM
+## Topology
 
-- [ASP.NET Core 9 Hosting Bundle / Runtime](https://dotnet.microsoft.com/download/dotnet/9.0) installed
-  (the publish is framework-dependent, not self-contained, to keep the deploy artifact small).
+Nothing here is IIS-hosted — every app is a standalone Kestrel process running as a Windows Service
+(the same published output can later run under systemd on Linux with no code change, since each app
+calls both `.UseWindowsService()`/`AddWindowsService()` and `.UseSystemd()`/`AddSystemd()`). The
+`C:\inetpub\wwwroot\...` folder names are just a reused convention, not an IIS site path.
+
+| Service name | Folder | Bind | Role |
+|---|---|---|---|
+| `FHIRBridge.Api` | `C:\inetpub\wwwroot\fhirbridge-api` | `127.0.0.1:5000` (loopback only) | The API; not reachable from outside the server |
+| `FHIRBridge.Gateway` | `C:\inetpub\wwwroot\fhirbridge-gateway` | `0.0.0.0:80` (public) | YARP reverse proxy — routes `/api/**` and `/swagger/**` to the Api, serves the portal for everything else |
+| *(no service)* | `C:\inetpub\wwwroot\fhirbridge-portal` | — | Angular portal build; static files only, served by Gateway |
+| `FHIRBridge.Worker` | `C:\inetpub\wwwroot\fhirbridge-worker` | none (no HTTP endpoint) | Background scheduler/pipeline processor |
+| `FHIRBridge.DemoApp` | `C:\inetpub\wwwroot\demoapp-api` | `0.0.0.0:5500` (public) | Demo app backend — serves its own frontend, same origin |
+| *(no service)* | `C:\inetpub\wwwroot\demoapp-portal` | — | Demo app Angular build; static files only, served by DemoApp |
+
+Both public entry points (Gateway on 80, DemoApp on 5500) currently serve plain HTTP — TLS
+termination is a deliberate later step, not yet configured.
+
+## 1. Prerequisites on the server
+
+- **ASP.NET Core 9.0 Runtime** (not the Hosting Bundle — that only matters for IIS/ANCM, which isn't
+  used here): https://dotnet.microsoft.com/download/dotnet/9.0
 - PowerShell 5.1+ (built into Windows Server).
 - Outbound HTTPS access to `github.com` / `*.actions.githubusercontent.com`.
+- Inbound firewall rules opened for ports **80** (Gateway) and **5500** (Demo app) — this is a
+  one-time manual step (`New-NetFirewallRule`), not something CI touches:
+  ```powershell
+  New-NetFirewallRule -DisplayName "FHIRBridge Gateway (80)" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
+  New-NetFirewallRule -DisplayName "FHIRBridge Demo App (5500)" -Direction Inbound -LocalPort 5500 -Protocol TCP -Action Allow
+  ```
 
 ## 2. Install the self-hosted runner
 
@@ -22,7 +49,7 @@ exact command GitHub shows you rather than reusing this one. When prompted for l
 `fhirbridge-vm` (the workflow targets this label).
 
 ```powershell
-# From an elevated PowerShell prompt on the VM, in the folder where you extracted the runner:
+# From an elevated PowerShell prompt on the server, in the folder where you extracted the runner:
 .\config.cmd --url https://github.com/<org>/<repo> --token <TOKEN_FROM_GITHUB_UI> --labels fhirbridge-vm
 
 # Install it as a Windows service so it survives reboots and starts automatically:
@@ -34,47 +61,81 @@ Verify it shows up as **Idle** under Settings → Actions → Runners before con
 
 ## 3. Provision production secrets (once, never touched by CI)
 
-`appsettings.Production.json` is deliberately **not** part of the build artifact — it's excluded
-from the deploy script's copy/mirror step so it's safe to edit directly on the VM without CI ever
-overwriting it. Create these once:
+Every service's `appsettings.Production.json` is deliberately **not** part of the build artifact —
+it's excluded from the deploy script's copy/mirror step so it's safe to edit directly on the server
+without CI ever overwriting it. Create these four files by hand:
 
 ```
-C:\FHIRBridge\Api\appsettings.Production.json
-C:\FHIRBridge\Worker\appsettings.Production.json
+C:\inetpub\wwwroot\fhirbridge-api\appsettings.Production.json
+C:\inetpub\wwwroot\fhirbridge-gateway\appsettings.Production.json
+C:\inetpub\wwwroot\fhirbridge-worker\appsettings.Production.json
+C:\inetpub\wwwroot\demoapp-api\appsettings.Production.json
 ```
 
-Populate the real values for `ConnectionStrings:FHIRBridgeDb`, `Authentication:SigningKey`,
+**`fhirbridge-api`** — populate `ConnectionStrings:FHIRBridgeDb`, `Authentication:SigningKey`,
 `DataProtection:KeyRingPath` (point this at a persistent folder, e.g. `C:\FHIRBridge\keys`, so
-OAuth/launch tokens survive redeploys and restarts), `Portal:AllowedOrigins`, and `AllowedHosts`
-(must include the VM's hostname/IP, not just `localhost`) — see the `Key Configuration Sections`
-table in the repo's `CLAUDE.md` for what each of these does.
+OAuth/launch tokens survive redeploys and restarts), `Portal:AllowedOrigins` (the public URL clients
+use — since Gateway is what the browser actually talks to, this should be the Gateway's public
+origin, not the Api's own loopback address), and `AllowedHosts` — see the `Key Configuration
+Sections` table in the repo's `CLAUDE.md` for what each of these does.
 
-Also set the Kestrel bind address/port if the default (`http://localhost:5000`) isn't right for
-this VM, either in `appsettings.Production.json` under `Kestrel:Endpoints`, or via an
-`ASPNETCORE_URLS` environment variable on the two Windows Services once created (**Environment**
-tab in `services.msc`, or `sc.exe` / `Set-Service` scripting — this is a one-time step per service,
-not something the deploy script touches).
+**`fhirbridge-gateway`** — set `StaticFiles:RootPath` to
+`C:\inetpub\wwwroot\fhirbridge-portal` (absolute path, so it doesn't matter what working directory
+the service starts in). The `ReverseProxy:Clusters:api-cluster:Destinations` address (already
+`http://127.0.0.1:5000/` in the checked-in `appsettings.json`) only needs overriding here if the Api
+ever moves off port 5000.
 
-## 4. First deploy
+**`fhirbridge-worker`** — populate `ConnectionStrings:FHIRBridgeDb`, `RuntimeWorker:Enabled`, and
+`Messaging:Provider` (`InMemory` / `RabbitMQ` / `AzureServiceBus` — see `CLAUDE.md`), plus
+`Hl7MllpOptions` if the MLLP listener is in use.
+
+**`demoapp-api`** — populate `ConnectionStrings:Default` (its own SQL Server database — this is a
+separate database from `FHIRBridgeDb`, used only by the demo app) and `AllowedFrontendOrigin` (set
+to this app's own public URL, e.g. `http://<server>:5500`, not the portal's origin — CORS here only
+applies to any cross-origin caller, since the demo frontend is served same-origin already).
+
+## 4. Set each service's bind address (one-time, per service)
+
+None of this is in `appsettings.Production.json` by default — set it via an `ASPNETCORE_URLS`
+environment variable on each Windows Service (**Environment** tab in `services.msc`, or
+`sc.exe`/`Set-Service` scripting). This is a one-time step per service, not something the deploy
+script touches:
+
+| Service | `ASPNETCORE_URLS` |
+|---|---|
+| `FHIRBridge.Api` | `http://127.0.0.1:5000` |
+| `FHIRBridge.Gateway` | `http://+:80` |
+| `FHIRBridge.Worker` | *(none — no HTTP endpoint)* |
+| `FHIRBridge.DemoApp` | `http://+:5500` |
+
+`FHIRBridge.DemoApp` also needs a `DEMOAPP_PORTAL_PATH` environment variable set to
+`C:\inetpub\wwwroot\demoapp-portal` — the app reads this directly via
+`Environment.GetEnvironmentVariable`, not through `IConfiguration`, so it can't go in
+`appsettings.json`.
+
+## 5. First deploy
 
 Go to the **Actions** tab → **Deploy** workflow → **Run workflow**. This:
 
-1. Builds the Api and Worker (`dotnet publish`, win-x64, framework-dependent) and the Angular
-   portal (`ng build --configuration production`) on a GitHub-hosted runner.
-2. Copies the portal's build output into the Api's `wwwroot` — the Api serves the portal directly
-   over the same Kestrel process/port, no separate web server needed.
-3. Ships the combined artifact to the self-hosted runner on the VM, which stops the two services,
-   mirrors the new files into `C:\FHIRBridge\Api` and `C:\FHIRBridge\Worker` (preserving
-   `appsettings.Production.json`), creates the services if they don't exist yet, starts them, and
-   polls `/health` until the Api responds.
+1. Builds Api, Gateway, Worker, and the Demo app backend (`dotnet publish`, win-x64,
+   framework-dependent) and both Angular frontends (portal, demo) on a GitHub-hosted runner.
+2. Ships one combined artifact (6 folders: `Api`, `Gateway`, `Worker`, `DemoApi`, `Portal`,
+   `DemoPortal`) to the self-hosted runner on the server.
+3. The runner's `Deploy-FHIRBridge.ps1`: mirrors the two static frontend folders first (so
+   Gateway/DemoApp pick them up immediately on next start — both only wire up static-file serving if
+   the folder already exists when the process starts), then for each of the four services: stops
+   it, mirrors the new published files (preserving `appsettings.Production.json`), creates the
+   service if it doesn't exist yet, starts it, and health-checks it (Api via `/health`,
+   Gateway/DemoApp via their root URL — Worker has no HTTP endpoint, so it's just checked for
+   `Running` status).
 
-The very first run creates the `FHIRBridge.Api` and `FHIRBridge.Worker` Windows services for you;
-after that it's just start/stop/replace.
+The very first run creates all four Windows Services for you; after that it's just
+stop/replace/start.
 
-## 5. Optional: require an approval click before deploying
+## 6. Optional: require an approval click before deploying
 
 By default `workflow_dispatch` already requires a manual click to start the workflow. If you also
-want a **second** approval gate right before the deploy job touches the VM (e.g. so a different
+want a **second** approval gate right before the deploy job touches the server (e.g. so a different
 person can review before build → deploy proceeds): **Settings → Environments → New environment →
 `production`**, add required reviewers. The `deploy` job in `deploy.yml` already targets the
 `production` environment, so this takes effect immediately without any workflow changes.

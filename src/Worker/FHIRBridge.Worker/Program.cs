@@ -13,9 +13,10 @@ using Serilog;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// No-op unless the process is actually started by the Windows Service Control Manager (e.g. `dotnet run`
-// and console execution are unaffected) — lets the same published output run standalone or as a service.
+// No-ops unless actually launched by that OS's service manager — lets the same published output
+// run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
 builder.Services.AddWindowsService(options => options.ServiceName = "FHIRBridge.Worker");
+builder.Services.AddSystemd();
 
 // HostApplicationBuilder has no .Host.UseSerilog() (that's WebApplicationBuilder-only, via Serilog.AspNetCore) — build
 // the shared logger directly and register it as the logging provider instead.

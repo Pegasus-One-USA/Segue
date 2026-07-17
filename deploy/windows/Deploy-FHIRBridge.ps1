@@ -1,33 +1,32 @@
 <#
 .SYNOPSIS
-    Deploys a published FHIRBridge Api + Worker build to this Windows VM as Windows Services.
+    Deploys a published FHIRBridge build (4 Windows Services + 2 static frontend folders) to this
+    Windows VM.
 
 .DESCRIPTION
     Invoked by the self-hosted GitHub Actions runner (see .github/workflows/deploy.yml) after the
-    build job's artifact has been downloaded and extracted. Stops each service (if running), mirrors
-    the new published files into the deploy path while preserving appsettings.Production.json (which
-    is never part of the artifact and must be provisioned once by hand on this VM), then (re)creates
-    and starts the service.
+    build job's artifact has been downloaded and extracted. For each Windows Service (Api, Gateway,
+    Worker, DemoApi): stops it (if running), mirrors the new published files into the deploy path
+    while preserving appsettings.Production.json (which is never part of the artifact and must be
+    provisioned once by hand on this VM), then (re)creates and starts the service. For each static
+    frontend (Portal, DemoPortal): mirrors the built files only — no service involved, since Gateway
+    and DemoApi serve these themselves (see deploy/windows/README.md).
 
 .PARAMETER ArtifactPath
-    Path to the extracted publish artifact. Must contain Api\ and Worker\ subfolders.
+    Path to the extracted publish artifact. Must contain Api\, Gateway\, Worker\, DemoApi\, Portal\,
+    and DemoPortal\ subfolders.
 
 .PARAMETER DeployRoot
-    Root folder on this VM under which Api\ and Worker\ live. Defaults to C:\FHIRBridge.
-
-.PARAMETER HealthCheckUrl
-    URL polled after the Api service starts to confirm it came up. Pass '' to skip.
+    Root folder on this VM under which every app's deploy folder lives. Defaults to
+    C:\inetpub\wwwroot, matching the folder names already in use on this server
+    (fhirbridge-api, fhirbridge-gateway, fhirbridge-portal, fhirbridge-worker, demoapp-api,
+    demoapp-portal) even though none of them are IIS-hosted.
 #>
 param(
     [Parameter(Mandatory = $true)]
     [string]$ArtifactPath,
 
-    [string]$DeployRoot = "C:\FHIRBridge",
-
-    [string]$ApiServiceName = "FHIRBridge.Api",
-    [string]$WorkerServiceName = "FHIRBridge.Worker",
-
-    [string]$HealthCheckUrl = "http://localhost:5000/health",
+    [string]$DeployRoot = "C:\inetpub\wwwroot",
 
     [int]$ServiceStopTimeoutSeconds = 30,
     [int]$HealthCheckRetries = 10,
@@ -83,27 +82,40 @@ function Deploy-Service {
     Write-Host "$Name is running."
 }
 
-$apiSource = Join-Path $ArtifactPath "Api"
-$workerSource = Join-Path $ArtifactPath "Worker"
+function Deploy-StaticFiles {
+    param(
+        [string]$Name,
+        [string]$SourceDir,
+        [string]$DestDir
+    )
 
-if (-not (Test-Path $apiSource)) { throw "Artifact is missing Api\ folder at $apiSource" }
-if (-not (Test-Path $workerSource)) { throw "Artifact is missing Worker\ folder at $workerSource" }
+    Write-Host "== Deploying static files: $Name =="
 
-Deploy-Service -Name $ApiServiceName -SourceDir $apiSource -DestDir (Join-Path $DeployRoot "Api") `
-    -ExeName "FHIRBridge.Api.exe" -DisplayName "FHIRBridge API"
+    if (-not (Test-Path $DestDir)) {
+        New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+    }
 
-Deploy-Service -Name $WorkerServiceName -SourceDir $workerSource -DestDir (Join-Path $DeployRoot "Worker") `
-    -ExeName "FHIRBridge.Worker.exe" -DisplayName "FHIRBridge Worker"
+    robocopy $SourceDir $DestDir /MIR /NFL /NDL /NP /R:3 /W:5
+    if ($LASTEXITCODE -ge 8) {
+        throw "robocopy failed deploying $Name (exit code $LASTEXITCODE)"
+    }
 
-if ($HealthCheckUrl) {
-    Write-Host "Health-checking $HealthCheckUrl..."
-    $healthy = $false
+    Write-Host "$Name deployed."
+}
+
+function Test-Health {
+    param(
+        [string]$Name,
+        [string]$Url
+    )
+
+    Write-Host "Health-checking $Name at $Url..."
     for ($i = 1; $i -le $HealthCheckRetries; $i++) {
         try {
-            $response = Invoke-WebRequest -Uri $HealthCheckUrl -UseBasicParsing -TimeoutSec 5
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
             if ($response.StatusCode -eq 200) {
-                $healthy = $true
-                break
+                Write-Host "$Name is healthy."
+                return
             }
         } catch {
             Write-Host "Attempt $i/$HealthCheckRetries not healthy yet: $($_.Exception.Message)"
@@ -111,10 +123,54 @@ if ($HealthCheckUrl) {
         Start-Sleep -Seconds $HealthCheckDelaySeconds
     }
 
-    if (-not $healthy) {
-        throw "Api did not become healthy at $HealthCheckUrl after $HealthCheckRetries attempts."
+    throw "$Name did not become healthy at $Url after $HealthCheckRetries attempts."
+}
+
+# --- Static frontends first (no service — served by Gateway / DemoApi respectively). These must
+# land on disk BEFORE Gateway/DemoApi start: both only wire up their static-file middleware if the
+# configured folder already exists at process startup (see Gateway/Program.cs and
+# Demo_TestApp/backend/Program.cs) — deploying them after the service starts would leave the portal
+# unserved until the next restart. ---
+
+$staticSites = @(
+    @{ Name = "Portal"; Folder = "Portal"; DestDir = "fhirbridge-portal" }
+    @{ Name = "DemoPortal"; Folder = "DemoPortal"; DestDir = "demoapp-portal" }
+)
+
+foreach ($site in $staticSites) {
+    $sourceDir = Join-Path $ArtifactPath $site.Folder
+    if (-not (Test-Path $sourceDir)) { throw "Artifact is missing $($site.Folder)\ folder at $sourceDir" }
+
+    Deploy-StaticFiles -Name $site.Name -SourceDir $sourceDir -DestDir (Join-Path $DeployRoot $site.DestDir)
+}
+
+# --- Windows Services (Kestrel/background hosts) ---
+
+$services = @(
+    @{ Name = "FHIRBridge.Api"; Folder = "Api"; DestDir = "fhirbridge-api"; Exe = "FHIRBridge.Api.exe";
+       DisplayName = "FHIRBridge API"; HealthCheckUrl = "http://127.0.0.1:5000/health" }
+    @{ Name = "FHIRBridge.Gateway"; Folder = "Gateway"; DestDir = "fhirbridge-gateway"; Exe = "FHIRBridge.Gateway.exe";
+       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "http://localhost/" }
+    @{ Name = "FHIRBridge.Worker"; Folder = "Worker"; DestDir = "fhirbridge-worker"; Exe = "FHIRBridge.Worker.exe";
+       DisplayName = "FHIRBridge Worker"; HealthCheckUrl = $null }
+    @{ Name = "FHIRBridge.DemoApp"; Folder = "DemoApi"; DestDir = "demoapp-api"; Exe = "HealthAppBackend.exe";
+       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "http://localhost:5500/" }
+)
+
+foreach ($svc in $services) {
+    $sourceDir = Join-Path $ArtifactPath $svc.Folder
+    if (-not (Test-Path $sourceDir)) { throw "Artifact is missing $($svc.Folder)\ folder at $sourceDir" }
+
+    Deploy-Service -Name $svc.Name -SourceDir $sourceDir -DestDir (Join-Path $DeployRoot $svc.DestDir) `
+        -ExeName $svc.Exe -DisplayName $svc.DisplayName
+}
+
+# --- Health checks (after every service is already started above) ---
+
+foreach ($svc in $services) {
+    if ($svc.HealthCheckUrl) {
+        Test-Health -Name $svc.Name -Url $svc.HealthCheckUrl
     }
-    Write-Host "Api is healthy."
 }
 
 Write-Host "Deploy complete."

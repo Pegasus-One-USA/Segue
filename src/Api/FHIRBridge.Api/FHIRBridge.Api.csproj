@@ -5,8 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>044077df-af7f-484b-a9fc-ef5a02828198</UserSecretsId>
-    <!-- IIS defaults ASPNETCORE_ENVIRONMENT to Production; bake Development into web.config so Swagger/CORS behave like `dotnet run`. -->
-    <EnvironmentName>Development</EnvironmentName>
+    <!-- Not IIS-hosted (Kestrel-only, run as a Windows Service/systemd unit) — suppress the
+         auto-generated web.config, which would otherwise be unused dead weight in every publish. -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,7 +18,6 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.10" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.1" />

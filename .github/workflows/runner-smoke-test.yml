@@ -1,0 +1,59 @@
+name: Runner Smoke Test
+
+# Throwaway diagnostic workflow to confirm the self-hosted runner on the Windows server is reachable
+# and correctly labeled, without touching any running service or port. Safe to run any time; delete
+# this file once the real Deploy workflow has been verified end-to-end.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: runner-smoke-test
+    runs-on: [self-hosted, Windows, fhirbridge-vm]
+    steps:
+      - name: Runner identity
+        shell: pwsh
+        run: |
+          Write-Host "Hostname: $(hostname)"
+          Write-Host "User: $(whoami)"
+          Write-Host "OS: $([System.Environment]::OSVersion.VersionString)"
+
+      - name: ASP.NET Core / .NET runtimes installed
+        shell: pwsh
+        run: dotnet --list-runtimes
+
+      - name: Outbound HTTPS to GitHub (from within an Actions job, not just an interactive session)
+        shell: pwsh
+        run: curl.exe -s -o NUL -w "github.com -> HTTP %{http_code}`n" https://github.com
+
+      - name: Deploy target folders present?
+        shell: pwsh
+        run: |
+          $paths = @(
+            "C:\inetpub\wwwroot\fhirbridge-api",
+            "C:\inetpub\wwwroot\fhirbridge-gateway",
+            "C:\inetpub\wwwroot\fhirbridge-portal",
+            "C:\inetpub\wwwroot\fhirbridge-worker",
+            "C:\inetpub\wwwroot\demoapp-api",
+            "C:\inetpub\wwwroot\demoapp-portal"
+          )
+          foreach ($p in $paths) {
+            if (Test-Path $p) { Write-Host "OK      $p" } else { Write-Host "MISSING $p" }
+          }
+
+      - name: appsettings.Production.json present? (never checked into git, must exist by hand)
+        shell: pwsh
+        run: |
+          $files = @(
+            "C:\inetpub\wwwroot\fhirbridge-api\appsettings.Production.json",
+            "C:\inetpub\wwwroot\fhirbridge-gateway\appsettings.Production.json",
+            "C:\inetpub\wwwroot\fhirbridge-worker\appsettings.Production.json",
+            "C:\inetpub\wwwroot\demoapp-api\appsettings.Production.json"
+          )
+          foreach ($f in $files) {
+            if (Test-Path $f) { Write-Host "OK      $f" } else { Write-Host "MISSING $f" }
+          }
+
+      - name: Ports currently in use (80, 5000, 5500) — sanity check before the first real deploy
+        shell: pwsh
+        run: Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 80,5000,5500 } | Format-Table LocalAddress,LocalPort,OwningProcess -AutoSize
