@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -27,22 +28,26 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
     private readonly IPatientStandaloneEhrEndpointService _myChartEndpointService;
+    private readonly IConfiguration _configuration;
 
     public PatientStandaloneLaunchController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
-        IPatientStandaloneEhrEndpointService myChartEndpointService)
+        IPatientStandaloneEhrEndpointService myChartEndpointService,
+        IConfiguration configuration)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
         _myChartEndpointService = myChartEndpointService;
+        _configuration = configuration;
     }
 
     [HttpGet("workflows/{workflowId:guid}/public-patient-standalone-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicPatientStandaloneUrl(
-        Guid workflowId, [FromQuery] Guid ehrEndpointId, CancellationToken cancellationToken)
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
     {
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
         if (workflow is null || !workflow.IsPubliclyLaunchable)
@@ -61,7 +66,14 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             return NotFound();
         }
 
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId);
+        // Anonymous endpoint — validate callerId against Portal:AllowedOrigins before honoring it (see
+        // CallerIdOriginValidator), so it can't be used as an open redirect off a real MyChart login.
+        if (!string.IsNullOrWhiteSpace(callerId) && !CallerIdOriginValidator.IsAllowedOrigin(callerId, _configuration))
+        {
+            return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
+        }
+
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
         return Ok(BuildLaunchResponse(context));
     }
 

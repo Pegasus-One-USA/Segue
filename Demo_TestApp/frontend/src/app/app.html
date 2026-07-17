@@ -42,6 +42,7 @@
   ></app-launch-provider-in-app>
 } @else if (selectedDemoType() === 'Provider_Standalone') {
   <app-launch-standalone-provider
+    [role]="role()"
     [loginTypeLabel]="selectedDemoType()"
     (logout)="logout()"
   ></app-launch-standalone-provider>

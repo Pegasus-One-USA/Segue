@@ -286,11 +286,11 @@ export class PatientStandaloneLaunchService {
     );
   }
 
-  async mintLaunchUrl(workflowId: string, ehrEndpointId: string): Promise<PublicPatientStandaloneUrlResponse> {
+  async mintLaunchUrl(workflowId: string, ehrEndpointId: string, callerId?: string): Promise<PublicPatientStandaloneUrlResponse> {
     return firstValueFrom(
       this.http.get<PublicPatientStandaloneUrlResponse>(
         `${this.baseUrl}/api/v1/workflows/${workflowId}/public-patient-standalone-url`,
-        { params: { ehrEndpointId } },
+        { params: callerId ? { ehrEndpointId, callerId } : { ehrEndpointId } },
       ),
     );
   }
