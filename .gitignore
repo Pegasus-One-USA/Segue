@@ -55,6 +55,7 @@ ScaffoldingReadMe.txt
 .azure-cli/
 artifacts/
 src/Api/FHIRBridge.Api/artifacts/
+src/Api/FHIRBridge.Api/App_Data/
 # Others
 ~$*
 *~

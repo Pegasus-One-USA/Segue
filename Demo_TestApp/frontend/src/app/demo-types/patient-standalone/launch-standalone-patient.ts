@@ -8,11 +8,17 @@ import {
   MyChartEndpoint,
   PatientDetail,
   PatientStandaloneLaunchService,
+  extractDownloadUrl,
   extractFetchedPatients,
   extractPatientDetail,
   indicatesReAuthorizationNeeded,
 } from './core/services/patient-standalone-launch.service';
-import { PATIENT_DETAIL_WORKFLOW_ID, PATIENT_WORKFLOW_ID } from './core/config/standalone-launch.config';
+import {
+  CSV_EMAIL_EXPORT_WORKFLOW_ID,
+  CSV_EXPORT_WORKFLOW_ID,
+  PATIENT_DETAIL_WORKFLOW_ID,
+  PATIENT_WORKFLOW_ID,
+} from './core/config/standalone-launch.config';
 
 @Component({
   selector: 'app-launch-standalone-patient',
@@ -45,6 +51,19 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly isFetchingPatientDetail = signal(false);
   readonly patientDetailError = signal<string | null>(null);
   readonly patientDetail = signal<PatientDetail | null>(null);
+
+  // "Download Patient Information" — a third, independent workflow (CSV_EXPORT_WORKFLOW_ID) whose destination uses
+  // Download-URL delivery. Only enabled once a specific patient's detail is open, since it downloads for whichever
+  // patientId is currently selected (see downloadPatientInformation).
+  readonly isDownloadingPatientInfo = signal(false);
+  readonly downloadError = signal<string | null>(null);
+
+  // "Email Patient Information" — same shape as the download button above, but backed by CSV_EMAIL_EXPORT_WORKFLOW_ID
+  // (Email delivery instead of Download-URL). A Succeeded run means the file was already sent server-side, so there's
+  // nothing to navigate to — emailSuccess just confirms it happened.
+  readonly isEmailingPatientInfo = signal(false);
+  readonly emailError = signal<string | null>(null);
+  readonly emailSuccess = signal(false);
 
   // True while a remembered session is still being checked (on load) or a just-completed launch's patientId is
   // still being resolved from /launch-result — gates the Connect button so a click can't race ahead of patientId
@@ -298,6 +317,110 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.selectedPatientId.set(null);
     this.patientDetail.set(null);
     this.patientDetailError.set(null);
+    this.downloadError.set(null);
+    this.emailError.set(null);
+    this.emailSuccess.set(false);
+  }
+
+  // Triggers CSV_EXPORT_WORKFLOW_ID for whichever patient's detail is currently open. That workflow's destination
+  // uses Download-URL delivery, so a Succeeded run returns a signed link (extractDownloadUrl) rather than resource
+  // JSON — navigating the browser to it is enough to download, since the response carries
+  // Content-Disposition: attachment (no synthetic anchor/blob handling needed). Same token-status-then-run shape as
+  // fetchPatient/viewPatientDetail: an already-invalid token redirects to MyChart rather than wasting a /run call.
+  async downloadPatientInformation(): Promise<void> {
+    const patientId = this.selectedPatientId();
+    if (!patientId || this.isDownloadingPatientInfo() || this.isRedirectingToMyChart()) {
+      return;
+    }
+
+    this.isDownloadingPatientInfo.set(true);
+    this.downloadError.set(null);
+    try {
+      if (!(await this.hasValidToken(CSV_EXPORT_WORKFLOW_ID))) {
+        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+        return;
+      }
+
+      const result = await this.launchService.run(CSV_EXPORT_WORKFLOW_ID, patientId);
+
+      if (result.workflowRun.status !== 'Succeeded') {
+        const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
+        if (indicatesReAuthorizationNeeded(errorMessage)) {
+          await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+          return;
+        }
+        this.downloadError.set(errorMessage);
+        return;
+      }
+
+      const downloadUrl = extractDownloadUrl(result);
+      if (!downloadUrl) {
+        this.downloadError.set('FHIRBridge did not return a download link for this export.');
+        return;
+      }
+
+      window.location.href = downloadUrl;
+    } catch (err) {
+      const backendMessage = err instanceof HttpErrorResponse && typeof err.error?.error === 'string'
+        ? err.error.error
+        : null;
+      const errorMessage = backendMessage
+        ?? 'Could not reach FHIRBridge to generate this download. Check your connection and try again.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+        return;
+      }
+      this.downloadError.set(errorMessage);
+    } finally {
+      this.isDownloadingPatientInfo.set(false);
+    }
+  }
+
+  // Triggers CSV_EMAIL_EXPORT_WORKFLOW_ID for whichever patient's detail is currently open. That workflow's
+  // destination uses Email delivery, so a Succeeded run has already sent the file server-side — there is no link or
+  // bytes to hand back, just a status. Same token-status-then-run shape as downloadPatientInformation.
+  async emailPatientInformation(): Promise<void> {
+    const patientId = this.selectedPatientId();
+    if (!patientId || this.isEmailingPatientInfo() || this.isRedirectingToMyChart()) {
+      return;
+    }
+
+    this.isEmailingPatientInfo.set(true);
+    this.emailError.set(null);
+    this.emailSuccess.set(false);
+    try {
+      if (!(await this.hasValidToken(CSV_EMAIL_EXPORT_WORKFLOW_ID))) {
+        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+        return;
+      }
+
+      const result = await this.launchService.run(CSV_EMAIL_EXPORT_WORKFLOW_ID, patientId);
+
+      if (result.workflowRun.status !== 'Succeeded') {
+        const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
+        if (indicatesReAuthorizationNeeded(errorMessage)) {
+          await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+          return;
+        }
+        this.emailError.set(errorMessage);
+        return;
+      }
+
+      this.emailSuccess.set(true);
+    } catch (err) {
+      const backendMessage = err instanceof HttpErrorResponse && typeof err.error?.error === 'string'
+        ? err.error.error
+        : null;
+      const errorMessage = backendMessage
+        ?? 'Could not reach FHIRBridge to send this email. Check your connection and try again.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+        return;
+      }
+      this.emailError.set(errorMessage);
+    } finally {
+      this.isEmailingPatientInfo.set(false);
+    }
   }
 
   // Cheap pre-check: does FHIRBridge currently have (or can it silently refresh) a usable token, without running
@@ -405,6 +528,9 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.selectedPatientId.set(null);
     this.patientDetail.set(null);
     this.patientDetailError.set(null);
+    this.downloadError.set(null);
+    this.emailError.set(null);
+    this.emailSuccess.set(false);
   }
 
   private async discardFhirBridgeToken(): Promise<void> {

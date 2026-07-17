@@ -25,15 +25,16 @@ public sealed class MappedAvroDestinationWriter : IConfiguredDestinationWriter
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var target = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -48,7 +49,7 @@ public sealed class MappedAvroDestinationWriter : IConfiguredDestinationWriter
             _httpClientFactory.CreateClient(nameof(MappedAvroDestinationWriter)),
             cancellationToken);
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 
     private static async Task WriteObjectContainerAsync(

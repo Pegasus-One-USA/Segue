@@ -34,6 +34,54 @@ public sealed class SmtpEmailSender : IEmailSender
         };
         message.To.Add(toEmail);
 
+        await SendAsync(message, subject, toEmail, cancellationToken);
+    }
+
+    public async Task SendAsync(
+        IReadOnlyCollection<string> toEmails,
+        IReadOnlyCollection<string>? ccEmails,
+        string subject,
+        string htmlBody,
+        IReadOnlyCollection<EmailAttachment>? attachments,
+        CancellationToken cancellationToken)
+    {
+        var recipients = string.Join(", ", toEmails);
+        if (!_options.Enabled)
+        {
+            _logger.LogInformation("Email sending is disabled; skipped '{Subject}' to {ToEmails}.", subject, recipients);
+            return;
+        }
+
+        using var message = new MailMessage
+        {
+            From = new MailAddress(_options.FromAddress, _options.FromName),
+            Subject = subject,
+            Body = htmlBody,
+            IsBodyHtml = true
+        };
+
+        foreach (var toEmail in toEmails)
+        {
+            message.To.Add(toEmail);
+        }
+
+        foreach (var ccEmail in ccEmails ?? [])
+        {
+            message.CC.Add(ccEmail);
+        }
+
+        // MailMessage.Dispose() disposes every Attachment, which in turn disposes the stream it was constructed
+        // with, so no separate stream cleanup is needed here.
+        foreach (var attachment in attachments ?? [])
+        {
+            message.Attachments.Add(new Attachment(new MemoryStream(attachment.Content), attachment.FileName, attachment.ContentType));
+        }
+
+        await SendAsync(message, subject, recipients, cancellationToken);
+    }
+
+    private async Task SendAsync(MailMessage message, string subject, string recipients, CancellationToken cancellationToken)
+    {
         using var client = new SmtpClient(_options.Host, _options.Port)
         {
             EnableSsl = _options.EnableSsl,
@@ -43,11 +91,11 @@ public sealed class SmtpEmailSender : IEmailSender
         try
         {
             await client.SendMailAsync(message, cancellationToken);
-            _logger.LogInformation("Email '{Subject}' sent to {ToEmail}.", subject, toEmail);
+            _logger.LogInformation("Email '{Subject}' sent to {ToEmails}.", subject, recipients);
         }
         catch (SmtpException ex)
         {
-            _logger.LogError(ex, "Failed to send email '{Subject}' to {ToEmail}.", subject, toEmail);
+            _logger.LogError(ex, "Failed to send email '{Subject}' to {ToEmails}.", subject, recipients);
             throw;
         }
     }

@@ -32,15 +32,16 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         _secretProvider = secretProvider;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var connectionString = await _secretProvider.GetSecretAsync(
@@ -84,7 +85,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             }
         }
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 
     private static async Task EnsureTableAsync(

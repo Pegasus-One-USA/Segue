@@ -24,15 +24,16 @@ public sealed class MappedParquetDestinationWriter : IConfiguredDestinationWrite
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var target = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -59,6 +60,6 @@ public sealed class MappedParquetDestinationWriter : IConfiguredDestinationWrite
             _httpClientFactory.CreateClient(nameof(MappedParquetDestinationWriter)),
             cancellationToken);
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 }
