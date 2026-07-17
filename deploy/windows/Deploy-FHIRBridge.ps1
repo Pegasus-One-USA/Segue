@@ -68,7 +68,7 @@ function Deploy-Service {
     # robocopy's exit codes 0-7 are all "success" variants (2 = extras purged, etc.), but the value stays
     # non-zero in $LASTEXITCODE regardless -- clear it so it can't leak into this script's own final exit
     # code once everything below finishes normally.
-    $LASTEXITCODE = 0
+    $global:LASTEXITCODE = 0
 
     $exePath = Join-Path $DestDir $ExeName
     if (-not (Test-Path $exePath)) {
@@ -103,7 +103,7 @@ function Deploy-StaticFiles {
     if ($LASTEXITCODE -ge 8) {
         throw "robocopy failed deploying $Name (exit code $LASTEXITCODE)"
     }
-    $LASTEXITCODE = 0
+    $global:LASTEXITCODE = 0
 
     Write-Host "$Name deployed."
 }
