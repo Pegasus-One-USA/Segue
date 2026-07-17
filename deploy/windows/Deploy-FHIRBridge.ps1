@@ -10,13 +10,18 @@
     /swagger/** to FHIRBridge.Api on loopback, serves the Portal's static build directly).
     FHIRBridge.Api and FHIRBridge.Worker run as internal-only Windows Services.
 
-    For each service (Api/Gateway/Worker): stops it if running, mirrors the new published files
-    into place via robocopy while preserving appsettings.Production.json (never part of the
+    Also deploys Demo_TestApp (DemoBackend\) — a standalone third-party demo client that serves
+    its own frontend (nested under DemoBackend\portal\, published there by the build job) and
+    calls FHIRBridge's Gateway directly, cross-origin.
+
+    For each service (Api/Gateway/Worker/Demo): stops it if running, mirrors the new published
+    files into place via robocopy while preserving appsettings.Production.json (never part of the
     artifact — provisioned once by hand on this VM, see README.md), creates the service on first
     run, then starts it. The Portal is mirrored as plain static files (no service).
 
 .PARAMETER ArtifactPath
-    Path to the extracted publish artifact. Must contain Api\, Gateway\, Worker\, and Portal\ subfolders.
+    Path to the extracted publish artifact. Must contain Api\, Gateway\, Worker\, Portal\, and
+    DemoBackend\ subfolders.
 
 .PARAMETER DeployRoot
     Root folder on this VM under which fhirbridge-api\, fhirbridge-gateway\, fhirbridge-worker\,
@@ -29,6 +34,10 @@
     Plain-HTTP URL polled after the Gateway service starts, confirming the public entry point
     itself is reachable (avoids dealing with the self-signed HTTPS cert from this script). Pass
     '' to skip.
+
+.PARAMETER DemoHealthCheckUrl
+    URL polled after the Demo service starts (it binds 0.0.0.0, so loopback works fine as a local
+    check). Pass '' to skip.
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -39,9 +48,11 @@ param(
     [string]$ApiServiceName = "FHIRBridge.Api",
     [string]$GatewayServiceName = "FHIRBridge.Gateway",
     [string]$WorkerServiceName = "FHIRBridge.Worker",
+    [string]$DemoServiceName = "FHIRBridge.Demo",
 
     [string]$ApiHealthCheckUrl = "http://127.0.0.1:5000/health",
     [string]$GatewayHealthCheckUrl = "http://localhost/",
+    [string]$DemoHealthCheckUrl = "http://127.0.0.1:5500/",
 
     [int]$ServiceStopTimeoutSeconds = 30,
     [int]$HealthCheckRetries = 10,
@@ -149,12 +160,14 @@ $apiSource = Join-Path $ArtifactPath "Api"
 $gatewaySource = Join-Path $ArtifactPath "Gateway"
 $workerSource = Join-Path $ArtifactPath "Worker"
 $portalSource = Join-Path $ArtifactPath "Portal"
+$demoSource = Join-Path $ArtifactPath "DemoBackend"
 
 foreach ($required in @(
     @{ Name = "Api"; Path = $apiSource },
     @{ Name = "Gateway"; Path = $gatewaySource },
     @{ Name = "Worker"; Path = $workerSource },
-    @{ Name = "Portal"; Path = $portalSource }
+    @{ Name = "Portal"; Path = $portalSource },
+    @{ Name = "DemoBackend"; Path = $demoSource }
 )) {
     if (-not (Test-Path $required.Path)) {
         throw "Artifact is missing the $($required.Name) folder at $($required.Path)"
@@ -174,7 +187,14 @@ Deploy-StaticFiles -Label "Portal" -SourceDir $portalSource -DestDir (Join-Path 
 Deploy-Service -Name $GatewayServiceName -SourceDir $gatewaySource -DestDir (Join-Path $DeployRoot "fhirbridge-gateway") `
     -ExeName "FHIRBridge.Gateway.exe" -DisplayName "FHIRBridge Gateway"
 
+# Standalone third-party demo client — its frontend (nested under DemoBackend\portal\ in the
+# artifact) rides along in the same robocopy mirror as the backend, so no separate static-files
+# call is needed the way the main Portal needs one.
+Deploy-Service -Name $DemoServiceName -SourceDir $demoSource -DestDir (Join-Path $DeployRoot "fhirbridge-demo") `
+    -ExeName "HealthAppBackend.exe" -DisplayName "FHIRBridge Demo (HealthApp)"
+
 Test-HealthCheck -Label "Api" -Url $ApiHealthCheckUrl
 Test-HealthCheck -Label "Gateway" -Url $GatewayHealthCheckUrl
+Test-HealthCheck -Label "Demo" -Url $DemoHealthCheckUrl
 
 Write-Host "Deploy complete."

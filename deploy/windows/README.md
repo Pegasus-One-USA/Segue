@@ -13,7 +13,12 @@ for the full story (including every issue hit and how it was diagnosed). Summary
 - **FHIRBridge.Api** binds loopback-only (`127.0.0.1:5000`) — never reachable from outside the VM.
 - **FHIRBridge.Worker** runs the scheduled dispatcher / pipeline processor / HL7 MLLP listener,
   also internal-only.
-- All three run as Windows Services.
+- **Demo_TestApp** is a standalone third-party demo client (a separate app entirely, used to show
+  a customer that FHIRBridge can be called from an outside application). Its backend serves its
+  own frontend directly (same origin), but calls FHIRBridge's Gateway *cross-origin* — unlike the
+  main Portal, this one genuinely needs CORS, and its target URL is baked into its frontend at
+  build time (see step 4).
+- All four run as Windows Services.
 
 The VM is not reachable from the internet, so GitHub Actions can't SSH/WinRM into it. Instead the
 VM runs a **self-hosted GitHub Actions runner** that polls GitHub outbound — no inbound firewall
@@ -81,6 +86,7 @@ overwriting it. Create these once:
 C:\inetpub\wwwroot\fhirbridge-api\appsettings.Production.json
 C:\inetpub\wwwroot\fhirbridge-worker\appsettings.Production.json
 C:\inetpub\wwwroot\fhirbridge-gateway\appsettings.Production.json
+C:\inetpub\wwwroot\fhirbridge-demo\appsettings.Production.json
 ```
 
 **Api** (`fhirbridge-api\appsettings.Production.json`):
@@ -128,10 +134,32 @@ without a redeploy (just edit this file and restart the service).
 **Worker** (`fhirbridge-worker\appsettings.Production.json`): same `ConnectionStrings:FHIRBridgeDb`
 and `DataProtection:KeyRingPath` as the Api (they share the same database and key ring).
 
+**Demo** (`fhirbridge-demo\appsettings.Production.json`) — a separate database, own SQL Server
+instance is fine, but a new database (not `FHIRBridge`) on the same instance is simplest:
+```json
+{
+  "ConnectionStrings": { "Default": "Server=<sql-host>;Database=HealthAppDb;User Id=...;Password=...;TrustServerCertificate=True;Encrypt=True" },
+  "AllowedFrontendOrigin": "http://localhost",
+  "AllowedHosts": "*"
+}
+```
+`AllowedFrontendOrigin` is effectively unused in production (the backend serves its own frontend,
+same-origin) — leaving it at its dev default is harmless.
+
 The Gateway's PFX password is deliberately **not** in its `appsettings.Production.json` — set it via
 an environment variable on the service instead (step 6), so it isn't sitting in plaintext config.
 
 Grant the service account read/write on `C:\inetpub\dataprotection-keys` and `C:\FHIRBridge-certs`.
+
+### Registering the Demo app with FHIRBridge (one-time, per target, after its first deploy)
+
+The Demo app's frontend calls FHIRBridge's Gateway directly from the browser — a genuinely
+cross-origin request, since it's hosted at a different port. Sign in to the FHIRBridge portal as a
+SuperAdmin and add the Demo app's own origin (e.g. `https://<vm-hostname>:5500` for production,
+`https://<vm-hostname>:5600` for test) under **CORS Origins** — this takes effect live, no restart
+needed, no redeploy needed. Until this is added, the Demo app's "Connect Get Data" flow will fail
+with a CORS error in the browser console; everything else in the Demo app (login, its own
+database) works regardless, since only that one call is cross-origin.
 
 ## 5. Testing CI/CD without touching your manual deployment
 
@@ -144,14 +172,20 @@ The **Run workflow** dialog asks for a `target`: `production` or `test`.
 
   | | production | test |
   |---|---|---|
-  | Folders | `C:\inetpub\wwwroot\fhirbridge-{api,gateway,worker,portal}` | `C:\inetpub\wwwroot\test\fhirbridge-{api,gateway,worker,portal}` |
-  | Service names | `FHIRBridge.Api` / `.Gateway` / `.Worker` | `FHIRBridge.Api.Test` / `.Gateway.Test` / `.Worker.Test` |
+  | Folders | `C:\inetpub\wwwroot\fhirbridge-{api,gateway,worker,portal,demo}` | `C:\inetpub\wwwroot\test\fhirbridge-{api,gateway,worker,portal,demo}` |
+  | Service names | `FHIRBridge.Api` / `.Gateway` / `.Worker` / `.Demo` | `FHIRBridge.Api.Test` / `.Gateway.Test` / `.Worker.Test` / `.Demo.Test` |
   | Api port (loopback) | `127.0.0.1:5000` | `127.0.0.1:5100` |
-  | Gateway ports (public) | `80` / `443` | `8080` / `8443` |
+  | Gateway ports (public) | `80` / `443` | `9080` / `9443` |
+  | Demo app port (public) | `5500` | `5600` |
 
   These live as `-DeployRoot`, `-ApiServiceName`, etc. arguments in `deploy.yml`'s `deploy` job —
-  change the numbers there if `8080`/`8443`/`5100` collide with something else already running on
-  the VM.
+  change the numbers there if `9080`/`9443`/`5100`/`5600` collide with something else already
+  running on the VM.
+
+  The Demo app's frontend is rebuilt for each target with its cross-origin FHIRBridge URL baked
+  in — that's what the **Run workflow** dialog's `vm_hostname` field is for (see step 6). Get this
+  wrong and the Demo app's "Connect Get Data" button will fail with either a CORS error (wrong host)
+  or a connection error (wrong port) — it won't silently point at the other target.
 
 Before running with `test` for the first time, provision its own config the same way you did for
 production (step 4), just under the `test` paths and ports instead:
@@ -172,8 +206,8 @@ whatever DB you want the test instance to use (the same database is fine for a f
   "StaticFiles": { "RootPath": "C:\\inetpub\\wwwroot\\test\\fhirbridge-portal" },
   "Kestrel": {
     "Endpoints": {
-      "Http": { "Url": "http://0.0.0.0:8080" },
-      "Https": { "Url": "https://0.0.0.0:8443", "Certificate": { "Path": "C:\\FHIRBridge-certs\\gateway.pfx" } }
+      "Http": { "Url": "http://0.0.0.0:9080" },
+      "Https": { "Url": "https://0.0.0.0:9443", "Certificate": { "Path": "C:\\FHIRBridge-certs\\gateway.pfx" } }
     }
   },
   "AllowedHosts": "*"
@@ -181,30 +215,51 @@ whatever DB you want the test instance to use (the same database is fine for a f
 ```
 The same self-signed cert from step 3 works fine here too — a cert isn't tied to a port.
 
+`C:\inetpub\wwwroot\test\fhirbridge-demo\appsettings.Production.json` — same shape as production's,
+pointed at its own database (e.g. `HealthAppDb_Test`) so test runs never touch production demo data:
+```json
+{
+  "ConnectionStrings": { "Default": "Server=<sql-host>;Database=HealthAppDb_Test;User Id=...;Password=...;TrustServerCertificate=True;Encrypt=True" },
+  "AllowedFrontendOrigin": "http://localhost",
+  "AllowedHosts": "*"
+}
+```
+Remember to also add this instance's own origin (`https://<vm-hostname>:5600`) to FHIRBridge's
+CORS Origins as a SuperAdmin, same as production (see the note in step 4) — production's and
+test's origins are two separate entries, since they're two different ports.
+
 Since the very first deploy to a target creates its Windows Services (via `New-Service`), the
 loopback URL/environment name for `FHIRBridge.Api.Test` and the cert password for
 `FHIRBridge.Gateway.Test` still need to be set once via the registry, same as step 6 below but
 against the `.Test` service names and `5100`/cert-password values.
 
 If the test Gateway needs to be reachable from other machines on the LAN (not just from the VM
-itself), open `8080`/`8443` in the firewall the same way `80`/`443` were opened for production.
+itself), open `9080`/`9443` in the firewall the same way `80`/`443` were opened for production.
 
 ## 6. First deploy
 
-Go to the **Actions** tab → **Deploy** workflow → **Run workflow**, choose `production` or `test`.
+Go to the **Actions** tab → **Deploy** workflow → **Run workflow**. It asks for two things:
+
+- `target`: `production` or `test` (see step 5)
+- `vm_hostname`: the VM's public hostname or IP, **no scheme, no port** (e.g. `demo.example.com` or
+  `20.1.2.3`) — used only to build the Demo app's cross-origin FHIRBridge URL. Get this wrong and
+  only the Demo app is affected (see step 5); Api/Gateway/Worker/Portal don't use it.
+
 This:
 
-1. Builds the Api, Gateway, Worker (`dotnet publish`, win-x64, framework-dependent) and the Angular
-   portal (`ng build --configuration production`) on a GitHub-hosted runner — identical build for
-   either target.
-2. Ships all four to the self-hosted runner on the VM, which mirrors each into the chosen target's
-   folders (preserving each service's `appsettings.Production.json`), creates the three Windows
-   Services if they don't exist yet, starts Api and Worker first, mirrors the Portal's static
-   files, then starts the Gateway last.
-3. Health-checks the Api directly over loopback and confirms the Gateway itself answers on plain
-   HTTP — against whichever ports the chosen target uses.
+1. Builds the Api, Gateway, Worker, Demo backend (`dotnet publish`, win-x64, framework-dependent)
+   and both Angular apps — the main portal (`ng build --configuration production`, always) and the
+   Demo app's frontend (`--configuration production` or `--configuration test` matching `target`,
+   after substituting `vm_hostname` into its compiled-in FHIRBridge URL) — on a GitHub-hosted runner.
+2. Ships everything to the self-hosted runner on the VM, which mirrors each into the chosen
+   target's folders (preserving each service's `appsettings.Production.json`), creates the four
+   Windows Services if they don't exist yet, starts Api and Worker first, mirrors the Portal's
+   static files, starts the Gateway, then starts the Demo app last (its frontend rides along
+   inside its own folder, no separate static-files step needed).
+3. Health-checks the Api directly over loopback, confirms the Gateway itself answers on plain HTTP,
+   and confirms the Demo app answers too — against whichever ports the chosen target uses.
 
-The very first run against a given target creates all three of its services for you; after that
+The very first run against a given target creates all four of its services for you; after that
 it's just start/stop/replace.
 
 ## 7. Register the services (first run only, if the workflow's own New-Service ever needs redoing)
@@ -229,8 +284,19 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\FHIRBridge.Worke
   "ASPNETCORE_ENVIRONMENT=Production"
 )) -Type MultiString
 
-Restart-Service FHIRBridge.Api, FHIRBridge.Worker, FHIRBridge.Gateway
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\FHIRBridge.Demo" -Name Environment -Value ([string[]]@(
+  "ASPNETCORE_ENVIRONMENT=Production",
+  "ASPNETCORE_URLS=http://0.0.0.0:5500",
+  "DEMOAPP_PORTAL_PATH=C:\inetpub\wwwroot\fhirbridge-demo\portal"
+)) -Type MultiString
+
+Restart-Service FHIRBridge.Api, FHIRBridge.Worker, FHIRBridge.Gateway, FHIRBridge.Demo
 ```
+
+`DEMOAPP_PORTAL_PATH` must be an **absolute** path — a Windows Service's working directory isn't
+guaranteed to be its own exe's folder, so the app's relative `portal` default can resolve to the
+wrong place (e.g. `C:\Windows\System32\portal`) if left unset. For the `test` target, use
+`FHIRBridge.Demo.Test`, port `5600`, and `C:\inetpub\wwwroot\test\fhirbridge-demo\portal`.
 
 `Set-ItemProperty` needs an explicit `[string[]]` cast — PowerShell otherwise builds a generic
 `Object[]`, which `RegistryKey.SetValue` rejects for a `REG_MULTI_SZ` value.

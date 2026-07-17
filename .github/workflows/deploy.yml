@@ -10,6 +10,10 @@ name: Deploy
 # to FHIRBridge.Api, serves the portal's static build directly). FHIRBridge.Api and FHIRBridge.Worker
 # are internal-only. All three run as Windows Services.
 #
+# Also builds and deploys Demo_TestApp (a standalone third-party demo client) as its own Windows
+# Service — it serves its own frontend directly (same-origin) but calls FHIRBridge's Gateway
+# cross-origin, so its frontend bundle is built with that origin baked in (see vm_hostname input).
+#
 # Recommended hardening (one-time, in repo Settings > Environments): add required reviewers to the
 # "production" environment so the deploy job pauses for an approval click before it runs.
 on:
@@ -26,6 +30,13 @@ on:
         options:
           - production
           - test
+      vm_hostname:
+        description: >
+          VM's public hostname or IP (no scheme/port) — the Demo app's frontend calls FHIRBridge's Gateway
+          directly, cross-origin, and that URL is compiled into its bundle at build time. production is built
+          pointing at https://<this>; test is built pointing at https://<this>:9443. See deploy/windows/README.md.
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -68,6 +79,12 @@ jobs:
           -c Release -r win-x64 --self-contained false
           -o publish/Worker
 
+      - name: Publish Demo backend (win-x64, framework-dependent)
+        run: >
+          dotnet publish Demo_TestApp/backend/HealthAppBackend.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/DemoBackend
+
       - name: Build portal
         working-directory: portal
         run: |
@@ -79,10 +96,35 @@ jobs:
           mkdir -p publish/Portal
           cp -r portal/dist/fhirbridge-ui/browser/. publish/Portal/
 
+      - name: Configure Demo app's FHIRBridge origin
+        # The Demo frontend calls the Gateway cross-origin, and that URL is a compile-time constant
+        # (see environment.prod.ts / environment.test.ts) — substitute the real origin in before building.
+        working-directory: Demo_TestApp/frontend
+        run: |
+          if [ "${{ inputs.target }}" = "test" ]; then
+            ORIGIN="https://${{ inputs.vm_hostname }}:9443"
+            FILE="src/environments/environment.test.ts"
+          else
+            ORIGIN="https://${{ inputs.vm_hostname }}"
+            FILE="src/environments/environment.prod.ts"
+          fi
+          sed -i "s#__FHIRBRIDGE_GATEWAY_ORIGIN__#$ORIGIN#" "$FILE"
+
+      - name: Build Demo frontend
+        working-directory: Demo_TestApp/frontend
+        run: |
+          npm ci
+          npm run build -- --configuration ${{ inputs.target == 'test' && 'test' || 'production' }}
+
+      - name: Stage Demo app (backend + its frontend, nested under the backend's portal/ folder)
+        run: |
+          mkdir -p publish/DemoBackend/portal
+          cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoBackend/portal/
+
       - name: Package deploy artifact
         run: |
           cd publish
-          zip -r ../fhirbridge-deploy.zip Api Gateway Worker Portal
+          zip -r ../fhirbridge-deploy.zip Api Gateway Worker Portal DemoBackend
 
       - uses: actions/upload-artifact@v4
         with:
@@ -126,5 +168,7 @@ jobs:
             -ApiServiceName "FHIRBridge.Api.Test" `
             -GatewayServiceName "FHIRBridge.Gateway.Test" `
             -WorkerServiceName "FHIRBridge.Worker.Test" `
+            -DemoServiceName "FHIRBridge.Demo.Test" `
             -ApiHealthCheckUrl "http://127.0.0.1:5100/health" `
-            -GatewayHealthCheckUrl "http://localhost:8080/"
+            -GatewayHealthCheckUrl "http://localhost:9080/" `
+            -DemoHealthCheckUrl "http://127.0.0.1:5600/"
