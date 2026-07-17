@@ -9,7 +9,7 @@
     Worker, DemoApi): stops it (if running), mirrors the new published files into the deploy path
     while preserving appsettings.Production.json (which is never part of the artifact and must be
     provisioned once by hand on this VM), then (re)creates and starts the service. For each static
-    frontend (Portal, DemoPortal): mirrors the built files only — no service involved, since Gateway
+    frontend (Portal, DemoPortal): mirrors the built files only -- no service involved, since Gateway
     and DemoApi serve these themselves (see deploy/windows/README.md).
 
 .PARAMETER ArtifactPath
@@ -65,6 +65,10 @@ function Deploy-Service {
     if ($LASTEXITCODE -ge 8) {
         throw "robocopy failed deploying $Name (exit code $LASTEXITCODE)"
     }
+    # robocopy's exit codes 0-7 are all "success" variants (2 = extras purged, etc.), but the value stays
+    # non-zero in $LASTEXITCODE regardless -- clear it so it can't leak into this script's own final exit
+    # code once everything below finishes normally.
+    $global:LASTEXITCODE = 0
 
     $exePath = Join-Path $DestDir $ExeName
     if (-not (Test-Path $exePath)) {
@@ -72,7 +76,7 @@ function Deploy-Service {
     }
 
     if (-not (Get-Service -Name $Name -ErrorAction SilentlyContinue)) {
-        Write-Host "Service $Name does not exist yet — creating it."
+        Write-Host "Service $Name does not exist yet -- creating it."
         New-Service -Name $Name -BinaryPathName "`"$exePath`"" -DisplayName $DisplayName -StartupType Automatic
     }
 
@@ -99,6 +103,7 @@ function Deploy-StaticFiles {
     if ($LASTEXITCODE -ge 8) {
         throw "robocopy failed deploying $Name (exit code $LASTEXITCODE)"
     }
+    $global:LASTEXITCODE = 0
 
     Write-Host "$Name deployed."
 }
@@ -126,10 +131,10 @@ function Test-Health {
     throw "$Name did not become healthy at $Url after $HealthCheckRetries attempts."
 }
 
-# --- Static frontends first (no service — served by Gateway / DemoApi respectively). These must
+# --- Static frontends first (no service -- served by Gateway / DemoApi respectively). These must
 # land on disk BEFORE Gateway/DemoApi start: both only wire up their static-file middleware if the
 # configured folder already exists at process startup (see Gateway/Program.cs and
-# Demo_TestApp/backend/Program.cs) — deploying them after the service starts would leave the portal
+# Demo_TestApp/backend/Program.cs) -- deploying them after the service starts would leave the portal
 # unserved until the next restart. ---
 
 $staticSites = @(
