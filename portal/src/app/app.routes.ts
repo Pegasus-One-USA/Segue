@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './auth/guards/auth.guard';
 import { permissionGuard } from './auth/guards/permission.guard';
+import { superAdminGuard } from './auth/guards/super-admin.guard';
 import { setupGuard } from './auth/guards/setup.guard';
 import { mfaSetupGuard } from './auth/guards/mfa-setup.guard';
 
@@ -92,6 +93,17 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component').then(
             m => m.EhrEndpointListComponent
+          ),
+      },
+
+      // Allowed CORS origins (SuperAdmin only — backend enforces AuthorizationPolicies.SuperAdminOnly,
+      // stricter than permissionGuard's isAdmin() bypass which also lets a regular Admin through)
+      {
+        path: 'allowed-origins',
+        canActivate: [superAdminGuard],
+        loadComponent: () =>
+          import('./allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component').then(
+            m => m.AllowedCorsOriginListComponent
           ),
       },
 

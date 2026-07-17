@@ -1,0 +1,98 @@
+@use '../../../_list-page' as *;
+
+// ─── Action Buttons ───────────────────────────────────────────────────────────
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-base);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-base);
+
+  &:hover { background: var(--color-primary-dark); }
+  &:active { background: var(--color-primary-dark); }
+}
+
+.filter-header-text {
+  flex: 1 1 280px;
+
+  p {
+    font-size: 13.5px;
+    color: var(--color-muted);
+    margin: 0;
+  }
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 0;
+}
+
+// ─── Column widths ────────────────────────────────────────────────────────────
+.col-actions {
+  width: 100px;
+  text-align: right;
+}
+
+// ─── Cell elements ────────────────────────────────────────────────────────────
+.cell-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.endpoint-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: var(--color-primary);
+  }
+}
+
+// ─── Action buttons ───────────────────────────────────────────────────────────
+.actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+// Each action gets its own soft-tinted "chip" background at rest (not just on hover)
+// so the actions read as distinct, colorful controls rather than plain icons.
+%action-chip {
+  width:         32px;
+  height:        32px;
+  border-radius: 50%;
+  transition:    background var(--transition-base), color var(--transition-base), opacity var(--transition-base);
+
+  mat-icon { font-size: 17px; height: 17px; width: 17px; }
+
+  &[disabled] { opacity: 0.35; }
+}
+
+.btn-delete {
+  @extend %action-chip;
+  background: var(--color-error-soft);
+  color:      var(--color-error);
+
+  &:hover:not([disabled]) { background: var(--color-error); color: var(--color-on-primary); }
+}

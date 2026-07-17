@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IRetentionPolicyService, DefaultRetentionPolicyService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
+        services.AddScoped<IAllowedCorsOriginsService, AllowedCorsOriginsService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<ILocalAuthService, LocalAuthService>();
