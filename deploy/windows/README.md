@@ -61,16 +61,25 @@ Verify it shows up as **Idle** under Settings → Actions → Runners before con
 
 ## 3. Provision production secrets (once, never touched by CI)
 
-Every service's `appsettings.Production.json` is deliberately **not** part of the build artifact —
-it's excluded from the deploy script's copy/mirror step so it's safe to edit directly on the server
-without CI ever overwriting it. Create these four files by hand:
+Every service's config files (`appsettings.Production.json` etc.) are deliberately **not** part of
+the build artifact. Instead they live under a separate config root,
+`C:\inetpub\FHIRBridge_Configurations`, mirroring the same per-app folder names used under
+`C:\inetpub\wwwroot`:
 
 ```
-C:\inetpub\wwwroot\fhirbridge-api\appsettings.Production.json
-C:\inetpub\wwwroot\fhirbridge-gateway\appsettings.Production.json
-C:\inetpub\wwwroot\fhirbridge-worker\appsettings.Production.json
-C:\inetpub\wwwroot\demoapp-api\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\fhirbridge-api\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\fhirbridge-gateway\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\fhirbridge-worker\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\demoapp-api\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\fhirbridge-portal\
+C:\inetpub\FHIRBridge_Configurations\demoapp-portal\
 ```
+
+After every deploy mirrors an app's published files into its `C:\inetpub\wwwroot\...` folder,
+`Deploy-FHIRBridge.ps1` copies that app's `ConfigRoot` subfolder on top (see the script's
+`ConfigRoot` parameter). Because config lives in a folder tree the artifact mirror never touches,
+there's no risk of it being deleted or overwritten by a deploy — edit these files directly on the
+server at any time; they take effect on that service's next restart.
 
 **`fhirbridge-api`** — populate `ConnectionStrings:FHIRBridgeDb`, `Authentication:SigningKey`,
 `DataProtection:KeyRingPath` (point this at a persistent folder, e.g. `C:\FHIRBridge\keys`, so
@@ -93,6 +102,10 @@ ever moves off port 5000.
 separate database from `FHIRBridgeDb`, used only by the demo app) and `AllowedFrontendOrigin` (set
 to this app's own public URL, e.g. `http://<server>:5500`, not the portal's origin — CORS here only
 applies to any cross-origin caller, since the demo frontend is served same-origin already).
+
+**`fhirbridge-portal` / `demoapp-portal`** — these Angular builds have no runtime config file today;
+their folders under `ConfigRoot` can stay empty. They exist for consistency and in case a
+runtime-loaded config file is ever added later.
 
 ## 4. Set each service's bind address (one-time, per service)
 
@@ -123,8 +136,9 @@ Go to the **Actions** tab → **Deploy** workflow → **Run workflow**. This:
    `DemoPortal`) to the self-hosted runner on the server.
 3. The runner's `Deploy-FHIRBridge.ps1`: mirrors the two static frontend folders first (so
    Gateway/DemoApp pick them up immediately on next start — both only wire up static-file serving if
-   the folder already exists when the process starts), then for each of the four services: stops
-   it, mirrors the new published files (preserving `appsettings.Production.json`), creates the
+   the folder already exists when the process starts), overlaying each from its `ConfigRoot`
+   subfolder, then for each of the four services: stops it, mirrors the new published files,
+   overlays that service's `ConfigRoot` subfolder (`appsettings.Production.json` etc.), creates the
    service if it doesn't exist yet, starts it, and health-checks it (Api via `/health`,
    Gateway/DemoApp via their root URL — Worker has no HTTP endpoint, so it's just checked for
    `Running` status).
