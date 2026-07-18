@@ -34,7 +34,6 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
         Guid destinationId,
         string destinationObject,
         int top,
-        IReadOnlyCollection<Guid> pipelineRunIds,
         CancellationToken cancellationToken)
     {
         var destination = await _repository.GetDestinationAsync(destinationId, cancellationToken)
@@ -57,28 +56,14 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
             return new DestinationDataDto(target, [], [], 0, ex.Message);
         }
 
-        if (pipelineRunIds.Count == 0)
-        {
-            return new DestinationDataDto(target, [], [], 0,
-                "This workflow has not completed any runs yet — nothing has been written to the destination.");
-        }
-
         var boundedTop = Math.Clamp(top, 1, 500);
-        var runIds = pipelineRunIds.ToList();
 
         try
         {
             var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
             await using var connection = await OpenConnectionAsync(destination.DestinationType, connectionString, cancellationToken);
             await using var command = connection.CreateCommand();
-            command.CommandText = BuildSelect(destination.DestinationType, schema, table, boundedTop, runIds.Count);
-            for (var i = 0; i < runIds.Count; i++)
-            {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = "@runId" + i;
-                parameter.Value = runIds[i].ToString();
-                command.Parameters.Add(parameter);
-            }
+            command.CommandText = BuildSelect(destination.DestinationType, schema, table, boundedTop);
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
@@ -202,14 +187,12 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
         }
     }
 
-    private static string BuildSelect(DestinationType type, string schema, string table, int top, int runIdCount)
+    private static string BuildSelect(DestinationType type, string schema, string table, int top)
     {
         var qualified = QualifiedName(type, schema, table);
-        var placeholders = string.Join(", ", Enumerable.Range(0, runIdCount).Select(i => "@runId" + i));
-        var where = $"WHERE {Quote(type, "PipelineRunId")} IN ({placeholders})";
         return type is DestinationType.SqlServer or DestinationType.AzureSql
-            ? $"SELECT TOP {top} * FROM {qualified} {where}"
-            : $"SELECT * FROM {qualified} {where} LIMIT {top}";
+            ? $"SELECT TOP {top} * FROM {qualified}"
+            : $"SELECT * FROM {qualified} LIMIT {top}";
     }
 
     private static string Quote(DestinationType type, string id) => type switch

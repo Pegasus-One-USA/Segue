@@ -14,7 +14,9 @@ public sealed record PipelineRunRouteExecutionDto(
     int ExtractedCount,
     int MappedCount,
     int WrittenCount,
-    string? ErrorMessage)
+    string? ErrorMessage,
+    string? CorrelationId,
+    int ErrorCount = 0)
 {
     /// <summary>Derived, not stored — null while the execution is still running.</summary>
     public long? DurationMs => CompletedOnUtc.HasValue

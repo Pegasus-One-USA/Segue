@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Security;
+using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using Microsoft.AspNetCore.DataProtection;
 using FHIRBridge.Application;
@@ -19,6 +20,7 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -110,6 +112,12 @@ builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+// Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
+// from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
+// anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
+// of whether an exporter is configured (see ObservabilityOptions.Enabled's remarks).
+builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.Api");
+
 builder.Services
     .AddFHIRBridgeApplication()
     .AddPatientStandaloneApplicationServices()
@@ -156,6 +164,7 @@ builder.Services.AddAuthorization(options =>
             });
     }
 });
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, GovernanceAuditingAuthorizationMiddlewareResultHandler>();
 // The "Portal" policy is built per-request by DynamicPortalCorsPolicyProvider from
 // IAllowedCorsOriginsCache (Portal:AllowedOrigins config floor ∪ AllowedCorsOrigins DB rows), not a
 // fixed WithOrigins(...) list — so a SuperAdmin adding/removing an origin via the admin screen takes
@@ -258,6 +267,20 @@ app.UseExceptionHandler(errorApp =>
         app.Logger.LogError(feature.Error, "Unhandled exception on {Path}.", context.Request.Path);
 
         var (status, message) = MapException(feature.Error);
+
+        // Governance: every unhandled exception is captured centrally, regardless of which
+        // controller/service raised it — no per-call-site logging needed.
+        var governanceLogger = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGovernanceLogger>();
+        var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+        await governanceLogger.LogErrorAsync(
+            new FHIRBridge.Governance.ErrorEntry(
+                status >= 500 ? "Error" : "Warning",
+                feature.Error.GetType().Name,
+                feature.Error.Message,
+                feature.Error.StackTrace,
+                "Api",
+                correlationId));
+
         context.Response.StatusCode  = status;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new { error = message });

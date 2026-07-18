@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 
 namespace FHIRBridge.Worker;
 
@@ -8,6 +9,11 @@ namespace FHIRBridge.Worker;
 /// the scoped <see cref="IPipelineRunCommandHandler"/>. Always on — it idles until commands arrive. In Azure this
 /// role maps to an event-triggered Container Apps Job scaled by queue depth (Phase 4).
 /// </summary>
+/// <remarks>
+/// <b>Live (2026-07-18 migration).</b> Registered in <c>Program.cs</c>. Consumes <see cref="PipelineRunCommand"/>
+/// messages enqueued by <c>ScheduleDispatcher</c> (the now-live scheduler — see its remarks) — its
+/// <c>RetryHistory</c>/<c>ErrorLog</c> instrumentation is genuinely exercised now, not just correct-but-unreachable.
+/// </remarks>
 public sealed class PipelineRunCommandProcessor : BackgroundService
 {
     private readonly IMessageConsumer<PipelineRunCommand> _consumer;
@@ -34,6 +40,26 @@ public sealed class PipelineRunCommandProcessor : BackgroundService
     {
         using var scope = _serviceScopeFactory.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<IPipelineRunCommandHandler>();
-        await handler.HandleAsync(command, cancellationToken);
+
+        try
+        {
+            await handler.HandleAsync(command, cancellationToken);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Centralized capture for the Worker host — rethrow so the transport's own
+            // retry/dead-letter behavior (see MessageRetry / IMessageConsumer) is unaffected.
+            var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
+            await governanceLogger.LogErrorAsync(
+                new ErrorEntry(
+                    "Error",
+                    exception.GetType().Name,
+                    exception.Message,
+                    exception.StackTrace,
+                    "Worker",
+                    command.CorrelationId),
+                CancellationToken.None);
+            throw;
+        }
     }
 }

@@ -25,6 +25,7 @@
     <ProjectReference Include="..\FHIRBridge.Domain\FHIRBridge.Domain.csproj" />
     <ProjectReference Include="..\Runtime\FHIRBridge.Runtime.Application\FHIRBridge.Runtime.Application.csproj" />
     <ProjectReference Include="..\BuildingBlocks\FHIRBridge.SharedKernel\FHIRBridge.SharedKernel.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj" />
   </ItemGroup>
 
   <ItemGroup>

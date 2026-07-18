@@ -1,0 +1,73 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Compliance Reports</h1>
+    <p class="page-sub">Generate the HIPAA §164.312(b) / SOC 2 audit report — audit-trail hash-chain integrity plus authentication, data-access, security, and error activity for a date range.</p>
+  </div>
+
+  <div class="report-card">
+    <div class="field-row">
+      <label>
+        From
+        <input type="date" [value]="fromDate()" (change)="onFromDateChange($any($event.target).value)" />
+      </label>
+      <label>
+        To
+        <input type="date" [value]="toDate()" (change)="onToDateChange($any($event.target).value)" />
+      </label>
+      <button class="btn" type="button" [disabled]="generating()" (click)="generate()">
+        {{ generating() ? 'Generating…' : 'Generate & Download PDF' }}
+      </button>
+    </div>
+
+    @if (errorMessage()) {
+      <p class="error-message">{{ errorMessage() }}</p>
+    }
+
+    <div class="report-contents">
+      <h3>Report contents</h3>
+      <ul>
+        <li>Audit-trail hash-chain integrity verification (full history, not just the selected period)</li>
+        <li>Authentication summary — total, successful, failed, distinct users</li>
+        <li>Patient/resource data access summary — allowed vs. denied</li>
+        <li>Security events by severity, unresolved count</li>
+        <li>Errors by severity</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="report-card">
+    <div class="page-header">
+      <h2>SOC 2 Evidence Export</h2>
+      <p class="page-sub">A distinct report from the HIPAA one above — Security/Availability/Processing Integrity framing. Manual-trigger only; no scheduled monthly generation exists yet.</p>
+    </div>
+
+    <div class="field-row">
+      <label>
+        From
+        <input type="date" [value]="soc2FromDate()" (change)="onSoc2FromDateChange($any($event.target).value)" />
+      </label>
+      <label>
+        To
+        <input type="date" [value]="soc2ToDate()" (change)="onSoc2ToDateChange($any($event.target).value)" />
+      </label>
+      <button class="btn" type="button" [disabled]="soc2Generating()" (click)="generateSoc2()">
+        {{ soc2Generating() ? 'Generating…' : 'Generate & Download PDF' }}
+      </button>
+    </div>
+
+    @if (soc2ErrorMessage()) {
+      <p class="error-message">{{ soc2ErrorMessage() }}</p>
+    }
+
+    <div class="report-contents">
+      <h3>Report contents</h3>
+      <ul>
+        <li>Processing integrity — audit-trail hash-chain verification</li>
+        <li>Change management — configuration changes by action type</li>
+        <li>Access control — authorization denials by permission code</li>
+        <li>Availability — endpoint health check uptime percentage per endpoint</li>
+        <li>Security incidents by severity</li>
+      </ul>
+    </div>
+  </div>
+</div>

@@ -32,6 +32,16 @@ public static class ObservabilityServiceCollectionExtensions
         services.AddSingleton<IPipelineMetrics>(metrics);
         services.AddSingleton<IMetricsSnapshotProvider>(metrics);
 
+        // Same split, for outbound API calls (API Analytics) instead of pipeline runs.
+        var apiMetrics = new FhirBridgeApiMetrics();
+        services.AddSingleton(apiMetrics);
+        services.AddSingleton<IApiMetrics>(apiMetrics);
+        services.AddSingleton<IApiMetricsSnapshotProvider>(apiMetrics);
+
+        // Live CPU/memory for the current process — backs System Health's "this process" row. No OTel export of
+        // its own; it's a point-in-time diagnostic read, not a time-series metric worth shipping to a backend.
+        services.AddSingleton<IProcessHealthProvider, ProcessHealthProvider>();
+
         if (!options.Enabled)
         {
             return services;
@@ -77,7 +87,8 @@ public static class ObservabilityServiceCollectionExtensions
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
-                    .AddMeter(FhirBridgeMetrics.MeterName);
+                    .AddMeter(FhirBridgeMetrics.MeterName)
+                    .AddMeter(FhirBridgeApiMetrics.MeterName);
 
                 if (!string.IsNullOrWhiteSpace(options.OtlpEndpoint))
                 {

@@ -1,0 +1,75 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Data Access Logs</h1>
+    <p class="page-sub">Who accessed which patient/resource, when, and why — PHI-free by design (identifiers only).</p>
+  </div>
+
+  <div class="filter-bar">
+    <input
+      type="search"
+      class="correlation-input"
+      placeholder="Filter by Correlation ID…"
+      [value]="correlationId()"
+      (input)="onCorrelationIdChange($any($event.target).value)"
+      (keyup.enter)="load()"
+    />
+    <button class="btn" type="button" (click)="load()">Search</button>
+    <button class="btn btn-ghost" type="button" (click)="reset()">Reset</button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="occurredOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Timestamp</th>
+          <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actor">
+          <th mat-header-cell *matHeaderCellDef>User</th>
+          <td mat-cell *matCellDef="let r">{{ r.actor }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="patientId">
+          <th mat-header-cell *matHeaderCellDef>Patient</th>
+          <td mat-cell *matCellDef="let r"><span class="mono">{{ r.patientId || '—' }}</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="resourceType">
+          <th mat-header-cell *matHeaderCellDef>Resource</th>
+          <td mat-cell *matCellDef="let r">{{ r.resourceType }}<span class="mono" *ngIf="r.resourceId">/{{ r.resourceId }}</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="action">
+          <th mat-header-cell *matHeaderCellDef>Action</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class.status-success]="r.action === 'Allowed'" [class.status-fail]="r.action === 'Denied'">
+              {{ r.action }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="purpose">
+          <th mat-header-cell *matHeaderCellDef>Purpose</th>
+          <td mat-cell *matCellDef="let r">{{ r.purpose || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="correlationId">
+          <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.correlationId || '—' }}</code></td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">No data access entries found.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+  </div>
+</div>

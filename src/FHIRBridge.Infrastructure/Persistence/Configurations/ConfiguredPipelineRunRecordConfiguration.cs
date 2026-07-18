@@ -20,8 +20,10 @@ public sealed class ConfiguredPipelineRunRecordConfiguration : IEntityTypeConfig
         builder.Property(x => x.StartedOnUtc).IsRequired();
         builder.Property(x => x.CompletedOnUtc).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.CorrelationId).HasMaxLength(100);
 
         builder.HasIndex(x => x.StartedOnUtc);
         builder.HasIndex(x => x.Status);
+        builder.HasIndex(x => x.CorrelationId);
     }
 }

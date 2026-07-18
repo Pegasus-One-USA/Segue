@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Governance;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Application.Services;
@@ -17,6 +18,7 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly ICurrentUserService _currentUserService;
     private readonly IEmailSender _emailSender;
     private readonly ITotpService _totpService;
+    private readonly IGovernanceLogger _governanceLogger;
     private readonly LocalAuthOptions _localAuthOptions;
 
     public LocalAuthService(
@@ -26,6 +28,7 @@ public sealed class LocalAuthService : ILocalAuthService
         ICurrentUserService currentUserService,
         IEmailSender emailSender,
         ITotpService totpService,
+        IGovernanceLogger governanceLogger,
         IOptions<LocalAuthOptions> localAuthOptions)
     {
         _repository = repository;
@@ -34,6 +37,7 @@ public sealed class LocalAuthService : ILocalAuthService
         _currentUserService = currentUserService;
         _emailSender = emailSender;
         _totpService = totpService;
+        _governanceLogger = governanceLogger;
         _localAuthOptions = localAuthOptions.Value;
     }
 
@@ -48,6 +52,10 @@ public sealed class LocalAuthService : ILocalAuthService
         // repeated attempts don't extend the window silently.
         if (user is not null && user.IsLockedOut(DateTime.UtcNow))
         {
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("Local", Success: false, email, "Account is locked out"), cancellationToken);
+            await _governanceLogger.LogSecurityEventAsync(
+                new SecurityEventEntry("LoginAttemptWhileLocked", "Medium", email), cancellationToken);
             throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
         }
 
@@ -64,8 +72,18 @@ public sealed class LocalAuthService : ILocalAuthService
                 user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
                     TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
                 await _repository.UpdateUserAsync(user, cancellationToken);
+
+                if (user.IsLockedOut(DateTime.UtcNow))
+                {
+                    await _governanceLogger.LogSecurityEventAsync(
+                        new SecurityEventEntry("AccountLockedThresholdReached", "High", email,
+                            $"{_localAuthOptions.Lockout.MaxFailedAttempts} consecutive failed login attempts"),
+                        cancellationToken);
+                }
             }
 
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("Local", Success: false, email, "Invalid email or password"), cancellationToken);
             throw new InvalidOperationException("Invalid email or password.");
         }
 
@@ -122,6 +140,8 @@ public sealed class LocalAuthService : ILocalAuthService
             user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
                 TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
             await _repository.UpdateUserAsync(user, cancellationToken);
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("MFA", Success: false, user.Email, "Invalid MFA code"), cancellationToken);
             throw new InvalidOperationException("A valid MFA code is required.");
         }
 
@@ -134,6 +154,8 @@ public sealed class LocalAuthService : ILocalAuthService
     {
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
+        await _governanceLogger.LogAuthenticationAsync(
+            new AuthenticationEntry("Local", Success: true, user.Email), cancellationToken);
 
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
@@ -269,6 +291,8 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.ClearRefreshToken();
         await _repository.UpdateUserAsync(user, cancellationToken);
+        await _governanceLogger.LogAuthenticationAsync(
+            new AuthenticationEntry("Logout", Success: true, user.Email), cancellationToken);
     }
 
     private async Task<LocalLoginResponse> CreateLoginResponseAsync(

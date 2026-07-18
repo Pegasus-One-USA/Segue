@@ -38,6 +38,16 @@ public sealed class InMemoryConfiguredPipelineRunRepository : IConfiguredPipelin
         }
     }
 
+    public Task<ConfiguredPipelineRunDto?> GetByCorrelationIdAsync(
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult(_runs.FirstOrDefault(x => x.CorrelationId == correlationId));
+        }
+    }
+
     public Task SetEnabledAsync(
         Guid pipelineRunId,
         bool isEnabled,

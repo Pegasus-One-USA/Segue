@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,17 +16,20 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
 {
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly IProcessedMessageStore _processedMessageStore;
+    private readonly IGovernanceLogger _governanceLogger;
     private readonly MessageProcessingOptions _options;
     private readonly ILogger<PipelineRunCommandHandler> _logger;
 
     public PipelineRunCommandHandler(
         IConfiguredPipelineService pipelineService,
         IProcessedMessageStore processedMessageStore,
+        IGovernanceLogger governanceLogger,
         IOptions<MessageProcessingOptions> options,
         ILogger<PipelineRunCommandHandler> logger)
     {
         _pipelineService = pipelineService;
         _processedMessageStore = processedMessageStore;
+        _governanceLogger = governanceLogger;
         _options = options.Value;
         _logger = logger;
     }
@@ -54,7 +58,15 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
             _options,
             _logger,
             $"Pipeline run command {command.MessageId}",
-            cancellationToken);
+            cancellationToken,
+            onRetryAsync: (attempt, delayMs, exception, token) => _governanceLogger.LogRetryAsync(
+                new RetryEntry(
+                    $"Pipeline run command {command.MessageId}",
+                    attempt,
+                    delayMs,
+                    exception.Message,
+                    command.CorrelationId),
+                token));
 
         // A run that completed but reported Failed is dead-lettered (no point retrying a deterministic failure).
         if (run is not null && string.Equals(run.Status, "Failed", StringComparison.OrdinalIgnoreCase))

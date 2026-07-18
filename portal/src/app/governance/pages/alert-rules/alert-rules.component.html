@@ -1,0 +1,87 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Alert Rules</h1>
+    <p class="page-sub">Real, evaluated conditions — count of a SecurityEvent type within a time window exceeding a threshold. Evaluated every few minutes; firing sends a real email and records the alert.</p>
+  </div>
+
+  <div class="filter-bar">
+    <button class="btn" type="button" (click)="toggleForm()">{{ showForm() ? 'Cancel' : '+ New Rule' }}</button>
+  </div>
+
+  @if (showForm()) {
+    <div class="form-card">
+      <div class="field-row">
+        <label>Name<input type="text" [ngModel]="form().name" (ngModelChange)="updateForm('name', $event)" /></label>
+        <label>Event Type<input type="text" placeholder="e.g. LockoutThreshold" [ngModel]="form().eventTypeFilter" (ngModelChange)="updateForm('eventTypeFilter', $event)" /></label>
+      </div>
+      <div class="field-row">
+        <label>Threshold Count<input type="number" [ngModel]="form().thresholdCount" (ngModelChange)="updateForm('thresholdCount', $event)" /></label>
+        <label>Window (minutes)<input type="number" [ngModel]="form().windowMinutes" (ngModelChange)="updateForm('windowMinutes', $event)" /></label>
+        <label>Severity
+          <select [ngModel]="form().severity" (ngModelChange)="updateForm('severity', $event)">
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="wide">Recipients (comma-separated emails)<input type="text" [ngModel]="form().recipients" (ngModelChange)="updateForm('recipients', $event)" /></label>
+      </div>
+      @if (errorMessage()) {
+        <p class="error-message">{{ errorMessage() }}</p>
+      }
+      <button class="btn" type="button" (click)="submit()">Create</button>
+    </div>
+  }
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="rules()" class="data-table">
+
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Rule</th>
+          <td mat-cell *matCellDef="let r">{{ r.name }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="eventTypeFilter">
+          <th mat-header-cell *matHeaderCellDef>Condition</th>
+          <td mat-cell *matCellDef="let r">count({{ r.eventTypeFilter }}, {{ r.windowMinutes }}min) &gt;= {{ r.thresholdCount }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="threshold">
+          <th mat-header-cell *matHeaderCellDef>Threshold</th>
+          <td mat-cell *matCellDef="let r">{{ r.thresholdCount }} / {{ r.windowMinutes }}m</td>
+        </ng-container>
+
+        <ng-container matColumnDef="severity">
+          <th mat-header-cell *matHeaderCellDef>Severity</th>
+          <td mat-cell *matCellDef="let r">{{ r.severity }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="recipients">
+          <th mat-header-cell *matHeaderCellDef>Recipients</th>
+          <td mat-cell *matCellDef="let r">{{ r.recipients }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="isEnabled">
+          <th mat-header-cell *matHeaderCellDef>Enabled</th>
+          <td mat-cell *matCellDef="let r">
+            <button class="btn-link" type="button" (click)="toggleEnabled(r)">{{ r.isEnabled ? 'On — disable' : 'Off — enable' }}</button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (rules().length === 0 && !loading()) {
+      <div class="empty-state">No alert rules configured.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+  </div>
+</div>

@@ -1,0 +1,77 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Security Events</h1>
+    <p class="page-sub">Lockouts, threshold breaches, and other security-relevant events outside normal auth/config flows.</p>
+  </div>
+
+  <div class="filter-bar">
+    <input
+      type="search"
+      class="correlation-input"
+      placeholder="Filter by Correlation ID…"
+      [value]="correlationId()"
+      (input)="onCorrelationIdChange($any($event.target).value)"
+      (keyup.enter)="load()"
+    />
+    <button class="btn" type="button" (click)="load()">Search</button>
+    <button class="btn btn-ghost" type="button" (click)="reset()">Reset</button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="occurredOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Timestamp</th>
+          <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="severity">
+          <th mat-header-cell *matHeaderCellDef>Severity</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="severity-badge" [class]="severityClass(r.severity)">{{ r.severity }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="eventType">
+          <th mat-header-cell *matHeaderCellDef>Event</th>
+          <td mat-cell *matCellDef="let r">{{ r.eventType }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="userEmail">
+          <th mat-header-cell *matHeaderCellDef>User</th>
+          <td mat-cell *matCellDef="let r">{{ r.userEmail || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="ipAddress">
+          <th mat-header-cell *matHeaderCellDef>IP Address</th>
+          <td mat-cell *matCellDef="let r"><span class="mono">{{ r.ipAddress || '—' }}</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="resolved">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class.status-success]="r.resolved" [class.status-fail]="!r.resolved">
+              {{ r.resolved ? 'Resolved' : 'Open' }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="correlationId">
+          <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.correlationId || '—' }}</code></td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">No security events found.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+  </div>
+</div>

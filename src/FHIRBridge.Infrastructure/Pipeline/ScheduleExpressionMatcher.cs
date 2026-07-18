@@ -54,6 +54,30 @@ public static class ScheduleExpressionMatcher
         return new DateTime(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, DateTimeKind.Utc);
     }
 
+    /// <summary>
+    /// Scans forward minute-by-minute from <paramref name="fromUtc"/> (exclusive) for the next matching slot —
+    /// backs the Scheduler summary screen's "Next Run" column. Returns null if nothing matches within
+    /// <paramref name="maxMinutesToScan"/> (default 7 days — generous headroom over any realistic cron cadence).
+    /// </summary>
+    public static DateTime? NextDueAfter(string? scheduleExpression, DateTime fromUtc, int maxMinutesToScan = 10080)
+    {
+        if (string.IsNullOrWhiteSpace(scheduleExpression))
+        {
+            return null;
+        }
+
+        var slot = TruncateToMinuteUtc(fromUtc).AddMinutes(1);
+        for (var i = 0; i < maxMinutesToScan; i++, slot = slot.AddMinutes(1))
+        {
+            if (IsDue(scheduleExpression, slot))
+            {
+                return slot;
+            }
+        }
+
+        return null;
+    }
+
     public static bool IsDue(string? scheduleExpression, DateTime utcNow)
     {
         if (string.IsNullOrWhiteSpace(scheduleExpression))

@@ -105,12 +105,65 @@ export const SOURCE_DISCOVERY_ENDPOINTS = {
 
 // ─── Execution History (WorkflowEndpoints — api/v1/workflow-runs) ──────────────
 // Backs the Runtime Plane's execution history (the path "Run" and interactive EHR/standalone launches actually
-// take). The Configured Pipeline has its own parallel route-execution history under /pipeline-runs/route-executions,
-// used only by the route/schedule/webhook path — not currently surfaced in the portal since it has no UI trigger.
+// take). See PIPELINE_RUNS_ENDPOINTS below for the Configured Pipeline plane's parallel history.
 export const EXECUTION_HISTORY_ENDPOINTS = {
   list:      `${API_V1_BASE}/workflow-runs`,
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
+};
+
+// ─── Pipeline Executions (PipelineRunsController — api/v1/pipeline-runs) ───────
+// The Configured Pipeline plane's route-execution history — scheduler/webhook-triggered runs against
+// ResourcePipelineRoute, distinct from the Runtime DAG plane above. UnifiedAdmin-gated server-side.
+export const PIPELINE_RUNS_ENDPOINTS = {
+  routeExecutions:         `${API_V1_BASE}/pipeline-runs/route-executions`,
+  routeExecutionById:      (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}`,
+  routeExecutionResources: (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}/resources`,
+};
+
+// ─── Governance (GovernanceController — api/v1/governance) ─────────────────────
+// Read-only: audit trail, authentication log, patient/resource data-access log, security events.
+// Every log type shares the same `correlationId` query param, letting the portal jump from one
+// execution's CorrelationId straight to everything else that happened during it.
+export const GOVERNANCE_ENDPOINTS = {
+  auditLogs:          `${API_V1_BASE}/governance/audit-logs`,
+  authenticationLogs: `${API_V1_BASE}/governance/authentication-logs`,
+  dataAccessLogs:     `${API_V1_BASE}/governance/data-access-logs`,
+  securityEvents:     `${API_V1_BASE}/governance/security-events`,
+  authorizationLogs:  `${API_V1_BASE}/governance/authorization-logs`,
+  hipaaAuditReport:   `${API_V1_BASE}/governance/reports/hipaa-audit`,
+  soc2EvidenceReport: `${API_V1_BASE}/governance/reports/soc2-evidence`,
+  smartLaunchLogs:    `${API_V1_BASE}/governance/smart-launch-logs`,
+  correlationSearch:  `${API_V1_BASE}/governance/correlation-search`,
+  retentionPolicies:  `${API_V1_BASE}/governance/retention-policies`,
+  logSettings:        `${API_V1_BASE}/governance/log-settings`,
+  archives:           `${API_V1_BASE}/governance/archives`,
+  restoreArchive:     (dataClass: string) => `${API_V1_BASE}/governance/archives/${encodeURIComponent(dataClass)}/restore`,
+  dataLineage:        (resourceRecordId: string) => `${API_V1_BASE}/governance/data-lineage/${resourceRecordId}`,
+  revealLineageField: (resourceRecordId: string, targetField: string) =>
+    `${API_V1_BASE}/governance/data-lineage/${resourceRecordId}/fields/${encodeURIComponent(targetField)}/reveal`,
+  alertRules:         `${API_V1_BASE}/governance/alert-rules`,
+  alertRuleById:      (id: string) => `${API_V1_BASE}/governance/alert-rules/${id}`,
+  setAlertRuleEnabled: (id: string, isEnabled: boolean) => `${API_V1_BASE}/governance/alert-rules/${id}/enabled?isEnabled=${isEnabled}`,
+  alerts:             `${API_V1_BASE}/governance/alerts`,
+  acknowledgeAlert:   (id: string) => `${API_V1_BASE}/governance/alerts/${id}/acknowledge`,
+};
+
+// ─── Operations (OperationsController — api/v1/operations) ─────────────────────
+// Read-only: scheduler dispatch history, retry history, error logs, outbound API request logs.
+export const OPERATIONS_ENDPOINTS = {
+  schedulerHistory: `${API_V1_BASE}/operations/scheduler-history`,
+  retryHistory:     `${API_V1_BASE}/operations/retry-history`,
+  errors:           `${API_V1_BASE}/operations/errors`,
+  apiRequests:      `${API_V1_BASE}/operations/api-requests`,
+  exports:          `${API_V1_BASE}/operations/exports`,
+  notifications:    `${API_V1_BASE}/operations/notifications`,
+  validationFailures: `${API_V1_BASE}/operations/validation-failures`,
+  endpointHealth:     `${API_V1_BASE}/operations/endpoint-health`,
+  queueMonitor:       `${API_V1_BASE}/operations/queue-monitor`,
+  apiAnalytics:       `${API_V1_BASE}/operations/api-analytics`,
+  systemHealth:       `${API_V1_BASE}/operations/system-health`,
+  schedulerSummary:   `${API_V1_BASE}/operations/scheduler-summary`,
 };
 
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────

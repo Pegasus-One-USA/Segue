@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Messaging;
+using FHIRBridge.Governance;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -45,6 +46,12 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Governance: log every outbound HTTP call's method/URL/status/duration (never headers/tokens/bodies).
+        // Registered before the resilience handler below so its duration reflects the full retried call, not
+        // just the final attempt.
+        services.AddTransient<ApiRequestLoggingHandler>();
+        services.ConfigureHttpClientDefaults(http => http.AddHttpMessageHandler<ApiRequestLoggingHandler>());
+
         // Phase 1.2: standard resilience (retry + circuit breaker + attempt/total timeouts) on EVERY outbound
         // HttpClient (EHR sources, REST/FHIR-repo/blob/S3/SFTP-N/A/terminology/source-test). Applied as a client
         // default so all IHttpClientFactory clients are covered. Timeouts are generous so legitimate long FHIR
@@ -79,6 +86,22 @@ public static class DependencyInjection
         // Registered unconditionally — it has no DB dependency of its own.
         services.AddSingleton<IPhiFieldEncryptor, AesGcmPhiFieldEncryptor>();
 
+        // Endpoint health for destinations — registry over switch, one registration per DestinationType this
+        // provider covers (see its remarks for which types those are). Registered unconditionally — no DB
+        // dependency of its own; EndpointHealthCheckWorker resolves ISecretProvider/destinations lazily.
+        foreach (var destinationType in new[]
+        {
+            Domain.Enums.DestinationType.BlobStorage, Domain.Enums.DestinationType.Csv, Domain.Enums.DestinationType.Excel,
+            Domain.Enums.DestinationType.PowerBi, Domain.Enums.DestinationType.Snowflake, Domain.Enums.DestinationType.S3,
+            Domain.Enums.DestinationType.Ndjson, Domain.Enums.DestinationType.Parquet, Domain.Enums.DestinationType.Tableau,
+            Domain.Enums.DestinationType.Pdf, Domain.Enums.DestinationType.Avro, Domain.Enums.DestinationType.Protobuf,
+        })
+        {
+            services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider>(sp =>
+                new Destinations.TargetReachabilityDestinationHealthCheckProvider(
+                    destinationType, sp.GetRequiredService<ISecretProvider>(), sp.GetRequiredService<IHttpClientFactory>()));
+        }
+
         // Registered unconditionally (before the in-memory/DB branch below) — it resolves
         // IAllowedCorsOriginRepository lazily through a scope, so it works against either repository.
         services.AddSingleton<IAllowedCorsOriginsCache, InProcessAllowedCorsOriginsCache>();
@@ -98,6 +121,18 @@ public static class DependencyInjection
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
+
+            // No database: nothing to persist governance events to, nothing to read them back from.
+            services.AddSingleton<IGovernanceLogger, NullGovernanceLogger>();
+            services.AddSingleton<IGovernanceQueryService, EmptyGovernanceQueryService>();
+            services.AddSingleton<IComplianceReportService, NullComplianceReportService>();
+            services.AddSingleton<IAuditChainVerificationService, NullAuditChainVerificationService>();
+            services.AddSingleton<IGovernanceLogArchiveWriter, NullGovernanceLogArchiveWriter>();
+            services.AddScoped<ISystemHealthService, InMemorySystemHealthService>();
+            services.AddScoped<ISchedulerSummaryService, InMemorySchedulerSummaryService>();
+            services.AddScoped<IDataLineageService, InMemoryDataLineageService>();
+            services.AddScoped<IAlertRuleService, InMemoryAlertRuleService>();
+            services.AddScoped<IAlertEvaluationService, NullAlertEvaluationService>();
         }
         else
         {
@@ -105,6 +140,17 @@ public static class DependencyInjection
             // The API host registers an HTTP-aware ICurrentUserService that takes precedence over this.
             services.TryAddScoped<ICurrentUserService, SystemCurrentUserService>();
             services.AddScoped<AuditingSaveChangesInterceptor>();
+            services.AddScoped<IGovernanceLogger, EfGovernanceLogger>();
+            services.AddScoped<IGovernanceQueryService, EfGovernanceQueryService>();
+            services.AddScoped<IAuditChainVerificationService, EfAuditChainVerificationService>();
+            services.AddScoped<IComplianceReportService, QuestPdfComplianceReportService>();
+            services.AddScoped<IGovernanceLogArchiveWriter, EfGovernanceLogArchiveWriter>();
+            services.Configure<GovernanceArchiveOptions>(configuration.GetSection("Governance:Archive"));
+            services.AddScoped<ISystemHealthService, EfSystemHealthService>();
+            services.AddScoped<ISchedulerSummaryService, EfSchedulerSummaryService>();
+            services.AddScoped<IDataLineageService, EfDataLineageService>();
+            services.AddScoped<IAlertRuleService, EfAlertRuleService>();
+            services.AddScoped<IAlertEvaluationService, EfAlertEvaluationService>();
 
             services.AddDbContext<FHIRBridgeDbContext>((sp, options) =>
             {
@@ -131,6 +177,33 @@ public static class DependencyInjection
             services.AddScoped<EfExecutionResourceHistoryRecorder>();
             services.AddScoped<IExecutionResourceHistoryRecorder>(sp => sp.GetRequiredService<EfExecutionResourceHistoryRecorder>());
             services.AddScoped<IPurgeableStore>(sp => sp.GetRequiredService<EfExecutionResourceHistoryRecorder>());
+
+            // Operations-log retention: every governance table EXCEPT the four immutable, 7-year HIPAA audit
+            // tables (AuditLog, AuthenticationLog, SmartLaunchLog, DataAccessLog — deliberately never registered
+            // here) is purgeable per the configured retention policy (see RetentionPurgeService/ConfiguredRetentionPolicyService).
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.SchedulerHistory>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "SchedulerHistory", x => x.RunTimeUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.RetryHistory>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "RetryHistory", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.ErrorLog>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "ErrorLog", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.ApiRequestLog>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "ApiRequestLog", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.ExportHistory>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "ExportHistory", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.NotificationHistory>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "NotificationHistory", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.ValidationFailureLog>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "ValidationFailureLog", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.EndpointHealthCheck>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "EndpointHealthCheck", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.SecurityEvent>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "SecurityEvent", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.AuthorizationLog>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "AuthorizationLog", x => x.OccurredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.AlertHistoryEntry>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "AlertHistoryEntry", x => x.FiredOnUtc));
+
             services.AddScoped<ISourceCapabilityRepository, EfSourceCapabilityRepository>();
 
             // Durable, multi-instance idempotency backed by the ProcessedMessages table.

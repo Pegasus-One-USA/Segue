@@ -12,6 +12,8 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.DTOs;
@@ -38,6 +40,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IResourceNormalizationService _normalizationService;
     private readonly IMappedRecordNormalizationService _mappedRecordNormalizationService;
     private readonly IGovernancePolicyService _governancePolicyService;
+    private readonly IGovernanceLogger _governanceLogger;
     private readonly IDeIdentificationService _deIdentificationService;
     private readonly IDataSetDeIdentificationService? _dataSetDeIdentificationService;
     private readonly IFhirBulkExportClient? _bulkExportClient;
@@ -62,7 +65,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IFhirBulkExportClient? bulkExportClient = null,
         IPipelineMetrics? pipelineMetrics = null,
         IncrementalSyncOptions? incrementalSyncOptions = null,
-        IDataSetDeIdentificationService? dataSetDeIdentificationService = null)
+        IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
+        IGovernanceLogger? governanceLogger = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -75,6 +79,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _normalizationService = normalizationService ?? new PassThroughResourceNormalizationService();
         _mappedRecordNormalizationService = mappedRecordNormalizationService ?? new PassThroughMappedRecordNormalizationService();
         _governancePolicyService = governancePolicyService ?? new DefaultGovernancePolicyService();
+        _governanceLogger = governanceLogger ?? new NullGovernanceLogger();
         _deIdentificationService = deIdentificationService ?? new PassThroughDeIdentificationService();
         _bulkExportClient = bulkExportClient;
         _pipelineMetrics = pipelineMetrics;
@@ -245,7 +250,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     var writeContext = new PipelineWriteContext(
                         request.AllowInlineDownload,
                         route.MappingProfile.Name,
-                        runStartedAtUtc);
+                        runStartedAtUtc,
+                        request.CorrelationId);
 
                     var result = await ExecuteRouteAsync(
                         config,
@@ -363,7 +369,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 var writeContext = new PipelineWriteContext(
                     AllowInlineDelivery: false,
                     route.MappingProfile.Name,
-                    runStartedAtUtc);
+                    runStartedAtUtc,
+                    request.CorrelationId);
 
                 var result = await ExecuteRouteAsync(
                     config,
@@ -508,6 +515,17 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     cancellationToken);
             }
 
+            await _governanceLogger.LogExportAsync(
+                new ExportEntry(
+                    destination.Name,
+                    destination.DestinationType.ToString(),
+                    writtenCount,
+                    writtenCount > 0 ? "Succeeded" : "NoData",
+                    writeResult.InlineDownload?.Content.Length,
+                    pipelineRunId,
+                    correlationId),
+                cancellationToken);
+
             var routeHadErrors = errors.Count > errorCountBefore;
             var routeStatus = !routeHadErrors
                 ? PipelineRunRouteExecutionStatus.Completed
@@ -590,6 +608,19 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     correlationId),
                 cancellationToken);
 
+            // HIPAA §164.312(b) data-access evidence: every access decision — allowed or denied — is
+            // recorded PHI-free (identifiers only), regardless of what happens to the resource afterward.
+            await _governanceLogger.LogDataAccessAsync(
+                new DataAccessEntry(
+                    resourceType,
+                    resource.ResourceId,
+                    governanceDecision.IsAllowed ? "Allowed" : "Denied",
+                    PatientId: resourceType == "Patient" ? resource.ResourceId : null,
+                    Purpose: "RouteResourceAccess",
+                    PipelineRunId: pipelineRunId,
+                    CorrelationId: correlationId),
+                cancellationToken);
+
             if (!governanceDecision.IsAllowed)
             {
                 var denialReason = governanceDecision.DenialReason ?? "Governance policy denied resource access.";
@@ -620,6 +651,19 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 normalizationResult.DataQualityScore,
                 normalizationResult.MasterPatientId,
                 cancellationToken);
+
+            if (normalizationResult.Warnings.Count > 0)
+            {
+                await _governanceLogger.LogValidationFailureAsync(
+                    new ValidationFailureEntry(
+                        resourceType,
+                        resource.ResourceId,
+                        normalizationResult.Warnings,
+                        normalizationResult.DataQualityScore,
+                        pipelineRunId,
+                        correlationId),
+                    cancellationToken);
+            }
 
             if (governanceDecision.RequiresDeIdentification)
             {
@@ -706,7 +750,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             TriggeredBy: triggeredBy,
             TriggerType: triggerType,
             InlineDownload: inlineDownload,
-            DownloadUrls: downloadUrls.Count == 0 ? null : downloadUrls);
+            DownloadUrls: downloadUrls.Count == 0 ? null : downloadUrls,
+            CorrelationId: correlationId);
 
         await _pipelineRunRepository.AddAsync(pipelineRun, cancellationToken);
 

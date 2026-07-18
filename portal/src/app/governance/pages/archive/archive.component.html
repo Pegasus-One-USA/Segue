@@ -1,0 +1,54 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Archive</h1>
+    <p class="page-sub">Every retention purge archives expiring rows to a durable NDJSON file before deleting them. This lists the most recent archive run per log type.</p>
+  </div>
+
+  @if (restoreMessage()) {
+    <p class="info-message">{{ restoreMessage() }}</p>
+  }
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="dataClass">
+          <th mat-header-cell *matHeaderCellDef>Log Type</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.dataClass }}</code></td>
+        </ng-container>
+
+        <ng-container matColumnDef="archivedThroughUtc">
+          <th mat-header-cell *matHeaderCellDef>Archived Through</th>
+          <td mat-cell *matCellDef="let r">{{ r.archivedThroughUtc | date:'MMM d, y, h:mm a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="recordCount">
+          <th mat-header-cell *matHeaderCellDef>Rows</th>
+          <td mat-cell *matCellDef="let r">{{ r.recordCount }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="fileLocation">
+          <th mat-header-cell *matHeaderCellDef>Location</th>
+          <td mat-cell *matCellDef="let r"><span class="mono truncate">{{ r.fileLocation }}</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="restore">
+          <th mat-header-cell *matHeaderCellDef>Restore</th>
+          <td mat-cell *matCellDef="let r">
+            <button class="btn btn-ghost" type="button" (click)="restore(r.dataClass)">Restore range…</button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">Nothing has been archived yet — a log type appears here after its first retention purge run.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+  </div>
+</div>

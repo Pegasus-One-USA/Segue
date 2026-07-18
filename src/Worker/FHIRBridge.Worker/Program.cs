@@ -2,6 +2,7 @@ using FHIRBridge.Application;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
@@ -32,6 +33,10 @@ builder.Logging.AddSerilog(serilogLogger, dispose: true);
 // single-instance dev machine (see FHIRBridge.Api/Program.cs for the production KeyRingPath guidance).
 builder.Services.AddDataProtection().SetApplicationName("FHIRBridge");
 
+// Same reasoning as the Api host — see its Program.cs comment. AddAspNetCoreInstrumentation() is a no-op here
+// (no ASP.NET Core pipeline in this host), but HttpClient/.NET-runtime/custom-meter instrumentation still applies.
+builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.Worker");
+
 builder.Services
     .AddFHIRBridgeApplication()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
@@ -41,6 +46,42 @@ builder.Services
 
 builder.Services.Configure<RuntimeWorkerOptions>(builder.Configuration.GetSection("RuntimeWorker"));
 builder.Services.AddHostedService<Worker>();
+
+// Scheduling migration (2026-07-18): the queue-based path is now the live scheduler by default —
+// ScheduleDispatcherWorker atomically claims due routes (IScheduleEvaluationService.ClaimDueRunsAsync, verified
+// safe under concurrent instances via ResourcePipelineRoute's RowVersion optimistic-concurrency token) and enqueues
+// a PipelineRunCommand; PipelineRunCommandProcessor consumes it. Worker.RunDueRoutesAsync (direct-call polling) is
+// now off by default — see RuntimeWorkerOptions.DirectRouteSchedulingEnabled — kept only as a fast-rollback switch.
+builder.Services.Configure<ScheduleDispatcherOptions>(builder.Configuration.GetSection("ScheduleDispatcher"));
+builder.Services.AddHostedService<ScheduleDispatcherWorker>();
+builder.Services.AddHostedService<PipelineRunCommandProcessor>();
+
+// Closes a separate, previously-silent gap found while reviewing the scheduling path: WebhookIngestionController
+// (Api host) already enqueues a WebhookIngestionCommand on every inbound webhook via IWebhookIngestionDispatcher —
+// with no consumer running, those were silently never processed in any transport configuration. No double-claim
+// race to resolve here; registering this was always safe, it just hadn't been done.
+builder.Services.AddHostedService<WebhookIngestionCommandProcessor>();
+
+builder.Services.Configure<EndpointHealthCheckOptions>(builder.Configuration.GetSection("EndpointHealthCheck"));
+builder.Services.AddHostedService<EndpointHealthCheckWorker>();
+
+// Retention enforcement: was built (RetentionPurgeService/ConfiguredRetentionPolicyService/the purgeable-store
+// registrations in AddFHIRBridgeInfrastructure) but never actually hosted anywhere until now, so it never ran.
+// Enabled by default (RetentionPurgeOptions.Enabled = true) — this starts genuinely deleting expired rows from
+// every registered IPurgeableStore on a 24h timer. The four immutable HIPAA audit tables are never purgeable
+// (see GovernanceLogPurgeableStore's remarks) regardless of this setting.
+builder.Services.Configure<RetentionPurgeOptions>(builder.Configuration.GetSection("RetentionPurge"));
+builder.Services.AddHostedService<RetentionPurgeWorker>();
+
+// Recurring AuditLog hash-chain tamper check — previously only verified on-demand inside Compliance Report
+// generation. Enabled by default; raises a Critical SecurityEvent if the chain is ever found broken.
+builder.Services.Configure<AuditChainVerificationOptions>(builder.Configuration.GetSection("AuditChainVerification"));
+builder.Services.AddHostedService<AuditChainVerificationWorker>();
+
+// Alert Engine: evaluates every enabled AlertRule against SecurityEvents on a timer, firing real alerts
+// (AlertHistoryEntry + email) — see IAlertEvaluationService.
+builder.Services.Configure<AlertEvaluationOptions>(builder.Configuration.GetSection("AlertEvaluation"));
+builder.Services.AddHostedService<AlertEvaluationWorker>();
 
 // AddFHIRBridgeApplication/Infrastructure register the full application surface (auth, user management, etc.) that
 // only the Api host actually wires end-to-end (IDataProtectionProvider, IAccessTokenIssuer, ...). The Worker never
@@ -53,6 +94,23 @@ builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProvider
 }));
 
 var host = builder.Build();
+
+// Fail fast rather than silently double-dispatch: direct-call route polling (Worker.RunDueRoutesAsync) and the
+// queue-based dispatcher (ScheduleDispatcherWorker) use unrelated due-detection/claim logic — running both at
+// once has no protection against processing the same due routes twice. See RuntimeWorkerOptions.
+// DirectRouteSchedulingEnabled's remarks; this should only ever be true as a deliberate, temporary rollback with
+// ScheduleDispatcher:Enabled explicitly turned off first.
+{
+    var runtimeWorkerOptions = host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<RuntimeWorkerOptions>>().Value;
+    var scheduleDispatcherOptions = host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ScheduleDispatcherOptions>>().Value;
+    if (runtimeWorkerOptions.DirectRouteSchedulingEnabled && scheduleDispatcherOptions.Enabled)
+    {
+        throw new InvalidOperationException(
+            "RuntimeWorker:DirectRouteSchedulingEnabled and ScheduleDispatcher:Enabled are both true. " +
+            "Running both scheduling paths at once can double-dispatch the same due routes — disable one before starting. " +
+            "See RuntimeWorkerOptions.DirectRouteSchedulingEnabled's remarks.");
+    }
+}
 
 // Applies pending EF migrations, mirroring the Api host's bootstrap — no-ops on the in-memory path (no
 // ConnectionStrings:FHIRBridgeDb configured, so AddFHIRBridgeInfrastructure never registers FHIRBridgeDbContext).

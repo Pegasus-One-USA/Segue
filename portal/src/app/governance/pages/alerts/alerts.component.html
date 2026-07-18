@@ -1,0 +1,62 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Alerts</h1>
+    <p class="page-sub">Real alert-rule firings — each row is an actual evaluated condition that reached its threshold, with a real email sent to its recipients.</p>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="firedOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Time</th>
+          <td mat-cell *matCellDef="let r">{{ r.firedOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="ruleName">
+          <th mat-header-cell *matHeaderCellDef>Rule</th>
+          <td mat-cell *matCellDef="let r">{{ r.ruleName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="severity">
+          <th mat-header-cell *matHeaderCellDef>Severity</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge"
+                  [class.status-critical]="r.severity === 'Critical'"
+                  [class.status-high]="r.severity === 'High'"
+                  [class.status-medium]="r.severity === 'Medium'"
+                  [class.status-low]="r.severity === 'Low'">
+              {{ r.severity }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="summary">
+          <th mat-header-cell *matHeaderCellDef>Summary</th>
+          <td mat-cell *matCellDef="let r">{{ r.summary }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="acknowledged">
+          <th mat-header-cell *matHeaderCellDef>Acknowledged</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.acknowledged) {
+              <span>Yes — {{ r.acknowledgedBy || '—' }} ({{ r.acknowledgedOnUtc | date:'MMM d, h:mm a' }})</span>
+            } @else {
+              <button class="btn-link" type="button" (click)="acknowledge(r)">Acknowledge</button>
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">No alerts have fired.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+  </div>
+</div>

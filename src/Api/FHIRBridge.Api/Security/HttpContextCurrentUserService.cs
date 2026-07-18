@@ -18,9 +18,19 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
         {
             var httpContext = _httpContextAccessor.HttpContext;
             var principal = httpContext?.User;
+
+            // IP/user-agent/correlation are ambient request context, not identity — captured even for
+            // anonymous requests (e.g. a failed login) since those are exactly the events a security
+            // investigation needs this data for.
+            var ipAddress = httpContext?.Connection.RemoteIpAddress?.ToString();
+            var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
+            var correlationId = httpContext?.Request.Headers["X-Correlation-Id"].FirstOrDefault()
+                ?? httpContext?.TraceIdentifier;
+
             if (principal?.Identity?.IsAuthenticated != true)
             {
-                return new CurrentUserInfo(null, null, null, [], false);
+                return new CurrentUserInfo(null, null, null, [], false,
+                    IpAddress: ipAddress, UserAgent: userAgent, CorrelationId: correlationId);
             }
 
             var permissions = principal.Claims
@@ -35,12 +45,9 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
                 CurrentUserClaimReader.GetRoles(principal),
                 true,
                 permissions,
-                IpAddress: httpContext?.Connection.RemoteIpAddress?.ToString(),
-                UserAgent: httpContext?.Request.Headers.UserAgent.ToString(),
-                // Prefer an incoming correlation header (set by a caller/gateway that already tracks one across
-                // hops) over ASP.NET Core's own per-request TraceIdentifier, so a multi-service trace stays joined.
-                CorrelationId: httpContext?.Request.Headers["X-Correlation-Id"].FirstOrDefault()
-                    ?? httpContext?.TraceIdentifier);
+                IpAddress: ipAddress,
+                UserAgent: userAgent,
+                CorrelationId: correlationId);
         }
     }
 }

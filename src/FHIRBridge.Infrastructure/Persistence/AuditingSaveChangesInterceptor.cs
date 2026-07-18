@@ -1,14 +1,21 @@
+using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.SharedKernel.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace FHIRBridge.Infrastructure.Persistence;
 
 /// <summary>
-/// Stamps creation/modification provenance on <see cref="IAuditableEntity"/> rows and converts physical
-/// deletes of <see cref="ISoftDeletable"/> rows into soft deletes, using the current user as the actor.
+/// Stamps creation/modification provenance on <see cref="IAuditableEntity"/> rows, converts physical
+/// deletes of <see cref="ISoftDeletable"/> rows into soft deletes, blocks modification of
+/// <see cref="IAppendOnlyEntity"/> rows, and appends one <see cref="AuditLog"/> row per
+/// <see cref="IAuditableEntity"/> change (config/entity Created/Updated/Deleted) to the same
+/// SaveChanges batch — this is what makes every governed config change show up in the audit trail
+/// without every call site having to remember to log it.
 /// </summary>
 public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 {
@@ -27,13 +34,14 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         return base.SavingChanges(eventData, result);
     }
 
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
         Stamp(eventData.Context);
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
+        await AppendConfigAuditLogsAsync(eventData.Context, cancellationToken);
+        return await base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
     private void Stamp(DbContext? context)
@@ -48,6 +56,12 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 
         foreach (var entry in context.ChangeTracker.Entries())
         {
+            if (entry.Entity is IAppendOnlyEntity && entry.State is EntityState.Modified or EntityState.Deleted)
+            {
+                throw new InvalidOperationException(
+                    $"{entry.Metadata.ClrType.Name} is append-only and cannot be modified or deleted.");
+            }
+
             if (entry.State == EntityState.Deleted && entry.Entity is ISoftDeletable softDeletable)
             {
                 // Never physically delete: flip to a soft delete so audit/lineage references stay resolvable.
@@ -114,5 +128,102 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 entry.State = EntityState.Modified;
             }
         }
+    }
+
+    /// <summary>
+    /// Appends one <see cref="AuditLog"/> row per <see cref="IAuditableEntity"/> Added/Modified/soft-Deleted
+    /// entry in this same SaveChanges batch, chained onto the last persisted row's hash. Async-only: every
+    /// call site in this codebase already uses SaveChangesAsync, so the sync <see cref="Stamp"/> path
+    /// intentionally doesn't duplicate this (a DB round-trip for the previous hash has no sync-safe story
+    /// here without blocking).
+    /// </summary>
+    private async Task AppendConfigAuditLogsAsync(DbContext? context, CancellationToken cancellationToken)
+    {
+        if (context is null)
+        {
+            return;
+        }
+
+        var pending = new List<(EntityEntry Entry, string Action)>();
+        foreach (var entry in context.ChangeTracker.Entries())
+        {
+            if (entry.Entity is not IAuditableEntity)
+            {
+                continue;
+            }
+
+            var action = entry.State switch
+            {
+                EntityState.Added => "Created",
+                EntityState.Modified when entry.Entity is ISoftDeletable { IsDeleted: true } => "Deleted",
+                EntityState.Modified => "Updated",
+                _ => null,
+            };
+
+            if (action is not null)
+            {
+                pending.Add((entry, action));
+            }
+        }
+
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var current = _currentUserService.CurrentUser;
+        var previousHash = await context.Set<AuditLog>()
+            .OrderByDescending(x => x.SequenceNumber)
+            .Select(x => x.EntryHash)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        foreach (var (entry, action) in pending)
+        {
+            var entityId = entry.Property("Id").CurrentValue?.ToString();
+            var entityType = entry.Metadata.ClrType.Name;
+
+            var auditLog = new AuditLog(
+                Guid.NewGuid(),
+                DateTime.UtcNow,
+                current.AuditName,
+                entityType,
+                action,
+                entityType,
+                entityId,
+                entityName: null,
+                oldValueJson: action == "Updated" || action == "Deleted" ? SerializeValues(entry, useOriginalValues: true) : null,
+                newValueJson: SerializeValues(entry, useOriginalValues: false),
+                status: "Success",
+                remarks: null,
+                current.IpAddress,
+                current.UserAgent,
+                current.CorrelationId,
+                previousHash);
+
+            context.Set<AuditLog>().Add(auditLog);
+            previousHash = auditLog.EntryHash;
+        }
+    }
+
+    /// <summary>
+    /// Flattens an entry's own scalar properties to JSON for the audit trail's old/new value columns.
+    /// Skips <c>RowVersion</c> (opaque concurrency token, not a meaningful diff) and any binary column.
+    /// </summary>
+    private static string SerializeValues(EntityEntry entry, bool useOriginalValues)
+    {
+        var values = useOriginalValues ? entry.OriginalValues : entry.CurrentValues;
+        var snapshot = new Dictionary<string, string?>();
+
+        foreach (var property in entry.Properties)
+        {
+            if (property.Metadata.ClrType == typeof(byte[]) || property.Metadata.Name == "RowVersion")
+            {
+                continue;
+            }
+
+            snapshot[property.Metadata.Name] = values[property.Metadata]?.ToString();
+        }
+
+        return JsonSerializer.Serialize(snapshot);
     }
 }

@@ -1,0 +1,52 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>API Analytics</h1>
+    <p class="page-sub">In-process snapshot for this host, sourced from real OpenTelemetry instrumentation on every outbound HTTP call. Resets on restart; does not aggregate across multiple instances.</p>
+  </div>
+
+  @if (loading()) {
+    <div class="empty-state">Loading…</div>
+  }
+
+  @if (!loading() && analytics(); as a) {
+    <div class="fact-grid">
+      <div class="fact-card"><div class="fact-label">Total Requests</div><div class="fact-value">{{ a.totalRequests }}</div></div>
+      <div class="fact-card"><div class="fact-label">Total Errors</div><div class="fact-value">{{ a.totalErrors }}</div></div>
+      <div class="fact-card"><div class="fact-label">Error Rate</div><div class="fact-value">{{ a.errorRatePercent }}%</div></div>
+    </div>
+
+    <h2 class="section-title">Top APIs by Call Count</h2>
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="a.topByCallCount" class="data-table">
+          <ng-container matColumnDef="method"><th mat-header-cell *matHeaderCellDef>Method</th><td mat-cell *matCellDef="let r">{{ r.method }}</td></ng-container>
+          <ng-container matColumnDef="url"><th mat-header-cell *matHeaderCellDef>URL</th><td mat-cell *matCellDef="let r" class="truncate">{{ r.url }}</td></ng-container>
+          <ng-container matColumnDef="callCount"><th mat-header-cell *matHeaderCellDef>Calls</th><td mat-cell *matCellDef="let r">{{ r.callCount }}</td></ng-container>
+          <ng-container matColumnDef="averageDurationMs"><th mat-header-cell *matHeaderCellDef>Avg</th><td mat-cell *matCellDef="let r">{{ r.averageDurationMs }}ms</td></ng-container>
+          <ng-container matColumnDef="p95DurationMs"><th mat-header-cell *matHeaderCellDef>p95</th><td mat-cell *matCellDef="let r">{{ r.p95DurationMs }}ms</td></ng-container>
+          <ng-container matColumnDef="errorCount"><th mat-header-cell *matHeaderCellDef>Errors</th><td mat-cell *matCellDef="let r">{{ r.errorCount }}</td></ng-container>
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+        </table>
+      </div>
+      @if (a.topByCallCount.length === 0) { <div class="empty-state">No outbound API calls recorded yet in this process.</div> }
+    </div>
+
+    <h2 class="section-title">Slowest by Average Duration</h2>
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="a.slowestByAverageDuration" class="data-table">
+          <ng-container matColumnDef="method"><th mat-header-cell *matHeaderCellDef>Method</th><td mat-cell *matCellDef="let r">{{ r.method }}</td></ng-container>
+          <ng-container matColumnDef="url"><th mat-header-cell *matHeaderCellDef>URL</th><td mat-cell *matCellDef="let r" class="truncate">{{ r.url }}</td></ng-container>
+          <ng-container matColumnDef="callCount"><th mat-header-cell *matHeaderCellDef>Calls</th><td mat-cell *matCellDef="let r">{{ r.callCount }}</td></ng-container>
+          <ng-container matColumnDef="averageDurationMs"><th mat-header-cell *matHeaderCellDef>Avg</th><td mat-cell *matCellDef="let r">{{ r.averageDurationMs }}ms</td></ng-container>
+          <ng-container matColumnDef="p95DurationMs"><th mat-header-cell *matHeaderCellDef>p95</th><td mat-cell *matCellDef="let r">{{ r.p95DurationMs }}ms</td></ng-container>
+          <ng-container matColumnDef="errorCount"><th mat-header-cell *matHeaderCellDef>Errors</th><td mat-cell *matCellDef="let r">{{ r.errorCount }}</td></ng-container>
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+        </table>
+      </div>
+      @if (a.slowestByAverageDuration.length === 0) { <div class="empty-state">No outbound API calls recorded yet in this process.</div> }
+    </div>
+  }
+</div>

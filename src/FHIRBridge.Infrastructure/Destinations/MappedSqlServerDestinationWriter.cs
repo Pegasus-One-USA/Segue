@@ -11,20 +11,14 @@ using Microsoft.Data.SqlClient;
 namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
-/// Writes mapped records to SQL Server / Azure SQL, auto-creating the target schema and table.
-/// Supports Insert, Upsert (MERGE on resource type + key column), and CDC write modes.
+/// Writes mapped records to SQL Server / Azure SQL, auto-creating the target schema and table. The table contains
+/// only the mapped destination columns — no system/audit columns are added.
+/// Supports Insert, Upsert (MERGE on an explicit '?key=&lt;ColumnName&gt;' column), and CDC write modes.
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
 /// </summary>
 public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
 {
-    // System-managed columns the writer always emits. A mapping field targeting one of these is ignored (the
-    // system value wins) so the generated CREATE TABLE / INSERT never declares a column twice.
-    private static readonly HashSet<string> ReservedColumns = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "FHIRBridgeRowId", "PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc", "LastUpdatedOnUtc"
-    };
-
     private readonly ISecretProvider _secretProvider;
 
     public MappedSqlServerDestinationWriter(ISecretProvider secretProvider)
@@ -73,7 +67,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             switch (target.WriteMode)
             {
                 case SqlDestinationWriteMode.Upsert:
-                    await UpsertRecordAsync(connection, target.SchemaName, target.TableName, record, target.KeyColumn, cancellationToken);
+                    await UpsertRecordAsync(connection, target.SchemaName, target.TableName, record, target.KeyColumn!, cancellationToken);
                     break;
                 case SqlDestinationWriteMode.Cdc:
                     await InsertRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
@@ -114,21 +108,22 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             .Where(field =>
                 string.IsNullOrWhiteSpace(field.DestinationObject) ||
                 string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
-            .Where(field => !ReservedColumns.Contains(field.TargetField))
             .GroupBy(field => field.TargetField, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
-            .Select(field => $"[{ValidateIdentifier(field.TargetField)}] {GetSqlType(field.ValueType)} NULL");
+            .Select(field => $"[{ValidateIdentifier(field.TargetField)}] {GetSqlType(field.ValueType)} NULL")
+            .ToList();
+
+        if (mappedColumns.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Mapping profile for '{schemaName}.{tableName}' has no mapped fields — a SQL destination needs at least one mapped column.");
+        }
+
         var createTableSql = $"""
             IF OBJECT_ID(N'[{schemaName}].[{tableName}]', N'U') IS NULL
             BEGIN
                 CREATE TABLE [{schemaName}].[{tableName}]
                 (
-                    FHIRBridgeRowId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_FHIRBridgeRowId PRIMARY KEY,
-                    PipelineRunId UNIQUEIDENTIFIER NOT NULL,
-                    ResourceType NVARCHAR(100) NOT NULL,
-                    SourceResourceId NVARCHAR(200) NULL,
-                    WrittenOnUtc DATETIME2 NOT NULL,
-                    LastUpdatedOnUtc DATETIME2 NULL,
                     {string.Join(",\n                    ", mappedColumns)}
                 );
             END
@@ -147,18 +142,16 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         MappedDestinationRecord record,
         CancellationToken cancellationToken)
     {
-        var fieldNames = record.Values.Keys
-            .Where(key => !ReservedColumns.Contains(key))
+        var columns = record.Values.Keys
             .Select(ValidateIdentifier)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var columns = new[]
+
+        if (columns.Count == 0)
         {
-            "PipelineRunId",
-            "ResourceType",
-            "SourceResourceId",
-            "WrittenOnUtc"
-        }.Concat(fieldNames).ToList();
+            return;
+        }
+
         var parameterNames = columns.Select(column => $"@{column}").ToList();
 
         var sql = $"""
@@ -173,14 +166,9 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             """;
 
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@PipelineRunId", record.PipelineRunId);
-        command.Parameters.AddWithValue("@ResourceType", record.ResourceType);
-        command.Parameters.AddWithValue("@SourceResourceId", (object?)record.SourceResourceId ?? DBNull.Value);
-        command.Parameters.AddWithValue("@WrittenOnUtc", DateTime.UtcNow);
-
-        foreach (var targetField in fieldNames)
+        foreach (var column in columns)
         {
-            command.Parameters.AddWithValue($"@{targetField}", record.Values[targetField] ?? DBNull.Value);
+            command.Parameters.AddWithValue($"@{column}", record.Values[column] ?? DBNull.Value);
         }
 
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -200,22 +188,12 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             return;
         }
 
-        var fieldNames = record.Values.Keys
-            .Where(key => !ReservedColumns.Contains(key))
+        var columns = record.Values.Keys
             .Select(ValidateIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var standardColumns = new[]
-        {
-            "PipelineRunId",
-            "ResourceType",
-            "SourceResourceId",
-            "WrittenOnUtc",
-            "LastUpdatedOnUtc"
-        };
-        var columns = standardColumns.Concat(fieldNames).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var parameterNames = columns.Select(column => $"@{column}").ToList();
         var updateColumns = columns
-            .Where(column => !string.Equals(column, "WrittenOnUtc", StringComparison.OrdinalIgnoreCase))
             .Where(column => !string.Equals(column, keyColumn, StringComparison.OrdinalIgnoreCase))
             .Select(column => $"target.[{column}] = source.[{column}]");
 
@@ -225,8 +203,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             (
                 SELECT {string.Join(", ", parameterNames.Select((parameter, index) => $"{parameter} AS [{columns[index]}]"))}
             ) AS source
-            ON target.[ResourceType] = source.[ResourceType]
-               AND target.[{ValidateIdentifier(keyColumn)}] = source.[{ValidateIdentifier(keyColumn)}]
+            ON target.[{ValidateIdentifier(keyColumn)}] = source.[{ValidateIdentifier(keyColumn)}]
             WHEN MATCHED THEN
                 UPDATE SET {string.Join(", ", updateColumns)}
             WHEN NOT MATCHED THEN
@@ -315,16 +292,9 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
     {
         foreach (var column in columns)
         {
-            var value = column switch
-            {
-                "PipelineRunId" => record.PipelineRunId,
-                "ResourceType" => record.ResourceType,
-                "SourceResourceId" => record.SourceResourceId,
-                "WrittenOnUtc" => DateTime.UtcNow,
-                "LastUpdatedOnUtc" => DateTime.UtcNow,
-                _ when string.Equals(column, keyColumn, StringComparison.OrdinalIgnoreCase) => keyValue,
-                _ => record.Values.TryGetValue(column, out var mappedValue) ? mappedValue : null
-            };
+            var value = string.Equals(column, keyColumn, StringComparison.OrdinalIgnoreCase)
+                ? keyValue
+                : record.Values.TryGetValue(column, out var mappedValue) ? mappedValue : null;
 
             command.Parameters.AddWithValue($"@{column}", value ?? DBNull.Value);
         }
@@ -334,15 +304,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         MappedDestinationRecord record,
         string keyColumn,
         out object? keyValue)
-    {
-        if (string.Equals(keyColumn, "SourceResourceId", StringComparison.OrdinalIgnoreCase))
-        {
-            keyValue = record.SourceResourceId;
-            return !string.IsNullOrWhiteSpace(record.SourceResourceId);
-        }
-
-        return record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
-    }
+        => record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
 
     private static SqlDestinationTarget ParseDestinationTarget(string destinationObject)
     {
@@ -372,7 +334,14 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             : SqlDestinationWriteMode.Insert;
         var keyColumn = options.TryGetValue("key", out var configuredKey)
             ? ValidateIdentifier(configuredKey)
-            : "SourceResourceId";
+            : null;
+
+        if (writeMode == SqlDestinationWriteMode.Upsert && keyColumn is null)
+        {
+            throw new InvalidOperationException(
+                $"Destination '{schemaName}.{tableName}' is configured for Upsert mode but has no '?key=<ColumnName>' " +
+                "option naming which mapped column identifies an existing row.");
+        }
 
         return new SqlDestinationTarget(schemaName, tableName, writeMode, keyColumn);
     }
@@ -441,7 +410,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         string SchemaName,
         string TableName,
         SqlDestinationWriteMode WriteMode,
-        string KeyColumn);
+        string? KeyColumn);
 
     private enum SqlDestinationWriteMode
     {

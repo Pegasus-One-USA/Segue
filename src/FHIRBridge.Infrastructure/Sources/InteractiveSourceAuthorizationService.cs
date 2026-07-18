@@ -7,6 +7,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Workflows;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
@@ -38,6 +39,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     private readonly ILaunchTokenProtector _launchTokenProtector;
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IGovernanceLogger _governanceLogger;
     private readonly ILogger<InteractiveSourceAuthorizationService> _logger;
 
     // Scenario B (optional): when the graph-execution flag is on for a source, the launch runs its persisted
@@ -56,6 +58,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         ILaunchTokenProtector launchTokenProtector,
         IConfiguredPipelineService pipelineService,
         ICurrentUserService currentUserService,
+        IGovernanceLogger governanceLogger,
         ILogger<InteractiveSourceAuthorizationService> logger,
         IRankedWorkflowOrchestrator? workflowOrchestrator = null,
         ILaunchWorkflowResolver? launchWorkflowResolver = null,
@@ -70,6 +73,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _launchTokenProtector = launchTokenProtector;
         _pipelineService = pipelineService;
         _currentUserService = currentUserService;
+        _governanceLogger = governanceLogger;
         _logger = logger;
         _workflowOrchestrator = workflowOrchestrator;
         _launchWorkflowResolver = launchWorkflowResolver;
@@ -460,6 +464,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             SourceConnectionId: pending.SourceConnectionId,
             ClientSecret: clientSecret);
 
+        var launchType = DetermineLaunchType(pending);
+
         try
         {
             await _authorizationFlow.ExchangeAuthorizationCodeAsync(
@@ -471,8 +477,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 exception,
                 "Interactive authorization exchange failed for source {SourceConnectionId}.",
                 pending.SourceConnectionId);
+
+            await _governanceLogger.LogSmartLaunchAsync(
+                new SmartLaunchEntry(pending.SourceConnectionId, pending.SourceName, launchType, Success: false, exception.Message),
+                CancellationToken.None);
             throw;
         }
+
+        await _governanceLogger.LogSmartLaunchAsync(
+            new SmartLaunchEntry(pending.SourceConnectionId, pending.SourceName, launchType, Success: true),
+            CancellationToken.None);
 
         Guid? workflowRunId = null;
         var workflowRunFailed = false;
@@ -771,6 +785,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         return [.. scopes, patientScope];
     }
+
+    // Classifies a completed launch for the governance log — mirrors the same three-way split
+    // TriggerRouteRunAsync/TriggerWorkflowRunAsync/skipWorkflowTrigger already reason about above.
+    private static string DetermineLaunchType(PendingAuthorization pending) => pending switch
+    {
+        { HasLaunchContext: true } => "EhrLaunch",
+        { WorkflowId: not null } => "WorkflowStandalone",
+        { RouteId: not null } => "RouteStandalone",
+        _ => "SignIn"
+    };
 
     // Compares two issuers ignoring a trailing slash and case (FHIR base URLs are compared case-insensitively).
     private static bool IssuersMatch(string trusted, string incoming) =>

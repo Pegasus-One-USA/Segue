@@ -11,20 +11,15 @@ namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
 /// Provider-agnostic relational destination writer built on ADO.NET (<see cref="DbConnection"/>). Auto-creates the
-/// target schema/table and writes mapped records in Insert or Upsert mode. Upsert is implemented as a portable
-/// delete-by-key + insert within a transaction (last-write-wins) so it works on any dialect without requiring a
-/// pre-existing unique index. Concrete subclasses supply the dialect (connection, identifier quoting, type mapping,
-/// DDL). Mirrors <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
+/// target schema/table (containing only the mapped destination columns — no system/audit columns) and writes
+/// mapped records in Insert or Upsert mode. Upsert requires an explicit '?key=&lt;ColumnName&gt;' option naming one
+/// of the mapped columns, and is implemented as a portable delete-by-key + insert within a transaction
+/// (last-write-wins) so it works on any dialect without requiring a pre-existing unique index. Concrete subclasses
+/// supply the dialect (connection, identifier quoting, type mapping, DDL). Mirrors
+/// <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
 /// </summary>
 public abstract partial class RelationalDestinationWriterBase : IConfiguredDestinationWriter
 {
-    private static readonly string[] StandardColumns =
-        ["PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc"];
-
-    // A mapping field targeting one of the system-managed columns above is ignored (the system value wins) so the
-    // generated DDL/INSERT never declares a column twice.
-    private static readonly HashSet<string> ReservedColumns = new(StandardColumns, StringComparer.OrdinalIgnoreCase);
-
     private readonly ISecretProvider _secretProvider;
 
     protected RelationalDestinationWriterBase(ISecretProvider secretProvider)
@@ -67,9 +62,9 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         foreach (var record in records)
         {
-            if (target.Upsert && TryGetKeyValue(record, target.KeyColumn, out var keyValue))
+            if (target.Upsert && TryGetKeyValue(record, target.KeyColumn!, out var keyValue))
             {
-                await DeleteByKeyAsync(connection, transaction, target, record.ResourceType, keyValue, cancellationToken);
+                await DeleteByKeyAsync(connection, transaction, target, keyValue, cancellationToken);
             }
 
             await InsertRecordAsync(connection, transaction, target, record, cancellationToken);
@@ -91,25 +86,23 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
             await ExecuteAsync(connection, transaction: null, createSchemaSql, cancellationToken);
         }
 
-        var columnDefinitions = new List<string>
-        {
-            $"{Quote("PipelineRunId")} {ColumnType(MappingValueType.String)}",
-            $"{Quote("ResourceType")} {ColumnType(MappingValueType.String)}",
-            $"{Quote("SourceResourceId")} {ColumnType(MappingValueType.String)}",
-            $"{Quote("WrittenOnUtc")} {ColumnType(MappingValueType.DateTime)}"
-        };
-
-        columnDefinitions.AddRange(mappingProfile.Fields
+        var columnDefinitions = mappingProfile.Fields
             .Where(field =>
                 string.IsNullOrWhiteSpace(field.ResourceType) ||
                 string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
             .Where(field =>
                 string.IsNullOrWhiteSpace(field.DestinationObject) ||
                 string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
-            .Where(field => !ReservedColumns.Contains(field.TargetField))
             .GroupBy(field => field.TargetField, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
-            .Select(field => $"{Quote(ValidateIdentifier(field.TargetField))} {ColumnType(field.ValueType)}"));
+            .Select(field => $"{Quote(ValidateIdentifier(field.TargetField))} {ColumnType(field.ValueType)}")
+            .ToList();
+
+        if (columnDefinitions.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Mapping profile for '{target.Schema}.{target.Table}' has no mapped fields — a SQL destination needs at least one mapped column.");
+        }
 
         await ExecuteAsync(connection, transaction: null, BuildCreateTableSql(target.Schema, target.Table, columnDefinitions), cancellationToken);
     }
@@ -121,12 +114,15 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         MappedDestinationRecord record,
         CancellationToken cancellationToken)
     {
-        var fieldNames = record.Values.Keys
-            .Where(key => !ReservedColumns.Contains(key))
+        var columns = record.Values.Keys
             .Select(ValidateIdentifier)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var columns = StandardColumns.Concat(fieldNames).ToList();
+
+        if (columns.Count == 0)
+        {
+            return;
+        }
 
         var sql = $"INSERT INTO {QualifiedName(target.Schema, target.Table)} " +
                   $"({string.Join(", ", columns.Select(Quote))}) VALUES " +
@@ -135,13 +131,9 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = sql;
-        AddParameter(command, "PipelineRunId", record.PipelineRunId.ToString());
-        AddParameter(command, "ResourceType", record.ResourceType);
-        AddParameter(command, "SourceResourceId", Stringify(record.SourceResourceId));
-        AddParameter(command, "WrittenOnUtc", DateTime.UtcNow.ToString("o"));
-        foreach (var field in fieldNames)
+        foreach (var column in columns)
         {
-            AddParameter(command, field, Stringify(record.Values[field]));
+            AddParameter(command, column, Stringify(record.Values[column]));
         }
 
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -151,17 +143,15 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         DbConnection connection,
         DbTransaction transaction,
         RelationalTarget target,
-        string resourceType,
         object? keyValue,
         CancellationToken cancellationToken)
     {
         var sql = $"DELETE FROM {QualifiedName(target.Schema, target.Table)} " +
-                  $"WHERE {Quote("ResourceType")} = @ResourceType AND {Quote(target.KeyColumn)} = @KeyValue";
+                  $"WHERE {Quote(target.KeyColumn!)} = @KeyValue";
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = sql;
-        AddParameter(command, "ResourceType", resourceType);
         AddParameter(command, "KeyValue", Stringify(keyValue));
 
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -188,15 +178,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         => value is null ? DBNull.Value : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
 
     private static bool TryGetKeyValue(MappedDestinationRecord record, string keyColumn, out object? keyValue)
-    {
-        if (string.Equals(keyColumn, "SourceResourceId", StringComparison.OrdinalIgnoreCase))
-        {
-            keyValue = record.SourceResourceId;
-            return !string.IsNullOrWhiteSpace(record.SourceResourceId);
-        }
-
-        return record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
-    }
+        => record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
 
     private RelationalTarget ParseTarget(string destinationObject)
     {
@@ -227,7 +209,14 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         };
 
         var upsert = options.TryGetValue("mode", out var mode) && string.Equals(mode, "upsert", StringComparison.OrdinalIgnoreCase);
-        var keyColumn = options.TryGetValue("key", out var key) ? ValidateIdentifier(key) : "SourceResourceId";
+        var keyColumn = options.TryGetValue("key", out var key) ? ValidateIdentifier(key) : null;
+
+        if (upsert && keyColumn is null)
+        {
+            throw new InvalidOperationException(
+                $"Destination '{schema}.{table}' is configured for Upsert mode but has no '?key=<ColumnName>' " +
+                "option naming which mapped column identifies an existing row.");
+        }
 
         return new RelationalTarget(schema, table, upsert, keyColumn);
     }
@@ -249,5 +238,5 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         string Schema,
         string Table,
         bool Upsert,
-        string KeyColumn);
+        string? KeyColumn);
 }

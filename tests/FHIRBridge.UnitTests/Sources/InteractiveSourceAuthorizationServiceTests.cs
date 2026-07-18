@@ -6,6 +6,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Sources;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
@@ -28,6 +29,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     private readonly ILaunchTokenProtector _protector = new DataProtectionLaunchTokenProtector(new EphemeralDataProtectionProvider());
     private readonly Mock<IConfiguredPipelineService> _pipeline = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
+    private readonly Mock<IGovernanceLogger> _governanceLogger = new();
 
     public InteractiveSourceAuthorizationServiceTests()
     {
@@ -44,6 +46,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _protector,
         _pipeline.Object,
         _currentUser.Object,
+        _governanceLogger.Object,
         NullLogger<InteractiveSourceAuthorizationService>.Instance);
 
     private SourceConnection SeedEpicSource(

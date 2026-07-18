@@ -57,4 +57,7 @@ public enum PermissionGroupCode
     // of a pre-existing one — confirms the mechanism also covers vendors that don't exist yet today.
     [PermissionGroup("30000000-0000-0000-0000-000000000014", PermissionCategoryCode.Pipelines, "NewEHR")]
     NewEHR = 14,
+
+    [PermissionGroup("30000000-0000-0000-0000-000000000015", PermissionCategoryCode.Platform, "Governance")]
+    Governance = 15,
 }

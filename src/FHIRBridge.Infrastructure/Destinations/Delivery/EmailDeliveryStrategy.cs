@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Email;
 
 namespace FHIRBridge.Infrastructure.Destinations.Delivery;
@@ -16,10 +17,12 @@ public sealed class EmailDeliveryStrategy : IArtifactDeliveryStrategy
     private const string DefaultBodyTemplate = "Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.";
 
     private readonly IEmailSender _emailSender;
+    private readonly IGovernanceLogger _governanceLogger;
 
-    public EmailDeliveryStrategy(IEmailSender emailSender)
+    public EmailDeliveryStrategy(IEmailSender emailSender, IGovernanceLogger governanceLogger)
     {
         _emailSender = emailSender;
+        _governanceLogger = governanceLogger;
     }
 
     public async Task<DestinationWriteResult> DeliverAsync(
@@ -48,12 +51,29 @@ public sealed class EmailDeliveryStrategy : IArtifactDeliveryStrategy
             ["RowCount"] = recordCount.ToString()
         };
 
-        await _emailSender.SendAsync(
-            toEmails,
-            ccEmails.Count == 0 ? null : ccEmails,
-            EmailTemplateRenderer.Render(subjectTemplate, placeholders),
-            EmailTemplateRenderer.Render(bodyTemplate, placeholders),
-            [new EmailAttachment(file.FileName, file.Content, file.ContentType)],
+        var subject = EmailTemplateRenderer.Render(subjectTemplate, placeholders);
+        var recipients = string.Join(", ", ccEmails.Count == 0 ? toEmails : [.. toEmails, .. ccEmails]);
+
+        try
+        {
+            await _emailSender.SendAsync(
+                toEmails,
+                ccEmails.Count == 0 ? null : ccEmails,
+                subject,
+                EmailTemplateRenderer.Render(bodyTemplate, placeholders),
+                [new EmailAttachment(file.FileName, file.Content, file.ContentType)],
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            await _governanceLogger.LogNotificationAsync(
+                new NotificationEntry("Email", recipients, "Failed", subject, exception.Message, context.CorrelationId),
+                cancellationToken);
+            throw;
+        }
+
+        await _governanceLogger.LogNotificationAsync(
+            new NotificationEntry("Email", recipients, "Sent", subject, CorrelationId: context.CorrelationId),
             cancellationToken);
 
         return new DestinationWriteResult(recordCount);

@@ -5,9 +5,17 @@ namespace FHIRBridge.Worker;
 
 /// <summary>
 /// Dispatcher worker role: on a timer, claims due scheduled runs and enqueues pipeline-run commands to the messaging
-/// transport. Disabled by default. The actual pipeline execution is performed by the processor role (Phase 2),
+/// transport. The actual pipeline execution is performed by the processor role (<see cref="PipelineRunCommandProcessor"/>),
 /// which consumes the queue.
 /// </summary>
+/// <remarks>
+/// <b>Live scheduler (2026-07-18 migration).</b> Registered in <c>Program.cs</c> and enabled by default via
+/// <see cref="ScheduleDispatcherOptions.Enabled"/>. <c>Worker.RunDueRoutesAsync</c> (the previous direct-call
+/// scheduler) is now off by default — see <c>RuntimeWorkerOptions.DirectRouteSchedulingEnabled</c> — and the Worker
+/// host fails fast at startup if both are ever enabled simultaneously. See the remarks on
+/// <c>FHIRBridge.Infrastructure.Scheduling.ScheduleDispatcher</c> for why that combination is unsafe, and
+/// docs/backend/08-governance-logging-status.md for the full history.
+/// </remarks>
 public sealed class ScheduleDispatcherWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;

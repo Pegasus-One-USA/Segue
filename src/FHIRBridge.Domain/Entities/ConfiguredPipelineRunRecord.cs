@@ -19,7 +19,8 @@ public sealed class ConfiguredPipelineRunRecord : Entity<Guid>
         DateTime startedOnUtc,
         DateTime completedOnUtc,
         string? triggeredBy = null,
-        string? triggerType = null)
+        string? triggerType = null,
+        string? correlationId = null)
     {
         Id = id;
         Status = status;
@@ -32,6 +33,7 @@ public sealed class ConfiguredPipelineRunRecord : Entity<Guid>
         CompletedOnUtc = completedOnUtc;
         TriggeredBy = triggeredBy;
         TriggerType = triggerType;
+        CorrelationId = correlationId;
         IsEnabled = true;
     }
 
@@ -50,6 +52,9 @@ public sealed class ConfiguredPipelineRunRecord : Entity<Guid>
 
     /// <summary>How the run was launched: Manual, Scheduled, Webhook, or Bulk.</summary>
     public string? TriggerType { get; private set; }
+
+    /// <summary>Ties this run's header row to every governance log row generated during it.</summary>
+    public string? CorrelationId { get; private set; }
 
     public void SetEnabled(bool isEnabled)
     {

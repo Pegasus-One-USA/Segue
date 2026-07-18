@@ -5,6 +5,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Governance;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -19,6 +20,7 @@ public sealed class LocalAuthServiceMfaTests
     private readonly Mock<ICurrentUserService> _currentUser = new();
     private readonly Mock<IEmailSender> _email = new();
     private readonly Mock<ITotpService> _totp = new();
+    private readonly Mock<IGovernanceLogger> _governanceLogger = new();
     private readonly LocalAuthOptions _options = new();
 
     private LocalAuthService Service() => new(
@@ -28,6 +30,7 @@ public sealed class LocalAuthServiceMfaTests
         _currentUser.Object,
         _email.Object,
         _totp.Object,
+        _governanceLogger.Object,
         Options.Create(_options));
 
     private const string Email = "mfa-user@x.io";

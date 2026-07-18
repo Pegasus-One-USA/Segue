@@ -1,0 +1,210 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Correlation Search</h1>
+    <p class="page-sub">Paste a Correlation ID to see everything that happened during that execution, across every governance and operations table in one place.</p>
+  </div>
+
+  <div class="filter-bar">
+    <input
+      type="search"
+      class="correlation-input"
+      placeholder="Correlation ID…"
+      [value]="correlationId()"
+      (input)="onCorrelationIdChange($any($event.target).value)"
+      (keyup.enter)="search()"
+    />
+    <button class="btn" type="button" (click)="search()">Search</button>
+  </div>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <div class="empty-state">Searching…</div>
+  }
+
+  @if (!loading() && searched() && result(); as r) {
+    @if (r.totalCount === 0 && !r.pipelineRun) {
+      <div class="empty-state">Nothing found for this Correlation ID.</div>
+    } @else {
+      <div class="result-summary">
+        {{ r.totalCount }} entr{{ r.totalCount === 1 ? 'y' : 'ies' }} found across all tables.
+        <span class="view-toggle">
+          <button class="toggle-btn" [class.active]="viewMode() === 'sections'" type="button" (click)="setViewMode('sections')">Sections</button>
+          <button class="toggle-btn" [class.active]="viewMode() === 'timeline'" type="button" (click)="setViewMode('timeline')">Timeline</button>
+        </span>
+      </div>
+
+      @if (viewMode() === 'timeline') {
+        <section class="result-section timeline">
+          @for (entry of timeline(); track $index) {
+            <div class="timeline-entry">
+              <div class="timeline-time">{{ entry.timeUtc | date:'h:mm:ss a' }}</div>
+              <div class="timeline-body">
+                <div class="timeline-header">
+                  <span class="timeline-category">{{ entry.category }}</span>
+                  <span class="timeline-summary">{{ entry.summary }}</span>
+                  <button class="btn-link" type="button" (click)="toggleRaw($index)">{{ expandedIndex() === $index ? 'Hide' : 'Raw' }}</button>
+                </div>
+                @if (expandedIndex() === $index) {
+                  <pre class="timeline-raw">{{ rawJson(entry) }}</pre>
+                }
+              </div>
+            </div>
+          }
+          @if (timeline().length === 0) {
+            <div class="empty-state">Nothing to show on the timeline.</div>
+          }
+        </section>
+      }
+
+      @if (viewMode() === 'sections') {
+
+      @if (r.pipelineRun; as run) {
+        <section class="result-section">
+          <h3>Pipeline Run</h3>
+          <table class="mini-table">
+            <tr><th>Status</th><td>{{ run.status }}</td><th>Triggered By</th><td>{{ run.triggeredBy || '—' }} ({{ run.triggerType || '—' }})</td></tr>
+            <tr><th>Started</th><td>{{ run.startedOnUtc | date:'MMM d, h:mm:ss a' }}</td><th>Completed</th><td>{{ run.completedOnUtc | date:'MMM d, h:mm:ss a' }}</td></tr>
+            <tr><th>Extracted</th><td>{{ run.extractedResourceCount }}</td><th>Written</th><td>{{ run.writtenRecordCount }}</td></tr>
+          </table>
+        </section>
+      }
+
+      @if (r.auditLogs.length > 0) {
+        <section class="result-section">
+          <h3>Audit Logs ({{ r.auditLogs.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Actor</th><th>Module</th><th>Action</th><th>Status</th></tr>
+            @for (x of r.auditLogs; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.actor }}</td><td>{{ x.module }}</td><td>{{ x.action }}</td><td>{{ x.status }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.dataAccessLogs.length > 0) {
+        <section class="result-section">
+          <h3>Data Access Logs ({{ r.dataAccessLogs.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Actor</th><th>Resource</th><th>Action</th></tr>
+            @for (x of r.dataAccessLogs; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.actor }}</td><td>{{ x.resourceType }}/{{ x.resourceId }}</td><td>{{ x.action }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.authenticationLogs.length > 0) {
+        <section class="result-section">
+          <h3>Authentication Logs ({{ r.authenticationLogs.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>User</th><th>Type</th><th>Result</th></tr>
+            @for (x of r.authenticationLogs; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.userEmail || '—' }}</td><td>{{ x.authenticationType }}</td><td>{{ x.success ? 'Success' : 'Failed' }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.securityEvents.length > 0) {
+        <section class="result-section">
+          <h3>Security Events ({{ r.securityEvents.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Severity</th><th>Event</th></tr>
+            @for (x of r.securityEvents; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.severity }}</td><td>{{ x.eventType }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.authorizationLogs.length > 0) {
+        <section class="result-section">
+          <h3>Authorization Logs ({{ r.authorizationLogs.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>User</th><th>Action</th><th>Permission</th><th>Result</th></tr>
+            @for (x of r.authorizationLogs; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.userEmail || '—' }}</td><td>{{ x.requestPath }}</td><td>{{ x.permissionCode }}</td><td>{{ x.result }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.schedulerHistory.length > 0) {
+        <section class="result-section">
+          <h3>Scheduler History ({{ r.schedulerHistory.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Scheduler</th><th>Status</th><th>Routes</th></tr>
+            @for (x of r.schedulerHistory; track x.id) {
+              <tr><td>{{ x.runTimeUtc | date:'h:mm:ss a' }}</td><td>{{ x.schedulerId }}</td><td>{{ x.status }}</td><td>{{ x.routeCount }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.retryHistory.length > 0) {
+        <section class="result-section">
+          <h3>Retry History ({{ r.retryHistory.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Attempt</th><th>Reason</th></tr>
+            @for (x of r.retryHistory; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.retryNumber }}</td><td>{{ x.reason }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.errors.length > 0) {
+        <section class="result-section">
+          <h3>Errors ({{ r.errors.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Severity</th><th>Exception</th><th>Message</th></tr>
+            @for (x of r.errors; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.severity }}</td><td>{{ x.exceptionType }}</td><td>{{ x.message }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.apiRequests.length > 0) {
+        <section class="result-section">
+          <h3>API Requests ({{ r.apiRequests.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Duration</th></tr>
+            @for (x of r.apiRequests; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.method }}</td><td class="truncate">{{ x.url }}</td><td>{{ x.statusCode ?? '—' }}</td><td>{{ x.durationMs }} ms</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.exports.length > 0) {
+        <section class="result-section">
+          <h3>Exports ({{ r.exports.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Destination</th><th>Rows</th><th>Status</th></tr>
+            @for (x of r.exports; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.destinationName }}</td><td>{{ x.rowCount }}</td><td>{{ x.status }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.notifications.length > 0) {
+        <section class="result-section">
+          <h3>Notifications ({{ r.notifications.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Type</th><th>Recipient</th><th>Status</th></tr>
+            @for (x of r.notifications; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.notificationType }}</td><td>{{ x.recipient }}</td><td>{{ x.status }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      @if (r.validationFailures.length > 0) {
+        <section class="result-section">
+          <h3>Validation Failures ({{ r.validationFailures.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Resource</th></tr>
+            @for (x of r.validationFailures; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.resourceType }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
+      } <!-- end viewMode() === 'sections' -->
+    }
+  }
+</div>

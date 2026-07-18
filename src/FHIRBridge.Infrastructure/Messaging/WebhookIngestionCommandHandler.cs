@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,17 +16,20 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
 {
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly IProcessedMessageStore _processedMessageStore;
+    private readonly IGovernanceLogger _governanceLogger;
     private readonly MessageProcessingOptions _options;
     private readonly ILogger<WebhookIngestionCommandHandler> _logger;
 
     public WebhookIngestionCommandHandler(
         IConfiguredPipelineService pipelineService,
         IProcessedMessageStore processedMessageStore,
+        IGovernanceLogger governanceLogger,
         IOptions<MessageProcessingOptions> options,
         ILogger<WebhookIngestionCommandHandler> logger)
     {
         _pipelineService = pipelineService;
         _processedMessageStore = processedMessageStore;
+        _governanceLogger = governanceLogger;
         _options = options.Value;
         _logger = logger;
     }
@@ -48,7 +52,15 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
             _options,
             _logger,
             $"Webhook command {command.MessageId}",
-            cancellationToken);
+            cancellationToken,
+            onRetryAsync: (attempt, delayMs, exception, token) => _governanceLogger.LogRetryAsync(
+                new RetryEntry(
+                    $"Webhook command {command.MessageId}",
+                    attempt,
+                    delayMs,
+                    exception.Message,
+                    command.CorrelationId),
+                token));
 
         if (run is not null && string.Equals(run.Status, "Failed", StringComparison.OrdinalIgnoreCase))
         {

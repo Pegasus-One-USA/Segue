@@ -85,6 +85,7 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<IPipelineRunDispatcher, AzureServiceBusPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, AzureServiceBusWebhookIngestionDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(AzureServiceBusMessageConsumer<>));
+        services.AddSingleton<IQueueMonitorProvider, AzureServiceBusQueueMonitorProvider>();
 
         return services;
     }
@@ -96,6 +97,7 @@ public static class MessagingServiceCollectionExtensions
         {
             HostName = section["HostName"] ?? "localhost",
             Port = int.TryParse(section["Port"], out var port) ? port : 5672,
+            ManagementPort = int.TryParse(section["ManagementPort"], out var managementPort) ? managementPort : 15672,
             UserName = section["UserName"] ?? "fhirbridge",
             Password = section["Password"] ?? "fhirbridge",
             VirtualHost = section["VirtualHost"] ?? "/",
@@ -110,6 +112,7 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<IPipelineRunDispatcher, RabbitMqPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, RabbitMqWebhookIngestionDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(RabbitMqMessageConsumer<>));
+        services.AddSingleton<IQueueMonitorProvider, RabbitMqQueueMonitorProvider>();
 
         return services;
     }
@@ -120,6 +123,7 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<IPipelineRunDispatcher, InMemoryPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, InMemoryWebhookIngestionDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(InMemoryMessageConsumer<>));
+        services.AddSingleton<IQueueMonitorProvider, NullQueueMonitorProvider>();
 
         return services;
     }

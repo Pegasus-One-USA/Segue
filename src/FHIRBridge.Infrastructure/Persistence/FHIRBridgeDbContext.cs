@@ -1,4 +1,5 @@
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.SharedKernel.Abstractions;
@@ -42,6 +43,25 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<WorkflowRun> WorkflowRuns => Set<WorkflowRun>();
     public DbSet<WorkflowNodeRun> WorkflowNodeRuns => Set<WorkflowNodeRun>();
     public DbSet<WorkflowNodeRunPayload> WorkflowNodeRunPayloads => Set<WorkflowNodeRunPayload>();
+
+    // Governance: immutable audit/access/authentication trail + mutable security-event triage.
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<DataAccessLog> DataAccessLogs => Set<DataAccessLog>();
+    public DbSet<AuthenticationLog> AuthenticationLogs => Set<AuthenticationLog>();
+    public DbSet<SecurityEvent> SecurityEvents => Set<SecurityEvent>();
+    public DbSet<AuthorizationLog> AuthorizationLogs => Set<AuthorizationLog>();
+    public DbSet<ArchiveManifestEntry> ArchiveManifestEntries => Set<ArchiveManifestEntry>();
+    public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+    public DbSet<AlertHistoryEntry> AlertHistoryEntries => Set<AlertHistoryEntry>();
+    public DbSet<SchedulerHistory> SchedulerHistory => Set<SchedulerHistory>();
+    public DbSet<RetryHistory> RetryHistory => Set<RetryHistory>();
+    public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
+    public DbSet<ApiRequestLog> ApiRequestLogs => Set<ApiRequestLog>();
+    public DbSet<ExportHistory> ExportHistory => Set<ExportHistory>();
+    public DbSet<NotificationHistory> NotificationHistory => Set<NotificationHistory>();
+    public DbSet<ValidationFailureLog> ValidationFailureLogs => Set<ValidationFailureLog>();
+    public DbSet<EndpointHealthCheck> EndpointHealthChecks => Set<EndpointHealthCheck>();
+    public DbSet<SmartLaunchLog> SmartLaunchLogs => Set<SmartLaunchLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

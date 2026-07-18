@@ -9,16 +9,17 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// </summary>
 public interface IDestinationDataService
 {
+    /// <summary>Plain top-N sample of the table, not scoped to any particular run — destination tables contain only
+    /// the mapped columns, with no PipelineRunId or other system column to filter by.</summary>
     Task<DestinationDataDto> ReadSampleAsync(
         Guid destinationId,
         string destinationObject,
         int top,
-        IReadOnlyCollection<Guid> pipelineRunIds,
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Reads every row matching an equality filter on an arbitrary column — for destination tables that don't carry
-    /// a PipelineRunId (e.g. one-to-many child tables keyed only by a parent identifier like PatientId).
+    /// Reads every row matching an equality filter on an arbitrary column — e.g. one-to-many child tables keyed only
+    /// by a parent identifier like PatientId.
     /// </summary>
     Task<DestinationDataDto> ReadByColumnAsync(
         Guid destinationId,

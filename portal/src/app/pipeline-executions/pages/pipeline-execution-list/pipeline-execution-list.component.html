@@ -1,0 +1,108 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Pipeline Executions</h1>
+    <p class="page-sub">Configured Pipeline plane runs — scheduler/webhook-triggered route executions against Resource Pipeline Routes. Click a row for the per-resource-type breakdown.</p>
+  </div>
+
+  <div class="filter-bar">
+    <input
+      type="search"
+      class="search-input"
+      placeholder="Search pipeline or source…"
+      [value]="search()"
+      (input)="onSearchChange($any($event.target).value)"
+      (keyup.enter)="applyFilters()"
+    />
+    <select [value]="status()" (change)="onStatusChange($any($event.target).value)">
+      <option value="">All statuses</option>
+      <option value="Running">Running</option>
+      <option value="Completed">Completed</option>
+      <option value="CompletedWithErrors">Completed with errors</option>
+      <option value="Failed">Failed</option>
+      <option value="Skipped">Skipped</option>
+    </select>
+    <button class="btn" type="button" (click)="applyFilters()">Search</button>
+    <button class="btn btn-ghost" type="button" (click)="reset()">Reset</button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="pipelineName">
+          <th mat-header-cell *matHeaderCellDef>Pipeline</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.pipelineName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="sourceName">
+          <th mat-header-cell *matHeaderCellDef>Source</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.sourceName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="startedOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Started</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.startedOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="durationMs">
+          <th mat-header-cell *matHeaderCellDef>Duration</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.durationMs !== null ? (r.durationMs / 1000 | number:'1.0-1') + 's' : '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">
+            <span class="status-badge"
+                  [class.status-success]="r.status === 'Completed'"
+                  [class.status-warn]="r.status === 'CompletedWithErrors'"
+                  [class.status-fail]="r.status === 'Failed'"
+                  [class.status-neutral]="r.status === 'Running' || r.status === 'Skipped'">
+              {{ r.status }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="triggeredBy">
+          <th mat-header-cell *matHeaderCellDef>Triggered By</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.triggeredBy || '—' }} <span class="mono" *ngIf="r.triggerType">({{ r.triggerType }})</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="counts">
+          <th mat-header-cell *matHeaderCellDef>Read / Written / Errors</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">
+            {{ r.extractedCount }} / {{ r.writtenCount }} / <span [class.error-count]="r.errorCount > 0">{{ r.errorCount }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="correlationId">
+          <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.correlationId) {
+              <button class="btn-link" type="button" (click)="viewCorrelation(r, $event)"><code class="mono">{{ r.correlationId }}</code></button>
+            } @else {
+              —
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">No pipeline executions found.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+
+    @if (totalCount() > pageSize) {
+      <div class="pagination-bar">
+        <button class="btn-ghost" type="button" [disabled]="page() === 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page() }} of {{ Math.ceil(totalCount() / pageSize) }} ({{ totalCount() }} total)</span>
+        <button class="btn-ghost" type="button" [disabled]="page() * pageSize >= totalCount()" (click)="nextPage()">Next</button>
+      </div>
+    }
+  </div>
+</div>

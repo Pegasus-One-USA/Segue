@@ -1,0 +1,66 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Configuration Comparison</h1>
+    <p class="page-sub">
+      @if (entityType() && entityId()) {
+        <strong>{{ entityType() }}</strong> <code class="mono">{{ entityId() }}</code> — pick any two versions to compare.
+      } @else {
+        No entity specified — open this from an entity's "Compare versions…" action on Audit Logs.
+      }
+    </p>
+  </div>
+
+  @if (loading()) {
+    <div class="empty-state">Loading…</div>
+  }
+
+  @if (!loading() && versions().length > 0) {
+    <div class="picker-bar">
+      <label>
+        Version A
+        <select [value]="leftVersion()" (change)="onLeftChange($any($event.target).value)">
+          @for (v of versions(); track v.version) {
+            <option [value]="v.version">v{{ v.version }} — {{ v.entry.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</option>
+          }
+        </select>
+      </label>
+      <span class="arrow">→</span>
+      <label>
+        Version B
+        <select [value]="rightVersion()" (change)="onRightChange($any($event.target).value)">
+          @for (v of versions(); track v.version) {
+            <option [value]="v.version">v{{ v.version }} — {{ v.entry.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    <div class="table-card">
+      <table class="diff-table">
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Version A (v{{ leftVersion() }})</th>
+            <th>Version B (v{{ rightVersion() }})</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (diff of diffs(); track diff.field) {
+            <tr [class.diff-changed]="diff.changed">
+              <td>{{ diff.field }}</td>
+              <td>{{ diff.leftValue }}</td>
+              <td>{{ diff.rightValue }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (diffs().length === 0) {
+        <div class="empty-state">No fields to compare.</div>
+      }
+    </div>
+  }
+
+  @if (!loading() && versions().length === 0 && entityType() && entityId()) {
+    <div class="empty-state">No version history found for this entity.</div>
+  }
+</div>

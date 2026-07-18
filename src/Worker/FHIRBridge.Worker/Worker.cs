@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Pipeline;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -51,14 +52,23 @@ public sealed class Worker : BackgroundService
         using var scope = _serviceScopeFactory.CreateScope();
         var nowUtc = DateTime.UtcNow;
 
-        await RunDueRoutesAsync(scope, nowUtc, cancellationToken);
+        // Route scheduling now lives on the queue-based path (ScheduleDispatcherWorker → PipelineRunCommandProcessor)
+        // by default — see RuntimeWorkerOptions.DirectRouteSchedulingEnabled's remarks for the fast-rollback story.
+        if (_options.Value.DirectRouteSchedulingEnabled)
+        {
+            await RunDueRoutesAsync(scope, nowUtc, cancellationToken);
+        }
+
         await RunDueWorkflowsAsync(scope, nowUtc, cancellationToken);
     }
 
-    // Existing route-based scheduling (unchanged behaviour).
+    // Direct-call route scheduling — off by default (see RuntimeWorkerOptions.DirectRouteSchedulingEnabled), kept
+    // as a fast-rollback path if the queue-based scheduler (ScheduleDispatcherWorker) needs to be disabled without
+    // a redeploy. Never run both at once: see ScheduleDispatcher's remarks for why that would double-dispatch.
     private async Task RunDueRoutesAsync(IServiceScope scope, DateTime nowUtc, CancellationToken cancellationToken)
     {
         var options = _options.Value;
+        var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
         var configurationRepository = scope.ServiceProvider.GetRequiredService<IConfigurationRepository>();
         var dueResourceTypes = await GetDueResourceTypesAsync(
             configurationRepository,
@@ -75,24 +85,44 @@ public sealed class Worker : BackgroundService
             return;
         }
 
-        var pipelineService = scope.ServiceProvider.GetRequiredService<IConfiguredPipelineService>();
-        var pipelineRun = await pipelineService.StartAsync(
-            new StartConfiguredPipelineRunRequest(
-                dueResourceTypes,
-                "worker",
-                Guid.NewGuid().ToString("N"))
-            {
-                RunDueSchedulesOnly = true,
-                ScheduledAtUtc = nowUtc
-            },
+        var correlationId = Guid.NewGuid().ToString("N");
+
+        await governanceLogger.LogSchedulerRunAsync(
+            new SchedulerRunEntry("worker:poll", "Dispatched", dueResourceTypes.Count, correlationId),
             cancellationToken);
 
-        _logger.LogInformation(
-            "Scheduled unified pipeline run {PipelineRunId} finished with status {Status}. Extracted {Extracted}; wrote {Written}.",
-            pipelineRun.Id,
-            pipelineRun.Status,
-            pipelineRun.ExtractedResourceCount,
-            pipelineRun.WrittenRecordCount);
+        var pipelineService = scope.ServiceProvider.GetRequiredService<IConfiguredPipelineService>();
+
+        try
+        {
+            var pipelineRun = await pipelineService.StartAsync(
+                new StartConfiguredPipelineRunRequest(
+                    dueResourceTypes,
+                    "worker",
+                    correlationId)
+                {
+                    RunDueSchedulesOnly = true,
+                    ScheduledAtUtc = nowUtc
+                },
+                cancellationToken);
+
+            _logger.LogInformation(
+                "Scheduled unified pipeline run {PipelineRunId} finished with status {Status}. Extracted {Extracted}; wrote {Written}.",
+                pipelineRun.Id,
+                pipelineRun.Status,
+                pipelineRun.ExtractedResourceCount,
+                pipelineRun.WrittenRecordCount);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Previously unhandled here: an exception would propagate out of ExecuteAsync and permanently fault
+            // this BackgroundService, silently stopping all future scheduled runs. Logging and continuing matches
+            // RunDueWorkflowsAsync's existing per-item resilience below.
+            _logger.LogError(exception, "Scheduled unified pipeline run failed at {ScheduledAtUtc}.", nowUtc);
+            await governanceLogger.LogErrorAsync(
+                new ErrorEntry("Error", exception.GetType().Name, exception.Message, exception.StackTrace, "Worker", correlationId),
+                CancellationToken.None);
+        }
     }
 
     // Approach-B workflow scheduling: fire enabled workflow graphs whose trigger is due. Graceful when the graph
@@ -106,6 +136,7 @@ public sealed class Worker : BackgroundService
             return;
         }
 
+        var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
         var workflows = await store.ListAsync(cancellationToken);
         foreach (var workflow in workflows)
         {
@@ -114,11 +145,17 @@ public sealed class Worker : BackgroundService
                 continue;
             }
 
+            var correlationId = Guid.NewGuid().ToString("N");
+
+            await governanceLogger.LogSchedulerRunAsync(
+                new SchedulerRunEntry($"worker:workflow:{workflow.Id:N}", "Dispatched", 1, correlationId),
+                cancellationToken);
+
             try
             {
                 var context = new WorkflowExecutionContext(
                     Guid.NewGuid(),
-                    Guid.NewGuid().ToString("N"),
+                    correlationId,
                     triggeredBy: "scheduler",
                     triggerType: "Scheduled");
                 var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
@@ -129,9 +166,12 @@ public sealed class Worker : BackgroundService
                     "Scheduled workflow {WorkflowId} '{Name}' fired at {ScheduledAtUtc} → {Status}.",
                     workflow.Id, workflow.Name, nowUtc, result.WorkflowRun.Status);
             }
-            catch (Exception exception)
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogError(exception, "Scheduled workflow {WorkflowId} '{Name}' failed.", workflow.Id, workflow.Name);
+                await governanceLogger.LogErrorAsync(
+                    new ErrorEntry("Error", exception.GetType().Name, exception.Message, exception.StackTrace, "Worker", correlationId),
+                    CancellationToken.None);
             }
         }
     }
