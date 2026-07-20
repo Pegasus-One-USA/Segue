@@ -1,9 +1,10 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { AuditLogEntry } from '../../models/governance.model';
+import { LocalDateTimePipe } from '../../../core/pipes/local-date-time.pipe';
 
 interface FieldDiff {
   field: string;
@@ -19,7 +20,7 @@ function formatValue(value: unknown): string {
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule],
+  imports: [CommonModule, LocalDateTimePipe, MatTableModule],
   templateUrl: './audit-logs.component.html',
   styleUrl: './audit-logs.component.scss',
 })

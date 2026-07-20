@@ -63,6 +63,15 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<EndpointHealthCheck> EndpointHealthChecks => Set<EndpointHealthCheck>();
     public DbSet<SmartLaunchLog> SmartLaunchLogs => Set<SmartLaunchLog>();
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // All DateTime values in this system represent UTC instants (DateTime.UtcNow at the
+        // write site). Stamping Kind=Utc on every read/write ensures the API serializes them
+        // with a "Z" suffix so the portal correctly converts to the viewer's local time.
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FHIRBridgeDbContext).Assembly);

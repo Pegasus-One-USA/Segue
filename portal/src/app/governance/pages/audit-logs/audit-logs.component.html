@@ -36,7 +36,7 @@
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
-          <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+          <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | localDateTime:'MMM d, h:mm:ss a' }}</td>
         </ng-container>
 
         <ng-container matColumnDef="actor">
