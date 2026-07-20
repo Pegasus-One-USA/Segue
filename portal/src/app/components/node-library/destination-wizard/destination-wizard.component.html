@@ -301,6 +301,8 @@
           [columnsForTable]="columnsForTableFn"
           [availableTablesToAdd]="availableTablesToAddFn"
           [connectionInfo]="connectionInfo()"
+          [openLoadPayloadRequest]="openLoadPayloadRequest()"
+          [openPreviewRequest]="openPreviewRequest()"
           (mappingRowsChange)="mappingRows.set($event)"
           (targetByResourceChange)="targetByResource.set($event)"
           (extraTablesChange)="onExtraTablesChange($event)"

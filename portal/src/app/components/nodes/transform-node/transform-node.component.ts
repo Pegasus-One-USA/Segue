@@ -83,29 +83,8 @@ export class TransformNodeComponent {
     return (this.node() as TransformNode).statusAtAdd === 'caveat';
   }
 
-  protected typeTag(): string {
-    const id = this.transformId();
-    if (id.startsWith('dest-'))                                      return 'Destination';
-    if (id === 'audit-lineage' || id === 'hedis' || id === 'anomaly' || id === 'patient-agg') return 'Analytics';
-    return 'Transform';
-  }
-
-  protected typeTagColor(): string {
-    const t = this.typeTag();
-    if (t === 'Destination') return '#1D4ED8';
-    if (t === 'Analytics')   return '#7C3AED';
-    return '#007A72';
-  }
-
   protected isDestination(): boolean {
     return this.transformId().startsWith('dest-');
-  }
-
-  protected typeTagBg(): string {
-    const t = this.typeTag();
-    if (t === 'Destination') return '#EFF6FF';
-    if (t === 'Analytics')   return '#F5F3FF';
-    return '#E6F9F7';
   }
 
   onAddNextClick(e: MouseEvent): void {

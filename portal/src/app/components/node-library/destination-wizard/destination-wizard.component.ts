@@ -143,9 +143,16 @@ export class DestinationWizardComponent implements OnInit {
   readonly saveMappingRequest = input<number>(0);
   private _lastExitTrigger = 0;
   private _lastSaveTrigger = 0;
+  // Same pattern, passed straight through to the mapping canvas — its "Load JSON payload"/"Preview
+  // output" actions now live in the dialog header (see NodeLibraryDialogComponent), not this canvas's
+  // own toolbar, so the wizard just forwards these without reacting to them itself.
+  readonly openLoadPayloadRequest = input<number>(0);
+  readonly openPreviewRequest = input<number>(0);
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
+  /** Total field-mapping count for the currently open group — the dialog header shows it next to the title. */
+  readonly mappingCountChange = output<number>();
 
   // Lets the parent (Node Library sidebar) lock out the other destination type
   // mid-wizard, and warn before discarding progress if the user switches anyway.
@@ -349,6 +356,7 @@ export class DestinationWizardComponent implements OnInit {
       const g = this.activeMappingGroup();
       this.mappingCanvasTitle.emit(g ? `Map fields — ${g}` : null);
     });
+    effect(() => this.mappingCountChange.emit(this.mappingRows().length));
 
     // Header-level Close/Save trigger counters — react only on an actual increment, never on the
     // initial read (both start at 0, so the first effect run must not fire either action).

@@ -1,14 +1,7 @@
 <div class="fm-canvas">
-  <div class="fm-toolbar">
-    <span class="fm-toolbar-destbadge">{{ destType() === 'sql' ? '🗄️' : '📄' }} {{ destTypeLabel() }}</span>
-    <span class="fm-toolbar-count">{{ mappingRows().length }} field mapping{{ mappingRows().length === 1 ? '' : 's' }}</span>
-    <span class="fm-toolbar-spacer"></span>
-    <button type="button" class="fm-toolbar-btn" (click)="openLoadPayloadModal()">⇩ Load JSON payload</button>
-    <button type="button" class="fm-toolbar-btn" (click)="openDrawer()">⤢ Preview output</button>
-  </div>
-
   <div
     class="fm-viewport"
+    id="fm-viewport"
     #viewport
     [class.fm-viewport--panning]="panning()"
     (pointerdown)="onViewportPointerDown($event)"
@@ -123,6 +116,32 @@
       (reset)="resetView()"
       (fit)="fitToView()"
     />
+
+    @if (scrollThumbFraction() < 1) {
+      <div
+        class="fm-scrollbar-track"
+        tabindex="0"
+        role="scrollbar"
+        aria-orientation="vertical"
+        aria-label="Scroll canvas vertically"
+        aria-controls="fm-viewport"
+        aria-valuemin="0"
+        [attr.aria-valuemax]="maxScrollY()"
+        [attr.aria-valuenow]="scrollY()"
+        (click)="onScrollTrackClick($event)"
+        (keydown)="onScrollTrackKeydown($event)"
+      >
+        <div
+          class="fm-scrollbar-thumb"
+          [style.height.%]="scrollThumbFraction() * 100"
+          [style.top.%]="scrollThumbTopFraction() * 100"
+          (pointerdown)="onScrollThumbPointerDown($event)"
+          (pointermove)="onScrollThumbPointerMove($event)"
+          (pointerup)="onScrollThumbPointerUp($event)"
+          (pointercancel)="onScrollThumbPointerUp($event)"
+        ></div>
+      </div>
+    }
   </div>
 
   <app-field-mapping-list

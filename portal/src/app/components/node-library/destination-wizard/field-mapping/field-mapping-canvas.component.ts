@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, computed, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy,
+  Component, ElementRef, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
 import { MappingRow, MappingSourceRef, isApproximated } from './field-mapping-model';
@@ -61,6 +61,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private readonly canvasInner = viewChild.required<ElementRef<HTMLElement>>('canvasInner');
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
   private resizeObserver: ResizeObserver | null = null;
+  private viewportResizeObserver: ResizeObserver | null = null;
 
   readonly resources = input.required<string[]>();
   readonly destType = input.required<'sql' | 'csv'>();
@@ -81,6 +82,14 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   // CREATE TABLE calls below. Only meaningful for destType 'sql'.
   readonly connectionInfo = input<DestinationProbeRequest | null>(null);
 
+  // Incrementing counters from the dialog header's "Load JSON payload"/"Preview output" buttons (moved
+  // there so this canvas's own toolbar row can be dropped, giving the viewport back that height) — same
+  // pattern as DestinationWizardComponent's exitMappingRequest/saveMappingRequest.
+  readonly openLoadPayloadRequest = input<number>(0);
+  readonly openPreviewRequest = input<number>(0);
+  private _lastLoadPayloadTrigger = 0;
+  private _lastPreviewTrigger = 0;
+
   readonly mappingRowsChange = output<MappingRow[]>();
   readonly targetByResourceChange = output<Record<string, string>>();
   readonly extraTablesChange = output<string[]>();
@@ -92,8 +101,6 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   readonly columnDropped = output<{ tableName: string; column: string }>();
   /** A JSON payload was successfully parsed — the parent stores these fields as the resource's source tree. */
   readonly sourcePayloadLoaded = output<{ resource: string; fields: ResourceFieldDef[] }>();
-
-  destTypeLabel(): string { return this.destType() === 'sql' ? 'SQL Server' : 'CSV File'; }
 
   // ── local UI state ──────────────────────────────────────────────────────
   readonly collapsedIds = signal<Set<string>>(new Set());
@@ -166,15 +173,34 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     return this.columnsForCardFn(resource, tableName, card?.isExtra ?? false);
   };
 
+  constructor() {
+    // React only on an actual increment, never the initial read (both start at 0).
+    effect(() => {
+      const v = this.openLoadPayloadRequest();
+      if (v !== this._lastLoadPayloadTrigger) { this._lastLoadPayloadTrigger = v; if (v > 0) this.openLoadPayloadModal(); }
+    });
+    effect(() => {
+      const v = this.openPreviewRequest();
+      if (v !== this._lastPreviewTrigger) { this._lastPreviewTrigger = v; if (v > 0) this.openDrawer(); }
+    });
+  }
+
   ngAfterViewInit(): void {
     const origin = this.canvasInner().nativeElement;
     this.anchors.setOrigin(origin);
     this.resizeObserver = new ResizeObserver(() => this.anchors.refreshAll());
     this.resizeObserver.observe(origin);
+
+    const viewportEl = this.viewport().nativeElement;
+    this.anchors.setViewportSize(viewportEl.clientWidth, viewportEl.clientHeight);
+    this.viewportResizeObserver = new ResizeObserver(() =>
+      this.anchors.setViewportSize(viewportEl.clientWidth, viewportEl.clientHeight));
+    this.viewportResizeObserver.observe(viewportEl);
   }
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    this.viewportResizeObserver?.disconnect();
   }
 
   // ── viewport pan / zoom (mirrors the main workflow canvas's CanvasService interaction pattern:
@@ -201,7 +227,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     if (!this.panStart || ev.pointerId !== this.panStart.pointerId) return;
     this.anchors.setPan(
       this.panStart.panX + (ev.clientX - this.panStart.startX),
-      this.panStart.panY + (ev.clientY - this.panStart.startY),
+      this.anchors.clampPanY(this.panStart.panY + (ev.clientY - this.panStart.startY)),
     );
   }
 
@@ -213,10 +239,83 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     this.panning.set(false);
   }
 
-  /** Wheel always zooms, anchored at the cursor — same behavior as the main canvas's onWheel. */
+  /** Plain wheel/trackpad scrolls the canvas vertically (bounded, like a real scrollbar); Ctrl/Cmd+wheel
+   *  zooms, anchored at the cursor — matches the vertical scrollbar's own bounded range exactly, since
+   *  both go through clampPanY/setScrollY. */
   onViewportWheel(ev: WheelEvent): void {
     ev.preventDefault();
-    this.anchors.setZoom(this.anchors.zoom() * (ev.deltaY < 0 ? 1.1 : 0.9), ev.clientX, ev.clientY);
+    if (ev.ctrlKey || ev.metaKey) {
+      this.anchors.setZoom(this.anchors.zoom() * (ev.deltaY < 0 ? 1.1 : 0.9), ev.clientX, ev.clientY);
+      return;
+    }
+    this.anchors.setScrollY(this.anchors.scrollY() + ev.deltaY);
+  }
+
+  // ── vertical scrollbar (custom-built, not a native overflow scrollbar — the canvas's virtual content
+  // is transform-scaled, which native overflow can't reliably size against across browsers; this reads
+  // the exact same pan/zoom state instead) ──
+  readonly scrollThumbFraction = this.anchors.scrollThumbFraction;
+  readonly scrollY = this.anchors.scrollY;
+  readonly maxScrollY = this.anchors.maxScrollY;
+  /** Thumb's top offset as a fraction of the track — 0 at the top, (1 - thumbFraction) at the bottom. */
+  readonly scrollThumbTopFraction = computed(() => {
+    const max = this.maxScrollY();
+    return max > 0 ? (this.scrollY() / max) * (1 - this.scrollThumbFraction()) : 0;
+  });
+
+  private thumbDragStart: { pointerId: number; startClientY: number; startScrollY: number; trackHeight: number } | null = null;
+
+  onScrollThumbPointerDown(ev: PointerEvent): void {
+    if (ev.button !== 0) return;
+    ev.stopPropagation(); // don't let this also start a viewport drag-pan
+    const track = (ev.currentTarget as HTMLElement).parentElement;
+    this.thumbDragStart = {
+      pointerId: ev.pointerId,
+      startClientY: ev.clientY,
+      startScrollY: this.anchors.scrollY(),
+      trackHeight: track?.clientHeight ?? this.anchors.viewportSize().height,
+    };
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+  }
+
+  onScrollThumbPointerMove(ev: PointerEvent): void {
+    if (!this.thumbDragStart || ev.pointerId !== this.thumbDragStart.pointerId) return;
+    const travel = this.thumbDragStart.trackHeight * (1 - this.anchors.scrollThumbFraction());
+    if (travel <= 0) return;
+    const deltaScroll = ((ev.clientY - this.thumbDragStart.startClientY) / travel) * this.anchors.maxScrollY();
+    this.anchors.setScrollY(this.thumbDragStart.startScrollY + deltaScroll);
+  }
+
+  onScrollThumbPointerUp(ev: PointerEvent): void {
+    if (!this.thumbDragStart || ev.pointerId !== this.thumbDragStart.pointerId) return;
+    const el = ev.currentTarget as HTMLElement;
+    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    this.thumbDragStart = null;
+  }
+
+  /** Clicking empty track (not the thumb itself) pages toward the click, like a native scrollbar. */
+  onScrollTrackClick(ev: MouseEvent): void {
+    if (ev.target !== ev.currentTarget) return;
+    const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const clickScrollPos = ((ev.clientY - rect.top) / rect.height) * this.anchors.maxScrollY();
+    const current = this.anchors.scrollY();
+    const page = this.anchors.viewportSize().height * 0.9;
+    this.anchors.setScrollY(clickScrollPos > current ? current + page : current - page);
+  }
+
+  onScrollTrackKeydown(ev: KeyboardEvent): void {
+    const current = this.anchors.scrollY();
+    const page = this.anchors.viewportSize().height * 0.9;
+    switch (ev.key) {
+      case 'ArrowUp':   this.anchors.setScrollY(current - 40); break;
+      case 'ArrowDown': this.anchors.setScrollY(current + 40); break;
+      case 'PageUp':    this.anchors.setScrollY(current - page); break;
+      case 'PageDown':  this.anchors.setScrollY(current + page); break;
+      case 'Home':      this.anchors.setScrollY(0); break;
+      case 'End':       this.anchors.setScrollY(this.anchors.maxScrollY()); break;
+      default: return;
+    }
+    ev.preventDefault();
   }
 
   zoomIn(): void { this.anchors.setZoom(this.anchors.zoom() + 0.1); }

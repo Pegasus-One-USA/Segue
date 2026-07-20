@@ -1,0 +1,1087 @@
+{
+  "fhirVersion": "epic-r4",
+  "generatedBy": "tools/EpicTemplateCatalogGenerator (parsed from Epic profile templates)",
+  "resources": {
+    "Patient": [
+      {
+        "label": "Active",
+        "jsonPath": "$.active",
+        "fhirPath": "active",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A City",
+        "jsonPath": "$.address[*].city",
+        "fhirPath": "address.city",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A Country",
+        "jsonPath": "$.address[*].country",
+        "fhirPath": "address.country",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A District",
+        "jsonPath": "$.address[*].district",
+        "fhirPath": "address.district",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A Line",
+        "jsonPath": "$.address[*].line[*]",
+        "fhirPath": "address.line",
+        "cardinality": "0..*",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": true,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A Period \u203A End",
+        "jsonPath": "$.address[*].period.end",
+        "fhirPath": "address.period.end",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A Period \u203A Start",
+        "jsonPath": "$.address[*].period.start",
+        "fhirPath": "address.period.start",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A Postal Code",
+        "jsonPath": "$.address[*].postalCode",
+        "fhirPath": "address.postalCode",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A State",
+        "jsonPath": "$.address[*].state",
+        "fhirPath": "address.state",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Address \u203A Use",
+        "jsonPath": "$.address[*].use",
+        "fhirPath": "address.use",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "address"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Birth Date",
+        "jsonPath": "$.birthDate",
+        "fhirPath": "birthDate",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "Date",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Birth Sex",
+        "jsonPath": "$.birthsex",
+        "fhirPath": "birthsex",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex"
+      },
+      {
+        "label": "Communication \u203A Preferred",
+        "jsonPath": "$.communication[*].preferred",
+        "fhirPath": "communication.preferred",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "communication"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A City",
+        "jsonPath": "$.contact[*].address.city",
+        "fhirPath": "contact.address.city",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A Country",
+        "jsonPath": "$.contact[*].address.country",
+        "fhirPath": "contact.address.country",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A District",
+        "jsonPath": "$.contact[*].address.district",
+        "fhirPath": "contact.address.district",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A Line",
+        "jsonPath": "$.contact[*].address.line[*]",
+        "fhirPath": "contact.address.line",
+        "cardinality": "0..*",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": true,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A Period \u203A End",
+        "jsonPath": "$.contact[*].address.period.end",
+        "fhirPath": "contact.address.period.end",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A Period \u203A Start",
+        "jsonPath": "$.contact[*].address.period.start",
+        "fhirPath": "contact.address.period.start",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A Postal Code",
+        "jsonPath": "$.contact[*].address.postalCode",
+        "fhirPath": "contact.address.postalCode",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A State",
+        "jsonPath": "$.contact[*].address.state",
+        "fhirPath": "contact.address.state",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Address \u203A Use",
+        "jsonPath": "$.contact[*].address.use",
+        "fhirPath": "contact.address.use",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Name \u203A Family",
+        "jsonPath": "$.contact[*].name.family",
+        "fhirPath": "contact.name.family",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Name \u203A Given",
+        "jsonPath": "$.contact[*].name.given[*]",
+        "fhirPath": "contact.name.given",
+        "cardinality": "1..*",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": true,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Name \u203A Prefix",
+        "jsonPath": "$.contact[*].name.prefix",
+        "fhirPath": "contact.name.prefix",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Name \u203A Suffix",
+        "jsonPath": "$.contact[*].name.suffix[*]",
+        "fhirPath": "contact.name.suffix",
+        "cardinality": "0..*",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": true,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Name \u203A Use",
+        "jsonPath": "$.contact[*].name.use",
+        "fhirPath": "contact.name.use",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Organization \u203A Display",
+        "jsonPath": "$.contact[*].organization.display",
+        "fhirPath": "contact.organization.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Organization \u203A Reference",
+        "jsonPath": "$.contact[*].organization.reference",
+        "fhirPath": "contact.organization.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Organization \u203A Type",
+        "jsonPath": "$.contact[*].organization.type",
+        "fhirPath": "contact.organization.type",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Period \u203A End",
+        "jsonPath": "$.contact[*].period.end",
+        "fhirPath": "contact.period.end",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Period \u203A Start",
+        "jsonPath": "$.contact[*].period.start",
+        "fhirPath": "contact.period.start",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "contact"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Relationship \u203A Coding \u203A Code",
+        "jsonPath": "$.contact[*].relationship[*].coding[*].code",
+        "fhirPath": "contact.relationship.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.relationship",
+          "contact.relationship.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Relationship \u203A Coding \u203A Display",
+        "jsonPath": "$.contact[*].relationship[*].coding[*].display",
+        "fhirPath": "contact.relationship.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.relationship",
+          "contact.relationship.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Relationship \u203A Coding \u203A System",
+        "jsonPath": "$.contact[*].relationship[*].coding[*].system",
+        "fhirPath": "contact.relationship.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.relationship",
+          "contact.relationship.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Relationship \u203A Coding \u203A User Selected",
+        "jsonPath": "$.contact[*].relationship[*].coding[*].userSelected",
+        "fhirPath": "contact.relationship.coding.userSelected",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.relationship",
+          "contact.relationship.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Relationship \u203A Coding \u203A Version",
+        "jsonPath": "$.contact[*].relationship[*].coding[*].version",
+        "fhirPath": "contact.relationship.coding.version",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.relationship",
+          "contact.relationship.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Telecom \u203A Rank",
+        "jsonPath": "$.contact[*].telecom[*].rank",
+        "fhirPath": "contact.telecom.rank",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Integer",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.telecom"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Telecom \u203A System",
+        "jsonPath": "$.contact[*].telecom[*].system",
+        "fhirPath": "contact.telecom.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.telecom"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Telecom \u203A Use",
+        "jsonPath": "$.contact[*].telecom[*].use",
+        "fhirPath": "contact.telecom.use",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.telecom"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Contact \u203A Telecom \u203A Value",
+        "jsonPath": "$.contact[*].telecom[*].value",
+        "fhirPath": "contact.telecom.value",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "contact",
+          "contact.telecom"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Deceased Boolean",
+        "jsonPath": "$.deceasedBoolean",
+        "fhirPath": "deceasedBoolean",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Deceased Date Time",
+        "jsonPath": "$.deceasedDateTime",
+        "fhirPath": "deceasedDateTime",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Ethnicity",
+        "jsonPath": "$.ethnicity",
+        "fhirPath": "ethnicity",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity#text"
+      },
+      {
+        "label": "Gender",
+        "jsonPath": "$.gender",
+        "fhirPath": "gender",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "General Practitioner \u203A Display",
+        "jsonPath": "$.generalPractitioner[*].display",
+        "fhirPath": "generalPractitioner.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "generalPractitioner"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "General Practitioner \u203A Reference",
+        "jsonPath": "$.generalPractitioner[*].reference",
+        "fhirPath": "generalPractitioner.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "generalPractitioner"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "General Practitioner \u203A Type",
+        "jsonPath": "$.generalPractitioner[*].type",
+        "fhirPath": "generalPractitioner.type",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "generalPractitioner"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Id",
+        "jsonPath": "$.id",
+        "fhirPath": "id",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Period \u203A End",
+        "jsonPath": "$.identifier[*].period.end",
+        "fhirPath": "identifier.period.end",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "identifier"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Period \u203A Start",
+        "jsonPath": "$.identifier[*].period.start",
+        "fhirPath": "identifier.period.start",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "identifier"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A System",
+        "jsonPath": "$.identifier[*].system",
+        "fhirPath": "identifier.system",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Type \u203A Coding \u203A Code",
+        "jsonPath": "$.identifier[*].type.coding[*].code",
+        "fhirPath": "identifier.type.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier",
+          "identifier.type.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Type \u203A Coding \u203A Display",
+        "jsonPath": "$.identifier[*].type.coding[*].display",
+        "fhirPath": "identifier.type.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier",
+          "identifier.type.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Type \u203A Coding \u203A System",
+        "jsonPath": "$.identifier[*].type.coding[*].system",
+        "fhirPath": "identifier.type.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier",
+          "identifier.type.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Type \u203A Coding \u203A User Selected",
+        "jsonPath": "$.identifier[*].type.coding[*].userSelected",
+        "fhirPath": "identifier.type.coding.userSelected",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "identifier",
+          "identifier.type.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Type \u203A Coding \u203A Version",
+        "jsonPath": "$.identifier[*].type.coding[*].version",
+        "fhirPath": "identifier.type.coding.version",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier",
+          "identifier.type.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Value",
+        "jsonPath": "$.identifier[*].value",
+        "fhirPath": "identifier.value",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Legal Sex",
+        "jsonPath": "$.legalSex",
+        "fhirPath": "legalSex",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": "http://open.epic.com/FHIR/StructureDefinition/extension/legal-sex"
+      },
+      {
+        "label": "Link \u203A Other \u203A Display",
+        "jsonPath": "$.link[*].other.display",
+        "fhirPath": "link.other.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "link"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Link \u203A Other \u203A Reference",
+        "jsonPath": "$.link[*].other.reference",
+        "fhirPath": "link.other.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "link"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Link \u203A Other \u203A Type",
+        "jsonPath": "$.link[*].other.type",
+        "fhirPath": "link.other.type",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "link"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Link \u203A Type",
+        "jsonPath": "$.link[*].type",
+        "fhirPath": "link.type",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "link"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Managing Organization \u203A Display",
+        "jsonPath": "$.managingOrganization.display",
+        "fhirPath": "managingOrganization.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Managing Organization \u203A Reference",
+        "jsonPath": "$.managingOrganization.reference",
+        "fhirPath": "managingOrganization.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Managing Organization \u203A Type",
+        "jsonPath": "$.managingOrganization.type",
+        "fhirPath": "managingOrganization.type",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Marital Status \u203A Coding \u203A Code",
+        "jsonPath": "$.maritalStatus.coding[*].code",
+        "fhirPath": "maritalStatus.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "maritalStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Marital Status \u203A Coding \u203A Display",
+        "jsonPath": "$.maritalStatus.coding[*].display",
+        "fhirPath": "maritalStatus.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "maritalStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Marital Status \u203A Coding \u203A System",
+        "jsonPath": "$.maritalStatus.coding[*].system",
+        "fhirPath": "maritalStatus.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "maritalStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Marital Status \u203A Coding \u203A User Selected",
+        "jsonPath": "$.maritalStatus.coding[*].userSelected",
+        "fhirPath": "maritalStatus.coding.userSelected",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "maritalStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Marital Status \u203A Coding \u203A Version",
+        "jsonPath": "$.maritalStatus.coding[*].version",
+        "fhirPath": "maritalStatus.coding.version",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "maritalStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Multiple Birth Integer",
+        "jsonPath": "$.multipleBirthInteger",
+        "fhirPath": "multipleBirthInteger",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Integer",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Name \u203A Family",
+        "jsonPath": "$.name[*].family",
+        "fhirPath": "name.family",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "name"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Name \u203A Given",
+        "jsonPath": "$.name[*].given[*]",
+        "fhirPath": "name.given",
+        "cardinality": "1..*",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": true,
+        "arrays": [
+          "name"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Name \u203A Prefix",
+        "jsonPath": "$.name[*].prefix",
+        "fhirPath": "name.prefix",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "name"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Name \u203A Suffix",
+        "jsonPath": "$.name[*].suffix[*]",
+        "fhirPath": "name.suffix",
+        "cardinality": "0..*",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": true,
+        "arrays": [
+          "name"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Name \u203A Use",
+        "jsonPath": "$.name[*].use",
+        "fhirPath": "name.use",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "name"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Pronouns",
+        "jsonPath": "$.pronouns",
+        "fhirPath": "pronouns",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": "http://open.epic.com/FHIR/StructureDefinition/extension/calculated-pronouns-to-use-for-text"
+      },
+      {
+        "label": "Race",
+        "jsonPath": "$.race",
+        "fhirPath": "race",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race#text"
+      },
+      {
+        "label": "Race Category",
+        "jsonPath": "$.raceCategory",
+        "fhirPath": "raceCategory",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race#ombCategory"
+      },
+      {
+        "label": "Telecom \u203A Rank",
+        "jsonPath": "$.telecom[*].rank",
+        "fhirPath": "telecom.rank",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Integer",
+        "isArray": false,
+        "arrays": [
+          "telecom"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Telecom \u203A System",
+        "jsonPath": "$.telecom[*].system",
+        "fhirPath": "telecom.system",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "telecom"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Telecom \u203A Use",
+        "jsonPath": "$.telecom[*].use",
+        "fhirPath": "telecom.use",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "telecom"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Telecom \u203A Value",
+        "jsonPath": "$.telecom[*].value",
+        "fhirPath": "telecom.value",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "telecom"
+        ],
+        "sourceExtension": null
+      }
+    ]
+  }
+}

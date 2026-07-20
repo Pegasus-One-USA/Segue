@@ -1,10 +1,44 @@
+// :host's own height is bound via @HostBinding (field-mapping-list.component.ts) while expanded, so
+// this becomes a real, bounded flex column instead of "grow to content" — .fm-list-body (flex: 1 below)
+// is what actually absorbs whatever height that leaves after the handle + head, exactly mirroring how
+// .fm-canvas/.fm-viewport already divide space with the same flex: 1; min-height: 0 pattern.
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
 }
 
+// Drag up/down to trade height with the canvas above. A real, normal-flow element (not an absolutely
+// positioned overlay poking into the canvas above) — that canvas has its own drag-to-pan pointerdown
+// handler on the exact same pixels an overlay approach would've shared, which is what silently ate the
+// drag before it ever reached this handle.
+.fm-list-resize-handle {
+  flex-shrink: 0;
+  height: 8px;
+  cursor: row-resize;
+  touch-action: none;
+  position: relative;
+
+  &:hover, &:active {
+    &::after { background: var(--color-primary-mid); }
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: transparent;
+    transition: background var(--transition-base, 150ms ease);
+  }
+}
+
 .fm-list-head {
+  flex-shrink: 0;
   width: 100%;
   display: flex;
   align-items: center;
@@ -38,7 +72,8 @@
 .fm-list-hint { font-size: 11px; font-weight: 400; color: var(--color-muted-2); }
 
 .fm-list-body {
-  max-height: 220px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: var(--space-6) var(--space-8);
 }

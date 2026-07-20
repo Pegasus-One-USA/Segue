@@ -19,6 +19,9 @@
     <Content Include="Mapping\Catalog\fhir-r4-catalog.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Mapping\Catalog\fhir-r4-catalog.epic.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

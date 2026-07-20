@@ -182,6 +182,19 @@ export class NodeLibraryDialogComponent {
   readonly saveMappingTrigger = signal(0);
   bumpExitMappingTrigger(): void { this.exitMappingTrigger.update(v => v + 1); }
   bumpSaveMappingTrigger(): void { this.saveMappingTrigger.update(v => v + 1); }
+
+  // Same counter-trigger pattern for the canvas's "Load JSON payload"/"Preview output" actions, now
+  // shown here instead of the canvas's own toolbar row (freeing that row's height for the canvas itself).
+  readonly loadPayloadTrigger = signal(0);
+  readonly previewOutputTrigger = signal(0);
+  bumpLoadPayloadTrigger(): void { this.loadPayloadTrigger.update(v => v + 1); }
+  bumpPreviewOutputTrigger(): void { this.previewOutputTrigger.update(v => v + 1); }
+
+  // Mirrors the open canvas's own destination type / mapping count so the header can show them
+  // without reaching into the wizard's nested-@if template (a template ref there is out of scope here).
+  readonly destMappingTypeLabel = computed(() => this.destWizardType() === 'sql' ? 'SQL Server' : 'CSV');
+  readonly destMappingCount = signal(0);
+
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | null>(null);
 
   private readonly destTypeLocked = computed(() =>
@@ -414,6 +427,7 @@ export class NodeLibraryDialogComponent {
     this.destWizardHasProgressed.set(false);
     this.destMappingCanvasActive.set(false);
     this.destMappingTitle.set(null);
+    this.destMappingCount.set(0);
     this.showDestWizard.set(true);
   }
 
@@ -430,6 +444,7 @@ export class NodeLibraryDialogComponent {
     this.destWizardHasProgressed.set(false);
     this.destMappingCanvasActive.set(false);
     this.destMappingTitle.set(null);
+    this.destMappingCount.set(0);
     this.showDestWizard.set(true);
   }
 
@@ -448,6 +463,7 @@ export class NodeLibraryDialogComponent {
     this.destWizardHasProgressed.set(false);
     this.destMappingCanvasActive.set(false);
     this.destMappingTitle.set(null);
+    this.destMappingCount.set(0);
   }
 
   // ── add to pipeline (fallback for items without an auto-open form) ───────
@@ -493,6 +509,7 @@ export class NodeLibraryDialogComponent {
     this.destWizardHasProgressed.set(false);
     this.destMappingCanvasActive.set(false);
     this.destMappingTitle.set(null);
+    this.destMappingCount.set(0);
     this.pendingDestSwitch.set(null);
     this.wiz.close();
   }

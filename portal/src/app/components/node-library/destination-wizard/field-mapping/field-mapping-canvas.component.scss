@@ -2,59 +2,14 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 480px;
   position: relative;
 }
 
-.fm-canvas { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-
-.fm-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-6);
-  padding: var(--space-4) 0 var(--space-6);
-}
-
-.fm-toolbar-spacer { flex: 1; }
-
-.fm-toolbar-count {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-  background: var(--color-side);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-8);
-  white-space: nowrap;
-}
-
-.fm-toolbar-destbadge {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-primary-dark);
-  background: var(--color-primary-soft);
-  border: 1px solid var(--color-primary-mid);
-  border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-8);
-  white-space: nowrap;
-}
-
-.fm-toolbar-btn {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-base);
-  padding: var(--space-2) var(--space-8);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-  cursor: pointer;
-  transition: background var(--transition-base), border-color var(--transition-base);
-
-  &:hover { background: var(--color-primary-soft); border-color: var(--color-primary-mid); color: var(--color-primary-dark); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
-}
+// No scroll at this level, ever — the pan/zoom viewport's own content now has a single, dedicated
+// vertical scrollbar (.fm-scrollbar-track/.fm-scrollbar-thumb below), and the mapping list has its own
+// bounded internal scroll (.fm-list-body's max-height). A second scroll region here would just be a
+// confusing, differently-styled native scrollbar layered on top of the real one.
+.fm-canvas { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: hidden; }
 
 .fm-viewport {
   position: relative;
@@ -65,7 +20,10 @@
   // to `position: absolute` (needed so it stops contributing to flow-based sizing at all, since panning
   // replaces it) removed that anchor, so without this the whole chain has nothing to resolve a height
   // from and collapses. flex: 1 still lets it grow beyond this floor whenever more space is available.
-  min-height: 400px;
+  // MUST match FieldMappingListComponent's MIN_CANVAS_HEIGHT constant — that's what the mapping list's
+  // own resize clamp assumes this can shrink to; a mismatch here means the two panels stop summing to
+  // the full available height (overflow or a gap, depending on which direction it's off by).
+  min-height: 150px;
   overflow: hidden;
   background: var(--color-bg);
   background-image: radial-gradient(color-mix(in srgb, var(--color-primary) 15%, transparent) 1px, transparent 1px);
@@ -87,6 +45,37 @@
   width: 4000px;
   height: 2600px;
   transform-origin: 0 0;
+}
+
+// Custom vertical scrollbar — not a native overflow scrollbar, since .fm-canvas-inner's transform-scale
+// can't be relied on cross-browser to size a native scroll area correctly. Reads/writes the same pan.y
+// the drag-pan and wheel-scroll already use (see FieldMappingAnchorService), so all three interaction
+// methods stay in perfect sync.
+.fm-scrollbar-track {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  z-index: 15;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  transition: background var(--transition-base, 150ms ease);
+
+  &:hover { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+}
+
+.fm-scrollbar-thumb {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  min-height: 32px;
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--color-ink) 22%, transparent);
+  cursor: pointer;
+  touch-action: none;
+
+  &:hover, &:active { background: color-mix(in srgb, var(--color-ink) 38%, transparent); }
 }
 
 // Fixed chrome (like the zoom-dock) — top-right of the viewport, not the pannable/zoomable content, so
@@ -198,5 +187,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fm-toolbar-btn, .fm-add-table-select { transition: none; }
+  .fm-add-table-select { transition: none; }
 }

@@ -1,14 +1,23 @@
-<div class="fm-list-wrap" [class.fm-list-wrap--collapsed]="collapsed()">
-  <button type="button" class="fm-list-head" (click)="toggleCollapsed()" [attr.aria-expanded]="!collapsed()">
-    <span class="fm-list-caret" aria-hidden="true">{{ collapsed() ? '▸' : '▾' }}</span>
-    Mapping list
-    <span class="fm-list-count">{{ rows().length }}</span>
-    <span class="fm-list-spacer"></span>
-    <span class="fm-list-hint">Edit joins, delimiters, or instance selection here — no dragging required</span>
-  </button>
+@if (!collapsed()) {
+  <div
+    class="fm-list-resize-handle"
+    (pointerdown)="onResizeHandlePointerDown($event)"
+    (pointermove)="onResizeHandlePointerMove($event)"
+    (pointerup)="onResizeHandlePointerUp($event)"
+    (pointercancel)="onResizeHandlePointerUp($event)"
+  ></div>
+}
 
-  @if (!collapsed()) {
-    <div class="fm-list-body">
+<button type="button" class="fm-list-head" (click)="toggleCollapsed()" [attr.aria-expanded]="!collapsed()">
+  <span class="fm-list-caret" aria-hidden="true">{{ collapsed() ? '▸' : '▾' }}</span>
+  Mapping list
+  <span class="fm-list-count">{{ rows().length }}</span>
+  <span class="fm-list-spacer"></span>
+  <span class="fm-list-hint">Edit joins, delimiters, or instance selection here — no dragging required</span>
+</button>
+
+@if (!collapsed()) {
+  <div class="fm-list-body">
       <table class="data-table">
         <thead class="data-table__header">
           <tr>
@@ -121,4 +130,4 @@
       }
     </div>
   }
-</div>
+

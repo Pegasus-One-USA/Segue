@@ -1,6 +1,7 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, HostBinding, computed, inject, input, output, signal } from '@angular/core';
 import { MappingRow, MappingInstanceSelection } from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
+import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 
 interface NewMappingDraft {
   resource: string;
@@ -37,6 +38,11 @@ function collectGroups(node: FmTreeNode, out: FmTreeNode[] = []): FmTreeNode[] {
   styleUrl: './field-mapping-list.component.scss',
 })
 export class FieldMappingListComponent {
+  // Same injector subtree as FieldMappingCanvasComponent (which provides this) — reused here purely to
+  // read the pan/zoom viewport's live height, so this panel's resize can be clamped against the real
+  // total space it shares with the canvas, not a guessed constant.
+  private readonly anchors = inject(FieldMappingAnchorService);
+
   readonly rows = input.required<MappingRow[]>();
   readonly resources = input.required<string[]>();
   readonly forest = input.required<FmTreeNode[]>();
@@ -54,6 +60,53 @@ export class FieldMappingListComponent {
   readonly draft = signal<NewMappingDraft | null>(null);
 
   toggleCollapsed(): void { this.collapsed.update(v => !v); }
+
+  // ── drag-to-resize this panel's whole height (handle + head + body) — the boundary between the
+  // canvas above and this list. The canvas's own min-height (.fm-viewport CSS) MUST match
+  // MIN_CANVAS_HEIGHT below, or the two clamps disagree and either overflow or leave a gap. ──
+  private static readonly MIN_PANEL_HEIGHT = 150;
+  private static readonly MIN_CANVAS_HEIGHT = 150;
+  readonly panelHeight = signal(260);
+
+  @HostBinding('style.height.px') get hostHeight(): number | null {
+    return this.collapsed() ? null : this.panelHeight();
+  }
+
+  private resizeStart: { pointerId: number; startClientY: number; startHeight: number; totalAvailable: number } | null = null;
+
+  onResizeHandlePointerDown(ev: PointerEvent): void {
+    if (ev.button !== 0) return;
+    // Captured once per drag, not read live on every move — the canvas viewport's own height changes
+    // in lockstep with this panel's (both are flex siblings under one fixed-height parent), so re-reading
+    // it mid-drag would just be reading back the effect of this same drag instead of the fixed total.
+    this.resizeStart = {
+      pointerId: ev.pointerId,
+      startClientY: ev.clientY,
+      startHeight: this.panelHeight(),
+      totalAvailable: this.anchors.viewportSize().height + this.panelHeight(),
+    };
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+  }
+
+  onResizeHandlePointerMove(ev: PointerEvent): void {
+    if (!this.resizeStart || ev.pointerId !== this.resizeStart.pointerId) return;
+    // Dragging the handle down grows the canvas above (and shrinks this list); dragging up grows this
+    // list (and shrinks the canvas) — the handle sits at this panel's own top edge.
+    const delta = ev.clientY - this.resizeStart.startClientY;
+    const next = this.resizeStart.startHeight - delta;
+    const maxHeight = this.resizeStart.totalAvailable - FieldMappingListComponent.MIN_CANVAS_HEIGHT;
+    this.panelHeight.set(Math.max(
+      FieldMappingListComponent.MIN_PANEL_HEIGHT,
+      Math.min(maxHeight, next),
+    ));
+  }
+
+  onResizeHandlePointerUp(ev: PointerEvent): void {
+    if (!this.resizeStart || ev.pointerId !== this.resizeStart.pointerId) return;
+    const el = ev.currentTarget as HTMLElement;
+    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    this.resizeStart = null;
+  }
 
   rowKey(row: MappingRow): string { return `${row.resource}::${row.tableName}::${row.targetName}`; }
 

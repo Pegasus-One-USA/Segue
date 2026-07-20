@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, inject, input, output, viewChildren, AfterViewInit,
+  Component, ElementRef, inject, input, output, viewChild, viewChildren, AfterViewInit, OnDestroy,
 } from '@angular/core';
 import { MappingRow } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -19,9 +19,11 @@ import { FieldMappingAnchorService } from './field-mapping-anchor.service';
   templateUrl: './field-mapping-target-card.component.html',
   styleUrl: './field-mapping-target-card.component.scss',
 })
-export class FieldMappingTargetCardComponent implements AfterViewInit {
+export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy {
   private readonly anchors = inject(FieldMappingAnchorService);
   private readonly columnRows = viewChildren<ElementRef<HTMLElement>>('columnRow');
+  private readonly card = viewChild.required<ElementRef<HTMLElement>>('card');
+  private resizeObserver: ResizeObserver | null = null;
 
   readonly resource = input.required<string>();
   /** Which destination table this card represents — the resource's primary table, or an added extra one. */
@@ -75,6 +77,15 @@ export class FieldMappingTargetCardComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
     this.registerRows();
+    // The card is now user-resizable (CSS `resize: both`), which doesn't fire any DOM event or trigger
+    // Angular change detection on its own — without this, wires attached to rows inside it would
+    // visually lag behind a drag-resize until some unrelated action happened to run ngDoCheck.
+    this.resizeObserver = new ResizeObserver(() => this.anchors.refreshAll());
+    this.resizeObserver.observe(this.card().nativeElement);
+  }
+
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
   }
 
   ngDoCheck(): void {

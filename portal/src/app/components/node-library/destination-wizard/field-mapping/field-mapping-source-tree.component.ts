@@ -1,4 +1,4 @@
-import { Component, inject, input, output } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, inject, input, output, viewChild } from '@angular/core';
 import { FmTreeNode } from './field-mapping-tree.util';
 import { FieldMappingTreeNodeComponent, FmDragStart, FmDragMove, FmDragEnd } from './field-mapping-tree-node.component';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -15,8 +15,10 @@ import { FieldMappingAnchorService } from './field-mapping-anchor.service';
   templateUrl: './field-mapping-source-tree.component.html',
   styleUrl: './field-mapping-source-tree.component.scss',
 })
-export class FieldMappingSourceTreeComponent {
+export class FieldMappingSourceTreeComponent implements AfterViewInit, OnDestroy {
   private readonly anchors = inject(FieldMappingAnchorService);
+  private readonly card = viewChild.required<ElementRef<HTMLElement>>('card');
+  private resizeObserver: ResizeObserver | null = null;
 
   readonly forest = input.required<FmTreeNode[]>();
   readonly isCollapsed = input.required<(id: string) => boolean>();
@@ -33,6 +35,18 @@ export class FieldMappingSourceTreeComponent {
   readonly positionChange = output<{ x: number; y: number }>();
 
   private dragOffset: { dx: number; dy: number } | null = null;
+
+  ngAfterViewInit(): void {
+    // The card is now user-resizable (CSS `resize: both`), which doesn't fire any DOM event on its
+    // own — without this, the wires attached to rows inside it would visually lag behind a drag-resize
+    // until some unrelated action happened to bump the anchor registry's version.
+    this.resizeObserver = new ResizeObserver(() => this.anchors.refreshAll());
+    this.resizeObserver.observe(this.card().nativeElement);
+  }
+
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
+  }
 
   onHeadPointerDown(ev: PointerEvent): void {
     if (ev.button !== 0) return;

@@ -4,14 +4,25 @@
   position: absolute;
   z-index: 2;
   width: 260px;
+  height: 340px;
+  min-width: 220px;
+  max-width: 640px;
+  min-height: 160px;
+  max-height: 1200px;
+  display: flex;
+  flex-direction: column;
+  // resize needs overflow other than the default `visible` to reliably show the drag handle across
+  // browsers — `auto` here (not `hidden`), same reasoning as the join popover's own resize handle.
+  resize: both;
+  overflow: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-xs);
-  overflow: hidden;
 }
 
 .fm-target-head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -58,6 +69,7 @@
 }
 
 .fm-target-select-row {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -91,7 +103,12 @@
   }
 }
 
-.fm-target-rows { background: var(--color-surface); }
+.fm-target-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-surface);
+}
 
 .fm-target-row {
   position: relative;

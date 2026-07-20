@@ -11,7 +11,18 @@ public static class DependencyInjection
     public static IServiceCollection AddFHIRBridgeApplication(this IServiceCollection services)
     {
         services.AddScoped<IJsonMappingEngine, JsonMappingEngine>();
-        services.AddSingleton<IFhirElementCatalog, EmbeddedFhirElementCatalog>();
+
+        // Vendor-keyed catalogs (registry-over-switch: one class, one instance per catalog file, picked
+        // by key rather than a switch on SourceSystemType — see MappingController.GetCatalogFields).
+        // "Generic" is also exposed unkeyed so every pre-existing plain `IFhirElementCatalog` injection
+        // (SourceCapabilitiesController, etc.) keeps resolving to the same base-FHIR-R4 catalog instance
+        // it always has, unchanged.
+        services.AddKeyedSingleton<IFhirElementCatalog>(
+            FhirElementCatalogKeys.Generic, (_, _) => new EmbeddedFhirElementCatalog("fhir-r4-catalog.json"));
+        services.AddKeyedSingleton<IFhirElementCatalog>(
+            FhirElementCatalogKeys.Epic, (_, _) => new EmbeddedFhirElementCatalog("fhir-r4-catalog.epic.json"));
+        services.AddSingleton<IFhirElementCatalog>(sp =>
+            sp.GetRequiredKeyedService<IFhirElementCatalog>(FhirElementCatalogKeys.Generic));
         services.AddScoped<IMappingMaterializer, DefaultMappingMaterializer>();
         services.AddScoped<IResourceNormalizationService, PassThroughResourceNormalizationService>();
         services.AddScoped<IMappedRecordNormalizationService, PassThroughMappedRecordNormalizationService>();

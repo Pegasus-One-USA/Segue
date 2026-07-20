@@ -28,11 +28,52 @@ export class FieldMappingAnchorService {
 
   private readonly _pan = signal<{ x: number; y: number }>({ x: 0, y: 0 });
   private readonly _zoom = signal<number>(1);
+  private readonly _viewportSize = signal<{ width: number; height: number }>({ width: 0, height: 0 });
 
   readonly pan = this._pan.asReadonly();
   readonly zoom = this._zoom.asReadonly();
+  readonly viewportSize = this._viewportSize.asReadonly();
 
   readonly zoomPercent = computed(() => Math.round(this._zoom() * 100) + '%');
+
+  // ── vertical scrollbar (replaces vertical drag-pan/wheel with a real, bounded scroll range —
+  // horizontal pan stays free-form via drag, unaffected by any of this) ──
+  private static readonly VIRTUAL_HEIGHT = 2600; // matches .fm-canvas-inner's fixed height
+
+  setViewportSize(width: number, height: number): void {
+    this._viewportSize.set({ width, height });
+  }
+
+  /** How far content can travel before its bottom edge reaches the viewport's bottom edge — the
+   *  range a scrollbar thumb travels across. 0 once everything already fits (no scrolling needed). */
+  readonly maxScrollY = computed(() =>
+    Math.max(0, FieldMappingAnchorService.VIRTUAL_HEIGHT * this._zoom() - this._viewportSize().height));
+
+  /** Current scroll position derived from pan.y — 0 at the top of content, maxScrollY at the bottom. */
+  readonly scrollY = computed(() => Math.min(this.maxScrollY(), Math.max(0, -this._pan().y)));
+
+  /** Thumb height as a fraction of the track; 1 means content already fits (no scrollbar needed). */
+  readonly scrollThumbFraction = computed(() => {
+    const contentHeight = FieldMappingAnchorService.VIRTUAL_HEIGHT * this._zoom();
+    return contentHeight > 0 ? Math.min(1, this._viewportSize().height / contentHeight) : 1;
+  });
+
+  /**
+   * Clamps a candidate Y pan to the scrollbar-compatible range [-maxScrollY, 0] — used by drag-pan and
+   * wheel-scroll. fitToView/resetView/setZoom deliberately do NOT go through this: they have their own
+   * positioning logic (e.g. centering content shorter than the viewport can legitimately need pan.y > 0,
+   * which a scrollbar has no equivalent of).
+   */
+  clampPanY(y: number): number {
+    const max = this.maxScrollY();
+    return Math.max(-max, Math.min(0, y));
+  }
+
+  setScrollY(scrollY: number): void {
+    const max = this.maxScrollY();
+    const clamped = Math.max(0, Math.min(max, scrollY));
+    this._pan.update(p => ({ ...p, y: -clamped }));
+  }
 
   readonly transformStyle = computed(() => {
     const { x, y } = this._pan();
