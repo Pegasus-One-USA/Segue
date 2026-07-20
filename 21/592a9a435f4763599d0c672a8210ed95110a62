@@ -1,0 +1,33 @@
+portal/src/app/governance/pages/audit-logs/audit-logs.component.ts
+  s_b8d845493b8bc7::t_b9309a89569227 23
+  s_b8d845493b8bc7::t_08a1961cc23409 2,7
+portal/src/app/core/pipes/local-date-time.pipe.ts
+  s_b8d845493b8bc7::t_ada4910a55238e 1-29
+portal/src/app/governance/pages/audit-logs/audit-logs.component.html
+  s_b8d845493b8bc7::t_ac3912033ebe01 39
+src/FHIRBridge.Infrastructure/Persistence/UtcDateTimeConverter.cs
+  s_b8d845493b8bc7::t_8e59cdde000e03 1-30
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_b8d845493b8bc7::t_65d06504a6224b 66-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "21592a9a435f4763599d0c672a8210ed95110a62",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_b8d845493b8bc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6927e548-44d5-493a-884d-c2af323bbada",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
