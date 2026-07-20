@@ -115,7 +115,7 @@ jobs:
       # Needed for deploy/windows/Deploy-FHIRBridge.ps1 — not for the app binaries, those come from the artifact.
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: fhirbridge-deploy
 
