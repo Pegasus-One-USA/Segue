@@ -1043,10 +1043,11 @@ export class EpicAudienceFormComponent implements OnInit {
    *  collisions up front — a failed load just skips the client-side check, since the backend still rejects a
    *  true collision regardless. */
   private loadAllConnectionNames(): void {
-    this.sourceConnectionSvc.getAll().subscribe({
-      next: connections => this._allConnectionNames = new Set(connections.map(c => c.name)),
-      error: () => {},
-    });
+    // Positional (next-only) subscribe: a failed load has nothing to react to (see doc comment above), so there's
+    // no error callback to keep empty — RxJS's default unhandled-error reporting is fine for a best-effort read.
+    this.sourceConnectionSvc.getAll().subscribe(
+      connections => this._allConnectionNames = new Set(connections.map(c => c.name)),
+    );
   }
 
   /**
