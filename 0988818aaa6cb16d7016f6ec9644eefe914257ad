@@ -1,0 +1,36 @@
+.github/workflows/deploy.yml
+  s_d6653b6b7d4145::t_726ef8273adbb5 13-16,33-39
+  s_d6653b6b7d4145::t_17805521e84787 82-87,99-123,127,171,173-174
+deploy/windows/README.md
+  s_d6653b6b7d4145::t_701de2b450bfbe 16-21
+  s_d6653b6b7d4145::t_4fcf9001db47df 89,137-148,154-163,175-176,178-179,182-188,209-210,218-230,237,241-247,250-262,287-293,296-300
+Demo_TestApp/frontend/src/environments/environment.prod.ts
+  s_d6653b6b7d4145::t_90cea606f90409 6-8
+  s_d6653b6b7d4145::t_e7775880450300 9-11
+  s_d6653b6b7d4145::t_8786f90b8b24fe 12-13
+deploy/windows/Deploy-FHIRBridge.ps1
+  s_d6653b6b7d4145::t_fc5134da4b0968 13-14
+  s_d6653b6b7d4145::t_d89da950ad7918 15-18,23-24
+  s_d6653b6b7d4145::t_d0fa1e3d585bee 37-40,51,55,163,169-170,190-195,198
+Demo_TestApp/frontend/src/environments/environment.test.ts
+  s_d6653b6b7d4145::t_8ab1e4628668b0 11
+  s_d6653b6b7d4145::t_0e1e417a4475b3 1-10,12
+Demo_TestApp/frontend/angular.json
+  s_d6653b6b7d4145::t_221db0f7168fbb 58-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "0988818aaa6cb16d7016f6ec9644eefe914257ad",
+  "prompts": {},
+  "sessions": {
+    "s_d6653b6b7d4145": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f1f01c0-0b78-48bd-8c60-7a2a868b28f5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

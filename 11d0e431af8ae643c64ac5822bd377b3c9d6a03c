@@ -1,0 +1,186 @@
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowDefinition.cs
+  s_2b3e33386ac39d::t_ec9c95e9f384ce 8
+  s_2b3e33386ac39d::t_1b1e7a19ad68d9 24,37-42,93,117-120
+src/FHIRBridge.Application/Abstractions/Persistence/IEhrEndpointRepository.cs
+  s_2b3e33386ac39d::t_2b1cda7fdeab39 2
+  s_2b3e33386ac39d::t_e6930c57285672 15-22
+Demo_TestApp/frontend/src/app/app.ts
+  s_2b3e33386ac39d::t_3bbac7d145bb1d 16
+  s_2b3e33386ac39d::t_9ea502443080ff 13-15
+  s_2b3e33386ac39d::t_228b8603a0e336 18
+  s_2b3e33386ac39d::t_24e0cebaaff9c3 17,19-22
+  s_2b3e33386ac39d::t_ac476fc87c5301 46-49,52,63,88-94,101,162,191
+src/Api/FHIRBridge.Api/Controllers/V1/EhrEpicEndpointsController.cs
+  s_2b3e33386ac39d::t_0882d68abf002e 32,34
+  s_2b3e33386ac39d::t_1504a935b633a3 1-31,33,35-37
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_2b3e33386ac39d::t_5844488b1f594e 7
+  s_2b3e33386ac39d::t_d03a66eab0be2d 34-48,55-60
+src/FHIRBridge.Infrastructure/Persistence/InMemoryEhrEndpointRepository.cs
+  s_2b3e33386ac39d::t_281777238577ef 4
+  s_2b3e33386ac39d::t_5ba1ffb01401d7 20-28
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.scss
+  s_2b3e33386ac39d::t_d3d22633e1e14d 189,214-268
+  s_2b3e33386ac39d::t_737c4f82508966 157,181,209-213,269
+  s_2b3e33386ac39d::t_a6b2870f8436a9 149,154-156
+  s_2b3e33386ac39d::t_f3ebf7e50bd8a8 73-103
+  s_2b3e33386ac39d::t_d0c187f7f247f3 163,165-171,175-180
+  s_2b3e33386ac39d::t_29f0ab78123581 47-72
+  s_2b3e33386ac39d::t_8178d36db0289a 110-126
+  s_2b3e33386ac39d::t_97e4876ad4f75b 158
+  s_2b3e33386ac39d::t_a56288066521b3 182
+Demo_TestApp/backend/Program.cs
+  s_2b3e33386ac39d::t_79efa244d2c663 14
+  s_2b3e33386ac39d::t_67d093a0c4c8a6 287-329,391-394,440-471
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_2b3e33386ac39d::t_f532b46ab84c38 2-3
+  s_2b3e33386ac39d::t_9ab8ea6d3e39c7 22-23,25-28,31-32
+  s_2b3e33386ac39d::t_b74c3f8cef419d 109-142
+src/FHIRBridge.Application/DTOs/PublicEhrEpicEndpointDto.cs
+  s_2b3e33386ac39d::t_1e1bfdd0a5d395 1-10
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_2b3e33386ac39d::t_7824d632374559 100-103
+  s_2b3e33386ac39d::t_cd19d333123d00 11-17
+  s_2b3e33386ac39d::t_9d088cfbbfa182 108
+  s_2b3e33386ac39d::t_61c85f1ea1df6e 131-136
+  s_2b3e33386ac39d::t_fe42451111b283 130
+  s_2b3e33386ac39d::t_e070671b26dc60 44-48,91-97
+  s_2b3e33386ac39d::t_9ff9b7358df462 9,20-32,104,118-121,128-129,148,178,180-181,248-256,262-268,275-283,287-288,293-324,329,334-336,338,340,342-343,363-364,372,405
+  s_2b3e33386ac39d::t_e9a753d3bf384f 285-286,289-291
+  s_2b3e33386ac39d::t_678b1b47e0d544 371
+  s_2b3e33386ac39d::t_4ed4ce88b3fd8b 169
+  s_2b3e33386ac39d::t_8d944fb03286dd 347
+  s_2b3e33386ac39d::t_87bc0b22a20eb2 325-328,351-362,365-370
+  s_2b3e33386ac39d::t_b32cb5d9ba011f 161-168
+  s_2b3e33386ac39d::t_1835512cae118f 346
+  s_2b3e33386ac39d::t_74bab2a3ea4d38 284
+  s_2b3e33386ac39d::t_63f5bc8c16a4b4 179
+  s_2b3e33386ac39d::t_d67194252f19e8 172-177
+  s_2b3e33386ac39d::t_32b8218cf1f2d5 2
+  s_2b3e33386ac39d::t_7dad27b0143a22 145-146
+  s_2b3e33386ac39d::t_b32ee9580c6156 337,341
+  s_2b3e33386ac39d::t_3ee15129e43939 54-58,60-61,63,66-90
+  s_2b3e33386ac39d::t_2b4266efb16ebe 330-332,339,344-345,348-350
+  s_2b3e33386ac39d::t_6d7cb05bdf7487 373-374,381-382,384-389
+  s_2b3e33386ac39d::t_95f0924a30a6c5 258-260,269
+  s_2b3e33386ac39d::t_5c28964a9c49ab 33-43
+  s_2b3e33386ac39d::t_8d62c225993947 18,49-53,98-99
+  s_2b3e33386ac39d::t_bc23f2c72debb1 202-204
+  s_2b3e33386ac39d::t_463f4364f2184d 116
+  s_2b3e33386ac39d::t_2a2b5ec4437da1 3
+  s_2b3e33386ac39d::t_770d336468eb0d 292,375-380,383,392-404
+  s_2b3e33386ac39d::t_31ef971d03e1d3 138-144,147
+  s_2b3e33386ac39d::t_c3375542d14d64 185-201,205-215,219-220,224,226-231,233-247
+  s_2b3e33386ac39d::t_945465b1a0de33 221-223
+  s_2b3e33386ac39d::t_98417db01fe20f 19
+  s_2b3e33386ac39d::t_44a272500b4e6f 137
+  s_2b3e33386ac39d::t_c864c6421f3e2f 257
+  s_2b3e33386ac39d::t_4841abe93fd5c0 261
+  s_2b3e33386ac39d::t_a5ab176bc1e286 333
+src/FHIRBridge.Application/Services/IEhrEndpointService.cs
+  s_2b3e33386ac39d::t_9c830622e479e9 9-11
+  s_2b3e33386ac39d::t_3b84704afa3085 12-14
+  s_2b3e33386ac39d::t_d61b714a0af4a0 17-21
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.html
+  s_2b3e33386ac39d::t_3a05854fd8b644 44
+  s_2b3e33386ac39d::t_874a1142a1af45 95-96
+  s_2b3e33386ac39d::t_06422f2a85d0fe 62-65,67-70,86,97-110,113-123,131
+  s_2b3e33386ac39d::t_73e06ef260cdb8 48
+  s_2b3e33386ac39d::t_5b857176db8cff 49-51
+  s_2b3e33386ac39d::t_b7f8a3675d534b 35-43
+  s_2b3e33386ac39d::t_b2e280ed14ef54 55-61
+  s_2b3e33386ac39d::t_e722aec07b3b13 124-127
+  s_2b3e33386ac39d::t_abbde4e80b7c93 34,45-47,52-54,71-85
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowExecutionContext.cs
+  s_2b3e33386ac39d::t_db977c803f2a77 12
+  s_2b3e33386ac39d::t_fd6aa3fc39af55 11
+  s_2b3e33386ac39d::t_bd23da6f49df69 20,40-48
+src/FHIRBridge.Infrastructure/Persistence/EfEhrEndpointRepository.cs
+  s_2b3e33386ac39d::t_57c14bac5ecdfa 3
+  s_2b3e33386ac39d::t_106e5fbd1ad91a 20-27
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2b3e33386ac39d::t_b16626ac4abeeb 11
+  s_2b3e33386ac39d::t_0d3acaca84896d 243-244,434-435,441-482,779-814,951
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_2b3e33386ac39d::t_53f6495f4af1eb 1435-1439
+Demo_TestApp/frontend/src/app/demo-types/demo-type-1/patient-standalone.ts
+  s_2b3e33386ac39d::t_113bc6da5d9c12 39
+portal/src/app/core/api-endpoints.ts
+  s_2b3e33386ac39d::t_3924bf30dd130e 121-122
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_2b3e33386ac39d::t_12160d17ce8e0c 153-163
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_2b3e33386ac39d::t_52709e3e6aeb15 213
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_2b3e33386ac39d::t_b4844a42117c66 187-216
+portal/src/app/services/workflow-api.service.ts
+  s_2b3e33386ac39d::t_6746e0d8d4f8d0 55,83,231,337-346
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_2b3e33386ac39d::t_f257573b8cda5e 10-11,41-47
+src/Api/FHIRBridge.Api/Workflows/WorkflowSummaryModels.cs
+  s_7f2c9a59895c3f::t_58d30ab9327f43 22-23
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_2b3e33386ac39d::t_1734ab970c5357 23
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260714065247_AddWorkflowIsPubliclyLaunchable.Designer.cs
+  s_2b3e33386ac39d::t_4f7f41cc6cf4bd 1-2261
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260714065247_AddWorkflowIsPubliclyLaunchable.cs
+  s_2b3e33386ac39d::t_6db90a0202e890 1-29
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_2b3e33386ac39d::t_7b2d419f082c4c 40-41,114-115,134-163
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategy.cs
+  s_2b3e33386ac39d::t_fbeec239b50dd6 44-47
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirAuthorizationCodeTokenStore.cs
+  s_2b3e33386ac39d::t_ca6fc4d4ea64a0 15-19
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirPatientContextProvider.cs
+  s_2b3e33386ac39d::t_1af31aad6b4d07 22-29
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/ISourceConnectionRuntimeResolver.cs
+  s_2b3e33386ac39d::t_5e6f349a88dfc2 16-22
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_2b3e33386ac39d::t_534e5fd75b450f 49-56
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_2b3e33386ac39d::t_c56a8fabbc5b15 45-47
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_2b3e33386ac39d::t_7c610c43fc9b85 46-48
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_2b3e33386ac39d::t_1ff6ee707eae28 29-32
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_2b3e33386ac39d::t_97bf71a321446b 45-47
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_2b3e33386ac39d::t_51ab609b34ac71 102-116
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/DistributedFhirAuthorizationCodeTokenStore.cs
+  s_2b3e33386ac39d::t_b55fb9f4cc4a26 76-78
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/InMemoryFhirAuthorizationCodeTokenStore.cs
+  s_2b3e33386ac39d::t_5760499eff9e00 27-32
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_2b3e33386ac39d::t_47f47fbe26ad82 110-125
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_2b3e33386ac39d::t_aecda4f142304c 254-260,267-277,279-280,283-289
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2b3e33386ac39d::t_27b54e98a626f4 160-165
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_2b3e33386ac39d::t_97e1a30b92fe7c 83-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "11d0e431af8ae643c64ac5822bd377b3c9d6a03c",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_7f2c9a59895c3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8283daf8-8f98-49b7-8716-848e54385678",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

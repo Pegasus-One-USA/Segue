@@ -1,0 +1,58 @@
+src/FHIRBridge.Domain/Enums/EhrEndpointType.cs
+  s_2b3e33386ac39d::t_625c94c04d7409 1-13
+src/FHIRBridge.Infrastructure/Sources/EpicEndpointDirectorySeeder.cs
+  s_2b3e33386ac39d::t_e4f0fa5855c447 15
+  s_2b3e33386ac39d::t_2c905cbef67e99 13-14,16-18,25-29,46-48,50-54,56,83
+  s_2b3e33386ac39d::t_5e255cac3f941e 55
+  s_2b3e33386ac39d::t_92f909c476e583 57-59,80-82
+  s_2b3e33386ac39d::t_377740abab7e30 84-85
+  s_2b3e33386ac39d::t_8fb88686ec6a81 60-79,91,136-137,157
+src/FHIRBridge.Domain/Entities/EhrEndpoint.cs
+  s_2b3e33386ac39d::t_0845a25f7582ef 19-21,39-40
+  s_2b3e33386ac39d::t_e2d37d47aca997 22-24
+  s_2b3e33386ac39d::t_b6ed1aefafe46c 38
+  s_2b3e33386ac39d::t_6a475b3e9a7541 41-43
+  s_2b3e33386ac39d::t_0c95251b10f568 25-26,35,44-45,53,65-67
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_2b3e33386ac39d::t_81dcbbbf26db67 151-153
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.html
+  s_2b3e33386ac39d::t_a5e784e59cda26 40-51
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.ts
+  s_2b3e33386ac39d::t_9c75ad99593fe9 13,33-37,63,93-96
+portal/src/app/ehr-endpoints/models/ehr-endpoint.model.ts
+  s_2b3e33386ac39d::t_88dc507ab58dbe 15-17,31,41
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_2b3e33386ac39d::t_61389ff912fd1a 94-101
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_2b3e33386ac39d::t_f71dfa928de4f9 46
+src/FHIRBridge.Application/DTOs/CreateEhrEndpointRequest.cs
+  s_2b3e33386ac39d::t_37db734137411d 11-12
+src/FHIRBridge.Application/DTOs/EhrEndpointDto.cs
+  s_2b3e33386ac39d::t_0ccaf7c6d6fa33 16-17
+src/FHIRBridge.Application/Mappings/EhrEndpointMapper.cs
+  s_2b3e33386ac39d::t_cf8ddbc21a4931 20-21
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_2b3e33386ac39d::t_86aa0d45386557 48-49,67-68
+src/FHIRBridge.Infrastructure/Persistence/Configurations/EhrEndpointConfiguration.cs
+  s_2b3e33386ac39d::t_78aca0c0b3bae3 20
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260714055653_AddEhrEndpointType.Designer.cs
+  s_2b3e33386ac39d::t_b73ec17e5d62d0 1-2256
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260714055653_AddEhrEndpointType.cs
+  s_2b3e33386ac39d::t_3ee7db3d7845c5 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "5dde4ed9bbd007c0561c156c72d0700ce9294dc2",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

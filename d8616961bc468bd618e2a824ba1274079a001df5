@@ -1,0 +1,45 @@
+src/FHIRBridge.Application/PatientStandaloneDependencyInjection.cs
+  s_4b14330bd85f4b::t_091932ae62db9a 1-20
+src/FHIRBridge.Application/Services/PatientStandaloneEhrEndpointService.cs
+  s_4b14330bd85f4b::t_89ff9b2f43f629 1-36
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_4b14330bd85f4b::t_a5269db33af6e5 1-186
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_4b14330bd85f4b::t_a9b22b54a35114 2-334
+  s_4b14330bd85f4b::t_0c8d56e40369b0 1
+src/FHIRBridge.Application/Services/IPatientStandaloneEhrEndpointService.cs
+  s_4b14330bd85f4b::t_7d4bdfac5526aa 1-23
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.html
+  s_4b14330bd85f4b::t_27e0344c1d7235 1-137
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/config/standalone-launch.config.ts
+  s_4b14330bd85f4b::t_21a63b7327ee14 11
+  s_4b14330bd85f4b::t_3bb465a60cf539 1-10
+src/Api/FHIRBridge.Api/Controllers/V1/EhrMyChartEndpointsController.cs
+  s_4b14330bd85f4b::t_55e0b2b74aaf0e 1-37
+src/Api/FHIRBridge.Api/Controllers/V1/PatientStandaloneLaunchController.cs
+  s_4b14330bd85f4b::t_19a3b050c1939c 1-81
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.scss
+  s_4b14330bd85f4b::t_d7a966cd02d2a8 1-265
+Demo_TestApp/frontend/src/app/app.html
+  s_4b14330bd85f4b::t_8e79bde35afd5a 48-52
+Demo_TestApp/frontend/src/app/app.ts
+  s_4b14330bd85f4b::t_b3b8a08b3581a9 9,58
+src/Api/FHIRBridge.Api/Program.cs
+  s_4b14330bd85f4b::t_bb1181a045f968 109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "d8616961bc468bd618e2a824ba1274079a001df5",
+  "prompts": {},
+  "sessions": {
+    "s_4b14330bd85f4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54cc0bc2-875e-41fe-96eb-396e788fab65",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_8bfa92c239fe27::t_77372bd96bc238 1-83
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_8bfa92c239fe27::t_e8ddc5cd642655 1-105
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.scss
+  s_8bfa92c239fe27::t_b23e4d5fdfe520 1-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "114db535661dc94d7db1ac0875fa306333c7f20c",
+  "prompts": {},
+  "sessions": {
+    "s_8bfa92c239fe27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80c45d53-3aec-4158-b8ee-12fe7247c102",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

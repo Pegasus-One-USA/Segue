@@ -1,0 +1,78 @@
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.scss
+  s_48a99af61ce8ad::t_b791ea30af8e04 104-108
+  s_2b3e33386ac39d::t_2c062685386bb9 109,131,164,166,170-172,176,182,199,207,209
+  s_2b3e33386ac39d::t_f65079538a9c69 167-169
+  s_2b3e33386ac39d::t_f48a31045fa9f4 227-229
+  s_2b3e33386ac39d::t_ba967d91bd336c 133-147
+  s_2b3e33386ac39d::t_39b3cd39092e58 253-255
+  s_2b3e33386ac39d::t_9f8afab47a92a0 110-112,128-130
+  s_2b3e33386ac39d::t_43f38a748d8d28 132
+  s_2b3e33386ac39d::t_3c4b551b5af1ad 148-150,161-163
+  s_2b3e33386ac39d::t_53cf4b2b012dad 165
+  s_2b3e33386ac39d::t_aafde1f7857002 113-127,151-160
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_2b3e33386ac39d::t_a357b07ae65919 169
+  s_2b3e33386ac39d::t_e63f817910ce84 198
+  s_2b3e33386ac39d::t_2ca3642df92857 348,361
+  s_2b3e33386ac39d::t_c2664abab4e44c 349
+  s_2b3e33386ac39d::t_a5a527cd8f0c9b 203
+  s_2b3e33386ac39d::t_e29d2879c3a909 233-238,240
+  s_2b3e33386ac39d::t_21de7e98a4a2db 444,472-480,483-486,504
+  s_48a99af61ce8ad::t_21b78085732221 50-54,111-115,127-129,131-132,139-143,195-196,202,205-210,217,232,239,241-242,258-260,278-279,286-289,311,316,326,328-330,333,371,380,382-384,388,410-412,416-419,424,432-435,458,489-503,507,512-516
+  s_2b3e33386ac39d::t_82f563869ef683 204
+  s_2b3e33386ac39d::t_4bd743b6a52345 251-253
+  s_2b3e33386ac39d::t_af89566bf49c50 154-156,158,163
+  s_2b3e33386ac39d::t_5aadc4e78e5d5c 1
+  s_2b3e33386ac39d::t_1ae24a35dc73ee 420,446-457,459-471,481-482,487-488,505-506
+  s_48a99af61ce8ad::t_ea03c056a2818f 119
+  s_2b3e33386ac39d::t_6387be34b1aaa3 150-153,157,159-162
+  s_2b3e33386ac39d::t_13e07aa0fe0035 173-184,188-189
+  s_2b3e33386ac39d::t_9cc9da77cf03f3 339-347,356-360,396-409,413-415,421-423,425-431
+  s_2b3e33386ac39d::t_25a39a6e313206 218-229,243-246
+  s_2b3e33386ac39d::t_0b59551f9bfcbd 185-187
+  s_2b3e33386ac39d::t_6056d40d91b50a 372-375
+  s_2b3e33386ac39d::t_697bee800c06cb 31-38
+  s_2b3e33386ac39d::t_8b0143385f8d17 436-443
+  s_2b3e33386ac39d::t_3bab66e8bb5c00 445
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.html
+  s_48a99af61ce8ad::t_c01347e0f65a26 23-28,30-46,92,94,96-97,99-102,105-107,109-116,121,123-127,129-146
+  s_2b3e33386ac39d::t_b8deb48e98469c 48-49,51-57,59-82,84-86,88-90,93,95,98,104,108,117,119
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_2b3e33386ac39d::t_614ba5c872f3b1 259-262,267-269
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2b3e33386ac39d::t_cc7d8480189d15 483-524
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_f774d7a515b53c 86-90,97-98
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_2b3e33386ac39d::t_92b18fd9df9d53 449-450,513-520,528,539-543,548-549
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_2b3e33386ac39d::t_bbd110cd150904 164-193
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IOAuthAuthorizationStateStore.cs
+  s_2b3e33386ac39d::t_51f98195bd96aa 36-41
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/ISourceConnectionRuntimeResolver.cs
+  s_2b3e33386ac39d::t_03d056489d1f81 23-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "b83d0195c0d87415595d5506ea4455125ca6d439",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_48a99af61ce8ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fea43c6f-d660-44a0-b003-8ece225a07a5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

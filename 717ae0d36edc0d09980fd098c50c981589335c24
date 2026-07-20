@@ -1,0 +1,44 @@
+portal/src/app/app.component.spec.ts
+  s_62affcfc9947ba::t_5b765bbc118e27 2-4,10-11,17,20,23
+portal/src/app/auth/services/http-error.util.ts
+  s_62affcfc9947ba::t_f98a42a18ec5aa 6-12,24-26
+  s_62affcfc9947ba::t_e3059d89029ad4 1-5,13-23,27-29
+portal/src/app/auth/services/http-error.util.spec.ts
+  s_62affcfc9947ba::t_b3c8c94663a0ae 1-4,7-9,20-24,26-34
+  s_62affcfc9947ba::t_397602ee0989b3 5-6,10-19,25
+portal/src/app/auth/pages/change-password/change-password.component.ts
+  s_62affcfc9947ba::t_f3abf65c762f5b 21,152
+portal/src/app/auth/pages/forgot-password/forgot-password.component.ts
+  s_62affcfc9947ba::t_ef5ce7480a657f 12,68
+portal/src/app/auth/pages/login/login.component.ts
+  s_62affcfc9947ba::t_1337ed234235a6 23,78-80,110
+portal/src/app/auth/pages/reset-password/reset-password.component.ts
+  s_62affcfc9947ba::t_f1e4d8f905df6d 19,126
+portal/src/app/auth/pages/set-password/set-password.component.ts
+  s_62affcfc9947ba::t_2d13c11d8e28cd 19,135-138
+portal/src/app/auth/services/auth.service.ts
+  s_62affcfc9947ba::t_208753bdadb72c 18,66,104
+portal/src/app/auth/services/jwt-user.mapper.ts
+  s_62affcfc9947ba::t_07efa3b653d852 53-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "717ae0d36edc0d09980fd098c50c981589335c24",
+  "prompts": {},
+  "humans": {
+    "h_ed4b8b661e4f7b": {
+      "author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}

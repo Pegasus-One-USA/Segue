@@ -1,0 +1,324 @@
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_f2e735b2ad7f17::t_973aa907c1f5fc 15
+  s_f2e735b2ad7f17::t_21921734efbc1c 12-14,16-17
+  s_f2e735b2ad7f17::t_18639277c3d3f9 157-177
+src/FHIRBridge.Application/Abstractions/Destinations/IDestinationSchemaService.cs
+  s_f2e735b2ad7f17::t_18f42cb5d7b8d6 17-19,24,30
+  s_f2e735b2ad7f17::t_8d2cad7abd4c1e 20-23
+  s_f2e735b2ad7f17::t_99312a51e652ab 25-29
+  s_f2e735b2ad7f17::t_04f8963a81657e 31-33
+  s_f2e735b2ad7f17::t_c0ab89ed0bf80e 34-35
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.scss
+  s_f2e735b2ad7f17::t_76783de7643e1c 1-82
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_f2e735b2ad7f17::t_2acd97af5b79b4 1-7
+  s_f2e735b2ad7f17::t_e0d3fa1cdca937 77-80
+  s_f2e735b2ad7f17::t_dbc10847589c01 67-73
+  s_f2e735b2ad7f17::t_1d2095b713c9e2 8,13-14,35-36,43-48,50-52,55-58,62,66,74-75,81-87
+  s_f2e735b2ad7f17::t_2eff2f1adff567 9-12,15-34,37-42,54
+  s_f2e735b2ad7f17::t_2eed0dde8064d2 49,53,59-61,63-65
+  s_f2e735b2ad7f17::t_8726435a70633c 76
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.ts
+  s_f2e735b2ad7f17::t_6a7c5fab4bdc62 2-118
+  s_f2e735b2ad7f17::t_31eeaa2cc26fdb 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-anchor.service.ts
+  s_f2e735b2ad7f17::t_a834f08c1789eb 23-24,42-43,47,52,57,62-63,68,75,82,87-90
+  s_f2e735b2ad7f17::t_0ad824afad5118 2,6-9,13,20-22,25-27,34,44-46,48-51,53-55,58-61,64-65,67,71-72,74,78-79,81,85-86,176-177
+  s_f2e735b2ad7f17::t_d1c9f5be1c1f07 1,3-5,10-12,14-19,28-33,35-41,56,66,69-70,73,76-77,80,83-84,91-175
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.html
+  s_f2e735b2ad7f17::t_bf54a7633a08df 1-7
+  s_f2e735b2ad7f17::t_9d674abbe906e4 8-31
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-automap.util.spec.ts
+  s_f2e735b2ad7f17::t_109b3b7a96e803 1-51
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.ts
+  s_f2e735b2ad7f17::t_e0e62223bf8280 1-44
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_f2e735b2ad7f17::t_4415d03ee2a690 35,37-39,41,44-45,48-51,53-55
+  s_f2e735b2ad7f17::t_16ba4da8715f38 3-5
+  s_f2e735b2ad7f17::t_858afc1a89fd58 25-26,32,36,40,42-43,46-47,57-58
+  s_f2e735b2ad7f17::t_3dcc1df22ebb42 131-132
+  s_f2e735b2ad7f17::t_77f27631c5a9ca 56
+  s_f2e735b2ad7f17::t_e63820656cfe85 180-203
+  s_f2e735b2ad7f17::t_23e809a4ccb2a1 67
+  s_f2e735b2ad7f17::t_aab353bb5dfdf5 83,87,93,96-111
+  s_f2e735b2ad7f17::t_19dd5d60f88ceb 159-179
+  s_f2e735b2ad7f17::t_f33020a44fac9f 68-79,117-124
+  s_f2e735b2ad7f17::t_350c653834aca2 82,84-86,88-92,94-95,112-113,115-116
+  s_f2e735b2ad7f17::t_5549553d037a9f 1-2,6-8,20-24,27-31,33-34,59-66,125-130,133-148,204
+  s_f2e735b2ad7f17::t_032f570dc1008b 114
+  s_f2e735b2ad7f17::t_baa005cc078a08 149-158
+  s_f2e735b2ad7f17::t_2099424b78de79 52
+  s_f2e735b2ad7f17::t_a9e2ded946cec7 81
+  s_f2e735b2ad7f17::t_e0218522363003 9-19
+  s_f2e735b2ad7f17::t_d9a52409d3f8a1 80
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_f2e735b2ad7f17::t_71f1066e93fad2 43-45
+  s_f2e735b2ad7f17::t_d97715db145c03 49
+  s_f2e735b2ad7f17::t_0a4c69ba00b76d 17-21,56
+  s_f2e735b2ad7f17::t_4bd20df4543bc9 47-48
+  s_f2e735b2ad7f17::t_f80d16327b6ba1 50
+  s_f2e735b2ad7f17::t_35b4c94e3bcc31 2,8-16,54
+  s_f2e735b2ad7f17::t_9ace45ef9919c0 25,31-36
+  s_f2e735b2ad7f17::t_1c77246c3bfd8a 38-39
+  s_f2e735b2ad7f17::t_28b548d11ecad7 37,40-42
+  s_f2e735b2ad7f17::t_1971fd3b3c736c 46
+  s_f2e735b2ad7f17::t_2611655945d403 51-53
+  s_f2e735b2ad7f17::t_fbb275c95d7e67 55
+  s_f2e735b2ad7f17::t_a475634f7a4d6b 63-65,151,171-172,177-178
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_f2e735b2ad7f17::t_03c1f9e7ef3738 54-59,70
+  s_f2e735b2ad7f17::t_8bf31de6dcaddc 33
+  s_f2e735b2ad7f17::t_6ee33b9ebf7cdc 1-32,34-53,60-69,71-124
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.html
+  s_f2e735b2ad7f17::t_f008f8e6922792 1-19
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_f2e735b2ad7f17::t_538794670bbdfc 1-63
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.scss
+  s_f2e735b2ad7f17::t_ff6d3d07d47326 1-107
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.html
+  s_f2e735b2ad7f17::t_695a9a3a768ea6 2,4-6
+  s_f2e735b2ad7f17::t_ce1fd4053a8dd0 7-8
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.ts
+  s_f2e735b2ad7f17::t_98004c67879e04 25
+  s_f2e735b2ad7f17::t_9a78f2c972685f 1-24,26-100
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview.util.spec.ts
+  s_f2e735b2ad7f17::t_3d73679ca60804 1-63
+portal/src/app/services/destination-schema.service.ts
+  s_f2e735b2ad7f17::t_946aeff8e57e03 39-41
+  s_f2e735b2ad7f17::t_84278ced03c5f9 42-44
+  s_f2e735b2ad7f17::t_06e02e99a99c00 45-64,67-69,78-89
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_f2e735b2ad7f17::t_eb370b24a7f901 1-167
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_f2e735b2ad7f17::t_b8929ee50e7cf3 92-94,97-99,109-110
+  s_f2e735b2ad7f17::t_147df76131233d 70-72
+  s_f2e735b2ad7f17::t_9719adb331fa32 62-68
+  s_f2e735b2ad7f17::t_a5d0d716c6df9b 14
+  s_f2e735b2ad7f17::t_0c6ffbccfdbf5f 121-146
+  s_f2e735b2ad7f17::t_277688e25f9b67 33-43
+  s_f2e735b2ad7f17::t_436472001159da 95-96,100-108,111-120
+  s_f2e735b2ad7f17::t_a024acdd49c49a 147-175,178-199
+  s_f2e735b2ad7f17::t_e3fcfb5f9cfbf5 176-177
+  s_f2e735b2ad7f17::t_15ae4442dc190a 201
+  s_f2e735b2ad7f17::t_ae18b2151c202e 1-13,15-20,44-61,73-74,79-80,83,90-91,200,202
+  s_f2e735b2ad7f17::t_5798688b03e9db 21-32
+  s_f2e735b2ad7f17::t_91245a7671633f 69,75-78,81-82,84-89
+src/BuildingBlocks/FHIRBridge.Integration/Sql/SqlIdentifier.cs
+  s_f2e735b2ad7f17::t_2b44b5aeef6e0a 1-2,6,13-22
+  s_f2e735b2ad7f17::t_6a889e970f374f 23-25
+  s_f2e735b2ad7f17::t_e888016e4b315a 26-31
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.scss
+  s_f2e735b2ad7f17::t_4d93cc641af30b 1-34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.ts
+  s_f2e735b2ad7f17::t_c1bc9ce737fdd4 2-3,5-18,21-24,27-32,56-60
+  s_f2e735b2ad7f17::t_c378dde17a0bca 19-20,25-26,33-55
+  s_f2e735b2ad7f17::t_b7c2adc58f698d 1,4
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.html
+  s_f2e735b2ad7f17::t_8c15d5436135a5 8-11
+  s_f2e735b2ad7f17::t_ed847a0f0a39c8 1-7,12-16
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.ts
+  s_f2e735b2ad7f17::t_e4029141ef83e5 1
+  s_f2e735b2ad7f17::t_fb5b1fde0d15eb 41,44,46,54
+  s_f2e735b2ad7f17::t_27e826396d70a3 55
+  s_f2e735b2ad7f17::t_6ca05f2ee0aaaa 42-43,45,47-48
+  s_f2e735b2ad7f17::t_435bea53b4f107 2-40,49-53,56-99
+tests/FHIRBridge.UnitTests/Infrastructure/SqlDestinationSchemaServiceTests.cs
+  s_f2e735b2ad7f17::t_9484bb0c0071d3 144-185
+  s_f2e735b2ad7f17::t_d565b642552624 1-143,186
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_f2e735b2ad7f17::t_75dfca2b713d74 10
+  s_f2e735b2ad7f17::t_dde4ef69620206 119
+  s_f2e735b2ad7f17::t_9033dd6f444b97 12
+  s_f2e735b2ad7f17::t_c00911cd105d8f 111
+  s_f2e735b2ad7f17::t_7601809c0a3e15 130-135,145-151
+  s_f2e735b2ad7f17::t_3daa92b880e990 13-14
+  s_f2e735b2ad7f17::t_75885d052fec8f 210-284,316-331,410-412,420-473,556-559,566-567,578-583,622-630,633-634,678-680,682-685
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview.util.ts
+  s_f2e735b2ad7f17::t_b990194ba07b01 1-56
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_f2e735b2ad7f17::t_dff6098e776293 51
+  s_f2e735b2ad7f17::t_e5ee49f0aef366 11-17
+  s_f2e735b2ad7f17::t_ce55c5ef43ac4a 1-10,18,20-50,52-96
+  s_f2e735b2ad7f17::t_daa52793c4b76a 19
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_f2e735b2ad7f17::t_ff3f4508fc28e7 28-29
+  s_f2e735b2ad7f17::t_b63b0c3e2cf2fc 30,32-33,36,369-370,389
+  s_f2e735b2ad7f17::t_ec1008b9f05448 3-15,17,20-26,230,352,386
+  s_f2e735b2ad7f17::t_461334b3ab52d0 227-229
+  s_f2e735b2ad7f17::t_43dd34dfea4948 349-351
+  s_f2e735b2ad7f17::t_d6b1bfb82ee3de 353-355,366-368
+  s_f2e735b2ad7f17::t_aa80089598db1b 371-373,383-385
+  s_f2e735b2ad7f17::t_aa58a59d516a51 387
+  s_f2e735b2ad7f17::t_bbb274f26bfe0d 209-210,224-226,232-245,247-277,356-365,374-382
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_f2e735b2ad7f17::t_34748f5c2b2b7b 66-69
+  s_f2e735b2ad7f17::t_9a52426cd10e74 1
+  s_f2e735b2ad7f17::t_e3a80a60449262 2-9,13-33,64-65,70-123
+  s_f2e735b2ad7f17::t_53ee0bea77e894 34-42,47-63
+  s_f2e735b2ad7f17::t_18d7c9fbaa85ba 43-46
+  s_f2e735b2ad7f17::t_6e27ba95652a19 10-12
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_f2e735b2ad7f17::t_20da63e3990371 42-50,59,63,65-66,75,80,82-83
+  s_f2e735b2ad7f17::t_edf2ce50529cf3 1
+  s_f2e735b2ad7f17::t_79f143fa3b50fa 51-53,56-58
+  s_f2e735b2ad7f17::t_ab674526a73a54 60-62
+  s_f2e735b2ad7f17::t_ea95c1e5b80bc1 64
+  s_f2e735b2ad7f17::t_f1a9948db8d214 67-69,72-74
+  s_f2e735b2ad7f17::t_175b3e945a8aa3 76-79
+  s_f2e735b2ad7f17::t_7a63094ab65955 81
+  s_f2e735b2ad7f17::t_4210cac84a75e6 84-86
+  s_f2e735b2ad7f17::t_85cf61f89672a7 54-55,70-71,87-90
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_f2e735b2ad7f17::t_dfbe0ccbfb3ee9 54-57
+  s_f2e735b2ad7f17::t_700103326740a0 39-40,46,49-53,58-74
+  s_f2e735b2ad7f17::t_377dcbcb09741e 2
+  s_f2e735b2ad7f17::t_f41440aff18ee2 36
+  s_f2e735b2ad7f17::t_78ee6f77893852 1,3-10,14-26,31-35,37,41-43,45,75-87,89-104,107-110
+  s_f2e735b2ad7f17::t_18b8a57b769861 48
+  s_f2e735b2ad7f17::t_33759ade5dd2cc 38
+  s_f2e735b2ad7f17::t_30512c65a1c4db 105-106
+  s_f2e735b2ad7f17::t_68cb157a628523 27-30,47
+  s_f2e735b2ad7f17::t_06b7a397233679 88
+  s_f2e735b2ad7f17::t_389eca4c3c9520 11-13
+  s_f2e735b2ad7f17::t_2ee6ca1bfba768 44
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_f2e735b2ad7f17::t_f33784845913eb 3
+  s_f2e735b2ad7f17::t_ffac7dc4f2638b 140-147,320-324,330-332,341-428
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-automap.util.ts
+  s_f2e735b2ad7f17::t_903a86e62be4ca 1-66
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_f2e735b2ad7f17::t_1f51583f820895 288-291,293-296,298-303,316-320,338,344
+  s_f2e735b2ad7f17::t_15c437ca039158 292,297
+  s_f2e735b2ad7f17::t_807315abced440 315,321-337,339-343,345-354,372-373,428-459,463,465-475
+  s_f2e735b2ad7f17::t_d61e9acf1ba0ab 374-427
+  s_f2e735b2ad7f17::t_e0c157ebfe28c6 460-462,464
+  s_f2e735b2ad7f17::t_632928139b3ab6 90-91
+  s_f2e735b2ad7f17::t_a4ee1393b453af 4
+  s_f2e735b2ad7f17::t_705250ef1970e3 70
+  s_f2e735b2ad7f17::t_125664727f4a3a 47,57
+  s_f2e735b2ad7f17::t_2d2440382bf71b 1-3,6-14,17,19,26-30,36-46,49-56,58-69,71,81-82,92-99,101,104,140-153,164-174,224-238,241,244-251,274,313-314,478-510,514-521,523-525,527-531,534-536,538-554,556-572,574,576-579,581-586,589-592,597-600,604-610,612-613,616-617,630-638,640-645
+  s_f2e735b2ad7f17::t_8bf17b937d9b79 5
+  s_f2e735b2ad7f17::t_191e4cb6a93dcb 16
+  s_f2e735b2ad7f17::t_e164907f6dc0fb 88-89
+  s_f2e735b2ad7f17::t_6d75177c0555f4 20-25,31-35,74-76,80,83,100,102,106,110,112,115-117,119,126-127,131-139,239-240,242-243,257,260-264,266,268-270,285-287,304,359,370,476-477,511-513,522,526,532-533,537,555,573,575,580,587-588,593-596,601-603,611,614-615,618-619,626-627,639
+  s_f2e735b2ad7f17::t_6d8fa3678e69a6 154-163
+  s_f2e735b2ad7f17::t_aa505c60c7bac9 72-73,77-79,84-87
+  s_f2e735b2ad7f17::t_f6dad252b1f446 355-358,360-369,371
+  s_f2e735b2ad7f17::t_4d85e9699f8eac 265,267,271-272
+  s_f2e735b2ad7f17::t_a4c08284bab22c 620-625,628-629
+  s_f2e735b2ad7f17::t_b3d8c8fde351eb 105,107-109,111,113-114,118,120-125,128-130
+  s_f2e735b2ad7f17::t_a14009530e7a5e 48
+  s_f2e735b2ad7f17::t_cdf21942651720 103
+  s_f2e735b2ad7f17::t_c77fc63fb4fcb3 252-256,258-259,305-312
+  s_f2e735b2ad7f17::t_79f9e24c9d9ce8 15,18
+  s_f2e735b2ad7f17::t_a72fc7d6d4bfab 273,275-284
+  s_f2e735b2ad7f17::t_1fc96d5149dfad 175-223
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_f2e735b2ad7f17::t_485c9c5a052a2a 7,27-30,43-45,50-51,58,72,76-79,85-86,102-107,145,156,174
+  s_f2e735b2ad7f17::t_db3ec92add69bd 1-6,8-26,31-42,46-49,52-57,59-71,73-74,80-84,87-101,108-144,146-155,157-173,175-179
+  s_f2e735b2ad7f17::t_24ef00422e0df0 75
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_f2e735b2ad7f17::t_1f7fb6e6d88673 30
+  s_f2e735b2ad7f17::t_794df26bdce6cd 1-29,31-156
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_f2e735b2ad7f17::t_d124e748b982b2 4-5
+  s_f2e735b2ad7f17::t_cd55d90f9803b6 1-3,7-8
+  s_f2e735b2ad7f17::t_b26e73eb2b45c8 26-30
+  s_f2e735b2ad7f17::t_f593fabb7b59d1 12,31-49
+  s_f2e735b2ad7f17::t_590227f9891ec4 6,9-11,13,22-25,50-58,64-88,91-189,191-223
+  s_f2e735b2ad7f17::t_6bce9fddbeca08 14-21,59
+  s_f2e735b2ad7f17::t_3fb207d0685783 60-63
+  s_f2e735b2ad7f17::t_86b3264ea4f72c 190
+  s_f2e735b2ad7f17::t_962c16466a94d8 89-90
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.spec.ts
+  s_f2e735b2ad7f17::t_068d85a20e54fd 1-13,15-23,27-94
+  s_f2e735b2ad7f17::t_394e80afa6fe9d 14,24-26
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_f2e735b2ad7f17::t_3ab47637923cd4 1-131
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.scss
+  s_f2e735b2ad7f17::t_4afb862cd54f54 1-83
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_f2e735b2ad7f17::t_0dd84dbac896e5 2-3,7-20,25-34,50-157,189-207,224-226
+  s_f2e735b2ad7f17::t_d02e62ba4f4eb3 4,6,21-24
+  s_f2e735b2ad7f17::t_949b2c8a7600f0 167-188
+  s_f2e735b2ad7f17::t_3784d88871ba27 158-166
+  s_f2e735b2ad7f17::t_a9103da4dc2c7b 5
+  s_f2e735b2ad7f17::t_e8c6ffce229704 208-223
+  s_f2e735b2ad7f17::t_e433ae4704361a 35-49
+  s_f2e735b2ad7f17::t_87047aa5cc8a88 1
+Demo_TestApp/frontend/.gitignore
+  s_f706e4e919e737::t_e52a21a4f13340 1-46
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  s_f2e735b2ad7f17::t_501822e5381b3f 1,4-6,21-24
+  s_f2e735b2ad7f17::t_3c6c8457be05ca 2-3,7-20,25-45
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_f2e735b2ad7f17::t_75af134689098a 19-23,25,27-28,38-39,43,45,103-116,118-121,123-134,215-310,317-318,324,327,332,340,344,346,350,365,369,379,382,385
+  s_f2e735b2ad7f17::t_53589edf774b2e 117,122,135-136,185-214,354,356,360,362,374,376
+  s_f2e735b2ad7f17::t_c245f7ed8d86de 44,49-50
+  s_f2e735b2ad7f17::t_e88dd63723d6c1 137-184
+  s_f2e735b2ad7f17::t_5509219d7a93a9 2-4
+  s_f2e735b2ad7f17::t_cb25d937e7cc67 311-316
+  s_f2e735b2ad7f17::t_68941d84e55422 319-323
+  s_f2e735b2ad7f17::t_45f509793b835f 325-326
+  s_f2e735b2ad7f17::t_ff612399e562c0 328-331
+  s_f2e735b2ad7f17::t_cff0ab49bba84b 333-335,337-339
+  s_f2e735b2ad7f17::t_8698a2087b3a08 341-343
+  s_f2e735b2ad7f17::t_489aadff681d9f 345
+  s_f2e735b2ad7f17::t_02d7e4ec160088 347-349
+  s_f2e735b2ad7f17::t_d4db6be74b066a 351-353
+  s_f2e735b2ad7f17::t_a4f43ac5dea92b 355
+  s_f2e735b2ad7f17::t_68905da9ce4bac 357-359
+  s_f2e735b2ad7f17::t_5b2ed4d8881afb 361
+  s_f2e735b2ad7f17::t_94216d684ba175 363-364
+  s_f2e735b2ad7f17::t_a4c378b30edaa1 366-368
+  s_f2e735b2ad7f17::t_c186567f0bbab0 370-373
+  s_f2e735b2ad7f17::t_961666d9ee9385 375
+  s_f2e735b2ad7f17::t_61de5b961d4008 377-378
+  s_f2e735b2ad7f17::t_9a944c11a473bd 380-381
+  s_f2e735b2ad7f17::t_d75bb077c8a854 383-384
+  s_f2e735b2ad7f17::t_b23caf45fd05b4 386-388
+  s_f2e735b2ad7f17::t_77fcdf639fb0ea 336,389-394
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.html
+  s_f2e735b2ad7f17::t_75713d5a769470 1-49
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.html
+  s_f2e735b2ad7f17::t_b108808d82581c 5-6,10-11,20,23,28,48-49,53
+  s_f2e735b2ad7f17::t_2e77f692b91727 1-4,7-9,12-19,21-22,24-27,29-47,50-52,54-64
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.ts
+  s_f2e735b2ad7f17::t_65ae361215f72d 12-13,17
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_f2e735b2ad7f17::t_bce3005f385179 147-150,170-184,415-416,431-432,449-450,494-495
+portal/src/app/core/api-endpoints.ts
+  s_f2e735b2ad7f17::t_3a8fbf7976dccf 66-68
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_f2e735b2ad7f17::t_2e5f2ce0c2b7ce 28-31,46-48,301,305-307
+portal/src/styles.scss
+  s_f2e735b2ad7f17::t_165ba2a0510e5c 83-86,204-219
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_f2e735b2ad7f17::t_f76a401ce33e25 43-81
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_f2e735b2ad7f17::t_63e428c41a7320 18,411
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "9ac33a6e0a38163d91fd0488d07db0f3b5ef41ac",
+  "prompts": {},
+  "sessions": {
+    "s_f2e735b2ad7f17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4add3300-65d3-4739-b657-bd4a95e31c89",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_f706e4e919e737": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "112718ab-7ecc-43e3-a5e8-918c411627c9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
