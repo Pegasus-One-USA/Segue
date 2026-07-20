@@ -1,0 +1,305 @@
+<#
+.SYNOPSIS
+    Deploys a published FHIRBridge build (4 systemd services + 2 static frontend folders) to this
+    Linux VM. Linux counterpart of Deploy-FHIRBridge.ps1 -- same stages, same parameters, but uses
+    systemctl/systemd units instead of Windows Services and rsync instead of robocopy. Runs under
+    PowerShell Core (pwsh), which is cross-platform, so the script structure stays close to the
+    Windows version rather than being a from-scratch bash rewrite.
+
+.DESCRIPTION
+    Invoked by a self-hosted GitHub Actions runner on the Linux VM (see .github/workflows/deploy.yml
+    and deploy/windows/README.md for the Windows equivalent topology) after the build job's artifact
+    has been downloaded and extracted. For each service (Api, Gateway, Worker, DemoApi): stops it (if
+    running), mirrors the new published files into the deploy path via rsync, overlays that app's
+    hand-provisioned config files from ConfigRoot (appsettings.Production.json etc. -- never part of
+    the artifact, provisioned once by hand on this VM and never touched by the mirror step since it
+    lives in a separate folder tree), (re)creates its systemd unit if missing, then starts and
+    health-checks it. For each static frontend (Portal, DemoPortal): mirrors the built files and
+    overlays its config folder the same way -- no service involved, since Gateway and DemoApi serve
+    these themselves.
+
+    Must be run as root (or via sudo) -- managing systemd units and writing to /etc/systemd/system
+    requires it, same as the Windows script assumes a service-account with rights to manage Windows
+    Services.
+
+.PARAMETER ArtifactPath
+    Path to the extracted publish artifact. Must contain Api/, Gateway/, Worker/, DemoApi/, Portal/,
+    and DemoPortal/ subfolders. NOTE: these must be linux-x64 (or linux-arm64) publishes -- see
+    .github/workflows/deploy.yml's Linux build job, which passes -r linux-x64 instead of -r win-x64.
+
+.PARAMETER DeployRoot
+    Root folder on this VM under which every app's deploy folder lives. Defaults to
+    /opt/fhirbridge, mirroring the folder names used under C:\inetpub\wwwroot on the Windows VM
+    (fhirbridge-api, fhirbridge-gateway, fhirbridge-portal, fhirbridge-worker, demoapp-api,
+    demoapp-portal).
+
+.PARAMETER ConfigRoot
+    Root folder on this VM holding each app's hand-provisioned config files, mirrored under the same
+    per-app folder names as DeployRoot (e.g. ConfigRoot/fhirbridge-api/appsettings.Production.json).
+    Never touched by CI -- ops edits files here directly. After every deploy's file mirror, this
+    app's ConfigRoot subfolder is copied on top of its DeployRoot subfolder, so config always
+    survives a redeploy. Defaults to /etc/fhirbridge-configurations.
+
+.PARAMETER ServiceUser
+    Linux user each systemd unit runs as. Defaults to root for parity with the Windows script (which
+    runs services as LocalSystem via New-Service). Point this at a dedicated non-root service account
+    instead for a real production hardening pass -- that's a deliberate follow-up, not done here.
+#>
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$ArtifactPath,
+
+    [string]$DeployRoot = "/opt/fhirbridge",
+
+    [string]$ConfigRoot = "/etc/fhirbridge-configurations",
+
+    [string]$ServiceUser = "root",
+
+    [int]$ServiceStopTimeoutSeconds = 30,
+    [int]$HealthCheckRetries = 10,
+    [int]$HealthCheckDelaySeconds = 3
+)
+
+$ErrorActionPreference = "Stop"
+
+function Invoke-Checked {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList,
+        [string]$FailureMessage
+    )
+
+    & $FilePath @ArgumentList
+    if ($LASTEXITCODE -ne 0) {
+        throw "$FailureMessage (exit code $LASTEXITCODE)"
+    }
+}
+
+function Copy-ConfigOverlay {
+    param(
+        [string]$Name,
+        [string]$ConfigSourceDir,
+        [string]$DestDir
+    )
+
+    if (-not (Test-Path $ConfigSourceDir)) {
+        Write-Host "No config folder for $Name at $ConfigSourceDir -- skipping overlay."
+        return
+    }
+
+    # Trailing slash on the source copies its *contents* into DestDir rather than nesting a
+    # subfolder. No --delete: this only ever adds/overwrites files already present in DestDir from
+    # the artifact mirror below, never removes anything. ConfigRoot is the source of truth for these
+    # files, never touched by CI.
+    Invoke-Checked -FilePath "rsync" -ArgumentList @("-a", "$ConfigSourceDir/", "$DestDir/") `
+        -FailureMessage "rsync failed overlaying config for $Name"
+}
+
+function New-SystemdUnit {
+    param(
+        [string]$Name,
+        [string]$DestDir,
+        [string]$DllName,
+        [string]$DisplayName,
+        [string]$AmbientCapabilities
+    )
+
+    $unitPath = "/etc/systemd/system/$Name.service"
+    if (Test-Path $unitPath) {
+        return
+    }
+
+    Write-Host "Unit $unitPath does not exist yet -- creating it."
+
+    $capabilityLines = ""
+    if ($AmbientCapabilities) {
+        # Lets a non-root ServiceUser still bind a privileged port (<1024) -- e.g. Gateway on 80 --
+        # without running the whole process as root. No-op (harmless) when ServiceUser is root.
+        $capabilityLines = @"
+AmbientCapabilities=$AmbientCapabilities
+CapabilityBoundingSet=$AmbientCapabilities
+"@
+    }
+
+    $unitContent = @"
+[Unit]
+Description=$DisplayName
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$DestDir
+ExecStart=/usr/bin/dotnet $DestDir/$DllName
+Restart=on-failure
+RestartSec=5
+User=$ServiceUser
+$capabilityLines
+[Install]
+WantedBy=multi-user.target
+"@
+
+    Set-Content -Path $unitPath -Value $unitContent -NoNewline
+    Invoke-Checked -FilePath "systemctl" -ArgumentList @("daemon-reload") -FailureMessage "systemctl daemon-reload failed"
+    Invoke-Checked -FilePath "systemctl" -ArgumentList @("enable", $Name) -FailureMessage "systemctl enable failed for $Name"
+}
+
+function Deploy-Service {
+    param(
+        [string]$Name,
+        [string]$SourceDir,
+        [string]$DestDir,
+        [string]$ConfigSourceDir,
+        [string]$DllName,
+        [string]$DisplayName,
+        [string]$AmbientCapabilities
+    )
+
+    Write-Host "== Deploying $Name =="
+
+    $isActive = (systemctl is-active $Name 2>$null)
+    if ($isActive -eq "active") {
+        Write-Host "Stopping service $Name..."
+        Invoke-Checked -FilePath "systemctl" -ArgumentList @("stop", $Name) -FailureMessage "systemctl stop failed for $Name"
+
+        $stopped = $false
+        for ($i = 0; $i -lt $ServiceStopTimeoutSeconds; $i++) {
+            if ((systemctl is-active $Name 2>$null) -ne "active") { $stopped = $true; break }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $stopped) {
+            throw "$Name did not stop within $ServiceStopTimeoutSeconds seconds"
+        }
+    }
+
+    if (-not (Test-Path $DestDir)) {
+        New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+    }
+
+    # -a preserves permissions/timestamps/symlinks; --delete mirrors robocopy /MIR's "remove files no
+    # longer published" behavior; --exclude keeps runtime logs out of the mirror (robocopy /XD "logs"
+    # equivalent). Config files never live in SourceDir, so they're unaffected -- overlaid back on
+    # afterward below.
+    Invoke-Checked -FilePath "rsync" -ArgumentList @("-a", "--delete", "--exclude=logs", "$SourceDir/", "$DestDir/") `
+        -FailureMessage "rsync failed deploying $Name"
+
+    Copy-ConfigOverlay -Name $Name -ConfigSourceDir $ConfigSourceDir -DestDir $DestDir
+
+    $dllPath = Join-Path $DestDir $DllName
+    if (-not (Test-Path $dllPath)) {
+        throw "Expected assembly not found after deploy: $dllPath"
+    }
+
+    New-SystemdUnit -Name $Name -DestDir $DestDir -DllName $DllName -DisplayName $DisplayName `
+        -AmbientCapabilities $AmbientCapabilities
+
+    Write-Host "Starting service $Name..."
+    Invoke-Checked -FilePath "systemctl" -ArgumentList @("start", $Name) -FailureMessage "systemctl start failed for $Name"
+
+    $running = $false
+    for ($i = 0; $i -lt $ServiceStopTimeoutSeconds; $i++) {
+        if ((systemctl is-active $Name 2>$null) -eq "active") { $running = $true; break }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $running) {
+        throw "$Name did not reach the active state within $ServiceStopTimeoutSeconds seconds"
+    }
+    Write-Host "$Name is running."
+}
+
+function Deploy-StaticFiles {
+    param(
+        [string]$Name,
+        [string]$SourceDir,
+        [string]$DestDir,
+        [string]$ConfigSourceDir
+    )
+
+    Write-Host "== Deploying static files: $Name =="
+
+    if (-not (Test-Path $DestDir)) {
+        New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+    }
+
+    Invoke-Checked -FilePath "rsync" -ArgumentList @("-a", "--delete", "$SourceDir/", "$DestDir/") `
+        -FailureMessage "rsync failed deploying $Name"
+
+    Copy-ConfigOverlay -Name $Name -ConfigSourceDir $ConfigSourceDir -DestDir $DestDir
+
+    Write-Host "$Name deployed."
+}
+
+function Test-Health {
+    param(
+        [string]$Name,
+        [string]$Url
+    )
+
+    Write-Host "Health-checking $Name at $Url..."
+    for ($i = 1; $i -le $HealthCheckRetries; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
+            if ($response.StatusCode -eq 200) {
+                Write-Host "$Name is healthy."
+                return
+            }
+        } catch {
+            Write-Host "Attempt $i/$HealthCheckRetries not healthy yet: $($_.Exception.Message)"
+        }
+        Start-Sleep -Seconds $HealthCheckDelaySeconds
+    }
+
+    throw "$Name did not become healthy at $Url after $HealthCheckRetries attempts."
+}
+
+# --- Static frontends first (no service -- served by Gateway / DemoApi respectively). These must
+# land on disk BEFORE Gateway/DemoApi start: both only wire up their static-file middleware if the
+# configured folder already exists at process startup (see Gateway/Program.cs and
+# Demo_TestApp/backend/Program.cs) -- deploying them after the service starts would leave the portal
+# unserved until the next restart. ---
+
+$staticSites = @(
+    @{ Name = "Portal"; Folder = "Portal"; DestDir = "fhirbridge-portal" }
+    @{ Name = "DemoPortal"; Folder = "DemoPortal"; DestDir = "demoapp-portal" }
+)
+
+foreach ($site in $staticSites) {
+    $sourceDir = Join-Path $ArtifactPath $site.Folder
+    if (-not (Test-Path $sourceDir)) { throw "Artifact is missing $($site.Folder)/ folder at $sourceDir" }
+
+    Deploy-StaticFiles -Name $site.Name -SourceDir $sourceDir -DestDir (Join-Path $DeployRoot $site.DestDir) `
+        -ConfigSourceDir (Join-Path $ConfigRoot $site.DestDir)
+}
+
+# --- systemd services (Kestrel/background hosts). DllName is the framework-dependent linux-x64
+# publish output (dotnet <name>.dll), not a win-x64 .exe. AmbientCapabilities is only set for
+# Gateway, which needs to bind port 80 -- a privileged port on Linux when ServiceUser isn't root. ---
+
+$services = @(
+    @{ Name = "fhirbridge-api"; Folder = "Api"; DestDir = "fhirbridge-api"; Dll = "FHIRBridge.Api.dll";
+       DisplayName = "FHIRBridge API"; HealthCheckUrl = "http://127.0.0.1:5000/health"; AmbientCapabilities = "" }
+    @{ Name = "fhirbridge-gateway"; Folder = "Gateway"; DestDir = "fhirbridge-gateway"; Dll = "FHIRBridge.Gateway.dll";
+       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "http://localhost/"; AmbientCapabilities = "CAP_NET_BIND_SERVICE" }
+    @{ Name = "fhirbridge-worker"; Folder = "Worker"; DestDir = "fhirbridge-worker"; Dll = "FHIRBridge.Worker.dll";
+       DisplayName = "FHIRBridge Worker"; HealthCheckUrl = $null; AmbientCapabilities = "" }
+    @{ Name = "fhirbridge-demoapp"; Folder = "DemoApi"; DestDir = "demoapp-api"; Dll = "HealthAppBackend.dll";
+       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "http://localhost:5500/"; AmbientCapabilities = "" }
+)
+
+foreach ($svc in $services) {
+    $sourceDir = Join-Path $ArtifactPath $svc.Folder
+    if (-not (Test-Path $sourceDir)) { throw "Artifact is missing $($svc.Folder)/ folder at $sourceDir" }
+
+    Deploy-Service -Name $svc.Name -SourceDir $sourceDir -DestDir (Join-Path $DeployRoot $svc.DestDir) `
+        -ConfigSourceDir (Join-Path $ConfigRoot $svc.DestDir) -DllName $svc.Dll -DisplayName $svc.DisplayName `
+        -AmbientCapabilities $svc.AmbientCapabilities
+}
+
+# --- Health checks (after every service is already started above) ---
+
+foreach ($svc in $services) {
+    if ($svc.HealthCheckUrl) {
+        Test-Health -Name $svc.Name -Url $svc.HealthCheckUrl
+    }
+}
+
+Write-Host "Deploy complete."
