@@ -31,20 +31,30 @@ Corollary already agreed in this plan's discussion: all execution metadata, audi
 
 ---
 
-## 1. Current state — already implemented
+## 1. Current state — updated 2026-07-20
 
-These changes have already been made in this codebase as of this writing (verify they're present before starting new work; don't redo them):
+The four items below were already true when this document was verified fresh against the code on 2026-07-20 (a separate governance/observability logging commit on this branch had incidentally already made these changes as part of unrelated work). Section 5 step 1 (removing DB/schema/table auto-creation, section 3.A.1-2) has now also been completed and verified — see below.
 
-- **System/audit columns removed from destination tables.** `MappedSqlServerDestinationWriter` (SQL Server/Azure SQL, [MappedSqlServerDestinationWriter.cs](../../src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs)) and `RelationalDestinationWriterBase` (Postgres/MySQL, [RelationalDestinationWriterBase.cs](../../src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs)) no longer inject `FHIRBridgeRowId`, `PipelineRunId`, `ResourceType`, `SourceResourceId`, `WrittenOnUtc`, `LastUpdatedOnUtc` into `CREATE TABLE`/`INSERT`/`MERGE`. A destination table now contains **only** the columns the mapping profile actually maps. (`EnsureTableAsync` at `MappedSqlServerDestinationWriter.cs:84-135` and `RelationalDestinationWriterBase.cs:75-106`; both throw `InvalidOperationException` if the mapping has zero fields.)
-- **Upsert now requires an explicit key column.** `ParseDestinationTarget` (`MappedSqlServerDestinationWriter.cs:308-346`) and `ParseTarget` (`RelationalDestinationWriterBase.cs:181-220`) throw `InvalidOperationException` at parse time if write mode is `Upsert`/`upsert` and no `?key=<ColumnName>` option is present — there is no more implicit default of `SourceResourceId` as the match key (that column no longer exists on the table). `TryGetKeyValue` in both files now does a plain `record.Values.TryGetValue(keyColumn, ...)` lookup — the key must be a genuine mapped column, not a magic virtual field.
-- **Upsert's MERGE/DELETE no longer filters by `ResourceType`.** Match is purely on the configured key column now (`UpsertRecordAsync`, `MappedSqlServerDestinationWriter.cs:176-216`; `DeleteByKeyAsync`, `RelationalDestinationWriterBase.cs:140-156`), since that system column no longer exists.
-- **The portal's "preview what this workflow wrote" feature no longer filters by `PipelineRunId`.** `SqlDestinationDataService.ReadSampleAsync` now returns a plain top-N sample of the table, unscoped by run, since there's no `PipelineRunId` column to filter on anymore. `IDestinationDataService.ReadSampleAsync` and its caller in `WorkflowEndpoints.cs` (`GET /workflows/{workflowId}/destination-data`) had the now-unused `pipelineRunIds` parameter removed entirely, along with the `IWorkflowRunStore` dependency that supplied it.
+### Already in place (confirmed 2026-07-20)
 
-**Deliberately NOT changed yet (this is what the rest of this document covers):**
-- Table/schema/database auto-creation is **still present** — `MappedSqlServerDestinationWriter.EnsureTableAsync` still runs `CREATE SCHEMA`/`CREATE TABLE IF NOT EXISTS`; `RelationalDestinationWriterBase.EnsureTableAsync` does the same for Postgres/MySQL; `SqlServerConnectionFactory.OpenConnectionAsync` still runs `CREATE DATABASE` against `master` on every connection.
-- CDC mode's companion `{Table}_Cdc` table is still auto-created.
-- Upsert is still implemented as DELETE-by-key + INSERT (not a genuine UPDATE/MERGE).
-- No schema-existence, column-existence, type/nullability, or key-designation validation exists anywhere in the write path or the mapping-profile save path.
+- **System/audit columns removed from destination tables.** `MappedSqlServerDestinationWriter` (SQL Server/Azure SQL) and `RelationalDestinationWriterBase` (Postgres/MySQL) no longer inject `FHIRBridgeRowId`, `PipelineRunId`, `ResourceType`, `SourceResourceId`, `WrittenOnUtc`, `LastUpdatedOnUtc` into `INSERT`/`MERGE`. A destination table now contains **only** the columns the mapping profile actually maps. Both `EnsureTableAsync` methods throw `InvalidOperationException` if the mapping profile has no mapped fields.
+- **Upsert requires an explicit key column.** `ParseDestinationTarget`/`ParseTarget` throw `InvalidOperationException` at parse time if write mode is `Upsert` and no `?key=<ColumnName>` option is present — no implicit default to `SourceResourceId`. `TryGetKeyValue` in both writers does a plain lookup against the mapped `Values`.
+- **Upsert's MERGE/DELETE no longer filters by `ResourceType`.** Match is purely on the configured key column.
+- **The portal's destination-data preview no longer filters by `PipelineRunId`.** `IDestinationDataService.ReadSampleAsync`/`SqlDestinationDataService.ReadSampleAsync` return a plain top-N sample of the table; the `GET /workflows/{workflowId}/destination-data` endpoint no longer takes a `pipelineRunIds` parameter or depends on `IWorkflowRunStore`.
+
+### Done today (2026-07-20) — section 5 step 1 (DDL/creation removal)
+
+- **`SqlServerConnectionFactory.OpenConnectionAsync`** no longer opens a `master` connection or runs `CREATE DATABASE`; a missing database now surfaces as a normal SQL connection error.
+- **`MappedSqlServerDestinationWriter.EnsureTableAsync`** no longer runs `CREATE SCHEMA`/`CREATE TABLE`. It now queries `OBJECT_ID` for the target table and throws `InvalidOperationException` ("...does not exist. Create it in your database before running this pipeline.") if missing, in addition to its existing zero-mapped-fields guard. The now-unused `GetSqlType` helper (only needed for generating `CREATE TABLE` column DDL) was removed.
+- **`RelationalDestinationWriterBase.EnsureTableAsync`** (Postgres/MySQL) — same treatment. The `BuildCreateSchemaSql`/`BuildCreateTableSql` dialect hooks were replaced with a single `BuildTableExistsSql(schema, table)` hook; `MappedPostgreSqlDestinationWriter` queries `information_schema.tables` by schema+table name, `MappedMySqlDestinationWriter` queries it scoped to `DATABASE()` (MySQL has no schema layer distinct from the database). The now-dead `ExecuteAsync` helper (only used by the removed DDL calls) was removed.
+
+**Verified:** full solution build clean; `FHIRBridge.UnitTests` (150 tests, one pre-existing unrelated failure in `DestinationExecutionHistoryGateTests` confirmed present before these changes too) and `FHIRBridge.ArchitectureTests` pass. A temporary `_ScratchDestinationSchemaOwnershipTests.cs` was run against the real `docker-compose` SQL Server (`localhost,1433`), PostgreSQL (`localhost:5433`), and MySQL (`localhost:3307`) containers — hand-creating each target table via raw ADO (not through the writer under test) to simulate "customer already has a table" — covering: missing-table throws without auto-creating anything, insert against a pre-existing table writes only mapped columns, and Upsert matches purely on the key column (a row is updated, not duplicated, even when `ResourceType` differs across calls). All 7 passed; the scratch file was deleted afterward per the verification discipline above.
+
+### Still open (deliberately not touched in this pass)
+
+- CDC mode's companion `{Table}_Cdc` table is still auto-created — ⚠ decision required (section 3.A.3).
+- Postgres/MySQL Upsert is still implemented as DELETE-by-key + INSERT, not a genuine UPDATE/MERGE (section 3.A.4) — deferred to last per section 5. (SQL Server's writer already uses a real `MERGE`.) Note: `RelationalDestinationWriterBase`'s delete-by-key emulation stringifies the key value before binding it as a parameter, which fails against a non-text-typed key column on PostgreSQL (`operator does not exist: integer = text`) though MySQL tolerates it via implicit coercion — worth keeping in mind when this item is picked up.
+- Constraint/index metadata in schema introspection (section 2b), `IsKey` on `MappingField` (section 2a), "Source EHR/System Type" virtual field (section 2c), save-time and run-time validation (section 3.C/D), the Angular wizard changes (section 4), and the architecture-test DDL guardrail (section 3.E) are all still open, in the order given in section 5.
 
 ---
 

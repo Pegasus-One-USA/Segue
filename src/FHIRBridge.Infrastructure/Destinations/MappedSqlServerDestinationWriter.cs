@@ -4,18 +4,20 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
-using FHIRBridge.Domain.Enums;
 using FHIRBridge.Integration.Sql;
 using Microsoft.Data.SqlClient;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
-/// Writes mapped records to SQL Server / Azure SQL, auto-creating the target schema and table. The table contains
-/// only the mapped destination columns — no system/audit columns are added.
+/// Writes mapped records to SQL Server / Azure SQL. The customer owns the destination schema: the target table must
+/// already exist, and only the mapped destination columns are ever written — no system/audit columns are added.
 /// Supports Insert, Upsert (MERGE on an explicit '?key=&lt;ColumnName&gt;' column), and CDC write modes.
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
+/// TODO: CDC mode still auto-creates its companion table, which conflicts with the customer-owned-schema model;
+/// its fate (retire vs. require a customer-provisioned table) is an open decision (see
+/// docs/backend/11-destination-schema-ownership-plan.md section 3.A.3).
 /// </summary>
 public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
 {
@@ -89,49 +91,26 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         MappingProfile mappingProfile,
         CancellationToken cancellationToken)
     {
-        var createSchemaSql = $"""
-            IF SCHEMA_ID(N'{schemaName}') IS NULL
-            BEGIN
-                EXEC(N'CREATE SCHEMA [{schemaName}]')
-            END
-            """;
+        var hasMappedFields = mappingProfile.Fields.Any(field =>
+            (string.IsNullOrWhiteSpace(field.ResourceType) ||
+                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase)));
 
-        await using (var command = new SqlCommand(createSchemaSql, connection))
-        {
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        var mappedColumns = mappingProfile.Fields
-            .Where(field =>
-                string.IsNullOrWhiteSpace(field.ResourceType) ||
-                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
-            .Where(field =>
-                string.IsNullOrWhiteSpace(field.DestinationObject) ||
-                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(field => field.TargetField, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .Select(field => $"[{ValidateIdentifier(field.TargetField)}] {GetSqlType(field.ValueType)} NULL")
-            .ToList();
-
-        if (mappedColumns.Count == 0)
+        if (!hasMappedFields)
         {
             throw new InvalidOperationException(
                 $"Mapping profile for '{schemaName}.{tableName}' has no mapped fields — a SQL destination needs at least one mapped column.");
         }
 
-        var createTableSql = $"""
-            IF OBJECT_ID(N'[{schemaName}].[{tableName}]', N'U') IS NULL
-            BEGIN
-                CREATE TABLE [{schemaName}].[{tableName}]
-                (
-                    {string.Join(",\n                    ", mappedColumns)}
-                );
-            END
-            """;
+        await using var command = new SqlCommand("SELECT OBJECT_ID(@ObjectId, N'U')", connection);
+        command.Parameters.AddWithValue("@ObjectId", $"[{schemaName}].[{tableName}]");
+        var objectId = await command.ExecuteScalarAsync(cancellationToken);
 
-        await using (var command = new SqlCommand(createTableSql, connection))
+        if (objectId is null or DBNull)
         {
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            throw new InvalidOperationException(
+                $"Destination table '{schemaName}.{tableName}' does not exist. Create it in your database before running this pipeline.");
         }
     }
 
@@ -387,20 +366,6 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         }
 
         return identifier;
-    }
-
-    private static string GetSqlType(MappingValueType valueType)
-    {
-        return valueType switch
-        {
-            MappingValueType.Integer => "INT",
-            MappingValueType.Decimal => "DECIMAL(18, 4)",
-            MappingValueType.Boolean => "BIT",
-            MappingValueType.Date => "DATE",
-            MappingValueType.DateTime => "DATETIME2",
-            MappingValueType.Json => "NVARCHAR(MAX)",
-            _ => "NVARCHAR(MAX)"
-        };
     }
 
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]

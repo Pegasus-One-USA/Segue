@@ -10,13 +10,13 @@ using FHIRBridge.Domain.Enums;
 namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
-/// Provider-agnostic relational destination writer built on ADO.NET (<see cref="DbConnection"/>). Auto-creates the
-/// target schema/table (containing only the mapped destination columns — no system/audit columns) and writes
-/// mapped records in Insert or Upsert mode. Upsert requires an explicit '?key=&lt;ColumnName&gt;' option naming one
-/// of the mapped columns, and is implemented as a portable delete-by-key + insert within a transaction
-/// (last-write-wins) so it works on any dialect without requiring a pre-existing unique index. Concrete subclasses
-/// supply the dialect (connection, identifier quoting, type mapping, DDL). Mirrors
-/// <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
+/// Provider-agnostic relational destination writer built on ADO.NET (<see cref="DbConnection"/>). The customer owns
+/// the destination schema: the target table must already exist and every written column must be one the mapping
+/// profile explicitly maps. Writes mapped records in Insert or Upsert mode. Upsert requires an explicit
+/// '?key=&lt;ColumnName&gt;' option naming one of the mapped columns, and is implemented as a portable delete-by-key
+/// + insert within a transaction (last-write-wins) so it works on any dialect without requiring a pre-existing
+/// unique index. Concrete subclasses supply the dialect (connection, identifier quoting, type mapping,
+/// table-existence check). Mirrors <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
 /// </summary>
 public abstract partial class RelationalDestinationWriterBase : IConfiguredDestinationWriter
 {
@@ -32,8 +32,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
     protected abstract string DefaultSchema { get; }
     protected abstract string Quote(string identifier);
     protected abstract string ColumnType(MappingValueType valueType);
-    protected abstract string? BuildCreateSchemaSql(string schema);
-    protected abstract string BuildCreateTableSql(string schema, string table, IReadOnlyList<string> columnDefinitions);
+    protected abstract string BuildTableExistsSql(string schema, string table);
 
     /// <summary>Qualified <c>schema.table</c> (or just the quoted table when the dialect has no schemas).</summary>
     protected virtual string QualifiedName(string schema, string table)
@@ -80,31 +79,27 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         MappingProfile mappingProfile,
         CancellationToken cancellationToken)
     {
-        var createSchemaSql = string.IsNullOrEmpty(target.Schema) ? null : BuildCreateSchemaSql(target.Schema);
-        if (!string.IsNullOrWhiteSpace(createSchemaSql))
-        {
-            await ExecuteAsync(connection, transaction: null, createSchemaSql, cancellationToken);
-        }
+        var hasMappedFields = mappingProfile.Fields.Any(field =>
+            (string.IsNullOrWhiteSpace(field.ResourceType) ||
+                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase)));
 
-        var columnDefinitions = mappingProfile.Fields
-            .Where(field =>
-                string.IsNullOrWhiteSpace(field.ResourceType) ||
-                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
-            .Where(field =>
-                string.IsNullOrWhiteSpace(field.DestinationObject) ||
-                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(field => field.TargetField, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .Select(field => $"{Quote(ValidateIdentifier(field.TargetField))} {ColumnType(field.ValueType)}")
-            .ToList();
-
-        if (columnDefinitions.Count == 0)
+        if (!hasMappedFields)
         {
             throw new InvalidOperationException(
                 $"Mapping profile for '{target.Schema}.{target.Table}' has no mapped fields — a SQL destination needs at least one mapped column.");
         }
 
-        await ExecuteAsync(connection, transaction: null, BuildCreateTableSql(target.Schema, target.Table, columnDefinitions), cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = BuildTableExistsSql(target.Schema, target.Table);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+
+        if (result is null or DBNull)
+        {
+            throw new InvalidOperationException(
+                $"Destination table '{QualifiedName(target.Schema, target.Table)}' does not exist. Create it in your database before running this pipeline.");
+        }
     }
 
     private async Task InsertRecordAsync(
@@ -154,14 +149,6 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         command.CommandText = sql;
         AddParameter(command, "KeyValue", Stringify(keyValue));
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private static async Task ExecuteAsync(DbConnection connection, DbTransaction? transaction, string sql, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = sql;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
