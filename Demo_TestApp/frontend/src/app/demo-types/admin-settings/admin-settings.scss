@@ -64,6 +64,20 @@
   }
 }
 
+.field-warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  border-radius: var(--radius-base);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin: 4px 0 0;
+
+  code {
+    font-size: 11px;
+  }
+}
+
 .success-banner {
   background: var(--color-success-soft);
   color: var(--color-success-strong);
