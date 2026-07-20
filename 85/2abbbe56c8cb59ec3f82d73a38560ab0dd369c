@@ -1,0 +1,88 @@
+portal/src/app/operations/pages/validation-failures/validation-failures.component.html
+  s_692f2f7e28bb8d::t_d0ce793d119b7f 47
+portal/src/app/governance/pages/oauth-logs/oauth-logs.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,21,47-48,52-53,59
+portal/src/app/governance/pages/log-settings/log-settings.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,27,36,43,54-55,59-60,64-65,69,90
+portal/src/app/governance/pages/alert-rules/alert-rules.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29-30,36,55,66,72,78,96,104
+portal/src/app/governance/pages/alerts/alerts.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,21,41-44,51,59
+portal/src/app/governance/pages/smart-launch-logs/smart-launch-logs.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90,96-97,108,117,125,143-144,149,152-154
+portal/src/app/pipeline-executions/pages/pipeline-execution-detail/pipeline-execution-detail.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,25,40,46-47,62,66,98-99,104,115,120-121
+portal/src/app/governance/pages/audit-logs/audit-logs.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90,96-97,108,117,126-127,136,154-155,160,163-165
+portal/src/app/operations/pages/exports/exports.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,28,41-42,49-50,67,71,94,105-108,113,124
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,46,53,60,74,76,83-85,92,103,124,130,141,147,166,168,173
+portal/src/app/operations/pages/queue-monitor/queue-monitor.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,21,40,52-53,57,64
+portal/src/app/operations/pages/api-requests/api-requests.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,87-88,92-93,99
+portal/src/app/operations/pages/errors/errors.component.html
+  s_692f2f7e28bb8d::t_dde3a6dd0b0553 47-55
+portal/src/app/governance/pages/compliance-reports/compliance-reports.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 22,27,44,49,58-59,70,78,90
+portal/src/app/governance/pages/retention-policies/retention-policies.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,21,47-48,52-53,59
+portal/src/app/operations/pages/errors/errors.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,81,97-98,102-103,109
+portal/src/app/operations/pages/retry-history/retry-history.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90
+portal/src/app/operations/pages/system-health/system-health.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,21,41-42,47
+portal/src/app/governance/pages/security-events/security-events.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,88-89,93-94,98-99,105
+portal/src/app/operations/pages/api-analytics/api-analytics.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,27,36,52,75
+portal/src/app/governance/pages/authorization-logs/authorization-logs.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,85
+portal/src/app/operations/pages/scheduler-history/scheduler-history.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90
+portal/src/app/operations/pages/notifications/notifications.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90
+portal/src/app/operations/pages/validation-failures/validation-failures.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,84-85,89-90,96
+portal/scripts/token-baseline.json
+  s_692f2f7e28bb8d::t_99981838eabef9 2
+portal/src/app/governance/pages/authentication-logs/authentication-logs.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90
+portal/src/app/operations/pages/endpoint-health/endpoint-health.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90
+portal/src/app/governance/pages/data-access-logs/data-access-logs.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,29,39-40,47-48,52,78-79,83-84,90
+portal/src/app/governance/pages/archive/archive.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,24-25,30,61-62,70
+portal/src/app/governance/pages/configuration-comparison/configuration-comparison.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,36,41,50,54,68-69,75,80,86
+portal/src/app/governance/pages/data-lineage/data-lineage.component.scss
+  s_692f2f7e28bb8d::t_09db6c9d245d8c 16,25,40,44,55,74,84,92,102,110
+portal/src/app/pages/schedules/schedules.component.scss
+  s_692f2f7e28bb8d::t_c18932a7424412 16,21,46-48,53,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "852abbbe56c8cb59ec3f82d73a38560ab0dd369c",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_692f2f7e28bb8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4cda6f8b-702f-4784-9f7c-6fe67bc2136f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
