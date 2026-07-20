@@ -1,0 +1,130 @@
+src/Api/FHIRBridge.Api/Controllers/V1/MappingController.cs
+  s_d68f9144c308b2::t_90f45731154cc4 2,7,17-19,21-25,28-30,42-47,52,55-56
+  s_d68f9144c308b2::t_aacd3218c75c23 57-59
+  s_d68f9144c308b2::t_099c9edaab4b5c 60-61,64-67,69-76,84-100
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  s_f2e735b2ad7f17::t_04dd61c26af122 7-12
+  s_f2e735b2ad7f17::t_399c6041257cd5 13-17,55
+  s_f2e735b2ad7f17::t_9f54bb6aa1704a 52-54
+  s_f2e735b2ad7f17::t_c1caf5dda15cf3 56-57
+  s_f2e735b2ad7f17::t_c48403e691ea1b 25
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.ts
+  s_f2e735b2ad7f17::t_5de8e250ae44e1 15
+  s_f2e735b2ad7f17::t_d8a09053c86147 1,16-17
+  s_f2e735b2ad7f17::t_93cbc751f46af2 18-20
+  s_f2e735b2ad7f17::t_03fd6523a2741f 21-30
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/patient_template.epic-r4.json
+  s_d68f9144c308b2::t_1febd96d4dfa47 1-405
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_f2e735b2ad7f17::t_e6ed1dda05060a 10-11
+  s_f2e735b2ad7f17::t_8ce1d18d164501 33-37,161-165,184-185,192
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.html
+  s_f2e735b2ad7f17::t_90b8f64123db54 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_f2e735b2ad7f17::t_42d3fd24a18f00 4
+  s_f2e735b2ad7f17::t_8ab462e33b44b5 119-144
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_f2e735b2ad7f17::t_bd981bb37ad346 2
+  s_f2e735b2ad7f17::t_080f3a22e166d5 22,25-26,80-88
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_f2e735b2ad7f17::t_2590c342dd4e1d 185-197,430,447,466,512
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_f2e735b2ad7f17::t_5d387cb74f81f2 10-12,23-26
+  s_f2e735b2ad7f17::t_d71aa04e31ae55 8
+  s_f2e735b2ad7f17::t_4e6f0febf44a67 9
+  s_f2e735b2ad7f17::t_5270a17c84c798 50-80,190
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_f2e735b2ad7f17::t_34c296c9d34a80 1-12,141
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_f2e735b2ad7f17::t_65b7b37a269aa0 7-12
+  s_f2e735b2ad7f17::t_3a56db6d6e6fbd 13
+  s_f2e735b2ad7f17::t_9788d9f5e92047 14-17,109
+  s_f2e735b2ad7f17::t_94e9cc04d5b284 106-108
+  s_f2e735b2ad7f17::t_25775904d6c0a5 110-111
+  s_f2e735b2ad7f17::t_a19bef5942fd39 25,72
+tools/EpicTemplateCatalogGenerator/Program.cs
+  s_d68f9144c308b2::t_80ecc6359c245c 211
+  s_d68f9144c308b2::t_127b35b0c11b12 26-45
+  s_d68f9144c308b2::t_a4d8688d1f399a 179
+  s_d68f9144c308b2::t_493308479133ff 1-25,46-178,180-210,212-272
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.epic.json
+  s_d68f9144c308b2::t_5ab6d27fee68d3 1-1087
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.ts
+  s_f2e735b2ad7f17::t_93bf88b3574734 1
+  s_f2e735b2ad7f17::t_a4372db8c7e75a 18,20-21,39-50
+src/FHIRBridge.Application/Abstractions/Mapping/FhirElementCatalogKeys.cs
+  s_d68f9144c308b2::t_360f99e537a53b 1-17
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-anchor.service.ts
+  s_f2e735b2ad7f17::t_34ffb1e8bda33d 31,35,39-41
+  s_f2e735b2ad7f17::t_7228e46a675952 42-44
+  s_f2e735b2ad7f17::t_1b1116b42600d1 45-77
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_f2e735b2ad7f17::t_e2bfa8bd2d808c 36-37
+  s_f2e735b2ad7f17::t_c7dc772b7de6cc 8,14,17,26
+  s_f2e735b2ad7f17::t_c5b3eeddb92115 1-4,6-7,13,35
+  s_f2e735b2ad7f17::t_aa781af511c2a1 15-16,18-25,27-34,41
+  s_f2e735b2ad7f17::t_2a92a53e8d259e 38-39
+  s_f2e735b2ad7f17::t_90241030fa00f9 75-76
+src/FHIRBridge.Application/Services/EmbeddedFhirElementCatalog.cs
+  s_d68f9144c308b2::t_d3e246557778a2 9-13
+  s_d68f9144c308b2::t_47155be20653b5 17-18,21-26,42,44,49
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_f2e735b2ad7f17::t_3071e5ed323066 20
+  s_f2e735b2ad7f17::t_fe78a76b7bd308 1-9,11-16,18-19
+  s_f2e735b2ad7f17::t_f9c4c843e2f4bb 17
+  s_f2e735b2ad7f17::t_967a67410e6577 133
+tools/EpicTemplateCatalogGenerator/EpicTemplateCatalogGenerator.csproj
+  s_d68f9144c308b2::t_b2c6346ee5c600 1-17
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_f2e735b2ad7f17::t_272db7ed343b70 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_f2e735b2ad7f17::t_2c5fa60b3f53d0 4
+  s_f2e735b2ad7f17::t_d2390317c98386 41-44
+  s_f2e735b2ad7f17::t_980ed59a3a0c76 45
+  s_f2e735b2ad7f17::t_77dcb9ccc35cc0 1
+  s_f2e735b2ad7f17::t_f2c88cb84876c5 64-110
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_f2e735b2ad7f17::t_16e62df1419727 64,85-92
+  s_f2e735b2ad7f17::t_db56579a9e9919 2
+  s_f2e735b2ad7f17::t_0dc9fceb472e0e 176-187,193-198,203,230,242-244,247-318
+api-run.pid
+  s_d68f9144c308b2::t_cfb80613424b4e 1
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_f2e735b2ad7f17::t_d8303956dee8df 304-305
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_f2e735b2ad7f17::t_4a8026ae9c5e7d 146-150,154-155,359
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_f2e735b2ad7f17::t_49d8cd5be2f1e1 127-175,771-778
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_d68f9144c308b2::t_af98a429132635 14-21
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_d68f9144c308b2::t_3d1e8df00886f4 13-20
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_d68f9144c308b2::t_01b922e7800034 14-25
+src/FHIRBridge.Application/FHIRBridge.Application.csproj
+  s_d68f9144c308b2::t_e983d0698581b1 22-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "179c933b6d913a74627ec588186194f17a139d44",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_f2e735b2ad7f17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4add3300-65d3-4739-b657-bd4a95e31c89",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
