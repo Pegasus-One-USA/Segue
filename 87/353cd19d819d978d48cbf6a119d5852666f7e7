@@ -1,0 +1,34 @@
+docs/backend/11-destination-schema-ownership-plan.md
+  s_0e76e12bbcdd64::t_3fc0048e6fca6c 1-156
+Demo_TestApp/backend/Properties/launchSettings.json
+  s_13d9134ea298b2::t_7d7f9d34e4b9c6 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "87353cd19d819d978d48cbf6a119d5852666f7e7",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_0e76e12bbcdd64": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ec49ab3-c691-4cc1-80cf-be7b23c33492",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_13d9134ea298b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c51d72fe-b529-4aa3-a4f3-fdcdf07e9a0c",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
