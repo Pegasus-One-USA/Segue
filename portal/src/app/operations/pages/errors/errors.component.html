@@ -44,7 +44,15 @@
         <ng-container matColumnDef="message">
           <th mat-header-cell *matHeaderCellDef>Message</th>
           <td mat-cell *matCellDef="let r">
-            <span class="clickable" (click)="toggleStackTrace(r.id)">{{ r.message }}</span>
+            <span
+              class="clickable"
+              role="button"
+              tabindex="0"
+              [attr.aria-expanded]="expandedId() === r.id"
+              (click)="toggleStackTrace(r.id)"
+              (keydown.enter)="toggleStackTrace(r.id)"
+              (keydown.space)="toggleStackTrace(r.id); $event.preventDefault()"
+            >{{ r.message }}</span>
             @if (expandedId() === r.id && r.stackTrace) {
               <pre class="stack-trace">{{ r.stackTrace }}</pre>
             }

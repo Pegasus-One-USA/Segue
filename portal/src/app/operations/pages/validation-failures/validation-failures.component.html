@@ -44,7 +44,7 @@
 
         <ng-container matColumnDef="dataQualityScore">
           <th mat-header-cell *matHeaderCellDef>Quality Score</th>
-          <td mat-cell *matCellDef="let r">{{ r.dataQualityScore != null ? (r.dataQualityScore | number:'1.0-2') : '—' }}</td>
+          <td mat-cell *matCellDef="let r">{{ (r.dataQualityScore ?? null) !== null ? (r.dataQualityScore | number:'1.0-2') : '—' }}</td>
         </ng-container>
 
         <ng-container matColumnDef="correlationId">

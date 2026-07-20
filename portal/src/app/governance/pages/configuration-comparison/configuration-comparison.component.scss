@@ -13,7 +13,7 @@
 
 .page-sub {
   margin: 0;
-  color: var(--text-secondary, #6b7280);
+  color: var(--color-muted);
   font-size: 13px;
 }
 
@@ -33,12 +33,12 @@
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--color-muted);
 }
 
 .picker-bar select {
   padding: 6px 10px;
-  border: 1px solid var(--border-color, #d1d5db);
+  border: 1px solid var(--color-border-input);
   border-radius: 6px;
   font-size: 13px;
   min-width: 260px;
@@ -47,11 +47,11 @@
 .arrow {
   font-size: 16px;
   padding-bottom: 8px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--color-muted);
 }
 
 .table-card {
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -65,33 +65,25 @@
 .diff-table th {
   text-align: left;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
-  color: var(--text-secondary, #6b7280);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
   font-size: 12px;
 }
 
 .diff-table td {
   padding: 8px 16px;
-  border-bottom: 1px solid var(--border-color, #f3f4f6);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .diff-changed td {
   font-weight: 600;
-  background: #fffbeb;
+  background: var(--color-warning-soft);
 }
 
 .empty-state {
   padding: 32px;
   text-align: center;
-  color: var(--text-secondary, #6b7280);
+  color: var(--color-muted);
   font-size: 13px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .page-sub, .picker-bar label, .arrow, .empty-state {
-    color: #9ca3af;
-  }
-  .diff-changed td {
-    background: #422006;
-  }
-}
