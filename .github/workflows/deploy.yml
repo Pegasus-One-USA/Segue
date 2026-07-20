@@ -100,7 +100,7 @@ jobs:
           cd publish
           zip -r ../fhirbridge-deploy.zip Api Gateway Worker DemoApi Portal DemoPortal
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: fhirbridge-deploy
           path: fhirbridge-deploy.zip
