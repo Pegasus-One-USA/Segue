@@ -75,6 +75,16 @@
   }
   h2.section-divider.windows-divider { background: linear-gradient(135deg, var(--windows) 0%, #0369A1 100%); }
   h2.section-divider.linux-divider { background: linear-gradient(135deg, var(--linux) 0%, #C2410C 100%); }
+  h2.section-divider.envs-divider { background: linear-gradient(135deg, var(--backend) 0%, #4C1D95 100%); }
+  .env-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 16px 0 24px; }
+  .env-card { border-radius: 10px; padding: 16px 20px; border: 1px solid var(--border); background: var(--surface); }
+  .env-card h4 { margin: 0 0 6px; }
+  .env-card .env-branch { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--muted); }
+  .gate-chain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 20px; }
+  .gate-chain .gate { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+  .gate-chain .gate.approval { color: var(--modified); border-color: var(--modified); }
+  .gate-chain .gate.deploy { color: var(--new); border-color: var(--new); }
+  .gate-chain .arrow { color: var(--muted); font-size: 16px; }
   h2.section-divider .os-icon {
     width: 40px; height: 40px;
     border-radius: 10px;
@@ -306,6 +316,13 @@
       <li><a href="#linux-script">The Linux deploy script, internals</a></li>
       <li><a href="#linux-setup">Setting up a new Linux server</a></li>
       <li><a href="#linux-gaps">Remaining work to fully enable Linux</a></li>
+      <li class="toc-section-head"><a href="#envs-deployment">&#9654; Staging / QA / Dev / Working Environments</a></li>
+      <li><a href="#envs-overview">Overview &amp; topology per environment</a></li>
+      <li><a href="#envs-gateway-roles">Reusing Gateway.exe as a static portal host</a></li>
+      <li><a href="#envs-triggers">Triggers &amp; chained approval gates</a></li>
+      <li><a href="#envs-workflows">Workflow structure</a></li>
+      <li><a href="#envs-angular">Angular build configurations &amp; CORS</a></li>
+      <li><a href="#envs-setup">Manual setup checklist</a></li>
       <li><a href="#gotchas">Known gotchas &amp; lessons learned</a></li>
       <li><a href="#reference">Quick reference</a></li>
     </ol>
@@ -785,7 +802,171 @@ sudo firewall-cmd --reload</code></pre>
 
   <!-- =========================== SHARED SECTIONS =========================== -->
 
-  <h2 id="gotchas"><span class="num">4.</span>Known Gotchas &amp; Lessons Learned</h2>
+  <!-- =========================== STAGING/QA/DEV/WORKING ENVIRONMENTS =========================== -->
+
+  <h2 class="section-divider envs-divider" id="envs-deployment"><span class="os-icon">&#127760;</span>Staging / QA / Dev / Working Environments</h2>
+  <p class="section-intro">
+    Four additional, fully isolated environments on the same Windows VM as production, each with its
+    own branch restriction, ports, service names, and folder tree. Production's own
+    <code>deploy.yml</code> / <code>Deploy-FHIRBridge.ps1</code> are untouched by any of this &mdash;
+    everything below is new, additive infrastructure living alongside them.
+  </p>
+
+  <h3 id="envs-overview">Overview &amp; topology per environment</h3>
+  <div class="env-grid">
+    <div class="env-card"><h4>Staging</h4><div class="env-branch">branch: main &middot; 2 approval gates</div></div>
+    <div class="env-card"><h4>QA</h4><div class="env-branch">branch: quality &middot; 2 approval gates</div></div>
+    <div class="env-card"><h4>Dev</h4><div class="env-branch">branch: develop &middot; 1 approval gate</div></div>
+    <div class="env-card"><h4>Working</h4><div class="env-branch">branch: any &middot; no approval</div></div>
+  </div>
+  <p>Each environment gets the same 6 deploy folders, under <code>C:\inetpub\wwwroot\&lt;Environment&gt;\</code>
+  and <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\</code>:</p>
+  <table class="file-table">
+    <tr><th>Folder</th><th>Staging</th><th>QA</th><th>Dev</th><th>Working</th><th>Windows Service name</th></tr>
+    <tr><td class="file-path">fhirbridge-portal</td><td class="file-path">:2000</td><td class="file-path">:3000</td><td class="file-path">:4000</td><td class="file-path">:6000</td><td class="file-path">fhirbridge-&lt;env&gt;-portal</td></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="file-path">:2002</td><td class="file-path">:3002</td><td class="file-path">:4002</td><td class="file-path">:6002</td><td class="file-path">fhirbridge-&lt;env&gt;-api</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="file-path">:2003</td><td class="file-path">:3003</td><td class="file-path">:4003</td><td class="file-path">:6003</td><td class="file-path">fhirbridge-&lt;env&gt;-gateway</td></tr>
+    <tr><td class="file-path">demoapp-portal</td><td class="file-path">:2010</td><td class="file-path">:3010</td><td class="file-path">:4010</td><td class="file-path">:6010</td><td class="file-path">fhirbridge-&lt;env&gt;-demoapp-portal</td></tr>
+    <tr><td class="file-path">demoapp-api</td><td class="file-path">:2011</td><td class="file-path">:3011</td><td class="file-path">:4011</td><td class="file-path">:6011</td><td class="file-path">fhirbridge-&lt;env&gt;-demoapp-api</td></tr>
+    <tr><td class="file-path">fhirbridge-worker</td><td class="file-path">:2020</td><td class="file-path">:3020</td><td class="file-path">:4020</td><td class="file-path">:6020</td><td class="file-path">fhirbridge-&lt;env&gt;-worker</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>The worker port is reserved, not bindable</strong>
+    <code>FHIRBridge.Worker</code> uses <code>Host.CreateApplicationBuilder</code>
+    (<code>src/Worker/FHIRBridge.Worker/Program.cs:14</code>) &mdash; there is no Kestrel, no HTTP
+    endpoint at all, in any environment. The worker port in the table above is kept for naming-scheme
+    consistency only; nothing listens on it.
+  </div>
+
+  <h3 id="envs-gateway-roles">Reusing Gateway.exe as a static portal host</h3>
+  <p>
+  Every non-prod environment decouples the portal from Gateway &mdash; unlike production, where
+  Gateway serves the portal and proxies the API from the same origin/port, here
+  <code>fhirbridge-portal</code> and <code>demoapp-portal</code> are each independently reachable on
+  their own port. This needed <strong>zero new C# code</strong>: <code>FHIRBridge.Gateway</code>'s
+  existing <code>Program.cs</code> already does exactly two independent, config-driven things (see
+  <code>src/Gateway/FHIRBridge.Gateway/Program.cs:19-52</code>) &mdash; serve static files if
+  <code>StaticFiles:RootPath</code> is set, and proxy <code>/api/**</code>/<code>/swagger/**</code> via
+  YARP regardless. So the same published <code>FHIRBridge.Gateway.exe</code> is deployed
+  <strong>three times per environment</strong>, in three different config-only roles:
+  </p>
+  <table class="file-table">
+    <tr><th>Deploy folder</th><th>Role</th><th>Config</th></tr>
+    <tr><td class="file-path">fhirbridge-portal</td><td class="why">Static-only</td><td class="why"><code>StaticFiles:RootPath</code> pointed at this folder's own <code>wwwroot\</code> subfolder (where the built portal lands); <code>ReverseProxy</code> left effectively unused.</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="why">Proxy-only</td><td class="why"><code>StaticFiles:RootPath</code> left empty &mdash; Gateway already just logs a warning and skips static serving in that case; <code>ReverseProxy:Clusters:api-cluster:Destinations</code> points at this environment's own Api instance port.</td></tr>
+    <tr><td class="file-path">demoapp-portal</td><td class="why">Static-only</td><td class="why">Same as <code>fhirbridge-portal</code>, but serving the Demo app's portal build instead.</td></tr>
+  </table>
+  <p><code>deploy/windows/Deploy-FHIRBridge-Environment.ps1</code> (sibling to the production-only
+  <code>Deploy-FHIRBridge.ps1</code>, which it does not modify) implements this via two functions:
+  <code>Deploy-Service</code> (the regular, one-executable-per-service case &mdash; used for Api,
+  Worker, DemoApi, and the proxy-only Gateway) and <code>Deploy-StaticPortal</code> (mirrors the
+  Gateway artifact <em>and</em> a built Angular site into a <code>wwwroot\</code> subfolder alongside
+  it, for the two static-only roles). Both reuse the same <code>robocopy</code> mirror +
+  ConfigRoot-overlay pattern as the production script.</p>
+  <div class="callout">
+    <strong>The proxy-only Gateway's health check needs one added config route</strong>
+    Gateway has no <code>/health</code> endpoint of its own, and its YARP config only proxies
+    <code>/api/**</code> and <code>/swagger/**</code> by default &mdash; neither reaches Api's
+    <code>/health</code>. Add a third route to this instance's <code>appsettings.Production.json</code>
+    matching <code>/health</code> to the same <code>api-cluster</code>, so
+    <code>Deploy-FHIRBridge-Environment.ps1</code>'s health check
+    (<code>http://localhost:&lt;gateway-port&gt;/health</code>) has something real to hit.
+  </div>
+
+  <h3 id="envs-triggers">Triggers &amp; chained approval gates</h3>
+  <p>
+  Each environment auto-deploys only from a <strong>blank</strong> commit whose message is the exact
+  literal string <code>Deploy</code>, pushed to that environment's own branch &mdash; a commit with
+  that message which isn't blank is deliberately ignored. Manual <code>workflow_dispatch</code> is
+  always available too, on any branch, and skips the blank-commit check (an explicit manual run is
+  already a deliberate action).
+  </p>
+  <pre><code>git commit --allow-empty -m "Deploy"
+git push origin develop   # (or main / quality / any branch, depending on the environment)</code></pre>
+  <p>
+  GitHub's native "required reviewers" per Environment only enforces <em>any one</em> of the assigned
+  reviewers approving &mdash; not a true quorum. To genuinely require multiple <em>distinct</em>
+  people, Staging and QA chain two sequential single-reviewer gate environments instead of one
+  multi-reviewer one; Dev uses a single gate; Working has none:
+  </p>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">staging-approval-1</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">staging-approval-2</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (Staging)</span>
+  </div>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">qa-approval-1</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">qa-approval-2</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (QA)</span>
+  </div>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">dev-approval-1</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (Dev)</span>
+  </div>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (Working)</span>
+  </div>
+  <p>Each <code>approval-N</code> job's only purpose is its <code>environment:</code> protection rule
+  &mdash; it has a single trivial step and exists purely to block until that environment's assigned
+  reviewer clicks approve, before the next job in the chain can start.</p>
+
+  <h3 id="envs-workflows">Workflow structure</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Role</th></tr>
+    <tr><td class="file-path">.github/workflows/deploy-environment.yml</td><td class="why">Reusable engine (<code>workflow_call</code>, input: <code>environment</code>). Builds all 4 backends + both frontends (the frontend builds use that environment's own Angular configuration &mdash; see below), packages one artifact, then runs <code>Deploy-FHIRBridge-Environment.ps1 -Environment &lt;name&gt;</code> on the same self-hosted runner (<code>fhirbridge-vm</code>) production already uses.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-staging.yml</td><td class="why">"Deploy_Staging" &mdash; branch <code>main</code>, guard, 2 gates, calls the engine with <code>environment: Staging</code>.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-qa.yml</td><td class="why">"Deploy_QA" &mdash; branch <code>quality</code>, guard, 2 gates, <code>environment: QA</code>.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-dev.yml</td><td class="why">"Deploy_Dev" &mdash; branch <code>develop</code>, guard, 1 gate, <code>environment: Dev</code>.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-working.yml</td><td class="why">"Deploy_Working" &mdash; no branch filter (any branch), guard, no gates, <code>environment: Working</code>.</td></tr>
+  </table>
+  <p>The <code>guard</code> job in each trigger workflow checks out with <code>fetch-depth: 2</code>
+  and runs <code>git diff --quiet HEAD^ HEAD</code> for push events (always <code>true</code> for
+  <code>workflow_dispatch</code>) to confirm the commit is genuinely blank before setting a
+  <code>proceed</code> output that every later job in that file gates on.</p>
+
+  <h3 id="envs-angular">Angular build configurations &amp; CORS</h3>
+  <p>
+  Production's <code>apiBase</code>/<code>fhirbridgeBase</code> are intentionally empty
+  (<code>environment.prod.ts</code> in both <code>portal/</code> and
+  <code>Demo_TestApp/frontend/</code>) because the portal is same-origin with its API there. Since
+  every non-prod environment's portal is now genuinely cross-origin from its own API (different
+  port), each got its own new Angular build configuration and environment file, mirroring the
+  existing <code>production</code>/<code>development</code> pattern in both apps'
+  <code>angular.json</code>:
+  </p>
+  <table class="file-table">
+    <tr><th>New file</th><th>Sets</th></tr>
+    <tr><td class="file-path">portal/src/environments/environment.{staging,qa,dev,working}.ts</td><td class="why"><code>apiBase</code> &rarr; that environment's own Gateway origin (e.g. Staging: <code>http://localhost:2003</code>)</td></tr>
+    <tr><td class="file-path">Demo_TestApp/frontend/src/environments/environment.{staging,qa,dev,working}.ts</td><td class="why"><code>healthAppBase</code> &rarr; that environment's own demo backend origin, <code>fhirbridgeBase</code> &rarr; that environment's own Gateway origin</td></tr>
+  </table>
+  <div class="callout bad">
+    <strong>CORS must be configured per environment or the portal can't call its API</strong>
+    <code>FHIRBridge.Api</code>'s CORS is already dynamic and config/DB-driven
+    (<code>DynamicPortalCorsPolicyProvider</code>, reads <code>Portal:AllowedOrigins</code> &mdash;
+    <code>src/Api/FHIRBridge.Api/Program.cs:159-167</code> &mdash; and can be edited live via the
+    admin UI with no restart), so no code change is needed, but each environment's Api instance
+    <strong>must</strong> have that environment's portal origin (e.g.
+    <code>http://localhost:2000</code> for Staging) added to its allow-list, or the portal will fail
+    every API call with a CORS error. Same idea for the Demo app backend's
+    <code>AllowedFrontendOrigin</code>.
+  </div>
+
+  <h3 id="envs-setup">Manual setup checklist</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Create the branches</strong><span><code>quality</code> and <code>develop</code>, both from <code>main</code> (already done for this rollout).</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Create 9 GitHub Environments</strong><span>Settings &rarr; Environments: <code>staging-approval-1</code>, <code>staging-approval-2</code>, <code>Staging</code>, <code>qa-approval-1</code>, <code>qa-approval-2</code>, <code>QA</code>, <code>dev-approval-1</code>, <code>Dev</code>, <code>Working</code>. Assign the actual required reviewer (a real person) to each <code>-approval-N</code> environment.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Open firewall ports</strong><span>2000/2002/2003/2010/2011/2020, 3000/3002/3003/3010/3011/3020, 4000/4002/4003/4010/4011/4020, 6000/6002/6003/6010/6011/6020.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Provision 24 appsettings.Production.json files</strong><span>Under <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\&lt;folder&gt;\</code> &mdash; one per folder per environment, with the roles described above (static-only Gateway vs. proxy-only Gateway vs. Api vs. Worker vs. DemoApi).</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Provision separate databases</strong><span>Recommended: a distinct <code>FHIRBridgeDb</code> and demo-app database per environment, so Staging/QA/Dev/Working don't share data with each other or with production.</span></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Set ASPNETCORE_URLS per service</strong><span>Same one-time-manual pattern as production &mdash; via each Windows Service's Environment tab in <code>services.msc</code>, once each service exists after its first deploy.</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Confirm VM headroom</strong><span>4 more environments' worth of services (24 total) now run alongside production's 4 on the same VM.</span></div></div>
+  </div>
+
+  <h2 id="gotchas"><span class="num">5.</span>Known Gotchas &amp; Lessons Learned</h2>
 
   <div class="callout bad">
     <strong>Real incident: missing column after a schema change</strong>
@@ -832,7 +1013,7 @@ ADD [ProviderLaunchContext] nvarchar(max) NOT NULL DEFAULT N'';</code></pre>
     server (now under ConfigRoot). CI never sees or manages these files.
   </div>
 
-  <h2 id="reference"><span class="num">5.</span>Quick Reference</h2>
+  <h2 id="reference"><span class="num">6.</span>Quick Reference</h2>
   <div class="compare-grid">
     <div class="compare-card windows-card">
       <h4><span class="pill pill-windows">Windows</span> Trigger a deploy right now</h4>
