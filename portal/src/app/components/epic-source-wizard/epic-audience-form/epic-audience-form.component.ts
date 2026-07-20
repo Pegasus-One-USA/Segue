@@ -349,11 +349,11 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly loadingExisting = signal(false);
   protected readonly selectedExistingId = signal<string | null>(null);
   /** Every saved source connection's name (all vendors, not just Epic — getAll() returns everything, this
-   *  component just filters existingConnections down to Epic for the dropdown). Cloning from "Existing Source"
-   *  always creates a brand-new connection (see populateFormFromSourceConnection's own comment: canvas mode has
-   *  no entity id to attach to), so save() must dedupe the cloned name here — otherwise Name is copied verbatim
-   *  and the create call collides with "A source connection named '<name>' already exists." on the very save
-   *  that's supposed to clone it. */
+   *  component just filters existingConnections down to Epic for the dropdown). Populated on ngOnInit for any
+   *  canvas-mode create (see loadAllConnectionNames) and refreshed by onSourceModeChange when the picker switches
+   *  to "Existing Source". save() dedupes against it in both branches — cloning an existing connection verbatim,
+   *  and leaving a brand-new node on its default/reused App Name — otherwise the create call collides with
+   *  "A source connection named '<name>' already exists." only at workflow-build time. */
   private _allConnectionNames = new Set<string>();
   /** Only offered when creating a brand-new canvas node — editing an existing node already has its own data, and
    *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
@@ -637,6 +637,13 @@ export class EpicAudienceFormComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    // "New Source" (the default picker state) needs the same collision defense as "Existing Source" cloning —
+    // otherwise a brand-new node left on the default App Name silently collides with a prior connection of that
+    // exact name, and the raw backend "already exists" error only surfaces later, at workflow build time.
+    if (this.showSourcePicker()) {
+      this.loadAllConnectionNames();
+    }
+
     if (this.wiz.isEditing()) {
       // Pre-populate all fields from saved node data
       this.form.controls.audience.setValue(this.wiz.epicAudience() as EpicAudience);
@@ -1032,6 +1039,16 @@ export class EpicAudienceFormComponent implements OnInit {
     }
   }
 
+  /** Best-effort load of every saved connection's name so save()'s "New Source" branch can dedupe against real
+   *  collisions up front — a failed load just skips the client-side check, since the backend still rejects a
+   *  true collision regardless. */
+  private loadAllConnectionNames(): void {
+    this.sourceConnectionSvc.getAll().subscribe({
+      next: connections => this._allConnectionNames = new Set(connections.map(c => c.name)),
+      error: () => {},
+    });
+  }
+
   /**
    * Resolves a unique name for the cloned connection. When the user typed their own distinct name, it's used
    * as-is (forceSuffix false) — only a genuine collision gets a -1/-2/... suffix appended. When the name was left
@@ -1334,6 +1351,12 @@ export class EpicAudienceFormComponent implements OnInit {
         const nameWasEdited = !!original && resolvedName !== original.name;
         resolvedName = this._resolveUniqueSourceName(resolvedName, !nameWasEdited);
       }
+    } else {
+      // "New Source": a brand-new node left on the default (or a reused) App Name must not silently collide with
+      // an already-persisted connection of that exact name — only suffix on an actual collision (forceSuffix
+      // false), so a genuinely unique name the user typed is still honored as-is. No-ops in entity-mode create,
+      // where _allConnectionNames is never populated (see loadAllConnectionNames's showSourcePicker guard).
+      resolvedName = this._resolveUniqueSourceName(resolvedName, false);
     }
 
     this.wiz.setAppKey(appKeyMap[aud]);

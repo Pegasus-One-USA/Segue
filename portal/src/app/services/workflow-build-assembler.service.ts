@@ -429,12 +429,23 @@ export class WorkflowBuildAssemblerService {
       primary;
     // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
     // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
-    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. No explicit ;key=
-    // override: the writer's own default key (SourceResourceId) matches that label's "by source id" semantics.
-    const destinationObject =
-      destFields['dest_writeMode'] === 'upsert'
-        ? `${baseDestinationObject};mode=upsert`
-        : baseDestinationObject;
+    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. MappedSqlServerDestinationWriter
+    // has no default key (ParseDestinationTarget throws immediately if mode=upsert has no explicit ;key=<Column>),
+    // so "by source id" only means something once we resolve which destination column the FHIR resource's own
+    // `id` field was mapped onto, and pass that through explicitly.
+    let destinationObject = baseDestinationObject;
+    if (destFields['dest_writeMode'] === 'upsert') {
+      const idRow = primaryRows.find(
+        (row) => (row.jsonPath ?? this.toJsonPath(row.path, primary)) === '$.id',
+      );
+      if (!idRow) {
+        throw new Error(
+          `"${primary}" destination is set to Upsert by source id, but no destination column is mapped from ` +
+            `${primary}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
+        );
+      }
+      destinationObject = `${baseDestinationObject};mode=upsert;key=${idRow.column}`;
+    }
 
     const fields: MappingFieldRequest[] = primaryRows.map((row) => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the

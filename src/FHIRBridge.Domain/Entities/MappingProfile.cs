@@ -66,6 +66,13 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     private void ReplaceFields(IEnumerable<MappingField> fields)
     {
         _fields.Clear();
-        _fields.AddRange(fields);
+        // One row per destination column: a caller resubmitting the same TargetField more than once in a single
+        // request (e.g. the field was re-picked in the mapping editor without the earlier row being cleared) must
+        // not persist as separate rows. Keep the last occurrence — it reflects whatever the caller most recently
+        // configured for that column.
+        _fields.AddRange(
+            fields
+                .GroupBy(f => f.TargetField, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.Last()));
     }
 }

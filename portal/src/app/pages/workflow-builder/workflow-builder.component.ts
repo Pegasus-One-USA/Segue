@@ -230,7 +230,17 @@ export class WorkflowBuilderComponent implements OnInit {
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
 
-    const request = this.buildAssembler.assemble(name, this.buildTrigger());
+    let request: WorkflowBuildRequest;
+    try {
+      request = this.buildAssembler.assemble(name, this.buildTrigger());
+    } catch (err) {
+      // buildAssembler throws for configuration gaps it can catch up front (e.g. Upsert write mode with no
+      // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
+      const msg = err instanceof Error ? err.message : 'Workflow configuration is invalid.';
+      this.workflowStatus.set(msg);
+      this.toast.show('Cannot save workflow', msg);
+      return;
+    }
     const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
     if (hasSpecs) {
       this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });

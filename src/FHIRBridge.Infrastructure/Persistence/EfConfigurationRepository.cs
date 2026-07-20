@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 
 namespace FHIRBridge.Infrastructure.Persistence;
@@ -164,9 +165,27 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     {
         await _db.SaveChangesAsync(ct);
 
-        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() replaces the
-        // entire owned Fields collection) — clear the tracker so a later Get*Async for this id within the same
-        // request's DbContext re-materializes cleanly instead of hitting the corrupted tracked entry/orphans.
+        // MappingProfile.Update() replaces the entire Fields collection in memory (see MappingProfile.ReplaceFields:
+        // Clear + AddRange). A definitive cleanup pass below removes anything left over for this profile that isn't
+        // one of the ids SaveChangesAsync just persisted, guaranteeing "update" is a real full replace — a field
+        // dropped from the mapping is deleted, not left behind as an orphan that keeps feeding future pipeline runs
+        // regardless of what the UI currently shows. ExecuteDeleteAsync runs directly against the database (no
+        // change-tracker involvement), so it can't conflict with the save that just happened.
+        var currentFieldIds = e.Fields
+            .Select(f => _db.Entry(f).Property<Guid>("Id").CurrentValue)
+            .ToList();
+
+        // MappingField is owned (OwnsMany), so it has no queryable DbSet of its own — EF requires navigating to it
+        // through its owner.
+        await _db.MappingProfiles
+            .Where(p => p.Id == e.Id)
+            .SelectMany(p => p.Fields)
+            .Where(f => !currentFieldIds.Contains(EF.Property<Guid>(f, "Id")))
+            .ExecuteDeleteAsync(ct);
+
+        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above — clear the tracker so a
+        // later Get*Async for this id within the same request's DbContext re-materializes cleanly instead of
+        // hitting the corrupted tracked entry/orphans.
         _db.ChangeTracker.Clear();
     }
 
