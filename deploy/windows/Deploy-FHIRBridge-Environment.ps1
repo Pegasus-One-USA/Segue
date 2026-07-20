@@ -113,8 +113,24 @@ function Stop-ServiceIfRunning {
     }
 }
 
+function Set-ServiceEnvironment {
+    param([string]$Name, [string[]]$EnvironmentVariables)
+
+    if (-not $EnvironmentVariables -or $EnvironmentVariables.Count -eq 0) {
+        return
+    }
+
+    # Written directly to the service's registry key rather than via a services.msc-equivalent
+    # cmdlet (none ship in-box) -- REG_MULTI_SZ needs an explicit string[], not the Object[] a bare
+    # array literal would produce. Called every deploy (not just service creation) so ASPNETCORE_URLS
+    # stays correct even if it's ever changed here later -- the caller already stopped the service
+    # before this runs, so the new value takes effect on the very next Start-Service.
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$Name" -Name Environment `
+        -Value ([string[]]$EnvironmentVariables) -Type MultiString
+}
+
 function Start-AndWait {
-    param([string]$Name, [string]$ExePath, [string]$DisplayName)
+    param([string]$Name, [string]$ExePath, [string]$DisplayName, [string[]]$EnvironmentVariables)
 
     if (-not (Test-Path $ExePath)) {
         throw "Expected executable not found after deploy: $ExePath"
@@ -124,6 +140,8 @@ function Start-AndWait {
         Write-Host "Service $Name does not exist yet -- creating it."
         New-Service -Name $Name -BinaryPathName "`"$ExePath`"" -DisplayName $DisplayName -StartupType Automatic
     }
+
+    Set-ServiceEnvironment -Name $Name -EnvironmentVariables $EnvironmentVariables
 
     Write-Host "Starting service $Name..."
     Start-Service -Name $Name
@@ -139,7 +157,8 @@ function Deploy-Service {
         [string]$DestDir,
         [string]$ConfigSourceDir,
         [string]$ExeName,
-        [string]$DisplayName
+        [string]$DisplayName,
+        [string[]]$EnvironmentVariables
     )
 
     Write-Host "== Deploying $Name =="
@@ -156,7 +175,7 @@ function Deploy-Service {
     $global:LASTEXITCODE = 0
 
     Copy-ConfigOverlay -Name $Name -ConfigSourceDir $ConfigSourceDir -DestDir $DestDir
-    Start-AndWait -Name $Name -ExePath (Join-Path $DestDir $ExeName) -DisplayName $DisplayName
+    Start-AndWait -Name $Name -ExePath (Join-Path $DestDir $ExeName) -DisplayName $DisplayName -EnvironmentVariables $EnvironmentVariables
 }
 
 # Static-portal role: an extra FHIRBridge.Gateway.exe instance, mirrored the same way as any other
@@ -170,7 +189,8 @@ function Deploy-StaticPortal {
         [string]$ContentSourceDir,
         [string]$DestDir,
         [string]$ConfigSourceDir,
-        [string]$DisplayName
+        [string]$DisplayName,
+        [string[]]$EnvironmentVariables
     )
 
     Write-Host "== Deploying $Name (static portal) =="
@@ -200,7 +220,7 @@ function Deploy-StaticPortal {
     $global:LASTEXITCODE = 0
 
     Copy-ConfigOverlay -Name $Name -ConfigSourceDir $ConfigSourceDir -DestDir $DestDir
-    Start-AndWait -Name $Name -ExePath (Join-Path $DestDir "FHIRBridge.Gateway.exe") -DisplayName $DisplayName
+    Start-AndWait -Name $Name -ExePath (Join-Path $DestDir "FHIRBridge.Gateway.exe") -DisplayName $DisplayName -EnvironmentVariables $EnvironmentVariables
 }
 
 function Test-Health {
@@ -231,14 +251,14 @@ $healthChecks = @()
 Deploy-StaticPortal -Name "fhirbridge-$prefix-portal" `
     -GatewaySourceDir (Join-Path $ArtifactPath "Gateway") -ContentSourceDir (Join-Path $ArtifactPath "Portal") `
     -DestDir (Join-Path $envDeployRoot "fhirbridge-portal") -ConfigSourceDir (Join-Path $envConfigRoot "fhirbridge-portal") `
-    -DisplayName "FHIRBridge $Environment Portal"
+    -DisplayName "FHIRBridge $Environment Portal" -EnvironmentVariables @("ASPNETCORE_URLS=http://+:$($ports.Portal)")
 $healthChecks += @{ Name = "fhirbridge-$prefix-portal"; Url = "http://localhost:$($ports.Portal)/" }
 
-# 2. fhirbridge-api
+# 2. fhirbridge-api -- loopback-only, matching production's own security posture.
 Deploy-Service -Name "fhirbridge-$prefix-api" `
     -SourceDir (Join-Path $ArtifactPath "Api") -DestDir (Join-Path $envDeployRoot "fhirbridge-api") `
     -ConfigSourceDir (Join-Path $envConfigRoot "fhirbridge-api") -ExeName "FHIRBridge.Api.exe" `
-    -DisplayName "FHIRBridge $Environment API"
+    -DisplayName "FHIRBridge $Environment API" -EnvironmentVariables @("ASPNETCORE_URLS=http://127.0.0.1:$($ports.Api)")
 $healthChecks += @{ Name = "fhirbridge-$prefix-api"; Url = "http://127.0.0.1:$($ports.Api)/health" }
 
 # 3. fhirbridge-gateway -- proxy-only Gateway instance (no StaticFiles:RootPath configured for this
@@ -247,14 +267,14 @@ $healthChecks += @{ Name = "fhirbridge-$prefix-api"; Url = "http://127.0.0.1:$($
 Deploy-Service -Name "fhirbridge-$prefix-gateway" `
     -SourceDir (Join-Path $ArtifactPath "Gateway") -DestDir (Join-Path $envDeployRoot "fhirbridge-gateway") `
     -ConfigSourceDir (Join-Path $envConfigRoot "fhirbridge-gateway") -ExeName "FHIRBridge.Gateway.exe" `
-    -DisplayName "FHIRBridge $Environment Gateway"
+    -DisplayName "FHIRBridge $Environment Gateway" -EnvironmentVariables @("ASPNETCORE_URLS=http://+:$($ports.Gateway)")
 $healthChecks += @{ Name = "fhirbridge-$prefix-gateway"; Url = "http://localhost:$($ports.Gateway)/health" }
 
 # 4. demoapp-portal -- static Gateway instance serving the demo app's portal build.
 Deploy-StaticPortal -Name "fhirbridge-$prefix-demoapp-portal" `
     -GatewaySourceDir (Join-Path $ArtifactPath "Gateway") -ContentSourceDir (Join-Path $ArtifactPath "DemoPortal") `
     -DestDir (Join-Path $envDeployRoot "demoapp-portal") -ConfigSourceDir (Join-Path $envConfigRoot "demoapp-portal") `
-    -DisplayName "FHIRBridge $Environment Demo Portal"
+    -DisplayName "FHIRBridge $Environment Demo Portal" -EnvironmentVariables @("ASPNETCORE_URLS=http://+:$($ports.DemoPortal)")
 $healthChecks += @{ Name = "fhirbridge-$prefix-demoapp-portal"; Url = "http://localhost:$($ports.DemoPortal)/" }
 
 # 5. demoapp-api -- health-checked via the existing public, unauthenticated /api/demo-types endpoint
@@ -263,11 +283,12 @@ $healthChecks += @{ Name = "fhirbridge-$prefix-demoapp-portal"; Url = "http://lo
 Deploy-Service -Name "fhirbridge-$prefix-demoapp-api" `
     -SourceDir (Join-Path $ArtifactPath "DemoApi") -DestDir (Join-Path $envDeployRoot "demoapp-api") `
     -ConfigSourceDir (Join-Path $envConfigRoot "demoapp-api") -ExeName "HealthAppBackend.exe" `
-    -DisplayName "FHIRBridge $Environment Demo App API"
+    -DisplayName "FHIRBridge $Environment Demo App API" -EnvironmentVariables @("ASPNETCORE_URLS=http://+:$($ports.DemoApi)")
 $healthChecks += @{ Name = "fhirbridge-$prefix-demoapp-api"; Url = "http://localhost:$($ports.DemoApi)/api/demo-types" }
 
 # 6. fhirbridge-worker -- Host.CreateApplicationBuilder, no Kestrel/HTTP endpoint at all (see
-# src/Worker/FHIRBridge.Worker/Program.cs). Its port entry is reserved/unused; no health check URL.
+# src/Worker/FHIRBridge.Worker/Program.cs). Its port entry is reserved/unused; ASPNETCORE_URLS would
+# be inert here, so none is set, and there's no health check URL.
 Deploy-Service -Name "fhirbridge-$prefix-worker" `
     -SourceDir (Join-Path $ArtifactPath "Worker") -DestDir (Join-Path $envDeployRoot "fhirbridge-worker") `
     -ConfigSourceDir (Join-Path $envConfigRoot "fhirbridge-worker") -ExeName "FHIRBridge.Worker.exe" `

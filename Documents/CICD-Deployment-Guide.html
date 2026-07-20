@@ -863,6 +863,14 @@ sudo firewall-cmd --reload</code></pre>
   Gateway artifact <em>and</em> a built Angular site into a <code>wwwroot\</code> subfolder alongside
   it, for the two static-only roles). Both reuse the same <code>robocopy</code> mirror +
   ConfigRoot-overlay pattern as the production script.</p>
+  <p>Unlike the production script, <code>ASPNETCORE_URLS</code> is <strong>not</strong> a manual
+  post-deploy step here &mdash; each service's port comes straight from the environment's own port
+  table, and <code>Set-ServiceEnvironment</code> writes it to that Windows Service's registry
+  <code>Environment</code> value (<code>REG_MULTI_SZ</code>) every deploy, right before
+  <code>Start-Service</code>. <code>fhirbridge-api</code> binds loopback-only
+  (<code>http://127.0.0.1:&lt;port&gt;</code>, matching production's security posture); every other
+  service binds <code>http://+:&lt;port&gt;</code>. <code>fhirbridge-worker</code> gets none, since it
+  has no HTTP endpoint to bind at all.</p>
   <div class="callout">
     <strong>The proxy-only Gateway's health check needs one added config route</strong>
     Gateway has no <code>/health</code> endpoint of its own, and its YARP config only proxies
@@ -960,11 +968,10 @@ git push origin develop   # (or main / quality / any branch, depending on the en
     <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Create the branches</strong><span><code>quality</code> and <code>develop</code>, both from <code>main</code> (already done for this rollout).</span></div></div>
     <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Create 9 GitHub Environments</strong><span>Settings &rarr; Environments: <code>staging-approval-1</code>, <code>staging-approval-2</code>, <code>Staging</code>, <code>qa-approval-1</code>, <code>qa-approval-2</code>, <code>QA</code>, <code>dev-approval-1</code>, <code>Dev</code>, <code>Working</code>. Assign the actual required reviewer (a real person) to each <code>-approval-N</code> environment.</span></div></div>
     <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Open firewall ports</strong><span>2000/2002/2003/2010/2011/2020, 3000/3002/3003/3010/3011/3020, 4000/4002/4003/4010/4011/4020, 6000/6002/6003/6010/6011/6020.</span></div></div>
-    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Provision 24 appsettings.Production.json files</strong><span>Under <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\&lt;folder&gt;\</code> &mdash; one per folder per environment, with the roles described above (static-only Gateway vs. proxy-only Gateway vs. Api vs. Worker vs. DemoApi). Each <code>fhirbridge-api</code> one must also override <code>GeneratedFileDownload:PublicBaseUrl</code> (defaults to <code>http://localhost:5000</code> in the checked-in <code>appsettings.json</code> &mdash; left unset, every environment would silently generate download links pointing at the wrong host).</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Provision 24 appsettings.Production.json files</strong><span>Under <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\&lt;folder&gt;\</code> &mdash; one per folder per environment, with the roles described above (static-only Gateway vs. proxy-only Gateway vs. Api vs. Worker vs. DemoApi). Each <code>fhirbridge-api</code> one must also override <code>GeneratedFileDownload:PublicBaseUrl</code> and <code>Portal:AllowedOrigins</code> (both ship as dummy <code>REPLACE_WITH_PUBLIC_URL</code> placeholders in the checked-in base <code>appsettings.json</code> &mdash; left unset, every environment would either generate download links pointing at a nonsense host or reject the portal's own CORS requests). Each <code>demoapp-api</code> one must override <code>AllowedFrontendOrigin</code> the same way.</span></div></div>
     <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Provision separate databases</strong><span>Recommended: a distinct <code>FHIRBridgeDb</code> and demo-app database per environment, so Staging/QA/Dev/Working don't share data with each other or with production.</span></div></div>
-    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Set ASPNETCORE_URLS per service</strong><span>Same one-time-manual pattern as production &mdash; via each Windows Service's Environment tab in <code>services.msc</code>, once each service exists after its first deploy.</span></div></div>
-    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Confirm VM headroom</strong><span>4 more environments' worth of services (24 total) now run alongside production's 4 on the same VM.</span></div></div>
-    <div class="flow-step"><div class="step-num">8</div><div class="step-body"><strong>Set each environment's admin-configurable Settings after first login</strong><span>The Demo app's Workflow Settings row (<code>PatientBaseUrl</code> etc.) seeds as empty for a brand-new database &mdash; set the real per-environment values via the Settings UI, not appsettings.</span></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Confirm VM headroom</strong><span>4 more environments' worth of services (24 total) now run alongside production's 4 on the same VM.</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Set each environment's admin-configurable Settings after first login</strong><span>The Demo app's Workflow Settings row (<code>PatientBaseUrl</code> etc.) seeds as empty for a brand-new database &mdash; set the real per-environment values via the Settings UI, not appsettings.</span></div></div>
   </div>
 
   <h2 id="gotchas"><span class="num">5.</span>Known Gotchas &amp; Lessons Learned</h2>
