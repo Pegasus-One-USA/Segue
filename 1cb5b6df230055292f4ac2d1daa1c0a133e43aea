@@ -1,0 +1,19 @@
+docs/backend/10-governance-logging-remaining-gaps-plan.md
+  s_655d7121a91143::t_a743ea4f4c275e 1-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "1cb5b6df230055292f4ac2d1daa1c0a133e43aea",
+  "prompts": {},
+  "sessions": {
+    "s_655d7121a91143": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b4333382-f9e8-4af3-8ae7-25ba4a341177",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

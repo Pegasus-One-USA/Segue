@@ -1,0 +1,80 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260717172336_RemoveGovernanceAuditLoggingTables.cs
+  s_8bfa92c239fe27::t_48ae4c51001386 1-186
+portal/src/app/dashboard/services/dashboard.service.ts
+  s_8bfa92c239fe27::t_bd04d45e0fd450 1
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260717172336_RemoveGovernanceAuditLoggingTables.Designer.cs
+  s_8bfa92c239fe27::t_48ae4c51001386 1-2110
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_8bfa92c239fe27::t_b2bff705abb167 19,31,43,55,67,79,91,103,137
+  s_8bfa92c239fe27::t_c9ea9b12b2d90c 20,32,44,56,68,80,92,104,394,411
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_8bfa92c239fe27::t_a86b5cfd4778d5 16-21
+src/Api/FHIRBridge.Api/Controllers/V1/FhirBridgeAggregationController.cs
+  s_8bfa92c239fe27::t_404a24cdd1a47a 28,53,67,71,79,87,91
+src/Api/FHIRBridge.Api/Controllers/V1/PipelineRunsController.cs
+  s_8bfa92c239fe27::t_862c203b43a56f 149-150
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_8bfa92c239fe27::t_bfde5d8878b573 829,845
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_8bfa92c239fe27::t_2840d6e2ecff21 14
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_8bfa92c239fe27::t_c10963fa7b19ca 132
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_8bfa92c239fe27::t_3e1e525cc6046c 24
+src/FHIRBridge.Application/Services/UserAccessService.cs
+  s_8bfa92c239fe27::t_30f8bac32c4fd2 16
+src/FHIRBridge.Domain/Entities/PipelineRunResourceRecord.cs
+  s_8bfa92c239fe27::t_21326cf5b48959 24-27
+src/FHIRBridge.Infrastructure/Persistence/EfExecutionResourceHistoryRecorder.cs
+  s_8bfa92c239fe27::t_6125d4735e59c7 16
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_8bfa92c239fe27::t_58a1aa578dd693 128-129,139-140,142-148,150-151,153-156,158-159,168-183,185-186,188-194,196-202,204-205,207-215,217-227,229-233,240,242-243,245-246,248-254,256-260,262-263,265-266,268-269,528,563-564,585,591
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_8bfa92c239fe27::t_03b25c1806855c 53
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_8bfa92c239fe27::t_5f3333473d4c76 65
+src/Worker/FHIRBridge.Worker/ScheduleDispatcherWorker.cs
+  s_8bfa92c239fe27::t_472048a46c50ac 52
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs
+  s_8bfa92c239fe27::t_1626066e35d31f 158,188
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorRetryTests.cs
+  s_8bfa92c239fe27::t_ae8b9c4c70b12a 16-18,22,54
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  s_8bfa92c239fe27::t_4d195e45d71c4f 29
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  s_8bfa92c239fe27::t_0d8fe44d6ec75e 29
+tests/FHIRBridge.UnitTests/README.md
+  s_8bfa92c239fe27::t_2449e61c2772d5 24
+tests/FHIRBridge.UnitTests/SystemSettings/AllowedCorsOriginsServiceTests.cs
+  s_8bfa92c239fe27::t_997e6e05adca97 24,90
+docs/backend/01-domain-and-data.md
+  s_8bfa92c239fe27::t_d6534029785fed 43
+docs/backend/02-api-surface.md
+  s_8bfa92c239fe27::t_a253a3342cdcd1 18
+scripts/reset-to-first-setup.sql
+  s_8bfa92c239fe27::t_89d8ab5474d7e2 14
+src/FHIRBridge.Application/Abstractions/Pipeline/IExecutionResourceHistoryRecorder.cs
+  s_8bfa92c239fe27::t_b4430fae3c56f2 9-10
+src/FHIRBridge.Application/README.md
+  s_8bfa92c239fe27::t_e116c7b4412a10 32,61
+src/FHIRBridge.Domain/README.md
+  s_8bfa92c239fe27::t_bc9ad2aa2f24a8 61
+src/FHIRBridge.Infrastructure/README.md
+  s_8bfa92c239fe27::t_b56e6a1fbb4bf7 23,25,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "e14a4cf236d0ebc6097716a6399bada950b57447",
+  "prompts": {},
+  "sessions": {
+    "s_8bfa92c239fe27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80c45d53-3aec-4158-b8ee-12fe7247c102",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

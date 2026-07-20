@@ -1,0 +1,48 @@
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.scss
+  s_8bfa92c239fe27::t_fc637a54a9ff49 18-80,87,91-92
+  s_8bfa92c239fe27::t_c6fcb9ab354cc5 81-86
+  s_8bfa92c239fe27::t_1d3a78e062617a 88-90
+  s_8bfa92c239fe27::t_a6c70bf80dbd82 93-95
+  s_8bfa92c239fe27::t_593d030084540c 96-97
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts
+  s_8bfa92c239fe27::t_22b859b45f45ee 3-4,9,13-28,33,39,46-56,62-108,112,115,118,120-122,127,129,131-132
+  s_8bfa92c239fe27::t_50f1824bfdcec2 109-111
+  s_8bfa92c239fe27::t_55a1750a3f0c5d 113-114
+  s_8bfa92c239fe27::t_574457ea1bfbf8 116-117
+  s_8bfa92c239fe27::t_5a62cdb4ce6c59 119
+  s_8bfa92c239fe27::t_9ee0c1cdcb7eaf 123-126
+  s_8bfa92c239fe27::t_8d0db02ffd6f8b 128
+  s_8bfa92c239fe27::t_4d3e8b19d6bcf9 130
+  s_8bfa92c239fe27::t_899c1cdbaf8fc5 134,150,152
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.html
+  s_8bfa92c239fe27::t_0fce4834665137 7-12,219
+  s_8bfa92c239fe27::t_5e2f24ad1363b9 13-18,224
+  s_8bfa92c239fe27::t_54a94b010d1201 216-218
+  s_8bfa92c239fe27::t_8f475ce3b4e970 220-223
+  s_8bfa92c239fe27::t_41ae0862755083 225-226
+  s_8bfa92c239fe27::t_ed47e864702c26 206-215
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_8bfa92c239fe27::t_8b192fc8ed7e8e 104-110
+Demo_TestApp/backend/Program.cs
+  s_8bfa92c239fe27::t_4d27000eafbacf 299-367,609
+Demo_TestApp/frontend/src/app/app.html
+  s_8bfa92c239fe27::t_6db5a30432a8fb 40
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/core/config/launch.config.ts
+  s_8bfa92c239fe27::t_4db03f417accd5 7-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "90dffcb6e13a426dcbbad8b93c58f3c0147d2b4e",
+  "prompts": {},
+  "sessions": {
+    "s_8bfa92c239fe27": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80c45d53-3aec-4158-b8ee-12fe7247c102",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
