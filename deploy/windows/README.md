@@ -90,9 +90,9 @@ Sections` table in the repo's `CLAUDE.md` for what each of these does.
 
 **`fhirbridge-gateway`** — set `StaticFiles:RootPath` to
 `C:\inetpub\wwwroot\fhirbridge-portal` (absolute path, so it doesn't matter what working directory
-the service starts in). The `ReverseProxy:Clusters:api-cluster:Destinations` address (already
-`http://127.0.0.1:5000/` in the checked-in `appsettings.json`) only needs overriding here if the Api
-ever moves off port 5000.
+the service starts in). `ApiBaseUrl` (a single flat setting — `Program.cs` builds the YARP
+routes/clusters in code and only reads the destination address from this key, already
+`http://127.0.0.1:5000/` by default) only needs overriding here if the Api ever moves off port 5000.
 
 **`fhirbridge-worker`** — populate `ConnectionStrings:FHIRBridgeDb`, `RuntimeWorker:Enabled`, and
 `Messaging:Provider` (`InMemory` / `RabbitMQ` / `AzureServiceBus` — see `CLAUDE.md`), plus
