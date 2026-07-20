@@ -1,0 +1,39 @@
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_b1f6d1f17e3986::t_d709ce6a578294 1
+  s_b1f6d1f17e3986::t_ded83df5072412 9-14
+  s_b1f6d1f17e3986::t_3caf72a37817e0 51-58
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_b1f6d1f17e3986::t_0072fb2a93dedd 68-79
+  s_b1f6d1f17e3986::t_ea32bab470fb35 300-301,305,389-392,395-396,400-401,416,422,437,439,443-448,452-454,469,473,484,486,490-539,653
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_b1f6d1f17e3986::t_94a282a4912ca8 67-73
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.scss
+  s_b1f6d1f17e3986::t_7c6db53ebda5a7 67-80
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.html
+  s_b1f6d1f17e3986::t_68dd8b646d2d38 131-193
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.scss
+  s_b1f6d1f17e3986::t_090704ac173f68 208-219,225-226,262-275
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/config/standalone-launch.config.ts
+  s_b1f6d1f17e3986::t_ba13ce359f3000 5,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "be259fe508ccc50bad78c346a26d4b6de0300e69",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_b1f6d1f17e3986": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20a8cb5e-4a7c-478c-86c5-defe3be3ad72",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
