@@ -28,10 +28,24 @@ builder.Logging.ClearProviders();
 builder.Logging.AddSerilog(serilogLogger, dispose: true);
 
 // DbSecretStore (app-provisioned secrets, e.g. destination connection strings written by the Api's wizard) encrypts
-// at rest via Data Protection — a real runtime dependency of the shared configuration/secret-resolution graph, not
-// Worker-specific noise. Same application name as the Api host so both processes share one local key ring on a
-// single-instance dev machine (see FHIRBridge.Api/Program.cs for the production KeyRingPath guidance).
-builder.Services.AddDataProtection().SetApplicationName("FHIRBridge");
+// at rest via Data Protection — a real runtime dependency of the shared configuration/secret-resolution graph. The
+// Worker MUST resolve the SAME key ring as the Api or it can't decrypt what the Api wrote (and vice versa), so this
+// mirrors FHIRBridge.Api/Program.cs exactly: same application name + same KeyRingPath (a shared path in prod, or the
+// same stable machine-local default when unset). Never an ephemeral ring.
+var workerDataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName(builder.Configuration["DataProtection:ApplicationName"] ?? "FHIRBridge");
+
+var workerKeyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
+if (string.IsNullOrWhiteSpace(workerKeyRingPath))
+{
+    workerKeyRingPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "FHIRBridge",
+        "dataprotection-keys");
+}
+
+Directory.CreateDirectory(workerKeyRingPath);
+workerDataProtection.PersistKeysToFileSystem(new DirectoryInfo(workerKeyRingPath));
 
 // Same reasoning as the Api host — see its Program.cs comment. AddAspNetCoreInstrumentation() is a no-op here
 // (no ASP.NET Core pipeline in this host), but HttpClient/.NET-runtime/custom-meter instrumentation still applies.

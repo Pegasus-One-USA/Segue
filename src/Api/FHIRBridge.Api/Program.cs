@@ -58,26 +58,36 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
-// Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector).
-// In production the key ring MUST be persisted to shared storage so tokens survive restarts and work
-// across instances (otherwise each node/restart mints a new key and can't decrypt the others' tokens).
-// Set DataProtection:KeyRingPath to a shared, backed-up volume (Azure Files, K8s PVC, etc.). Without a
-// path we keep the default (machine-local) ring, which is fine only for single-instance dev.
+// Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector) and the
+// at-rest encryption of app-provisioned secrets (DbSecretStore). The key ring MUST be persisted or long-lived
+// tokens — especially EHR-launch URLs, which the EHR stores and invokes much later — stop decrypting after a
+// restart/redeploy and surface as "The launch context is invalid or has been tampered with." on launch.
+//   • A MULTI-INSTANCE deployment MUST set DataProtection:KeyRingPath to SHARED, backed-up storage
+//     (Azure Files, K8s PVC, etc.) so every node shares one ring.
+//   • When no path is configured we still persist to a stable, user-writable local folder (never an ephemeral
+//     ring) so single-instance restarts keep working; a multi-instance deployment without a shared path is warned.
 var dataProtection = builder.Services.AddDataProtection()
     .SetApplicationName(builder.Configuration["DataProtection:ApplicationName"] ?? "FHIRBridge");
 
 var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
-if (!string.IsNullOrWhiteSpace(keyRingPath))
+if (string.IsNullOrWhiteSpace(keyRingPath))
 {
-    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+    keyRingPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "FHIRBridge",
+        "dataprotection-keys");
+
+    if (!builder.Environment.IsDevelopment())
+    {
+        Console.Error.WriteLine(
+            $"[WARN] DataProtection:KeyRingPath is not set; using a machine-local key ring at '{keyRingPath}'. " +
+            "OAuth/launch tokens will NOT be decryptable across instances — set a shared, persistent path for " +
+            "any multi-instance deployment.");
+    }
 }
-else if (!builder.Environment.IsDevelopment())
-{
-    // Surface the misconfiguration loudly instead of silently issuing un-shareable keys in production.
-    Console.Error.WriteLine(
-        "[WARN] DataProtection:KeyRingPath is not set. In a multi-instance deployment, OAuth/launch " +
-        "tokens will not be decryptable across instances or restarts. Configure a shared key-ring path.");
-}
+
+Directory.CreateDirectory(keyRingPath);
+dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
