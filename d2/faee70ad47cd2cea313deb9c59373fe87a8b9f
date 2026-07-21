@@ -1,0 +1,30 @@
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.ts
+  s_e74e11fa5660af::t_e597a911fa80ea 7
+  s_e74e11fa5660af::t_d2009546c95862 8-10
+  s_e74e11fa5660af::t_71b8491092a7aa 11-13
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  s_e74e11fa5660af::t_be612ec33465f1 3,5,12,32-35,39
+  s_e74e11fa5660af::t_1d486b0e28d131 1-2,4,7-8,13-16,20,25-26,29-31,36-38,40-45
+portal/src/app/dashboard/models/pipeline-run.model.ts
+  s_e74e11fa5660af::t_f93693e98e565e 1-2,23-29,32-36,40,42,45
+  s_e74e11fa5660af::t_3c95abf6d64f98 3-10,19,22,30-31,37-39,41,43-44,46
+  s_e74e11fa5660af::t_d688cafa248dc0 47
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.scss
+  s_e74e11fa5660af::t_444fc81e795e2d 54-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "d2faee70ad47cd2cea313deb9c59373fe87a8b9f",
+  "prompts": {},
+  "sessions": {
+    "s_e74e11fa5660af": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5e9ff43-359d-4bd7-b2bd-70aeb7d230e4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}
