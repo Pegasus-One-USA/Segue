@@ -1,0 +1,93 @@
+portal/src/app/operations/layout/operations-shell.component.scss
+  s_847aee1e6f20e2::t_d04d078d4e9533 1-36
+portal/src/app/app.routes.ts
+  s_847aee1e6f20e2::t_8c21f6b2f1eebd 78-80,87-92,179-267,269-270,273-275,278-279,282-284,287-288,291-293,296-297,300-302,305-306,309-311,314-315,318-319,326,328,330-331,334-335,338-340,343-344,347-349,352-353,356-358,361-362,364-365,368-369,371-372,375-376,379-381,384-385,387-388,391-392,394-395,398-399,401-402,405-406,408-409,412-413,415-416,419-420,423-425,428-429,432-433
+  s_847aee1e6f20e2::t_4bab98ab6cea60 268,277,286,295,304,313,333,342,351,360,367,374,383,390,397,404,411,418,427
+  s_847aee1e6f20e2::t_174fe2a35a6f07 271-272
+  s_847aee1e6f20e2::t_f43c7ac595249b 276
+  s_847aee1e6f20e2::t_fac99d2cdbeaae 280-281
+  s_847aee1e6f20e2::t_7b93f83811100a 285
+  s_847aee1e6f20e2::t_fb3ea396aa822d 289-290
+  s_847aee1e6f20e2::t_83e203cd39a4d9 294
+  s_847aee1e6f20e2::t_6ce0474564b27e 298-299
+  s_847aee1e6f20e2::t_c9f803dca7e9aa 303
+  s_847aee1e6f20e2::t_d9e5fba22b2f76 307-308
+  s_847aee1e6f20e2::t_2a535617da2f30 312
+  s_847aee1e6f20e2::t_bf5b4c24cdef2b 316-317
+  s_847aee1e6f20e2::t_1ddef186fe9a5e 320-321
+  s_847aee1e6f20e2::t_557ffcae1ada7c 324-325
+  s_847aee1e6f20e2::t_66de615dcfc510 327
+  s_847aee1e6f20e2::t_ceabae2dfb9ca1 329
+  s_847aee1e6f20e2::t_c4cb6f1535f84e 332
+  s_847aee1e6f20e2::t_620ed156982a7d 336-337
+  s_847aee1e6f20e2::t_8a1cbf540ea88b 341
+  s_847aee1e6f20e2::t_32339baa555469 345-346
+  s_847aee1e6f20e2::t_1a2413a2e3f138 350
+  s_847aee1e6f20e2::t_7f5920ad674086 354-355
+  s_847aee1e6f20e2::t_3e7f2362ce218c 359
+  s_847aee1e6f20e2::t_b3b970f6f8d5e9 363
+  s_847aee1e6f20e2::t_c40545c3ffb344 366
+  s_847aee1e6f20e2::t_be50ec3c597597 370
+  s_847aee1e6f20e2::t_57b69b7e6bb42a 373
+  s_847aee1e6f20e2::t_6471c39c6764c1 377-378
+  s_847aee1e6f20e2::t_37d4dc8828912f 382
+  s_847aee1e6f20e2::t_53a90d84abac85 386
+  s_847aee1e6f20e2::t_bd36af3aa511fc 389
+  s_847aee1e6f20e2::t_e866f046ee3908 393
+  s_847aee1e6f20e2::t_e7936ce056a756 396
+  s_847aee1e6f20e2::t_affeee52a7e7df 400
+  s_847aee1e6f20e2::t_7fbf31328db635 403
+  s_847aee1e6f20e2::t_a18235ecf811fb 407
+  s_847aee1e6f20e2::t_a0a74001f9fd33 410
+  s_847aee1e6f20e2::t_64a0f386e66cba 414
+  s_847aee1e6f20e2::t_64ae5eb6b84e48 417
+  s_847aee1e6f20e2::t_a1c89d9f67599c 421-422
+  s_847aee1e6f20e2::t_ab0882fa017450 426
+  s_847aee1e6f20e2::t_0c838f06fc48a5 430-431
+  s_847aee1e6f20e2::t_9f403c055bde06 434-435
+  s_847aee1e6f20e2::t_44abd871c55662 438-441
+portal/src/app/operations/layout/operations-shell.component.html
+  s_847aee1e6f20e2::t_c6a0c48e8ae598 1-7
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_847aee1e6f20e2::t_69aec843354162 1-44
+portal/src/app/governance/layout/governance-shell.component.html
+  s_847aee1e6f20e2::t_6d4c83e512dead 1-7
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.ts
+  s_847aee1e6f20e2::t_e8e3ef63b9266e 83
+portal/src/app/operations/layout/operations-shell.component.ts
+  s_847aee1e6f20e2::t_ae7de7631dd3db 1-46
+portal/src/app/governance/layout/governance-shell.component.ts
+  s_847aee1e6f20e2::t_5c29f5bf9c714a 1-50
+portal/src/app/settings/settings.routes.ts
+  s_847aee1e6f20e2::t_4f7401e6156859 2-3,5-6,9,11-64
+portal/src/app/settings/layout/settings-shell.component.html
+  s_847aee1e6f20e2::t_331b0babfe4521 1-7
+portal/src/app/governance/layout/governance-shell.component.scss
+  s_847aee1e6f20e2::t_1e9b640399036a 1-36
+portal/src/app/settings/layout/settings-shell.component.scss
+  s_847aee1e6f20e2::t_3a0db985a81fe0 1-9,11-36
+  s_847aee1e6f20e2::t_a439300c864bc3 10
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_847aee1e6f20e2::t_a9413a43ccb9a3 32-36,38-40,42-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "908973cd5fa405934dce4ee7a700bd1bd96622eb",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_847aee1e6f20e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "107cb5aa-6778-4535-9a6d-82e5bba2513f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
