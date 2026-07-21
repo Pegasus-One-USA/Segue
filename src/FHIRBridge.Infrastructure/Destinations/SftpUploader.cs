@@ -1,4 +1,3 @@
-using System.Text;
 using Renci.SshNet;
 
 namespace FHIRBridge.Infrastructure.Destinations;
@@ -6,14 +5,15 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// <summary>
 /// Shared SFTP connect/ensure-directory/upload logic, extracted from <see cref="MappedSftpDestinationWriter"/> so
 /// it can also back <see cref="Delivery.SftpDeliveryStrategy"/>'s CSV-over-SFTP delivery without duplicating the
-/// SSH.NET plumbing. Callers supply already-serialized content and a filename — this class does not care about format.
+/// SSH.NET plumbing. Callers supply already-serialized bytes and a filename — this class does not care about format
+/// (text or binary, e.g. a ZIP archive).
 /// </summary>
 internal static class SftpUploader
 {
     public static async Task UploadAsync(
         string sftpSecretUri,
         string fileName,
-        string content,
+        byte[] content,
         CancellationToken cancellationToken)
     {
         if (!Uri.TryCreate(sftpSecretUri, UriKind.Absolute, out var uri) ||
@@ -36,7 +36,7 @@ internal static class SftpUploader
             {
                 EnsureRemoteDirectory(client, remoteDir);
                 var remotePath = $"{remoteDir.TrimEnd('/')}/{fileName}";
-                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+                using var stream = new MemoryStream(content);
                 client.UploadFile(stream, remotePath, canOverride: true);
             }
             finally

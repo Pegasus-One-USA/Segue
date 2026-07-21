@@ -12,6 +12,7 @@ using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using RuntimeDestinationWriteResult = FHIRBridge.Runtime.Application.Workflows.Payloads.DestinationWriteResult;
 
@@ -19,168 +20,189 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
 public sealed class SqlServerDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory)
+    public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class AzureSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory)
+    public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class BlobDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory)
+    public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class PowerBiDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory)
+    public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class PostgreSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory)
+    public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class MySqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory)
+    public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class SnowflakeDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory)
+    public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class TableauDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory)
+    public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class DatabricksDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory)
+    public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class S3DestinationNodeExecutor : DestinationNodeExecutor
 {
-    public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory)
+    public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory)
+    public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory)
+    public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class ExcelDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory)
+    public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class NdjsonDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory)
+    public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class ParquetDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory)
+    public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class AvroDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory)
+    public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class ProtobufDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory)
+    public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class PdfDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory)
+    public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class SftpDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory)
+    public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class RestApiDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory)
+    public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, workflowDefinitionStore)
     {
     }
 }
 
 public sealed class InMemoryDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory)
+    public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, workflowDefinitionStore)
     {
     }
 }
@@ -464,15 +486,18 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 {
     private readonly DestinationType _destinationType;
     private readonly IConfiguredDestinationWriterFactory? _writerFactory;
+    private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
 
     protected DestinationNodeExecutor(
         string nodeType,
         DestinationType destinationType,
-        IConfiguredDestinationWriterFactory? writerFactory)
+        IConfiguredDestinationWriterFactory? writerFactory,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
         : base(nodeType, WorkflowDataContract.DestinationWriteResult)
     {
         _destinationType = destinationType;
         _writerFactory = writerFactory;
+        _workflowDefinitionStore = workflowDefinitionStore;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -495,9 +520,12 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var writer = _writerFactory.Create(_destinationType);
         // The Runtime DAG engine has no HTTP response to carry Download-mode bytes back through — this run always
         // executes as a background node, not a synchronous API call — so inline delivery is never allowed here.
+        // RouteName drives both the email {{RouteName}} template placeholder and (for CSV) the multi-resource ZIP
+        // filename — the workflow's own name is far more useful here than the generic node type string.
+        var workflowName = await ResolveWorkflowNameAsync(node, cancellationToken) ?? node.NodeType;
         var writeContext = new PipelineWriteContext(
             AllowInlineDelivery: false,
-            node.NodeType,
+            workflowName,
             DateTimeOffset.UtcNow);
         var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
         var written = writeResult.Count;
@@ -532,6 +560,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             ?? node.Id.ToString("N");
 
         return new RuntimeDestinationWriteResult(destinationId, inputs.Count, DateTimeOffset.UtcNow);
+    }
+
+    private async Task<string?> ResolveWorkflowNameAsync(WorkflowNode node, CancellationToken cancellationToken)
+    {
+        if (_workflowDefinitionStore is null)
+        {
+            return null;
+        }
+
+        var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
+        return definition?.Name;
     }
 
     private DestinationConfiguration CreateDestinationConfiguration(WorkflowExecutionContext context, WorkflowNode node)

@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Text;
+using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
@@ -10,9 +13,10 @@ using Moq;
 namespace FHIRBridge.UnitTests.Destinations;
 
 /// <summary>
-/// The CSV writer's only job is to serialize records to CSV once and dispatch to whichever
-/// <see cref="ArtifactDeliveryMode"/> the destination's <c>dest_deliveryMode</c> metadata field selects — these
-/// cover that dispatch, including the legacy-row default (no field present) falling back to Download.
+/// The CSV writer groups records by FHIR resource type and serializes only the mapped fields (no lineage columns)
+/// per resource type. A single selected resource is delivered as a plain CSV; two or more are bundled into a single
+/// ZIP archive (named after the workflow), one CSV entry per resource type. Either way, dispatches to whichever
+/// <see cref="ArtifactDeliveryMode"/> the destination's <c>dest_deliveryMode</c> metadata field selects.
 /// </summary>
 public sealed class MappedCsvDestinationWriterTests
 {
@@ -25,8 +29,10 @@ public sealed class MappedCsvDestinationWriterTests
     private static MappedDestinationRecord Record() =>
         new(Guid.NewGuid(), "Patient", "patients.csv", "123", new Dictionary<string, object?> { ["Name"] = "Alice" });
 
+    private const string WorkflowName = "Patient Export Workflow";
+
     private static PipelineWriteContext Context(bool allowInline = true) =>
-        new(allowInline, "Route", DateTimeOffset.UtcNow);
+        new(allowInline, WorkflowName, DateTimeOffset.UtcNow);
 
     private static (MappedCsvDestinationWriter Writer, Mock<IArtifactDeliveryStrategyFactory> Factory, Mock<IArtifactDeliveryStrategy> Strategy)
         CreateWriter()
@@ -75,25 +81,6 @@ public sealed class MappedCsvDestinationWriterTests
     }
 
     [Fact]
-    public async Task Builds_a_real_CSV_GeneratedFile_and_passes_the_record_count_through()
-    {
-        var (writer, _, strategy) = CreateWriter();
-        var records = new[] { Record(), Record() };
-
-        var result = await writer.WriteAsync(
-            Destination("""{"dest_deliveryMode":"download"}"""), Mapping(), records, Context(), CancellationToken.None);
-
-        result.Count.Should().Be(1); // the mocked strategy's own return value flows straight back
-        strategy.Verify(s => s.DeliverAsync(
-            It.IsAny<DestinationConfiguration>(),
-            It.Is<GeneratedFile>(f => f.ContentType == "text/csv" && f.Content.Length > 0),
-            2,
-            It.IsAny<PipelineWriteContext>(),
-            It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Fact]
     public async Task Empty_record_set_short_circuits_without_invoking_any_delivery_strategy()
     {
         var (writer, factory, _) = CreateWriter();
@@ -103,5 +90,108 @@ public sealed class MappedCsvDestinationWriterTests
 
         result.Count.Should().Be(0);
         factory.Verify(f => f.Create(It.IsAny<ArtifactDeliveryMode>()), Times.Never);
+    }
+
+    // Matches "{ResourceType}_{yyyyMMdd_HHmmss}.csv", e.g. "Patient_20260721_143022.csv".
+    private static readonly Regex CsvEntryNamePattern = new(@"^[A-Za-z]+_\d{8}_\d{6}\.csv$");
+
+    [Fact]
+    public async Task Single_selected_resource_is_delivered_as_a_plain_CSV_not_a_zip()
+    {
+        var (writer, _, strategy) = CreateWriter();
+        GeneratedFile? capturedFile = null;
+        strategy
+            .Setup(s => s.DeliverAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<GeneratedFile>(), It.IsAny<int>(),
+                It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, GeneratedFile, int, PipelineWriteContext, CancellationToken>(
+                (_, file, _, _, _) => capturedFile = file)
+            .ReturnsAsync(new DestinationWriteResult(1));
+        var records = new[] { Record(), Record() }; // both "Patient" — one resource type
+
+        var result = await writer.WriteAsync(
+            Destination("""{"dest_deliveryMode":"download"}"""), Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1); // the mocked strategy's own return value flows straight back
+        capturedFile.Should().NotBeNull();
+        capturedFile!.ContentType.Should().Be("text/csv");
+        CsvEntryNamePattern.IsMatch(capturedFile.FileName).Should().BeTrue();
+        capturedFile.FileName.Should().StartWith("Patient_");
+        capturedFile.Content.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Multiple_selected_resources_are_bundled_into_one_ZIP_named_after_the_workflow()
+    {
+        var (writer, _, strategy) = CreateWriter();
+        GeneratedFile? capturedFile = null;
+        strategy
+            .Setup(s => s.DeliverAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<GeneratedFile>(), It.IsAny<int>(),
+                It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, GeneratedFile, int, PipelineWriteContext, CancellationToken>(
+                (_, file, _, _, _) => capturedFile = file)
+            .ReturnsAsync(new DestinationWriteResult(1));
+
+        var records = new[]
+        {
+            new MappedDestinationRecord(Guid.NewGuid(), "Patient", "patients.csv", "p1", new Dictionary<string, object?> { ["Name"] = "Alice" }),
+            new MappedDestinationRecord(Guid.NewGuid(), "Patient", "patients.csv", "p2", new Dictionary<string, object?> { ["Name"] = "Bob" }),
+            new MappedDestinationRecord(Guid.NewGuid(), "Observation", "observations.csv", "o1", new Dictionary<string, object?> { ["Code"] = "8302-2" }),
+            new MappedDestinationRecord(Guid.NewGuid(), "Condition", "conditions.csv", "c1", new Dictionary<string, object?> { ["Code"] = "E11.9" }),
+        };
+
+        var result = await writer.WriteAsync(
+            Destination("""{"dest_deliveryMode":"download"}"""), Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        capturedFile.Should().NotBeNull();
+        capturedFile!.ContentType.Should().Be("application/zip");
+        capturedFile.FileName.Should().MatchRegex(@"^Patient_Export_Workflow_\d{8}_\d{6}\.zip$");
+
+        using var archive = new ZipArchive(new MemoryStream(capturedFile.Content), ZipArchiveMode.Read);
+
+        archive.Entries.Select(e => e.Name).Should().HaveCount(3);
+        archive.Entries.Select(e => e.Name).Should().OnlyContain(name => CsvEntryNamePattern.IsMatch(name));
+        archive.Entries.Select(e => e.Name.Split('_')[0]).Should().BeEquivalentTo(["Patient", "Observation", "Condition"]);
+
+        var patientEntry = archive.Entries.Single(e => e.Name.StartsWith("Patient_"));
+        using var reader = new StreamReader(patientEntry.Open(), Encoding.UTF8);
+        var patientCsv = await reader.ReadToEndAsync();
+        patientCsv.Should().Contain("Alice").And.Contain("Bob").And.NotContain("8302-2");
+    }
+
+    [Fact]
+    public async Task CSV_contains_only_mapped_columns_no_lineage_or_system_columns()
+    {
+        var (writer, _, strategy) = CreateWriter();
+        GeneratedFile? capturedFile = null;
+        strategy
+            .Setup(s => s.DeliverAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<GeneratedFile>(), It.IsAny<int>(),
+                It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, GeneratedFile, int, PipelineWriteContext, CancellationToken>(
+                (_, file, _, _, _) => capturedFile = file)
+            .ReturnsAsync(new DestinationWriteResult(1));
+
+        var records = new[]
+        {
+            new MappedDestinationRecord(Guid.NewGuid(), "Patient", "patients.csv", "p1",
+                new Dictionary<string, object?> { ["Name"] = "Alice", ["BirthDate"] = "1990-01-01" }),
+        };
+
+        await writer.WriteAsync(
+            Destination("""{"dest_deliveryMode":"download"}"""), Mapping(), records, Context(), CancellationToken.None);
+
+        capturedFile.Should().NotBeNull();
+        var csv = Encoding.UTF8.GetString(capturedFile!.Content);
+        var header = csv.Split('\n')[0].TrimEnd('\r');
+
+        header.Should().Be("BirthDate,Name"); // alphabetical, mapped columns only
+        header.Should().NotContain("PipelineRunId");
+        header.Should().NotContain("ResourceType");
+        header.Should().NotContain("DestinationObject");
+        header.Should().NotContain("SourceResourceId");
+        header.Should().NotContain("WrittenOnUtc");
     }
 }

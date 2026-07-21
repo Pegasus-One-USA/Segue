@@ -1,3 +1,4 @@
+using System.Text;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -33,7 +34,7 @@ public sealed class MappedSftpDestinationWriter : IConfiguredDestinationWriter
 
         var secret = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
         var fileName = MappedDestinationSerialization.BuildFileName(destination, mappingProfile, "ndjson");
-        var content = MappedDestinationSerialization.ToNdjson(records);
+        var content = Encoding.UTF8.GetBytes(MappedDestinationSerialization.ToNdjson(records));
 
         await SftpUploader.UploadAsync(secret, fileName, content, cancellationToken);
 

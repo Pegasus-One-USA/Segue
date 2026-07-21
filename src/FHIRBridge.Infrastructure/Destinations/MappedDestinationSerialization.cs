@@ -143,6 +143,33 @@ internal static class MappedDestinationSerialization
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Same shape as <see cref="ToCsv"/> but omits the standard lineage columns (PipelineRunId, ResourceType,
+    /// DestinationObject, SourceResourceId, WrittenOnUtc) — only the fields the wizard's mapping actually selected
+    /// for this resource. Used by the CSV destination, where the exported file is meant to be exactly the mapped
+    /// business data, not an internal audit trail.
+    /// </summary>
+    public static string ToMappedOnlyCsv(IReadOnlyCollection<MappedDestinationRecord> records)
+    {
+        var columns = records
+            .SelectMany(record => record.Values.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(column => column, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var builder = new StringBuilder();
+
+        builder.AppendLine(string.Join(",", columns.Select(EscapeCsv)));
+        foreach (var record in records)
+        {
+            var row = columns.Select(column =>
+                EscapeCsv(record.Values.TryGetValue(column, out var value) ? value?.ToString() ?? string.Empty : string.Empty));
+
+            builder.AppendLine(string.Join(",", row));
+        }
+
+        return builder.ToString();
+    }
+
     public static async Task WriteTextTargetAsync(
         string targetRootOrUrl,
         string fileName,
