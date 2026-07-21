@@ -80,7 +80,7 @@ export class PipelineExecutionListComponent implements OnInit {
   }
 
   openDetail(entry: PipelineExecutionEntry): void {
-    this.router.navigate(['/pipeline-executions', entry.id]);
+    this.router.navigate(['/operations/pipeline-executions', entry.id]);
   }
 
   viewCorrelation(entry: PipelineExecutionEntry, event: Event): void {
