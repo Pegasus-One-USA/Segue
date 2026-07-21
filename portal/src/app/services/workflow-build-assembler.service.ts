@@ -108,17 +108,15 @@ export class WorkflowBuildAssemblerService {
       if (!mappingNodeId || !sourceNodeId) continue;
 
       const mappingFields = this.fieldsFor(mappingNodeId, nodesById);
-      const mappingSpec = this.buildMapping(
-        mappingNodeId,
-        sourceNodeId,
-        destNode.id,
-        destFields,
+      mappings.push(
+        ...this.buildMappings(
+          mappingNodeId,
+          sourceNodeId,
+          destNode.id,
+          destFields,
+          mappingFields,
+        ),
       );
-      if (mappingSpec)
-        mappings.push({
-          ...mappingSpec,
-          existingId: mappingFields['mappingProfileId'] || null,
-        });
     }
 
     return { ...graph, sources, destinations, mappings };
@@ -310,6 +308,17 @@ export class WorkflowBuildAssemblerService {
     const secretName =
       fields['secretName'] || `dest-${this.slug(name)}-${this.shortId()}`;
 
+    // dest_password/dest_sftpPassword are redacted from persisted config (see WorkflowGraphMapperService's
+    // SECRET_FIELD_KEYS) and never round-trip back into the wizard on reload — a blank password field on a
+    // destination that's ALREADY been provisioned (it already carries a secretName from a prior build) means
+    // "the wizard never had a password to show", not "the user wants to blank out a working credential". Rebuilding
+    // the connection string/URI anyway would send a non-blank string with an empty password embedded in it, which
+    // the backend's own "don't touch the secret if none was sent" guard (ConfigurationService's
+    // UpdateDestinationConfigurationAsync, checking IsNullOrWhiteSpace on the WHOLE string) can't catch — silently
+    // overwriting a working credential with a broken one on every no-op re-save. Only rebuild when a password was
+    // actually entered, or this is a brand-new destination with nothing to preserve yet.
+    const hasExistingSecret = !!fields['secretName'];
+
     if (isSql) {
       return {
         name,
@@ -317,11 +326,15 @@ export class WorkflowBuildAssemblerService {
         keyVaultName,
         secretName,
         target: null,
-        inlineSecret: this.buildSqlConnectionString(fields),
+        inlineSecret:
+          hasExistingSecret && !fields['dest_password']
+            ? null
+            : this.buildSqlConnectionString(fields),
         connectionMetadataJson: this.buildConnectionMetadata(fields, true),
       };
     }
 
+    const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
       // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson field
@@ -331,8 +344,11 @@ export class WorkflowBuildAssemblerService {
       keyVaultName,
       secretName,
       target: fields['dest_filePattern'] || null,
-      inlineSecret:
-        fields['dest_deliveryMode'] === 'sftp' ? this.buildSftpUri(fields) : '',
+      inlineSecret: !isSftp
+        ? ''
+        : hasExistingSecret && !fields['dest_sftpPassword']
+          ? null
+          : this.buildSftpUri(fields),
       connectionMetadataJson: this.buildConnectionMetadata(fields, false),
     };
   }
@@ -409,25 +425,74 @@ export class WorkflowBuildAssemblerService {
   }
 
   // ── mapping ───────────────────────────────────────────────────────────────
-  private buildMapping(
+  // One MappingBuildSpec per resource the destination actually selected — a destination picking Patient +
+  // Observation + Condition produces three specs, all sharing the same canvas "Field Mapping" node id (that one
+  // node's wizard-authored dest_mappings already carries every resource's field rows, tagged by resource). The
+  // backend creates one MappingProfile per spec and accumulates their ids onto that shared node (see
+  // WorkflowEndpoints.cs's Mappings step) rather than each overwriting the last — previously only the first
+  // (primary) resource ever got a real profile, and every other selected resource silently inherited the
+  // primary's field mappings at run time instead of its own (see MappingNodeExecutor).
+  private buildMappings(
     mappingNodeId: string,
     sourceNodeId: string,
     destinationNodeId: string,
     destFields: Record<string, string>,
-  ): MappingBuildSpec | null {
+    mappingFields: Record<string, string>,
+  ): MappingBuildSpec[] {
     const rows = this.parseMappingRows(destFields['dest_mappings']);
     const resources = [...new Set(rows.map((row) => row.resource))];
-    if (resources.length === 0) return null;
+    if (resources.length === 0) return [];
 
-    const primary = resources[0];
-    if (resources.length > 1)
-      this.lastUnmappedResources.push(...resources.slice(1));
+    const existingIdsByResource = this.parseExistingMappingProfileIds(mappingFields);
 
-    const primaryRows = rows.filter((row) => row.resource === primary);
+    return resources.map((resource) => {
+      const spec = this.buildMappingForResource(
+        mappingNodeId,
+        sourceNodeId,
+        destinationNodeId,
+        destFields,
+        rows,
+        resource,
+      );
+      return {
+        ...spec,
+        existingId:
+          existingIdsByResource[resource] ??
+          // Legacy single-resource node from before mappingProfileIds existed: its one profile id was only ever
+          // stored under the flat mappingProfileId field, with no resource tagging at all.
+          (resources.length === 1 ? mappingFields['mappingProfileId'] || null : null),
+      };
+    });
+  }
+
+  private parseExistingMappingProfileIds(
+    mappingFields: Record<string, string>,
+  ): Record<string, string> {
+    const raw = mappingFields['mappingProfileIds'];
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return parsed && typeof parsed === 'object'
+        ? (parsed as Record<string, string>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private buildMappingForResource(
+    mappingNodeId: string,
+    sourceNodeId: string,
+    destinationNodeId: string,
+    destFields: Record<string, string>,
+    rows: DestMappingRow[],
+    resource: string,
+  ): MappingBuildSpec {
+    const resourceRows = rows.filter((row) => row.resource === resource);
     const baseDestinationObject =
-      primaryRows[0]?.target ||
-      this.targetForResource(destFields, primary) ||
-      primary;
+      resourceRows[0]?.target ||
+      this.targetForResource(destFields, resource) ||
+      resource;
     // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
     // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
     // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. The writer resolves the
@@ -436,24 +501,24 @@ export class WorkflowBuildAssemblerService {
     // option, so "by source id" only means something once that field is present. jsonPath === '$.id' is kept as a
     // fallback match for mapping rows saved before isUpsertKey existed on a node.
     const idRow =
-      primaryRows.find((row) => row.isUpsertKey) ??
-      primaryRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, primary)) === '$.id');
+      resourceRows.find((row) => row.isUpsertKey) ??
+      resourceRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, resource)) === '$.id');
 
     let destinationObject = baseDestinationObject;
     if (destFields['dest_writeMode'] === 'upsert') {
       if (!idRow) {
         throw new Error(
-          `"${primary}" destination is set to Upsert by source id, but no destination column is mapped from ` +
-            `${primary}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
+          `"${resource}" destination is set to Upsert by source id, but no destination column is mapped from ` +
+            `${resource}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
         );
       }
       destinationObject = `${baseDestinationObject};mode=upsert`;
     }
 
-    const fields: MappingFieldRequest[] = primaryRows.map((row) => {
+    const fields: MappingFieldRequest[] = resourceRows.map((row) => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
-      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, primary);
+      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource);
       const arrays = row.arrays ?? [];
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
       return {
@@ -475,8 +540,8 @@ export class WorkflowBuildAssemblerService {
       nodeId: mappingNodeId,
       sourceNodeId,
       destinationNodeId,
-      name: `${primary} mapping`,
-      resourceType: primary,
+      name: `${resource} mapping`,
+      resourceType: resource,
       destinationObject,
       fields,
     };

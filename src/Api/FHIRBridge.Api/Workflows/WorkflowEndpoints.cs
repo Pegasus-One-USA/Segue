@@ -97,6 +97,13 @@ public static class WorkflowEndpoints
             }
 
             // 3. Mappings — bound to a source + destination created above (or already referenced on the picked node).
+            // A destination selecting more than one resource (Patient + Observation + Condition, say) produces one
+            // spec per resource, all sharing the SAME mapping node id — the canvas has one "Field Mapping" node
+            // whose wizard-authored config already carries every selected resource's field rows; what's created
+            // here is one MappingProfile row per resource. Every spec for a given node id must accumulate into that
+            // node's config rather than overwrite it, or only the last-processed resource would survive on the node
+            // (MappingNodeExecutor resolves its fields from whichever mappingProfileId(s) end up there).
+            var profileIdsByNode = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
             foreach (var spec in request.Mappings ?? [])
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
@@ -127,13 +134,33 @@ public static class WorkflowEndpoints
                     ? await configurationService.UpdateMappingProfileAsync(existingMappingId, mappingRequest, cancellationToken)
                     : await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken);
                 mappingIds[spec.NodeId] = mapping.Id;
-                nodes[spec.NodeId] = WithConfiguration(node, config => config["mappingProfileId"] = mapping.Id.ToString());
+
+                if (!profileIdsByNode.TryGetValue(spec.NodeId, out var idsForNode))
+                {
+                    idsForNode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    profileIdsByNode[spec.NodeId] = idsForNode;
+                }
+                idsForNode[spec.ResourceType] = mapping.Id.ToString();
+
+                nodes[spec.NodeId] = WithConfiguration(node, config =>
+                {
+                    // Kept for backward compatibility with anything still reading the single legacy field (reflects
+                    // whichever resource was processed last when there's more than one — MappingNodeExecutor prefers
+                    // mappingProfileIds below whenever it's present, so this is display/compat-only in that case).
+                    config["mappingProfileId"] = mapping.Id.ToString();
+                    config["mappingProfileIds"] = JsonSerializer.SerializeToNode(idsForNode, WebJsonOptions);
+                });
 
                 // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
                 // from its OWN node config rather than resolving the mapping by id, so mirror the mapping's target and
                 // fields onto the destination node — the same shape the route→graph projection embeds. Without this the
-                // writer defaults the target table to the resource type and creates no data columns.
-                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
+                // writer defaults the target table to the resource type and creates no data columns. Only the FIRST
+                // resource's shape survives here across multiple specs for the same destination — this is a
+                // last-resort fallback for table-existence validation and upsert-key-name resolution only (see
+                // DestinationNodeExecutor.CreateMappingProfile); the actual per-resource records always come from
+                // this mapping node's own output, never from this mirrored config.
+                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode) &&
+                    ReadConfigString(destinationNode, "resourceType") is null)
                 {
                     nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
                     {
@@ -967,6 +994,9 @@ public static class WorkflowEndpoints
         mutate(config);
         return node with { ConfigurationJson = config.ToJsonString() };
     }
+
+    private static string? ReadConfigString(WorkflowNodeRequest node, string key) =>
+        TryParseConfiguration(node.ConfigurationJson)?[key]?.ToString();
 
     private static bool TryResolveEntityId(
         string nodeId,

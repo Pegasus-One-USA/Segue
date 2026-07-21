@@ -63,30 +63,24 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        IReadOnlyCollection<MappingFieldDto> fields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
-        var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
-        var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
-
-        // Option A: prefer a real MappingProfile referenced by id (fields + resource type + destination object).
-        var mappingProfileId = ReadStringConfiguration(node, "mappingProfileId");
-        Guid? resolvedMappingProfileId = Guid.TryParse(mappingProfileId, out var parsedMappingProfileId) ? parsedMappingProfileId : null;
-        if (_configurationRepository is not null && resolvedMappingProfileId is { } profileId)
-        {
-            var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
-            if (profile is not null)
-            {
-                fields = profile.Fields.Select(ConfigurationMapper.ToDto).ToArray();
-                resourceType = profile.ResourceType;
-                destinationObject = profile.DestinationObject;
-            }
-        }
+        var resourceConfigs = await ResolveResourceMappingConfigsAsync(node, cancellationToken);
 
         var records = new List<MappedDestinationRecord>();
 
         foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
         {
+            // A destination selecting multiple resources (e.g. Patient + Observation + Condition) has one config
+            // entry per resource type here — each with its own fields and destination object. A resource type this
+            // node has no configured mapping for is skipped entirely rather than mapped with another resource
+            // type's fields (which previously produced rows with only the coincidentally-shared "id" populated and
+            // every other column blank/wrong).
+            if (!resourceConfigs.TryGetValue(resource.ResourceType, out var config))
+            {
+                continue;
+            }
+
             var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
-            var mapped = _mappingEngine?.Map(sourceJson, fields);
+            var mapped = _mappingEngine?.Map(sourceJson, config.Fields);
 
             // Parent row (Scalar/FirstItem/RejectIfMultiple fields land here). Skipped when every field on this
             // node uses SeparateDestination, so a node dedicated to a child table doesn't emit an empty parent row.
@@ -95,7 +89,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 records.Add(new MappedDestinationRecord(
                     context.WorkflowRunId,
                     resource.ResourceType,
-                    destinationObject,
+                    config.DestinationObject,
                     resource.ResourceId,
                     mapped?.Values ?? new Dictionary<string, object?>(),
                     sourceJson));
@@ -138,6 +132,67 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         WorkflowNode node,
         IReadOnlyCollection<WorkflowNodeOutput> inputs)
         => new MappedRecordBatch(inputs.Select(input => input.Payload!).Where(payload => payload is not null).ToArray());
+
+    private readonly record struct ResourceMappingConfig(string DestinationObject, IReadOnlyCollection<MappingFieldDto> Fields);
+
+    /// <summary>
+    /// Resolves this node's mapping configuration, keyed by FHIR resource type. Prefers <c>mappingProfileIds</c> —
+    /// a JSON object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps when a destination
+    /// selects more than one resource (see WorkflowEndpoints.cs's Mappings step) — resolving each referenced
+    /// MappingProfile from the database. Falls back to the legacy single <c>mappingProfileId</c> (one resource per
+    /// node, pre-dating multi-resource destinations), and finally to the node's own inline
+    /// "resourceType"/"destinationObject"/"fields" config (no repository composed, or a hand-authored node) —
+    /// unchanged behavior for every node that predates multi-resource support.
+    /// </summary>
+    private async Task<Dictionary<string, ResourceMappingConfig>> ResolveResourceMappingConfigsAsync(
+        WorkflowNode node, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, ResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
+
+        if (_configurationRepository is not null)
+        {
+            foreach (var profileId in ReadProfileIds(node))
+            {
+                var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
+                if (profile is null)
+                {
+                    continue;
+                }
+
+                result[profile.ResourceType] = new ResourceMappingConfig(
+                    profile.DestinationObject,
+                    profile.Fields.Select(ConfigurationMapper.ToDto).ToArray());
+            }
+        }
+
+        if (result.Count > 0)
+        {
+            return result;
+        }
+
+        // Legacy/offline fallback: the node's own inline config describes exactly one resource type.
+        var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
+        var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
+        var fields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
+        result[resourceType] = new ResourceMappingConfig(destinationObject, fields);
+        return result;
+    }
+
+    private static IReadOnlyList<Guid> ReadProfileIds(WorkflowNode node)
+    {
+        var mappingProfileIds = ReadConfiguration<Dictionary<string, string>>(node, "mappingProfileIds");
+        if (mappingProfileIds is { Count: > 0 })
+        {
+            return mappingProfileIds.Values
+                .Select(id => Guid.TryParse(id, out var parsed) ? parsed : (Guid?)null)
+                .Where(id => id is not null)
+                .Select(id => id!.Value)
+                .ToArray();
+        }
+
+        var single = ReadStringConfiguration(node, "mappingProfileId");
+        return Guid.TryParse(single, out var singleId) ? [singleId] : [];
+    }
 }
 
 public sealed class TerminologyNodeExecutor : PassThroughNodeExecutor
