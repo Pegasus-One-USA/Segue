@@ -32,10 +32,11 @@ export const EHR_OPTIONS: { value: EhrVendor; label: string }[] = [
   { value: 'Sample',             label: 'Sample' },
 ];
 
+// MVP1 resource set — keep in sync with portal/src/app/data/scope-constants.data.ts's FHIR_RESOURCES.
 const FHIR_RESOURCES = [
-  'Patient', 'Encounter', 'Observation', 'Condition', 'MedicationRequest',
-  'AllergyIntolerance', 'Immunization', 'Procedure', 'DiagnosticReport',
-  'DocumentReference', 'Practitioner', 'PractitionerRole',
+  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation',
+  'Condition', 'Procedure', 'ServiceRequest', 'DiagnosticReport',
+  'MedicationRequest', 'MedicationAdministration',
 ];
 
 function urlValidator(ctrl: AbstractControl): ValidationErrors | null {

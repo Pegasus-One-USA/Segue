@@ -59,6 +59,23 @@ public sealed class ResourcePipelineRouteConfiguration : IEntityTypeConfiguratio
                 .WithMany()
                 .HasForeignKey(x => x.MappingProfileId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            mapping.OwnsMany(x => x.ParentReferences, parent =>
+            {
+                parent.ToTable("ResourcePipelineRouteMappingParentReferences");
+                parent.HasKey(x => x.Id);
+                parent.Property(x => x.Id).ValueGeneratedNever();
+                parent.Property(x => x.ResourcePipelineRouteMappingId).IsRequired();
+                parent.Property(x => x.ParentMappingProfileId).IsRequired();
+                parent.Property(x => x.ReferenceFieldOverride).HasMaxLength(500);
+                parent.WithOwner().HasForeignKey(x => x.ResourcePipelineRouteMappingId);
+                parent.HasIndex(x => new { x.ResourcePipelineRouteMappingId, x.ParentMappingProfileId }).IsUnique();
+                // No FK to MappingProfile: ParentMappingProfileId must resolve to a mapping inside this
+                // specific route (the route's primary mapping or another entry in ResourceMappings), which a
+                // table-level FK can't express — validated in ConfigurationService instead.
+            });
+
+            mapping.Navigation(x => x.ParentReferences).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
     }
 }

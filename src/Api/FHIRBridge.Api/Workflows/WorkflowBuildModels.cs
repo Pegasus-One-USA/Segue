@@ -59,7 +59,17 @@ public sealed record MappingBuildSpec(
     string ResourceType,
     string DestinationObject,
     IReadOnlyList<MappingFieldDto> Fields,
-    Guid? ExistingId = null);
+    Guid? ExistingId = null,
+    IReadOnlyList<ParentReferenceSpec>? ParentReferences = null);
+
+/// <summary>
+/// Declares that this spec's resource is a "child" of another resource selected on the same destination
+/// (matched by <see cref="ParentResourceType"/> against a sibling <see cref="MappingBuildSpec"/> sharing the
+/// same <see cref="MappingBuildSpec.DestinationNodeId"/> in the same request) — e.g. Observation declaring
+/// Patient as a parent requires <c>subject.reference</c> to be mapped. A spec can carry several, each
+/// validated independently (see <c>WorkflowEndpoints</c>'s parent-reference validation pass).
+/// </summary>
+public sealed record ParentReferenceSpec(string ParentResourceType, string? ReferenceFieldOverride = null);
 
 /// <summary>Ids of everything created, keyed by the canvas node id each entity was attached to.
 /// <see cref="SyncedScopesBySourceConnectionId"/> reports each referenced source connection's OAuth scopes as they

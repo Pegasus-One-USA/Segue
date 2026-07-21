@@ -17,6 +17,46 @@ export interface FhirElement {
   valueType: string;                // String | Integer | Decimal | Boolean | Date | DateTime | Json
   isArray: boolean;
   arrays: string[];                 // array-ancestor fhir paths, e.g. ["name"]
+  referenceTargetTypes: string[];   // resource types this Reference leaf may point at, e.g. ["Patient"]
+}
+
+/**
+ * Resolves which reference field on `childFields` must be mapped because the resource is configured
+ * as a child of `parentResourceType` (e.g. "subject.reference" for a Patient parent). Mirrors
+ * `ParentReferenceResolver` (FHIRBridge.Application/Services) field-for-field — the two must stay in
+ * sync, since the backend independently re-validates at save time and this is only the UI's
+ * auto-lock/preview of that same decision. Returns null if no reference field on the child can target
+ * that parent type at all (an invalid pairing), unless `referenceFieldOverride` names a real field.
+ */
+export function resolveParentReferenceField(
+  childFields: FhirElement[],
+  parentResourceType: string,
+  referenceFieldOverride?: string | null,
+): FhirElement | null {
+  if (referenceFieldOverride) {
+    return childFields.find(f => f.fhirPath === referenceFieldOverride) ?? null;
+  }
+
+  const candidates = childFields.filter(
+    f => f.fhirPath.endsWith('.reference') && f.referenceTargetTypes.includes(parentResourceType),
+  );
+
+  if (candidates.length <= 1) {
+    return candidates[0] ?? null;
+  }
+
+  // Multiple fields could satisfy the same parent (e.g. Observation.subject and
+  // Observation.performer can both target Patient) - break the tie structurally, without
+  // hardcoding any resource or field name: prefer the most specific field (fewest allowed target
+  // types), then a singular reference over a repeating one, then alphabetical as a final,
+  // deterministic tiebreak.
+  return [...candidates].sort((a, b) => {
+    const byTargetCount = a.referenceTargetTypes.length - b.referenceTargetTypes.length;
+    if (byTargetCount !== 0) return byTargetCount;
+    const bySingular = (a.cardinality === '0..1' ? 0 : 1) - (b.cardinality === '0..1' ? 0 : 1);
+    if (bySingular !== 0) return bySingular;
+    return a.fhirPath.localeCompare(b.fhirPath);
+  })[0];
 }
 
 /**

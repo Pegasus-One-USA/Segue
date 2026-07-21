@@ -181,6 +181,15 @@ export interface MappingFieldRequest {
 // load-and-edit), the server updates that record in place instead of provisioning a duplicate.
 export interface SourceBuildSpec { nodeId: string; source: CreateSourceConnectionRequest; existingId?: string | null; }
 export interface DestinationBuildSpec { nodeId: string; destination: CreateDestinationConfigurationRequest; existingId?: string | null; }
+// Declares this spec's resource as a "child" of another resource on the SAME destination (matched by
+// parentResourceType against a sibling MappingBuildSpec sharing destinationNodeId) — e.g. Observation
+// declaring Patient as a parent requires "subject.reference" to be mapped. Validated server-side in
+// /workflows/build before anything is created; see WorkflowEndpoints.ValidateMappingParentReferences.
+export interface ParentReferenceSpec {
+  parentResourceType: string;
+  referenceFieldOverride?: string | null;
+}
+
 export interface MappingBuildSpec {
   nodeId: string;
   sourceNodeId: string;
@@ -190,6 +199,7 @@ export interface MappingBuildSpec {
   destinationObject: string;
   fields: MappingFieldRequest[];
   existingId?: string | null;
+  parentReferences?: ParentReferenceSpec[];
 }
 
 export interface WorkflowBuildRequest {

@@ -362,6 +362,27 @@
           <span class="dw-hint dw-mapping-key-hint">
             🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.
           </span>
+
+          @if (candidateParentsFor(r).length > 0) {
+            <div class="dw-parent-refs">
+              <span class="dw-parent-refs-label">{{ r }} is a child of:</span>
+              @for (parent of candidateParentsFor(r); track parent) {
+                <button
+                  type="button"
+                  class="dw-chip"
+                  [class.selected]="isParentSelected(r, parent)"
+                  (click)="toggleParent(r, parent)"
+                  [attr.title]="isParentSelected(r, parent)
+                    ? 'Required reference field to ' + parent + ' is locked below'
+                    : 'Mark ' + r + ' as a child of ' + parent"
+                >
+                  @if (isParentSelected(r, parent)) { ✓ }
+                  {{ parent }}
+                </button>
+              }
+            </div>
+          }
+
           <table class="dw-map-table">
             <thead>
               <tr>
@@ -374,10 +395,12 @@
             </thead>
             <tbody>
               @for (row of rowsForResource(r); track $index) {
-                <tr [class.dw-map-row--id]="isIdRow(row)">
+                <tr [class.dw-map-row--id]="isIdRow(row)" [class.dw-map-row--parent-ref]="isRequiredParentRefRow(row)">
                   <td>
                     @if (isIdRow(row)) {
                       <span class="dw-map-locked" title="This resource's id — always mapped, never reassignable">🔒 {{ row.fieldLabel }}</span>
+                    } @else if (isRequiredParentRefRow(row)) {
+                      <span class="dw-map-locked" [attr.title]="'Required — ' + r + ' is a child of ' + row.parentResourceType">🔒 {{ row.fieldLabel }}</span>
                     } @else {
                       <div class="dw-select-wrap">
                         <select
@@ -420,7 +443,7 @@
                     <input type="checkbox" [checked]="row.isUpsertKey" disabled title="Only the id row is the Upsert key" />
                   </td>
                   <td class="dw-map-actions">
-                    @if (!isIdRow(row)) {
+                    @if (!isIdRow(row) && !isRequiredParentRefRow(row)) {
                       <button type="button" class="dw-row-remove" title="Remove field" (click)="removeRow(row)">✕</button>
                     }
                   </td>

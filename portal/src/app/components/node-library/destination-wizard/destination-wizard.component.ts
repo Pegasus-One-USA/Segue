@@ -10,7 +10,7 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationColumn, DestinationTable } from '../../../services/destination-schema.service';
-import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
+import { MappingCatalogService, FhirElement, resolveParentReferenceField } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 
@@ -25,6 +25,7 @@ export interface ResourceFieldDef {
   jsonPath?: string;
   valueType?: string;
   arrays?: string[];
+  referenceTargetTypes?: string[];
 }
 
 export interface ResourceDef {
@@ -104,6 +105,11 @@ export interface MappingRow {
   // True only for a resource's mandatory id row (see _reconcileIdRows) — the column an Upsert write
   // matches an existing row on. Forced/locked by the wizard; never set true on any other row.
   isUpsertKey: boolean;
+  // True only for a reference-field row forced/locked by _reconcileParentRefRows because this resource
+  // is configured as a child of parentResourceType (see selectedParentsOf/toggleParent). Never
+  // removable, never reassignable to another business field — same lock semantics as the id row.
+  isRequiredParentRef?: boolean;
+  parentResourceType?: string;
 }
 
 /** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
@@ -205,6 +211,11 @@ export class DestinationWizardComponent implements OnInit {
   });
   readonly selectedResources = signal<string[]>(['Patient', 'Observation', 'Encounter']);
 
+  // Which other selected resources each resource is configured as a "child" of — e.g.
+  // { Observation: ['Patient', 'Encounter'] } means Observation independently requires a mapped
+  // reference field to both. A resource can have several parents at once (see _reconcileParentRefRows).
+  readonly parentSelections = signal<Record<string, string[]>>({});
+
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
 
@@ -281,6 +292,19 @@ export class DestinationWizardComponent implements OnInit {
       this.targetByResource();
       untracked(() => this._reconcileIdRows());
     });
+
+    // Same idea as the id-row effect above, for reference fields required by a "child of" declaration:
+    // prunes stale parent selections (a resource or its chosen parent was deselected), then locks/
+    // unlocks the corresponding reference-field rows to match.
+    effect(() => {
+      this.selectedResources();
+      this.catalogByResource();
+      this.parentSelections();
+      untracked(() => {
+        this._pruneParentSelections();
+        this._reconcileParentRefRows();
+      });
+    });
   }
 
   private readonly _requested = new Set<string>();
@@ -307,6 +331,7 @@ export class DestinationWizardComponent implements OnInit {
       jsonPath: f.jsonPath,
       valueType: f.valueType,
       arrays: f.arrays,
+      referenceTargetTypes: f.referenceTargetTypes,
     };
   }
 
@@ -589,6 +614,52 @@ export class DestinationWizardComponent implements OnInit {
     );
   }
 
+  // ── parent-child reference mapping ───────────────────────────────────────
+  // Other selected resources that `r` could be a child of — i.e. `r` has at least one FHIR reference
+  // field whose allowed target types include that resource. Only these are offered as parent choices,
+  // so the UI can never be pushed into a pairing FHIR doesn't actually support.
+  candidateParentsFor(r: string): string[] {
+    const fields = this.availableFields(r);
+    return this.selectedResources().filter(other =>
+      other !== r && resolveParentReferenceField(this._asFhirElements(fields), other) !== null);
+  }
+
+  selectedParentsOf(r: string): string[] {
+    return this.parentSelections()[r] ?? [];
+  }
+
+  isParentSelected(r: string, parent: string): boolean {
+    return this.selectedParentsOf(r).includes(parent);
+  }
+
+  toggleParent(r: string, parent: string): void {
+    this.parentSelections.update(m => {
+      const current = m[r] ?? [];
+      const next = current.includes(parent) ? current.filter(p => p !== parent) : [...current, parent];
+      return { ...m, [r]: next };
+    });
+  }
+
+  private _asFhirElements(fields: ResourceFieldDef[]): FhirElement[] {
+    return fields.map(f => {
+      const isArray = !!f.arrays?.length;
+      return {
+        label: f.label,
+        jsonPath: f.jsonPath ?? '',
+        fhirPath: f.path.includes('.') ? f.path.slice(f.path.indexOf('.') + 1) : f.path,
+        cardinality: isArray ? '0..*' : '0..1',
+        valueType: f.valueType ?? 'String',
+        isArray,
+        arrays: f.arrays ?? [],
+        referenceTargetTypes: f.referenceTargetTypes ?? [],
+      };
+    });
+  }
+
+  isRequiredParentRefRow(row: MappingRow): boolean {
+    return !!row.isRequiredParentRef;
+  }
+
   // ── mapping rows ──────────────────────────────────────────────────────────
   rowsForResource(r: string): MappingRow[] {
     return this.mappingRows().filter(row => row.resource === r);
@@ -725,6 +796,7 @@ export class DestinationWizardComponent implements OnInit {
 
   removeRow(row: MappingRow): void {
     if (this.isIdRow(row)) return; // mandatory — guarantees every resource keeps its upsert key mapped
+    if (row.isRequiredParentRef) return; // mandatory while its parent chip is selected — toggle the chip instead
     this.mappingRows.update(rows => {
       const i = rows.indexOf(row);
       if (i < 0) return rows;
@@ -800,6 +872,91 @@ export class DestinationWizardComponent implements OnInit {
     if (changed) this.mappingRows.set(next);
   }
 
+  // Drops parent selections that no longer point at a currently-selected resource, and drops the
+  // child side entirely if the child itself was deselected — mirrors the "prune stale state" half of
+  // _reconcileIdRows, just for parentSelections instead of mappingRows.
+  private _pruneParentSelections(): void {
+    const selected = new Set(this.selectedResources());
+    this.parentSelections.update(m => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+      for (const [child, parents] of Object.entries(m)) {
+        if (!selected.has(child)) { changed = true; continue; }
+        const kept = parents.filter(p => selected.has(p));
+        if (kept.length !== parents.length) changed = true;
+        if (kept.length) next[child] = kept;
+      }
+      return changed ? next : m;
+    });
+  }
+
+  // Keeps each resource's required-reference rows in sync with its current parent selections: one
+  // locked row per selected parent (independent — Observation with both Patient and Encounter as
+  // parents gets two separate locked rows), inserted/removed/refreshed the same way _reconcileIdRows
+  // manages the id row. A parent whose resolver lookup returns null (shouldn't happen, since
+  // candidateParentsFor already filters to resolvable pairs) is skipped rather than locking a bad row.
+  private _reconcileParentRefRows(): void {
+    let changed = false;
+    let next = [...this.mappingRows()];
+
+    for (const r of this.selectedResources()) {
+      const parents = this.selectedParentsOf(r);
+      const wanted = new Set(parents);
+
+      const kept = next.filter(row =>
+        !(row.resource === r && row.isRequiredParentRef && !wanted.has(row.parentResourceType ?? '')));
+      if (kept.length !== next.length) { next = kept; changed = true; }
+
+      const fields = this.availableFields(r);
+
+      for (const parent of parents) {
+        const requiredField = resolveParentReferenceField(this._asFhirElements(fields), parent);
+        if (!requiredField) continue;
+
+        const targetFhirPath = `${r}.${requiredField.fhirPath}`;
+        const matchingFieldDef = fields.find(f => f.path === targetFhirPath);
+        const idx = next.findIndex(row =>
+          row.resource === r && row.isRequiredParentRef && row.parentResourceType === parent);
+
+        if (idx === -1) {
+          const columnName = matchingFieldDef
+            ? (this.destType() === 'sql' ? matchingFieldDef.sqlColumn : matchingFieldDef.csvColumn)
+            : requiredField.label;
+          const fieldDef: ResourceFieldDef = matchingFieldDef ?? {
+            label: requiredField.label,
+            path: targetFhirPath,
+            sqlColumn: columnName,
+            csvColumn: columnName,
+            jsonPath: requiredField.jsonPath,
+            valueType: requiredField.valueType,
+            arrays: requiredField.arrays,
+          };
+          next = [...next, {
+            ...this._buildRow(r, fieldDef, columnName),
+            isRequiredParentRef: true,
+            parentResourceType: parent,
+          }];
+          changed = true;
+        } else {
+          const row = next[idx];
+          if (row.fhirPath !== targetFhirPath || row.jsonPath !== requiredField.jsonPath) {
+            next[idx] = {
+              ...row,
+              fhirPath: targetFhirPath,
+              fieldLabel: requiredField.label,
+              jsonPath: requiredField.jsonPath,
+              valueType: requiredField.valueType,
+              arrays: requiredField.arrays,
+            };
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (changed) this.mappingRows.set(next);
+  }
+
   // ── per-resource target (file name / table) ────────────────────────────────
   targetFor(r: string): string { return this.targetByResource()[r] ?? ''; }
 
@@ -816,6 +973,7 @@ export class DestinationWizardComponent implements OnInit {
   changeBusinessField(i: number, label: string): void {
     this.mappingRows.update(rows => {
       if (this.isIdRow(rows[i])) return rows; // the id row's business field is fixed, never reassignable
+      if (rows[i].isRequiredParentRef) return rows; // ditto for a required parent-reference field
       const next = [...rows];
       const row  = next[i];
       const f    = this.availableFields(row.resource).find(x => x.label === label);
@@ -897,6 +1055,7 @@ export class DestinationWizardComponent implements OnInit {
         const saved = JSON.parse(f['dest_mappings']) as {
           resource: string; field: string; path: string; target: string; column: string;
           jsonPath?: string; valueType?: string; arrays?: string[]; isUpsertKey?: boolean;
+          isRequiredParentRef?: boolean; parentResourceType?: string;
         }[];
         this.mappingRows.set(saved.map(m => ({
           resource:   m.resource,
@@ -908,8 +1067,13 @@ export class DestinationWizardComponent implements OnInit {
           valueType:  m.valueType,
           arrays:     m.arrays,
           isUpsertKey: m.isUpsertKey ?? false,
+          isRequiredParentRef: m.isRequiredParentRef ?? false,
+          parentResourceType: m.parentResourceType,
         })));
       } catch { /* ignore malformed */ }
+    }
+    if (f['dest_parentSelections']) {
+      try { this.parentSelections.set(JSON.parse(f['dest_parentSelections'])); } catch { /* ignore malformed */ }
     }
   }
 
@@ -999,8 +1163,11 @@ export class DestinationWizardComponent implements OnInit {
         valueType: r.valueType,
         arrays:    r.arrays,
         isUpsertKey: r.isUpsertKey,
+        isRequiredParentRef: r.isRequiredParentRef,
+        parentResourceType: r.parentResourceType,
       })),
     );
+    config['dest_parentSelections'] = JSON.stringify(this.parentSelections());
 
     this.saved.emit({
       attachNode:  this.attachNode(),

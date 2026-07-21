@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
@@ -27,7 +28,8 @@ public sealed class MappingProfileCapabilityGatingTests
     {
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
-            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>());
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
+            Mock.Of<IParentReferenceResolver>());
     }
 
     [Fact]

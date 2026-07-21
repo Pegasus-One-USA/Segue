@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -48,8 +49,17 @@ public static class WorkflowEndpoints
             IConfigurationService configurationService,
             IWorkflowDefinitionStore store,
             IEpicSourceConnectionScopeSyncService scopeSyncService,
+            IParentReferenceResolver parentReferenceResolver,
             CancellationToken cancellationToken) =>
         {
+            // Fail fast, before provisioning anything: every "child of" declaration on a mapping spec must
+            // resolve to a real reference field, mapped, targeting a sibling resource on the same destination.
+            var parentReferenceError = ValidateMappingParentReferences(request.Mappings ?? [], parentReferenceResolver);
+            if (parentReferenceError is not null)
+            {
+                return Results.BadRequest(parentReferenceError);
+            }
+
             // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
             // saved graph. Node order is preserved from the original request when the definition is rebuilt.
             var nodes = request.Nodes.ToDictionary(node => node.Id, node => node, StringComparer.OrdinalIgnoreCase);
@@ -986,6 +996,59 @@ public static class WorkflowEndpoints
         }
 
         return (total, usedBulkExport);
+    }
+
+    // Validates every ParentReferenceSpec across the build request in one pass, before anything is created.
+    // "Same destination" (grouping by DestinationNodeId) is this flow's stand-in for "same route" — the canvas
+    // has no persisted ResourcePipelineRoute to group by, but every resource a destination-wizard session
+    // selects together shares the same destination node, which is the equivalent scope for "resources
+    // configured together." Returns the first validation failure found, or null if everything resolves.
+    private static string? ValidateMappingParentReferences(
+        IReadOnlyCollection<MappingBuildSpec> mappings,
+        IParentReferenceResolver parentReferenceResolver)
+    {
+        foreach (var group in mappings.GroupBy(m => m.DestinationNodeId, StringComparer.OrdinalIgnoreCase))
+        {
+            var byResourceType = group
+                .GroupBy(m => m.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var spec in group)
+            {
+                foreach (var link in spec.ParentReferences ?? [])
+                {
+                    if (!byResourceType.ContainsKey(link.ParentResourceType))
+                    {
+                        return $"'{spec.ResourceType}' is configured as a child of '{link.ParentResourceType}', " +
+                            "which is not one of this destination's selected resources.";
+                    }
+
+                    var requiredField = parentReferenceResolver.Resolve(
+                        spec.ResourceType, link.ParentResourceType, link.ReferenceFieldOverride);
+
+                    if (requiredField is null)
+                    {
+                        return $"'{spec.ResourceType}' has no FHIR reference field that can target " +
+                            $"'{link.ParentResourceType}'.";
+                    }
+
+                    // MappingFieldDto (this create-request shape) has no IsEnabled flag — a disabled row in the
+                    // wizard is simply never included in the built request, so presence in Fields already means
+                    // "enabled" here (unlike MappingField, the persisted domain record ConfigurationService
+                    // validates separately for the ResourcePipelineRoute path).
+                    var isMapped = spec.Fields.Any(f =>
+                        string.Equals(f.JsonPath, requiredField.JsonPath, StringComparison.Ordinal));
+
+                    if (!isMapped)
+                    {
+                        return $"'{spec.ResourceType}' must map '{requiredField.FhirPath}' because it is " +
+                            $"configured as a child of '{link.ParentResourceType}'.";
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)

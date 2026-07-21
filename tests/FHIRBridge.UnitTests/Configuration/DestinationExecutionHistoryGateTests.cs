@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -36,7 +37,8 @@ public sealed class DestinationExecutionHistoryGateTests
             _repository.Object,
             Mock.Of<ISourceCapabilityRepository>(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
-            Mock.Of<ISecretWriter>());
+            Mock.Of<ISecretWriter>(),
+            Mock.Of<IParentReferenceResolver>());
     }
 
     private static CreateDestinationConfigurationRequest UpdateRequest() =>
