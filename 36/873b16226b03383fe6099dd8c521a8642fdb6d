@@ -1,0 +1,73 @@
+tests/FHIRBridge.UnitTests/Destinations/MappedCsvDestinationWriterTests.cs
+  s_847aee1e6f20e2::t_316a6b3f24748e 1-3,16-19,32-33,35,84-99,102-110,116-120,124,126-142,145,147-195
+src/FHIRBridge.Infrastructure/Destinations/MappedSftpDestinationWriter.cs
+  s_847aee1e6f20e2::t_4d692985263c72 1
+  s_847aee1e6f20e2::t_8c8ca286d652ab 37
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_847aee1e6f20e2::t_1cdf9aa7ace20a 25,34,43,52,61
+  s_847aee1e6f20e2::t_d57d7fcafed537 68
+  s_847aee1e6f20e2::t_f047d3c5e37e43 69-70
+  s_847aee1e6f20e2::t_0b802fbd7b8b24 77-79,87,96,105,114,123,132,141,150,159,168,177,186,195,204,495
+  s_847aee1e6f20e2::t_c95f5d45100c0f 15,23-24,32-33,41-42,50-51,59-60
+  s_847aee1e6f20e2::t_9f49b235e9a5e0 86
+  s_847aee1e6f20e2::t_e0027ff7d7e41b 88
+  s_847aee1e6f20e2::t_c1a3561ebc974a 95
+  s_847aee1e6f20e2::t_469e036f0769e5 97
+  s_847aee1e6f20e2::t_a3b536457b05ca 104
+  s_847aee1e6f20e2::t_27b58f5b5f42ac 106
+  s_847aee1e6f20e2::t_65288b152904d8 113
+  s_847aee1e6f20e2::t_9793b32316472c 115
+  s_847aee1e6f20e2::t_2236f18ef609e0 122
+  s_847aee1e6f20e2::t_c41cf7fa928371 124
+  s_847aee1e6f20e2::t_6108cbb54c317a 131
+  s_847aee1e6f20e2::t_80067a0b15cdd5 133
+  s_847aee1e6f20e2::t_d447cfc80a9273 140
+  s_847aee1e6f20e2::t_4e3ae9fdbd4cf0 142
+  s_847aee1e6f20e2::t_af33132346f179 149
+  s_847aee1e6f20e2::t_8342920b268722 151
+  s_847aee1e6f20e2::t_5159222a876209 158
+  s_847aee1e6f20e2::t_362a360b1b0ef3 160
+  s_847aee1e6f20e2::t_d37060d44ae8ee 167
+  s_847aee1e6f20e2::t_7c0d230fbc6472 169
+  s_847aee1e6f20e2::t_79eb7fe449293b 176
+  s_847aee1e6f20e2::t_07758e5b185c70 178
+  s_847aee1e6f20e2::t_23c1bca563dc0d 185
+  s_847aee1e6f20e2::t_06efcceba3595f 187
+  s_847aee1e6f20e2::t_12a4a82c9f26df 194
+  s_847aee1e6f20e2::t_1c1ecbfa1e6a62 196
+  s_847aee1e6f20e2::t_099d399db17022 203
+  s_847aee1e6f20e2::t_e0a5e35f38101c 205
+  s_847aee1e6f20e2::t_9badd132c9f0f7 494
+  s_847aee1e6f20e2::t_525cbda1d4abd0 489,500,523-525,528,565-575
+docs/backend/12-provider-standalone-ehr-launch-fixes.md
+  s_847aee1e6f20e2::t_472f49a244e100 26-38
+src/FHIRBridge.Infrastructure/Destinations/MappedCsvDestinationWriter.cs
+  s_847aee1e6f20e2::t_0299edc33718df 1,11-17,40-51,59-98
+src/FHIRBridge.Infrastructure/Destinations/Delivery/SftpDeliveryStrategy.cs
+  s_847aee1e6f20e2::t_5e4aff1e5f8e7e 29
+src/FHIRBridge.Infrastructure/Destinations/SftpUploader.cs
+  s_847aee1e6f20e2::t_035e981d556433 8-9,16,39
+src/FHIRBridge.Infrastructure/Destinations/MappedDestinationSerialization.cs
+  s_847aee1e6f20e2::t_6936aa4331f0d3 146-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "36873b16226b03383fe6099dd8c521a8642fdb6d",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_847aee1e6f20e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "107cb5aa-6778-4535-9a6d-82e5bba2513f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
