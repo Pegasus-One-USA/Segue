@@ -356,36 +356,47 @@
                 />
               }
             </span>
+            <button type="button" class="dw-btn" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
             <button type="button" class="dw-btn dw-add-field" (click)="addRow(r)">+ Add field</button>
           </div>
+          <span class="dw-hint dw-mapping-key-hint">
+            🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.
+          </span>
           <table class="dw-map-table">
             <thead>
               <tr>
                 <th>Business field</th>
                 <th>FHIR path</th>
                 <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
+                <th class="dw-map-key-col" title="Upsert key — the column an Upsert write matches an existing row on">Key</th>
                 <th class="dw-map-actions" aria-label="Actions"></th>
               </tr>
             </thead>
             <tbody>
               @for (row of rowsForResource(r); track $index) {
-                <tr>
+                <tr [class.dw-map-row--id]="isIdRow(row)">
                   <td>
-                    <div class="dw-select-wrap">
-                      <select
-                        class="dw-select"
-                        [value]="row.fieldLabel"
-                        (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
-                      >
-                        @for (f of availableFields(r); track f.path) {
-                          <option [value]="f.label" [selected]="f.label === row.fieldLabel">{{ f.label }}</option>
-                        }
-                      </select>
-                    </div>
+                    @if (isIdRow(row)) {
+                      <span class="dw-map-locked" title="This resource's id — always mapped, never reassignable">🔒 {{ row.fieldLabel }}</span>
+                    } @else {
+                      <div class="dw-select-wrap">
+                        <select
+                          class="dw-select"
+                          [value]="row.fieldLabel"
+                          (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
+                        >
+                          @for (f of availableFields(r); track f.path) {
+                            <option [value]="f.label" [selected]="f.label === row.fieldLabel">{{ f.label }}</option>
+                          }
+                        </select>
+                      </div>
+                    }
                   </td>
                   <td class="dw-mono">{{ row.fhirPath }}</td>
                   <td>
-                    @if (hasSqlTables() && columnsForResourceTarget(r).length) {
+                    @if (isIdRow(row) && isIdColumnLocked(r)) {
+                      <span class="dw-map-locked" title="Auto-matched to this table's primary/unique key column">🔒 {{ row.targetName }}</span>
+                    } @else if (hasSqlTables() && columnsForResourceTarget(r).length) {
                       <div class="dw-select-wrap">
                         <select class="dw-select"
                                 [value]="row.targetName"
@@ -394,6 +405,9 @@
                           @for (c of columnsForResourceTarget(r); track c) { <option [value]="c" [selected]="c === row.targetName">{{ c }}</option> }
                         </select>
                       </div>
+                      @if (isIdRow(row)) {
+                        <span class="dw-hint">No primary/unique key detected on this table — choose the column that uniquely identifies each {{ r }}.</span>
+                      }
                     } @else {
                       <input
                         class="dw-map-input"
@@ -402,14 +416,19 @@
                       />
                     }
                   </td>
+                  <td class="dw-map-key-col">
+                    <input type="checkbox" [checked]="row.isUpsertKey" disabled title="Only the id row is the Upsert key" />
+                  </td>
                   <td class="dw-map-actions">
-                    <button type="button" class="dw-row-remove" title="Remove field" (click)="removeRow(row)">✕</button>
+                    @if (!isIdRow(row)) {
+                      <button type="button" class="dw-row-remove" title="Remove field" (click)="removeRow(row)">✕</button>
+                    }
                   </td>
                 </tr>
               }
               @if (rowsForResource(r).length === 0) {
                 <tr class="dw-map-empty">
-                  <td [attr.colspan]="4">No fields mapped yet — click <strong>+ Add field</strong> to add one.</td>
+                  <td [attr.colspan]="5">No fields mapped yet — click <strong>+ Add field</strong> to add one.</td>
                 </tr>
               }
             </tbody>

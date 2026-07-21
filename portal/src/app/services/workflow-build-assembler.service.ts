@@ -25,6 +25,7 @@ interface DestMappingRow {
   jsonPath?: string; // e.g. "$.name[*].given[*]"
   valueType?: string; // String | Integer | Decimal | Boolean | Date | DateTime | Json
   arrays?: string[]; // array-ancestor fhir paths
+  isUpsertKey?: boolean; // wizard-forced true on the resource's mandatory id row, false elsewhere
 }
 
 /**
@@ -429,22 +430,24 @@ export class WorkflowBuildAssemblerService {
       primary;
     // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
     // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
-    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. MappedSqlServerDestinationWriter
-    // has no default key (ParseDestinationTarget throws immediately if mode=upsert has no explicit ;key=<Column>),
-    // so "by source id" only means something once we resolve which destination column the FHIR resource's own
-    // `id` field was mapped onto, and pass that through explicitly.
+    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. The writer resolves the
+    // key column from whichever mapped field is flagged isUpsertKey (the wizard forces this on the resource's
+    // mandatory id row — see destination-wizard.component.ts's ID-row reconciliation) rather than a query-string
+    // option, so "by source id" only means something once that field is present. jsonPath === '$.id' is kept as a
+    // fallback match for mapping rows saved before isUpsertKey existed on a node.
+    const idRow =
+      primaryRows.find((row) => row.isUpsertKey) ??
+      primaryRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, primary)) === '$.id');
+
     let destinationObject = baseDestinationObject;
     if (destFields['dest_writeMode'] === 'upsert') {
-      const idRow = primaryRows.find(
-        (row) => (row.jsonPath ?? this.toJsonPath(row.path, primary)) === '$.id',
-      );
       if (!idRow) {
         throw new Error(
           `"${primary}" destination is set to Upsert by source id, but no destination column is mapped from ` +
             `${primary}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
         );
       }
-      destinationObject = `${baseDestinationObject};mode=upsert;key=${idRow.column}`;
+      destinationObject = `${baseDestinationObject};mode=upsert`;
     }
 
     const fields: MappingFieldRequest[] = primaryRows.map((row) => {
@@ -464,6 +467,7 @@ export class WorkflowBuildAssemblerService {
         // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
         arrayPolicy: isArrayPath ? 'FirstItem' : 'Scalar',
         arrayAncestors: arrays.length > 0 ? arrays : null,
+        isUpsertKey: row === idRow,
       };
     });
 

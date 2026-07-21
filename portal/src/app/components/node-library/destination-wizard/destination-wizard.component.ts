@@ -9,7 +9,7 @@ import { forkJoin, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
-import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
+import { DestinationSchemaService, DestinationColumn, DestinationTable } from '../../../services/destination-schema.service';
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
@@ -101,6 +101,9 @@ export interface MappingRow {
   jsonPath?:  string;
   valueType?: string;
   arrays?:    string[];
+  // True only for a resource's mandatory id row (see _reconcileIdRows) — the column an Upsert write
+  // matches an existing row on. Forced/locked by the wizard; never set true on any other row.
+  isUpsertKey: boolean;
 }
 
 /** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
@@ -265,6 +268,18 @@ export class DestinationWizardComponent implements OnInit {
     // over the built-in fallback once loaded. Deduped via _requested so this effect never re-fetches.
     effect(() => {
       for (const r of this.availableGroups()) this._ensureCatalog(r);
+    });
+
+    // Keeps each selected resource's mandatory id/upsert-key row in sync — inserted the moment a resource is
+    // selected, upgraded to the schema-verified PK/unique column once the destination table's columns load,
+    // and refreshed if the catalog's id field metadata changes. See _reconcileIdRows for the merge rules.
+    effect(() => {
+      this.selectedResources();
+      this.destType();
+      this.catalogByResource();
+      this.sqlTables();
+      this.targetByResource();
+      untracked(() => this._reconcileIdRows());
     });
   }
 
@@ -554,11 +569,15 @@ export class DestinationWizardComponent implements OnInit {
     return this.sqlTables().map(t => t.fullName);
   }
 
+  // Table currently chosen for a resource, with full column metadata (name/type/PK/unique).
+  private tableForResourceTarget(r: string): DestinationTable | undefined {
+    const target = this.targetFor(r);
+    return this.sqlTables().find(t => t.fullName === target || t.tableName === target);
+  }
+
   // Columns of the table currently chosen for a resource (drives the per-row column dropdown).
   columnsForResourceTarget(r: string): string[] {
-    const target = this.targetFor(r);
-    const table = this.sqlTables().find(t => t.fullName === target || t.tableName === target);
-    return table ? table.columns.map(c => c.name) : [];
+    return (this.tableForResourceTarget(r)?.columns ?? []).map(c => c.name);
   }
 
   // ── data groups ───────────────────────────────────────────────────────────
@@ -577,6 +596,12 @@ export class DestinationWizardComponent implements OnInit {
 
   updateRow(i: number, field: 'targetName', val: string): void {
     this.mappingRows.update(rows => {
+      // The id row's column is auto-resolved (and its dropdown rendered read-only, see isIdColumnLocked in the
+      // template) only when a real primary/unique key was auto-matched on the destination table. When none was
+      // found, the template renders the id row's column as a live picker instead ("No primary/unique key
+      // detected... choose the column") — that picker must actually be able to write here, or the user's
+      // selection is silently discarded in favor of the catalog-derived fallback column name.
+      if (this.isIdRow(rows[i]) && this.isIdColumnLocked(rows[i].resource)) return rows;
       const next = [...rows];
       next[i] = { ...next[i], [field]: val };
       return next;
@@ -599,16 +624,180 @@ export class DestinationWizardComponent implements OnInit {
       jsonPath:   next.jsonPath,
       valueType:  next.valueType,
       arrays:     next.arrays,
+      isUpsertKey: false,
     };
     this.mappingRows.update(rows => [...rows, row]);
   }
 
+  // Bulk "Add Fields": confidence-scores every not-yet-mapped source field against every not-yet-used
+  // destination column (name similarity + type compatibility) and appends the best match per field —
+  // above a threshold, matched to a real column; below it, added anyway with a blank column for manual
+  // pick. The resource's id field is excluded — its row is mandatory and reconciled separately (see
+  // _reconcileIdRows), always as the upsert key. Ranks only against the live probed schema, never a
+  // hardcoded column list (docs/backend/11-destination-schema-ownership-plan.md section 8).
+  private static readonly AUTO_MATCH_THRESHOLD = 0.5;
+
+  addFields(resource: string): void {
+    const idField = this.idFieldFor(resource);
+    const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
+    const remaining = this.availableFields(resource).filter(f =>
+      !used.has(f.label) && f.path !== idField?.path);
+    if (!remaining.length) return;
+
+    const table = this.tableForResourceTarget(resource);
+    const columns = table?.columns ?? [];
+    const usedColumns = new Set(this.rowsForResource(resource).map(r => r.targetName).filter(Boolean));
+
+    const newRows: MappingRow[] = [];
+
+    if (!columns.length) {
+      // No live schema loaded (CSV, or SQL not yet probed) — fall back to the built-in naming convention,
+      // same guess addRow() uses for a single field.
+      for (const f of remaining) {
+        newRows.push(this._buildRow(resource, f, this.destType() === 'sql' ? f.sqlColumn : f.csvColumn));
+      }
+    } else {
+      const candidates = remaining.flatMap(f =>
+        columns
+          .filter(c => !usedColumns.has(c.name))
+          .map(c => ({ field: f, column: c, score: this._matchScore(f, c) })));
+      candidates.sort((a, b) => b.score - a.score);
+
+      // Only fields that cross the confidence threshold get auto-populated. Anything that doesn't match
+      // a real column is left out entirely — the admin adds it manually via "+ Add field" instead of the
+      // table filling up with unmatched, blank-target rows.
+      const assignedFields = new Set<string>();
+      const assignedColumns = new Set<string>();
+      for (const cand of candidates) {
+        if (assignedFields.has(cand.field.label) || assignedColumns.has(cand.column.name)) continue;
+        if (cand.score < DestinationWizardComponent.AUTO_MATCH_THRESHOLD) continue;
+        assignedFields.add(cand.field.label);
+        assignedColumns.add(cand.column.name);
+        newRows.push(this._buildRow(resource, cand.field, cand.column.name));
+      }
+    }
+
+    this.mappingRows.update(rows => [...rows, ...newRows]);
+  }
+
+  private _buildRow(resource: string, f: ResourceFieldDef, targetName: string): MappingRow {
+    return {
+      resource,
+      fieldLabel: f.label,
+      fhirPath:   f.path,
+      targetName,
+      tableName:  this.targetFor(resource),
+      jsonPath:   f.jsonPath,
+      valueType:  f.valueType,
+      arrays:     f.arrays,
+      isUpsertKey: false,
+    };
+  }
+
+  private _matchScore(field: ResourceFieldDef, column: DestinationColumn): number {
+    const suggested = this.destType() === 'sql' ? field.sqlColumn : field.csvColumn;
+    const nameScore = this._nameSimilarity(this._normalize(suggested), this._normalize(column.name))
+      || this._nameSimilarity(this._normalize(field.label), this._normalize(column.name));
+    const typeScore = field.valueType && field.valueType.toLowerCase() === column.mappingValueType.toLowerCase() ? 1 : 0;
+    return nameScore * 0.7 + typeScore * 0.3;
+  }
+
+  private _normalize(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // Levenshtein-distance similarity ratio in [0, 1]; 1 = identical, 0 = nothing in common.
+  private _nameSimilarity(a: string, b: string): number {
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+    for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+    return 1 - dp[a.length][b.length] / Math.max(a.length, b.length);
+  }
+
   removeRow(row: MappingRow): void {
+    if (this.isIdRow(row)) return; // mandatory — guarantees every resource keeps its upsert key mapped
     this.mappingRows.update(rows => {
       const i = rows.indexOf(row);
       if (i < 0) return rows;
       return [...rows.slice(0, i), ...rows.slice(i + 1)];
     });
+  }
+
+  // ── mandatory id / upsert-key row ─────────────────────────────────────────
+  // Every resource's own `id` field (e.g. Patient.id) must always be mapped and must always be the Upsert
+  // key, so two records can never collide/duplicate on write — this can't be turned off or reassigned.
+  isIdField(f: ResourceFieldDef, resource: string): boolean {
+    return f.path === `${resource}.id`;
+  }
+
+  idFieldFor(r: string): ResourceFieldDef | undefined {
+    return this.availableFields(r).find(f => this.isIdField(f, r));
+  }
+
+  isIdRow(row: MappingRow): boolean {
+    return row.fhirPath === `${row.resource}.id`;
+  }
+
+  // The schema-verified primary/unique-key column for a resource's live target table, if introspection found
+  // one — the only case the id row's destination column is locked/read-only (see isIdColumnLocked below).
+  private _autoMatchIdColumn(r: string): string | null {
+    const columns = this.tableForResourceTarget(r)?.columns ?? [];
+    return columns.find(c => c.isPrimaryKey)?.name ?? columns.find(c => c.isUnique)?.name ?? null;
+  }
+
+  // True once the destination column for a resource's id row is schema-verified (a real PK/unique column was
+  // found) — only then is it safe to fully lock the field, since a guessed name could otherwise be wrong.
+  isIdColumnLocked(r: string): boolean {
+    return this._autoMatchIdColumn(r) !== null;
+  }
+
+  // Keeps every selected resource's mandatory id row in sync with the live schema and the catalog: inserts it
+  // if missing, forces isUpsertKey true, and upgrades its destination column to the schema-verified PK/unique
+  // column once one is found (never overwrites a column that isn't schema-verified, so a value loaded from a
+  // saved node — or typed in before the schema had a detectable key — is never silently clobbered by a guess).
+  private _reconcileIdRows(): void {
+    let changed = false;
+    let next = [...this.mappingRows()];
+
+    for (const r of this.selectedResources()) {
+      const idField = this.idFieldFor(r);
+      if (!idField) continue;
+
+      const autoColumn = this._autoMatchIdColumn(r);
+      const idx = next.findIndex(row => row.resource === r && this.isIdRow(row));
+
+      if (idx === -1) {
+        const initialColumn = autoColumn ?? (this.destType() === 'sql' ? idField.sqlColumn : idField.csvColumn);
+        next = [{ ...this._buildRow(r, idField, initialColumn), isUpsertKey: true }, ...next];
+        changed = true;
+      } else {
+        const row = next[idx];
+        const desiredColumn = autoColumn ?? row.targetName;
+        if (row.targetName !== desiredColumn || !row.isUpsertKey ||
+            row.jsonPath !== idField.jsonPath || row.valueType !== idField.valueType) {
+          next[idx] = {
+            ...row,
+            targetName: desiredColumn,
+            isUpsertKey: true,
+            jsonPath: idField.jsonPath,
+            valueType: idField.valueType,
+            arrays: idField.arrays,
+          };
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) this.mappingRows.set(next);
   }
 
   // ── per-resource target (file name / table) ────────────────────────────────
@@ -626,6 +815,7 @@ export class DestinationWizardComponent implements OnInit {
 
   changeBusinessField(i: number, label: string): void {
     this.mappingRows.update(rows => {
+      if (this.isIdRow(rows[i])) return rows; // the id row's business field is fixed, never reassignable
       const next = [...rows];
       const row  = next[i];
       const f    = this.availableFields(row.resource).find(x => x.label === label);
@@ -706,7 +896,7 @@ export class DestinationWizardComponent implements OnInit {
       try {
         const saved = JSON.parse(f['dest_mappings']) as {
           resource: string; field: string; path: string; target: string; column: string;
-          jsonPath?: string; valueType?: string; arrays?: string[];
+          jsonPath?: string; valueType?: string; arrays?: string[]; isUpsertKey?: boolean;
         }[];
         this.mappingRows.set(saved.map(m => ({
           resource:   m.resource,
@@ -717,6 +907,7 @@ export class DestinationWizardComponent implements OnInit {
           jsonPath:   m.jsonPath,
           valueType:  m.valueType,
           arrays:     m.arrays,
+          isUpsertKey: m.isUpsertKey ?? false,
         })));
       } catch { /* ignore malformed */ }
     }
@@ -807,6 +998,7 @@ export class DestinationWizardComponent implements OnInit {
         jsonPath:  r.jsonPath,
         valueType: r.valueType,
         arrays:    r.arrays,
+        isUpsertKey: r.isUpsertKey,
       })),
     );
 

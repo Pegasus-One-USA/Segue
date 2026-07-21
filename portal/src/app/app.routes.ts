@@ -107,6 +107,16 @@ export const routes: Routes = [
           ),
       },
 
+      // App-level signing secrets (SuperAdmin only — same policy as Allowed Origins above)
+      {
+        path: 'system-security',
+        canActivate: [superAdminGuard],
+        loadComponent: () =>
+          import('./system-security/pages/app-secret-list/app-secret-list.component').then(
+            m => m.AppSecretListComponent
+          ),
+      },
+
       // Source Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
       {
         path: 'source-connections',

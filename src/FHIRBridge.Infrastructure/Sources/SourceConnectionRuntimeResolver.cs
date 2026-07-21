@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
@@ -18,6 +19,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
 {
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
+    private readonly IScopeGeneratorService _scopeGenerator;
     // IFhirPatientContextProvider is never registered as its own service type — it's reached by downcasting the
     // registered IFhirAccessTokenProvider (CompositeFhirAccessTokenProvider implements both), the same pattern
     // FhirSourceConnectorBase.ApplyPatientScopeAsync already uses.
@@ -26,10 +28,12 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
     public SourceConnectionRuntimeResolver(
         IConfigurationRepository repository,
         ISecretProvider secretProvider,
+        IScopeGeneratorService scopeGenerator,
         IFhirAccessTokenProvider? accessTokenProvider = null)
     {
         _repository = repository;
         _secretProvider = secretProvider;
+        _scopeGenerator = scopeGenerator;
         _accessTokenProvider = accessTokenProvider;
     }
 
@@ -82,6 +86,23 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         var retrieval = sourceConnection.Retrieval;
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
+        // A source connection that was created/re-saved without ever going through the wizard's scope preview (or
+        // the admin resync endpoint — see IEpicSourceConnectionScopeSyncService) can reach here with an empty
+        // persisted Authentication.Scopes list. Falling through to SmartAuthorizationCodeTokenProvider.ResolveScopes'
+        // own last-resort default in that case is wrong for anything but a Patient-type source — it hardcodes
+        // launch/patient + patient/*.read, which for a Standalone/EhrLaunch (Provider) source makes Epic show its
+        // native patient-search screen instead of going straight to consent. Generating from this workflow's own
+        // configured resource types (the same generator the wizard and the resync endpoint already use) keeps this
+        // in sync with actual usage without requiring an admin to remember to resync.
+        var scopes = sourceConnection.Authentication.Scopes.Any()
+            ? sourceConnection.Authentication.Scopes
+            : _scopeGenerator.Generate(
+                sourceConnection.ApplicationType,
+                retrieval?.ResourceTypes ?? [],
+                scopeVersion: "v2",
+                scopeVersionDetected: false,
+                supportedScopes: null).Scopes;
+
         var config = new FhirSourceConfiguration(
             sourceType,
             sourceConnection.Name,
@@ -90,7 +111,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             sourceConnection.Authentication.ClientId,
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
-            sourceConnection.Authentication.Scopes,
+            scopes,
             retrieval?.PageSize ?? 100,
             5,
             sourceConnection.Id,

@@ -98,6 +98,14 @@ export const CORS_ORIGINS_ENDPOINTS = {
   byId: (id: string) => `${API_V1_BASE}/system/allowed-origins/${id}`,
 };
 
+// ─── App-level signing secrets (AppSecretsController — api/v1/system/app-secrets) ──
+// SuperAdmin-only: JWT signing key / download-link signing secret, auto-generated on first boot —
+// this surface only exposes metadata + on-demand regeneration, never the value itself.
+export const APP_SECRETS_ENDPOINTS = {
+  list: `${API_V1_BASE}/system/app-secrets`,
+  regenerate: (secretName: string) => `${API_V1_BASE}/system/app-secrets/${secretName}/regenerate`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,

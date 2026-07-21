@@ -16,6 +16,7 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using FHIRBridge.SharedKernel.Exceptions;
@@ -35,15 +36,6 @@ builder.Host.UseWindowsService(options => options.ServiceName = "FHIRBridge.Api"
 
 builder.Host.UseSerilog((context, loggerConfig) =>
     loggerConfig.ConfigureFhirBridge(context.Configuration, "FHIRBridge.Api"));
-
-if (builder.Environment.IsDevelopment())
-{
-    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-    {
-        ["Authentication:SigningKey"] = builder.Configuration["Authentication:SigningKey"]
-            ?? "StepBase-FHIRBridge-local-development-signing-key-2026-06-22"
-    });
-}
 
 builder.Services
     .AddControllers()
@@ -338,6 +330,7 @@ if (swaggerEnabled)
 }
 
 BootstrapDatabase(app);
+ProvisionAppSecrets(app);
 SyncDiscoveredPermissions(app);
 
 // Serves the Angular portal's production build when it's been copied into wwwroot (see deploy/windows) —
@@ -423,6 +416,14 @@ static void BootstrapDatabase(WebApplication app)
     {
         seeder.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
+}
+
+// Generates and persists the JWT signing key / download-link signing secret the first time an install has
+// none (see AppSecretProvisioner's remarks) — must run after BootstrapDatabase, since the provisioned value
+// is stored via DbSecretStore, which needs the ProvisionedSecrets table to already exist.
+static void ProvisionAppSecrets(WebApplication app)
+{
+    AppSecretProvisioner.ProvisionAsync(app.Services, CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only

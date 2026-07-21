@@ -10,5 +10,5 @@ import { environment } from '../../../../../environments/environment';
 // icon) — same requirement patient-standalone/core/config/standalone-launch.config.ts documents
 // for its own workflow ids. Replace both placeholders with real opted-in workflow ids.
 export const FHIRBRIDGE_BASE_URL = environment.fhirbridgeBase;
-export const STANDALONE_WORKFLOW_ID = '<<REPLACE_WITH_REAL_WORKFLOW_ID>>';
-export const STANDALONE_DETAIL_WORKFLOW_ID = '<<REPLACE_WITH_REAL_WORKFLOW_ID>>';
+export const STANDALONE_WORKFLOW_ID = 'fd12224e-9af4-4ad4-954b-148ad26e1754';
+export const STANDALONE_DETAIL_WORKFLOW_ID = 'fd12224e-9af4-4ad4-954b-148ad26e1754';

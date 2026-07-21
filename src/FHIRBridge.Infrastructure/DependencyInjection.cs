@@ -386,6 +386,10 @@ public static class DependencyInjection
 
         services.AddSingleton<ConfigurationSecretProvider>();
         services.AddSingleton<AzureKeyVaultSecretProvider>();
+        // App-level secrets (JWT signing key, download-link signing secret) — auto-generated on first boot
+        // via AppSecretProvisioner and cached here for the app's lifetime. See AppSecretAccessor's remarks.
+        services.AddSingleton<AppSecretAccessor>();
+        services.AddSingleton<IAppSecretAccessor>(sp => sp.GetRequiredService<AppSecretAccessor>());
         // B1: app-provisioned secrets. DbSecretStore/CompositeSecretProvider need FHIRBridgeDbContext, which
         // only exists on the SQL-backed path below — the InMemory path gets a process-local stand-in instead.
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -393,13 +397,17 @@ public static class DependencyInjection
             services.AddSingleton<InMemorySecretStore>();
             services.AddSingleton<ISecretWriter>(sp => sp.GetRequiredService<InMemorySecretStore>());
             services.AddSingleton<ISecretProvider>(sp => sp.GetRequiredService<InMemorySecretStore>());
+            services.AddSingleton<IAppSecretMetadataProvider>(sp => sp.GetRequiredService<InMemorySecretStore>());
         }
         else
         {
             services.AddScoped<DbSecretStore>();
             services.AddScoped<ISecretWriter>(sp => sp.GetRequiredService<DbSecretStore>());
             services.AddScoped<ISecretProvider, CompositeSecretProvider>();
+            services.AddScoped<IAppSecretMetadataProvider>(sp => sp.GetRequiredService<DbSecretStore>());
         }
+
+        services.AddScoped<IAppSecretsAdminService, AppSecretsAdminService>();
 
         services.AddScoped<IConfiguredPipelineService, ConfiguredPipelineService>();
 

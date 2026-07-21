@@ -33,7 +33,14 @@ public sealed class SourceNodeExecutorCohortTests
             .ReturnsAsync(source);
 
         var callOrder = new List<string>();
-        var capturedPatientIds = new Dictionary<string, IReadOnlyCollection<string>?>();
+        // Epic (and US Core generally) rejects a clinical-resource search scoped to more than one patient at once —
+        // FhirSourceConnectorBase's CohortBatchSize is 1, so each sibling resource type gets one call per cohort
+        // member rather than one batched, comma-joined call. Capture every call's PatientIds (not just the last).
+        var capturedPatientIdsPerCall = new Dictionary<string, List<IReadOnlyCollection<string>?>>
+        {
+            ["Observation"] = [],
+            ["Condition"] = [],
+        };
 
         var client = new Mock<IFhirSourceClient>();
         client
@@ -49,7 +56,7 @@ public sealed class SourceNodeExecutorCohortTests
             .Returns((string _, FhirSourceConfiguration cfg, CancellationToken _) =>
             {
                 callOrder.Add("Observation");
-                capturedPatientIds["Observation"] = cfg.PatientIds;
+                capturedPatientIdsPerCall["Observation"].Add(cfg.PatientIds);
                 return Task.FromResult<IReadOnlyList<ResourceEnvelope>>([new ResourceEnvelope("Observation", "o1", "{}", null, null)]);
             });
         client
@@ -57,7 +64,7 @@ public sealed class SourceNodeExecutorCohortTests
             .Returns((string _, FhirSourceConfiguration cfg, CancellationToken _) =>
             {
                 callOrder.Add("Condition");
-                capturedPatientIds["Condition"] = cfg.PatientIds;
+                capturedPatientIdsPerCall["Condition"].Add(cfg.PatientIds);
                 return Task.FromResult<IReadOnlyList<ResourceEnvelope>>([new ResourceEnvelope("Condition", "c1", "{}", null, null)]);
             });
 
@@ -71,9 +78,12 @@ public sealed class SourceNodeExecutorCohortTests
         var output = await executor.ExecuteAsync(context, node, [], CancellationToken.None);
 
         callOrder.Should().StartWith("Patient");
-        capturedPatientIds["Observation"].Should().BeEquivalentTo(["p1", "p2"]);
-        capturedPatientIds["Condition"].Should().BeEquivalentTo(["p1", "p2"]);
-        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(4);
+        capturedPatientIdsPerCall["Observation"].Should().HaveCount(2);
+        capturedPatientIdsPerCall["Observation"].SelectMany(ids => ids!).Should().BeEquivalentTo(["p1", "p2"]);
+        capturedPatientIdsPerCall["Condition"].Should().HaveCount(2);
+        capturedPatientIdsPerCall["Condition"].SelectMany(ids => ids!).Should().BeEquivalentTo(["p1", "p2"]);
+        // 2 Patient + 2 Observation (one per cohort member) + 2 Condition (one per cohort member).
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(6);
         output.Metadata!["cohortSize"].Should().Be(2);
     }
 

@@ -9,6 +9,8 @@ export interface DestinationColumn {
   mappingValueType: string;
   isNullable: boolean;
   maxLength: number | null;
+  isPrimaryKey?: boolean;
+  isUnique?: boolean;
 }
 
 export interface DestinationTable {

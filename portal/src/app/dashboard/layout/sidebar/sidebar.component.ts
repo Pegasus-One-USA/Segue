@@ -34,6 +34,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '🔌', label: 'Source Connections', route: '/source-connections', permissions: ['sourceconnections.view'] },
   { type: 'item', icon: '🔌', label: 'Destination Connections', route: '/destination-connections', permissions: ['configuration.write'] },
   { type: 'item', icon: '🌐', label: 'Allowed Origins',    route: '/allowed-origins',   superAdminOnly: true },
+  { type: 'item', icon: '🔑', label: 'System Security',    route: '/system-security',   superAdminOnly: true },
 
   { type: 'section', label: 'Operations' },
   { type: 'item', icon: '🧬', label: 'Pipeline Executions',  route: '/pipeline-executions',           permissions: ['governance.read'] },

@@ -4,6 +4,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -16,8 +17,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -28,8 +30,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -40,8 +43,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -52,8 +56,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -64,8 +69,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -76,8 +82,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -88,8 +95,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -100,8 +108,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
     {
     }
 }
@@ -127,6 +136,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly ISourceConnectionRuntimeResolver? _sourceResolver;
     private readonly ISourceConnectionSyncCursorStore? _syncCursorStore;
     private readonly IFhirBulkExportClient? _bulkExportClient;
+    private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
 
     protected SourceNodeExecutor(
         string nodeType,
@@ -134,7 +144,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IFhirSourceClientFactory? sourceClientFactory,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
@@ -142,6 +153,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _sourceResolver = sourceResolver;
         _syncCursorStore = syncCursorStore;
         _bulkExportClient = bulkExportClient;
+        _workflowDefinitionStore = workflowDefinitionStore;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -206,6 +218,15 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 : DeriveResourceTypesFromScopes(source.Scopes) is { Count: > 0 } fromScopes
                     ? fromScopes
                     : [resourceType];
+
+        // Narrow to whatever this node's downstream destination(s) actually selected — a destination wizard's own
+        // "dest_resources" picker is the real record of what's ever written anywhere; without this, a source
+        // configured (or scope-derived) for a broader set than any destination consumes silently over-fetches
+        // (and, upstream of here, over-requests OAuth scopes for) resource types nobody ever asked for. Only applies
+        // a constraint when at least one reachable destination exists — a destination-less run (e.g. a caller that
+        // reads this node's raw output directly, with no destination node at all) has nothing to narrow against and
+        // keeps fetching exactly what was resolved above, unchanged.
+        resourceTypes = await RestrictToDestinationResourceTypesAsync(resourceTypes, node, cancellationToken);
 
         // A source configured for bulk export ($export) pulls each resource type via the Bulk Data flow instead of a
         // paged search — same downstream envelope projection, so the rest of the DAG is identical. Every other source
@@ -286,13 +307,15 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
-    /// Batches a cohort-scoped search: <see cref="FhirSourceConfiguration.PatientIds"/> is OR'd into a single
-    /// <c>patient=</c> parameter by <c>FhirSourceConnectorBase.ApplyPatientScopeAsync</c>, but most FHIR servers
-    /// (Epic included) cap how many comma-separated reference values one request reasonably supports — so the
-    /// cohort is split into fixed-size batches, each run through the existing per-type retry/timeout wrapper, and
-    /// the pages concatenated. A cohort at or under one batch still makes exactly one request, unchanged.
+    /// Batches a cohort-scoped search: <see cref="FhirSourceConfiguration.PatientIds"/> would be OR'd into a single
+    /// <c>patient=</c> parameter by <c>FhirSourceConnectorBase.ApplyPatientScopeAsync</c> if more than one id were
+    /// passed through at once, but Epic (and US Core generally) rejects a clinical-resource search scoped to more
+    /// than one patient outright — "A given request can only apply to one patient" — there is no larger batch size
+    /// that's actually safe. So the cohort is split one patient per batch, each run through the existing per-type
+    /// retry/timeout wrapper, and the pages concatenated. A single-patient cohort still makes exactly one request,
+    /// unchanged.
     /// </summary>
-    private const int CohortBatchSize = 50;
+    private const int CohortBatchSize = 1;
 
     private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> SearchCohortScopedAsync(
         IFhirSourceClient client,
@@ -322,6 +345,62 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         string.IsNullOrWhiteSpace(raw)
             ? []
             : raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// Narrows <paramref name="resourceTypes"/> down to whatever this node's downstream destination node(s) actually
+    /// selected — each destination's own wizard-authored "dest_resources" field, unioned across every destination
+    /// reachable from this node in the workflow graph. Prevents the over-fetch (and, further upstream, over-broad
+    /// OAuth scope requests) that results when a source is configured/scope-derived for a broader resource-type set
+    /// than any destination ever consumes. A run with no destination reachable at all (e.g. a caller that reads this
+    /// node's raw output directly, with nothing downstream to narrow against) returns <paramref name="resourceTypes"/>
+    /// unchanged — this only ever removes types nothing downstream wants, never adds ones the source itself wasn't
+    /// already configured/authorized for.
+    /// </summary>
+    private async Task<IReadOnlyCollection<string>> RestrictToDestinationResourceTypesAsync(
+        IReadOnlyCollection<string> resourceTypes,
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
+        if (_workflowDefinitionStore is null)
+        {
+            return resourceTypes;
+        }
+
+        var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
+        if (definition is null)
+        {
+            return resourceTypes;
+        }
+
+        var reachable = new HashSet<Guid>();
+        var frontier = new Queue<Guid>();
+        frontier.Enqueue(node.Id);
+        while (frontier.Count > 0)
+        {
+            var current = frontier.Dequeue();
+            foreach (var edge in definition.Edges.Where(e => e.FromNodeId == current))
+            {
+                if (reachable.Add(edge.ToNodeId))
+                {
+                    frontier.Enqueue(edge.ToNodeId);
+                }
+            }
+        }
+
+        var destinationResourceTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var destinationNode in definition.Nodes.Where(
+            candidate => reachable.Contains(candidate.Id) && candidate.Category == WorkflowNodeCategory.Destination))
+        {
+            foreach (var type in ParseCommaSeparatedResourceTypes(ReadStringConfiguration(destinationNode, "dest_resources")))
+            {
+                destinationResourceTypes.Add(type);
+            }
+        }
+
+        return destinationResourceTypes.Count == 0
+            ? resourceTypes
+            : resourceTypes.Where(destinationResourceTypes.Contains).ToList();
+    }
 
     /// <summary>
     /// Extracts the distinct FHIR resource types a set of granted SMART scopes actually covers, in the standard

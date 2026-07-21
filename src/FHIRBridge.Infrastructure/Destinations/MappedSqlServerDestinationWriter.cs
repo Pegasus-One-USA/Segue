@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Integration.Sql;
 using Microsoft.Data.SqlClient;
 
@@ -12,7 +13,8 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// <summary>
 /// Writes mapped records to SQL Server / Azure SQL. The customer owns the destination schema: the target table must
 /// already exist, and only the mapped destination columns are ever written — no system/audit columns are added.
-/// Supports Insert, Upsert (MERGE on an explicit '?key=&lt;ColumnName&gt;' column), and CDC write modes.
+/// Supports Insert, Upsert (MERGE on the mapped field flagged <see cref="MappingField.IsUpsertKey"/>), and CDC write
+/// modes.
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
 /// TODO: CDC mode still auto-creates its companion table, which conflicts with the customer-owned-schema model;
@@ -44,7 +46,8 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             destination.SecretReference,
             cancellationToken);
         var target = ParseDestinationTarget(
-            destination.Target ?? mappingProfile.DestinationObject);
+            destination.Target ?? mappingProfile.DestinationObject,
+            mappingProfile);
 
         await using var connection = await SqlServerConnectionFactory.OpenConnectionAsync(connectionString, cancellationToken);
 
@@ -202,6 +205,8 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         CancellationToken cancellationToken)
     {
         var cdcTableName = $"{tableName}_Cdc";
+        // ddl-allowed: CDC companion table — open decision (retire vs. customer-provisioned table), see
+        // docs/backend/11-destination-schema-ownership-plan.md section 3.A.3.
         var createTableSql = $"""
             IF OBJECT_ID(N'[{schemaName}].[{cdcTableName}]', N'U') IS NULL
             BEGIN
@@ -285,7 +290,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         out object? keyValue)
         => record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
 
-    private static SqlDestinationTarget ParseDestinationTarget(string destinationObject)
+    private static SqlDestinationTarget ParseDestinationTarget(string destinationObject, MappingProfile mappingProfile)
     {
         var objectAndOptions = destinationObject.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var objectName = objectAndOptions[0];
@@ -311,18 +316,38 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         var writeMode = options.TryGetValue("mode", out var configuredMode)
             ? ParseWriteMode(configuredMode)
             : SqlDestinationWriteMode.Insert;
-        var keyColumn = options.TryGetValue("key", out var configuredKey)
-            ? ValidateIdentifier(configuredKey)
-            : null;
+
+        // Prefer the structured IsUpsertKey flag; fall back to the legacy '?key=' option so destinations configured
+        // before the mapping UI grows an IsUpsertKey control (docs/backend/11-destination-schema-ownership-plan.md
+        // section 4 item 5) keep working. Remove the fallback once that UI work lands.
+        var keyColumn = ResolveUpsertKeyColumn(mappingProfile)
+            ?? (options.TryGetValue("key", out var configuredKey) ? ValidateIdentifier(configuredKey) : null);
 
         if (writeMode == SqlDestinationWriteMode.Upsert && keyColumn is null)
         {
             throw new InvalidOperationException(
-                $"Destination '{schemaName}.{tableName}' is configured for Upsert mode but has no '?key=<ColumnName>' " +
-                "option naming which mapped column identifies an existing row.");
+                $"Destination '{schemaName}.{tableName}' is configured for Upsert mode but no mapped field is " +
+                "designated as the upsert key. Mark one mapped field's IsUpsertKey in the mapping profile.");
         }
 
         return new SqlDestinationTarget(schemaName, tableName, writeMode, keyColumn);
+    }
+
+    /// <summary>
+    /// The mapped field marked <see cref="MappingField.IsUpsertKey"/> for this profile's resource/destination-object
+    /// scope, if any — derived from the mapping config rather than a second, independently-configured value.
+    /// </summary>
+    private static string? ResolveUpsertKeyColumn(MappingProfile mappingProfile)
+    {
+        var keyField = mappingProfile.Fields.FirstOrDefault(field =>
+            field.IsUpsertKey &&
+            field.IsEnabled &&
+            (string.IsNullOrWhiteSpace(field.ResourceType) ||
+                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase)));
+
+        return keyField is null ? null : ValidateIdentifier(keyField.TargetField);
     }
 
     private static (string SchemaName, string TableName) ParseDestinationObject(string destinationObject)

@@ -6,17 +6,18 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.ValueObjects;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
 /// Provider-agnostic relational destination writer built on ADO.NET (<see cref="DbConnection"/>). The customer owns
 /// the destination schema: the target table must already exist and every written column must be one the mapping
-/// profile explicitly maps. Writes mapped records in Insert or Upsert mode. Upsert requires an explicit
-/// '?key=&lt;ColumnName&gt;' option naming one of the mapped columns, and is implemented as a portable delete-by-key
-/// + insert within a transaction (last-write-wins) so it works on any dialect without requiring a pre-existing
-/// unique index. Concrete subclasses supply the dialect (connection, identifier quoting, type mapping,
-/// table-existence check). Mirrors <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
+/// profile explicitly maps. Writes mapped records in Insert or Upsert mode. Upsert requires one mapped field flagged
+/// <see cref="MappingField.IsUpsertKey"/>, and is implemented as a portable delete-by-key + insert within a
+/// transaction (last-write-wins) so it works on any dialect without requiring a pre-existing unique index. Concrete
+/// subclasses supply the dialect (connection, identifier quoting, type mapping, table-existence check). Mirrors
+/// <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
 /// </summary>
 public abstract partial class RelationalDestinationWriterBase : IConfiguredDestinationWriter
 {
@@ -51,7 +52,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         }
 
         var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
-        var target = ParseTarget(destination.Target ?? mappingProfile.DestinationObject);
+        var target = ParseTarget(destination.Target ?? mappingProfile.DestinationObject, mappingProfile);
 
         await using var connection = CreateConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -167,7 +168,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
     private static bool TryGetKeyValue(MappedDestinationRecord record, string keyColumn, out object? keyValue)
         => record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
 
-    private RelationalTarget ParseTarget(string destinationObject)
+    private RelationalTarget ParseTarget(string destinationObject, MappingProfile mappingProfile)
     {
         var name = destinationObject.Trim();
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -196,16 +197,38 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         };
 
         var upsert = options.TryGetValue("mode", out var mode) && string.Equals(mode, "upsert", StringComparison.OrdinalIgnoreCase);
-        var keyColumn = options.TryGetValue("key", out var key) ? ValidateIdentifier(key) : null;
+
+        // Prefer the structured IsUpsertKey flag; fall back to the legacy '?key=' option so destinations configured
+        // before the mapping UI grows an IsUpsertKey control (docs/backend/11-destination-schema-ownership-plan.md
+        // section 4 item 5) keep working. Remove the fallback once that UI work lands.
+        var keyColumn = ResolveUpsertKeyColumn(mappingProfile)
+            ?? (options.TryGetValue("key", out var configuredKey) ? ValidateIdentifier(configuredKey) : null);
 
         if (upsert && keyColumn is null)
         {
             throw new InvalidOperationException(
-                $"Destination '{schema}.{table}' is configured for Upsert mode but has no '?key=<ColumnName>' " +
-                "option naming which mapped column identifies an existing row.");
+                $"Destination '{schema}.{table}' is configured for Upsert mode but no mapped field is designated " +
+                "as the upsert key. Mark one mapped field's IsUpsertKey in the mapping profile.");
         }
 
         return new RelationalTarget(schema, table, upsert, keyColumn);
+    }
+
+    /// <summary>
+    /// The mapped field marked <see cref="MappingField.IsUpsertKey"/> for this profile's resource/destination-object
+    /// scope, if any — derived from the mapping config rather than a second, independently-configured value.
+    /// </summary>
+    private static string? ResolveUpsertKeyColumn(MappingProfile mappingProfile)
+    {
+        var keyField = mappingProfile.Fields.FirstOrDefault(field =>
+            field.IsUpsertKey &&
+            field.IsEnabled &&
+            (string.IsNullOrWhiteSpace(field.ResourceType) ||
+                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase)));
+
+        return keyField is null ? null : ValidateIdentifier(keyField.TargetField);
     }
 
     protected static string ValidateIdentifier(string identifier)

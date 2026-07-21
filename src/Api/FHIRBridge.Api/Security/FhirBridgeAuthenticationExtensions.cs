@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Text;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Web;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -42,7 +44,14 @@ public static class FhirBridgeAuthenticationExtensions
                 entra.Enabled && LooksLikeEntraToken(context, entra) ? EntraScheme : LocalScheme;
         });
 
-        builder.AddJwtBearer(LocalScheme, options => ConfigureLocalBearer(options, configuration, environment));
+        builder.AddJwtBearer(LocalScheme, _ => { });
+        // The signing key is resolved from IAppSecretAccessor (a DI-registered singleton), so it's configured
+        // via the named-options DI pipeline rather than captured directly in the AddJwtBearer delegate above —
+        // that lets it pick up the value AppSecretProvisioner generates/persists at startup instead of a raw
+        // (and, for a self-hosted marketplace install, necessarily hardcoded) appsettings value.
+        services.AddOptions<JwtBearerOptions>(LocalScheme)
+            .Configure<IAppSecretAccessor>((options, secretAccessor) =>
+                ConfigureLocalBearer(options, configuration, environment, secretAccessor));
 
         if (entra.Enabled)
         {
@@ -85,9 +94,10 @@ public static class FhirBridgeAuthenticationExtensions
     private static void ConfigureLocalBearer(
         JwtBearerOptions options,
         IConfiguration configuration,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        IAppSecretAccessor secretAccessor)
     {
-        var signingKey = configuration["Authentication:SigningKey"];
+        var signingKey = secretAccessor.JwtSigningKey;
         var authority = configuration["Authentication:Authority"];
         var audience = configuration["Authentication:Audience"];
         var validIssuer = configuration["Authentication:ValidIssuer"];

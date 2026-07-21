@@ -16,4 +16,5 @@ public sealed record MappingFieldDto(
     string? TerminologyCodeJsonPath = null,
     ArrayPolicy ArrayPolicy = ArrayPolicy.Scalar,
     string? Cardinality = null,
-    IReadOnlyList<string>? ArrayAncestors = null);
+    IReadOnlyList<string>? ArrayAncestors = null,
+    bool IsUpsertKey = false);

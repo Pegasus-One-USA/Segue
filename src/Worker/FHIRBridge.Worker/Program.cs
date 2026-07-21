@@ -2,6 +2,7 @@ using FHIRBridge.Application;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -132,5 +133,11 @@ using (var scope = host.Services.CreateScope())
 {
     scope.ServiceProvider.GetService<FHIRBridgeDbContext>()?.Database.Migrate();
 }
+
+// Ensures the download-link signing secret exists (generating it on first boot if needed) — the Worker can
+// mint download links (DownloadUrlDeliveryStrategy) that the Api host later verifies, so both hosts must
+// resolve the same value; sharing the DB-provisioned secret (and Data Protection key ring) is what makes
+// that safe. See AppSecretProvisioner's remarks. Must run after the migration above.
+AppSecretProvisioner.ProvisionAsync(host.Services, CancellationToken.None).GetAwaiter().GetResult();
 
 host.Run();

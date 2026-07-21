@@ -39,4 +39,6 @@ public sealed record DestinationColumnSchemaDto(
     string DataType,
     string MappingValueType,
     bool IsNullable,
-    int? MaxLength);
+    int? MaxLength,
+    bool IsPrimaryKey = false,
+    bool IsUnique = false);

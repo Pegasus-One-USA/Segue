@@ -174,6 +174,7 @@ export interface MappingFieldRequest {
   format?: string | null;
   arrayPolicy?: string;                        // Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson | RejectIfMultiple
   arrayAncestors?: string[] | null;            // array-ancestor fhir paths (child-table alignment)
+  isUpsertKey?: boolean;                       // marks the column an Upsert write matches an existing row on
 }
 
 // existingId: when the node already carries an id from a prior create-on-save (round-tripped through node.fields on

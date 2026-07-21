@@ -12,10 +12,12 @@ namespace FHIRBridge.Api.Security;
 public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
 {
     private readonly IConfiguration _configuration;
+    private readonly IAppSecretAccessor _secretAccessor;
 
-    public JwtAccessTokenIssuer(IConfiguration configuration)
+    public JwtAccessTokenIssuer(IConfiguration configuration, IAppSecretAccessor secretAccessor)
     {
         _configuration = configuration;
+        _secretAccessor = secretAccessor;
     }
 
     public AccessTokenDto Issue(
@@ -23,10 +25,10 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
         IReadOnlyCollection<string> roleNames,
         IReadOnlyCollection<string>? permissionCodes = null)
     {
-        var signingKey = _configuration["Authentication:SigningKey"];
+        var signingKey = _secretAccessor.JwtSigningKey;
         if (string.IsNullOrWhiteSpace(signingKey))
         {
-            throw new InvalidOperationException("Authentication:SigningKey configuration is missing.");
+            throw new InvalidOperationException("The JWT signing key has not been provisioned yet.");
         }
 
         var expiresOnUtc = DateTime.UtcNow.AddMinutes(

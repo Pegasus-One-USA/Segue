@@ -26,6 +26,30 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         ORDER BY table_schema, table_name, ordinal_position
         """;
 
+    // PRIMARY KEY / UNIQUE constraint membership per column, via the ANSI-standard information_schema views shared
+    // by SQL Server, PostgreSQL, and MySQL alike (see docs/backend/11-destination-schema-ownership-plan.md section 2b).
+    private const string InformationSchemaConstraintsSql = """
+        SELECT kcu.table_schema, kcu.table_name, kcu.column_name, tc.constraint_type
+        FROM information_schema.key_column_usage kcu
+        JOIN information_schema.table_constraints tc
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+            AND tc.table_name = kcu.table_name
+        WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+            AND kcu.table_schema NOT IN ('pg_catalog', 'information_schema', 'mysql', 'performance_schema', 'sys')
+        """;
+
+    private const string SqlServerConstraintsSql = """
+        SELECT kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, tc.CONSTRAINT_TYPE
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+        JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+            AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+            AND tc.TABLE_NAME = kcu.TABLE_NAME
+        WHERE tc.CONSTRAINT_TYPE IN ('PRIMARY KEY', 'UNIQUE')
+            AND kcu.TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA');
+        """;
+
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
 
@@ -93,14 +117,46 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
+        var isSqlServer = type is DestinationType.SqlServer or DestinationType.AzureSql;
+
+        var constraints = await ReadConstraintsAsync(connection, isSqlServer, cancellationToken);
+
         await using var command = connection.CreateCommand();
-        command.CommandText = type is DestinationType.SqlServer or DestinationType.AzureSql
-            ? SqlServerColumnsSql
-            : InformationSchemaSql;
+        command.CommandText = isSqlServer ? SqlServerColumnsSql : InformationSchemaSql;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await ReadColumnsAsync(reader, MapType(type), cancellationToken);
+        return await ReadColumnsAsync(reader, MapType(type), constraints, cancellationToken);
     }
+
+    /// <summary>
+    /// Column -> (IsPrimaryKey, IsUnique) membership, keyed by "schema.table.column" (case-insensitive). A column can
+    /// appear under more than one constraint (e.g. its own unique index plus being part of the primary key), so flags
+    /// are OR-merged rather than overwritten.
+    /// </summary>
+    private static async Task<Dictionary<string, (bool IsPrimaryKey, bool IsUnique)>> ReadConstraintsAsync(
+        DbConnection connection,
+        bool isSqlServer,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = isSqlServer ? SqlServerConstraintsSql : InformationSchemaConstraintsSql;
+
+        var constraints = new Dictionary<string, (bool IsPrimaryKey, bool IsUnique)>(StringComparer.OrdinalIgnoreCase);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var key = ConstraintKey(reader.GetString(0), reader.GetString(1), reader.GetString(2));
+            var isPrimaryKey = string.Equals(reader.GetString(3), "PRIMARY KEY", StringComparison.OrdinalIgnoreCase);
+
+            var existing = constraints.TryGetValue(key, out var current) ? current : (false, false);
+            constraints[key] = (existing.Item1 || isPrimaryKey, true);
+        }
+
+        return constraints;
+    }
+
+    private static string ConstraintKey(string schema, string table, string column) => $"{schema}.{table}.{column}";
 
     private static string BuildConnectionString(DestinationConnectionProbeRequest request)
     {
@@ -186,6 +242,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
     private static async Task<List<DestinationTableSchemaDto>> ReadColumnsAsync(
         DbDataReader reader,
         Func<string, string> mapType,
+        IReadOnlyDictionary<string, (bool IsPrimaryKey, bool IsUnique)> constraints,
         CancellationToken cancellationToken)
     {
         var tables = new Dictionary<string, List<DestinationColumnSchemaDto>>(StringComparer.OrdinalIgnoreCase);
@@ -195,6 +252,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         {
             var schemaName = reader.GetString(0);
             var tableName = reader.GetString(1);
+            var columnName = reader.GetString(2);
             var fullName = $"{schemaName}.{tableName}";
             var dataType = reader.GetString(3);
 
@@ -213,12 +271,18 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 tableNames[fullName] = (schemaName, tableName);
             }
 
+            var (isPrimaryKey, isUnique) = constraints.TryGetValue(ConstraintKey(schemaName, tableName, columnName), out var flags)
+                ? flags
+                : (false, false);
+
             columns.Add(new DestinationColumnSchemaDto(
-                reader.GetString(2),
+                columnName,
                 dataType,
                 mapType(dataType),
                 string.Equals(reader.GetString(4), "YES", StringComparison.OrdinalIgnoreCase),
-                maxLength));
+                maxLength,
+                isPrimaryKey,
+                isUnique));
         }
 
         return tables

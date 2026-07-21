@@ -10,7 +10,7 @@ namespace FHIRBridge.Infrastructure.Security;
 /// path) -- same read-then-config-fallback shape as <see cref="CompositeSecretProvider"/>, without the
 /// <c>FHIRBridgeDbContext</c> dependency that path doesn't register. Not durable across restarts.
 /// </summary>
-public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider
+public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider, IAppSecretMetadataProvider
 {
     private readonly ConcurrentDictionary<(string KeyVaultName, string SecretName), string> _secrets = new();
     private readonly IConfiguration _configuration;
@@ -41,5 +41,12 @@ public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider
         }
 
         return Task.FromResult(configured);
+    }
+
+    /// <summary>No write timestamps are tracked in-process, so only presence is reported.</summary>
+    public Task<ProvisionedSecretMetadata> GetMetadataAsync(SecretReference secretReference, CancellationToken cancellationToken)
+    {
+        var provisioned = _secrets.ContainsKey((secretReference.KeyVaultName, secretReference.SecretName));
+        return Task.FromResult(new ProvisionedSecretMetadata(provisioned, null));
     }
 }
