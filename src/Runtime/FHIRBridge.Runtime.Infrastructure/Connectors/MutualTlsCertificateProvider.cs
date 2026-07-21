@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -95,7 +96,7 @@ public sealed class MutualTlsCertificateProvider
     /// Builds a pooled <see cref="SocketsHttpHandler"/> for an HttpClient — applying connection-pool limits
     /// (per-tenant pooling) and attaching the mTLS client certificate when enabled.
     /// </summary>
-    public HttpMessageHandler CreatePrimaryHandler()
+    public HttpMessageHandler CreatePrimaryHandler(bool enableAutomaticDecompression = false)
     {
         var handler = new SocketsHttpHandler
         {
@@ -105,6 +106,15 @@ public sealed class MutualTlsCertificateProvider
         if (_poolOptions.MaxConnectionsPerServer > 0)
         {
             handler.MaxConnectionsPerServer = _poolOptions.MaxConnectionsPerServer;
+        }
+
+        // Transparent gzip: advertise Accept-Encoding: gzip and decompress the response before it reaches the caller.
+        // Enabled only for callers that opt in (bulk export, whose NDJSON files compress well). The decompressed stream
+        // is handed to the reader exactly as before, so no downstream parsing change is needed. Off by default so no
+        // other FHIR client's behavior changes.
+        if (enableAutomaticDecompression)
+        {
+            handler.AutomaticDecompression = DecompressionMethods.GZip;
         }
 
         var certificate = GetClientCertificate();
