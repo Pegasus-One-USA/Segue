@@ -8,7 +8,7 @@ namespace FHIRBridge.Domain.Entities.Governance;
 /// SecurityEvents. Deliberately not a general expression language — one concrete, working condition rather than
 /// a fake generic evaluator with nothing behind it.
 /// </summary>
-public sealed class AlertRule : AuditableChildEntity<Guid>
+public sealed class AlertRule : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private AlertRule()
     {
@@ -35,6 +35,7 @@ public sealed class AlertRule : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
 
     /// <summary>Matched against SecurityEvent.EventType.</summary>
     public string EventTypeFilter { get; private set; } = default!;

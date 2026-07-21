@@ -41,6 +41,7 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
 
         var dueResourceTypes = new List<string>();
         var dueRouteIds = new List<Guid>();
+        var dueRouteLabels = new List<string>();
         var claimedRoutes = new List<ResourcePipelineRoute>();
 
         foreach (var route in routes)
@@ -62,6 +63,11 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
                 !string.IsNullOrWhiteSpace(mapping.ResourceType))
             {
                 dueResourceTypes.Add(mapping.ResourceType);
+                dueRouteLabels.Add(!string.IsNullOrWhiteSpace(mapping.Name) ? mapping.Name : mapping.ResourceType);
+            }
+            else
+            {
+                dueRouteLabels.Add(route.Id.ToString("N"));
             }
         }
 
@@ -85,6 +91,9 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
             new DueScheduledRun(
                 dueResourceTypes.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList(),
                 dueRouteIds)
+            {
+                RouteLabels = dueRouteLabels,
+            }
         ];
     }
 

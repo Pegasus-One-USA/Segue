@@ -10,7 +10,7 @@ namespace FHIRBridge.Domain.Entities;
 /// per seeder today ("R4" for Epic's directory) — a future directory serving a different FHIR version would set its
 /// own FormatType value.
 /// </summary>
-public sealed class EhrEndpoint : AuditableChildEntity<Guid>
+public sealed class EhrEndpoint : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private EhrEndpoint()
     {
@@ -59,6 +59,7 @@ public sealed class EhrEndpoint : AuditableChildEntity<Guid>
     /// <summary>The vendor's own id for this endpoint — lets each vendor's seeder detect already-imported rows on re-sync.</summary>
     public string VendorEndpointId { get; private set; } = default!;
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public string FhirBaseUrl { get; private set; } = default!;
     public string FormatType { get; private set; } = default!;
     public string Status { get; private set; } = default!;

@@ -181,6 +181,7 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         {
             var entityId = entry.Property("Id").CurrentValue?.ToString();
             var entityType = entry.Metadata.ClrType.Name;
+            var entityName = entry.Entity is IHasAuditDisplayName named ? named.AuditDisplayName : null;
 
             var auditLog = new AuditLog(
                 Guid.NewGuid(),
@@ -190,7 +191,7 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 action,
                 entityType,
                 entityId,
-                entityName: null,
+                entityName,
                 oldValueJson: action == "Updated" || action == "Deleted" ? SerializeValues(entry, useOriginalValues: true) : null,
                 newValueJson: SerializeValues(entry, useOriginalValues: false),
                 status: "Success",

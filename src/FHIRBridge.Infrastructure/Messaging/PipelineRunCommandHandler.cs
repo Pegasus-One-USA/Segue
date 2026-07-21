@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
@@ -17,6 +18,7 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly IProcessedMessageStore _processedMessageStore;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly IAmbientActorContext _ambientActorContext;
     private readonly MessageProcessingOptions _options;
     private readonly ILogger<PipelineRunCommandHandler> _logger;
 
@@ -24,12 +26,14 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
         IConfiguredPipelineService pipelineService,
         IProcessedMessageStore processedMessageStore,
         IGovernanceLogger governanceLogger,
+        IAmbientActorContext ambientActorContext,
         IOptions<MessageProcessingOptions> options,
         ILogger<PipelineRunCommandHandler> logger)
     {
         _pipelineService = pipelineService;
         _processedMessageStore = processedMessageStore;
         _governanceLogger = governanceLogger;
+        _ambientActorContext = ambientActorContext;
         _options = options.Value;
         _logger = logger;
     }
@@ -43,6 +47,11 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
         }
 
         ConfiguredPipelineRunDto? run = null;
+
+        var actorLabel = string.Equals(command.TriggeredBy, "scheduler", StringComparison.OrdinalIgnoreCase)
+            ? "Scheduler (Automated Pipeline Run)"
+            : $"Automated Pipeline Run ({command.TriggeredBy ?? "unknown trigger"})";
+        using var actorScope = _ambientActorContext.BeginScope(actorLabel);
 
         // Transient failures (e.g. source/DB unavailable) are retried with backoff.
         await MessageRetry.ExecuteAsync(

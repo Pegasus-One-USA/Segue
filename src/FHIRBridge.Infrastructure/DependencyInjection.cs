@@ -138,6 +138,7 @@ public static class DependencyInjection
         {
             // Fallback actor source for audit stamping in hosts without an HTTP context (Worker, migrations).
             // The API host registers an HTTP-aware ICurrentUserService that takes precedence over this.
+            services.TryAddSingleton<IAmbientActorContext, AmbientActorContext>();
             services.TryAddScoped<ICurrentUserService, SystemCurrentUserService>();
             services.AddScoped<AuditingSaveChangesInterceptor>();
             services.AddScoped<IGovernanceLogger, EfGovernanceLogger>();

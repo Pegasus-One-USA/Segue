@@ -610,13 +610,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             // HIPAA §164.312(b) data-access evidence: every access decision — allowed or denied — is
             // recorded PHI-free (identifiers only), regardless of what happens to the resource afterward.
+            var purpose = $"Pipeline export via mapping '{mappingProfile.Name}' (route {route.Id:N}, triggered by {triggeredBy ?? "manual"})";
             await _governanceLogger.LogDataAccessAsync(
                 new DataAccessEntry(
                     resourceType,
                     resource.ResourceId,
                     governanceDecision.IsAllowed ? "Allowed" : "Denied",
                     PatientId: resourceType == "Patient" ? resource.ResourceId : null,
-                    Purpose: "RouteResourceAccess",
+                    Purpose: purpose,
                     PipelineRunId: pipelineRunId,
                     CorrelationId: correlationId),
                 cancellationToken);

@@ -3,7 +3,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class MappingProfile : AuditableChildEntity<Guid>
+public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private readonly List<MappingField> _fields = [];
 
@@ -30,6 +30,7 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public string ResourceType { get; private set; } = default!;
 
     /// <summary>

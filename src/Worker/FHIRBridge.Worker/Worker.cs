@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -92,9 +93,12 @@ public sealed class Worker : BackgroundService
             cancellationToken);
 
         var pipelineService = scope.ServiceProvider.GetRequiredService<IConfiguredPipelineService>();
+        var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
 
         try
         {
+            using var actorScope = ambientActorContext.BeginScope("Scheduler (Legacy Poll)");
+
             var pipelineRun = await pipelineService.StartAsync(
                 new StartConfiguredPipelineRunRequest(
                     dueResourceTypes,
@@ -137,6 +141,7 @@ public sealed class Worker : BackgroundService
         }
 
         var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
+        var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
         var workflows = await store.ListAsync(cancellationToken);
         foreach (var workflow in workflows)
         {
@@ -148,11 +153,13 @@ public sealed class Worker : BackgroundService
             var correlationId = Guid.NewGuid().ToString("N");
 
             await governanceLogger.LogSchedulerRunAsync(
-                new SchedulerRunEntry($"worker:workflow:{workflow.Id:N}", "Dispatched", 1, correlationId),
+                new SchedulerRunEntry($"Scheduler (Workflow: {workflow.Name})", "Dispatched", 1, correlationId),
                 cancellationToken);
 
             try
             {
+                using var actorScope = ambientActorContext.BeginScope($"Scheduler (Workflow: {workflow.Name})");
+
                 var context = new WorkflowExecutionContext(
                     Guid.NewGuid(),
                     correlationId,

@@ -62,8 +62,12 @@ public sealed class ScheduleDispatcher : IScheduleDispatcher
 
             await _pipelineRunDispatcher.EnqueueAsync(command, cancellationToken);
 
+            var schedulerLabel = dueRun.RouteLabels.Count > 0
+                ? $"Scheduler ({string.Join(", ", dueRun.RouteLabels)})"
+                : $"Scheduler ({routeKey})";
+
             await _governanceLogger.LogSchedulerRunAsync(
-                new SchedulerRunEntry(routeKey, "Dispatched", dueRun.RouteIds.Count, messageId),
+                new SchedulerRunEntry(schedulerLabel, "Dispatched", dueRun.RouteIds.Count, messageId),
                 cancellationToken);
         }
 

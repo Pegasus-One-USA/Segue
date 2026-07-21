@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
@@ -17,6 +18,7 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly IProcessedMessageStore _processedMessageStore;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly IAmbientActorContext _ambientActorContext;
     private readonly MessageProcessingOptions _options;
     private readonly ILogger<WebhookIngestionCommandHandler> _logger;
 
@@ -24,12 +26,14 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
         IConfiguredPipelineService pipelineService,
         IProcessedMessageStore processedMessageStore,
         IGovernanceLogger governanceLogger,
+        IAmbientActorContext ambientActorContext,
         IOptions<MessageProcessingOptions> options,
         ILogger<WebhookIngestionCommandHandler> logger)
     {
         _pipelineService = pipelineService;
         _processedMessageStore = processedMessageStore;
         _governanceLogger = governanceLogger;
+        _ambientActorContext = ambientActorContext;
         _options = options.Value;
         _logger = logger;
     }
@@ -43,6 +47,9 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
         }
 
         ConfiguredPipelineRunDto? run = null;
+
+        using var actorScope = _ambientActorContext.BeginScope(
+            $"Webhook Ingestion (Automated, config {command.WebhookConfigurationId:N})");
 
         await MessageRetry.ExecuteAsync(
             async token => run = await _pipelineService.StartWebhookAsync(

@@ -2,7 +2,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class Role : AuditableChildEntity<Guid>
+public sealed class Role : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private Role()
     {
@@ -24,6 +24,7 @@ public sealed class Role : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public string Description { get; private set; } = default!;
 
     /// <summary>True for the seeded built-in roles; blocks edit/delete of platform roles.</summary>
