@@ -413,7 +413,7 @@ public sealed class ConfigurationService : IConfigurationService
             if (!seen.Add(mappingRequest.MappingProfileId))
             {
                 throw new InvalidOperationException(
-                    $"Route resource mapping '{mappingRequest.MappingProfileId}' is duplicated.");
+                    "A resource mapping is listed more than once on this route.");
             }
 
             var mapping = await GetMappingProfileRequiredAsync(mappingRequest.MappingProfileId, cancellationToken);
@@ -547,9 +547,8 @@ public sealed class ConfigurationService : IConfigurationService
         if (!capability.SupportsResourceType(resourceType))
         {
             throw new InvalidOperationException(
-                $"The selected source does not support FHIR resource type '{resourceType}'. " +
-                $"Its capability statement (discovered {capability.DiscoveredOnUtc:u}) does not expose that type " +
-                "with a read or search interaction. Refresh the source's capabilities or choose a different resource type.");
+                $"This source doesn't support the '{resourceType}' resource type. " +
+                "Refresh its capabilities or choose a different resource type.");
         }
     }
 

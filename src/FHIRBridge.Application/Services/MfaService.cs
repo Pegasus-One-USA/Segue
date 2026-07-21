@@ -103,7 +103,7 @@ public sealed class MfaService : IMfaService
         var externalUserId = _currentUserService.CurrentUser.ExternalUserId;
         if (string.IsNullOrWhiteSpace(externalUserId))
         {
-            throw new InvalidOperationException("Authenticated user id claim is missing.");
+            throw new InvalidOperationException("Your session is no longer valid. Please sign in again.");
         }
 
         return await _repository.GetUserByExternalIdAsync(externalUserId, cancellationToken)

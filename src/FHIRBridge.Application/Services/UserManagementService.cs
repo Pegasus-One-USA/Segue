@@ -444,7 +444,7 @@ public sealed class UserManagementService : IUserManagementService
         foreach (var roleName in roleNames.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var role = await _repository.GetRoleByNameAsync(roleName, cancellationToken)
-                ?? throw new InvalidOperationException($"Role '{roleName}' is not configured.");
+                ?? throw new InvalidOperationException("Something went wrong assigning roles. Please contact support.");
 
             roleIds.Add(role.Id);
         }

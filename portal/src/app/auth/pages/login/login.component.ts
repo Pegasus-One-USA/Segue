@@ -68,7 +68,11 @@ export class LoginComponent {
 
   protected readonly form = this.fb.nonNullable.group({
     email:      ['', [Validators.required, Validators.email]],
-    password:   ['', [Validators.required, Validators.minLength(8)]],
+    // Login only needs a non-empty password — the backend is the sole judge of whether it's
+    // correct, so this must never re-validate password shape/length (that belongs on account
+    // creation/reset). A minLength here would silently block sign-in for any real password
+    // shorter than the threshold with no visible error (submit() just no-ops on form.invalid).
+    password:   ['', [Validators.required]],
     rememberMe: [false],
   });
 

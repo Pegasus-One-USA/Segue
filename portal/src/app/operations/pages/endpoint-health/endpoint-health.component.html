@@ -48,7 +48,7 @@
     </div>
 
     @if (entries().length === 0 && !loading()) {
-      <div class="empty-state">No health checks recorded yet — enable EndpointHealthCheck:Enabled on the Worker host to start collecting them.</div>
+      <div class="empty-state">No health checks recorded yet. Ask an administrator to enable endpoint health checks.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
