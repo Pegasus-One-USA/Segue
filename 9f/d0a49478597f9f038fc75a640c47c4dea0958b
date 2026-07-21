@@ -1,0 +1,24 @@
+Demo_TestApp/backend/Program.cs
+  s_4cbfee433b5ae2::t_ec859aa8e6a97d 242-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "9fd0a49478597f9f038fc75a640c47c4dea0958b",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_4cbfee433b5ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80757dfb-c581-46cf-8de9-9df05272ed1a",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
