@@ -239,16 +239,15 @@ app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, Ses
     });
 });
 
-// Read-only, any authenticated role — lets launch-provider-in-app.ts's EHR-launch redirect resolve the
-// configured launch-context token without needing the full settings endpoint's role check. Must be awaited
-// BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
-app.MapGet("/api/provider-in-app-launch-context", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+// Anonymous by design (no session-cookie check): launch-provider-in-app.ts calls this from inside Epic's
+// embedded ("Embedded" launch display mode) iframe, where the browser treats it as a third-party/cross-site
+// request and won't attach the hb_session cookie (SameSite=Lax) — a session check here would silently 401 on
+// every embedded EHR launch and fall back to the compiled-in placeholder token. The value it returns is an
+// opaque launch-context token, not PHI or a secret; the actual security boundary is FHIRBridge's own
+// ILaunchTokenProtector validation when this token is redeemed against the iss/launch exchange. Must be
+// awaited BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
+app.MapGet("/api/provider-in-app-launch-context", async (HealthAppDbContext db) =>
 {
-    if (!TryGetSession(http, sessions, out _, out _))
-    {
-        return Results.Unauthorized();
-    }
-
     var settings = await db.WorkflowSettings.FindAsync(1);
     return Results.Ok(new
     {
