@@ -1,0 +1,22 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/MutualTlsCertificateProvider.cs
+  s_2b61b2c58de087::t_bc8d7829a57aba 1
+  s_2b61b2c58de087::t_8a1d0fe6aed8ae 99,111-119
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_2b61b2c58de087::t_3d047d441c5214 93-96,112-114,117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "6fd0583b95d6493bf25b7919ae0a4453859b9fe7",
+  "prompts": {},
+  "sessions": {
+    "s_2b61b2c58de087": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b10e7981-8c72-4d24-a8f0-ae88db6f3c97",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  }
+}
