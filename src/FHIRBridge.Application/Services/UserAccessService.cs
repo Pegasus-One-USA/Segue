@@ -40,7 +40,7 @@ public sealed class UserAccessService : IUserAccessService
         var currentUser = _currentUserService.CurrentUser;
         if (!currentUser.IsAuthenticated || string.IsNullOrWhiteSpace(currentUser.ExternalUserId))
         {
-            throw new InvalidOperationException("Authenticated user id claim is missing.");
+            throw new InvalidOperationException("Your session is no longer valid. Please sign in again.");
         }
 
         var user = await _repository.GetUserByExternalIdAsync(currentUser.ExternalUserId, cancellationToken);

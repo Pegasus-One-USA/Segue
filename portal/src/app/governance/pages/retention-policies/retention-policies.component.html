@@ -33,7 +33,7 @@
     </div>
 
     @if (entries().length === 0 && !loading()) {
-      <div class="empty-state">No retention policies found (in-memory dev mode has no database to retain anything in).</div>
+      <div class="empty-state">No retention policies configured yet.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>

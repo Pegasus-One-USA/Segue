@@ -9,6 +9,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { tap } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
+import { httpErrorSanitizerInterceptor } from './core/http-error-sanitizer.interceptor';
 import { IAuthService } from './auth/services/i-auth.service';
 import { IUserService } from './auth/services/i-user.service';
 import { AuthApiService } from './auth/services/auth-api.service';
@@ -44,7 +45,11 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes, withComponentInputBinding()),
     provideAnimationsAsync(),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    // Order matters: authInterceptor is the outer wrapper (closer to the app) so its 401
+    // refresh-and-retry logic still sees the real status code; httpErrorSanitizerInterceptor is the
+    // inner wrapper (closer to the network) so every error — including ones authInterceptor passes
+    // through unchanged — has already had its unsafe `.message` replaced before anything reads it.
+    provideHttpClient(withInterceptors([authInterceptor, httpErrorSanitizerInterceptor])),
 
     // ── Real backend wiring (environment.apiBase) ────────────────────────────
     { provide: IAuthService, useClass: AuthApiService },

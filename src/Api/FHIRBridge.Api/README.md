@@ -14,7 +14,7 @@
 - Expose the workflow designer minimal-API endpoints (`/api/v1/workflows/...`) for CRUD, validate, run, activate/deactivate, and the node catalog.
 - Apply the CORS `Portal` policy (configurable allowed origins, defaults to `localhost:4200`) so the SPA can call the API with credentials.
 - Seed a local identity (super-admin) on startup in environments where `IIdentitySeedService` is registered.
-- Shape unhandled exceptions into JSON problem responses via `GlobalExceptionHandlingMiddleware`.
+- Shape unhandled exceptions into JSON problem responses via the `UseExceptionHandler` block + `MapException(...)` in `Program.cs` — never the raw diagnostic `exception.Message` for `NotFoundException` (see `FHIRBridgeException.UserMessage`).
 
 ## Key components
 
@@ -49,7 +49,7 @@ All controllers except the anonymous local-auth and webhook-ingest endpoints req
 - **WorkflowApiModels** — request/response records (`WorkflowDefinitionRequest`, node/edge requests, `WorkflowRunRequest`).
 
 ### Cross-cutting
-- **GlobalExceptionHandlingMiddleware** — catches unhandled exceptions, logs them, and writes a JSON `{ title, status }` body mapping `NotFoundException`→404, `InvalidOperationException`/`ArgumentException`→400, else 500.
+- **`Program.cs`'s `UseExceptionHandler` + `MapException`** — catches unhandled exceptions, logs the full diagnostic detail to `ErrorLog` via `IGovernanceLogger`, and writes a JSON `{ error }` body mapping `NotFoundException`→404 (using `FHIRBridgeException.UserMessage`, never the raw `Message`), `InvalidOperationException`/`ArgumentException`→400/401/404/409 by message classification, else 500 with a fixed generic string.
 
 ## Dependencies
 - **Projects:** `FHIRBridge.Application`, `FHIRBridge.Infrastructure`, `FHIRBridge.Domain`, `FHIRBridge.Runtime.Application`, `FHIRBridge.Runtime.Infrastructure`, `FHIRBridge.Observability` (BuildingBlocks).

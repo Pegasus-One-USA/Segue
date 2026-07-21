@@ -49,7 +49,7 @@ public sealed class GoogleTokenValidator : IProviderTokenValidator
 
         if (string.IsNullOrWhiteSpace(_options.ClientId))
         {
-            throw new InvalidOperationException("Google sign-in is not configured (missing client id).");
+            throw new InvalidOperationException("Sign-in with Google isn't available right now.");
         }
 
         var config = await _configurationManager.GetConfigurationAsync(cancellationToken);
@@ -77,7 +77,7 @@ public sealed class GoogleTokenValidator : IProviderTokenValidator
 
         var subject = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
             ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? throw new InvalidOperationException("The Google token does not contain a subject claim.");
+            ?? throw new InvalidOperationException("Sign-in failed. Please try again.");
 
         var email = principal.FindFirst(JwtRegisteredClaimNames.Email)?.Value
             ?? principal.FindFirst(ClaimTypes.Email)?.Value
