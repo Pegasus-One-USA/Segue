@@ -4,11 +4,13 @@ import { RouterLink } from '@angular/router';
 import { PipelineRun, PipelineRunStatus } from '../../models/pipeline-run.model';
 
 const STATUS_LABELS: Record<PipelineRunStatus, string> = {
-  running:   'Running',
-  completed: 'Completed',
-  failed:    'Failed',
-  queued:    'Queued',
-  cancelled: 'Cancelled',
+  running:             'Running',
+  completed:           'Completed',
+  completedWithErrors: 'Completed with errors',
+  failed:              'Failed',
+  skipped:             'Skipped',
+  queued:              'Queued',
+  cancelled:           'Cancelled',
 };
 
 @Component({
