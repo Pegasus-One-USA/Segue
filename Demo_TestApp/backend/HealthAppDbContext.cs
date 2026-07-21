@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace HealthAppBackend;
 
@@ -104,8 +105,14 @@ public sealed class WorkflowSettingsEntity
 
 public sealed class HealthAppDbContext : DbContext
 {
-    public HealthAppDbContext(DbContextOptions<HealthAppDbContext> options) : base(options)
+    private readonly IConfiguration _configuration;
+
+    // IConfiguration is resolved via DI alongside DbContextOptions -- AddDbContext<T> supports any
+    // additional constructor parameter the app's service provider can already resolve, and
+    // IConfiguration is always registered by WebApplicationBuilder.
+    public HealthAppDbContext(DbContextOptions<HealthAppDbContext> options, IConfiguration configuration) : base(options)
     {
+        _configuration = configuration;
     }
 
     public DbSet<UserEntity> Users => Set<UserEntity>();
@@ -206,7 +213,12 @@ public sealed class HealthAppDbContext : DbContext
             WorkflowUrl = string.Empty,
             PatientWorkflowId = string.Empty,
             PatientDetailWorkflowId = string.Empty,
-            PatientBaseUrl = "http://localhost:5000",
+            // Seeded once, only for a brand-new database (see EnsureCreated() in Program.cs) -- admin-editable
+            // afterward via the Workflow Settings panel, same as every other field in this row. Sourced from
+            // config (DefaultWorkflowSettings:PatientBaseUrl) rather than hardcoded, so each environment's own
+            // appsettings.Production.json can seed a sensible default matching that environment's own FHIRBridge
+            // Api instead of every environment seeding the same placeholder.
+            PatientBaseUrl = _configuration["DefaultWorkflowSettings:PatientBaseUrl"] ?? string.Empty,
             StandaloneWorkflowId = string.Empty,
             StandaloneDetailWorkflowId = string.Empty
         });
