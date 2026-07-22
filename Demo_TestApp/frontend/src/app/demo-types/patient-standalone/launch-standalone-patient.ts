@@ -35,6 +35,16 @@ export class LaunchStandalonePatientComponent implements OnInit {
     window.location.href = '/';
   }
 
+  // Identifies this HealthApp page/session to FHIRBridge's Patient Standalone token cache (see
+  // SmartAuthorizationCodeTokenProvider.BuildStoreKey) — must be the SAME value passed to mintLaunchUrl (below),
+  // hasValidToken, run, and discardToken for every one of this page's workflows (list, detail, csv export, csv
+  // email export) so they all share the one token FHIRBridge cached under this callerId, instead of each workflow's
+  // check missing it and falling back to a per-SourceConnection key that was never written to. Origin + pathname
+  // only, computed fresh each time (not cached) since it's cheap and never changes within one page's lifetime.
+  private get pageCallerId(): string {
+    return `${window.location.origin}${window.location.pathname}`;
+  }
+
   // Purely informational badge — never gates whether the Connect button is shown. The real, authoritative check is
   // always the next actual /run attempt (see fetchPatient); this is just a "last known good" hint carried over from
   // HealthApp's own remembered session or the most recent successful fetch.
@@ -292,7 +302,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.workflowId, this.patientId);
+      const result = await this.launchService.run(this.workflowId, this.patientId, this.pageCallerId);
 
       if (result.workflowRun.status === 'Succeeded') {
         this.fetchedPatients.set(extractFetchedPatients(result));
@@ -350,7 +360,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.detailWorkflowId, patient.id);
+      const result = await this.launchService.run(this.detailWorkflowId, patient.id, this.pageCallerId);
 
       if (result.workflowRun.status === 'Succeeded') {
         const detail = extractPatientDetail(result, patient.id);
@@ -408,7 +418,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.csvExportWorkflowId, patientId);
+      const result = await this.launchService.run(this.csvExportWorkflowId, patientId, this.pageCallerId);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
@@ -461,7 +471,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.csvEmailExportWorkflowId, patientId);
+      const result = await this.launchService.run(this.csvEmailExportWorkflowId, patientId, this.pageCallerId);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
@@ -545,7 +555,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // call right after is always the authoritative test either way.
   private async hasValidToken(workflowId: string): Promise<boolean> {
     try {
-      return await this.launchService.hasValidToken(workflowId, this.patientId);
+      return await this.launchService.hasValidToken(workflowId, this.patientId, this.pageCallerId);
     } catch {
       return true;
     }
@@ -623,12 +633,12 @@ export class LaunchStandalonePatientComponent implements OnInit {
       // callerId tells FHIRBridge's OAuthController.Callback to redirect the browser straight back to this exact
       // page (see ngOnInit) once the token exchange completes, instead of falling back to the source connection's
       // static PostLaunchRedirectUri — see InteractiveSourceAuthorizationService.CompleteAsync, where a caller-
-      // supplied callerId always wins over that DB field. Origin + pathname only (no existing query/hash): the
-      // callback appends its own workflowRunId/launchError/signedIn marker on top, and ngOnInit strips whatever
-      // query string is present anyway. FHIRBridge validates the origin against Portal:AllowedOrigins before
-      // honoring it (CallerIdOriginValidator) — this page's origin must be listed there.
-      const callerId = `${window.location.origin}${window.location.pathname}`;
-      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id, callerId);
+      // supplied callerId always wins over that DB field. It ALSO doubles as the token-cache key FHIRBridge saves
+      // this session's token under (see pageCallerId's own remarks) — every hasValidToken/run/discardToken call for
+      // this page must send this exact same value for that caching to actually work. FHIRBridge validates the
+      // origin against Portal:AllowedOrigins before honoring it (CallerIdOriginValidator) — this page's origin must
+      // be listed there.
+      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id, this.pageCallerId);
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);
@@ -658,7 +668,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
 
   private async discardFhirBridgeToken(): Promise<void> {
     try {
-      await this.launchService.discardToken(this.workflowId, this.patientId);
+      await this.launchService.discardToken(this.workflowId, this.patientId, this.pageCallerId);
     } catch {
       // Non-fatal — worst case FHIRBridge's cache still has the old token, which the next /run attempt would just
       // successfully reuse (same as if Reset Token had never been clicked); nothing is left in a broken state.
