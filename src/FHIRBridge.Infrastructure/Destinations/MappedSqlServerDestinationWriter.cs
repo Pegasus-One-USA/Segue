@@ -67,24 +67,106 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
                 cancellationToken);
         }
 
+        // FHIRBridge's own output tables carry NOT NULL audit/lineage columns (PipelineRunId, ResourceType,
+        // WrittenOnUtc, ...) that describe the run rather than the source resource, so they are never part of a
+        // field mapping. Discover which of them this target table actually declares and fill them from the run
+        // context per record — a customer-owned table without those columns gets nothing extra.
+        var systemColumns = await ReadSystemColumnsPresentAsync(
+            connection, target.SchemaName, target.TableName, cancellationToken);
+
         foreach (var record in records)
         {
+            var toWrite = AugmentWithSystemColumns(record, systemColumns, context);
             switch (target.WriteMode)
             {
                 case SqlDestinationWriteMode.Upsert:
-                    await UpsertRecordAsync(connection, target.SchemaName, target.TableName, record, target.KeyColumn!, cancellationToken);
+                    await UpsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
                     break;
                 case SqlDestinationWriteMode.Cdc:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
-                    await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
+                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
+                    await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
                     break;
                 default:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
+                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
                     break;
             }
         }
 
         return new DestinationWriteResult(records.Count);
+    }
+
+    // FHIRBridge-managed audit/lineage columns and how to fill each from the run: these describe the pipeline run,
+    // not the source resource, so they are auto-populated (never mapped). Only columns the target table actually
+    // declares are written; a mapping that explicitly sets one of these wins over the auto value (see
+    // AugmentWithSystemColumns), so this never overrides a customer's own intent.
+    private static readonly IReadOnlyDictionary<string, Func<MappedDestinationRecord, PipelineWriteContext, object?>> SystemColumnValues =
+        new Dictionary<string, Func<MappedDestinationRecord, PipelineWriteContext, object?>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PipelineRunId"] = (record, _) => record.PipelineRunId,
+            ["ResourceType"] = (record, _) => record.ResourceType,
+            ["WrittenOnUtc"] = (_, context) => context.RunStartedAtUtc.UtcDateTime,
+            ["LastUpdatedOnUtc"] = (_, context) => context.RunStartedAtUtc.UtcDateTime,
+        };
+
+    /// <summary>The FHIRBridge-managed system columns (see <see cref="SystemColumnValues"/>) that the target table
+    /// actually declares — the only ones safe to auto-populate. Empty for a customer-owned table without them.</summary>
+    private static async Task<IReadOnlyList<string>> ReadSystemColumnsPresentAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(
+            """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @Table
+            """,
+            connection);
+        command.Parameters.AddWithValue("@Schema", schemaName);
+        command.Parameters.AddWithValue("@Table", tableName);
+
+        var present = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var column = reader.GetString(0);
+            if (SystemColumnValues.ContainsKey(column))
+            {
+                present.Add(column);
+            }
+        }
+
+        return present;
+    }
+
+    /// <summary>Returns the record with any target-declared system column filled from the run context, unless the
+    /// mapping already provided that column (an explicit mapping always wins). Returns the record unchanged when the
+    /// table declares none of them.</summary>
+    private static MappedDestinationRecord AugmentWithSystemColumns(
+        MappedDestinationRecord record,
+        IReadOnlyList<string> systemColumns,
+        PipelineWriteContext context)
+    {
+        if (systemColumns.Count == 0)
+        {
+            return record;
+        }
+
+        var values = new Dictionary<string, object?>(record.Values, StringComparer.OrdinalIgnoreCase);
+        var added = false;
+        foreach (var column in systemColumns)
+        {
+            if (values.ContainsKey(column))
+            {
+                continue;
+            }
+
+            values[column] = SystemColumnValues[column](record, context);
+            added = true;
+        }
+
+        return added ? record with { Values = values } : record;
     }
 
     private static async Task EnsureTableAsync(

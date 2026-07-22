@@ -19,6 +19,8 @@ interface AdminSettings {
   patientWorkflowId: string;
   patientDetailWorkflowId: string;
   patientBaseUrl: string;
+  patientCsvExportWorkflowId: string;
+  patientCsvEmailExportWorkflowId: string;
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
   providerLaunchContext: string;
@@ -44,6 +46,8 @@ export class AdminSettingsComponent implements OnInit {
   readonly patientWorkflowId = signal('');
   readonly patientDetailWorkflowId = signal('');
   readonly patientBaseUrl = signal('');
+  readonly patientCsvExportWorkflowId = signal('');
+  readonly patientCsvEmailExportWorkflowId = signal('');
   readonly standaloneWorkflowId = signal('');
   readonly standaloneDetailWorkflowId = signal('');
   readonly providerLaunchContext = signal('');
@@ -74,6 +78,8 @@ export class AdminSettingsComponent implements OnInit {
       this.patientWorkflowId.set(current.patientWorkflowId);
       this.patientDetailWorkflowId.set(current.patientDetailWorkflowId);
       this.patientBaseUrl.set(current.patientBaseUrl);
+      this.patientCsvExportWorkflowId.set(current.patientCsvExportWorkflowId);
+      this.patientCsvEmailExportWorkflowId.set(current.patientCsvEmailExportWorkflowId);
       this.standaloneWorkflowId.set(current.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.providerLaunchContext.set(current.providerLaunchContext);
@@ -97,6 +103,8 @@ export class AdminSettingsComponent implements OnInit {
             patientWorkflowId: this.patientWorkflowId(),
             patientDetailWorkflowId: this.patientDetailWorkflowId(),
             patientBaseUrl: this.patientBaseUrl(),
+            patientCsvExportWorkflowId: this.patientCsvExportWorkflowId(),
+            patientCsvEmailExportWorkflowId: this.patientCsvEmailExportWorkflowId(),
             standaloneWorkflowId: this.standaloneWorkflowId(),
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             providerLaunchContext: this.providerLaunchContext(),
@@ -108,6 +116,8 @@ export class AdminSettingsComponent implements OnInit {
       this.patientWorkflowId.set(result.patientWorkflowId);
       this.patientDetailWorkflowId.set(result.patientDetailWorkflowId);
       this.patientBaseUrl.set(result.patientBaseUrl);
+      this.patientCsvExportWorkflowId.set(result.patientCsvExportWorkflowId);
+      this.patientCsvEmailExportWorkflowId.set(result.patientCsvEmailExportWorkflowId);
       this.standaloneWorkflowId.set(result.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.providerLaunchContext.set(result.providerLaunchContext);

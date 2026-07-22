@@ -9,12 +9,18 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// </summary>
 public interface IDestinationDataService
 {
-    /// <summary>Plain top-N sample of the table, not scoped to any particular run — destination tables contain only
-    /// the mapped columns, with no PipelineRunId or other system column to filter by.</summary>
+    /// <summary>
+    /// Top-N sample of the destination table. When the table carries a <c>PipelineRunId</c> column (FHIRBridge's
+    /// own output tables, or any mapping that maps the <c>@runId</c> system value), the sample is scoped to
+    /// <paramref name="pipelineRunIds"/> — the calling workflow's own runs — so it shows only what that workflow
+    /// wrote; an empty set then yields no rows ("hasn't run yet"). A customer-owned table with no such column is
+    /// read whole (the run ids are ignored), since there's nothing to filter on.
+    /// </summary>
     Task<DestinationDataDto> ReadSampleAsync(
         Guid destinationId,
         string destinationObject,
         int top,
+        IReadOnlyCollection<Guid> pipelineRunIds,
         CancellationToken cancellationToken);
 
     /// <summary>

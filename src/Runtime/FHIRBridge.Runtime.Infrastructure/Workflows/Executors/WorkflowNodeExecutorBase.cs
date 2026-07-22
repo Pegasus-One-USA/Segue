@@ -61,6 +61,18 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         // crash the whole run with a raw JsonException.
         try
         {
+            // Wizard-authored nodes serialize every config value as a string (BaseNode.fields is Record<string,string>),
+            // so a structured value such as "fields" or "mappingProfile" arrives JSON-encoded *inside* a JSON string
+            // (e.g. "[{\"targetField\":...}]"). Deserializing that string token straight into a collection/object
+            // throws and would silently yield an empty config (an upsert SQL destination then failing with
+            // "no mapped field is designated as the upsert key"). Unwrap the one extra layer first — unless T itself
+            // is string, where the raw value is what the caller wants.
+            if (property.ValueKind == JsonValueKind.String && typeof(T) != typeof(string))
+            {
+                var inner = property.GetString();
+                return string.IsNullOrWhiteSpace(inner) ? default : JsonSerializer.Deserialize<T>(inner, JsonOptions);
+            }
+
             return property.Deserialize<T>(JsonOptions);
         }
         catch (JsonException)

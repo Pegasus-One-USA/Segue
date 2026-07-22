@@ -64,6 +64,18 @@ export function resolveParentReferenceField(
  * session (the catalog is static reference data). A fetch failure resolves to an empty list so the
  * wizard can fall back to its built-in field set rather than break.
  */
+/**
+ * Pipeline/runtime "system value" fields, resolved by the mapping engine from the run context rather than the
+ * source FHIR document (their jsonPath is a reserved `@token`, not a `$` JSONPath). Offered for every resource so
+ * audit/lineage columns (run id, write time, resource type, source id) can be mapped like any other field.
+ */
+export const SYSTEM_MAPPING_FIELDS: readonly FhirElement[] = [
+  { label: 'System › Pipeline Run Id', jsonPath: '@runId', fhirPath: '@runId', cardinality: '0..1', valueType: 'String', isArray: false, arrays: [], referenceTargetTypes: [] },
+  { label: 'System › Written At (UTC)', jsonPath: '@now', fhirPath: '@now', cardinality: '0..1', valueType: 'DateTime', isArray: false, arrays: [], referenceTargetTypes: [] },
+  { label: 'System › Resource Type', jsonPath: '@resourceType', fhirPath: '@resourceType', cardinality: '0..1', valueType: 'String', isArray: false, arrays: [], referenceTargetTypes: [] },
+  { label: 'System › Source Resource Id', jsonPath: '@sourceResourceId', fhirPath: '@sourceResourceId', cardinality: '0..1', valueType: 'String', isArray: false, arrays: [], referenceTargetTypes: [] },
+];
+
 @Injectable({ providedIn: 'root' })
 export class MappingCatalogService {
   private readonly http = inject(HttpClient);
@@ -74,7 +86,9 @@ export class MappingCatalogService {
     let stream = this.cache.get(resourceType);
     if (!stream) {
       stream = this.http.get<FhirElement[]>(MAPPING_ENDPOINTS.resourceFields(resourceType)).pipe(
-        catchError(() => of<FhirElement[]>([])),
+        // Prepend the resource-agnostic system-value fields so they're selectable alongside the FHIR elements.
+        map(fields => [...SYSTEM_MAPPING_FIELDS, ...fields]),
+        catchError(() => of<FhirElement[]>([...SYSTEM_MAPPING_FIELDS])),
         shareReplay(1),
       );
       this.cache.set(resourceType, stream);

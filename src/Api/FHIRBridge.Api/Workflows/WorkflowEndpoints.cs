@@ -392,6 +392,7 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IConfigurationRepository configurationRepository,
             IDestinationDataService destinationDataService,
+            IWorkflowRunStore runStore,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -410,8 +411,14 @@ public static class WorkflowEndpoints
                     "This workflow has no saved destination to preview. Save or build the destination first."));
             }
 
+            // Scope the preview to this workflow's own runs (each run id is the PipelineRunId stamped on the rows it
+            // wrote), so a shared destination table shows only what THIS workflow produced — and nothing for a
+            // workflow that hasn't run yet.
+            var runs = await runStore.ListByDefinitionAsync(workflowId, cancellationToken);
+            var pipelineRunIds = runs.Select(run => run.Id).ToArray();
+
             var result = await destinationDataService.ReadSampleAsync(
-                destinationId, destinationObject, top ?? 50, cancellationToken);
+                destinationId, destinationObject, top ?? 50, pipelineRunIds, cancellationToken);
             return Results.Ok(result);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 

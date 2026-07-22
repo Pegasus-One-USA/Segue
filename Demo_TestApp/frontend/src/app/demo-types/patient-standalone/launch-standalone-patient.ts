@@ -12,10 +12,6 @@ import {
   extractPatientDetail,
   indicatesReAuthorizationNeeded,
 } from './core/services/patient-standalone-launch.service';
-import {
-  CSV_EMAIL_EXPORT_WORKFLOW_ID,
-  CSV_EXPORT_WORKFLOW_ID,
-} from './core/config/standalone-launch.config';
 
 @Component({
   selector: 'app-launch-standalone-patient',
@@ -64,14 +60,14 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly patientDetailError = signal<string | null>(null);
   readonly patientDetail = signal<PatientDetail | null>(null);
 
-  // "Download Patient Information" — a third, independent workflow (CSV_EXPORT_WORKFLOW_ID) whose destination uses
+  // "Download Patient Information" — a third, independent workflow (csvExportWorkflowId) whose destination uses
   // Download-URL delivery. Triggered directly from a row's inline icon (not gated behind viewPatientDetail), so
   // state is tracked per patientId rather than as a single shared flag — more than one row's action can be
   // in-flight/erroring independently of whichever row (if any) currently has its detail open.
   readonly downloadingPatientIds = signal<ReadonlySet<string>>(new Set());
   readonly downloadErrors = signal<ReadonlyMap<string, string>>(new Map());
 
-  // "Email Patient Information" — same shape as the download action above, but backed by CSV_EMAIL_EXPORT_WORKFLOW_ID
+  // "Email Patient Information" — same shape as the download action above, but backed by csvEmailExportWorkflowId
   // (Email delivery instead of Download-URL). A Succeeded run means the file was already sent server-side, so
   // there's nothing to navigate to — emailSuccessIds just confirms it happened, per patientId.
   readonly emailingPatientIds = signal<ReadonlySet<string>>(new Set());
@@ -104,6 +100,11 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // triggered by viewPatientDetail — each has its own independent FHIRBridge public-launch opt-in.
   private workflowId = '';
   private detailWorkflowId = '';
+  // Also resolved by initialize()'s loadConfig() call — the workflows behind "Download Patient Information" /
+  // "Email Patient Information", formerly the hardcoded this.csvExportWorkflowId/this.csvEmailExportWorkflowId
+  // constants in standalone-launch.config.ts, now admin-configurable via WorkflowSettingsEntity.
+  private csvExportWorkflowId = '';
+  private csvEmailExportWorkflowId = '';
 
   constructor(
     private readonly launchService: PatientStandaloneLaunchService,
@@ -158,6 +159,8 @@ export class LaunchStandalonePatientComponent implements OnInit {
 
     this.workflowId = settings.workflowId;
     this.detailWorkflowId = settings.detailWorkflowId;
+    this.csvExportWorkflowId = settings.csvExportWorkflowId;
+    this.csvEmailExportWorkflowId = settings.csvEmailExportWorkflowId;
 
     if (isOAuthCallback) {
       await this.handleOAuthCallback(workflowRunId, launchError);
@@ -386,7 +389,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.patientDetailError.set(null);
   }
 
-  // Triggers CSV_EXPORT_WORKFLOW_ID for the given row's patientId — called directly from that row's inline download
+  // Triggers csvExportWorkflowId for the given row's patientId — called directly from that row's inline download
   // icon, independent of whichever row (if any) currently has its detail open via viewPatientDetail. That workflow's
   // destination uses Download-URL delivery, so a Succeeded run returns a signed link (extractDownloadUrl) rather
   // than resource JSON — navigating the browser to it is enough to download, since the response carries
@@ -400,17 +403,17 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.setDownloading(patientId, true);
     this.setDownloadError(patientId, null);
     try {
-      if (!(await this.hasValidToken(CSV_EXPORT_WORKFLOW_ID))) {
-        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+      if (!(await this.hasValidToken(this.csvExportWorkflowId))) {
+        await this.needsReAuthorization(this.csvExportWorkflowId);
         return;
       }
 
-      const result = await this.launchService.run(CSV_EXPORT_WORKFLOW_ID, patientId);
+      const result = await this.launchService.run(this.csvExportWorkflowId, patientId);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
         if (indicatesReAuthorizationNeeded(errorMessage)) {
-          await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+          await this.needsReAuthorization(this.csvExportWorkflowId);
           return;
         }
         this.setDownloadError(patientId, errorMessage);
@@ -431,7 +434,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       const errorMessage = backendMessage
         ?? 'Could not reach FHIRBridge to generate this download. Check your connection and try again.';
       if (indicatesReAuthorizationNeeded(errorMessage)) {
-        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+        await this.needsReAuthorization(this.csvExportWorkflowId);
         return;
       }
       this.setDownloadError(patientId, errorMessage);
@@ -440,7 +443,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
     }
   }
 
-  // Triggers CSV_EMAIL_EXPORT_WORKFLOW_ID for the given row's patientId — called directly from that row's inline
+  // Triggers csvEmailExportWorkflowId for the given row's patientId — called directly from that row's inline
   // email icon. That workflow's destination uses Email delivery, so a Succeeded run has already sent the file
   // server-side — there is no link or bytes to hand back, just a status. Same token-status-then-run shape as
   // downloadPatientInformation.
@@ -453,17 +456,17 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.setEmailError(patientId, null);
     this.setEmailSuccess(patientId, false);
     try {
-      if (!(await this.hasValidToken(CSV_EMAIL_EXPORT_WORKFLOW_ID))) {
-        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+      if (!(await this.hasValidToken(this.csvEmailExportWorkflowId))) {
+        await this.needsReAuthorization(this.csvEmailExportWorkflowId);
         return;
       }
 
-      const result = await this.launchService.run(CSV_EMAIL_EXPORT_WORKFLOW_ID, patientId);
+      const result = await this.launchService.run(this.csvEmailExportWorkflowId, patientId);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
         if (indicatesReAuthorizationNeeded(errorMessage)) {
-          await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+          await this.needsReAuthorization(this.csvEmailExportWorkflowId);
           return;
         }
         this.setEmailError(patientId, errorMessage);
@@ -478,7 +481,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       const errorMessage = backendMessage
         ?? 'Could not reach FHIRBridge to send this email. Check your connection and try again.';
       if (indicatesReAuthorizationNeeded(errorMessage)) {
-        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+        await this.needsReAuthorization(this.csvEmailExportWorkflowId);
         return;
       }
       this.setEmailError(patientId, errorMessage);

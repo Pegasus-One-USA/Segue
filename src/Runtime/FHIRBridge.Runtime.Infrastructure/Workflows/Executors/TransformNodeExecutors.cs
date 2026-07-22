@@ -66,6 +66,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         var resourceConfigs = await ResolveResourceMappingConfigsAsync(node, cancellationToken);
 
         var records = new List<MappedDestinationRecord>();
+        // One timestamp for the whole run so every row this node writes shares the same @now / WrittenOnUtc value.
+        var runTimestampUtc = DateTime.UtcNow;
 
         foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
         {
@@ -80,7 +82,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             }
 
             var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
-            var mapped = _mappingEngine?.Map(sourceJson, config.Fields);
+            // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the source
+            // FHIR document): the run id, a shared write timestamp, and the resource's own type/id.
+            var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["@runId"] = context.WorkflowRunId,
+                ["@now"] = runTimestampUtc,
+                ["@resourceType"] = resource.ResourceType,
+                ["@sourceResourceId"] = resource.ResourceId,
+            };
+            var mapped = _mappingEngine?.Map(sourceJson, config.Fields, systemValues);
 
             // Parent row (Scalar/FirstItem/RejectIfMultiple fields land here). Skipped when every field on this
             // node uses SeparateDestination, so a node dedicated to a child table doesn't emit an empty parent row.
