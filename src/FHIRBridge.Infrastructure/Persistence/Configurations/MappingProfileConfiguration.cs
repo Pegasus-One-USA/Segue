@@ -17,6 +17,7 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.Property(x => x.DestinationId).IsRequired();
         builder.Property(x => x.DestinationObject).HasMaxLength(300).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.MappingJson);
 
         builder.HasIndex(x => x.SourceConnectionId);
         builder.HasIndex(x => x.DestinationId);

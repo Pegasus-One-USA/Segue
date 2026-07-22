@@ -17,7 +17,8 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
         Guid sourceConnectionId,
         Guid destinationId,
         string destinationObject,
-        IEnumerable<MappingField> fields)
+        IEnumerable<MappingField> fields,
+        string? mappingJson = null)
     {
         Id = Guid.NewGuid();
         Name = name;
@@ -26,6 +27,7 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
         DestinationId = destinationId;
         DestinationObject = destinationObject;
         IsEnabled = true;
+        MappingJson = mappingJson;
         ReplaceFields(fields);
     }
 
@@ -41,6 +43,13 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     public string DestinationObject { get; private set; } = default!;
     public bool IsEnabled { get; private set; }
     public IReadOnlyCollection<MappingField> Fields => _fields.AsReadOnly();
+
+    /// <summary>
+    /// The complete, unmodified source JSON this profile was imported from (see the mapping-config import
+    /// endpoint) — the source of truth for re-running the ETL later. <see cref="Fields"/> is a queryable
+    /// projection of it, not a replacement.
+    /// </summary>
+    public string? MappingJson { get; private set; }
 
     public void Update(
         string name,
@@ -61,6 +70,13 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     public void SetEnabled(bool isEnabled)
     {
         IsEnabled = isEnabled;
+    }
+
+    /// <summary>Replaces the raw source JSON this profile was (re-)imported from. Left untouched by
+    /// <see cref="Update"/> so plain field edits via the configuration CRUD UI don't wipe it.</summary>
+    public void SetMappingJson(string? mappingJson)
+    {
+        MappingJson = mappingJson;
     }
 
     private void ReplaceFields(IEnumerable<MappingField> fields)

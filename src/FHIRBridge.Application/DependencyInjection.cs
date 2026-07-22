@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<IDeIdentificationService, PassThroughDeIdentificationService>();
         services.AddScoped<IRetentionPolicyService, DefaultRetentionPolicyService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
+        services.AddScoped<IMappingImportService, MappingImportService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();
         services.AddScoped<IUserAccessService, UserAccessService>();

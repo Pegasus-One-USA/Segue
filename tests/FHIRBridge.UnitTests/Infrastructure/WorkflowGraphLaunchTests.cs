@@ -222,6 +222,9 @@ public sealed class WorkflowGraphLaunchTests
         public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken ct) => Task.FromResult(false);
         public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) => Task.FromResult(_mappings);
         public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) => Task.FromResult(_mappings.FirstOrDefault(x => x.Id == id));
+        public Task<MappingProfile?> FindMappingProfileAsync(string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct) =>
+            Task.FromResult(_mappings.FirstOrDefault(x =>
+                x.ResourceType == resourceType && x.SourceConnectionId == sourceConnectionId && x.DestinationId == destinationId));
         public Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) => Task.FromResult(_routes);
         public Task<ResourcePipelineRoute?> GetRouteAsync(Guid id, CancellationToken ct) => Task.FromResult(_routes.FirstOrDefault(x => x.Id == id));
 

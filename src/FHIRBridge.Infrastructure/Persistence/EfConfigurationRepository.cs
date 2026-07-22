@@ -135,6 +135,16 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     public async Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) =>
         await _db.MappingProfiles.Include(x => x.Fields).FirstOrDefaultAsync(x => x.Id == id, ct);
 
+    public async Task<MappingProfile?> FindMappingProfileAsync(
+        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct) =>
+        await _db.MappingProfiles
+            .Include(x => x.Fields)
+            .FirstOrDefaultAsync(
+                x => x.ResourceType == resourceType
+                    && x.SourceConnectionId == sourceConnectionId
+                    && x.DestinationId == destinationId,
+                ct);
+
     public async Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct)
     {
         await _db.MappingProfiles.AddAsync(e, ct);
