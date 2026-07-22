@@ -99,6 +99,13 @@ export const MAPPING_ENDPOINTS = {
   },
 };
 
+// ─── Mapping profiles (ConfigurationsController — api/v1/mapping-profiles) ─────
+// import: accepts the canonical Mapping JSON (field-mapping-summary.model.ts) wholesale and creates one
+// MappingProfile per mapped resource — called when the destination wizard's "Add to Pipeline" step finishes.
+export const MAPPING_PROFILES_ENDPOINTS = {
+  import: `${API_V1_BASE}/mapping-profiles/import`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,

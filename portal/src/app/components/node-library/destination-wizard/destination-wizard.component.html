@@ -433,10 +433,10 @@
         <button
           class="dw-btn dw-btn--primary"
           type="button"
-          [disabled]="isNextDisabled() || probeState() === 'testing' || provisioningDestination()"
+          [disabled]="isNextDisabled() || probeState() === 'testing' || provisioningDestination() || savingMappingProfiles()"
           (click)="next()"
         >
-          @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }
+          @if (step() === TOTAL_STEPS) { {{ savingMappingProfiles() ? 'Saving…' : (editNode() ? '✓ Update' : '✓ Add to Pipeline') }} }
           @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
           @else if (step() === 1 && provisioningDestination()) { Creating… }
           @else { Next }

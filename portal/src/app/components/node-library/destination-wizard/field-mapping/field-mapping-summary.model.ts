@@ -63,7 +63,7 @@ export interface MappingSummaryInstance {
   type: MappingInstanceSelection['type'];
   n?: number;
   field?: string;
-  operator?: MappingInstanceSelection['op'];
+  op?: MappingInstanceSelection['op'];
   value?: string;
   aggregate?: 'rows' | 'csv';
 }
@@ -155,7 +155,7 @@ function toSummaryInstance(row: MappingRow, arrayContext: string | null): Mappin
   const out: MappingSummaryInstance = { arrayContext, type: instance.type };
   if (instance.n !== undefined) out.n = instance.n;
   if (instance.field !== undefined) out.field = instance.field;
-  if (instance.op !== undefined) out.operator = instance.op;
+  if (instance.op !== undefined) out.op = instance.op;
   if (instance.value !== undefined) out.value = instance.value;
   if (instance.aggregate !== undefined) out.aggregate = instance.aggregate;
   return out;
@@ -349,7 +349,7 @@ function sourceRefFromPath(path: string, arrayContext: string | undefined, resou
 
 function instanceFromSummary(instance: MappingSummaryInstance | null | undefined): MappingInstanceSelection | undefined {
   if (!instance) return undefined;
-  return { type: instance.type, n: instance.n, field: instance.field, op: instance.operator, value: instance.value, aggregate: instance.aggregate };
+  return { type: instance.type, n: instance.n, field: instance.field, op: instance.op, value: instance.value, aggregate: instance.aggregate };
 }
 
 export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destType: 'sql' | 'csv'): AppliedMappingSummary {

@@ -22,9 +22,14 @@ import {
   MappingSummaryDocument, ChildTableRelation, buildMappingSummaryDocument, applyMappingSummaryDocument,
 } from './field-mapping/field-mapping-summary.model';
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
+import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
 import { requiredClosureFor, recommendedFor, lockingDependentsOf, sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
+
+// Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
+// import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -133,7 +138,11 @@ export class DestinationWizardComponent implements OnInit {
   private readonly destinationConfigSvc = inject(DestinationConfigurationService);
   private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
   private readonly mappingSummarySvc = inject(MappingSummaryService);
+  private readonly mappingProfileImportSvc = inject(MappingProfileImportService);
   private readonly injector = inject(Injector);
+
+  // True while "Add to Pipeline"/"Update" is waiting on POST mapping-profiles/import.
+  readonly savingMappingProfiles = signal(false);
 
   // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
@@ -1381,8 +1390,8 @@ export class DestinationWizardComponent implements OnInit {
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
     // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
     // preview modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children
-    // and of what (childTableRelationsByTable).
-    config['dest_mapping_summary_v1'] = JSON.stringify(buildMappingSummaryDocument({
+    // and of what (childTableRelationsByTable). Also what POST mapping-profiles/import sends verbatim below.
+    const doc = buildMappingSummaryDocument({
       sourceVendor: this.sourceVendor().toUpperCase(),
       destType: type,
       destLabel: this.destLabel(),
@@ -1392,13 +1401,46 @@ export class DestinationWizardComponent implements OnInit {
       availableFields: this.availableFieldsFn,
       sourceConnectionId: this.sourceConnectionId(),
       destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
-    }));
-
-    this.saved.emit({
-      attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : 'dest-csv',
-      status:      'enabled',
-      config,
     });
+    config['dest_mapping_summary_v1'] = JSON.stringify(doc);
+
+    const emitSaved = () => {
+      this.saved.emit({
+        attachNode:  this.attachNode(),
+        transformId: type === 'sql' ? 'dest-sqlserver' : 'dest-csv',
+        status:      'enabled',
+        config,
+      });
+    };
+
+    // Import the mapping profile(s) now that both real ids exist — skipped when either is still missing
+    // (e.g. no source configured yet) or there's nothing mapped, so this stays a no-op for those cases
+    // exactly like before this endpoint existed. Either way "Add to Pipeline"/"Update" still completes —
+    // a failed import is surfaced as a toast, not a blocker, since the node's own local save (config above)
+    // never depended on it.
+    if (doc.sourceConnectionId && doc.destinationId && doc.mappings.length > 0) {
+      this.savingMappingProfiles.set(true);
+      this.mappingProfileImportSvc.import(doc).subscribe({
+        next: result => {
+          this.savingMappingProfiles.set(false);
+          const failed = result.profiles.filter(p => p.warnings.length > 0 && p.mappingProfileId === EMPTY_GUID);
+          if (failed.length) {
+            this.toast.show('Mapping profile import had issues', failed.map(p => `${p.resourceType}: ${p.warnings.join(' ')}`).join(' '));
+          } else {
+            this.toast.success('Mapping profile saved', `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`);
+          }
+          emitSaved();
+        },
+        error: err => {
+          this.savingMappingProfiles.set(false);
+          const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to import the mapping profile.';
+          this.toast.show('Mapping profile not saved', typeof msg === 'string' ? msg : 'Failed to import the mapping profile.');
+          emitSaved();
+        },
+      });
+      return;
+    }
+
+    emitSaved();
   }
 }
