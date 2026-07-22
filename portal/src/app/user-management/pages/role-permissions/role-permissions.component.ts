@@ -12,12 +12,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { IRoleService } from '../../services/i-role.service';
 import { Role, Permission, PermissionCategory } from '../../../auth/models/user.model';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
+import { ToastService } from '../../../services/toast.service';
 
 // One row of a category table — a Permission Group. `cells` holds only the actions that actually
 // have a Permission for this group (capitalized action label -> Permission); an action with no
@@ -66,7 +66,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
 
   private readonly svc    = inject(IRoleService);
   private readonly router = inject(Router);
-  private readonly snack  = inject(MatSnackBar);
+  private readonly toast  = inject(ToastService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   constructor() {
@@ -279,7 +279,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
         this.originalSelectedIds = new Set(updated.permissions.map(p => p.id));
         this.selectedIds.set(new Set(this.originalSelectedIds));
         this.roles.update(list => list.map(r => (r.id === updated.id ? updated : r)));
-        this.snack.open(`Permissions updated for "${updated.displayName}".`, 'Dismiss', { duration: 3000 });
+        this.toast.success(`Permissions updated for "${updated.displayName}".`);
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);

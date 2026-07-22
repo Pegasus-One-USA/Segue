@@ -10,7 +10,9 @@
     </div>
     <div class="toast-body">
       <strong class="toast-title">{{ toast.title }}</strong>
-      <p class="toast-text">{{ toast.text }}</p>
+      @if (toast.text) {
+        <p class="toast-text">{{ toast.text }}</p>
+      }
     </div>
     <button class="toast-dismiss" (click)="toastService.dismiss()" aria-label="Dismiss">&#10005;</button>
   </div>

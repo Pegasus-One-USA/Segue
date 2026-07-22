@@ -56,6 +56,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<SchedulerHistory> SchedulerHistory => Set<SchedulerHistory>();
     public DbSet<RetryHistory> RetryHistory => Set<RetryHistory>();
     public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
+    public DbSet<ErrorResolution> ErrorResolutions => Set<ErrorResolution>();
     public DbSet<ApiRequestLog> ApiRequestLogs => Set<ApiRequestLog>();
     public DbSet<ExportHistory> ExportHistory => Set<ExportHistory>();
     public DbSet<NotificationHistory> NotificationHistory => Set<NotificationHistory>();

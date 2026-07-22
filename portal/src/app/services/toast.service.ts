@@ -21,16 +21,20 @@ export class ToastService {
 
   private timer: ReturnType<typeof setTimeout> | null = null;
 
-  show(title: string, text: string, type: ToastType = 'info', durationMs?: number): void {
+  show(title: string, text = '', type: ToastType = 'info', durationMs?: number): void {
     if (this.timer) clearTimeout(this.timer);
     this.current.set({ title, text, type });
     this.timer = setTimeout(() => this.current.set(null), durationMs ?? DURATIONS[type]);
   }
 
-  success(title: string, text: string): void { this.show(title, text, 'success'); }
-  error(title: string, text: string): void   { this.show(title, text, 'error'); }
-  warning(title: string, text: string): void { this.show(title, text, 'warning'); }
-  info(title: string, text: string): void    { this.show(title, text, 'info'); }
+  // Two call shapes are supported so both the existing (title, text) call sites and the migrated
+  // single-message ones read cleanly:
+  //   toast.success('User "X" deleted.')            → title only
+  //   toast.success('Saved', 'Your changes are live') → title + supporting text
+  success(title: string, text = ''): void { this.show(title, text, 'success'); }
+  error(title: string, text = ''): void   { this.show(title, text, 'error'); }
+  warning(title: string, text = ''): void { this.show(title, text, 'warning'); }
+  info(title: string, text = ''): void    { this.show(title, text, 'info'); }
 
   dismiss(): void {
     if (this.timer) clearTimeout(this.timer);

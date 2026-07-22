@@ -28,6 +28,9 @@ public interface IGovernanceQueryService
 
     Task<IReadOnlyList<ErrorLogDto>> GetErrorLogsAsync(string? correlationId, int take, CancellationToken cancellationToken);
 
+    /// <summary>Phase 6A – multi-criteria search for the Monitoring → Errors screen, including resolution status.</summary>
+    Task<IReadOnlyList<ErrorLogDto>> SearchErrorLogsAsync(ErrorLogSearch search, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<ApiRequestLogDto>> GetApiRequestLogsAsync(string? correlationId, int take, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ExportHistoryDto>> GetExportHistoryAsync(string? correlationId, int take, CancellationToken cancellationToken);

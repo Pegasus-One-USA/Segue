@@ -12,7 +12,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
@@ -32,6 +31,7 @@ import { ResetPasswordLinkDialogComponent } from '../../dialogs/reset-password-l
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
+import { ToastService } from '../../../services/toast.service';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
 // whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
@@ -83,7 +83,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   private readonly roleService = inject(IRoleService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
-  private readonly snackBar    = inject(MatSnackBar);
+  private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
 
   private readonly destroy$ = new Subject<void>();
@@ -151,7 +151,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: catalog => this.catalog.set(catalog),
-        error: () => this.snackBar.open('Failed to load the permission catalog.', 'Dismiss', { duration: 4000 }),
+        error: () => this.toast.error('Failed to load the permission catalog.'),
       });
 
     if (this.id) {
@@ -188,7 +188,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
         },
         error: (err: {message?: string}) => {
           this.loading.set(false);
-          this.snackBar.open(err?.message ?? 'Failed to load user.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to load user.');
         },
       });
   }
@@ -234,10 +234,10 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
       next: updated => {
         this.user.set(updated);
         const label = action === 'enable' ? 'enabled' : action === 'disable' ? 'disabled' : 'suspended';
-        this.snackBar.open(`User "${u.fullName}" ${label}.`, 'Dismiss', { duration: 3000 });
+        this.toast.success(`User "${u.fullName}" ${label}.`);
       },
       error: err => {
-        this.snackBar.open(err?.message ?? `Failed to ${action} user.`, 'Dismiss', { duration: 4000 });
+        this.toast.error(err?.message ?? `Failed to ${action} user.`);
       },
     });
   }
@@ -254,7 +254,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
           });
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to reset password.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to reset password.');
         },
       });
   }
@@ -283,10 +283,10 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
         .subscribe({
           next: (updated) => {
             this.user.set(updated);
-            this.snackBar.open(`Two-factor authentication disabled for "${u.fullName}".`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`Two-factor authentication disabled for "${u.fullName}".`);
           },
           error: (err: {message?: string}) => {
-            this.snackBar.open(err?.message ?? 'Failed to disable two-factor authentication.', 'Dismiss', { duration: 4000 });
+            this.toast.error(err?.message ?? 'Failed to disable two-factor authentication.');
           },
         });
     });
@@ -303,15 +303,14 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
       .subscribe({
         next: (updated) => {
           this.user.set(updated);
-          this.snackBar.open(
+          this.toast.success(
             required
               ? `Two-factor authentication is now required for "${u.fullName}". They'll be prompted to set it up on next login.`
               : `Two-factor authentication is no longer required for "${u.fullName}".`,
-            'Dismiss', { duration: 4000 },
           );
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to update the MFA requirement.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to update the MFA requirement.');
         },
       });
   }
@@ -323,10 +322,10 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          this.snackBar.open(`Invitation resent to "${u.email}".`, 'Dismiss', { duration: 3000 });
+          this.toast.success(`Invitation resent to "${u.email}".`);
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to resend invitation.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to resend invitation.');
         },
       });
   }
@@ -343,11 +342,11 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          this.snackBar.open(`User "${u.fullName}" deleted.`, 'Dismiss', { duration: 3000 });
+          this.toast.success(`User "${u.fullName}" deleted.`);
           this.router.navigate(['/user-management']);
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to delete user.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to delete user.');
         },
       });
   }

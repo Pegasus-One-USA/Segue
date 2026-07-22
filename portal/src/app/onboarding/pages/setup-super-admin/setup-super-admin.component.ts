@@ -10,9 +10,9 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { AppInitService } from '../../services/app-init.service';
+import { ToastService } from '../../../services/toast.service';
 import { PasswordPolicyService } from '../../../auth/services/password-policy.service';
 import { PasswordValidation } from '../../../auth/models/password-policy.model';
 import { AuthStore } from '../../../auth/store/auth.store';
@@ -37,7 +37,6 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
     SsoButtonsComponent,
   ],
   templateUrl: './setup-super-admin.component.html',
@@ -48,7 +47,7 @@ export class SetupSuperAdminComponent {
   private readonly fb        = inject(FormBuilder);
   private readonly appInit   = inject(AppInitService);
   private readonly policySvc = inject(PasswordPolicyService);
-  private readonly snackBar  = inject(MatSnackBar);
+  private readonly toast     = inject(ToastService);
   private readonly ssoApi    = inject(SsoAuthApiService);
 
   // Login success handling — reuse the exact login pattern (see AuthService.login).
@@ -132,13 +131,12 @@ export class SetupSuperAdminComponent {
         if (err?.status === 409) {
           const msg = 'Setup already completed — please go to the sign-in page.';
           this.serverError.set(msg);
-          this.snackBar.open(msg, 'Go to Sign In', { duration: 8000, panelClass: ['snack-error'] })
-            .onAction().subscribe(() => this.router.navigate(['/auth/login']));
+          this.toast.error(msg);
           return;
         }
         const message = err?.error?.message ?? 'Setup failed. Please try again.';
         this.serverError.set(message);
-        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+        this.toast.error(message);
       },
     });
   }
@@ -159,13 +157,12 @@ export class SetupSuperAdminComponent {
         if (err?.status === 409) {
           const msg = 'Setup already completed — please go to the sign-in page.';
           this.serverError.set(msg);
-          this.snackBar.open(msg, 'Go to Sign In', { duration: 8000, panelClass: ['snack-error'] })
-            .onAction().subscribe(() => this.router.navigate(['/auth/login']));
+          this.toast.error(msg);
           return;
         }
         const message = err?.error?.message ?? 'Setup failed. Please try again.';
         this.serverError.set(message);
-        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+        this.toast.error(message);
       },
     });
   }

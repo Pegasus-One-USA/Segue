@@ -4,9 +4,6 @@
       <h1 class="page-title">Branding</h1>
       <p class="page-sub">Customize how {{ branding.current().companyName }} looks across the platform — changes preview live before you save.</p>
     </div>
-    @if (saved()) {
-      <div class="save-toast">&#10003; Branding saved</div>
-    }
   </div>
 
   <form class="settings-body" [formGroup]="form" (ngSubmit)="save()">

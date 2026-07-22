@@ -73,6 +73,10 @@ export class ExecutionHistoryDetailComponent implements OnInit {
     return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
   }
 
+  errorDisplayMessage(): string {
+    return `Something went wrong while running this workflow. Please contact your admin. (Reference: ${this.runId})`;
+  }
+
   formatJson(value: string | null): string {
     if (!value) return '';
     try {

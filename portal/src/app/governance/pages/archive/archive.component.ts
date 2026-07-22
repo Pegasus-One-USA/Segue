@@ -32,7 +32,9 @@ export class ArchiveComponent implements OnInit {
     this.restoreMessage.set(null);
     this.api.restoreArchive(dataClass).subscribe({
       next: () => this.restoreMessage.set(`Restored ${dataClass}.`),
-      error: err => this.restoreMessage.set(err?.error?.error ?? `Restore for ${dataClass} is not available.`),
+      error: err => this.restoreMessage.set(
+        typeof err?.error?.error === 'string' ? err.error.error : `Restore for ${dataClass} is not available.`,
+      ),
     });
   }
 }

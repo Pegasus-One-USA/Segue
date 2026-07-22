@@ -53,6 +53,10 @@ export const appConfig: ApplicationConfig = {
     // refresh-and-retry logic still sees the real status code; httpErrorSanitizerInterceptor is the
     // inner wrapper (closer to the network) so every error — including ones authInterceptor passes
     // through unchanged — has already had its unsafe `.message` replaced before anything reads it.
+    // NOTE (Phase 6A): globalErrorInterceptor (auto friendly-error dialog) is intentionally NOT wired
+    // here — it popped a blocking modal on every backend error, which interrupted workflow testing.
+    // The backend still captures every exception with a reference id (Monitoring → Errors). Re-add it
+    // gated to 5xx only if a global dialog is wanted.
     provideHttpClient(withInterceptors([authInterceptor, httpErrorSanitizerInterceptor])),
 
     // ── Real backend wiring (environment.apiBase) ────────────────────────────

@@ -21,15 +21,24 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .correlation-input {
-  flex: 0 0 320px;
+  flex: 0 0 240px;
   padding: 8px 12px;
   border: 1px solid var(--color-border-input);
   border-radius: 6px;
   font-family: monospace;
   font-size: 13px;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--color-surface, #fff);
 }
 
 .btn {
@@ -101,6 +110,44 @@
 .severity-error, .severity-high, .severity-critical {
   background: var(--color-error-soft);
   color: var(--color-error-strong);
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-open {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+}
+
+.status-resolved {
+  background: var(--color-success-soft, #e6f4ea);
+  color: var(--color-success-strong, #1e7e34);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.detail-panel {
+  margin-top: 8px;
+
+  p {
+    margin: 4px 0;
+    font-size: 12px;
+  }
+}
+
+.detail-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--color-muted);
 }
 
 .empty-state {

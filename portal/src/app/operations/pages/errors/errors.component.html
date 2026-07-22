@@ -1,18 +1,58 @@
 <div class="list-page">
   <div class="page-header">
     <h1>Errors</h1>
-    <p class="page-sub">Unhandled exceptions captured centrally across the API and Worker hosts.</p>
+    <p class="page-sub">Unhandled exceptions captured centrally across the API, Worker, and workflow engine. Search by Error Reference ID to locate a specific incident.</p>
   </div>
 
   <div class="filter-bar">
     <input
       type="search"
       class="correlation-input"
-      placeholder="Filter by Correlation ID…"
-      [value]="correlationId()"
-      (input)="onCorrelationIdChange($any($event.target).value)"
+      placeholder="Error Reference ID (e.g. ERR-20260721-000123)…"
+      [value]="errorReferenceId()"
+      (input)="errorReferenceId.set($any($event.target).value)"
       (keyup.enter)="load()"
     />
+    <input
+      type="search"
+      class="correlation-input"
+      placeholder="Correlation ID…"
+      [value]="correlationId()"
+      (input)="correlationId.set($any($event.target).value)"
+      (keyup.enter)="load()"
+    />
+    <input
+      type="search"
+      class="correlation-input"
+      placeholder="Execution ID…"
+      [value]="executionId()"
+      (input)="executionId.set($any($event.target).value)"
+      (keyup.enter)="load()"
+    />
+    <input
+      type="search"
+      class="correlation-input"
+      placeholder="Workflow…"
+      [value]="workflowId()"
+      (input)="workflowId.set($any($event.target).value)"
+      (keyup.enter)="load()"
+    />
+
+    <select class="filter-select" [value]="severity()" (change)="severity.set($any($event.target).value)">
+      <option value="">All severities</option>
+      @for (s of severities; track s) { <option [value]="s">{{ s }}</option> }
+    </select>
+
+    <select class="filter-select" [value]="category()" (change)="category.set($any($event.target).value)">
+      <option value="">All categories</option>
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+
+    <select class="filter-select" [value]="status()" (change)="status.set($any($event.target).value)">
+      <option value="">All statuses</option>
+      @for (st of statuses; track st) { <option [value]="st">{{ st }}</option> }
+    </select>
+
     <button class="btn" type="button" (click)="load()">Search</button>
     <button class="btn btn-ghost" type="button" (click)="reset()">Reset</button>
   </div>
@@ -26,9 +66,24 @@
           <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</td>
         </ng-container>
 
+        <ng-container matColumnDef="errorReferenceId">
+          <th mat-header-cell *matHeaderCellDef>Reference ID</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.errorReferenceId || '—' }}</code></td>
+        </ng-container>
+
         <ng-container matColumnDef="severity">
           <th mat-header-cell *matHeaderCellDef>Severity</th>
           <td mat-cell *matCellDef="let r"><span class="severity-badge" [class]="severityClass(r.severity)">{{ r.severity }}</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="category">
+          <th mat-header-cell *matHeaderCellDef>Category</th>
+          <td mat-cell *matCellDef="let r">{{ r.category || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r"><span class="status-badge" [class]="'status-' + (r.status || 'open').toLowerCase()">{{ r.status || 'Open' }}</span></td>
         </ng-container>
 
         <ng-container matColumnDef="module">
@@ -53,8 +108,19 @@
               (keydown.enter)="toggleStackTrace(r.id)"
               (keydown.space)="toggleStackTrace(r.id); $event.preventDefault()"
             >{{ r.message }}</span>
-            @if (expandedId() === r.id && r.stackTrace) {
-              <pre class="stack-trace">{{ r.stackTrace }}</pre>
+            @if (expandedId() === r.id) {
+              <div class="detail-panel">
+                @if (r.userFriendlyMessage) { <p><strong>User message:</strong> {{ r.userFriendlyMessage }}</p> }
+                <p class="detail-context">
+                  @if (r.executionId) { <span>Execution: <code>{{ r.executionId }}</code></span> }
+                  @if (r.workflowId) { <span>Workflow: <code>{{ r.workflowId }}</code></span> }
+                  @if (r.endpointId) { <span>Endpoint: <code>{{ r.endpointId }}</code></span> }
+                  @if (r.traceId) { <span>Trace: <code>{{ r.traceId }}</code></span> }
+                  @if (r.spanId) { <span>Span: <code>{{ r.spanId }}</code></span> }
+                </p>
+                @if (r.resolvedBy) { <p><strong>Resolved by:</strong> {{ r.resolvedBy }} ({{ r.resolvedOnUtc | date:'medium' }})</p> }
+                @if (r.stackTrace) { <pre class="stack-trace">{{ r.stackTrace }}</pre> }
+              </div>
             }
           </td>
         </ng-container>
@@ -62,6 +128,19 @@
         <ng-container matColumnDef="correlationId">
           <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
           <td mat-cell *matCellDef="let r"><code class="mono">{{ r.correlationId || '—' }}</code></td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>Actions</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.errorReferenceId) {
+              @if ((r.status || 'Open') === 'Open') {
+                <button class="btn btn-ghost btn-sm" type="button" (click)="resolve(r)">Resolve</button>
+              } @else {
+                <button class="btn btn-ghost btn-sm" type="button" (click)="reopen(r)">Reopen</button>
+              }
+            }
+          </td>
         </ng-container>
 
         <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>

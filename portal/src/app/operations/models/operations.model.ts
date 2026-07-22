@@ -19,7 +19,8 @@ export interface RetryHistoryEntry {
   correlationId: string | null;
 }
 
-/** Matches the backend's ErrorLogDto (api/v1/operations/errors). */
+/** Matches the backend's ErrorLogDto (api/v1/operations/errors). Phase 6A fields (reference id, category,
+ *  execution-correlation set, resolution status) are populated by the Global Exception Manager. */
 export interface ErrorLogEntry {
   id: string;
   occurredOnUtc: string;
@@ -29,6 +30,42 @@ export interface ErrorLogEntry {
   stackTrace: string | null;
   module: string | null;
   correlationId: string | null;
+  errorReferenceId: string | null;
+  category: string | null;
+  userFriendlyMessage: string | null;
+  executionId: string | null;
+  workflowId: string | null;
+  endpointId: string | null;
+  requestId: string | null;
+  traceId: string | null;
+  spanId: string | null;
+  status: string | null;
+  resolvedBy: string | null;
+  resolvedOnUtc: string | null;
+}
+
+/** Multi-criteria filter for the Monitoring → Errors search (Phase 6A). All fields optional. */
+export interface ErrorLogSearch {
+  errorReferenceId?: string;
+  correlationId?: string;
+  executionId?: string;
+  workflowId?: string;
+  endpointId?: string;
+  severity?: string;
+  category?: string;
+  status?: string;
+  fromUtc?: string;
+  toUtc?: string;
+  take?: number;
+}
+
+/** The standardized error envelope returned by the backend's Global Exception Manager (Phase 6A). */
+export interface StandardErrorResponse {
+  error?: string;
+  message?: string;
+  errorReferenceId?: string;
+  correlationId?: string;
+  category?: string;
 }
 
 /** Matches the backend's ApiRequestLogDto (api/v1/operations/api-requests). */

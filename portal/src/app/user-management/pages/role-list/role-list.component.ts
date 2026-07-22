@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -15,6 +14,7 @@ import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
 import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
 
 @Component({
   selector: 'app-role-list',
@@ -35,7 +35,7 @@ import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dia
 export class RoleListComponent implements OnInit {
   private readonly svc    = inject(IRoleService);
   private readonly dialog = inject(MatDialog);
-  private readonly snack  = inject(MatSnackBar);
+  private readonly toast  = inject(ToastService);
   private readonly router = inject(Router);
 
   readonly searchQuery = signal('');
@@ -81,7 +81,7 @@ export class RoleListComponent implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snack.open('Failed to load roles.', 'Dismiss', { duration: 4000 });
+        this.toast.error('Failed to load roles.');
       },
     });
   }
@@ -112,7 +112,7 @@ export class RoleListComponent implements OnInit {
       .afterClosed()
       .subscribe(res => {
         if (res) {
-          this.snack.open('Role added successfully.', 'Dismiss', { duration: 3000 });
+          this.toast.success('Role added successfully.');
           this.loadRoles();
         }
       });
@@ -129,7 +129,7 @@ export class RoleListComponent implements OnInit {
       .afterClosed()
       .subscribe(res => {
         if (res) {
-          this.snack.open('Role updated successfully.', 'Dismiss', { duration: 3000 });
+          this.toast.success('Role updated successfully.');
           this.loadRoles();
         }
       });
@@ -156,12 +156,12 @@ export class RoleListComponent implements OnInit {
         if (!confirmed) return;
         this.svc.deleteRole(role.id).subscribe({
           next: () => {
-            this.snack.open(`Role "${role.displayName}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`Role "${role.displayName}" deleted.`);
             this.loadRoles();
           },
           error: (err: HttpErrorResponse) => {
             const message = err.error?.title ?? 'Failed to delete role.';
-            this.snack.open(message, 'Dismiss', { duration: 5000 });
+            this.toast.error(message);
           },
         });
       });
