@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  s_4cbfee433b5ae2::t_a4f34855018365 209-215,223,232-282,285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "6a90b93495a9def1dd85aea9ec22cc74fd81618e",
+  "prompts": {},
+  "sessions": {
+    "s_4cbfee433b5ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80757dfb-c581-46cf-8de9-9df05272ed1a",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
