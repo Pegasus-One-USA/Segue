@@ -4,7 +4,7 @@ import { PipelineStore } from '../../services/pipeline.store';
 import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { WorkflowApiService, WorkflowBuildRequest, WorkflowTriggerRequest } from '../../services/workflow-api.service';
+import { WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowTriggerRequest } from '../../services/workflow-api.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { WorkflowBuildAssemblerService } from '../../services/workflow-build-assembler.service';
 import { SOURCES } from '../../data/sources.data';
@@ -260,7 +260,7 @@ export class WorkflowBuilderComponent implements OnInit {
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
         this.workflowBusy.set(false);
-        this.resetCanvasAndWorkflowState();
+        this.stampBuildResultIds(result);
       },
       error: err => {
         const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Create-on-save failed.';
@@ -599,6 +599,24 @@ export class WorkflowBuilderComponent implements OnInit {
   }
 
   /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */
+  // Writes each node's real, server-created id back onto its own fields instead of wiping the canvas —
+  // the wizards read these fields (findLaunchSourceId(), destination-wizard's resolvedDestinationId) so
+  // the Mapping JSON gets non-null sourceConnectionId/destinationId right after Save, no reload needed.
+  // Also stamps mappingProfileId so the next Save updates these records in place rather than duplicating
+  // them (workflow-build-assembler.service.ts reads these same three field names as each spec's existingId).
+  private stampBuildResultIds(result: WorkflowBuildResult): void {
+    const stamp = (ids: Record<string, string>, field: string) => {
+      for (const [nodeId, id] of Object.entries(ids)) {
+        const node = this.store.byId(nodeId);
+        if (!node) continue;
+        this.store.updateNode(nodeId, { fields: { ...node.fields, [field]: id } });
+      }
+    };
+    stamp(result.sourceConnectionIds, 'sourceConnectionId');
+    stamp(result.destinationIds, 'destinationId');
+    stamp(result.mappingProfileIds, 'mappingProfileId');
+  }
+
   private resetCanvasAndWorkflowState(): void {
     this.store.reset();
     this.currentWorkflowId.set(null);

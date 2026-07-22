@@ -125,19 +125,19 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
             return new SchemaMutationResultDto(false, exception.Message);
         }
 
-        bool tableCreated;
         try
         {
             await using var connection = await OpenConnectionAsync(
                 request.Connection.DestinationType, connectionString, cancellationToken);
 
-            // Adding a column to a resource's default table shouldn't require a separate "create the
-            // table first" step — auto-create it (bare Id PK) so "Add column" is self-sufficient, same
-            // as "Add table" already is.
-            tableCreated = !await TableExistsAsync(connection, schemaName, tableName, cancellationToken);
-            if (tableCreated)
+            // Never auto-create the table here — a column can only be added to a table the user
+            // explicitly created (via "Create a new table…") or that already exists for real. Silently
+            // creating a bare table just because its name was guessed and doesn't exist yet surprises the
+            // user with schema changes they never asked for.
+            if (!await TableExistsAsync(connection, schemaName, tableName, cancellationToken))
             {
-                await CreateBareTableAsync(connection, schemaName, tableName, cancellationToken);
+                return new SchemaMutationResultDto(
+                    false, $"Table '{schemaName}.{tableName}' does not exist. Create it first via \"Create a new table…\".");
             }
 
             await using var command = connection.CreateCommand();
@@ -153,14 +153,6 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
             return new SchemaMutationResultDto(false, exception.Message);
         }
 
-        if (tableCreated)
-        {
-            await RecordSchemaAuditAsync(
-                "TableCreated",
-                $"Table '{schemaName}.{tableName}' auto-created for a new column.",
-                cancellationToken);
-        }
-
         await RecordSchemaAuditAsync(
             "ColumnAdded",
             $"Column '{columnName}' ({normalizedDataType}) added to table '{schemaName}.{tableName}'.",
@@ -169,6 +161,7 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
         var typeFamily = normalizedDataType.Split('(')[0];
         var column = new DestinationColumnSchemaDto(
             columnName, normalizedDataType, MapSqlServerType(typeFamily), request.IsNullable, maxLength);
+
         return new SchemaMutationResultDto(true, null, column);
     }
 
@@ -183,10 +176,32 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
         }
 
         string schemaName, tableName, connectionString;
+        var columns = new List<(string Name, string NormalizedType, int? MaxLength)>();
+        (string SchemaName, string TableName, string ColumnName)? parent = null;
+        string? fkColumnName = null;
         try
         {
             (schemaName, tableName) = SplitTableName(request.TableName);
             connectionString = BuildConnectionString(request.Connection);
+
+            foreach (var column in request.Columns ?? [])
+            {
+                var name = SqlIdentifier.Validate(column.Name);
+                var (normalizedType, maxLength) = ValidateDataType(column.DataType);
+                columns.Add((name, normalizedType, maxLength));
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.ParentTable))
+            {
+                var (parentSchema, parentTableName) = SplitTableName(request.ParentTable);
+                var parentColumn = SqlIdentifier.Validate(
+                    string.IsNullOrWhiteSpace(request.ParentColumn) ? "Id" : request.ParentColumn);
+                parent = (parentSchema, parentTableName, parentColumn);
+                fkColumnName = SqlIdentifier.Validate(
+                    string.IsNullOrWhiteSpace(request.ForeignKeyColumnName)
+                        ? $"{parentTableName}Id"
+                        : request.ForeignKeyColumnName);
+            }
         }
         catch (Exception exception)
         {
@@ -203,7 +218,41 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
                 return new SchemaMutationResultDto(false, $"Table '{schemaName}.{tableName}' already exists.");
             }
 
-            await CreateBareTableAsync(connection, schemaName, tableName, cancellationToken);
+            if (parent is { } p && !await TableExistsAsync(connection, p.SchemaName, p.TableName, cancellationToken))
+            {
+                return new SchemaMutationResultDto(false, $"Parent table '{p.SchemaName}.{p.TableName}' was not found.");
+            }
+
+            await using var createSchemaCommand = connection.CreateCommand();
+            createSchemaCommand.CommandText = $"""
+                IF SCHEMA_ID(N'{schemaName}') IS NULL
+                BEGIN
+                    EXEC(N'CREATE SCHEMA [{schemaName}]')
+                END
+                """;
+            await createSchemaCommand.ExecuteNonQueryAsync(cancellationToken);
+
+            var columnDefinitions = new List<string>
+            {
+                $"Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_Id PRIMARY KEY",
+            };
+            columnDefinitions.AddRange(columns.Select(c => $"[{c.Name}] {c.NormalizedType} NULL"));
+            if (parent is { } fk)
+            {
+                columnDefinitions.Add(
+                    $"[{fkColumnName}] BIGINT NOT NULL " +
+                    $"CONSTRAINT FK_{schemaName}_{tableName}_{fkColumnName} " +
+                    $"REFERENCES [{fk.SchemaName}].[{fk.TableName}]([{fk.ColumnName}])");
+            }
+
+            await using var createTableCommand = connection.CreateCommand();
+            createTableCommand.CommandText = $"""
+                CREATE TABLE [{schemaName}].[{tableName}]
+                (
+                    {string.Join(",\n    ", columnDefinitions)}
+                );
+                """;
+            await createTableCommand.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception exception)
         {
@@ -212,10 +261,23 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
 
         await RecordSchemaAuditAsync(
             "TableCreated",
-            $"Table '{schemaName}.{tableName}' created.",
+            $"Table '{schemaName}.{tableName}' created"
+                + (parent is { } auditParent ? $" as a child of '{auditParent.SchemaName}.{auditParent.TableName}'." : "."),
             cancellationToken);
 
-        return new SchemaMutationResultDto(true, null);
+        var resultColumns = new List<DestinationColumnSchemaDto>
+        {
+            new("Id", "bigint", "Integer", false, null),
+        };
+        resultColumns.AddRange(columns.Select(c =>
+            new DestinationColumnSchemaDto(c.Name, c.NormalizedType, MapSqlServerType(c.NormalizedType.Split('(')[0]), true, c.MaxLength)));
+        if (parent is not null)
+        {
+            resultColumns.Add(new DestinationColumnSchemaDto(fkColumnName!, "bigint", "Integer", false, null));
+        }
+
+        var table = new DestinationTableSchemaDto(schemaName, tableName, $"{schemaName}.{tableName}", resultColumns);
+        return new SchemaMutationResultDto(true, null, Table: table);
     }
 
     public async Task<SchemaMutationResultDto> DropColumnAsync(
@@ -266,6 +328,108 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
         return new SchemaMutationResultDto(true, null);
     }
 
+    public async Task<SchemaMutationResultDto> AlterColumnAsync(
+        AlterColumnRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        {
+            return new SchemaMutationResultDto(
+                false, $"Destination type '{request.Connection.DestinationType}' does not support altering columns.");
+        }
+
+        string schemaName, tableName, columnName, normalizedDataType, connectionString;
+        int? maxLength;
+        string? newColumnName = null;
+        try
+        {
+            (schemaName, tableName) = SplitTableName(request.TableName);
+            columnName = SqlIdentifier.Validate(request.ColumnName);
+            (normalizedDataType, maxLength) = ValidateDataType(request.NewDataType);
+            if (!string.IsNullOrWhiteSpace(request.NewColumnName))
+            {
+                newColumnName = SqlIdentifier.Validate(request.NewColumnName);
+            }
+            connectionString = BuildConnectionString(request.Connection);
+        }
+        catch (Exception exception)
+        {
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        var finalColumnName = columnName;
+        bool isNullable;
+        try
+        {
+            await using var connection = await OpenConnectionAsync(
+                request.Connection.DestinationType, connectionString, cancellationToken);
+
+            await using var alterCommand = connection.CreateCommand();
+            alterCommand.CommandText = $"""
+                ALTER TABLE [{schemaName}].[{tableName}]
+                ALTER COLUMN [{columnName}] {normalizedDataType};
+                """;
+            await alterCommand.ExecuteNonQueryAsync(cancellationToken);
+
+            if (newColumnName is not null
+                && !string.Equals(newColumnName, columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                await using var renameCommand = connection.CreateCommand();
+                renameCommand.CommandText = "EXEC sp_rename @objname, @newname, N'COLUMN';";
+                AddParameter(renameCommand, "@objname", $"{schemaName}.{tableName}.{columnName}");
+                AddParameter(renameCommand, "@newname", newColumnName);
+                await renameCommand.ExecuteNonQueryAsync(cancellationToken);
+                finalColumnName = newColumnName;
+            }
+
+            isNullable = await GetColumnNullableAsync(connection, schemaName, tableName, finalColumnName, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // Incompatible type conversion, new name collides with an existing column, table/column
+            // missing, permission denied, etc. are expected UI outcomes.
+            return new SchemaMutationResultDto(false, exception.Message);
+        }
+
+        await RecordSchemaAuditAsync(
+            "ColumnAltered",
+            finalColumnName == columnName
+                ? $"Column '{columnName}' on table '{schemaName}.{tableName}' changed to {normalizedDataType}."
+                : $"Column '{columnName}' on table '{schemaName}.{tableName}' renamed to '{finalColumnName}' and changed to {normalizedDataType}.",
+            cancellationToken);
+
+        var typeFamily = normalizedDataType.Split('(')[0];
+        var column = new DestinationColumnSchemaDto(
+            finalColumnName, normalizedDataType, MapSqlServerType(typeFamily), isNullable, maxLength);
+        return new SchemaMutationResultDto(true, null, column);
+    }
+
+    private static void AddParameter(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    /// <summary>Definitive post-ALTER nullability, read back from the catalog rather than assumed — the
+    /// ALTER COLUMN statement above deliberately omits NULL/NOT NULL to preserve whatever it already
+    /// was, so this is the only way to know what that ended up being.</summary>
+    private static async Task<bool> GetColumnNullableAsync(
+        DbConnection connection, string schemaName, string tableName, string columnName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table AND COLUMN_NAME = @column;
+            """;
+        AddParameter(command, "@schema", schemaName);
+        AddParameter(command, "@table", tableName);
+        AddParameter(command, "@column", columnName);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is string s && string.Equals(s, "YES", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<bool> TableExistsAsync(
         DbConnection connection, string schemaName, string tableName, CancellationToken cancellationToken)
     {
@@ -273,29 +437,6 @@ public sealed partial class SqlDestinationSchemaService : IDestinationSchemaServ
         command.CommandText = $"SELECT OBJECT_ID(N'[{schemaName}].[{tableName}]', N'U');";
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is not null and not DBNull;
-    }
-
-    /// <summary>Creates the schema (if missing) and a bare table with just an auto-increment Id primary key.</summary>
-    private static async Task CreateBareTableAsync(
-        DbConnection connection, string schemaName, string tableName, CancellationToken cancellationToken)
-    {
-        await using var createSchemaCommand = connection.CreateCommand();
-        createSchemaCommand.CommandText = $"""
-            IF SCHEMA_ID(N'{schemaName}') IS NULL
-            BEGIN
-                EXEC(N'CREATE SCHEMA [{schemaName}]')
-            END
-            """;
-        await createSchemaCommand.ExecuteNonQueryAsync(cancellationToken);
-
-        await using var createTableCommand = connection.CreateCommand();
-        createTableCommand.CommandText = $"""
-            CREATE TABLE [{schemaName}].[{tableName}]
-            (
-                Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_Id PRIMARY KEY
-            );
-            """;
-        await createTableCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private async Task RecordSchemaAuditAsync(string action, string message, CancellationToken cancellationToken)

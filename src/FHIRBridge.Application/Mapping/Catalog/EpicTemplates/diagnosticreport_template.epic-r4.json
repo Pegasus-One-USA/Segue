@@ -1,0 +1,383 @@
+{
+  "resourceType": "DiagnosticReport",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>",
+    "profile": [
+      "<Canonical · 0..*>"
+    ],
+    "security": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "userSelected": "<boolean · 0..1>"
+      }
+    ],
+    "tag": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "userSelected": "<boolean · 0..1>"
+      }
+    ]
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "version": "<String · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "userSelected": "<boolean · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      },
+      "assigner": {
+        "reference": "<String · 0..1>",
+        "type": "<Uri · 0..1>",
+        "identifier": "<Identifier · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "basedOn": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "identifier": {
+        "use": "<Code · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "value": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        },
+        "assigner": "<Reference · 0..1>"
+      },
+      "display": "<String · 0..1>"
+    }
+  ],
+  "status": "<Code · 1..1 · required>",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "version": "<String · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>",
+          "userSelected": "<boolean · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "userSelected": "<boolean · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "subject": {
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>",
+    "identifier": {
+      "use": "<Code · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "version": "<String · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "userSelected": "<boolean · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      },
+      "assigner": "<Reference · 0..1>"
+    },
+    "display": "<String · 0..1>"
+  },
+  "encounter": {
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>",
+    "identifier": {
+      "use": "<Code · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "version": "<String · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "userSelected": "<boolean · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      },
+      "assigner": "<Reference · 0..1>"
+    },
+    "display": "<String · 0..1>"
+  },
+  "effectiveDateTime": "<DateTime · 0..1>",
+  "effectivePeriod": {
+    "start": "<DateTime · 0..1>",
+    "end": "<DateTime · 0..1>"
+  },
+  "issued": "<Instant · 0..1>",
+  "performer": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "identifier": {
+        "use": "<Code · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "value": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        },
+        "assigner": "<Reference · 0..1>"
+      },
+      "display": "<String · 0..1>"
+    }
+  ],
+  "resultsInterpreter": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "identifier": {
+        "use": "<Code · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "value": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        },
+        "assigner": "<Reference · 0..1>"
+      },
+      "display": "<String · 0..1>"
+    }
+  ],
+  "specimen": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "identifier": {
+        "use": "<Code · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "value": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        },
+        "assigner": "<Reference · 0..1>"
+      },
+      "display": "<String · 0..1>"
+    }
+  ],
+  "result": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "identifier": {
+        "use": "<Code · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "value": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        },
+        "assigner": "<Reference · 0..1>"
+      },
+      "display": "<String · 0..1>"
+    }
+  ],
+  "imagingStudy": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "identifier": {
+        "use": "<Code · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "value": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        },
+        "assigner": "<Reference · 0..1>"
+      },
+      "display": "<String · 0..1>"
+    }
+  ],
+  "media": [
+    {
+      "comment": "<String · 0..1>",
+      "link": {
+        "reference": "<String · 0..1>",
+        "type": "<Uri · 0..1>",
+        "identifier": {
+          "use": "<Code · 0..1>",
+          "type": {
+            "coding": [
+              {
+                "system": "<Uri · 0..1>",
+                "version": "<String · 0..1>",
+                "code": "<Code · 0..1>",
+                "display": "<String · 0..1>",
+                "userSelected": "<boolean · 0..1>"
+              }
+            ],
+            "text": "<String · 0..1>"
+          },
+          "system": "<Uri · 0..1>",
+          "value": "<String · 0..1>",
+          "period": {
+            "start": "<DateTime · 0..1>",
+            "end": "<DateTime · 0..1>"
+          },
+          "assigner": "<Reference · 0..1>"
+        },
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "conclusion": "<String · 0..1>",
+  "conclusionCode": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "version": "<String · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>",
+          "userSelected": "<boolean · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "presentedForm": [
+    {
+      "contentType": "<Code · 0..1>",
+      "language": "<Code · 0..1>",
+      "data": "<Base64Binary · 0..1>",
+      "url": "<Url · 0..1>",
+      "size": "<unsignedInt · 0..1>",
+      "hash": "<Base64Binary · 0..1>",
+      "title": "<String · 0..1>",
+      "creation": "<DateTime · 0..1>"
+    }
+  ]
+}

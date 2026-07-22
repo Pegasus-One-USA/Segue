@@ -107,30 +107,12 @@
   &:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-mid); }
 }
 
-.fm-add-table-new-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-
-  .fm-add-table-select { flex: 1; }
-}
-
-.fm-add-table-cancel {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-muted);
-  font-size: 12px;
-  cursor: pointer;
-  box-shadow: 0 12px 28px rgba(18, 20, 27, .11);
-
-  &:hover { background: var(--color-side); color: var(--color-ink); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+// Same affordance as .fm-add-table-select, but a real <button> (no live schema to pick an existing
+// table from yet, so this is the only "add a table" entry point) — reset UA button chrome so it reads
+// identically to the dropdown it stands in for.
+.fm-add-table-createbtn {
+  appearance: none;
+  text-align: left;
 }
 
 /* ── Confirm before removing an extra table ─────────────────────────────────── */

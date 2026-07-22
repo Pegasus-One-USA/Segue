@@ -38,23 +38,39 @@ export class FieldMappingAnchorService {
 
   // ── vertical scrollbar (replaces vertical drag-pan/wheel with a real, bounded scroll range —
   // horizontal pan stays free-form via drag, unaffected by any of this) ──
-  private static readonly VIRTUAL_HEIGHT = 2600; // matches .fm-canvas-inner's fixed height
+  // Floor for the scrollable range — matches .fm-canvas-inner's fixed CSS height, used until anything
+  // registers. Cards (e.g. the source payload tree) are height:auto and can render far taller than this
+  // for a large payload, so the real range below tracks the actual registered content instead of
+  // staying capped here — otherwise a tall card's bottom rows would be visually present but stuck
+  // beyond how far panning/scrolling is allowed to go.
+  private static readonly VIRTUAL_HEIGHT = 2600;
+  private static readonly CONTENT_BOTTOM_PADDING = 200;
 
   setViewportSize(width: number, height: number): void {
     this._viewportSize.set({ width, height });
   }
 
+  /** The tallest extent of any currently-registered anchor (tree leaves, group headers, column rows),
+   *  in model-space, with the same VIRTUAL_HEIGHT floor as before — falls back to that floor before
+   *  anything has rendered yet, or once whatever's registered still fits inside it. */
+  private readonly modelContentHeight = computed(() => {
+    this.version(); // re-run whenever anchors are registered/unregistered/refreshed
+    const bounds = this.boundingBoxModel();
+    const measured = bounds ? bounds.maxY + FieldMappingAnchorService.CONTENT_BOTTOM_PADDING : 0;
+    return Math.max(FieldMappingAnchorService.VIRTUAL_HEIGHT, measured);
+  });
+
   /** How far content can travel before its bottom edge reaches the viewport's bottom edge — the
    *  range a scrollbar thumb travels across. 0 once everything already fits (no scrolling needed). */
   readonly maxScrollY = computed(() =>
-    Math.max(0, FieldMappingAnchorService.VIRTUAL_HEIGHT * this._zoom() - this._viewportSize().height));
+    Math.max(0, this.modelContentHeight() * this._zoom() - this._viewportSize().height));
 
   /** Current scroll position derived from pan.y — 0 at the top of content, maxScrollY at the bottom. */
   readonly scrollY = computed(() => Math.min(this.maxScrollY(), Math.max(0, -this._pan().y)));
 
   /** Thumb height as a fraction of the track; 1 means content already fits (no scrollbar needed). */
   readonly scrollThumbFraction = computed(() => {
-    const contentHeight = FieldMappingAnchorService.VIRTUAL_HEIGHT * this._zoom();
+    const contentHeight = this.modelContentHeight() * this._zoom();
     return contentHeight > 0 ? Math.min(1, this._viewportSize().height / contentHeight) : 1;
   });
 

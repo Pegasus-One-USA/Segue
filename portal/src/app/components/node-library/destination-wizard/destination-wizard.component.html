@@ -233,14 +233,21 @@
             type="button"
             class="dw-resource-card"
             [class.selected]="isResourceSelected(r)"
+            [class.locked]="isResourceLocked(r)"
+            [title]="resourceHintFor(r) ?? ''"
             (click)="toggleResource(r)"
           >
             <div class="dw-rc-check">
-              @if (isResourceSelected(r)) { ✓ }
+              @if (isResourceSelected(r)) {
+                @if (isResourceLocked(r)) { 🔒 } @else { ✓ }
+              }
             </div>
             <div class="dw-rc-body">
               <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
               <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
+              @if (resourceHintFor(r); as hint) {
+                <span class="dw-rc-hint" [class.dw-rc-hint--locked]="isResourceLocked(r)">{{ hint }}</span>
+              }
             </div>
           </button>
         }
@@ -262,16 +269,38 @@
           <span class="dw-section-hint">Choose a data group to map.</span>
         </div>
 
+        <!-- ── Save mapping / Load saved mapping / Load mapping JSON controls live here, hidden from
+             this screen for now — still reachable via the in-canvas header Save (which also builds and
+             shows the Mapping JSON), see buildAndShowMappingSummary()/loadMappingSnapshot()/
+             submitLoadMappingSummary(). ── -->
+
         <table class="data-table dw-groups-table">
           <thead class="data-table__header">
             <tr>
+              <th class="dw-groups-drag-col"></th>
               <th>Data group</th>
               <th class="dw-groups-actions-col">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody #groupsBody>
             @for (r of resourceKeys(); track r) {
-              <tr class="data-table__row">
+              <tr
+                class="data-table__row"
+                [class.dw-groups-row--dragging]="draggingResource() === r"
+                [attr.data-resource-row]="r"
+              >
+                <td class="dw-groups-drag-col">
+                  <button
+                    type="button"
+                    class="dw-groups-drag-handle"
+                    [attr.aria-label]="'Drag to reorder ' + r"
+                    title="Drag to reorder"
+                    (pointerdown)="onGroupRowDragHandlePointerDown(r, $event)"
+                    (pointermove)="onGroupRowDragPointerMove($event)"
+                    (pointerup)="onGroupRowDragPointerUp($event)"
+                    (pointercancel)="onGroupRowDragPointerUp($event)"
+                  >⠿</button>
+                </td>
                 <td class="dw-groups-name">{{ r }}</td>
                 <td class="dw-groups-actions">
                   <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">Map</button>
@@ -279,7 +308,7 @@
               </tr>
             }
             @if (resourceKeys().length === 0) {
-              <tr><td colspan="2" class="dw-groups-empty">No data groups selected — go back to Step 2 to choose some.</td></tr>
+              <tr><td colspan="3" class="dw-groups-empty">No data groups selected — go back to Step 2 to choose some.</td></tr>
             }
           </tbody>
         </table>
@@ -299,6 +328,7 @@
           [csvDelimiterKey]="csvForm.value.delimiter ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
           [columnsForTable]="columnsForTableFn"
+          [dataTypeForTable]="dataTypeForTableColumnFn"
           [availableTablesToAdd]="availableTablesToAddFn"
           [connectionInfo]="connectionInfo()"
           [openLoadPayloadRequest]="openLoadPayloadRequest()"
@@ -309,9 +339,18 @@
           (columnAdded)="onColumnAdded($event)"
           (tableCreated)="onTableCreated($event)"
           (columnDropped)="onColumnDropped($event)"
+          (columnAltered)="onColumnAltered($event)"
           (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
+          (childTableRelationAdded)="onChildTableRelationAdded($event)"
         />
       }
+    }
+
+    @if (mappingSummaryPreviewOpen()) {
+      <app-field-mapping-export-preview-modal
+        [data]="lastMappingSummary()"
+        (closed)="closeMappingSummaryPreview()"
+      />
     }
 
     <!-- ═══ STEP 4: Review ═══════════════════════════════════════════════ -->
@@ -394,11 +433,12 @@
         <button
           class="dw-btn dw-btn--primary"
           type="button"
-          [disabled]="isNextDisabled() || probeState() === 'testing'"
+          [disabled]="isNextDisabled() || probeState() === 'testing' || provisioningDestination()"
           (click)="next()"
         >
           @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }
-          @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
+          @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
+          @else if (step() === 1 && provisioningDestination()) { Creating… }
           @else { Next }
         </button>
       </div>

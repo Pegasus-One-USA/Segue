@@ -38,6 +38,14 @@ const FHIR_RESOURCES = [
   'DocumentReference', 'Practitioner', 'PractitionerRole',
 ];
 
+/** Resource types actually supported end-to-end today (mapping catalog, pipeline steps, destination
+ *  writers) — of whatever an endpoint's CapabilityStatement discovers, only these are selectable; the
+ *  rest still show (for transparency about what the endpoint itself supports) but render disabled. */
+const SUPPORTED_RESOURCE_TYPES = [
+  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation', 'Condition',
+  'Procedure', 'ServiceRequest', 'DiagnosticReport', 'MedicationRequest', 'MedicationAdministration',
+];
+
 function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
   if (!ctrl.value) return null;
   try { new URL(ctrl.value); return null; } catch { return { url: true }; }
@@ -48,24 +56,6 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
  * tokens; when absent (Epic frequently omits them) it infers from scopes_supported — a granular v2 suffix like
  * `.rs` / `.cruds` implies v2, coarse `.read` / `.write` implies v1. Returns null when nothing is conclusive.
  */
-// True when an advertised scope (possibly with '*' wildcards in the resource/action segment) covers a concrete scope —
-// e.g. advertised "user/*.rs" covers "user/Patient.rs". Mirrors the backend ScopeGeneratorService matcher.
-function scopeWildcardCovers(advertised: string, scope: string): boolean {
-  const split = (s: string): [string, string, string] => {
-    const slash = s.indexOf('/');
-    if (slash < 0) return [s, '', ''];
-    const prefix = s.slice(0, slash);
-    const rest = s.slice(slash + 1);
-    const dot = rest.lastIndexOf('.');
-    return dot < 0 ? [prefix, rest, ''] : [prefix, rest.slice(0, dot), rest.slice(dot + 1)];
-  };
-  const [ap, ar, aa] = split(advertised);
-  const [sp, sr, sa] = split(scope);
-  return ap.toLowerCase() === sp.toLowerCase()
-    && (ar === '*' || ar.toLowerCase() === sr.toLowerCase())
-    && (aa === '*' || aa.toLowerCase() === sa.toLowerCase());
-}
-
 /**
  * `token_endpoint_auth_methods_supported` is a server-wide list (every method the FHIR server accepts from any
  * client), not a statement about how *this* app is registered — Epic's discovery document lists
@@ -255,9 +245,10 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
       // that only makes sense for Backend System's unattended, recurring execution.
       //
-      // For Standalone this field is hidden — it reuses the shared Resource Type & Scopes picker (Section 5)
-      // instead of a second, separate multiselect, since that picker already drives the SMART scopes this
-      // connection's one-shot fetch runs under.
+      // For Standalone this field is hidden — it reuses the shared `resources` control (fixed to the
+      // full supported set — see epic-audience-form.component.ts's form builder) instead of a second,
+      // separate multiselect, since that control already drives the SMART scopes this connection's
+      // one-shot fetch runs under.
       { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
       { key: 'searchCriteria',        label: 'Search Criteria',                  type: 'text',         required: false, placeholder: 'status=active&category=vital-signs', hint: 'Optional FHIR search parameters appended to every request.' },
       { key: 'runMode',               label: 'Run Mode',                         type: 'select',       required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated', options: [
@@ -364,14 +355,18 @@ export class EpicAudienceFormComponent implements OnInit {
   protected get resources(): string[] {
     return this.discoveredResourceTypes().length ? this.discoveredResourceTypes() : FHIR_RESOURCES;
   }
-  protected get resourcesAreAuto(): boolean { return this.discoveredResourceTypes().length > 0; }
+  protected isResourceSupported(r: string): boolean { return SUPPORTED_RESOURCE_TYPES.includes(r); }
+
+  /** Of `resources` (whatever the endpoint discovered, or the static fallback), only the subset this
+   *  pipeline actually supports today — drives "Select all" and the selected-count display so both are
+   *  scoped to what's selectable rather than the endpoint's full (often much larger) capability list. */
+  protected readonly selectableResources = computed(() => this.resources.filter(r => this.isResourceSupported(r)));
 
   /** Editing an existing source: resource types are locked (identity-defining) — shown prepopulated but disabled. */
   protected get isEditing(): boolean { return this.wiz.isEditing(); }
 
   protected readonly discStatus   = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
   protected readonly discValues   = signal<FullDiscoveredValues | null>(null);
-  protected readonly discoveredScopes = signal<string[]>([]);
   // True once discovery actually determined the SMART scope version (vs. leaving the default) — drives the badge.
   protected readonly scopeVersionAuto = signal(false);
   // True once discovery actually determined the Client Auth Method (vs. leaving the default) — drives the badge.
@@ -397,7 +392,9 @@ export class EpicAudienceFormComponent implements OnInit {
     // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
     launchDisplayMode: ['Embedded'],
     callbackUrl:       ['http://localhost:5000/api/v1/oauth/callback', [Validators.required, urlValidator]],
-    resources:         [[] as string[], Validators.required],
+    // No UI picks this anymore (Resource Type & Scopes was removed from the form) — every showResourcePicker
+    // audience always gets the full supported set; see clearInapplicableFields for the audience-switch case.
+    resources:         [[...SUPPORTED_RESOURCE_TYPES] as string[], Validators.required],
     scopeVersion:      ['v2'],
     appName:           ['FHIRBridge Epic'],
     // ── CDS Hooks ──────────────────────────────────────────────────────────────
@@ -575,7 +572,7 @@ export class EpicAudienceFormComponent implements OnInit {
   /** Section numbers shift depending on which optional sections the current audience shows. */
   protected readonly sectionNumbers = computed(() => {
     const cfg = this.audienceConfig();
-    let n = 5; // 1 Audience/Env · 2 FHIR Base URL · 3 OAuth Endpoints · 4 Credentials · 5 Resource Type & Scopes
+    let n = 4; // 1 Audience/Env · 2 FHIR Base URL · 3 OAuth Endpoints · 4 Credentials
     const urls              = (cfg.showLaunchUrl || cfg.showRedirect) ? ++n : null;
     const cds                = cfg.showCdsHooks ? ++n : null;
     const test                = ++n;
@@ -605,26 +602,6 @@ export class EpicAudienceFormComponent implements OnInit {
     // v2 = granular per-resource read+search (SMART v2 uses .rs); v1 = coarse per-resource .read.
     const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
     return [...fixed, ...res.map(r => `${cfg.scopePrefix}/${r}.${suffix}`)].join('\n');
-  });
-
-  /** True once Discover has fetched the endpoint's advertised scopes — lets the panel say "validated against Epic". */
-  protected get scopesValidatedByDiscovery(): boolean { return this.discoveredScopes().length > 0; }
-
-  /**
-   * Resource scopes the generated set requests that the source did NOT advertise in its SMART discovery document —
-   * mirrors the backend ScopeGeneratorService validation (exact or wildcard match). Base scopes (openid/launch/…) are
-   * not validated because servers rarely enumerate them in scopes_supported. Empty until Discover has run.
-   */
-  protected readonly unsupportedScopes = computed(() => {
-    const advertised = this.discoveredScopes();
-    if (advertised.length === 0) {
-      return [] as string[];
-    }
-    return this.scopeString()
-      .split(/\s+/)
-      .filter(Boolean)
-      .filter(s => /^[^/]+\/[^.]+\.[^.]+$/.test(s)) // resource-shaped scopes only
-      .filter(s => !advertised.some(a => a === s || scopeWildcardCovers(a, s)));
   });
 
   ngOnInit(): void {
@@ -844,6 +821,10 @@ export class EpicAudienceFormComponent implements OnInit {
 
     if (prevCfg.showResourcePicker && !nextCfg.showResourcePicker) {
       this.form.patchValue({ resources: [] });
+    } else if (!prevCfg.showResourcePicker && nextCfg.showResourcePicker && !this.isEditing) {
+      // Switching back into a showResourcePicker audience — there's no picker to re-populate it, so
+      // restore the fixed supported set (same default the form starts with).
+      this.form.patchValue({ resources: [...SUPPORTED_RESOURCE_TYPES] });
     }
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
@@ -865,8 +846,8 @@ export class EpicAudienceFormComponent implements OnInit {
     // fields Standalone never shows (Run Mode, scheduler, incremental cursor, page size/sort/reverse-include/retry/
     // timeout) so stale values from a prior Backend System attempt in the same form session can't silently ride
     // along into the saved Standalone config. Search Criteria / Max Results / Include Related carry over — they're
-    // meaningful for both scopes. searchRestResourceType is also cleared: Standalone reuses the shared Resource
-    // Type & Scopes picker (Section 5) instead, so anything left in this hidden control would be dead data.
+    // meaningful for both scopes. searchRestResourceType is also cleared: Standalone reuses the shared
+    // `resources` control instead, so anything left in this hidden control would be dead data.
     if (prevCfg.retrievalScope === 'automated' && nextCfg.retrievalScope === 'oneshot') {
       this.form.controls.incrementalCursor.enable({ emitEvent: false });
       this.form.patchValue({
@@ -982,9 +963,6 @@ export class EpicAudienceFormComponent implements OnInit {
     ctrl.setValue(cur.length === all.length ? [] : [...all]);
   }
 
-  protected toggleResource(r: string): void { this.toggleArrayControl('resources', r); }
-  protected toggleAllResources(): void { this.toggleAllArrayControl('resources', this.resources); }
-
   /** Each retrieval method owns its own Resource Type control — `key` picks which one. */
   protected toggleRetrievalResource(key: RetrievalFieldKey, r: string): void { this.toggleArrayControl(key, r); }
   protected toggleAllRetrievalResources(key: RetrievalFieldKey, all: readonly string[]): void { this.toggleAllArrayControl(key, all); }
@@ -1048,7 +1026,6 @@ export class EpicAudienceFormComponent implements OnInit {
     this.discoveredResourceTypes.set([]);
     this.discStatus.set('idle');
     this.discValues.set(null);
-    this.discoveredScopes.set([]);
     this.scopeVersionAuto.set(false);
     this.authMethodAuto.set(false);
     this.testStatus.set('idle');
@@ -1174,7 +1151,6 @@ export class EpicAudienceFormComponent implements OnInit {
           supportedScopes: result.scopesSupported.length ? result.scopesSupported.join(' ') : '—',
         };
         this.discValues.set(dv);
-        this.discoveredScopes.set(result.scopesSupported);
         // Resource Type: Auto — from the source's /metadata.
         this.discoveredResourceTypes.set(result.resourceTypes);
         // SMART Scope Version: Auto — prefer Epic's advertised permission-v1/permission-v2 capabilities; if neither is

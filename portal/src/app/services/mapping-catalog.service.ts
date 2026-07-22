@@ -29,15 +29,20 @@ export class MappingCatalogService {
   private readonly http = inject(HttpClient);
   private readonly cache = new Map<string, Observable<FhirElement[]>>();
 
-  fields(resourceType: string): Observable<FhirElement[]> {
+  /** sourceConnectionId lets the backend prefer that source's vendor-specific catalog (Epic, ...) —
+   *  omit it (or pass null) to get the generic base-FHIR-R4 catalog, same as before this param existed.
+   *  Cache key includes it so switching sources (or generic vs. vendor) never returns another's stale
+   *  result for the same resource type. */
+  fields(resourceType: string, sourceConnectionId?: string | null): Observable<FhirElement[]> {
     if (!resourceType) return of([]);
-    let stream = this.cache.get(resourceType);
+    const key = `${resourceType}::${sourceConnectionId ?? ''}`;
+    let stream = this.cache.get(key);
     if (!stream) {
-      stream = this.http.get<FhirElement[]>(MAPPING_ENDPOINTS.resourceFields(resourceType)).pipe(
+      stream = this.http.get<FhirElement[]>(MAPPING_ENDPOINTS.resourceFields(resourceType, sourceConnectionId)).pipe(
         catchError(() => of<FhirElement[]>([])),
         shareReplay(1),
       );
-      this.cache.set(resourceType, stream);
+      this.cache.set(key, stream);
     }
     return stream;
   }

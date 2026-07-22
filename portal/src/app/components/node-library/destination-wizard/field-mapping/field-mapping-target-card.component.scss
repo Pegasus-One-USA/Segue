@@ -3,7 +3,9 @@
 .fm-target-card {
   position: absolute;
   z-index: 2;
-  width: 260px;
+  // Wider by default (was 260px) so the header has room for kind + name + search without feeling
+  // cramped right out of the gate — still freely resizable beyond this, see below.
+  width: 300px;
   height: 340px;
   min-width: 220px;
   max-width: 640px;
@@ -19,6 +21,26 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-xs);
+
+  // The native resize handle is barely visible against this card's light body — draw an explicit grip
+  // so the affordance is actually discoverable (matches field-mapping-join-popover.component.scss's
+  // same fix). Purely cosmetic (pointer-events: none): the browser's own resize hit-area still does the
+  // real work underneath it.
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    width: 13px;
+    height: 13px;
+    pointer-events: none;
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--color-muted-2) 0 1.5px,
+      transparent 1.5px 4px
+    );
+  }
 }
 
 .fm-target-head {
@@ -62,10 +84,69 @@
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 13px;
-  flex: 1;
+  flex-shrink: 0;
+  max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// Same "glass" search-on-colored-header treatment as field-mapping-source-tree.component.scss's
+// .fm-source-search — kept in sync intentionally (one card is dark, one is teal, both need the same
+// translucent-white approach rather than a standard surface input that wouldn't read on either).
+.fm-target-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  cursor: default;
+}
+
+.fm-target-search {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--color-on-primary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: text;
+
+  &::placeholder { color: rgba(255, 255, 255, 0.65); }
+  &::-webkit-search-cancel-button { display: none; }
+
+  &:focus-visible {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+.fm-target-search-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-on-primary);
+  opacity: 0.75;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { opacity: 1; background: rgba(255, 255, 255, 0.14); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+}
+
+.fm-target-no-match {
+  padding: var(--space-8, 16px);
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--color-muted);
 }
 
 .fm-target-select-row {
@@ -166,6 +247,19 @@
   color: var(--color-ink-2);
 }
 
+.fm-target-coltype {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
 .fm-target-tag {
   font-size: 10px;
   font-weight: 700;
@@ -181,25 +275,38 @@
   line-height: 1.4;
 }
 
-.fm-target-col-delete {
+.fm-target-col-delete,
+.fm-target-col-edit {
   flex-shrink: 0;
   opacity: 0;
   background: none;
   border: none;
-  color: var(--color-error);
   font-size: 11px;
   line-height: 1;
   padding: 2px 4px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: opacity var(--transition-fast);
+}
+
+.fm-target-col-delete {
+  color: var(--color-error);
 
   &:hover { background: var(--color-error-soft); }
   &:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--color-error-soft); }
 }
 
+.fm-target-col-edit {
+  color: var(--color-primary);
+
+  &:hover { background: var(--color-primary-soft); }
+  &:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
 .fm-target-row:hover .fm-target-col-delete,
-.fm-target-row:focus-within .fm-target-col-delete {
+.fm-target-row:hover .fm-target-col-edit,
+.fm-target-row:focus-within .fm-target-col-delete,
+.fm-target-row:focus-within .fm-target-col-edit {
   opacity: 1;
 }
 
@@ -236,6 +343,8 @@
 
   &:hover { text-decoration: underline; }
   &:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-primary); }
+  &:disabled { color: var(--color-muted-2); cursor: not-allowed; }
+  &:disabled:hover { text-decoration: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

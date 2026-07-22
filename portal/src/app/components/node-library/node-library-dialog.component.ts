@@ -4,6 +4,7 @@ import { PipelineStore } from '../../services/pipeline.store';
 import { ApplicabilityService } from '../../services/applicability.service';
 import { PhaseConfigService } from '../../services/phase-config.service';
 import { WizardService } from '../../services/wizard.service';
+import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
@@ -116,6 +117,7 @@ export class NodeLibraryDialogComponent {
   private readonly store    = inject(PipelineStore);
   private readonly appSvc   = inject(ApplicabilityService);
   private readonly phaseCfg = inject(PhaseConfigService);
+  private readonly graphMapper = inject(WorkflowGraphMapperService);
   readonly wiz              = inject(WizardService);
 
   readonly open         = input(false);
@@ -163,6 +165,10 @@ export class NodeLibraryDialogComponent {
     return Array.from(new Set([...fromNodes, ...this.wiz.resources()]));
   });
 
+  // The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
+  // "sourceConnectionId" field. Reactive to store.nodes() via findLaunchSourceId()'s own read of it.
+  readonly sourceConnectionId = computed(() => this.graphMapper.findLaunchSourceId());
+
   // Mirrors the open destination wizard's own step/progress so the sidebar can
   // lock the other destination type out mid-wizard and warn before discarding.
   readonly destWizardStep         = signal(1);
@@ -182,6 +188,12 @@ export class NodeLibraryDialogComponent {
   readonly saveMappingTrigger = signal(0);
   bumpExitMappingTrigger(): void { this.exitMappingTrigger.update(v => v + 1); }
   bumpSaveMappingTrigger(): void { this.saveMappingTrigger.update(v => v + 1); }
+
+  // Same counter-trigger pattern, for the independent "save a mapping-only snapshot" action — never
+  // touches the workflow-level Save above (saveMappingTrigger), which still only keeps in-memory
+  // progress and closes the canvas; this one persists just the mapping screen's own state.
+  readonly saveSnapshotTrigger = signal(0);
+  bumpSaveSnapshotTrigger(): void { this.saveSnapshotTrigger.update(v => v + 1); }
 
   // Same counter-trigger pattern for the canvas's "Load JSON payload"/"Preview output" actions, now
   // shown here instead of the canvas's own toolbar row (freeing that row's height for the canvas itself).

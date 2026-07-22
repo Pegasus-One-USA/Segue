@@ -236,7 +236,7 @@
           </div>
 
           <!-- SMART scope version — v1 (coarse) vs v2 (granular) -->
-          <div *ngif="false" class="eaf-field">
+          <div class="eaf-field">
             <label class="eaf-label" for="eaf-scopeVersion">
               SMART Scope Version <span class="eaf-req">*</span>
               @if (scopeVersionAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
@@ -345,118 +345,6 @@
           }
         </div>
       </div>
-
-      <!-- ═══════════ SECTION 5: Resource Type & Scopes ════════════════════════ -->
-      @if (audienceConfig().showResourcePicker) {
-        <div *ngif="false" class="eaf-section">
-          <div class="eaf-section-head">
-            <span class="eaf-section-num">5</span>
-            <span class="eaf-section-title">Resource Type <span class="eaf-req">*</span></span>
-            @if (isEditing) { <span class="eaf-tag-fixed">locked — editing</span> }
-            @else if (resourcesAreAuto) { <span class="eaf-tag-auto">auto-detected from /metadata</span> }
-            @if (discStatus() === 'done') {
-              <span class="eaf-section-count">{{ selectedResources().length }}&nbsp;/&nbsp;{{ resources.length }} selected</span>
-            }
-          </div>
-
-          <!-- Resource types are gated on discovery: the list reflects what the endpoint actually supports, so it is
-               not shown (and scopes are not previewed) until Discover has run. -->
-          @if (discStatus() === 'done') {
-            <p class="eaf-section-sub">
-              @if (resourcesAreAuto) {
-                Resource types this endpoint actually supports, discovered from its CapabilityStatement.
-              } @else {
-                Discovery did not return resource types — showing common defaults. Verify against the endpoint.
-              }
-            </p>
-
-            @if (form.controls.resources.touched && form.controls.resources.invalid) {
-              <div class="eaf-callout eaf-callout--err eaf-callout--sm">Select at least one FHIR resource type.</div>
-            }
-
-            <div class="eaf-resources-grid" data-control="resources">
-              @if (!isEditing) {
-                <label class="eaf-res-all">
-                  <input type="checkbox"
-                         [checked]="selectedResources().length === resources.length"
-                         [indeterminate]="selectedResources().length > 0 && selectedResources().length < resources.length"
-                         [disabled]="isReadonly"
-                         (change)="toggleAllResources(); form.controls.resources.markAsTouched()" />
-                  <span>Select all</span>
-                </label>
-              }
-              @for (r of resources; track r) {
-                <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedResources().includes(r)">
-                  <input type="checkbox"
-                         [checked]="selectedResources().includes(r)"
-                         [disabled]="isEditing || isReadonly"
-                         (change)="toggleResource(r); form.controls.resources.markAsTouched()" />
-                  <span class="eaf-res-name">{{ r }}</span>
-                </label>
-              }
-            </div>
-            @if (isEditing) {
-              <p class="eaf-hint">Resource types are locked while editing — create a new source to change them.</p>
-            }
-
-            <!-- Scopes — auto/fixed by app, exposed as readonly field -->
-            @if (selectedResources().length > 0) {
-              <div class="eaf-scope-wrap">
-                <div class="eaf-scope-head">
-                  <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
-                  @if (scopesValidatedByDiscovery) {
-                    <span class="eaf-tag-auto">auto-generated · validated against Epic discovery</span>
-                  } @else {
-                    <span class="eaf-tag-auto">auto-generated</span>
-                  }
-                  <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
-                </div>
-                <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
-                @if (unsupportedScopes().length) {
-                  <p class="eaf-hint">⚠ Not advertised by this endpoint's discovery: {{ unsupportedScopes().join(', ') }}</p>
-                }
-                <p class="eaf-hint">
-                  This preview reflects only the resource types picked here. If this connection is shared by other
-                  pipelines, the scopes actually requested from Epic are kept in sync with every pipeline's
-                  destination selections after you save — they may end up broader than this preview.
-                </p>
-              </div>
-            }
-          } @else {
-            <p class="eaf-hint">Run <strong>Discover</strong> above to detect the resource types this endpoint supports. Scopes are derived from your selection once resource types are available.</p>
-          }
-        </div>
-      } @else {
-        <!-- Backend System: no shared picker here — Resource Type lives inside the
-             selected Data Retrieval Method below; this just previews the resulting scopes. -->
-        <div *ngif="false" class="eaf-section">
-          <div class="eaf-section-head">
-            <span class="eaf-section-num">5</span>
-            <span class="eaf-section-title">Scopes</span>
-          </div>
-          <p class="eaf-section-sub">Derived automatically from the Resource Type selected in Data Retrieval Method, below.</p>
-
-          @if (activeRetrievalResourceTypes().length > 0) {
-            <div class="eaf-scope-wrap">
-              <div class="eaf-scope-head">
-                <span class="eaf-scope-title">Scopes ({{ audienceConfig().scopePrefix }}/...)</span>
-                @if (scopesValidatedByDiscovery) {
-                  <span class="eaf-tag-auto">auto-generated · validated against Epic discovery</span>
-                } @else {
-                  <span class="eaf-tag-auto">auto-generated</span>
-                }
-                <span class="eaf-scope-note">Auto — derived from the selected resource types and SMART scope version.</span>
-              </div>
-              <textarea class="eaf-scope-area" readonly rows="4">{{ scopeString() }}</textarea>
-              @if (unsupportedScopes().length) {
-                <p class="eaf-hint">⚠ Not advertised by this endpoint's discovery: {{ unsupportedScopes().join(', ') }}</p>
-              }
-            </div>
-          } @else {
-            <p class="eaf-hint">Select a Data Retrieval Method and at least one Resource Type below to preview scopes.</p>
-          }
-        </div>
-      }
 
       @if (audienceConfig().showLaunchUrl || audienceConfig().showRedirect) {
         <!-- ═══════════ SECTION: Application URLs ═══════════════════════════════ -->
@@ -721,17 +609,21 @@
                       <div class="eaf-resources-grid" [attr.data-control]="field.key">
                         <label class="eaf-res-all">
                           <input type="checkbox"
-                                 [checked]="selectedRetrievalResourceTypes(field.key).length === resources.length"
-                                 [indeterminate]="selectedRetrievalResourceTypes(field.key).length > 0 && selectedRetrievalResourceTypes(field.key).length < resources.length"
-                                 [disabled]="isReadonly"
-                                 (change)="toggleAllRetrievalResources(field.key, resources); form.get(field.key)?.markAsTouched()" />
+                                 [checked]="selectedRetrievalResourceTypes(field.key).length === selectableResources().length"
+                                 [indeterminate]="selectedRetrievalResourceTypes(field.key).length > 0 && selectedRetrievalResourceTypes(field.key).length < selectableResources().length"
+                                 [disabled]="isReadonly || selectableResources().length === 0"
+                                 (change)="toggleAllRetrievalResources(field.key, selectableResources()); form.get(field.key)?.markAsTouched()" />
                           <span>Select all</span>
                         </label>
                         @for (r of resources; track r) {
-                          <label class="eaf-res-item" [class.eaf-res-item--checked]="selectedRetrievalResourceTypes(field.key).includes(r)">
+                          <label
+                            class="eaf-res-item"
+                            [class.eaf-res-item--checked]="selectedRetrievalResourceTypes(field.key).includes(r)"
+                            [title]="isResourceSupported(r) ? '' : 'Not yet supported by this pipeline'"
+                          >
                             <input type="checkbox"
                                    [checked]="selectedRetrievalResourceTypes(field.key).includes(r)"
-                                   [disabled]="isReadonly"
+                                   [disabled]="isReadonly || !isResourceSupported(r)"
                                    (change)="toggleRetrievalResource(field.key, r); form.get(field.key)?.markAsTouched()" />
                             <span class="eaf-res-name">{{ r }}</span>
                           </label>

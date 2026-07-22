@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, inject, input, output, viewChild, viewChildren, AfterViewInit, OnDestroy,
+  Component, ElementRef, computed, inject, input, output, signal, viewChild, viewChildren, AfterViewInit, OnDestroy,
 } from '@angular/core';
 import { MappingRow } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -36,6 +36,9 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly sqlTableOptions = input.required<string[]>();
   readonly columns = input.required<string[]>();
   readonly rowForColumn = input.required<(column: string) => MappingRow | undefined>();
+  /** Real data type (e.g. "nvarchar(50)") for a probed/created SQL column — undefined for CSV or
+   *  free-text columns that have no real schema behind them, in which case no type badge is shown. */
+  readonly columnDataType = input<(column: string) => string | undefined>(() => undefined);
   readonly isArmed = input.required<boolean>();
   readonly isApproximated = input.required<(row: MappingRow) => boolean>();
   readonly x = input.required<number>();
@@ -48,8 +51,38 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly positionChange = output<{ x: number; y: number }>();
   readonly removeTable = output<void>();
   readonly deleteColumn = output<string>();
+  readonly editColumn = output<string>();
+  /** The "✎ Create a new table…" sentinel option was picked in the primary target select — the parent
+   *  opens the real create-table modal and, on success, makes the result this resource's primary
+   *  target (see FieldMappingCanvasComponent.openCreateTableModal's asPrimary flag). */
+  readonly createTableRequested = output<void>();
+  readonly createTableOption = '__create_new_table__';
 
   private dragOffset: { dx: number; dy: number } | null = null;
+
+  /**
+   * False when this is the primary card, a live schema is known, and the current target (often just a
+   * generic "dbo.{resource}" guess seeded before any real table was ever chosen) doesn't match any real
+   * probed/created table. A native <select> can't actually display a value that matches none of its
+   * <option>s — it silently falls back to showing its first real option instead, which looks exactly
+   * like the user picked that table when they never did. Driving the placeholder option's selected state
+   * off this (rather than off "is targetValue empty") keeps the dropdown honest, and gates "+ Add column"
+   * so a column can't be added against a table nobody actually chose.
+   */
+  readonly hasValidTarget = computed(() =>
+    this.isExtra() || !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetValue())
+  );
+
+  // ── search ────────────────────────────────────────────────────────────────
+  readonly searchQuery = signal('');
+  readonly isSearching = computed(() => this.searchQuery().trim().length > 0);
+  readonly filteredColumns = computed(() => {
+    const q = this.searchQuery().trim().toLowerCase();
+    return q ? this.columns().filter(c => c.toLowerCase().includes(q)) : this.columns();
+  });
+
+  onSearchInput(value: string): void { this.searchQuery.set(value); }
+  clearSearch(): void { this.searchQuery.set(''); }
 
   onHeadPointerDown(ev: PointerEvent): void {
     if (ev.button !== 0) return;
@@ -93,16 +126,34 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     this.registerRows();
   }
 
+  // Tracks which columns are CURRENTLY registered so a column hidden by an active search filter (rather
+  // than actually deleted) gets its anchor unregistered too — otherwise a mapped column's wire would
+  // keep pointing at a detached DOM node (getBoundingClientRect() on it returns an all-zero rect).
+  private readonly registeredColumns = new Set<string>();
+
   private registerRows(): void {
+    const visible = this.filteredColumns();
+    const visibleSet = new Set(visible);
+    for (const col of this.registeredColumns) {
+      if (!visibleSet.has(col)) {
+        this.anchors.unregister(`${this.resource()}::${this.tableName()}::${col}`);
+        this.registeredColumns.delete(col);
+      }
+    }
     this.columnRows().forEach((ref, i) => {
-      const col = this.columns()[i];
-      if (col) this.anchors.register(`${this.resource()}::${this.tableName()}::${col}`, ref.nativeElement);
+      const col = visible[i];
+      if (!col) return;
+      this.anchors.register(`${this.resource()}::${this.tableName()}::${col}`, ref.nativeElement);
+      this.registeredColumns.add(col);
     });
   }
 
   targetLabel(): string { return this.destType() === 'sql' ? 'Table' : 'File name'; }
 
-  onTargetInput(value: string): void { this.targetChange.emit(value); }
+  onTargetInput(value: string): void {
+    if (value === this.createTableOption) { this.createTableRequested.emit(); return; }
+    this.targetChange.emit(value);
+  }
 
   onNewColumnKeydown(ev: KeyboardEvent): void {
     if (ev.key !== 'Enter') return;

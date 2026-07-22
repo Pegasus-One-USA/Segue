@@ -83,6 +83,7 @@ export const DESTINATION_ENDPOINTS = {
   addColumn:     `${API_V1_BASE}/destinations/schema/add-column`,
   createTable:   `${API_V1_BASE}/destinations/schema/create-table`,
   dropColumn:    `${API_V1_BASE}/destinations/schema/drop-column`,
+  alterColumn:   `${API_V1_BASE}/destinations/schema/alter-column`,
 };
 
 // ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
@@ -90,8 +91,12 @@ export const DESTINATION_ENDPOINTS = {
 // the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
 export const MAPPING_ENDPOINTS = {
   resources:     `${API_V1_BASE}/mapping/catalog/resources`,
-  resourceFields: (resourceType: string) =>
-    `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`,
+  // sourceConnectionId lets the backend resolve that source's vendor (Epic, ...) and prefer its
+  // vendor-specific catalog over the generic base-FHIR-R4 one — omitted (or falsy) always gets generic.
+  resourceFields: (resourceType: string, sourceConnectionId?: string | null) => {
+    const base = `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`;
+    return sourceConnectionId ? `${base}?sourceConnectionId=${encodeURIComponent(sourceConnectionId)}` : base;
+  },
 };
 
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
