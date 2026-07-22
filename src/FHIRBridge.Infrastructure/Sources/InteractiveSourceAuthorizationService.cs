@@ -310,7 +310,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             PrivateKeyPem: null,
             Scopes: resolvedScopes,
             SourceConnectionId: sourceConnection.Id,
-            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
+            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint,
+            CallerId: callerId);
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
@@ -462,7 +463,9 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             PrivateKeyPem: privateKeyPem,
             Scopes: [],
             SourceConnectionId: pending.SourceConnectionId,
-            ClientSecret: clientSecret);
+            ClientSecret: clientSecret,
+            ApplicationType: sourceConnection.ApplicationType,
+            CallerId: pending.CallerId);
 
         var launchType = DetermineLaunchType(pending);
 
@@ -506,13 +509,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             // Deliberately NOT the request token: the callback's caller is the provider's browser, which may
             // disconnect (tab closed, redirect) while the run is still pulling from the EHR. The run must not
             // die with the connection.
-            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None);
+            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None, pending.CallerId);
         }
         else if (pending.WorkflowId is { } workflowId && !skipWorkflowTrigger)
         {
             // Same reasoning as the route path above — the run must survive the browser disconnecting/redirecting
             // while it's still in flight, so it uses CancellationToken.None rather than the request's token.
-            var triggerResult = await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, CancellationToken.None);
+            var triggerResult = await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, CancellationToken.None, pending.CallerId);
             workflowRunId = triggerResult.WorkflowRunId;
             workflowRunFailed = triggerResult.Failed;
         }
@@ -540,14 +543,14 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     // that patient in a single run. The stored token is patient-scoped, so each route flows the launched patient's
     // data through Source → Mapping → Destination. A run failure does not fail the sign-in (the token is already
     // stored and the run can be retried) — it is logged.
-    private async Task TriggerRouteRunAsync(Guid sourceConnectionId, Guid launchedRouteId, CancellationToken cancellationToken)
+    private async Task TriggerRouteRunAsync(Guid sourceConnectionId, Guid launchedRouteId, CancellationToken cancellationToken, string? callerId = null)
     {
         try
         {
             // Scenario B: when the graph-execution flag is on for this source and a persisted graph resolves, the
             // launch runs that graph (make.com-style) instead of the flat route path. Falls back to the route path
             // if the flag is off, the graph engine isn't composed, or no graph could be projected for the source.
-            if (await TryTriggerGraphRunAsync(sourceConnectionId, cancellationToken))
+            if (await TryTriggerGraphRunAsync(sourceConnectionId, cancellationToken, callerId))
             {
                 return;
             }
@@ -576,7 +579,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     // graph. Returns false to defer to the route path when the flag is off, the graph engine isn't composed, or no
     // graph could be projected. A graph run that throws propagates to TriggerRouteRunAsync's catch — the
     // sign-in still succeeds since the token is already stored.
-    private async Task<bool> TryTriggerGraphRunAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+    private async Task<bool> TryTriggerGraphRunAsync(Guid sourceConnectionId, CancellationToken cancellationToken, string? callerId = null)
     {
         if (_workflowOrchestrator is null
             || _launchWorkflowResolver is null
@@ -595,7 +598,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             Guid.NewGuid(),
             $"ehr-launch:{sourceConnectionId:N}",
             triggeredBy: $"source:{sourceConnectionId:N}",
-            triggerType: "InteractiveLaunch");
+            triggerType: "InteractiveLaunch",
+            callerId: callerId);
         await _workflowOrchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
         return true;
@@ -605,7 +609,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     // a run failure does not fail the sign-in, since the token is already persisted). Returns
     // Failed=true (not just a null run id) on failure so the caller can still redirect the browser back to the
     // third-party app with an error marker, instead of leaving it stranded on this endpoint's bare JSON response.
-    private async Task<WorkflowRunTriggerResult> TriggerWorkflowRunAsync(Guid sourceConnectionId, Guid workflowId, CancellationToken cancellationToken)
+    private async Task<WorkflowRunTriggerResult> TriggerWorkflowRunAsync(Guid sourceConnectionId, Guid workflowId, CancellationToken cancellationToken, string? callerId = null)
     {
         try
         {
@@ -621,7 +625,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 Guid.NewGuid(),
                 $"ehr-launch:workflow:{workflowId:N}",
                 triggeredBy: $"source:{sourceConnectionId:N}",
-                triggerType: "InteractiveLaunch");
+                triggerType: "InteractiveLaunch",
+                callerId: callerId);
             var result = await _workflowOrchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             return new WorkflowRunTriggerResult(result.WorkflowRun.Id, Failed: false);

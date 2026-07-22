@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Web;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.SharedKernel.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Protocols;
@@ -319,7 +320,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             // Always save to the unscoped "default" slot — the pre-existing single-session behavior every caller
             // that doesn't specify TargetPatientId still relies on (e.g. the inline run triggered straight off this
             // same exchange, before any caller could know which patient just logged in).
-            await _tokenStore.SaveAsync(BuildStoreKey(source, null), stored, cancellationToken);
+            await SaveUnderBothKeysAsync(source, patientId: null, stored, cancellationToken);
 
             // ALSO save under a patient-specific key when a patient is known — either just returned by the token
             // endpoint (a fresh authorization_code exchange) or already known by the caller (a refresh, where
@@ -329,7 +330,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             var resolvedPatientId = token.Patient ?? source.TargetPatientId;
             if (!string.IsNullOrWhiteSpace(resolvedPatientId))
             {
-                await _tokenStore.SaveAsync(BuildStoreKey(source, resolvedPatientId), stored, cancellationToken);
+                await SaveUnderBothKeysAsync(source, resolvedPatientId, stored, cancellationToken);
             }
 
             await _auditSink.RecordAsync(source, $"{action}Succeeded", "Completed", $"{ProviderName} access token acquired.", cancellationToken);
@@ -425,13 +426,57 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         return string.Join(' ', scopes);
     }
 
-    // Token store key: prefer the durable source-connection id; fall back to the token endpoint + client identity.
-    // The patient segment isolates concurrent sessions on the same source connection — "default" is the unscoped
-    // slot every pre-existing caller (that never set TargetPatientId) reads/writes, so this is purely additive.
-    private string BuildStoreKey(FhirSourceConfiguration source, string? patientId) =>
-        source.SourceConnectionId is { } id && id != Guid.Empty
+    // Token store key: for a Patient Standalone source with a caller id, key on the logged-in end user instead of
+    // the SourceConnection — every pipeline that shares that same user's session then reuses the one token their
+    // authorization already covers (see FhirSourceConfiguration.CallerId), instead of each SourceConnection needing
+    // its own separate MyChart consent. Every other ApplicationType (and a Patient source with no caller id
+    // supplied) falls back to the pre-existing behavior: prefer the durable source-connection id, else the token
+    // endpoint + client identity. The patient segment isolates concurrent sessions on the same key — "default" is
+    // the unscoped slot every pre-existing caller (that never set TargetPatientId) reads/writes, so this is purely
+    // additive.
+    private string BuildStoreKey(FhirSourceConfiguration source, string? patientId)
+    {
+        if (source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId))
+        {
+            return $"{ProviderName.ToLowerInvariant()}|{source.CallerId}|{patientId ?? "default"}";
+        }
+
+        return source.SourceConnectionId is { } id && id != Guid.Empty
             ? $"{ProviderName.ToLowerInvariant()}|{id}|{patientId ?? "default"}"
             : $"{ProviderName.ToLowerInvariant()}|{source.TokenEndpoint}|{source.ClientId}|{patientId ?? "default"}";
+    }
+
+    // Saves under the CallerId-keyed slot (when applicable) AND the legacy per-SourceConnection slot, so a caller
+    // that doesn't yet supply CallerId (the launch's own immediate convenience auto-run, or a consumer app not yet
+    // updated to send it on later /run calls) still finds this session's token under the key it has always used.
+    // A no-op second write when no CallerId was used (the two keys are identical), so every non-Patient /
+    // no-caller-id source behaves exactly as before.
+    private Task SaveUnderBothKeysAsync(
+        FhirSourceConfiguration source,
+        string? patientId,
+        StoredOAuthToken stored,
+        CancellationToken cancellationToken)
+    {
+        var key = BuildStoreKey(source, patientId);
+        var saveTask = _tokenStore.SaveAsync(key, stored, cancellationToken);
+
+        if (source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId))
+        {
+            var legacyKey = BuildStoreKey(source with { CallerId = null }, patientId);
+            if (!string.Equals(legacyKey, key, StringComparison.Ordinal))
+            {
+                return SaveBothAsync(saveTask, legacyKey, stored, cancellationToken);
+            }
+        }
+
+        return saveTask;
+    }
+
+    private async Task SaveBothAsync(Task firstSave, string legacyKey, StoredOAuthToken stored, CancellationToken cancellationToken)
+    {
+        await firstSave;
+        await _tokenStore.SaveAsync(legacyKey, stored, cancellationToken);
+    }
 
     private sealed class TokenResponse
     {

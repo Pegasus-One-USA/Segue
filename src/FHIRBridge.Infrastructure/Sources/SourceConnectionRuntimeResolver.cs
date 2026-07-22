@@ -42,7 +42,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         string? searchParameters,
         string? targetPatientId,
         CancellationToken cancellationToken,
-        string? patientSearchCriteria = null)
+        string? patientSearchCriteria = null,
+        string? callerId = null)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -133,7 +134,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                 ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
                 : null,
             TargetPatientId: targetPatientId,
-            PatientSearchCriteria: patientSearchCriteria);
+            PatientSearchCriteria: patientSearchCriteria,
+            CallerId: callerId);
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME
@@ -152,7 +154,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         return config;
     }
 
-    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null)
     {
         if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
         {
@@ -177,7 +179,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             Scopes: [],
             SourceConnectionId: sourceConnection.Id,
             ApplicationType: sourceConnection.ApplicationType,
-            TargetPatientId: targetPatientId);
+            TargetPatientId: targetPatientId,
+            CallerId: callerId);
 
         await patientContextProvider.DiscardTokenAsync(source, cancellationToken);
     }
@@ -188,14 +191,14 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
     // actually search for resources. For an interactive source this is a cache lookup (silently refreshing via the
     // refresh token if the cached access token has merely expired); it only returns false when a genuinely fresh
     // interactive sign-in is required.
-    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null)
     {
         if (_accessTokenProvider is null)
         {
             return false;
         }
 
-        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken);
+        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken, callerId: callerId);
         if (source is null)
         {
             return false;

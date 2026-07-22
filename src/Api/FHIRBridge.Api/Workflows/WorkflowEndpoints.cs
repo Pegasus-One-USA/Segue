@@ -571,7 +571,8 @@ public static class WorkflowEndpoints
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
                 targetPatientId: request?.PatientId,
-                patientSearchCriteria: request?.PatientSearchCriteria);
+                patientSearchCriteria: request?.PatientSearchCriteria,
+                callerId: request?.CallerId);
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
             return Results.Ok(result);
