@@ -433,17 +433,21 @@ cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoPortal/</code></
   <h3 id="win-topology">Server topology</h3>
   <table class="file-table">
     <tr><th>Service</th><th>Folder</th><th>Bind address</th><th>Role</th></tr>
-    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-api</td><td class="why">127.0.0.1:5000 (loopback only)</td><td class="why">The core API &mdash; not reachable from outside the server</td></tr>
-    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-gateway</td><td class="why">0.0.0.0:80 (public)</td><td class="why">YARP reverse proxy &mdash; routes <code>/api/**</code> and <code>/swagger/**</code> to the Api, serves the portal for everything else</td></tr>
+    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-api</td><td class="file-path">127.0.0.1:&lt;PROD_API_PORT&gt; (loopback only)</td><td class="why">The core API &mdash; not reachable from outside the server</td></tr>
+    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-gateway</td><td class="file-path">0.0.0.0:&lt;PROD_GATEWAY_PORT&gt; (public)</td><td class="why">YARP reverse proxy &mdash; routes <code>/api/**</code> and <code>/swagger/**</code> to the Api, serves the portal for everything else</td></tr>
     <tr><td class="why"><em>(no service)</em></td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-portal</td><td class="why">&mdash;</td><td class="why">Angular portal build; static files only, served by Gateway</td></tr>
     <tr><td class="file-path">FHIRBridge.Worker</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-worker</td><td class="why">none (no HTTP endpoint)</td><td class="why">Background scheduler / pipeline processor</td></tr>
-    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">C:\inetpub\wwwroot\demoapp-api</td><td class="why">0.0.0.0:5500 (public)</td><td class="why">Demo app backend &mdash; serves its own frontend, same origin</td></tr>
+    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">C:\inetpub\wwwroot\demoapp-api</td><td class="file-path">0.0.0.0:&lt;PROD_DEMOAPI_PORT&gt; (public)</td><td class="why">Demo app backend &mdash; serves its own frontend, same origin</td></tr>
     <tr><td class="why"><em>(no service)</em></td><td class="file-path">C:\inetpub\wwwroot\demoapp-portal</td><td class="why">&mdash;</td><td class="why">Demo app Angular build; static files only, served by DemoApp</td></tr>
   </table>
   <div class="callout warn">
     <strong>Plain HTTP for now</strong>
-    Both public entry points (Gateway on 80, DemoApp on 5500) currently serve plain HTTP &mdash; TLS
-    termination is a deliberate later step, not yet configured.
+    Both public entry points (Gateway, DemoApp) currently serve plain HTTP &mdash; TLS termination is
+    a deliberate later step, not yet configured. <code>PROD_API_PORT</code>, <code>PROD_GATEWAY_PORT</code>,
+    and <code>PROD_DEMOAPI_PORT</code> are GitHub Environment variables (see <a href="#win-prereqs">prerequisites</a>
+    below) &mdash; pick any free ports on this host. There is deliberately no hardcoded default port
+    anywhere in this path anymore: a shared default (like Kestrel's own built-in <code>5000</code>) is
+    exactly what once let this collide silently with an unrelated application already on the box.
   </div>
 
   <h3 id="win-deploy-job">Deploy job, step by step</h3>
@@ -453,7 +457,7 @@ cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoPortal/</code></
     <li><code>actions/checkout@v4</code> &mdash; needed only so <code>deploy/windows/Deploy-FHIRBridge.ps1</code> itself is present on the runner; app binaries all come from the artifact, not this checkout.</li>
     <li><code>actions/download-artifact@v4</code> &mdash; pulls <code>fhirbridge-deploy</code></li>
     <li><code>Expand-Archive -Path fhirbridge-deploy.zip -DestinationPath extracted -Force</code></li>
-    <li><code>./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath (Resolve-Path extracted).Path</code></li>
+    <li><code>./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath (Resolve-Path extracted).Path -ApiPort &lt;vars.PROD_API_PORT&gt; -GatewayPort &lt;vars.PROD_GATEWAY_PORT&gt; -DemoApiPort &lt;vars.PROD_DEMOAPI_PORT&gt;</code> &mdash; the three ports are sourced from the <code>production</code> GitHub Environment's variables, not hardcoded in the workflow, so ops can repoint any service to a free port with no code change.</li>
   </ol>
 
   <h4>Deploy-FHIRBridge.ps1 parameters</h4>
@@ -462,6 +466,7 @@ cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoPortal/</code></
     <tr><td class="file-path">ArtifactPath</td><td class="why"><em>(mandatory)</em></td><td class="why">Path to the extracted publish artifact</td></tr>
     <tr><td class="file-path">DeployRoot</td><td class="file-path">C:\inetpub\wwwroot</td><td class="why">Root under which every app's deploy folder lives</td></tr>
     <tr><td class="file-path">ConfigRoot</td><td class="file-path">C:\inetpub\FHIRBridge_Configurations</td><td class="why">Root under which every app's hand-provisioned config lives (see next section)</td></tr>
+    <tr><td class="file-path">ApiPort / GatewayPort / DemoApiPort</td><td class="why"><em>(mandatory, no default)</em></td><td class="why">Kestrel bind port for each service. Deliberately has no baked-in fallback: these used to be configured once, by hand, via each Windows Service's <strong>Environment</strong> tab in <code>services.msc</code>, and silently drifted back to Kestrel's own built-in default (port 5000) whenever that step was skipped or a service was recreated &mdash; colliding with whatever else was already listening on 5000. Wired in from <code>deploy.yml</code> via the <code>production</code> GitHub Environment's <code>PROD_API_PORT</code>/<code>PROD_GATEWAY_PORT</code>/<code>PROD_DEMOAPI_PORT</code> variables.</td></tr>
     <tr><td class="file-path">ServiceStopTimeoutSeconds</td><td class="why">30</td><td class="why">How long to wait for a service to reach Stopped/Running</td></tr>
     <tr><td class="file-path">HealthCheckRetries</td><td class="why">10</td><td class="why">Health-check retry count after each service starts</td></tr>
     <tr><td class="file-path">HealthCheckDelaySeconds</td><td class="why">3</td><td class="why">Delay between health-check retries</td></tr>
@@ -481,11 +486,11 @@ cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoPortal/</code></
 
   <h4>Stage 2 &mdash; the four Windows Services</h4>
   <table class="file-table">
-    <tr><th>Service name</th><th>Artifact folder</th><th>Dest folder</th><th>Executable</th><th>Health check</th></tr>
-    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">Api</td><td class="file-path">fhirbridge-api</td><td class="file-path">FHIRBridge.Api.exe</td><td class="file-path">http://127.0.0.1:5000/health</td></tr>
-    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">Gateway</td><td class="file-path">fhirbridge-gateway</td><td class="file-path">FHIRBridge.Gateway.exe</td><td class="file-path">http://localhost/</td></tr>
-    <tr><td class="file-path">FHIRBridge.Worker</td><td class="file-path">Worker</td><td class="file-path">fhirbridge-worker</td><td class="file-path">FHIRBridge.Worker.exe</td><td class="why"><em>none</em></td></tr>
-    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">DemoApi</td><td class="file-path">demoapp-api</td><td class="file-path">HealthAppBackend.exe</td><td class="file-path">http://localhost:5500/</td></tr>
+    <tr><th>Service name</th><th>Artifact folder</th><th>Dest folder</th><th>Executable</th><th>EnvironmentVariables (set every deploy)</th><th>Health check</th></tr>
+    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">Api</td><td class="file-path">fhirbridge-api</td><td class="file-path">FHIRBridge.Api.exe</td><td class="file-path">ASPNETCORE_URLS=http://127.0.0.1:&lt;ApiPort&gt;</td><td class="file-path">http://127.0.0.1:&lt;ApiPort&gt;/health</td></tr>
+    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">Gateway</td><td class="file-path">fhirbridge-gateway</td><td class="file-path">FHIRBridge.Gateway.exe</td><td class="file-path">ASPNETCORE_URLS=http://+:&lt;GatewayPort&gt;</td><td class="file-path">http://localhost:&lt;GatewayPort&gt;/</td></tr>
+    <tr><td class="file-path">FHIRBridge.Worker</td><td class="file-path">Worker</td><td class="file-path">fhirbridge-worker</td><td class="file-path">FHIRBridge.Worker.exe</td><td class="why"><em>(none)</em></td><td class="why"><em>none</em></td></tr>
+    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">DemoApi</td><td class="file-path">demoapp-api</td><td class="file-path">HealthAppBackend.exe</td><td class="file-path">ASPNETCORE_URLS=http://+:&lt;DemoApiPort&gt;, DEMOAPP_PORTAL_PATH=&lt;demoapp-portal path&gt;</td><td class="file-path">http://localhost:&lt;DemoApiPort&gt;/</td></tr>
   </table>
   <div class="flow-steps">
     <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Stop if running</strong><span>If the Windows Service exists and isn't already Stopped: <code>Stop-Service -Force</code>, wait up to ServiceStopTimeoutSeconds for the Stopped state.</span></div></div>
@@ -494,13 +499,36 @@ cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoPortal/</code></
     <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Overlay config</strong><span>That service's ConfigRoot subfolder copied on top &mdash; see the Configuration Model section below.</span></div></div>
     <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Verify the executable exists</strong><span>Throws if the expected .exe isn't present after the mirror.</span></div></div>
     <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Create the service if missing</strong><span><code>New-Service -BinaryPathName "&lt;exe&gt;" -DisplayName "&lt;name&gt;" -StartupType Automatic</code>. Only the very first deploy does this &mdash; every deploy after that is just stop/replace/start against the existing service.</span></div></div>
-    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Start &amp; wait</strong><span><code>Start-Service</code>, wait up to ServiceStopTimeoutSeconds for the Running state.</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Set the service's environment variables</strong><span><code>Set-ServiceEnvironment</code> writes this service's <code>ASPNETCORE_URLS</code> (and, for the Demo app, <code>DEMOAPP_PORTAL_PATH</code>) straight to <code>HKLM:\SYSTEM\CurrentControlSet\Services\&lt;Name&gt;</code>'s <code>Environment</code> registry value (<code>REG_MULTI_SZ</code>), every deploy &mdash; not just the first. This replaced the old one-time manual <code>services.msc</code> step, which silently drifted whenever it was skipped or a service got recreated.</span></div></div>
+    <div class="flow-step"><div class="step-num">8</div><div class="step-body"><strong>Start &amp; wait</strong><span><code>Start-Service</code>, wait up to ServiceStopTimeoutSeconds for the Running state. If this throws, <code>Show-ServiceStartFailureDiagnostics</code> runs before the error propagates &mdash; see below.</span></div></div>
   </div>
   <p><strong>Stage 3 &mdash; health checks</strong>, run only after every service above has already
   started: for each service with a HealthCheckUrl, poll it (up to HealthCheckRetries times,
   HealthCheckDelaySeconds apart) until a <code>200</code> comes back, or throw if it never does.
   FHIRBridge.Worker has no HTTP endpoint, so it's skipped here &mdash; its Start-Service/Running-state
   wait in Stage 2 is its only check.</p>
+
+  <h4>When Start-Service fails: Show-ServiceStartFailureDiagnostics</h4>
+  <p>
+  Windows Service Control Manager only ever reports a generic <code>CouldNotStartService</code>
+  wrapper on failure &mdash; it never surfaces the app's own startup exception. This cost real
+  debugging time once: a JSON syntax error in an <code>appsettings.Production.json</code> crashed
+  <code>FHIRBridge.Api</code> on startup, but the CI log only showed the generic SCM wrapper error,
+  requiring an RDP session to track down the real cause by hand. Now, whenever <code>Start-Service</code>
+  or the wait-for-Running throws, <code>Deploy-Service</code> catches it and calls
+  <code>Show-ServiceStartFailureDiagnostics</code> <em>before</em> re-throwing &mdash; since the
+  self-hosted runner already runs on the same VM as the app that just failed to start, everything
+  below lands directly in the GitHub Actions log with no separate server access needed:
+  </p>
+  <ul class="feature-list">
+    <li><strong>Port check</strong> &mdash; parses the port out of this service's configured <code>ASPNETCORE_URLS</code> and runs <code>Get-NetTCPConnection</code> for it, printing any existing listener's process id, name, and path (this is exactly how a port collision with an unrelated application would show up).</li>
+    <li><strong>Direct run</strong> &mdash; sets the same environment variables in the current process, then <code>Start-Process</code>es the service's own <code>.exe</code> directly (same working directory) for 5 seconds with stdout/stderr redirected to temp files. If it exits on its own within that window, the exit code is almost certainly the real failure; if it's still running, the diagnostic run is stopped so it doesn't linger as an orphaned second instance.</li>
+    <li><strong>stdout / stderr dump</strong> &mdash; whatever the app printed on its way down (a config parse exception, a missing connection string, etc.) is written straight to the log.</li>
+    <li><strong>Recent Application event log entries</strong> &mdash; the last 20 entries from the last 2 minutes, via <code>Get-WinEvent</code>.</li>
+  </ul>
+  <p>This exists in both <code>Deploy-FHIRBridge.ps1</code> (production) and
+  <code>Deploy-FHIRBridge-Environment.ps1</code> (Staging/QA/Dev/Working) &mdash; identical function,
+  called the same way from each script's <code>Deploy-Service</code>.</p>
 
   <h3 id="win-config">Configuration model (ConfigRoot overlay)</h3>
   <p>
@@ -529,42 +557,56 @@ C:\inetpub\FHIRBridge_Configurations\demoapp-portal\      (currently empty)</cod
   <table class="file-table">
     <tr><th>Service</th><th>Keys to populate</th></tr>
     <tr><td class="file-path">fhirbridge-api</td><td class="why"><code>ConnectionStrings:FHIRBridgeDb</code>, <code>Authentication:SigningKey</code>, <code>DataProtection:KeyRingPath</code> (persistent folder, e.g. <code>C:\FHIRBridge\keys</code>, so OAuth/launch tokens survive redeploys and restarts), <code>Portal:AllowedOrigins</code> (Gateway's public origin &mdash; the browser talks to Gateway, not the Api's loopback address), <code>AllowedHosts</code>, <code>GeneratedFileDownload:PublicBaseUrl</code> (the base <code>appsettings.json</code> checked into the repo defaults this to <code>http://localhost:5000</code> &mdash; override it here to this environment's real public Api/Gateway address, or generated download links will silently point at the wrong host)</td></tr>
-    <tr><td class="file-path">fhirbridge-gateway</td><td class="why"><code>StaticFiles:RootPath</code> = <code>C:\inetpub\wwwroot\fhirbridge-portal</code> (absolute path). <code>ApiBaseUrl</code> &mdash; a single flat setting (<code>Program.cs</code> builds the YARP routes/clusters in code, reading only the destination address from config) &mdash; defaults to <code>http://127.0.0.1:5000/</code> in code, so only needs overriding here if the Api ever moves off port 5000.</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="why"><code>StaticFiles:RootPath</code> = <code>C:\inetpub\wwwroot\fhirbridge-portal</code> (absolute path). <code>ApiBaseUrl</code> &mdash; a single flat setting (<code>Program.cs</code> builds the YARP routes/clusters in code, reading only the destination address from config) &mdash; e.g. <code>http://127.0.0.1:&lt;PROD_API_PORT&gt;/</code>. <strong>Mandatory, no fallback</strong>: <code>Program.cs</code> throws at startup outside Development if this is unset, rather than silently defaulting to some other environment's Api address, so it must be kept in sync with whatever <code>PROD_API_PORT</code> is set to (see Bind Addresses below). The checked-in <code>appsettings.json</code> ships this as an empty string; only <code>appsettings.Development.json</code> has a real (dev-only) value.</td></tr>
     <tr><td class="file-path">fhirbridge-worker</td><td class="why"><code>ConnectionStrings:FHIRBridgeDb</code>, <code>RuntimeWorker:Enabled</code>, <code>Messaging:Provider</code> (<code>InMemory</code> / <code>RabbitMQ</code> / <code>AzureServiceBus</code>), <code>Hl7MllpOptions</code> if the MLLP listener is in use</td></tr>
     <tr><td class="file-path">demoapp-api</td><td class="why"><code>ConnectionStrings:Default</code> (a separate database from FHIRBridgeDb, used only by the demo app), <code>AllowedFrontendOrigin</code> (this app's own public URL, e.g. <code>http://&lt;server&gt;:5500</code>)</td></tr>
     <tr><td class="file-path">fhirbridge-portal / demoapp-portal</td><td class="why">No runtime config file today &mdash; these Angular builds bake their config in at build time. Folders exist under ConfigRoot for consistency and in case a runtime-loaded config file is added later.</td></tr>
   </table>
 
-  <h4>Bind addresses &mdash; one-time, per service, not managed by the deploy script</h4>
-  <p>None of this lives in <code>appsettings.Production.json</code>. It's set via an
-  <code>ASPNETCORE_URLS</code> environment variable directly on each Windows Service
-  (<strong>Environment</strong> tab in <code>services.msc</code>, or <code>sc.exe</code>/<code>Set-Service</code>
-  scripting) &mdash; a one-time step done once when the service is first created, never touched again
-  by CI.</p>
+  <h4>Bind addresses &mdash; auto-set every deploy, sourced from GitHub Environment variables</h4>
+  <p>None of this lives in <code>appsettings.Production.json</code>, and it is no longer a manual
+  <code>services.msc</code> step either. <code>Deploy-FHIRBridge.ps1</code> takes mandatory
+  <code>-ApiPort</code>/<code>-GatewayPort</code>/<code>-DemoApiPort</code> parameters (see
+  <a href="#win-deploy-job">deploy job parameters</a> above) and its <code>Set-ServiceEnvironment</code>
+  function writes each service's <code>ASPNETCORE_URLS</code> (and, for the Demo app,
+  <code>DEMOAPP_PORTAL_PATH</code>) directly to that Windows Service's registry <code>Environment</code>
+  value on <strong>every</strong> deploy, right before <code>Start-Service</code> &mdash; see Stage 2,
+  step 7 above. This used to be a one-time hand-provisioned step per service and silently drifted back
+  to Kestrel's own built-in default (port 5000) whenever it was skipped or a service was recreated,
+  which is exactly what caused the original port-collision incident this whole mandatory-port design
+  fixes.</p>
   <table class="file-table">
-    <tr><th>Service</th><th>ASPNETCORE_URLS</th></tr>
-    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">http://127.0.0.1:5000</td></tr>
-    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">http://+:80</td></tr>
-    <tr><td class="file-path">FHIRBridge.Worker</td><td class="why"><em>(none &mdash; no HTTP endpoint)</em></td></tr>
-    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">http://+:5500</td></tr>
+    <tr><th>Service</th><th>ASPNETCORE_URLS</th><th>Source parameter / GitHub Environment variable</th></tr>
+    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">http://127.0.0.1:&lt;ApiPort&gt;</td><td class="file-path">-ApiPort &larr; vars.PROD_API_PORT</td></tr>
+    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">http://+:&lt;GatewayPort&gt;</td><td class="file-path">-GatewayPort &larr; vars.PROD_GATEWAY_PORT</td></tr>
+    <tr><td class="file-path">FHIRBridge.Worker</td><td class="why"><em>(none &mdash; no HTTP endpoint)</em></td><td class="why">&mdash;</td></tr>
+    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">http://+:&lt;DemoApiPort&gt;</td><td class="file-path">-DemoApiPort &larr; vars.PROD_DEMOAPI_PORT</td></tr>
   </table>
-  <p>FHIRBridge.DemoApp also needs a <code>DEMOAPP_PORTAL_PATH</code> environment variable set to
-  <code>C:\inetpub\wwwroot\demoapp-portal</code> &mdash; read directly via
+  <p>FHIRBridge.DemoApp's <code>DEMOAPP_PORTAL_PATH</code> is likewise set automatically to
+  <code>C:\inetpub\wwwroot\demoapp-portal</code> every deploy &mdash; read directly via
   <code>Environment.GetEnvironmentVariable</code> in its <code>Program.cs</code> (not through
   <code>IConfiguration</code>), so it can't go in <code>appsettings.json</code> at all.</p>
+  <div class="callout">
+    <strong>No fallback, by design</strong>
+    Every host's <code>Program.cs</code> (Api, Gateway, Demo app) now throws at startup outside
+    Development if <code>ASPNETCORE_URLS</code> isn't set &mdash; refusing to silently bind Kestrel's
+    built-in <code>http://localhost:5000</code> default. If a service ever fails to start with no
+    obvious cause, check the diagnostics dump described above first; a missing/blank
+    <code>PROD_*_PORT</code> GitHub Environment variable is one likely reason.
+  </div>
 
   <h3 id="win-prereqs">One-time server prerequisites</h3>
   <div class="flow-steps">
     <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>ASP.NET Core 9.0 Runtime</strong><span>Not the Hosting Bundle &mdash; that's only for IIS/ANCM, unused here. <a href="https://dotnet.microsoft.com/download/dotnet/9.0" target="_blank" rel="noopener">dotnet.microsoft.com/download/dotnet/9.0</a></span></div></div>
     <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>PowerShell 5.1+</strong><span>Built into Windows Server.</span></div></div>
     <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Outbound HTTPS</strong><span>To <code>github.com</code> / <code>*.actions.githubusercontent.com</code>, for the self-hosted runner to poll GitHub.</span></div></div>
-    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Inbound firewall rules</strong><span>Ports 80 (Gateway) and 5500 (Demo app) &mdash; a one-time manual step, not something CI touches.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Pick free ports and open inbound firewall rules</strong><span>Confirm the ports you intend to use for Gateway and the Demo app aren't already bound by another application on this host (<code>Get-NetTCPConnection -LocalPort &lt;port&gt; -ErrorAction SilentlyContinue</code>, or <code>netstat -ano | findstr :&lt;port&gt;</code>), then open inbound rules for those two. The Api's port stays loopback-only and never needs a firewall rule.</span></div></div>
     <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Install the self-hosted runner</strong><span>Repo Settings &rarr; Actions &rarr; Runners &rarr; New self-hosted runner &rarr; Windows, label <code>fhirbridge-vm</code>.</span></div></div>
-    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Provision the four appsettings.Production.json files</strong><span>Under ConfigRoot, per the table above.</span></div></div>
-    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Set ASPNETCORE_URLS</strong><span>(and, for DemoApp, DEMOAPP_PORTAL_PATH) once each service exists &mdash; typically right after the first deploy creates it.</span></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Provision the four appsettings.Production.json files</strong><span>Under ConfigRoot, per the table above &mdash; including <code>fhirbridge-gateway</code>'s <code>ApiBaseUrl</code>, which is now mandatory (no fallback).</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Set the three GitHub Environment variables</strong><span>Settings &rarr; Environments &rarr; <code>production</code> &rarr; Environment variables: <code>PROD_API_PORT</code>, <code>PROD_GATEWAY_PORT</code>, <code>PROD_DEMOAPI_PORT</code>. Required before the very first deploy &mdash; <code>deploy.yml</code> passes them straight through as mandatory parameters, and the workflow fails immediately if any is unset rather than deploying with a guessed port. Make sure <code>fhirbridge-gateway</code>'s <code>ApiBaseUrl</code> (step 6) actually matches whatever port is set here for <code>PROD_API_PORT</code>.</span></div></div>
   </div>
-  <pre><code>New-NetFirewallRule -DisplayName "FHIRBridge Gateway (80)" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
-New-NetFirewallRule -DisplayName "FHIRBridge Demo App (5500)" -Direction Inbound -LocalPort 5500 -Protocol TCP -Action Allow</code></pre>
+  <pre><code>New-NetFirewallRule -DisplayName "FHIRBridge Gateway" -Direction Inbound -LocalPort &lt;PROD_GATEWAY_PORT&gt; -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "FHIRBridge Demo App" -Direction Inbound -LocalPort &lt;PROD_DEMOAPI_PORT&gt; -Protocol TCP -Action Allow</code></pre>
   <pre><code># From an elevated PowerShell prompt, in the extracted runner folder:
 .\config.cmd --url https://github.com/&lt;org&gt;/&lt;repo&gt; --token &lt;TOKEN_FROM_GITHUB_UI&gt; --labels fhirbridge-vm
 
@@ -577,14 +619,18 @@ New-NetFirewallRule -DisplayName "FHIRBridge Demo App (5500)" -Direction Inbound
     <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Run the workflow</strong><span>Actions tab &rarr; Deploy &rarr; Run workflow.</span></div></div>
     <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Build job compiles everything</strong><span>Api, Gateway, Worker, DemoApi (win-x64, framework-dependent) and both Angular frontends, on a GitHub-hosted runner.</span></div></div>
     <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>One artifact ships to the server</strong><span>Six folders, downloaded and expanded by the self-hosted runner.</span></div></div>
-    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Deploy-FHIRBridge.ps1 runs</strong><span>Mirrors static frontends + config overlay, then per service: stop (no-op first time) &rarr; mirror &rarr; config overlay &rarr; create service (first run only) &rarr; start &rarr; health-check.</span></div></div>
-    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>All four services now exist</strong><span>Every deploy after this is just stop &rarr; replace &rarr; start.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Deploy-FHIRBridge.ps1 runs</strong><span>Mirrors static frontends + config overlay, then per service: stop (no-op first time) &rarr; mirror &rarr; config overlay &rarr; create service (first run only) &rarr; set ASPNETCORE_URLS/DEMOAPP_PORTAL_PATH from -ApiPort/-GatewayPort/-DemoApiPort &rarr; start (diagnostics dump on failure) &rarr; health-check.</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>All four services now exist</strong><span>Every deploy after this is just stop &rarr; replace &rarr; re-set environment variables &rarr; start.</span></div></div>
   </div>
   <div class="callout">
-    <strong>First-run manual step</strong>
-    Right after the very first deploy creates each service, go set its <code>ASPNETCORE_URLS</code>
-    (and DemoApp's <code>DEMOAPP_PORTAL_PATH</code>) via <code>services.msc</code>, then restart that
-    service once by hand so it picks up the new bind address.
+    <strong>No manual post-first-deploy step anymore</strong>
+    Unlike the earlier design, there's nothing to do by hand after the first deploy creates each
+    service &mdash; <code>ASPNETCORE_URLS</code> (and DemoApp's <code>DEMOAPP_PORTAL_PATH</code>) is set
+    automatically from the <code>-ApiPort</code>/<code>-GatewayPort</code>/<code>-DemoApiPort</code>
+    parameters on every deploy, including the first. The only thing that must exist beforehand is the
+    <code>PROD_API_PORT</code>/<code>PROD_GATEWAY_PORT</code>/<code>PROD_DEMOAPI_PORT</code> GitHub
+    Environment variables (prerequisites step 7 above) &mdash; without them the workflow fails before
+    the deploy script even runs.
   </div>
 
   <h3 id="win-swagger">Swagger access in production</h3>
@@ -596,7 +642,7 @@ if (swaggerEnabled) { app.UseSwagger(); app.UseSwaggerUI(); }</code></pre>
   <table class="file-table">
     <tr><th>Project</th><th>Local dev URL</th><th>Production URL once enabled</th></tr>
     <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">http://localhost:5000/swagger</td><td class="why">Through the Gateway, which already proxies <code>/swagger/**</code>: <code>http://&lt;gateway-public-host&gt;/swagger</code> (Api itself binds loopback only)</td></tr>
-    <tr><td class="file-path">Demo app backend</td><td class="file-path">http://localhost:5500/swagger</td><td class="file-path">http://&lt;server&gt;:5500/swagger (binds public directly, no gateway in front)</td></tr>
+    <tr><td class="file-path">Demo app backend</td><td class="file-path">http://localhost:5500/swagger</td><td class="file-path">http://&lt;server&gt;:&lt;PROD_DEMOAPI_PORT&gt;/swagger (binds public directly, no gateway in front)</td></tr>
   </table>
   <p>To turn it on: add this to that service's <code>appsettings.Production.json</code> under
   ConfigRoot, then restart the service:</p>
@@ -974,6 +1020,40 @@ git push origin develop   # (or main / quality / any branch, depending on the en
   </div>
 
   <h2 id="gotchas"><span class="num">5.</span>Known Gotchas &amp; Lessons Learned</h2>
+
+  <div class="callout bad">
+    <strong>Real incident: silent fallback to Kestrel's default port 5000</strong>
+    Before <code>-ApiPort</code>/<code>-GatewayPort</code>/<code>-DemoApiPort</code> existed,
+    <code>Deploy-FHIRBridge.ps1</code> never set <code>ASPNETCORE_URLS</code> at all &mdash; it was a
+    one-time manual <code>services.msc</code> step that drifted. Whenever it was skipped or a service
+    got recreated, that service silently fell back to Kestrel's own built-in default,
+    <code>http://localhost:5000</code>, which then collided with an unrelated application already
+    bound to that port on the deploy VM. Gateway's <code>ApiBaseUrl</code> had the identical failure
+    mode in code (<code>?? "http://127.0.0.1:5000/"</code>), which could also make a misconfigured
+    non-prod environment's Gateway silently proxy straight into production's own Api.
+    <strong>Fix:</strong> every host's <code>Program.cs</code> (Api, Gateway, Demo app) now throws at
+    startup outside Development if <code>ASPNETCORE_URLS</code> is unset, Gateway's <code>Program.cs</code>
+    likewise throws if <code>ApiBaseUrl</code> is unset, and <code>Deploy-FHIRBridge.ps1</code> takes
+    <code>-ApiPort</code>/<code>-GatewayPort</code>/<code>-DemoApiPort</code> as mandatory parameters
+    (sourced from the <code>production</code> GitHub Environment's <code>PROD_API_PORT</code> etc.
+    variables) and sets <code>ASPNETCORE_URLS</code> on every deploy &mdash; see
+    <a href="#win-topology">Server topology</a> and the Bind Addresses section above. There is
+    deliberately no fallback left anywhere in this path.
+  </div>
+
+  <div class="callout warn">
+    <strong>Windows SCM only ever reports a generic start failure</strong>
+    <code>Start-Service</code> failures surface only as a generic <code>CouldNotStartService</code>
+    wrapper &mdash; never the app's actual startup exception. This cost real debugging time chasing a
+    JSON syntax error in an <code>appsettings.Production.json</code> that crashed
+    <code>FHIRBridge.Api</code> on startup; the CI log showed nothing but the generic SCM error, and
+    tracking down the real cause required an RDP session. <code>Deploy-Service</code> in both
+    <code>Deploy-FHIRBridge.ps1</code> and <code>Deploy-FHIRBridge-Environment.ps1</code> now catches a
+    <code>Start-Service</code> failure and runs <code>Show-ServiceStartFailureDiagnostics</code>
+    before re-throwing &mdash; see <a href="#win-deploy-job">the diagnostics section</a> above for what
+    it captures (port listener check, direct exe run to capture stdout/stderr, recent Application
+    event log entries).
+  </div>
 
   <div class="callout bad">
     <strong>Real incident: missing column after a schema change</strong>
