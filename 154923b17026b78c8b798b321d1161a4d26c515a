@@ -1,0 +1,23 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_4cbfee433b5ae2::t_94c2f4b3179564 686-688,753-757
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_4cbfee433b5ae2::t_7f4561901eed0f 87-96,593-605,745-751,1014-1019
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_4cbfee433b5ae2::t_00a8094f945c1c 166-171
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "154923b17026b78c8b798b321d1161a4d26c515a",
+  "prompts": {},
+  "sessions": {
+    "s_4cbfee433b5ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80757dfb-c581-46cf-8de9-9df05272ed1a",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

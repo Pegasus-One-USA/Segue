@@ -1,0 +1,35 @@
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_29a967ba537f2c::t_b54b1b90fac281 22
+  s_29a967ba537f2c::t_bcd0d57e6f612e 23-43
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_29a967ba537f2c::t_b54b1b90fac281 50,54,65-74
+  s_29a967ba537f2c::t_658e120652c8fb 148-161,227-230,1084-1147
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationTransaction.cs
+  s_29a967ba537f2c::t_b54b1b90fac281 1-18
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_29a967ba537f2c::t_2b7b971a1b6057 427,431-433,435-436
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_29a967ba537f2c::t_805463c1658780 392,836-870
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_29a967ba537f2c::t_e73b7d10ec4be4 13-20
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_29a967ba537f2c::t_7dd82f4ac7ae0f 20-34
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_29a967ba537f2c::t_b3ced54236c68e 234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c48fb8a1e744976f9e3a8a9d043024ff6eaa00ab",
+  "prompts": {},
+  "sessions": {
+    "s_29a967ba537f2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea0894a5-0d0c-496a-9e21-486e7821de47",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
