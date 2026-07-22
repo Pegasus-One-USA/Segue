@@ -1,4 +1,5 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -22,20 +23,20 @@ public sealed class OAuthController : ControllerBase
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
     private readonly IEhrEndpointService _ehrEndpointService;
-    private readonly IConfiguration _configuration;
+    private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
     private readonly ILogger<OAuthController> _logger;
 
     public OAuthController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
         IEhrEndpointService ehrEndpointService,
-        IConfiguration configuration,
+        IAllowedCorsOriginsCache allowedCorsOriginsCache,
         ILogger<OAuthController> logger)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
         _ehrEndpointService = ehrEndpointService;
-        _configuration = configuration;
+        _allowedCorsOriginsCache = allowedCorsOriginsCache;
         _logger = logger;
     }
 
@@ -155,12 +156,13 @@ public sealed class OAuthController : ControllerBase
         }
 
         // This endpoint is anonymous — anyone who knows workflowId can call it — so a caller-supplied callerId is
-        // validated against Portal:AllowedOrigins (the same trust boundary already used for CORS) before it's
+        // validated against the live allowed-origins set (same trust boundary already used for CORS) before it's
         // honored, to keep it from being an open redirect off a real Epic login.
-        if (!string.IsNullOrWhiteSpace(callerId) && !CallerIdOriginValidator.IsAllowedOrigin(callerId, _configuration))
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
         {
             _logger.LogWarning(
-                "[Step 1/6] public-standalone-url rejected: callerId origin is not in Portal:AllowedOrigins for workflowId={WorkflowId}",
+                "[Step 1/6] public-standalone-url rejected: callerId origin is not in the allowed-origins set for workflowId={WorkflowId}",
                 workflowId);
             return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
         }

@@ -1,4 +1,5 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -28,18 +29,18 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
     private readonly IPatientStandaloneEhrEndpointService _myChartEndpointService;
-    private readonly IConfiguration _configuration;
+    private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
 
     public PatientStandaloneLaunchController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
         IPatientStandaloneEhrEndpointService myChartEndpointService,
-        IConfiguration configuration)
+        IAllowedCorsOriginsCache allowedCorsOriginsCache)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
         _myChartEndpointService = myChartEndpointService;
-        _configuration = configuration;
+        _allowedCorsOriginsCache = allowedCorsOriginsCache;
     }
 
     [HttpGet("workflows/{workflowId:guid}/public-patient-standalone-url")]
@@ -66,9 +67,10 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             return NotFound();
         }
 
-        // Anonymous endpoint — validate callerId against Portal:AllowedOrigins before honoring it (see
+        // Anonymous endpoint — validate callerId against the live allowed-origins set before honoring it (see
         // CallerIdOriginValidator), so it can't be used as an open redirect off a real MyChart login.
-        if (!string.IsNullOrWhiteSpace(callerId) && !CallerIdOriginValidator.IsAllowedOrigin(callerId, _configuration))
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
         {
             return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
         }
