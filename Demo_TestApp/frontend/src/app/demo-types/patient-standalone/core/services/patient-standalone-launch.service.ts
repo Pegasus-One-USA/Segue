@@ -273,21 +273,33 @@ export class PatientStandaloneLaunchService {
     return firstValueFrom(this.http.get<MyChartEndpoint[]>(url));
   }
 
-  async hasValidToken(workflowId: string, patientId: string | null): Promise<boolean> {
+  // callerId identifies this HealthApp session/page to FHIRBridge's Patient Standalone token cache — omitting it
+  // (as this method used to) makes every check fall back to the pre-CallerId per-SourceConnection key, so a token
+  // FHIRBridge already has cached under the CallerId-keyed slot from redirectToMyChart's mintLaunchUrl call would
+  // look invalid here even though it's genuinely usable. Must match whatever callerId mintLaunchUrl used for this
+  // same page/session (see launch-standalone-patient.ts's pageCallerId).
+  async hasValidToken(workflowId: string, patientId: string | null, callerId?: string): Promise<boolean> {
+    const params: Record<string, string> = {};
+    if (patientId) {
+      params['patientId'] = patientId;
+    }
+    if (callerId) {
+      params['callerId'] = callerId;
+    }
     const status = await firstValueFrom(
-      this.http.get<TokenStatusResponse>(
-        `${this.baseUrl}/api/v1/workflows/${workflowId}/token-status`,
-        { params: patientId ? { patientId } : {} },
-      ),
+      this.http.get<TokenStatusResponse>(`${this.baseUrl}/api/v1/workflows/${workflowId}/token-status`, { params }),
     );
     return status.hasValidToken;
   }
 
-  async run(workflowId: string, patientId: string | null): Promise<WorkflowRunResponse> {
+  // Same callerId requirement as hasValidToken above — without it, this workflow's own token-cache lookup at run
+  // time misses the CallerId-keyed slot and the run fails with "no authorized token" even when a valid one exists.
+  async run(workflowId: string, patientId: string | null, callerId?: string): Promise<WorkflowRunResponse> {
     return firstValueFrom(
       this.http.post<WorkflowRunResponse>(`${this.baseUrl}/api/v1/workflows/${workflowId}/run`, {
         patientId,
         patientSearchCriteria: null,
+        callerId: callerId ?? null,
       }),
     );
   }
@@ -301,13 +313,16 @@ export class PatientStandaloneLaunchService {
     );
   }
 
-  async discardToken(workflowId: string, patientId: string | null): Promise<void> {
+  async discardToken(workflowId: string, patientId: string | null, callerId?: string): Promise<void> {
+    const params: Record<string, string> = {};
+    if (patientId) {
+      params['patientId'] = patientId;
+    }
+    if (callerId) {
+      params['callerId'] = callerId;
+    }
     await firstValueFrom(
-      this.http.post(
-        `${this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`,
-        {},
-        { params: patientId ? { patientId } : {} },
-      ),
+      this.http.post(`${this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`, {}, { params }),
     );
   }
 
