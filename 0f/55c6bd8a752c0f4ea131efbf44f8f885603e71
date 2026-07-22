@@ -1,0 +1,19 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_3679e3048431dc::t_1f31603146264d 198-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "0f55c6bd8a752c0f4ea131efbf44f8f885603e71",
+  "prompts": {},
+  "sessions": {
+    "s_3679e3048431dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1568ea7-c9f3-4703-ba4e-28032014b5af",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
