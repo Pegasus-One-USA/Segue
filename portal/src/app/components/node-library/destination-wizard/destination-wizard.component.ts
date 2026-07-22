@@ -10,7 +10,7 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationColumn, DestinationTable } from '../../../services/destination-schema.service';
-import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
+import { MappingCatalogService, FhirElement, resolveParentReferenceField } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 
@@ -25,6 +25,7 @@ export interface ResourceFieldDef {
   jsonPath?: string;
   valueType?: string;
   arrays?: string[];
+  referenceTargetTypes?: string[];
 }
 
 export interface ResourceDef {
@@ -104,6 +105,11 @@ export interface MappingRow {
   // True only for a resource's mandatory id row (see _reconcileIdRows) — the column an Upsert write
   // matches an existing row on. Forced/locked by the wizard; never set true on any other row.
   isUpsertKey: boolean;
+  // True only for a reference-field row forced/locked by _reconcileParentRefRows because this resource
+  // is configured as a child of parentResourceType (see selectedParentsOf/toggleParent). Never
+  // removable, never reassignable to another business field — same lock semantics as the id row.
+  isRequiredParentRef?: boolean;
+  parentResourceType?: string;
 }
 
 /** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
@@ -190,7 +196,7 @@ export class DestinationWizardComponent implements OnInit {
     // ── Email-only fields ─────────────────────────────────────────────────────
     emailTo:              ['', []],
     emailCc:               ['', []],
-    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
+    emailSubjectTemplate: ['Segue CSV Export - {{RouteName}} - {{RunDate}}', []],
     emailBodyTemplate:    ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
     // ── Download-link-only field ─────────────────────────────────────────────
     downloadLinkExpiryMinutes: [60, []],
@@ -204,6 +210,11 @@ export class DestinationWizardComponent implements OnInit {
     return src.length ? src : Object.keys(DEST_RESOURCE_DEFS);
   });
   readonly selectedResources = signal<string[]>(['Patient', 'Observation', 'Encounter']);
+
+  // Which other selected resources each resource is configured as a "child" of — e.g.
+  // { Observation: ['Patient', 'Encounter'] } means Observation independently requires a mapped
+  // reference field to both. A resource can have several parents at once (see _reconcileParentRefRows).
+  readonly parentSelections = signal<Record<string, string[]>>({});
 
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
@@ -281,6 +292,19 @@ export class DestinationWizardComponent implements OnInit {
       this.targetByResource();
       untracked(() => this._reconcileIdRows());
     });
+
+    // Same idea as the id-row effect above, for reference fields required by a "child of" declaration:
+    // prunes stale parent selections (a resource or its chosen parent was deselected), then locks/
+    // unlocks the corresponding reference-field rows to match.
+    effect(() => {
+      this.selectedResources();
+      this.catalogByResource();
+      this.parentSelections();
+      untracked(() => {
+        this._pruneParentSelections();
+        this._reconcileParentRefRows();
+      });
+    });
   }
 
   private readonly _requested = new Set<string>();
@@ -307,6 +331,7 @@ export class DestinationWizardComponent implements OnInit {
       jsonPath: f.jsonPath,
       valueType: f.valueType,
       arrays: f.arrays,
+      referenceTargetTypes: f.referenceTargetTypes,
     };
   }
 
@@ -364,6 +389,7 @@ export class DestinationWizardComponent implements OnInit {
       return this.isSql() ? this.sqlForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
+    if (s >= 3) return this._hasUnverifiedColumns();
     return false;
   }
 
@@ -507,7 +533,7 @@ export class DestinationWizardComponent implements OnInit {
         sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
         emailTo:              metadata['dest_emailTo']              || '',
         emailCc:               metadata['dest_emailCc']               || '',
-        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'Segue CSV Export - {{RouteName}} - {{RunDate}}',
         emailBodyTemplate:
           metadata['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
         downloadLinkExpiryMinutes: metadata['dest_downloadLinkExpiryMinutes']
@@ -587,6 +613,52 @@ export class DestinationWizardComponent implements OnInit {
     this.selectedResources.update(list =>
       list.includes(r) ? list.filter(x => x !== r) : [...list, r]
     );
+  }
+
+  // ── parent-child reference mapping ───────────────────────────────────────
+  // Other selected resources that `r` could be a child of — i.e. `r` has at least one FHIR reference
+  // field whose allowed target types include that resource. Only these are offered as parent choices,
+  // so the UI can never be pushed into a pairing FHIR doesn't actually support.
+  candidateParentsFor(r: string): string[] {
+    const fields = this.availableFields(r);
+    return this.selectedResources().filter(other =>
+      other !== r && resolveParentReferenceField(this._asFhirElements(fields), other) !== null);
+  }
+
+  selectedParentsOf(r: string): string[] {
+    return this.parentSelections()[r] ?? [];
+  }
+
+  isParentSelected(r: string, parent: string): boolean {
+    return this.selectedParentsOf(r).includes(parent);
+  }
+
+  toggleParent(r: string, parent: string): void {
+    this.parentSelections.update(m => {
+      const current = m[r] ?? [];
+      const next = current.includes(parent) ? current.filter(p => p !== parent) : [...current, parent];
+      return { ...m, [r]: next };
+    });
+  }
+
+  private _asFhirElements(fields: ResourceFieldDef[]): FhirElement[] {
+    return fields.map(f => {
+      const isArray = !!f.arrays?.length;
+      return {
+        label: f.label,
+        jsonPath: f.jsonPath ?? '',
+        fhirPath: f.path.includes('.') ? f.path.slice(f.path.indexOf('.') + 1) : f.path,
+        cardinality: isArray ? '0..*' : '0..1',
+        valueType: f.valueType ?? 'String',
+        isArray,
+        arrays: f.arrays ?? [],
+        referenceTargetTypes: f.referenceTargetTypes ?? [],
+      };
+    });
+  }
+
+  isRequiredParentRefRow(row: MappingRow): boolean {
+    return !!row.isRequiredParentRef;
   }
 
   // ── mapping rows ──────────────────────────────────────────────────────────
@@ -725,6 +797,7 @@ export class DestinationWizardComponent implements OnInit {
 
   removeRow(row: MappingRow): void {
     if (this.isIdRow(row)) return; // mandatory — guarantees every resource keeps its upsert key mapped
+    if (row.isRequiredParentRef) return; // mandatory while its parent chip is selected — toggle the chip instead
     this.mappingRows.update(rows => {
       const i = rows.indexOf(row);
       if (i < 0) return rows;
@@ -758,6 +831,41 @@ export class DestinationWizardComponent implements OnInit {
   // found) — only then is it safe to fully lock the field, since a guessed name could otherwise be wrong.
   isIdColumnLocked(r: string): boolean {
     return this._autoMatchIdColumn(r) !== null;
+  }
+
+  // True when this resource's live column list is known (a schema probe succeeded) but the id row's mapped
+  // column isn't actually one of those real columns — e.g. still left at the wizard's unverified default
+  // guess, or a stale value from before the table was reselected. Saving in this state is exactly what
+  // produces "Invalid column name 'X'" at run time, since the column genuinely doesn't exist on the
+  // customer's table. Returns false (nothing to flag) when the schema isn't known yet — there's no live
+  // column list to check the id row against.
+  isIdColumnUnverified(r: string): boolean {
+    if (this.isIdColumnLocked(r)) return false;
+    const columns = this.columnsForResourceTarget(r);
+    if (columns.length === 0) return false;
+    const idRow = this.mappingRows().find(row => row.resource === r && this.isIdRow(row));
+    return !idRow || !columns.includes(idRow.targetName);
+  }
+
+  // Same check as isIdColumnUnverified but for any mapped row, not just the id row — a non-id field left at a
+  // stale/guessed column name (e.g. after switching tables) fails the write with "Invalid column name" exactly
+  // the same way the id row does, just on a column that isn't the upsert key. The id row is schema-verified
+  // separately (isIdColumnLocked) when a PK/unique was auto-matched, so it's excluded here to avoid flagging a
+  // row the user was never shown an editable picker for in the first place.
+  isRowColumnUnverified(row: MappingRow): boolean {
+    if (this.isIdRow(row) && this.isIdColumnLocked(row.resource)) return false;
+    const columns = this.columnsForResourceTarget(row.resource);
+    if (columns.length === 0) return false;
+    return !columns.includes(row.targetName);
+  }
+
+  // Blocks proceeding past the mapping step while any selected resource has a mapped row (id or otherwise)
+  // whose column isn't verified against the live destination schema — the save-time gate the destination-node
+  // config alone can't guarantee, since nothing upstream forces the user to actually pick from the live column
+  // list rather than leaving an unmatched guess in place.
+  private _hasUnverifiedColumns(): boolean {
+    return this.mappingRows().some(row =>
+      this.selectedResources().includes(row.resource) && this.isRowColumnUnverified(row));
   }
 
   // Keeps every selected resource's mandatory id row in sync with the live schema and the catalog: inserts it
@@ -800,6 +908,91 @@ export class DestinationWizardComponent implements OnInit {
     if (changed) this.mappingRows.set(next);
   }
 
+  // Drops parent selections that no longer point at a currently-selected resource, and drops the
+  // child side entirely if the child itself was deselected — mirrors the "prune stale state" half of
+  // _reconcileIdRows, just for parentSelections instead of mappingRows.
+  private _pruneParentSelections(): void {
+    const selected = new Set(this.selectedResources());
+    this.parentSelections.update(m => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+      for (const [child, parents] of Object.entries(m)) {
+        if (!selected.has(child)) { changed = true; continue; }
+        const kept = parents.filter(p => selected.has(p));
+        if (kept.length !== parents.length) changed = true;
+        if (kept.length) next[child] = kept;
+      }
+      return changed ? next : m;
+    });
+  }
+
+  // Keeps each resource's required-reference rows in sync with its current parent selections: one
+  // locked row per selected parent (independent — Observation with both Patient and Encounter as
+  // parents gets two separate locked rows), inserted/removed/refreshed the same way _reconcileIdRows
+  // manages the id row. A parent whose resolver lookup returns null (shouldn't happen, since
+  // candidateParentsFor already filters to resolvable pairs) is skipped rather than locking a bad row.
+  private _reconcileParentRefRows(): void {
+    let changed = false;
+    let next = [...this.mappingRows()];
+
+    for (const r of this.selectedResources()) {
+      const parents = this.selectedParentsOf(r);
+      const wanted = new Set(parents);
+
+      const kept = next.filter(row =>
+        !(row.resource === r && row.isRequiredParentRef && !wanted.has(row.parentResourceType ?? '')));
+      if (kept.length !== next.length) { next = kept; changed = true; }
+
+      const fields = this.availableFields(r);
+
+      for (const parent of parents) {
+        const requiredField = resolveParentReferenceField(this._asFhirElements(fields), parent);
+        if (!requiredField) continue;
+
+        const targetFhirPath = `${r}.${requiredField.fhirPath}`;
+        const matchingFieldDef = fields.find(f => f.path === targetFhirPath);
+        const idx = next.findIndex(row =>
+          row.resource === r && row.isRequiredParentRef && row.parentResourceType === parent);
+
+        if (idx === -1) {
+          const columnName = matchingFieldDef
+            ? (this.destType() === 'sql' ? matchingFieldDef.sqlColumn : matchingFieldDef.csvColumn)
+            : requiredField.label;
+          const fieldDef: ResourceFieldDef = matchingFieldDef ?? {
+            label: requiredField.label,
+            path: targetFhirPath,
+            sqlColumn: columnName,
+            csvColumn: columnName,
+            jsonPath: requiredField.jsonPath,
+            valueType: requiredField.valueType,
+            arrays: requiredField.arrays,
+          };
+          next = [...next, {
+            ...this._buildRow(r, fieldDef, columnName),
+            isRequiredParentRef: true,
+            parentResourceType: parent,
+          }];
+          changed = true;
+        } else {
+          const row = next[idx];
+          if (row.fhirPath !== targetFhirPath || row.jsonPath !== requiredField.jsonPath) {
+            next[idx] = {
+              ...row,
+              fhirPath: targetFhirPath,
+              fieldLabel: requiredField.label,
+              jsonPath: requiredField.jsonPath,
+              valueType: requiredField.valueType,
+              arrays: requiredField.arrays,
+            };
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (changed) this.mappingRows.set(next);
+  }
+
   // ── per-resource target (file name / table) ────────────────────────────────
   targetFor(r: string): string { return this.targetByResource()[r] ?? ''; }
 
@@ -816,6 +1009,7 @@ export class DestinationWizardComponent implements OnInit {
   changeBusinessField(i: number, label: string): void {
     this.mappingRows.update(rows => {
       if (this.isIdRow(rows[i])) return rows; // the id row's business field is fixed, never reassignable
+      if (rows[i].isRequiredParentRef) return rows; // ditto for a required parent-reference field
       const next = [...rows];
       const row  = next[i];
       const f    = this.availableFields(row.resource).find(x => x.label === label);
@@ -840,9 +1034,16 @@ export class DestinationWizardComponent implements OnInit {
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
       if (targets[r]) continue;
-      // Seed the per-resource target once; preserve any value the user has already typed.
-      const def = this.defFor(r);
-      targets[r] = type === 'sql' ? def.sqlTable : def.csvFile;
+      // SQL: leave unset so the table dropdown genuinely shows its "Select a table…" placeholder and
+      // requires an explicit pick — a hardcoded guess here (e.g. dbo.Patient) rarely matches the
+      // customer's real table name (e.g. dbo.Patient_New), and once it doesn't match any <option>, the
+      // native <select> silently falls back to displaying its first listed table — alphabetically
+      // whatever that happens to be, with no relation to the resource — which reads as an intentional,
+      // correct selection the user never actually made. CSV has no such mismatch risk (it's a free-text
+      // filename input, not a dropdown of real destination objects), so keep suggesting one there.
+      if (type === 'csv') {
+        targets[r] = this.defFor(r).csvFile;
+      }
     }
     this.targetByResource.set(targets);
     this.mappingRows.update(rows =>
@@ -880,7 +1081,7 @@ export class DestinationWizardComponent implements OnInit {
         sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
         emailTo:              f['dest_emailTo']              || '',
         emailCc:               f['dest_emailCc']               || '',
-        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'Segue CSV Export - {{RouteName}} - {{RunDate}}',
         emailBodyTemplate:
           f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
         downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
@@ -897,6 +1098,7 @@ export class DestinationWizardComponent implements OnInit {
         const saved = JSON.parse(f['dest_mappings']) as {
           resource: string; field: string; path: string; target: string; column: string;
           jsonPath?: string; valueType?: string; arrays?: string[]; isUpsertKey?: boolean;
+          isRequiredParentRef?: boolean; parentResourceType?: string;
         }[];
         this.mappingRows.set(saved.map(m => ({
           resource:   m.resource,
@@ -908,8 +1110,13 @@ export class DestinationWizardComponent implements OnInit {
           valueType:  m.valueType,
           arrays:     m.arrays,
           isUpsertKey: m.isUpsertKey ?? false,
+          isRequiredParentRef: m.isRequiredParentRef ?? false,
+          parentResourceType: m.parentResourceType,
         })));
       } catch { /* ignore malformed */ }
+    }
+    if (f['dest_parentSelections']) {
+      try { this.parentSelections.set(JSON.parse(f['dest_parentSelections'])); } catch { /* ignore malformed */ }
     }
   }
 
@@ -999,8 +1206,11 @@ export class DestinationWizardComponent implements OnInit {
         valueType: r.valueType,
         arrays:    r.arrays,
         isUpsertKey: r.isUpsertKey,
+        isRequiredParentRef: r.isRequiredParentRef,
+        parentResourceType: r.parentResourceType,
       })),
     );
+    config['dest_parentSelections'] = JSON.stringify(this.parentSelections());
 
     this.saved.emit({
       attachNode:  this.attachNode(),

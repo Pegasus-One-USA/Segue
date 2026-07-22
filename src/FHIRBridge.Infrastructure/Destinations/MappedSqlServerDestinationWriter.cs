@@ -177,7 +177,20 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         var parameterNames = columns.Select(column => $"@{column}").ToList();
         var updateColumns = columns
             .Where(column => !string.Equals(column, keyColumn, StringComparison.OrdinalIgnoreCase))
-            .Select(column => $"target.[{column}] = source.[{column}]");
+            .Select(column => $"target.[{column}] = source.[{column}]")
+            .ToList();
+
+        // A mapping profile with only the upsert-key field configured (no other columns mapped) leaves
+        // updateColumns empty — "UPDATE SET" with nothing after it is invalid T-SQL. There is nothing meaningful
+        // to update in that case anyway, so omit the WHEN MATCHED clause entirely: MERGE still inserts a row the
+        // first time a given key is seen and is a no-op on every subsequent match, which is exactly the intended
+        // upsert behavior when the key is the only mapped field.
+        var matchedClause = updateColumns.Count > 0
+            ? $"""
+              WHEN MATCHED THEN
+                  UPDATE SET {string.Join(", ", updateColumns)}
+              """
+            : string.Empty;
 
         var sql = $"""
             MERGE [{schemaName}].[{tableName}] AS target
@@ -186,8 +199,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
                 SELECT {string.Join(", ", parameterNames.Select((parameter, index) => $"{parameter} AS [{columns[index]}]"))}
             ) AS source
             ON target.[{ValidateIdentifier(keyColumn)}] = source.[{ValidateIdentifier(keyColumn)}]
-            WHEN MATCHED THEN
-                UPDATE SET {string.Join(", ", updateColumns)}
+            {matchedClause}
             WHEN NOT MATCHED THEN
                 INSERT ({string.Join(", ", columns.Select(column => $"[{column}]"))})
                 VALUES ({string.Join(", ", columns.Select(column => $"source.[{column}]"))});

@@ -435,8 +435,47 @@
   }
 }
 
-.dw-map-row--id td {
+.dw-map-row--id td,
+.dw-map-row--parent-ref td {
   background: var(--color-primary-soft);
+}
+
+.dw-parent-refs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--color-side);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dw-parent-refs-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-muted-2);
+}
+
+.dw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover { border-color: var(--color-primary); }
+
+  &.selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    font-weight: 600;
+  }
 }
 
 .dw-map-locked {

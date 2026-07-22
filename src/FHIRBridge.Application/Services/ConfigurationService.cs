@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -22,17 +23,20 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly ISourceCapabilityRepository _capabilityRepository;
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly ISecretWriter _secretWriter;
+    private readonly IParentReferenceResolver _parentReferenceResolver;
 
     public ConfigurationService(
         IConfigurationRepository repository,
         ISourceCapabilityRepository capabilityRepository,
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
-        ISecretWriter secretWriter)
+        ISecretWriter secretWriter,
+        IParentReferenceResolver parentReferenceResolver)
     {
         _repository = repository;
         _capabilityRepository = capabilityRepository;
         _capabilityDiscoveryService = capabilityDiscoveryService;
         _secretWriter = secretWriter;
+        _parentReferenceResolver = parentReferenceResolver;
     }
 
     public async Task<SourceConnectionDto> AddSourceConnectionAsync(
@@ -407,13 +411,14 @@ public sealed class ConfigurationService : IConfigurationService
         var primaryMapping = await GetMappingProfileRequiredAsync(request.MappingProfileId, cancellationToken);
         var normalizedMappings = new List<ResourcePipelineRouteMapping>();
         var seen = new HashSet<Guid>();
+        var profilesInRoute = new Dictionary<Guid, MappingProfile> { [primaryMapping.Id] = primaryMapping };
 
         foreach (var mappingRequest in request.ResourceMappings)
         {
             if (!seen.Add(mappingRequest.MappingProfileId))
             {
                 throw new InvalidOperationException(
-                    $"Route resource mapping '{mappingRequest.MappingProfileId}' is duplicated.");
+                    "A resource mapping is listed more than once on this route.");
             }
 
             var mapping = await GetMappingProfileRequiredAsync(mappingRequest.MappingProfileId, cancellationToken);
@@ -423,11 +428,21 @@ public sealed class ConfigurationService : IConfigurationService
                     "All resource mappings on a route must use mapping profiles from the same source connection.");
             }
 
-            normalizedMappings.Add(new ResourcePipelineRouteMapping(
+            profilesInRoute[mapping.Id] = mapping;
+
+            var routeMapping = new ResourcePipelineRouteMapping(
                 mappingRequest.MappingProfileId,
                 mappingRequest.IsEnabled,
                 mappingRequest.ExecutionOrder,
-                mappingRequest.SearchParameters));
+                mappingRequest.SearchParameters);
+
+            if (mappingRequest.ParentReferences is { Count: > 0 })
+            {
+                routeMapping.ReplaceParentReferences(mappingRequest.ParentReferences
+                    .Select(p => new ParentReferenceLink(p.ParentMappingProfileId, p.ReferenceFieldOverride)));
+            }
+
+            normalizedMappings.Add(routeMapping);
         }
 
         if (!seen.Contains(request.MappingProfileId))
@@ -438,7 +453,60 @@ public sealed class ConfigurationService : IConfigurationService
                 executionOrder: 0));
         }
 
+        ValidateParentReferences(normalizedMappings, profilesInRoute);
+
         route.ReplaceResourceMappings(normalizedMappings);
+    }
+
+    /// <summary>
+    /// Enforces that every "child of" relationship declared on a route's resource mappings has its required
+    /// FHIR reference field actually mapped — the save-time gate the parent-child mapping feature depends on.
+    /// Runs regardless of whether the UI kept the mapping in sync, since a direct API call could otherwise
+    /// bypass it.
+    /// </summary>
+    private void ValidateParentReferences(
+        IReadOnlyCollection<ResourcePipelineRouteMapping> mappings,
+        IReadOnlyDictionary<Guid, MappingProfile> profilesInRoute)
+    {
+        foreach (var routeMapping in mappings)
+        {
+            if (routeMapping.ParentReferences.Count == 0)
+            {
+                continue;
+            }
+
+            var childProfile = profilesInRoute[routeMapping.MappingProfileId];
+
+            foreach (var link in routeMapping.ParentReferences)
+            {
+                if (!profilesInRoute.TryGetValue(link.ParentMappingProfileId, out var parentProfile))
+                {
+                    throw new InvalidOperationException(
+                        $"'{childProfile.ResourceType}' is configured as a child of mapping profile " +
+                        $"'{link.ParentMappingProfileId}', which is not part of this route.");
+                }
+
+                var requiredField = _parentReferenceResolver.Resolve(
+                    childProfile.ResourceType, parentProfile.ResourceType, link.ReferenceFieldOverride);
+
+                if (requiredField is null)
+                {
+                    throw new InvalidOperationException(
+                        $"'{childProfile.ResourceType}' has no FHIR reference field that can target " +
+                        $"'{parentProfile.ResourceType}'.");
+                }
+
+                var isMapped = childProfile.Fields.Any(f =>
+                    f.IsEnabled && string.Equals(f.JsonPath, requiredField.JsonPath, StringComparison.Ordinal));
+
+                if (!isMapped)
+                {
+                    throw new InvalidOperationException(
+                        $"'{childProfile.ResourceType}' must map '{requiredField.FhirPath}' because it is " +
+                        $"configured as a child of '{parentProfile.ResourceType}'.");
+                }
+            }
+        }
     }
 
     private async Task<string?> ResolveResourceTypeAsync(ResourcePipelineRoute route, CancellationToken cancellationToken)
@@ -547,9 +615,8 @@ public sealed class ConfigurationService : IConfigurationService
         if (!capability.SupportsResourceType(resourceType))
         {
             throw new InvalidOperationException(
-                $"The selected source does not support FHIR resource type '{resourceType}'. " +
-                $"Its capability statement (discovered {capability.DiscoveredOnUtc:u}) does not expose that type " +
-                "with a read or search interaction. Refresh the source's capabilities or choose a different resource type.");
+                $"This source doesn't support the '{resourceType}' resource type. " +
+                "Refresh its capabilities or choose a different resource type.");
         }
     }
 

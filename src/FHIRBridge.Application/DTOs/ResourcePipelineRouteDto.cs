@@ -18,4 +18,9 @@ public sealed record ResourcePipelineRouteMappingDto(
     Guid MappingProfileId,
     bool IsEnabled,
     int ExecutionOrder,
-    string? SearchParameters);
+    string? SearchParameters,
+    IReadOnlyList<ParentReferenceDto> ParentReferences);
+
+public sealed record ParentReferenceDto(
+    Guid ParentMappingProfileId,
+    string? ReferenceFieldOverride);

@@ -6,7 +6,7 @@ This document records a session of bug fixes to the Provider Standalone launch f
 
 ## Code changes
 
-### FHIRBridge API (backend, C#)
+### Segue API (backend, C#)
 
 - `src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs`
   - `CohortBatchSize` changed from `50` to `1`. Epic (and US Core generally) rejects a clinical-resource search scoped to more than one patient in a single request ("A given request can only apply to one patient") — cohort-scoped searches now issue one request per patient instead of one batched, comma-joined request.
@@ -18,7 +18,7 @@ This document records a session of bug fixes to the Provider Standalone launch f
 - `tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs` — updated to assert per-call (not last-call-wins) patient scoping, matching the `CohortBatchSize=1` change; total resource count assertion changed 4 → 6.
 - `tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs` — **new file** — two tests covering the destination-resource-type restriction feature (fetch is restricted when a destination is reachable in the graph; unrestricted when none is).
 
-### FHIRBridge Portal (Angular)
+### Segue Portal (Angular)
 
 - `portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts`
   - `updateRow()`: the mandatory Id/upsert-key row's destination-column edit guard now only blocks writes when `isIdColumnLocked(...)` is true (a real primary/unique key was schema-detected on the destination table). Previously the guard unconditionally discarded any edit to the Id row's column, even in the case where no PK/unique key was detected and the template renders a live "choose the column that uniquely identifies each {Resource}" picker specifically so the user can pick one — meaning any column the user selected there was silently thrown away in favor of a catalog-derived default column name.
@@ -38,7 +38,7 @@ Added after the initial round of fixes above — the CSV Destination Wizard prev
 
 ### HealthApp (Demo_TestApp API / UI)
 
-No code changes. Investigated (read-only) to trace request/redirect flows: `Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts`, `Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts`, `Demo_TestApp/frontend/src/app/app.ts`, `app.routes.ts`, `Demo_TestApp/backend/Program.cs`, `Demo_TestApp/backend/HealthAppDbContext.cs`. All fixes affecting HealthApp's actual behavior were made via FHIRBridge-side database configuration (below), not HealthApp code.
+No code changes. Investigated (read-only) to trace request/redirect flows: `Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts`, `Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts`, `Demo_TestApp/frontend/src/app/app.ts`, `app.routes.ts`, `Demo_TestApp/backend/Program.cs`, `Demo_TestApp/backend/HealthAppDbContext.cs`. All fixes affecting HealthApp's actual behavior were made via Segue-side database configuration (below), not HealthApp code.
 
 ## Database data fixes (dev DB only — not in git, not in any migration)
 
@@ -56,7 +56,7 @@ Applied directly against the local SQL Server dev database (`fhirbridge-controlp
 | Node | Workflow | Field | Change | Reason |
 |---|---|---|---|---|
 | `F3C470C6-463B-4261-8CC4-E5640347D067` (EpicSourceNode) | `fd12224e-9af4-4ad4-954b-148ad26e1754` | `sourceConnectionId` | Net unchanged (Epic-1) — was briefly repointed away and reverted within this session | This is the genuine, working EHR-launch entry point; confirmed via `SmartLaunchLogs` history. Flagging because it was mistakenly repointed once during this session based on an incorrect diagnosis, then reverted. |
-| `8475A1CB-E84C-4F6E-82E5-BC1F78E6325C` ("Epic-2") | `79d5bcd7-c616-4894-9b14-fd9c3f13d150` (Patient Detail) | `sourceConnectionId` | `1bdaf951-74b7-4d2d-831b-264531f0077c` → `b496d371-672e-4ff7-b266-8b4e07fa3938` | Old value pointed at a connection that never had an authorized token; new value is the connection actually signed into via the Fetch Patient List workflow. Root cause: this dev DB has 5 separate Epic `SourceConnection` rows, 3 of which share the same real Epic Client ID but keep separate FHIRBridge-side token caches (keyed by SourceConnectionId). |
+| `8475A1CB-E84C-4F6E-82E5-BC1F78E6325C` ("Epic-2") | `79d5bcd7-c616-4894-9b14-fd9c3f13d150` (Patient Detail) | `sourceConnectionId` | `1bdaf951-74b7-4d2d-831b-264531f0077c` → `b496d371-672e-4ff7-b266-8b4e07fa3938` | Old value pointed at a connection that never had an authorized token; new value is the connection actually signed into via the Fetch Patient List workflow. Root cause: this dev DB has 5 separate Epic `SourceConnection` rows, 3 of which share the same real Epic Client ID but keep separate Segue-side token caches (keyed by SourceConnectionId). |
 | `4F53272F-1CD8-4F82-86ED-4407B1B7D6F7` (CsvDestinationNode) | `a0de009e-9a60-494f-9ff8-d83cefdd1a3b` | `dest_deliveryMode` | `"email"` → `"downloadurl"` | Patient Standalone CSV export wasn't returning a download link (was configured for email delivery instead). |
 | `3A3D210D-9914-4CD7-9491-B5D89A796BD2` (SqlServerDestinationNode) | `79d5bcd7-...` | `fields[0].targetField`, `dest_mappings[0].column` | `"Id"` → `"ConditionId"` | `dbo.Condition` in HealthAppDB has no `Id` column, only `ConditionId`. |
 

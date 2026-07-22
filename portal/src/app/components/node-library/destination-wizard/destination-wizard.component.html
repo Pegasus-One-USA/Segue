@@ -94,7 +94,7 @@
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
               <label class="dw-label" for="dw-database">Database <span class="dw-req">*</span></label>
-              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
+              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. SegueDW" />
               @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
                 <span class="dw-error">Database name is required.</span>
               }
@@ -240,7 +240,7 @@
 
               <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
                 <label class="dw-label" for="dw-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
-                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
+                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/segue" />
                 @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
                   <span class="dw-error">Remote folder is required.</span>
                 }
@@ -362,6 +362,27 @@
           <span class="dw-hint dw-mapping-key-hint">
             🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.
           </span>
+
+          @if (candidateParentsFor(r).length > 0) {
+            <div class="dw-parent-refs">
+              <span class="dw-parent-refs-label">{{ r }} is a child of:</span>
+              @for (parent of candidateParentsFor(r); track parent) {
+                <button
+                  type="button"
+                  class="dw-chip"
+                  [class.selected]="isParentSelected(r, parent)"
+                  (click)="toggleParent(r, parent)"
+                  [attr.title]="isParentSelected(r, parent)
+                    ? 'Required reference field to ' + parent + ' is locked below'
+                    : 'Mark ' + r + ' as a child of ' + parent"
+                >
+                  @if (isParentSelected(r, parent)) { ✓ }
+                  {{ parent }}
+                </button>
+              }
+            </div>
+          }
+
           <table class="dw-map-table">
             <thead>
               <tr>
@@ -374,10 +395,12 @@
             </thead>
             <tbody>
               @for (row of rowsForResource(r); track $index) {
-                <tr [class.dw-map-row--id]="isIdRow(row)">
+                <tr [class.dw-map-row--id]="isIdRow(row)" [class.dw-map-row--parent-ref]="isRequiredParentRefRow(row)">
                   <td>
                     @if (isIdRow(row)) {
                       <span class="dw-map-locked" title="This resource's id — always mapped, never reassignable">🔒 {{ row.fieldLabel }}</span>
+                    } @else if (isRequiredParentRefRow(row)) {
+                      <span class="dw-map-locked" [attr.title]="'Required — ' + r + ' is a child of ' + row.parentResourceType">🔒 {{ row.fieldLabel }}</span>
                     } @else {
                       <div class="dw-select-wrap">
                         <select
@@ -401,12 +424,16 @@
                         <select class="dw-select"
                                 [value]="row.targetName"
                                 (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
-                          <option value="" disabled [selected]="!row.targetName">Select a column…</option>
+                          <option value="" disabled [selected]="!row.targetName || !columnsForResourceTarget(r).includes(row.targetName)">Select a column…</option>
                           @for (c of columnsForResourceTarget(r); track c) { <option [value]="c" [selected]="c === row.targetName">{{ c }}</option> }
                         </select>
                       </div>
-                      @if (isIdRow(row)) {
+                      @if (isIdRow(row) && isIdColumnUnverified(r)) {
+                        <span class="dw-error">⚠ Pick the real column that uniquely identifies each {{ r }} — this table has no primary/unique key, so nothing is auto-detected, and the current value isn't a column on this table.</span>
+                      } @else if (isIdRow(row)) {
                         <span class="dw-hint">No primary/unique key detected on this table — choose the column that uniquely identifies each {{ r }}.</span>
+                      } @else if (isRowColumnUnverified(row)) {
+                        <span class="dw-error">⚠ '{{ row.targetName || '(none)' }}' is not a column on this table — pick a real column.</span>
                       }
                     } @else {
                       <input
@@ -420,7 +447,7 @@
                     <input type="checkbox" [checked]="row.isUpsertKey" disabled title="Only the id row is the Upsert key" />
                   </td>
                   <td class="dw-map-actions">
-                    @if (!isIdRow(row)) {
+                    @if (!isIdRow(row) && !isRequiredParentRefRow(row)) {
                       <button type="button" class="dw-row-remove" title="Remove field" (click)="removeRow(row)">✕</button>
                     }
                   </td>

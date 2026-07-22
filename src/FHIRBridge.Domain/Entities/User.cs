@@ -3,7 +3,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class User : AuditableChildEntity<Guid>
+public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private User()
     {
@@ -28,6 +28,7 @@ public sealed class User : AuditableChildEntity<Guid>
     public string ExternalUserId { get; private set; } = default!;
     public string? Email { get; private set; }
     public string? DisplayName { get; private set; }
+    string? IHasAuditDisplayName.AuditDisplayName => DisplayName ?? Email;
 
     public string? FirstName { get; private set; }
     public string? LastName { get; private set; }

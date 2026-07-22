@@ -20,7 +20,7 @@
 
       <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
         <label class="dw-label" for="dcf-database">Database <span class="dw-req">*</span></label>
-        <input id="dcf-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
+        <input id="dcf-database" class="dw-input" formControlName="database" placeholder="e.g. SegueDW" />
         @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
           <span class="dw-error">Database name is required.</span>
         }
@@ -173,7 +173,7 @@
 
         <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
           <label class="dw-label" for="dcf-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
-          <input id="dcf-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
+          <input id="dcf-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/segue" />
           @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
             <span class="dw-error">Remote folder is required.</span>
           }

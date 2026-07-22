@@ -1,6 +1,10 @@
+// MVP1 resource set — keep in sync with SupportedFhirResourceTypes.All
+// (src/FHIRBridge.Domain/Fhir/SupportedFhirResourceTypes.cs) minus Immunization, which the backend
+// still supports but MVP1's resource picker deliberately does not surface.
 export const FHIR_RESOURCES: string[] = [
-  'Patient', 'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
-  'Encounter', 'Procedure', 'Immunization', 'DiagnosticReport', 'DocumentReference',
+  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation',
+  'Condition', 'Procedure', 'ServiceRequest', 'DiagnosticReport',
+  'MedicationRequest', 'MedicationAdministration',
 ];
 
 export const DEFAULT_RESOURCES: string[] = [
@@ -8,8 +12,8 @@ export const DEFAULT_RESOURCES: string[] = [
 ];
 
 export const CODED_RESOURCES: string[] = [
-  'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
-  'Procedure', 'Immunization', 'DiagnosticReport',
+  'Observation', 'Condition', 'MedicationRequest', 'MedicationAdministration',
+  'AllergyIntolerance', 'Procedure', 'ServiceRequest', 'DiagnosticReport',
 ];
 
 export const CTX_TRANSFORMS: Record<string, string[]> = {

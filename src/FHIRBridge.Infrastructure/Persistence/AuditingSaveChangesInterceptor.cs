@@ -181,6 +181,7 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         {
             var entityId = entry.Property("Id").CurrentValue?.ToString();
             var entityType = entry.Metadata.ClrType.Name;
+            var entityName = entry.Entity is IHasAuditDisplayName named ? named.AuditDisplayName : null;
 
             var auditLog = new AuditLog(
                 Guid.NewGuid(),
@@ -190,7 +191,7 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 action,
                 entityType,
                 entityId,
-                entityName: null,
+                entityName,
                 oldValueJson: action == "Updated" || action == "Deleted" ? SerializeValues(entry, useOriginalValues: true) : null,
                 newValueJson: SerializeValues(entry, useOriginalValues: false),
                 status: "Success",
@@ -205,6 +206,13 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         }
     }
 
+    /// <summary>AuditLogConfiguration caps OldValueJson/NewValueJson at this length — never emit more.</summary>
+    private const int MaxValueJsonLength = 4000;
+
+    /// <summary>Per-property cap so one oversized column (e.g. a raw FHIR CapabilityStatement blob) can't by
+    /// itself blow the whole snapshot past <see cref="MaxValueJsonLength"/>.</summary>
+    private const int MaxPropertyValueLength = 200;
+
     /// <summary>
     /// Flattens an entry's own scalar properties to JSON for the audit trail's old/new value columns.
     /// Skips <c>RowVersion</c> (opaque concurrency token, not a meaningful diff) and any binary column.
@@ -212,7 +220,7 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
     private static string SerializeValues(EntityEntry entry, bool useOriginalValues)
     {
         var values = useOriginalValues ? entry.OriginalValues : entry.CurrentValues;
-        var snapshot = new Dictionary<string, string?>();
+        var snapshot = new Dictionary<string, object?>();
 
         foreach (var property in entry.Properties)
         {
@@ -221,9 +229,59 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 continue;
             }
 
-            snapshot[property.Metadata.Name] = values[property.Metadata]?.ToString();
+            snapshot[property.Metadata.Name] = ToAuditValue(values[property.Metadata]);
         }
 
-        return JsonSerializer.Serialize(snapshot);
+        var json = JsonSerializer.Serialize(snapshot);
+        if (json.Length <= MaxValueJsonLength)
+        {
+            return json;
+        }
+
+        // Defensive fallback: per-property truncation above should already keep this under the column limit for
+        // any realistic entity, but if an entity has enough properties to still overflow, fall back to a small,
+        // always-valid JSON object rather than let a 4000-char SQL column truncation throw and fail the whole
+        // SaveChanges batch (this audit row shares a transaction with the real entity change being audited).
+        return JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["_truncated"] = $"Snapshot was {json.Length} chars, exceeding the {MaxValueJsonLength}-char audit column limit, and was omitted.",
+        });
+    }
+
+    /// <summary>
+    /// Converts a tracked property's current/original value into something that serializes meaningfully in the
+    /// audit snapshot: collections (e.g. <c>string[]</c>) are kept as real arrays instead of falling through to
+    /// <see cref="object.ToString"/> (which for an array just returns its CLR type name, e.g. "System.String[]"),
+    /// and any string form is capped at <see cref="MaxPropertyValueLength"/> so a single large text/JSON column
+    /// can't dominate the snapshot's total size.
+    /// </summary>
+    private static object? ToAuditValue(object? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value is string text)
+        {
+            return Truncate(text);
+        }
+
+        if (value is System.Collections.IEnumerable enumerable)
+        {
+            return enumerable.Cast<object?>().Select(item => Truncate(item?.ToString())).ToList();
+        }
+
+        return Truncate(value.ToString());
+    }
+
+    private static string? Truncate(string? value)
+    {
+        if (value is null || value.Length <= MaxPropertyValueLength)
+        {
+            return value;
+        }
+
+        return string.Concat(value.AsSpan(0, MaxPropertyValueLength), $"…(truncated, {value.Length} total chars)");
     }
 }

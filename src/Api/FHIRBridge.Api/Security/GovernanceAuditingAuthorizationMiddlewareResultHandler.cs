@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Governance;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
@@ -28,8 +29,14 @@ public sealed class GovernanceAuditingAuthorizationMiddlewareResultHandler : IAu
             if (permissionCode is not null)
             {
                 var governanceLogger = context.RequestServices.GetRequiredService<IGovernanceLogger>();
+                var currentUser = context.RequestServices.GetRequiredService<ICurrentUserService>().CurrentUser;
                 await governanceLogger.LogAuthorizationAsync(
-                    new AuthorizationEntry(context.Request.Path, permissionCode, "Denied"),
+                    new AuthorizationEntry(
+                        context.Request.Path,
+                        permissionCode,
+                        "Denied",
+                        UserEmail: currentUser.Email ?? currentUser.ExternalUserId,
+                        CorrelationId: currentUser.CorrelationId),
                     context.RequestAborted);
             }
         }

@@ -7,6 +7,7 @@ import {
   DestinationBuildSpec,
   MappingBuildSpec,
   MappingFieldRequest,
+  ParentReferenceSpec,
   SourceBuildSpec,
   SourceRetrievalConfigurationRequest,
   WorkflowBuildRequest,
@@ -26,6 +27,8 @@ interface DestMappingRow {
   valueType?: string; // String | Integer | Decimal | Boolean | Date | DateTime | Json
   arrays?: string[]; // array-ancestor fhir paths
   isUpsertKey?: boolean; // wizard-forced true on the resource's mandatory id row, false elsewhere
+  isRequiredParentRef?: boolean; // wizard-forced true on a locked "child of" reference-field row
+  parentResourceType?: string;   // which parent (of possibly several) this locked row satisfies
 }
 
 /**
@@ -535,6 +538,15 @@ export class WorkflowBuildAssemblerService {
         isUpsertKey: row === idRow,
       };
     });
+    // A locked "child of" row is mandatory the same way the id row is — mark it required so the built
+    // request reflects that, even though server-side enforcement (ValidateMappingParentReferences) checks
+    // presence/JsonPath match rather than this flag.
+    for (const row of resourceRows.filter((r) => r.isRequiredParentRef)) {
+      const field = fields.find((f) => f.jsonPath === (row.jsonPath ?? this.toJsonPath(row.path, resource)));
+      if (field) field.isRequired = true;
+    }
+
+    const parentReferences = this.parentReferencesFor(destFields, resource);
 
     return {
       nodeId: mappingNodeId,
@@ -544,7 +556,21 @@ export class WorkflowBuildAssemblerService {
       resourceType: resource,
       destinationObject,
       fields,
+      parentReferences: parentReferences.length ? parentReferences : undefined,
     };
+  }
+
+  // Reads the wizard's per-resource "child of" chip selections (dest_parentSelections: Record<child,
+  // parent[]>) and turns them into the ParentReferenceSpec[] the backend validates against sibling specs
+  // sharing the same destination node.
+  private parentReferencesFor(destFields: Record<string, string>, resource: string): ParentReferenceSpec[] {
+    try {
+      const parsed = JSON.parse(destFields['dest_parentSelections'] ?? '{}') as Record<string, string[]>;
+      const parents = parsed[resource] ?? [];
+      return parents.map((parentResourceType) => ({ parentResourceType }));
+    } catch {
+      return [];
+    }
   }
 
   private parseMappingRows(json: string | undefined): DestMappingRow[] {

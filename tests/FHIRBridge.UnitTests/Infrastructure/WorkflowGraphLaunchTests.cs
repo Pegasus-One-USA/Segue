@@ -231,6 +231,7 @@ public sealed class WorkflowGraphLaunchTests
 
         public Task<EhrEndpoint?> GetEhrEndpointAsync(Guid id, CancellationToken ct) => Task.FromResult<EhrEndpoint?>(null);
 
+        public Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct) => throw new NotSupportedException();
         public Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken) => throw new NotSupportedException();

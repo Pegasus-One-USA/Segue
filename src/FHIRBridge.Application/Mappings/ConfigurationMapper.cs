@@ -184,7 +184,10 @@ public static class ConfigurationMapper
             mapping.MappingProfileId,
             mapping.IsEnabled,
             mapping.ExecutionOrder,
-            mapping.SearchParameters);
+            mapping.SearchParameters,
+            mapping.ParentReferences
+                .Select(x => new ParentReferenceDto(x.ParentMappingProfileId, x.ReferenceFieldOverride))
+                .ToList());
     }
 
     public static MappingField ToDomain(MappingFieldDto dto)

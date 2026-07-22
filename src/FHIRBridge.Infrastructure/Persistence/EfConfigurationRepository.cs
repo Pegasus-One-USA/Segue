@@ -19,6 +19,28 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         _db = db;
     }
 
+    public async Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
+    {
+        var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        return new EfConfigurationTransaction(transaction);
+    }
+
+    private sealed class EfConfigurationTransaction : IConfigurationTransaction
+    {
+        private readonly Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction _transaction;
+
+        public EfConfigurationTransaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
+        {
+            _transaction = transaction;
+        }
+
+        public Task CommitAsync(CancellationToken cancellationToken) => _transaction.CommitAsync(cancellationToken);
+
+        public Task RollbackAsync(CancellationToken cancellationToken) => _transaction.RollbackAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => _transaction.DisposeAsync();
+    }
+
     // ── Source connections ────────────────────────────────────────────────────
     public async Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) =>
         await _db.SourceConnections.OrderBy(x => x.Name).ToListAsync(ct);

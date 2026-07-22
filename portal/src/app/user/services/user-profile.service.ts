@@ -39,7 +39,7 @@ const DEFAULT_PROFILE: UserProfile = {
   avatarColor:     '#94A3B8',
   role:            'Audit',
   roleLabel:       'Audit',
-  organization:    'FHIRBridge Platform',
+  organization:    'Segue Platform',
   tenant:          '',
   department:      '',
   designation:     '',

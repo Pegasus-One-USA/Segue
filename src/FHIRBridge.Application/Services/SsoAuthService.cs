@@ -60,7 +60,7 @@ public sealed class SsoAuthService : ISsoAuthService
                 cancellationToken);
 
             // 401 — no enabled account matches this external identity.
-            throw new UnauthorizedAccessException("No enabled FHIRBridge account is linked to this identity.");
+            throw new UnauthorizedAccessException("No enabled Segue account is linked to this identity.");
         }
 
         // Ensure the identity is linked so subsequent logins resolve by subject.

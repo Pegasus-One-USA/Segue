@@ -81,7 +81,7 @@ public sealed class EntraTokenValidator : IProviderTokenValidator
         var subject = principal.FindFirst("oid")?.Value
             ?? principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
             ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? throw new InvalidOperationException("The Entra token does not contain a subject claim.");
+            ?? throw new InvalidOperationException("Sign-in failed. Please try again.");
 
         var email = principal.FindFirst(JwtRegisteredClaimNames.Email)?.Value
             ?? principal.FindFirst("preferred_username")?.Value

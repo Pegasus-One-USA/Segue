@@ -12,6 +12,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IJsonMappingEngine, JsonMappingEngine>();
         services.AddSingleton<IFhirElementCatalog, EmbeddedFhirElementCatalog>();
+        services.AddSingleton<IParentReferenceResolver, ParentReferenceResolver>();
         services.AddScoped<IMappingMaterializer, DefaultMappingMaterializer>();
         services.AddScoped<IResourceNormalizationService, PassThroughResourceNormalizationService>();
         services.AddScoped<IMappedRecordNormalizationService, PassThroughMappedRecordNormalizationService>();

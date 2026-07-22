@@ -137,7 +137,7 @@
         <div class="eaf-field eaf-field--full">
           <label class="eaf-label" for="eaf-appName">App Name</label>
           <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
-                 placeholder="e.g. FHIRBridge Provider Launch" />
+                 placeholder="e.g. Segue Provider Launch" />
         </div>
       </div>
     </div>
@@ -488,7 +488,7 @@
                   <option value="ExternalBrowser">External Browser</option>
                   <option value="Sidebar">Sidebar (side-by-side with the chart)</option>
                 </select>
-                <p class="eaf-hint">Match whatever this app is registered as in Epic's own Hyperspace/Hyperdrive app-launch configuration — FHIRBridge doesn't control this behavior, it's just recorded here for reference (e.g. Embedded launches need the launch page to allow being framed; External Browser does not).</p>
+                <p class="eaf-hint">Match whatever this app is registered as in Epic's own Hyperspace/Hyperdrive app-launch configuration — Segue doesn't control this behavior, it's just recorded here for reference (e.g. Embedded launches need the launch page to allow being framed; External Browser does not).</p>
               </div>
             }
 
@@ -683,7 +683,9 @@
                 } @else {
                   <label class="eaf-label" [attr.for]="'eaf-' + field.key">
                     {{ field.label }}
-                    @if (field.required) { <span class="eaf-req">*</span> }
+                    @if (field.required || (field.key === 'searchCriteria' && searchCriteriaRequiredForPatient())) {
+                      <span class="eaf-req">*</span>
+                    }
                   </label>
 
                   @switch (field.type) {
@@ -748,7 +750,11 @@
                 @if (isRetrievalFieldInvalid(field)) {
                   <p class="eaf-error-msg">{{ field.label }} is required.</p>
                 }
-                @if (field.hint) {
+                @if (field.key === 'searchCriteria' && searchCriteriaRequiredForPatient()) {
+                  <p class="eaf-hint">Required: Epic rejects an unscoped Backend System Patient search (no launch
+                    context exists to scope it automatically). Supply an identifier, demographics, or _id here —
+                    e.g. <code>identifier=&lt;system&gt;|&lt;value&gt;</code> or <code>family=Smith&amp;birthdate=1990-01-01</code>.</p>
+                } @else if (field.hint) {
                   <p class="eaf-hint">{{ field.hint }}</p>
                 }
               </div>

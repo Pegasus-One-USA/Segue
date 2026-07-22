@@ -26,7 +26,7 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         var metadata = new Dictionary<string, object?>
         {
             ["executor"] = GetType().Name,
-            ["adapterStatus"] = "Placeholder until existing FHIRBridge service is wired behind this node."
+            ["adapterStatus"] = "Placeholder until existing Segue service is wired behind this node."
         };
 
         return Task.FromResult(new WorkflowNodeOutput(node.Id, node.NodeType, payload, OutputContract, metadata));
@@ -65,6 +65,23 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         }
         catch (JsonException)
         {
+            // The wizard flattens every node property to a string when it persists ConfigurationJson (matching the
+            // Key/Value shape of WorkflowNodeConfigurations), so a structured value like "fields" or "mappingProfileIds"
+            // arrives here JSON-encoded *inside* a string token rather than as a native array/object. Unwrap and retry
+            // once before giving up, or a wizard-authored node silently loses the property (e.g. an upsert-key flag
+            // that resolves to an empty Fields collection instead of the field it was actually set on).
+            if (property.ValueKind == JsonValueKind.String)
+            {
+                try
+                {
+                    return JsonSerializer.Deserialize<T>(property.GetString() ?? string.Empty, JsonOptions);
+                }
+                catch (JsonException)
+                {
+                    return default;
+                }
+            }
+
             return default;
         }
     }

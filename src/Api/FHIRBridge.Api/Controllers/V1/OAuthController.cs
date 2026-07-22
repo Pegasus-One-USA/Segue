@@ -293,7 +293,9 @@ public sealed class OAuthController : ControllerBase
         if (!string.IsNullOrWhiteSpace(error))
         {
             _logger.LogWarning("[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription}", error, errorDescription);
-            return BadRequest(new { error, error_description = errorDescription });
+            // error is an OAuth-standard code (e.g. "access_denied") and safe to return; error_description is
+            // freeform text from the EHR/IdP and must never be echoed back verbatim — log it above, show generic.
+            return BadRequest(new { error, error_description = "Authorization failed. Please try connecting again." });
         }
 
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
@@ -330,7 +332,7 @@ public sealed class OAuthController : ControllerBase
 
         return Ok(new
         {
-            message = "Authorization complete. You can close this window and return to FHIRBridge.",
+            message = "Authorization complete. You can close this window and return to Segue.",
             sourceConnectionId = result.SourceConnectionId,
             source = result.SourceName
         });

@@ -71,7 +71,7 @@ public sealed class EfAlertEvaluationService : IAlertEvaluationService
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
 
-            var subject = $"FHIRBridge Alert: {rule.Name}";
+            var subject = $"Segue Alert: {rule.Name}";
             foreach (var recipient in recipients)
             {
                 try

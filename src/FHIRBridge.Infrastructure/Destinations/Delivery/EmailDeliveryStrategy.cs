@@ -13,7 +13,7 @@ namespace FHIRBridge.Infrastructure.Destinations.Delivery;
 /// </summary>
 public sealed class EmailDeliveryStrategy : IArtifactDeliveryStrategy
 {
-    private const string DefaultSubjectTemplate = "FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}";
+    private const string DefaultSubjectTemplate = "Segue CSV Export - {{RouteName}} - {{RunDate}}";
     private const string DefaultBodyTemplate = "Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.";
 
     private readonly IEmailSender _emailSender;

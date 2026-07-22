@@ -61,7 +61,7 @@ export class ComplianceReportsComponent {
     this.api.hipaaAuditReport(this.fromDate(), this.toDate()).subscribe({
       next: blob => {
         this.generating.set(false);
-        this.download(blob, `FHIRBridge-Compliance-Report-${this.fromDate()}-${this.toDate()}.pdf`);
+        this.download(blob, `Segue-Compliance-Report-${this.fromDate()}-${this.toDate()}.pdf`);
       },
       error: () => {
         this.generating.set(false);
@@ -77,7 +77,7 @@ export class ComplianceReportsComponent {
     this.api.soc2EvidenceReport(this.soc2FromDate(), this.soc2ToDate()).subscribe({
       next: blob => {
         this.soc2Generating.set(false);
-        this.download(blob, `FHIRBridge-SOC2-Evidence-${this.soc2FromDate()}-${this.soc2ToDate()}.pdf`);
+        this.download(blob, `Segue-SOC2-Evidence-${this.soc2FromDate()}-${this.soc2ToDate()}.pdf`);
       },
       error: () => {
         this.soc2Generating.set(false);

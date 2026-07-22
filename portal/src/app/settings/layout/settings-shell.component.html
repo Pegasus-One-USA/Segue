@@ -1,0 +1,7 @@
+<nav class="settings-tabs">
+  @for (tab of tabs(); track tab.route) {
+    <a class="settings-tab" [routerLink]="tab.route" routerLinkActive="active">{{ tab.label }}</a>
+  }
+</nav>
+
+<router-outlet />

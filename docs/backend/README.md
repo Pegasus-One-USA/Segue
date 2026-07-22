@@ -1,12 +1,12 @@
-# FHIRBridge Backend — Architecture Guide
+# Segue Backend — Architecture Guide
 
-> **Audience:** developers working on the FHIRBridge backend.
+> **Audience:** developers working on the Segue backend.
 > **Scope:** the .NET solution (`src/`, `tests/`). The Angular `portal/` is out of scope here.
 > **Last reviewed:** 2026-07-01 (branch `port/stepbase-overlay`). Please keep these docs in sync when backend code changes.
 
-## What FHIRBridge is (plain English)
+## What Segue is (plain English)
 
-FHIRBridge is a **multi-tenant healthcare data-integration platform** (HIPAA-oriented). It's a "universal adapter + pipeline" between EHR systems and wherever an organization needs their clinical data to land.
+Segue is a **multi-tenant healthcare data-integration platform** (HIPAA-oriented). It's a "universal adapter + pipeline" between EHR systems and wherever an organization needs their clinical data to land.
 
 End to end:
 1. **Connect** to a source EHR (Epic, Healow, MEDITECH Greenfield, or any FHIR / HL7 v2 system) — handling the messy auth (SMART-on-FHIR, OAuth, backend-service JWTs).

@@ -41,7 +41,7 @@ function perms(...ids: string[]): Permission[] {
 export const ALL_ROLES: Role[] = [
   {
     id: 'r-01', name: 'SuperAdmin', displayName: 'System Administrator',
-    description: 'Full access to all FHIRBridge features and settings.',
+    description: 'Full access to all Segue features and settings.',
     color: '#7C3AED', isSystemRole: true, createdAt: '2024-01-01T00:00:00Z',
     permissions: ALL_PERMISSIONS,
   },

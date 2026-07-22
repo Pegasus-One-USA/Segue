@@ -2588,6 +2588,34 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("ResourcePipelineRouteId");
+
+                            b1.OwnsMany("FHIRBridge.Domain.Entities.ParentReferenceLink", "ParentReferences", b2 =>
+                                {
+                                    b2.Property<Guid>("Id")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<Guid>("ParentMappingProfileId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("ReferenceFieldOverride")
+                                        .HasMaxLength(500)
+                                        .HasColumnType("nvarchar(500)");
+
+                                    b2.Property<Guid>("ResourcePipelineRouteMappingId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.HasKey("Id");
+
+                                    b2.HasIndex("ResourcePipelineRouteMappingId", "ParentMappingProfileId")
+                                        .IsUnique();
+
+                                    b2.ToTable("ResourcePipelineRouteMappingParentReferences", (string)null);
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ResourcePipelineRouteMappingId");
+                                });
+
+                            b1.Navigation("ParentReferences");
                         });
 
                     b.Navigation("ResourceMappings");
