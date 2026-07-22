@@ -100,9 +100,4 @@ export class EpicSourceWizardComponent {
   toggleAdvanced(): void {
     this.showAdvanced.update(v => !v);
   }
-
-  // Backdrop click intentionally does nothing: an accidental click outside the panel shouldn't
-  // discard an in-progress, multi-step wizard. Use the explicit Cancel/close control instead.
-  onBackdropClick(_event: MouseEvent): void {
-  }
 }

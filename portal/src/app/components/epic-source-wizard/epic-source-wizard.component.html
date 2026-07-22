@@ -1,5 +1,7 @@
 @if (wiz.isOpen() && !wiz.openedInline()) {
-  <div class="ew-backdrop" (click)="onBackdropClick($event)">
+  <!-- No click handler on the backdrop: an accidental click outside the panel shouldn't discard
+       an in-progress, multi-step wizard. Use the explicit Cancel/close control instead. -->
+  <div class="ew-backdrop">
     <section class="ew-panel" role="dialog" aria-label="Epic Source Wizard">
 
       <!-- ═══ Header ════════════════════════════════════════════════════════ -->
