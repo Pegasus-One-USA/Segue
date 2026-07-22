@@ -31,6 +31,15 @@
     app's ConfigRoot subfolder is copied on top of its DeployRoot subfolder, so config always
     survives a redeploy without needing robocopy /XF exclusions. Defaults to
     C:\inetpub\FHIRBridge_Configurations.
+
+.PARAMETER ApiPort, GatewayPort, DemoApiPort
+    The port each service's Kestrel instance binds to. Mandatory and with no baked-in default on
+    purpose: these used to be configured once, by hand, via each Windows Service's Environment tab
+    in services.msc, and silently drifted back to Kestrel's own built-in default (port 5000) whenever
+    that step was skipped or a service was recreated -- which then collides with whatever else is
+    listening on 5000 on this host. Every deploy now sets ASPNETCORE_URLS explicitly from these
+    parameters instead. Wire the actual values in via this repo's GitHub Actions repository/environment
+    variables (see .github/workflows/deploy.yml) so ops can change a port without a code change.
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -39,6 +48,15 @@ param(
     [string]$DeployRoot = "C:\inetpub\wwwroot",
 
     [string]$ConfigRoot = "C:\inetpub\FHIRBridge_Configurations",
+
+    [Parameter(Mandatory = $true)]
+    [int]$ApiPort,
+
+    [Parameter(Mandatory = $true)]
+    [int]$GatewayPort,
+
+    [Parameter(Mandatory = $true)]
+    [int]$DemoApiPort,
 
     [int]$ServiceStopTimeoutSeconds = 30,
     [int]$HealthCheckRetries = 10,
@@ -69,6 +87,23 @@ function Copy-ConfigOverlay {
     $global:LASTEXITCODE = 0
 }
 
+function Set-ServiceEnvironment {
+    param([string]$Name, [string[]]$EnvironmentVariables)
+
+    if (-not $EnvironmentVariables -or $EnvironmentVariables.Count -eq 0) {
+        return
+    }
+
+    # Written directly to the service's registry key rather than via a services.msc-equivalent
+    # cmdlet (none ship in-box) -- REG_MULTI_SZ needs an explicit string[], not the Object[] a bare
+    # array literal would produce. Called every deploy (not just service creation) so ASPNETCORE_URLS
+    # (and, for the demo app, DEMOAPP_PORTAL_PATH) stay correct even if ever changed here later -- the
+    # caller already stopped the service before this runs, so the new value takes effect on the very
+    # next Start-Service.
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$Name" -Name Environment `
+        -Value ([string[]]$EnvironmentVariables) -Type MultiString
+}
+
 function Deploy-Service {
     param(
         [string]$Name,
@@ -76,7 +111,8 @@ function Deploy-Service {
         [string]$DestDir,
         [string]$ConfigSourceDir,
         [string]$ExeName,
-        [string]$DisplayName
+        [string]$DisplayName,
+        [string[]]$EnvironmentVariables
     )
 
     Write-Host "== Deploying $Name =="
@@ -116,6 +152,8 @@ function Deploy-Service {
         Write-Host "Service $Name does not exist yet -- creating it."
         New-Service -Name $Name -BinaryPathName "`"$exePath`"" -DisplayName $DisplayName -StartupType Automatic
     }
+
+    Set-ServiceEnvironment -Name $Name -EnvironmentVariables $EnvironmentVariables
 
     Write-Host "Starting service $Name..."
     Start-Service -Name $Name
@@ -192,15 +230,20 @@ foreach ($site in $staticSites) {
 
 # --- Windows Services (Kestrel/background hosts) ---
 
+$demoappPortalDir = Join-Path $DeployRoot "demoapp-portal"
+
 $services = @(
     @{ Name = "FHIRBridge.Api"; Folder = "Api"; DestDir = "fhirbridge-api"; Exe = "FHIRBridge.Api.exe";
-       DisplayName = "FHIRBridge API"; HealthCheckUrl = "http://127.0.0.1:5000/health" }
+       DisplayName = "FHIRBridge API"; HealthCheckUrl = "http://127.0.0.1:$ApiPort/health";
+       EnvironmentVariables = @("ASPNETCORE_URLS=http://127.0.0.1:$ApiPort") }
     @{ Name = "FHIRBridge.Gateway"; Folder = "Gateway"; DestDir = "fhirbridge-gateway"; Exe = "FHIRBridge.Gateway.exe";
-       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "http://localhost/" }
+       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "http://localhost:$GatewayPort/";
+       EnvironmentVariables = @("ASPNETCORE_URLS=http://+:$GatewayPort") }
     @{ Name = "FHIRBridge.Worker"; Folder = "Worker"; DestDir = "fhirbridge-worker"; Exe = "FHIRBridge.Worker.exe";
-       DisplayName = "FHIRBridge Worker"; HealthCheckUrl = $null }
+       DisplayName = "FHIRBridge Worker"; HealthCheckUrl = $null; EnvironmentVariables = @() }
     @{ Name = "FHIRBridge.DemoApp"; Folder = "DemoApi"; DestDir = "demoapp-api"; Exe = "HealthAppBackend.exe";
-       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "http://localhost:5500/" }
+       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "http://localhost:$DemoApiPort/";
+       EnvironmentVariables = @("ASPNETCORE_URLS=http://+:$DemoApiPort", "DEMOAPP_PORTAL_PATH=$demoappPortalDir") }
 )
 
 foreach ($svc in $services) {
@@ -208,7 +251,8 @@ foreach ($svc in $services) {
     if (-not (Test-Path $sourceDir)) { throw "Artifact is missing $($svc.Folder)\ folder at $sourceDir" }
 
     Deploy-Service -Name $svc.Name -SourceDir $sourceDir -DestDir (Join-Path $DeployRoot $svc.DestDir) `
-        -ConfigSourceDir (Join-Path $ConfigRoot $svc.DestDir) -ExeName $svc.Exe -DisplayName $svc.DisplayName
+        -ConfigSourceDir (Join-Path $ConfigRoot $svc.DestDir) -ExeName $svc.Exe -DisplayName $svc.DisplayName `
+        -EnvironmentVariables $svc.EnvironmentVariables
 }
 
 # --- Health checks (after every service is already started above) ---
