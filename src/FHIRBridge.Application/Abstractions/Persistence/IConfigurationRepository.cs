@@ -10,6 +10,14 @@ namespace FHIRBridge.Application.Abstractions.Persistence;
 /// </summary>
 public interface IConfigurationRepository
 {
+    /// <summary>
+    /// Opens a transaction spanning multiple subsequent writes on this repository (see
+    /// <see cref="IConfigurationTransaction"/>) — used by callers that create several related entities in
+    /// sequence (e.g. a workflow's source, destination, and mapping profiles) and need all-or-nothing semantics
+    /// rather than each write committing independently.
+    /// </summary>
+    Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken);
+
     // ── Source connections ────────────────────────────────────────────────────
     Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct);
     Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct);

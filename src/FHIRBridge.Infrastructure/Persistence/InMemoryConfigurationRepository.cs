@@ -17,6 +17,21 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     private readonly ConcurrentDictionary<Guid, ResourcePipelineRoute> _routes = new();
     private readonly ConcurrentDictionary<Guid, WebhookConfiguration> _webhooks = new();
 
+    // No-op: this repository is only used for local/dev runs with no connection string (see class remarks) and
+    // writes straight into the in-memory dictionaries with no staging to roll back. Real transactional
+    // all-or-nothing semantics are only meaningful — and only provided — against the real EF-backed repository.
+    public Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IConfigurationTransaction>(new NoOpConfigurationTransaction());
+
+    private sealed class NoOpConfigurationTransaction : IConfigurationTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task RollbackAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     // ── Source connections ────────────────────────────────────────────────────
     public Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<SourceConnection>>(_sources.Values.OrderBy(x => x.Name).ToList());

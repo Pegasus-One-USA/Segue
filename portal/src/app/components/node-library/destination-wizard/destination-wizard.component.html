@@ -424,12 +424,16 @@
                         <select class="dw-select"
                                 [value]="row.targetName"
                                 (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
-                          <option value="" disabled [selected]="!row.targetName">Select a column…</option>
+                          <option value="" disabled [selected]="!row.targetName || !columnsForResourceTarget(r).includes(row.targetName)">Select a column…</option>
                           @for (c of columnsForResourceTarget(r); track c) { <option [value]="c" [selected]="c === row.targetName">{{ c }}</option> }
                         </select>
                       </div>
-                      @if (isIdRow(row)) {
+                      @if (isIdRow(row) && isIdColumnUnverified(r)) {
+                        <span class="dw-error">⚠ Pick the real column that uniquely identifies each {{ r }} — this table has no primary/unique key, so nothing is auto-detected, and the current value isn't a column on this table.</span>
+                      } @else if (isIdRow(row)) {
                         <span class="dw-hint">No primary/unique key detected on this table — choose the column that uniquely identifies each {{ r }}.</span>
+                      } @else if (isRowColumnUnverified(row)) {
+                        <span class="dw-error">⚠ '{{ row.targetName || '(none)' }}' is not a column on this table — pick a real column.</span>
                       }
                     } @else {
                       <input

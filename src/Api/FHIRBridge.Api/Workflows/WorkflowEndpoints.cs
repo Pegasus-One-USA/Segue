@@ -47,9 +47,11 @@ public static class WorkflowEndpoints
         group.MapPost("/workflows/build", async (
             WorkflowBuildRequest request,
             IConfigurationService configurationService,
+            IConfigurationRepository configurationRepository,
             IWorkflowDefinitionStore store,
             IEpicSourceConnectionScopeSyncService scopeSyncService,
             IParentReferenceResolver parentReferenceResolver,
+            IDestinationSchemaService destinationSchemaService,
             CancellationToken cancellationToken) =>
         {
             // Fail fast, before provisioning anything: every "child of" declaration on a mapping spec must
@@ -59,6 +61,16 @@ public static class WorkflowEndpoints
             {
                 return Results.BadRequest(parentReferenceError);
             }
+
+            // Destinations, Sources, Mappings, and the workflow-definition save below used to each commit
+            // independently — a validation failure or exception partway through (e.g. a mapping's column not
+            // existing on the real table) left everything created so far durably persisted with no way to retry
+            // cleanly: resubmitting the same request tries to create the same source connection again and hits a
+            // name-uniqueness violation, since the first attempt's row never went away. Wrapping the whole
+            // sequence in one transaction makes it all-or-nothing: only CommitAsync (right before the success
+            // return) makes any of it durable — every early `return` below leaves this undisposed-without-commit,
+            // which rolls the transaction back.
+            await using var transaction = await configurationRepository.BeginTransactionAsync(cancellationToken);
 
             // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
             // saved graph. Node order is preserved from the original request when the definition is rebuilt.
@@ -133,6 +145,20 @@ public static class WorkflowEndpoints
                         $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
                 }
 
+                // Defense in depth against the wizard silently persisting a column that doesn't exist on the
+                // customer's own table (see the "Invalid column name" incidents this guards against — a
+                // destination table with no PK/unique constraint leaves the id row's column an unverified,
+                // editable guess client-side). Best-effort: only blocks the save when the live schema was
+                // actually reachable and the target table's real columns are known: an unreachable/non-relational
+                // destination can't be validated this way and is left to the frontend-side check instead, not
+                // hard-failed here.
+                var columnError = await ValidateMappedColumnsExistAsync(
+                    spec, destinationId, destinationSchemaService, cancellationToken);
+                if (columnError is not null)
+                {
+                    return Results.BadRequest(columnError);
+                }
+
                 var mappingRequest = new CreateMappingProfileRequest(
                     spec.Name,
                     spec.ResourceType,
@@ -197,6 +223,10 @@ public static class WorkflowEndpoints
             var workflow = BuildWorkflow(
                 request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
+
+            // Everything above (destinations, sources, mappings, the workflow definition itself) is durable only
+            // from this point on — nothing before here survives if any step failed or threw.
+            await transaction.CommitAsync(cancellationToken);
 
             // Re-derive each referenced source connection's OAuth scopes from what every pipeline sharing it
             // actually consumes downstream, now that this save may have changed a destination's resource selection
@@ -1045,6 +1075,70 @@ public static class WorkflowEndpoints
                             $"configured as a child of '{link.ParentResourceType}'.";
                     }
                 }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Best-effort check that every mapped field's <see cref="MappingFieldDto.TargetField"/> is a real column on
+    /// the destination's live table — the id/upsert-key field above all, since an unverified guess there is what
+    /// produces a run-time "Invalid column name" against a customer-owned table with no PK/unique constraint to
+    /// auto-detect from. Only validates when the destination is relational and its schema was actually reachable
+    /// (<see cref="IDestinationSchemaService.GetSchemaAsync"/> returns an empty table list for non-relational
+    /// destinations, and this method treats a lookup failure — deleted destination, transient connectivity — as
+    /// "can't verify" rather than a hard failure): the frontend-side check in the wizard is the first line of
+    /// defense for those cases, this is defense in depth for whatever reaches this endpoint regardless of how.
+    /// </summary>
+    private static async Task<string?> ValidateMappedColumnsExistAsync(
+        MappingBuildSpec spec,
+        Guid destinationId,
+        IDestinationSchemaService destinationSchemaService,
+        CancellationToken cancellationToken)
+    {
+        DestinationSchemaDto schema;
+        try
+        {
+            schema = await destinationSchemaService.GetSchemaAsync(destinationId, cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (schema.Tables.Count == 0)
+        {
+            return null;
+        }
+
+        var tableIdentifier = spec.DestinationObject.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is [var name, ..]
+            ? name
+            : spec.DestinationObject;
+
+        var table = schema.Tables.FirstOrDefault(t =>
+            string.Equals(t.FullName, tableIdentifier, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TableName, tableIdentifier, StringComparison.OrdinalIgnoreCase));
+
+        // The configured table isn't one this destination's live schema actually has — a different, more specific
+        // failure than a bad column, and one the writer already reports clearly at run time; nothing further to
+        // check here since there are no real columns to validate field names against.
+        if (table is null)
+        {
+            return null;
+        }
+
+        var realColumns = new HashSet<string>(table.Columns.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in spec.Fields)
+        {
+            if (!realColumns.Contains(field.TargetField))
+            {
+                return field.IsUpsertKey
+                    ? $"'{spec.ResourceType}': the id/upsert-key field is mapped to column '{field.TargetField}', " +
+                        $"which does not exist on '{table.FullName}'. Pick a real column from that table."
+                    : $"'{spec.ResourceType}': field '{field.TargetField}' does not exist on '{table.FullName}'. " +
+                        "Pick a real column from that table.";
             }
         }
 

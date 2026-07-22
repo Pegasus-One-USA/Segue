@@ -389,6 +389,7 @@ export class DestinationWizardComponent implements OnInit {
       return this.isSql() ? this.sqlForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
+    if (s >= 3) return this._hasUnverifiedColumns();
     return false;
   }
 
@@ -830,6 +831,41 @@ export class DestinationWizardComponent implements OnInit {
   // found) — only then is it safe to fully lock the field, since a guessed name could otherwise be wrong.
   isIdColumnLocked(r: string): boolean {
     return this._autoMatchIdColumn(r) !== null;
+  }
+
+  // True when this resource's live column list is known (a schema probe succeeded) but the id row's mapped
+  // column isn't actually one of those real columns — e.g. still left at the wizard's unverified default
+  // guess, or a stale value from before the table was reselected. Saving in this state is exactly what
+  // produces "Invalid column name 'X'" at run time, since the column genuinely doesn't exist on the
+  // customer's table. Returns false (nothing to flag) when the schema isn't known yet — there's no live
+  // column list to check the id row against.
+  isIdColumnUnverified(r: string): boolean {
+    if (this.isIdColumnLocked(r)) return false;
+    const columns = this.columnsForResourceTarget(r);
+    if (columns.length === 0) return false;
+    const idRow = this.mappingRows().find(row => row.resource === r && this.isIdRow(row));
+    return !idRow || !columns.includes(idRow.targetName);
+  }
+
+  // Same check as isIdColumnUnverified but for any mapped row, not just the id row — a non-id field left at a
+  // stale/guessed column name (e.g. after switching tables) fails the write with "Invalid column name" exactly
+  // the same way the id row does, just on a column that isn't the upsert key. The id row is schema-verified
+  // separately (isIdColumnLocked) when a PK/unique was auto-matched, so it's excluded here to avoid flagging a
+  // row the user was never shown an editable picker for in the first place.
+  isRowColumnUnverified(row: MappingRow): boolean {
+    if (this.isIdRow(row) && this.isIdColumnLocked(row.resource)) return false;
+    const columns = this.columnsForResourceTarget(row.resource);
+    if (columns.length === 0) return false;
+    return !columns.includes(row.targetName);
+  }
+
+  // Blocks proceeding past the mapping step while any selected resource has a mapped row (id or otherwise)
+  // whose column isn't verified against the live destination schema — the save-time gate the destination-node
+  // config alone can't guarantee, since nothing upstream forces the user to actually pick from the live column
+  // list rather than leaving an unmatched guess in place.
+  private _hasUnverifiedColumns(): boolean {
+    return this.mappingRows().some(row =>
+      this.selectedResources().includes(row.resource) && this.isRowColumnUnverified(row));
   }
 
   // Keeps every selected resource's mandatory id row in sync with the live schema and the catalog: inserts it
