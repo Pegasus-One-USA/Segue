@@ -1,0 +1,21 @@
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_a66c35895c7853::t_f9bdb7597f3a02 276-288,290,295-297,302,316-323,325
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_a66c35895c7853::t_f8ae7e9ef629e2 38-47,305,363,421,474,558,636-641,671
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "65b1838e6798b83feaab7d44cd17b410ac78f011",
+  "prompts": {},
+  "sessions": {
+    "s_a66c35895c7853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2907d4da-9fd4-4481-9632-f9243edf93fa",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
