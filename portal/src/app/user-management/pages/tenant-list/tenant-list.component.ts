@@ -2,7 +2,6 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -10,6 +9,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { TenantRoleService, Tenant } from '../../services/tenant-role.service';
 import { TenantDialogComponent } from '../../dialogs/tenant-dialog/tenant-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
 
 @Component({
   selector: 'app-tenant-list',
@@ -28,7 +28,7 @@ import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dia
 export class TenantListComponent {
   private readonly svc    = inject(TenantRoleService);
   private readonly dialog = inject(MatDialog);
-  private readonly snack  = inject(MatSnackBar);
+  private readonly toast  = inject(ToastService);
 
   readonly searchQuery = signal('');
   readonly pageIndex   = signal(0);
@@ -82,7 +82,7 @@ export class TenantListComponent {
       })
       .afterClosed()
       .subscribe(res => {
-        if (res) this.snack.open('Tenant added successfully.', 'Dismiss', { duration: 3000 });
+        if (res) this.toast.success('Tenant added successfully.');
       });
   }
 
@@ -96,7 +96,7 @@ export class TenantListComponent {
       })
       .afterClosed()
       .subscribe(res => {
-        if (res) this.snack.open('Tenant updated successfully.', 'Dismiss', { duration: 3000 });
+        if (res) this.toast.success('Tenant updated successfully.');
       });
   }
 
@@ -116,7 +116,7 @@ export class TenantListComponent {
       .subscribe(confirmed => {
         if (!confirmed) return;
         this.svc.deleteTenant(tenant.id);
-        this.snack.open(`Tenant "${tenant.name}" deleted.`, 'Dismiss', { duration: 3000 });
+        this.toast.success(`Tenant "${tenant.name}" deleted.`);
       });
   }
 

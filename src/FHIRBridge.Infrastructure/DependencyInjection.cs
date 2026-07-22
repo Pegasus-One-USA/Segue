@@ -125,6 +125,7 @@ public static class DependencyInjection
             // No database: nothing to persist governance events to, nothing to read them back from.
             services.AddSingleton<IGovernanceLogger, NullGovernanceLogger>();
             services.AddSingleton<IGovernanceQueryService, EmptyGovernanceQueryService>();
+            services.AddSingleton<IErrorResolutionService, NullErrorResolutionService>();
             services.AddSingleton<IComplianceReportService, NullComplianceReportService>();
             services.AddSingleton<IAuditChainVerificationService, NullAuditChainVerificationService>();
             services.AddSingleton<IGovernanceLogArchiveWriter, NullGovernanceLogArchiveWriter>();
@@ -143,6 +144,7 @@ public static class DependencyInjection
             services.AddScoped<AuditingSaveChangesInterceptor>();
             services.AddScoped<IGovernanceLogger, EfGovernanceLogger>();
             services.AddScoped<IGovernanceQueryService, EfGovernanceQueryService>();
+            services.AddScoped<IErrorResolutionService, EfErrorResolutionService>();
             services.AddScoped<IAuditChainVerificationService, EfAuditChainVerificationService>();
             services.AddScoped<IComplianceReportService, QuestPdfComplianceReportService>();
             services.AddScoped<IGovernanceLogArchiveWriter, EfGovernanceLogArchiveWriter>();
@@ -210,6 +212,12 @@ public static class DependencyInjection
             // Durable, multi-instance idempotency backed by the ProcessedMessages table.
             services.AddScoped<IProcessedMessageStore, EfProcessedMessageStore>();
         }
+
+        // Phase 6A – Enterprise Global Exception Management. Registered for both the DB and in-memory paths
+        // (depends only on IGovernanceLogger, which each branch registers, and the classifier). Scoped so it
+        // composes with the scoped EfGovernanceLogger; the classifier is stateless and shared.
+        services.AddSingleton<IExceptionClassifier>(_ => new DefaultExceptionClassifier());
+        services.AddScoped<IGlobalExceptionManager, GlobalExceptionManager>();
 
         services.AddRuntimeInfrastructure(configuration);
         services.AddMessaging(configuration);

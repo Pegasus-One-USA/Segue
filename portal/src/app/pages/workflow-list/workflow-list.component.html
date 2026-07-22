@@ -1,5 +1,3 @@
-<app-toast />
-
 <div class="list-page">
 
   <!-- Header -->
@@ -181,11 +179,6 @@
       <div class="state-block">
         <span class="spinner"></span>
         <p>Loading workflows…</p>
-      </div>
-    } @else if (loadError()) {
-      <div class="state-block error">
-        <p>{{ loadError() }}</p>
-        <button class="btn-secondary" type="button" (click)="reload()">Retry</button>
       </div>
     } @else if (filtered().length === 0) {
       <div class="state-block">

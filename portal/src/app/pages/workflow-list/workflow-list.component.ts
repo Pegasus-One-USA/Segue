@@ -7,7 +7,6 @@ import {
   DestinationData,
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
-import { ToastComponent } from '../../components/shared/toast/toast.component';
 
 interface LaunchModal {
   name: string;
@@ -34,7 +33,7 @@ interface CopyModal {
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, ToastComponent],
+  imports: [CommonModule, DatePipe],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -45,7 +44,6 @@ export class WorkflowListComponent implements OnInit {
 
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
-  readonly loadError = signal<string | null>(null);
   readonly searchQuery = signal('');
 
   /** Workflow id currently running/launching — disables its action button. */
@@ -76,15 +74,14 @@ export class WorkflowListComponent implements OnInit {
 
   reload(): void {
     this.loading.set(true);
-    this.loadError.set(null);
     this.api.summary().subscribe({
       next: rows => {
         this.summaries.set(rows);
         this.loading.set(false);
       },
       error: err => {
-        this.loadError.set(this.messageOf(err, 'Failed to load workflows.'));
         this.loading.set(false);
+        this.toast.error('Failed to load workflows.', this.messageOf(err, ''));
       },
     });
   }
@@ -311,11 +308,10 @@ export class WorkflowListComponent implements OnInit {
   }
 
   private messageOf(err: unknown, fallback: string): string {
-    const e = err as { error?: { detail?: string; title?: string; error_description?: string } | string; message?: string };
+    const e = err as { error?: { title?: string; error_description?: string } | string; message?: string };
     const body = e?.error;
-    if (typeof body === 'string' && body) return body;
     if (body && typeof body === 'object') {
-      return body.detail || body.error_description || body.title || e?.message || fallback;
+      return body.error_description || body.title || e?.message || fallback;
     }
     return e?.message || fallback;
   }

@@ -1,23 +1,23 @@
 import { TestBed } from '@angular/core/testing';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { PermissionActionGuard } from './permission-action-guard.service';
 import { AuthStore } from '../store/auth.store';
 import { PermissionService } from './permission.service';
+import { ToastService } from '../../services/toast.service';
 import { makeTestUser } from '../testing/auth-test-helpers';
 
 describe('PermissionActionGuard', () => {
   let guard: PermissionActionGuard;
   let authStore: AuthStore;
-  let snackBar: jasmine.SpyObj<MatSnackBar>;
+  let toast: jasmine.SpyObj<ToastService>;
 
   beforeEach(() => {
-    snackBar = jasmine.createSpyObj('MatSnackBar', ['open']);
+    toast = jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']);
     TestBed.configureTestingModule({
       providers: [
         AuthStore,
         PermissionService,
         PermissionActionGuard,
-        { provide: MatSnackBar, useValue: snackBar },
+        { provide: ToastService, useValue: toast },
       ],
     });
     guard     = TestBed.inject(PermissionActionGuard);
@@ -28,23 +28,21 @@ describe('PermissionActionGuard', () => {
     authStore.setUser(makeTestUser(['user.edit']));
 
     expect(guard.ensure('user.edit', 'You do not have permission to edit users.')).toBeTrue();
-    expect(snackBar.open).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   it('blocks the action and shows the given reason when the permission is missing', () => {
     authStore.setUser(makeTestUser([]));
 
     expect(guard.ensure('user.edit', 'You do not have permission to edit users.')).toBeFalse();
-    expect(snackBar.open).toHaveBeenCalledWith(
-      'You do not have permission to edit users.', 'Dismiss', { duration: 4000 }
-    );
+    expect(toast.warning).toHaveBeenCalledWith('You do not have permission to edit users.');
   });
 
   it('respects admin bypass — no toast, action proceeds', () => {
     authStore.setUser(makeTestUser([], 'SuperAdmin'));
 
     expect(guard.ensure('anything.goes', 'unused')).toBeTrue();
-    expect(snackBar.open).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   it('supports the same array + mode semantics as PermissionService', () => {
@@ -63,8 +61,6 @@ describe('PermissionActionGuard', () => {
     // guard still catches it at the moment the action actually runs.
     authStore.setUser(makeTestUser([]));
     expect(guard.ensure('user.delete', 'You do not have permission to delete users.')).toBeFalse();
-    expect(snackBar.open).toHaveBeenCalledWith(
-      'You do not have permission to delete users.', 'Dismiss', { duration: 4000 }
-    );
+    expect(toast.warning).toHaveBeenCalledWith('You do not have permission to delete users.');
   });
 });

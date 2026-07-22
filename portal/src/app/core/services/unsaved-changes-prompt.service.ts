@@ -1,9 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, map, of } from 'rxjs';
 import { ConfirmDialogComponent } from '../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { HasUnsavedChanges } from '../guards/has-unsaved-changes';
+import { ToastService } from '../../services/toast.service';
 
 /**
  * Shared "leave this page?" prompt used by unsaved-changes.guard.ts for every route that carries
@@ -13,14 +13,12 @@ import { HasUnsavedChanges } from '../guards/has-unsaved-changes';
 @Injectable({ providedIn: 'root' })
 export class UnsavedChangesPromptService {
   private readonly dialog = inject(MatDialog);
-  private readonly snack = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
 
   /** Resolves true if navigation should proceed. */
   confirmLeave(component: HasUnsavedChanges): Observable<boolean> {
     if (component.isSaveInProgress?.()) {
-      this.snack.open('Please wait for the current save to finish before leaving this page.', 'Dismiss', {
-        duration: 4000,
-      });
+      this.toast.warning('Please wait for the current save to finish before leaving this page.');
       return of(false);
     }
 

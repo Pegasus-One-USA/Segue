@@ -3,12 +3,15 @@ import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './services/theme.service';
 import { CrossTabAuthSyncService } from './auth/services/cross-tab-auth-sync.service';
 import { BrandingService } from './services/branding.service';
+import { ToastComponent } from './components/shared/toast/toast.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
-  template: '<router-outlet />',
+  imports: [RouterOutlet, ToastComponent],
+  // <app-toast /> is mounted once here at the root so the single, branded toast is available on every
+  // route (including /auth/login) — the app's single notification surface.
+  template: '<router-outlet /><app-toast />',
 })
 export class AppComponent {
   // Instantiate ThemeService at startup so the persisted theme is applied.

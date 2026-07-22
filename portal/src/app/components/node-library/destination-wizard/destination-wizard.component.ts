@@ -448,7 +448,7 @@ export class DestinationWizardComponent implements OnInit {
       },
       error: err => {
         this.probeState.set('error');
-        this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
+        this.probeError.set(typeof err?.error?.error === 'string' ? err.error.error : (err?.message ?? 'Connection failed.'));
       },
     });
   }

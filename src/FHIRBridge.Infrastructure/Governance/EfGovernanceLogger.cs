@@ -166,7 +166,16 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             Truncate(entry.Message, 2000)!,
             Truncate(entry.StackTrace, 4000),
             entry.Module,
-            entry.CorrelationId ?? current.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId,
+            entry.ErrorReferenceId,
+            entry.Category,
+            Truncate(entry.UserFriendlyMessage, 1000),
+            entry.ExecutionId,
+            entry.WorkflowId,
+            entry.EndpointId,
+            entry.RequestId,
+            entry.TraceId,
+            entry.SpanId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

@@ -1300,8 +1300,8 @@ export class EpicAudienceFormComponent implements OnInit {
       },
       error: (err) => {
         this.discStatus.set('error');
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Check the URL or enter endpoints manually.';
-        this.toast.show('Discovery failed', typeof msg === 'string' ? msg : 'Check the URL or enter endpoints manually.');
+        const msg = typeof err?.error?.error === 'string' ? err.error.error : 'Check the URL or enter endpoints manually.';
+        this.toast.show('Discovery failed', msg);
         this._captureBaselineIfAwaiting();
       },
     });
@@ -1333,8 +1333,8 @@ export class EpicAudienceFormComponent implements OnInit {
       },
       error: (err) => {
         this.testStatus.set('fail');
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Could not reach the source endpoint.';
-        this.toast.show('Test failed', typeof msg === 'string' ? msg : 'Could not reach the source endpoint.');
+        const msg = typeof err?.error?.error === 'string' ? err.error.error : 'Could not reach the source endpoint.';
+        this.toast.show('Test failed', msg);
       },
     });
   }

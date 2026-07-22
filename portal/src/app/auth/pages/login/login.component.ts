@@ -10,7 +10,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
@@ -21,6 +20,7 @@ import { extractApiErrorMessage } from '../../../core/http-error.util';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
 import { AppFooterComponent } from '../../../layout/app-footer/app-footer.component';
 import { BrandingService } from '../../../services/branding.service';
+import { ToastService } from '../../../services/toast.service';
 
 type LoginStage = 'credentials' | 'mfa';
 
@@ -49,7 +49,7 @@ export class LoginComponent {
   protected readonly branding = inject(BrandingService);
   private readonly router   = inject(Router);
   private readonly ssoApi   = inject(SsoAuthApiService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast    = inject(ToastService);
   protected readonly auth = inject(AuthService);
 
   protected readonly ssoBusy = signal(false);
@@ -164,12 +164,12 @@ export class LoginComponent {
         const message = err?.status === 401
           ? 'No matching account found for this identity. Ask an administrator for an invitation.'
           : err?.error?.message ?? 'Single sign-on failed. Please try again.';
-        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+        this.toast.error(message);
       },
     });
   }
 
   protected onSsoFailed(message: string): void {
-    this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+    this.toast.error(message);
   }
 }

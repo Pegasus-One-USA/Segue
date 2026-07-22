@@ -63,14 +63,25 @@ public sealed record RetryEntry(
     string Reason,
     string? CorrelationId = null);
 
-/// <summary>An unhandled exception, captured centrally.</summary>
+/// <summary>An unhandled exception, captured centrally. The Phase 6A fields (reference id, category,
+/// user-friendly message, and the execution-correlation set) are populated by the Global Exception Manager;
+/// call sites that construct an <see cref="ErrorEntry"/> directly may leave them null.</summary>
 public sealed record ErrorEntry(
     string Severity,
     string ExceptionType,
     string Message,
     string? StackTrace = null,
     string? Module = null,
-    string? CorrelationId = null);
+    string? CorrelationId = null,
+    string? ErrorReferenceId = null,
+    string? Category = null,
+    string? UserFriendlyMessage = null,
+    string? ExecutionId = null,
+    string? WorkflowId = null,
+    string? EndpointId = null,
+    string? RequestId = null,
+    string? TraceId = null,
+    string? SpanId = null);
 
 /// <summary>One outbound HTTP call — method/URL/status/duration only, never headers, tokens, or bodies.</summary>
 public sealed record ApiRequestEntry(

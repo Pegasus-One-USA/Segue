@@ -14,7 +14,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
@@ -34,6 +33,7 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
 import { DisableWithoutPermissionDirective } from '../../../auth/directives/disable-without-permission.directive';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { ToastService } from '../../../services/toast.service';
 
 export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
   'SuperAdmin': { label: 'Super Admin', color: '#5B21B6', bg: '#EDE9FE' },
@@ -68,7 +68,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(IUserService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
-  private readonly snackBar    = inject(MatSnackBar);
+  private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   private readonly actionGuard = inject(PermissionActionGuard);
 
@@ -168,7 +168,7 @@ export class UserListComponent implements OnInit, OnDestroy {
           const msg = err?.status === 403
             ? 'You do not have permission to view users.'
             : err?.message ?? 'Failed to load users.';
-          this.snackBar.open(msg, 'Dismiss', { duration: 4000 });
+          this.toast.error(msg);
         },
       });
   }
@@ -242,11 +242,11 @@ export class UserListComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: () => {
-            this.snackBar.open(`User "${user.fullName}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`User "${user.fullName}" deleted.`);
             this.loadUsers();
           },
           error: (err: { status?: number; message?: string }) => {
-            this.snackBar.open(this.errMsg(err, 'Failed to delete user.'), 'Dismiss', { duration: 4000 });
+            this.toast.error(this.errMsg(err, 'Failed to delete user.'));
           },
         });
     });
@@ -261,11 +261,11 @@ export class UserListComponent implements OnInit, OnDestroy {
     call$.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         const label = action === 'enable' ? 'activated' : 'deactivated';
-        this.snackBar.open(`User "${user.fullName}" ${label}.`, 'Dismiss', { duration: 3000 });
+        this.toast.success(`User "${user.fullName}" ${label}.`);
         this.loadUsers();
       },
       error: (err: { status?: number; message?: string }) => {
-        this.snackBar.open(this.errMsg(err, `Failed to ${action} user.`), 'Dismiss', { duration: 4000 });
+        this.toast.error(this.errMsg(err, `Failed to ${action} user.`));
       },
     });
   }
@@ -276,20 +276,20 @@ export class UserListComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: res => {
-          this.snackBar.open(`Invitation resent to "${user.email}".`, 'Dismiss', { duration: 3000 });
+          this.toast.success(`Invitation resent to "${user.email}".`);
           this.dialog.open(InviteResultDialogComponent, {
             width: '540px', restoreFocus: false, data: res,
           });
         },
         error: (err: { status?: number; message?: string }) => {
-          this.snackBar.open(this.errMsg(err, 'Failed to resend invitation.'), 'Dismiss', { duration: 4000 });
+          this.toast.error(this.errMsg(err, 'Failed to resend invitation.'));
         },
       });
   }
 
-  private errMsg(err: { status?: number; message?: string; error?: { message?: string } }, fallback: string): string {
+  private errMsg(err: { status?: number; message?: string }, fallback: string): string {
     if (err?.status === 403) return 'You do not have permission to perform this action.';
-    return err?.error?.message ?? err?.message ?? fallback;
+    return err?.message ?? fallback;
   }
 
   navigateToDetail(user: User): void {

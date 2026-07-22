@@ -181,7 +181,7 @@ export class DestinationConnectionFormComponent {
         },
         error: err => {
           this.probeState.set('error');
-          this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
+          this.probeError.set(typeof err?.error?.error === 'string' ? err.error.error : (err?.message ?? 'Connection failed.'));
         },
       });
   }
@@ -205,7 +205,7 @@ export class DestinationConnectionFormComponent {
         },
         error: err => {
           this.probeState.set('error');
-          this.probeError.set(err?.error?.title ?? err?.message ?? 'Connection failed.');
+          this.probeError.set(typeof err?.error?.title === 'string' ? err.error.title : (err?.message ?? 'Connection failed.'));
         },
       });
   }

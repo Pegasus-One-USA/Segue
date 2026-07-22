@@ -753,14 +753,30 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EndpointId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("ExceptionType")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ExecutionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Message")
                         .IsRequired()
@@ -774,24 +790,87 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("OccurredOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("RequestId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Severity")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("SpanId")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("StackTrace")
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("UserFriendlyMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("WorkflowId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.HasKey("Id");
 
+                    b.HasIndex("Category");
+
                     b.HasIndex("CorrelationId");
+
+                    b.HasIndex("ErrorReferenceId")
+                        .IsUnique()
+                        .HasFilter("[ErrorReferenceId] IS NOT NULL");
+
+                    b.HasIndex("ExecutionId");
 
                     b.HasIndex("OccurredOnUtc");
 
                     b.HasIndex("Severity");
 
                     b.ToTable("ErrorLogs", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Governance.ErrorResolution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("ResolvedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ErrorReferenceId")
+                        .IsUnique();
+
+                    b.ToTable("ErrorResolutions", (string)null);
                 });
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Governance.ExportHistory", b =>

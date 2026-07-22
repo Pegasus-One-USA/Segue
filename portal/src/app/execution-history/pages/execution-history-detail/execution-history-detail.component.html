@@ -44,7 +44,7 @@
       @if (ex.errorMessage) {
         <div class="error-banner">
           <mat-icon>error_outline</mat-icon>
-          <span>{{ ex.errorMessage }}</span>
+          <span>{{ errorDisplayMessage() }}</span>
         </div>
       }
     </div>

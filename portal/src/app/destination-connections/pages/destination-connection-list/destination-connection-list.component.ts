@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -19,6 +18,7 @@ import {
   DestinationConnectionDialogData,
 } from '../../dialogs/destination-connection-dialog/destination-connection-dialog.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
 
 /**
  * Standalone admin CRUD for DestinationConfiguration rows — server-side paged/filtered (no existing screen in
@@ -45,7 +45,7 @@ import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm
 export class DestinationConnectionListComponent implements OnInit {
   private readonly svc = inject(DestinationConfigurationService);
   private readonly dialog = inject(MatDialog);
-  private readonly snack = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
 
   readonly searchQuery = signal('');
   readonly typeFilter = signal<DestinationType | ''>('');
@@ -110,7 +110,7 @@ export class DestinationConnectionListComponent implements OnInit {
         },
         error: () => {
           this.loading.set(false);
-          this.snack.open('Failed to load destination connections.', 'Dismiss', { duration: 4000 });
+          this.toast.error('Failed to load destination connections.');
         },
       });
   }
@@ -179,7 +179,7 @@ export class DestinationConnectionListComponent implements OnInit {
       .afterClosed()
       .subscribe(result => {
         if (result) {
-          this.snack.open(successMessage, 'Dismiss', { duration: 3000 });
+          this.toast.success(successMessage);
           this.load();
         }
       });
@@ -204,12 +204,12 @@ export class DestinationConnectionListComponent implements OnInit {
         if (!confirmed) return;
         this.svc.delete(item.id).subscribe({
           next: () => {
-            this.snack.open(`"${item.name}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`"${item.name}" deleted.`);
             this.load();
           },
           error: (err: HttpErrorResponse) => {
             const message = err.error?.title ?? 'Failed to delete the destination connection.';
-            this.snack.open(message, 'Dismiss', { duration: 5000 });
+            this.toast.error(message);
           },
         });
       });
