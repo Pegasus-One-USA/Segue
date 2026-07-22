@@ -1,0 +1,79 @@
+name: Deploy_QA
+
+# Triggers:
+#   1. Manual: Actions tab -> Deploy_QA -> Run workflow. Always allowed, bypasses the blank-commit
+#      check below (an explicit manual run is already a deliberate action).
+#   2. Push to `quality` whose HEAD commit message is the *exact* literal string "Deploy", AND whose
+#      commit is blank (no file changes vs. its parent) -- see the `guard` job. A commit with message
+#      "Deploy" that isn't blank is deliberately ignored, per policy. Typical usage:
+#        git commit --allow-empty -m "Deploy"
+#        git push origin quality
+#
+# Approval: 2 sequential, distinct-reviewer gates (qa-approval-1, then qa-approval-2) -- GitHub's
+# native "required reviewers" only enforces "any one of N", not a true quorum, so this chains two
+# single-reviewer environments instead to require two distinct people to each approve in turn.
+# Configure the actual reviewers for both environments under Settings -> Environments.
+#
+# The actual build+deploy work happens in the shared deploy-environment.yml reusable workflow --
+# see deploy/windows/Deploy-FHIRBridge-Environment.ps1 for what gets deployed. Production's own
+# deploy.yml / Deploy-FHIRBridge.ps1 are entirely separate and unaffected by this file.
+
+on:
+  push:
+    branches:
+      - quality
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Guard (blank "Deploy" commit check)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Deploy'
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: check
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch -- proceeding regardless of commit content."
+          elif git diff --quiet HEAD^ HEAD; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "Commit message is 'Deploy' and the commit is blank -- proceeding."
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Commit message is 'Deploy' but the commit is NOT blank -- ignoring, per policy."
+          fi
+
+  approval-1:
+    name: Approval gate 1/2
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    environment: qa-approval-1
+    steps:
+      - run: echo "Approval gate 1/2 passed."
+
+  approval-2:
+    name: Approval gate 2/2
+    needs: approval-1
+    runs-on: ubuntu-latest
+    environment: qa-approval-2
+    steps:
+      - run: echo "Approval gate 2/2 passed."
+
+  deploy:
+    name: Build & deploy to QA
+    needs: approval-2
+    uses: ./.github/workflows/deploy-environment.yml
+    with:
+      environment: QA
+    secrets: inherit

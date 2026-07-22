@@ -14,6 +14,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { IRoleService } from '../../services/i-role.service';
 import { Permission, PermissionCategory, PermissionAllocationDto } from '../../../auth/models/user.model';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
+import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { TriStateToggleComponent, TriState } from './tri-state-toggle.component';
 
@@ -57,7 +59,7 @@ function capitalize(value: string): string {
   templateUrl: './user-permission-overrides.component.html',
   styleUrls: ['./user-permission-overrides.component.scss'],
 })
-export class UserPermissionOverridesComponent implements OnChanges {
+export class UserPermissionOverridesComponent implements OnChanges, HasUnsavedChanges {
   // Bound from the parent user-detail component.
   @Input() userId!: string;
   @Input() userDisplayName = 'this user';
@@ -71,6 +73,11 @@ export class UserPermissionOverridesComponent implements OnChanges {
   private readonly userService = inject(IUserService);
   private readonly roleService = inject(IRoleService);
   private readonly dialog      = inject(MatDialog);
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+
+  constructor() {
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+  }
   private readonly snack       = inject(MatSnackBar);
 
   readonly loading  = signal(true);
@@ -275,6 +282,15 @@ export class UserPermissionOverridesComponent implements OnChanges {
 
   cancel(): void {
     this.reset();
+  }
+
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts, consulted via the parent user-detail route) ──
+  hasUnsavedChanges(): boolean {
+    return this.isDirty();
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving() || this.clearing();
   }
 
   save(): void {

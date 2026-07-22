@@ -27,7 +27,11 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
         WorkflowDefinition workflowDefinition,
         CancellationToken cancellationToken)
     {
-        await using var transaction = _dbContext.Database.IsRelational()
+        // Reuse an ambient transaction (e.g. the caller wrapping this save alongside other work — see
+        // WorkflowEndpoints "/workflows/build") instead of nesting a second one on the same connection,
+        // which SQL Server rejects outright. Only start and commit our own transaction when none exists.
+        var ownsTransaction = _dbContext.Database.IsRelational() && _dbContext.Database.CurrentTransaction is null;
+        await using var transaction = ownsTransaction
             ? await _dbContext.Database.BeginTransactionAsync(cancellationToken)
             : null;
 
