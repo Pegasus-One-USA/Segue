@@ -998,9 +998,16 @@ export class DestinationWizardComponent implements OnInit {
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
       if (targets[r]) continue;
-      // Seed the per-resource target once; preserve any value the user has already typed.
-      const def = this.defFor(r);
-      targets[r] = type === 'sql' ? def.sqlTable : def.csvFile;
+      // SQL: leave unset so the table dropdown genuinely shows its "Select a table…" placeholder and
+      // requires an explicit pick — a hardcoded guess here (e.g. dbo.Patient) rarely matches the
+      // customer's real table name (e.g. dbo.Patient_New), and once it doesn't match any <option>, the
+      // native <select> silently falls back to displaying its first listed table — alphabetically
+      // whatever that happens to be, with no relation to the resource — which reads as an intentional,
+      // correct selection the user never actually made. CSV has no such mismatch risk (it's a free-text
+      // filename input, not a dropdown of real destination objects), so keep suggesting one there.
+      if (type === 'csv') {
+        targets[r] = this.defFor(r).csvFile;
+      }
     }
     this.targetByResource.set(targets);
     this.mappingRows.update(rows =>
