@@ -31,6 +31,15 @@
     app's ConfigRoot subfolder is copied on top of its DeployRoot subfolder, so config always
     survives a redeploy without needing robocopy /XF exclusions. Defaults to
     C:\inetpub\FHIRBridge_Configurations.
+
+.PARAMETER ApiPort, GatewayPort, DemoApiPort
+    The port each service's Kestrel instance binds to. Mandatory and with no baked-in default on
+    purpose: these used to be configured once, by hand, via each Windows Service's Environment tab
+    in services.msc, and silently drifted back to Kestrel's own built-in default (port 5000) whenever
+    that step was skipped or a service was recreated -- which then collides with whatever else is
+    listening on 5000 on this host. Every deploy now sets ASPNETCORE_URLS explicitly from these
+    parameters instead. Wire the actual values in via this repo's GitHub Actions repository/environment
+    variables (see .github/workflows/deploy.yml) so ops can change a port without a code change.
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -39,6 +48,15 @@ param(
     [string]$DeployRoot = "C:\inetpub\wwwroot",
 
     [string]$ConfigRoot = "C:\inetpub\FHIRBridge_Configurations",
+
+    [Parameter(Mandatory = $true)]
+    [int]$ApiPort,
+
+    [Parameter(Mandatory = $true)]
+    [int]$GatewayPort,
+
+    [Parameter(Mandatory = $true)]
+    [int]$DemoApiPort,
 
     [int]$ServiceStopTimeoutSeconds = 30,
     [int]$HealthCheckRetries = 10,
@@ -69,6 +87,91 @@ function Copy-ConfigOverlay {
     $global:LASTEXITCODE = 0
 }
 
+function Set-ServiceEnvironment {
+    param([string]$Name, [string[]]$EnvironmentVariables)
+
+    if (-not $EnvironmentVariables -or $EnvironmentVariables.Count -eq 0) {
+        return
+    }
+
+    # Written directly to the service's registry key rather than via a services.msc-equivalent
+    # cmdlet (none ship in-box) -- REG_MULTI_SZ needs an explicit string[], not the Object[] a bare
+    # array literal would produce. Called every deploy (not just service creation) so ASPNETCORE_URLS
+    # (and, for the demo app, DEMOAPP_PORTAL_PATH) stay correct even if ever changed here later -- the
+    # caller already stopped the service before this runs, so the new value takes effect on the very
+    # next Start-Service.
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$Name" -Name Environment `
+        -Value ([string[]]$EnvironmentVariables) -Type MultiString
+}
+
+function Show-ServiceStartFailureDiagnostics {
+    param([string]$ExePath, [string[]]$EnvironmentVariables)
+
+    # Start-Service only ever reports a generic wrapper error (CouldNotStartService) -- it never
+    # surfaces the app's real startup exception. This runs on the same VM as the app it just failed
+    # to start, so there's no need to RDP in separately: check what's already on the configured
+    # port, then run the exe directly (same env vars, same working directory) so whatever it prints
+    # on the way down lands straight in this CI log.
+    Write-Host "---- Diagnostics: why did this service fail to start? ----"
+
+    $urlsVar = $EnvironmentVariables | Where-Object { $_ -like "ASPNETCORE_URLS=*" } | Select-Object -First 1
+    if ($urlsVar -and ($urlsVar -match ':(\d+)(/|$)')) {
+        $port = $matches[1]
+        Write-Host "Configured to bind port $port -- existing listeners on that port:"
+        try {
+            $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+        } catch {
+            $conns = $null
+        }
+        if ($conns) {
+            $conns | Select-Object LocalAddress, LocalPort, State, OwningProcess | Format-Table | Out-String | Write-Host
+            $conns | Select-Object -Unique -ExpandProperty OwningProcess | ForEach-Object {
+                Get-Process -Id $_ -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, Path | Format-List | Out-String | Write-Host
+            }
+        } else {
+            Write-Host "(nothing else appears to be listening on port $port right now)"
+        }
+    }
+
+    $originalEnv = @{}
+    foreach ($kv in $EnvironmentVariables) {
+        $idx = $kv.IndexOf('=')
+        if ($idx -gt 0) {
+            $key = $kv.Substring(0, $idx); $val = $kv.Substring($idx + 1)
+            $originalEnv[$key] = [System.Environment]::GetEnvironmentVariable($key)
+            [System.Environment]::SetEnvironmentVariable($key, $val)
+        }
+    }
+    $stdOut = [System.IO.Path]::GetTempFileName()
+    $stdErr = [System.IO.Path]::GetTempFileName()
+    try {
+        Write-Host "Running $ExePath directly for 5s to capture its own startup output..."
+        $proc = Start-Process -FilePath $ExePath -WorkingDirectory (Split-Path $ExePath -Parent) `
+            -RedirectStandardOutput $stdOut -RedirectStandardError $stdErr -PassThru -WindowStyle Hidden
+        Start-Sleep -Seconds 5
+        if ($proc.HasExited) {
+            Write-Host "It exited on its own with code $($proc.ExitCode) -- this is almost certainly the real failure."
+        } else {
+            Write-Host "Still running after 5s (didn't crash immediately) -- stopping the diagnostic run."
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+    } finally {
+        foreach ($key in $originalEnv.Keys) {
+            [System.Environment]::SetEnvironmentVariable($key, $originalEnv[$key])
+        }
+    }
+    Write-Host "---- stdout ----"
+    Get-Content $stdOut -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    Write-Host "---- stderr ----"
+    Get-Content $stdErr -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    Remove-Item $stdOut, $stdErr -ErrorAction SilentlyContinue
+
+    Write-Host "---- Recent Application event log entries ----"
+    Get-WinEvent -LogName Application -MaxEvents 20 -ErrorAction SilentlyContinue |
+        Where-Object { $_.TimeCreated -gt (Get-Date).AddMinutes(-2) } |
+        Select-Object TimeCreated, ProviderName, Id, Message | Format-List | Out-String | Write-Host
+}
+
 function Deploy-Service {
     param(
         [string]$Name,
@@ -76,7 +179,8 @@ function Deploy-Service {
         [string]$DestDir,
         [string]$ConfigSourceDir,
         [string]$ExeName,
-        [string]$DisplayName
+        [string]$DisplayName,
+        [string[]]$EnvironmentVariables
     )
 
     Write-Host "== Deploying $Name =="
@@ -117,9 +221,17 @@ function Deploy-Service {
         New-Service -Name $Name -BinaryPathName "`"$exePath`"" -DisplayName $DisplayName -StartupType Automatic
     }
 
+    Set-ServiceEnvironment -Name $Name -EnvironmentVariables $EnvironmentVariables
+
     Write-Host "Starting service $Name..."
-    Start-Service -Name $Name
-    (Get-Service -Name $Name).WaitForStatus('Running', (New-TimeSpan -Seconds $ServiceStopTimeoutSeconds))
+    try {
+        Start-Service -Name $Name
+        (Get-Service -Name $Name).WaitForStatus('Running', (New-TimeSpan -Seconds $ServiceStopTimeoutSeconds))
+    } catch {
+        Write-Host "Service $Name failed to start -- capturing diagnostics before failing the deploy."
+        Show-ServiceStartFailureDiagnostics -ExePath $exePath -EnvironmentVariables $EnvironmentVariables
+        throw
+    }
     Write-Host "$Name is running."
 }
 
@@ -192,15 +304,20 @@ foreach ($site in $staticSites) {
 
 # --- Windows Services (Kestrel/background hosts) ---
 
+$demoappPortalDir = Join-Path $DeployRoot "demoapp-portal"
+
 $services = @(
     @{ Name = "FHIRBridge.Api"; Folder = "Api"; DestDir = "fhirbridge-api"; Exe = "FHIRBridge.Api.exe";
-       DisplayName = "FHIRBridge API"; HealthCheckUrl = "http://127.0.0.1:5000/health" }
+       DisplayName = "FHIRBridge API"; HealthCheckUrl = "http://127.0.0.1:$ApiPort/health";
+       EnvironmentVariables = @("ASPNETCORE_URLS=http://127.0.0.1:$ApiPort") }
     @{ Name = "FHIRBridge.Gateway"; Folder = "Gateway"; DestDir = "fhirbridge-gateway"; Exe = "FHIRBridge.Gateway.exe";
-       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "http://localhost/" }
+       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "http://localhost:$GatewayPort/";
+       EnvironmentVariables = @("ASPNETCORE_URLS=http://+:$GatewayPort") }
     @{ Name = "FHIRBridge.Worker"; Folder = "Worker"; DestDir = "fhirbridge-worker"; Exe = "FHIRBridge.Worker.exe";
-       DisplayName = "FHIRBridge Worker"; HealthCheckUrl = $null }
+       DisplayName = "FHIRBridge Worker"; HealthCheckUrl = $null; EnvironmentVariables = @() }
     @{ Name = "FHIRBridge.DemoApp"; Folder = "DemoApi"; DestDir = "demoapp-api"; Exe = "HealthAppBackend.exe";
-       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "http://localhost:5500/" }
+       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "http://localhost:$DemoApiPort/";
+       EnvironmentVariables = @("ASPNETCORE_URLS=http://+:$DemoApiPort", "DEMOAPP_PORTAL_PATH=$demoappPortalDir") }
 )
 
 foreach ($svc in $services) {
@@ -208,7 +325,8 @@ foreach ($svc in $services) {
     if (-not (Test-Path $sourceDir)) { throw "Artifact is missing $($svc.Folder)\ folder at $sourceDir" }
 
     Deploy-Service -Name $svc.Name -SourceDir $sourceDir -DestDir (Join-Path $DeployRoot $svc.DestDir) `
-        -ConfigSourceDir (Join-Path $ConfigRoot $svc.DestDir) -ExeName $svc.Exe -DisplayName $svc.DisplayName
+        -ConfigSourceDir (Join-Path $ConfigRoot $svc.DestDir) -ExeName $svc.Exe -DisplayName $svc.DisplayName `
+        -EnvironmentVariables $svc.EnvironmentVariables
 }
 
 # --- Health checks (after every service is already started above) ---

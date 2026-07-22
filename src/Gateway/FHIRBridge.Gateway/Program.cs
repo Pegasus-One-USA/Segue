@@ -5,6 +5,17 @@ using Yarp.ReverseProxy.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Every non-dev deployment MUST set ASPNETCORE_URLS explicitly (the Windows Service's registry
+// Environment value — see deploy/windows/Deploy-FHIRBridge*.ps1). Kestrel's own built-in fallback
+// (http://localhost:5000) is a shared, unconfigurable port; silently landing on it risks colliding
+// with another environment's service, or an unrelated application entirely, on the same host.
+if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+{
+    throw new InvalidOperationException(
+        "ASPNETCORE_URLS is not set for this environment. Refusing to fall back to Kestrel's default port — " +
+        "set it explicitly via this Windows Service's registry Environment value (deploy/windows/Deploy-FHIRBridge*.ps1).");
+}
+
 // No-ops unless actually launched by that OS's service manager — lets the same published
 // output run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
 builder.Host.UseWindowsService().UseSystemd();
@@ -14,10 +25,18 @@ builder.Host.UseSerilog((context, loggerConfig) =>
 
 // Routes are fixed (this Gateway only ever proxies these two path patterns to the one Api it
 // fronts) — only the destination address varies per deployment, so that's the one thing pulled
-// from config, as a single flat setting instead of hand-authoring YARP's full Routes/Clusters
-// schema per environment. Defaults to production's own address, so neither local dev nor
-// production needs to set this explicitly; other environments override just this one key.
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "http://127.0.0.1:5000/";
+// from config, as a single flat setting. Every environment (including production) must set this
+// explicitly in its own appsettings.Production.json overlay — there is no shared fallback here:
+// silently defaulting to one environment's Api address risks a misconfigured environment proxying
+// its traffic straight into another one's (e.g. production's).
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl) && !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "ApiBaseUrl is not set for this environment. Refusing to fall back to another environment's Api address — " +
+        "set it explicitly in this environment's appsettings.Production.json overlay.");
+}
+apiBaseUrl ??= "http://127.0.0.1:5000/"; // local dev only — matches FHIRBridge.Api's launchSettings.json port
 builder.Services.AddReverseProxy().LoadFromMemory(
     routes:
     [
