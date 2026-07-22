@@ -46,6 +46,14 @@
           Patient Standalone Base URL
           <input type="text" [ngModel]="patientBaseUrl()" (ngModelChange)="patientBaseUrl.set($event)" placeholder="http://localhost:5000" />
         </label>
+        <label class="field">
+          CSV Export Workflow Id ("Download Patient Information")
+          <input type="text" [ngModel]="patientCsvExportWorkflowId()" (ngModelChange)="patientCsvExportWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label class="field">
+          CSV Email Export Workflow Id ("Email Patient Information")
+          <input type="text" [ngModel]="patientCsvEmailExportWorkflowId()" (ngModelChange)="patientCsvEmailExportWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
       </section>
 
       <section class="settings-section">

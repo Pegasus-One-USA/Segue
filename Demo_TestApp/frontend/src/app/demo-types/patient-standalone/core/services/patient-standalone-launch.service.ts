@@ -96,11 +96,17 @@ export interface EpicSessionStatusResponse {
 /** Matches Demo_TestApp/backend's GET /api/patient-standalone-settings — the admin-configured FHIRBridge workflow
  *  ids + base URL for this flow (see WorkflowSettingsEntity.PatientWorkflowId/PatientDetailWorkflowId/PatientBaseUrl),
  *  formerly a gitignored per-developer local file (standalone-launch.config.ts). workflowId is the list fetch's
- *  workflow; detailWorkflowId is the separate workflow used only for the per-patient detail fetch. */
+ *  workflow; detailWorkflowId is the separate workflow used only for the per-patient detail fetch.
+ *  csvExportWorkflowId/csvEmailExportWorkflowId back the "Download Patient Information"/"Email Patient Information"
+ *  buttons — formerly the hardcoded CSV_EXPORT_WORKFLOW_ID/CSV_EMAIL_EXPORT_WORKFLOW_ID constants in
+ *  standalone-launch.config.ts, now admin-configurable via WorkflowSettingsEntity.PatientCsvExportWorkflowId/
+ *  PatientCsvEmailExportWorkflowId. */
 export interface PatientStandaloneSettingsResponse {
   workflowId: string;
   detailWorkflowId: string;
   baseUrl: string;
+  csvExportWorkflowId: string;
+  csvEmailExportWorkflowId: string;
 }
 
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge — remembers which patient/workflow this HealthApp user

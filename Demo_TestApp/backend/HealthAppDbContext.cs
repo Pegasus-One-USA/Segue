@@ -87,6 +87,14 @@ public sealed class WorkflowSettingsEntity
     public string PatientDetailWorkflowId { get; set; } = string.Empty;
     public string PatientBaseUrl { get; set; } = string.Empty;
 
+    // The two workflows behind Patient_Standalone's "Download Patient Information" / "Email Patient Information"
+    // buttons (see launch-standalone-patient.ts's downloadPatientInformation/emailPatientInformation) — previously
+    // hardcoded in the frontend's standalone-launch.config.ts, moved here for the same reason as PatientWorkflowId
+    // above. Each has its own independent public-launch opt-in on the FHIRBridge side and their CSV destinations
+    // use different delivery methods (Download-URL vs Email), so they're never the same id.
+    public string PatientCsvExportWorkflowId { get; set; } = string.Empty;
+    public string PatientCsvEmailExportWorkflowId { get; set; } = string.Empty;
+
     // The two FHIRBridge workflow ids Provider_Standalone's launch-standalone-provider screen needs — "Fetch
     // Patient List" and "Patient Detail" are deliberately separate workflows (see
     // launch-standalone-provider.ts's fetchPatientList/viewPatientDetail), so each gets its own settable id here
@@ -219,6 +227,11 @@ public sealed class HealthAppDbContext : DbContext
             // appsettings.Production.json can seed a sensible default matching that environment's own FHIRBridge
             // Api instead of every environment seeding the same placeholder.
             PatientBaseUrl = _configuration["DefaultWorkflowSettings:PatientBaseUrl"] ?? string.Empty,
+            // Seeded with the ids that were previously hardcoded in the frontend's standalone-launch.config.ts, so
+            // migrating a fresh database preserves today's "Download"/"Email Patient Information" behavior until an
+            // admin overrides them via the Workflow Settings panel.
+            PatientCsvExportWorkflowId = "a0de009e-9a60-494f-9ff8-d83cefdd1a3b",
+            PatientCsvEmailExportWorkflowId = "c5e813f5-04fe-4223-8465-fba1a1e83b75",
             StandaloneWorkflowId = string.Empty,
             StandaloneDetailWorkflowId = string.Empty
         });
