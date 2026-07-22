@@ -1,0 +1,82 @@
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_f2c84423ce0bfa::t_2202f0a3c16bf2 329,352
+  s_f2c84423ce0bfa::t_ba49311e017a3e 1-112,114-126,128-132,134-143,145-149,151-163,165-199,206-262,264-272,274-328,330-351,353-414
+  s_f2c84423ce0bfa::t_f0e283ce550dc4 113,127,133,144,150,164,200-205
+  s_f2c84423ce0bfa::t_6af816d1e9acc4 263,273
+src/FHIRBridge.Infrastructure/Destinations/SqlServerMappingSchemaTransaction.cs
+  s_f2c84423ce0bfa::t_81fa125cff428c 1-213
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  s_f2c84423ce0bfa::t_d7e3f326bd1b53 4,50-51,61-75,77-78,86-91,102-121,125-141
+src/FHIRBridge.Infrastructure/Destinations/MappingSchemaProviderFactory.cs
+  s_f2c84423ce0bfa::t_ba49311e017a3e 1-68
+src/FHIRBridge.Application/Services/IMappingImportService.cs
+  s_f2c84423ce0bfa::t_ba49311e017a3e 1-20
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaTransaction.cs
+  s_f2c84423ce0bfa::t_7da958751f9117 1-31
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260722135518_AddMappingProfileMappingJson.cs
+  s_f2c84423ce0bfa::t_38fc6285fc677f 1-28
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaProvider.cs
+  s_f2c84423ce0bfa::t_4e5482736fee50 1-22
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_f2c84423ce0bfa::t_351e03ba6478ec 1
+  s_f2c84423ce0bfa::t_8593c82d9dae65 26,31-32,37,262-279
+src/FHIRBridge.Infrastructure/Destinations/SqlServerMappingSchemaProvider.cs
+  s_f2c84423ce0bfa::t_eb5854892ec283 1-31
+src/FHIRBridge.Infrastructure/Destinations/SqlServerDdlTypeValidator.cs
+  s_f2c84423ce0bfa::t_ba49311e017a3e 1-70
+tests/FHIRBridge.UnitTests/Infrastructure/MappingProfileFieldReplacementTests.cs
+  s_f2c84423ce0bfa::t_f968c5f5e045cb 51,58
+  s_f2c84423ce0bfa::t_f6002b943b9670 1-16,25-38,40-50,52-57,59-78,81
+  s_f2c84423ce0bfa::t_fe0f2b10837304 17-24,39,79-80
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaProviderFactory.cs
+  s_f2c84423ce0bfa::t_ba49311e017a3e 1-9
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260722135518_AddMappingProfileMappingJson.Designer.cs
+  s_f2c84423ce0bfa::t_38fc6285fc677f 1-2352
+src/FHIRBridge.Application/DTOs/MappingImportDtos.cs
+  s_f2c84423ce0bfa::t_ba49311e017a3e 3-17,24-29,31-95
+  s_f2c84423ce0bfa::t_e280066b50b272 1-2
+  s_f2c84423ce0bfa::t_460c320dcfec7c 30
+  s_f2c84423ce0bfa::t_9b8c8a9972f823 18-23
+tests/FHIRBridge.UnitTests/Configuration/MappingImportServiceTests.cs
+  s_f2c84423ce0bfa::t_aec3813181958b 311
+  s_f2c84423ce0bfa::t_5e26392f54af62 158-181
+  s_f2c84423ce0bfa::t_d75cf785c22fb0 566-572,582-585,591-593,595,597-599,601,603-650
+  s_f2c84423ce0bfa::t_ba49311e017a3e 1-157,182-310,312-565,573-581,586-590,594,596,600,602,656-658
+  s_f2c84423ce0bfa::t_4ad626067e4972 651-655
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_f2c84423ce0bfa::t_89b22ced5a9188 43-48
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_f2c84423ce0bfa::t_faa82e1bd6e679 33
+src/FHIRBridge.Domain/Entities/MappingProfile.cs
+  s_f2c84423ce0bfa::t_3be0a4410cfb85 20-21,30,47-53,75-81
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f2c84423ce0bfa::t_6ce76547a0adc2 232-239
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_f2c84423ce0bfa::t_797ca11cbf243f 23,332-333
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_f2c84423ce0bfa::t_0e05fcebc1e99c 20
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_f2c84423ce0bfa::t_90446c8869c250 138-147
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_f2c84423ce0bfa::t_6bb7dc189a6202 124-133
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f2c84423ce0bfa::t_cd0e022b8bf585 297-299
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_f2c84423ce0bfa::t_abee24a6e1b135 225-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a4334b776ebbe1a580d8c0128cecb2554ae41cbd",
+  "prompts": {},
+  "sessions": {
+    "s_f2c84423ce0bfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c970d4-a48d-47fd-a18b-d7240753202d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
