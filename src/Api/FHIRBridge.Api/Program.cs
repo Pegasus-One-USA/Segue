@@ -175,7 +175,7 @@ builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, GovernanceA
 builder.Services.AddCors();
 builder.Services.AddSingleton<ICorsPolicyProvider, DynamicPortalCorsPolicyProvider>();
 builder.Services.AddOptions<AllowedCorsOriginsOptions>()
-    .Configure(options => options.RequireHttps = !builder.Environment.IsDevelopment());
+    .Configure(options => options.RequireHttps = false);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
