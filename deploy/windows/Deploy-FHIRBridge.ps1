@@ -104,6 +104,74 @@ function Set-ServiceEnvironment {
         -Value ([string[]]$EnvironmentVariables) -Type MultiString
 }
 
+function Show-ServiceStartFailureDiagnostics {
+    param([string]$ExePath, [string[]]$EnvironmentVariables)
+
+    # Start-Service only ever reports a generic wrapper error (CouldNotStartService) -- it never
+    # surfaces the app's real startup exception. This runs on the same VM as the app it just failed
+    # to start, so there's no need to RDP in separately: check what's already on the configured
+    # port, then run the exe directly (same env vars, same working directory) so whatever it prints
+    # on the way down lands straight in this CI log.
+    Write-Host "---- Diagnostics: why did this service fail to start? ----"
+
+    $urlsVar = $EnvironmentVariables | Where-Object { $_ -like "ASPNETCORE_URLS=*" } | Select-Object -First 1
+    if ($urlsVar -and ($urlsVar -match ':(\d+)(/|$)')) {
+        $port = $matches[1]
+        Write-Host "Configured to bind port $port -- existing listeners on that port:"
+        try {
+            $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+        } catch {
+            $conns = $null
+        }
+        if ($conns) {
+            $conns | Select-Object LocalAddress, LocalPort, State, OwningProcess | Format-Table | Out-String | Write-Host
+            $conns | Select-Object -Unique -ExpandProperty OwningProcess | ForEach-Object {
+                Get-Process -Id $_ -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, Path | Format-List | Out-String | Write-Host
+            }
+        } else {
+            Write-Host "(nothing else appears to be listening on port $port right now)"
+        }
+    }
+
+    $originalEnv = @{}
+    foreach ($kv in $EnvironmentVariables) {
+        $idx = $kv.IndexOf('=')
+        if ($idx -gt 0) {
+            $key = $kv.Substring(0, $idx); $val = $kv.Substring($idx + 1)
+            $originalEnv[$key] = [System.Environment]::GetEnvironmentVariable($key)
+            [System.Environment]::SetEnvironmentVariable($key, $val)
+        }
+    }
+    $stdOut = [System.IO.Path]::GetTempFileName()
+    $stdErr = [System.IO.Path]::GetTempFileName()
+    try {
+        Write-Host "Running $ExePath directly for 5s to capture its own startup output..."
+        $proc = Start-Process -FilePath $ExePath -WorkingDirectory (Split-Path $ExePath -Parent) `
+            -RedirectStandardOutput $stdOut -RedirectStandardError $stdErr -PassThru -WindowStyle Hidden
+        Start-Sleep -Seconds 5
+        if ($proc.HasExited) {
+            Write-Host "It exited on its own with code $($proc.ExitCode) -- this is almost certainly the real failure."
+        } else {
+            Write-Host "Still running after 5s (didn't crash immediately) -- stopping the diagnostic run."
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+    } finally {
+        foreach ($key in $originalEnv.Keys) {
+            [System.Environment]::SetEnvironmentVariable($key, $originalEnv[$key])
+        }
+    }
+    Write-Host "---- stdout ----"
+    Get-Content $stdOut -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    Write-Host "---- stderr ----"
+    Get-Content $stdErr -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    Remove-Item $stdOut, $stdErr -ErrorAction SilentlyContinue
+
+    Write-Host "---- Recent Application event log entries ----"
+    Get-WinEvent -LogName Application -MaxEvents 20 -ErrorAction SilentlyContinue |
+        Where-Object { $_.TimeCreated -gt (Get-Date).AddMinutes(-2) } |
+        Select-Object TimeCreated, ProviderName, Id, Message | Format-List | Out-String | Write-Host
+}
+
 function Deploy-Service {
     param(
         [string]$Name,
@@ -156,8 +224,14 @@ function Deploy-Service {
     Set-ServiceEnvironment -Name $Name -EnvironmentVariables $EnvironmentVariables
 
     Write-Host "Starting service $Name..."
-    Start-Service -Name $Name
-    (Get-Service -Name $Name).WaitForStatus('Running', (New-TimeSpan -Seconds $ServiceStopTimeoutSeconds))
+    try {
+        Start-Service -Name $Name
+        (Get-Service -Name $Name).WaitForStatus('Running', (New-TimeSpan -Seconds $ServiceStopTimeoutSeconds))
+    } catch {
+        Write-Host "Service $Name failed to start -- capturing diagnostics before failing the deploy."
+        Show-ServiceStartFailureDiagnostics -ExePath $exePath -EnvironmentVariables $EnvironmentVariables
+        throw
+    }
     Write-Host "$Name is running."
 }
 
