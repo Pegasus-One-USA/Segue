@@ -130,13 +130,32 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         var stored = await _tokenStore.GetAsync(key, cancellationToken);
         if (stored is not null || string.IsNullOrWhiteSpace(source.TargetPatientId))
         {
+            LogKeyLookup(source, key, stored is not null);
             return (key, stored);
         }
 
         var defaultKey = BuildStoreKey(source, null);
         var defaultStored = await _tokenStore.GetAsync(defaultKey, cancellationToken);
+        LogKeyLookup(source, defaultKey, defaultStored is not null);
         return (defaultKey, defaultStored);
     }
+
+    // Never logs patientId/CallerId values themselves (CallerId identifies a real end user, patientId a FHIR
+    // resource id) — only the resolved key's shape (which segments it's built from) and a stable, non-reversible
+    // hash of the full key, so two log lines for the same underlying session correlate ("this click's read found
+    // the same key that click's write saved to") without ever printing an identifier.
+    private void LogKeyLookup(FhirSourceConfiguration source, string key, bool hit)
+    {
+        _logger.LogInformation(
+            "{Provider} token cache lookup: sourceConnectionId={SourceConnectionId} applicationType={ApplicationType} " +
+            "keyedByCallerId={KeyedByCallerId} hasPatientId={HasPatientId} keyHash={KeyHash} hit={Hit}",
+            ProviderName, source.SourceConnectionId, source.ApplicationType,
+            source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId),
+            !string.IsNullOrWhiteSpace(source.TargetPatientId), HashKey(key), hit);
+    }
+
+    private static string HashKey(string key) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..12];
 
     /// <summary>
     /// Clears both the request-time <see cref="FhirSourceConfiguration.TargetPatientId"/> slot (if set) and the
@@ -174,10 +193,10 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         var resolvedScope = ResolveScopes(source, isEhrLaunch);
         _logger.LogInformation(
             "[Step 4/6] {Provider} BuildAuthorizationRequest: sourceConnectionId={SourceConnectionId} " +
-            "inputScopes=[{InputScopes}] isEhrLaunch={IsEhrLaunch} resolvedScope=\"{ResolvedScope}\" " +
-            "usedFallbackDefault={UsedFallbackDefault}",
-            ProviderName, source.SourceConnectionId, string.Join(' ', source.Scopes), isEhrLaunch, resolvedScope,
-            source.Scopes.Count == 0);
+            "applicationType={ApplicationType} hasCallerId={HasCallerId} inputScopes=[{InputScopes}] " +
+            "isEhrLaunch={IsEhrLaunch} resolvedScope=\"{ResolvedScope}\" usedFallbackDefault={UsedFallbackDefault}",
+            ProviderName, source.SourceConnectionId, source.ApplicationType, !string.IsNullOrWhiteSpace(source.CallerId),
+            string.Join(' ', source.Scopes), isEhrLaunch, resolvedScope, source.Scopes.Count == 0);
 
         var query = HttpUtility.ParseQueryString(string.Empty);
         query["response_type"] = "code";
@@ -426,14 +445,16 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         return string.Join(' ', scopes);
     }
 
-    // Token store key: for a Patient Standalone source with a caller id, key on the logged-in end user instead of
-    // the SourceConnection — every pipeline that shares that same user's session then reuses the one token their
-    // authorization already covers (see FhirSourceConfiguration.CallerId), instead of each SourceConnection needing
-    // its own separate MyChart consent. Every other ApplicationType (and a Patient source with no caller id
-    // supplied) falls back to the pre-existing behavior: prefer the durable source-connection id, else the token
-    // endpoint + client identity. The patient segment isolates concurrent sessions on the same key — "default" is
-    // the unscoped slot every pre-existing caller (that never set TargetPatientId) reads/writes, so this is purely
-    // additive.
+    // Token store key: for a Patient Standalone source with a caller id, key on the logged-in end user ALONE
+    // (no SourceConnectionId segment) — every pipeline that shares that same user's session reuses the one token
+    // their authorization already covers, instead of each SourceConnection needing its own separate MyChart
+    // consent. This is a deliberate tradeoff, not an oversight: if two SourceConnections sharing a CallerId request
+    // different scopes, whichever authorizes last silently overwrites the other's cached token in this slot — the
+    // team has accepted that collision risk in favor of zero repeat-consent prompts. Every other ApplicationType
+    // (and a Patient source with no caller id supplied) falls back to the pre-existing behavior: prefer the durable
+    // source-connection id, else the token endpoint + client identity. The patient segment isolates concurrent
+    // sessions on the same key — "default" is the unscoped slot every pre-existing caller (that never set
+    // TargetPatientId) reads/writes, so this is purely additive.
     private string BuildStoreKey(FhirSourceConfiguration source, string? patientId)
     {
         if (source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId))
@@ -458,6 +479,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         CancellationToken cancellationToken)
     {
         var key = BuildStoreKey(source, patientId);
+        LogKeySave(source, key, patientId);
         var saveTask = _tokenStore.SaveAsync(key, stored, cancellationToken);
 
         if (source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId))
@@ -465,6 +487,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             var legacyKey = BuildStoreKey(source with { CallerId = null }, patientId);
             if (!string.Equals(legacyKey, key, StringComparison.Ordinal))
             {
+                LogKeySave(source with { CallerId = null }, legacyKey, patientId);
                 return SaveBothAsync(saveTask, legacyKey, stored, cancellationToken);
             }
         }
@@ -476,6 +499,17 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     {
         await firstSave;
         await _tokenStore.SaveAsync(legacyKey, stored, cancellationToken);
+    }
+
+    // Same PHI-safe logging discipline as LogKeyLookup — see that method's remarks.
+    private void LogKeySave(FhirSourceConfiguration source, string key, string? patientId)
+    {
+        _logger.LogInformation(
+            "{Provider} token cache save: sourceConnectionId={SourceConnectionId} applicationType={ApplicationType} " +
+            "keyedByCallerId={KeyedByCallerId} hasPatientId={HasPatientId} keyHash={KeyHash}",
+            ProviderName, source.SourceConnectionId, source.ApplicationType,
+            source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId),
+            !string.IsNullOrWhiteSpace(patientId), HashKey(key));
     }
 
     private sealed class TokenResponse

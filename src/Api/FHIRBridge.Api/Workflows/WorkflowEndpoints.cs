@@ -586,6 +586,7 @@ public static class WorkflowEndpoints
         group.MapPost("/workflows/{workflowId:guid}/discard-token", async (
             Guid workflowId,
             string? patientId,
+            string? callerId,
             IWorkflowDefinitionStore store,
             ISourceConnectionRuntimeResolver? sourceResolver,
             CancellationToken cancellationToken) =>
@@ -616,7 +617,7 @@ public static class WorkflowEndpoints
                 return Results.Ok(new { discarded = false });
             }
 
-            await sourceResolver.DiscardTokenAsync(sourceConnectionId.Value, patientId, cancellationToken);
+            await sourceResolver.DiscardTokenAsync(sourceConnectionId.Value, patientId, cancellationToken, callerId);
             return Results.Ok(new { discarded = true });
         });
 
@@ -628,8 +629,10 @@ public static class WorkflowEndpoints
         group.MapGet("/workflows/{workflowId:guid}/token-status", async (
             Guid workflowId,
             string? patientId,
+            string? callerId,
             IWorkflowDefinitionStore store,
             ISourceConnectionRuntimeResolver? sourceResolver,
+            ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -658,7 +661,12 @@ public static class WorkflowEndpoints
                 return Results.Ok(new { hasValidToken = false });
             }
 
-            var hasValidToken = await sourceResolver.HasValidTokenAsync(sourceConnectionId.Value, patientId, cancellationToken);
+            var hasValidToken = await sourceResolver.HasValidTokenAsync(sourceConnectionId.Value, patientId, cancellationToken, callerId);
+            logger.LogInformation(
+                "token-status check: workflowId={WorkflowId} sourceConnectionId={SourceConnectionId} " +
+                "hasCallerId={HasCallerId} hasPatientId={HasPatientId} hasValidToken={HasValidToken}",
+                workflowId, sourceConnectionId, !string.IsNullOrWhiteSpace(callerId), !string.IsNullOrWhiteSpace(patientId),
+                hasValidToken);
             return Results.Ok(new { hasValidToken });
         });
 
