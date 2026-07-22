@@ -1,6 +1,6 @@
 // user-management/pages/user-detail/user-detail.component.ts
 import {
-  Component, OnInit, OnDestroy, signal, computed, inject, Input,
+  Component, OnInit, OnDestroy, signal, computed, inject, Input, ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -31,6 +31,7 @@ import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/as
 import { ResetPasswordLinkDialogComponent } from '../../dialogs/reset-password-link-dialog/reset-password-link-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
 // whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
@@ -71,8 +72,12 @@ interface StatusCategory {
   templateUrl: './user-detail.component.html',
   styleUrls: ['./user-detail.component.scss'],
 })
-export class UserDetailComponent implements OnInit, OnDestroy {
+export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges {
   @Input() id!: string;
+
+  // Direct-Permission-Overrides is rendered eagerly inside a mat-tab (not lazy), so this resolves
+  // as soon as the view initializes regardless of which tab is active.
+  @ViewChild(UserPermissionOverridesComponent) private overridesComponent?: UserPermissionOverridesComponent;
 
   private readonly userService = inject(IUserService);
   private readonly roleService = inject(IRoleService);
@@ -157,6 +162,18 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  // Delegates to the Direct-Permission-Overrides tab — the only editable, unsaved state this
+  // route can carry (every other edit here goes through a MatDialog, which is closed/cancelled
+  // independently of router navigation).
+  hasUnsavedChanges(): boolean {
+    return this.overridesComponent?.hasUnsavedChanges() ?? false;
+  }
+
+  isSaveInProgress(): boolean {
+    return this.overridesComponent?.isSaveInProgress() ?? false;
   }
 
   // ─── Data loading ─────────────────────────────────────────────────────────

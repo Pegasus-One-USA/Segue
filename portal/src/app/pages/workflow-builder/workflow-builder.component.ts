@@ -1,5 +1,7 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
+import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStore } from '../../services/pipeline.store';
 import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
@@ -36,7 +38,7 @@ import {
   templateUrl: './workflow-builder.component.html',
   styleUrl: './workflow-builder.component.scss',
 })
-export class WorkflowBuilderComponent implements OnInit {
+export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly store  = inject(PipelineStore);
   private readonly wiz    = inject(WizardService);
   private readonly toast  = inject(ToastService);
@@ -45,6 +47,11 @@ export class WorkflowBuilderComponent implements OnInit {
   private readonly graphMapper = inject(WorkflowGraphMapperService);
   private readonly buildAssembler = inject(WorkflowBuildAssemblerService);
   private readonly route = inject(ActivatedRoute);
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+
+  constructor() {
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+  }
 
   // ── page state ─────────────────────────────────────────────────────────────
   protected readonly scenarioName = signal('Grouped-node pipeline (Normalize group + merge)');
@@ -606,6 +613,15 @@ export class WorkflowBuilderComponent implements OnInit {
         this.workflowBusy.set(false);
       },
     });
+  }
+
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  hasUnsavedChanges(): boolean {
+    return this.store.dirty();
+  }
+
+  isSaveInProgress(): boolean {
+    return this.workflowBusy();
   }
 
   /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */

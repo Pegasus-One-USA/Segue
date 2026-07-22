@@ -101,9 +101,8 @@ export class EpicSourceWizardComponent {
     this.showAdvanced.update(v => !v);
   }
 
-  onBackdropClick(event: MouseEvent): void {
-    if ((event.target as HTMLElement).classList.contains('ew-backdrop')) {
-      this.close();
-    }
+  // Backdrop click intentionally does nothing: an accidental click outside the panel shouldn't
+  // discard an in-progress, multi-step wizard. Use the explicit Cancel/close control instead.
+  onBackdropClick(_event: MouseEvent): void {
   }
 }

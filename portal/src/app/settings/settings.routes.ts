@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { permissionGuard } from '../auth/guards/permission.guard';
 import { superAdminGuard } from '../auth/guards/super-admin.guard';
+import { unsavedChangesGuard } from '../core/guards/unsaved-changes.guard';
 
 // Every child below keeps the exact guard/permission it had as a standalone top-level route
 // before consolidation under this shell — see docs/backend/12-provider-standalone-ehr-launch-fixes.md.
@@ -13,6 +14,7 @@ export const SETTINGS_ROUTES: Routes = [
       {
         path: 'branding',
         canActivate: [permissionGuard],
+        canDeactivate: [unsavedChangesGuard],
         data: { permissions: ['configuration.write'] },
         loadComponent: () =>
           import('./pages/branding/branding-settings.component').then(m => m.BrandingSettingsComponent),

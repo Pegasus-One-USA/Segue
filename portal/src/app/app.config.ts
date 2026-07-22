@@ -3,7 +3,7 @@ import {
   provideZoneChangeDetection,
   APP_INITIALIZER,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { tap } from 'rxjs';
@@ -43,7 +43,11 @@ function initApp(auth: AuthService, appInit: AppInitService) {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(routes, withComponentInputBinding()),
+    // canceledNavigationResolution: 'computed' — when a CanDeactivate guard cancels a browser
+    // Back/Forward-triggered navigation, this restores the actual history-stack position (via
+    // history.go) instead of just the URL string, so Back/Forward depth stays consistent after
+    // a declined "unsaved changes" prompt.
+    provideRouter(routes, withComponentInputBinding(), withRouterConfig({ canceledNavigationResolution: 'computed' })),
     provideAnimationsAsync(),
     // Order matters: authInterceptor is the outer wrapper (closer to the app) so its 401
     // refresh-and-retry logic still sees the real status code; httpErrorSanitizerInterceptor is the

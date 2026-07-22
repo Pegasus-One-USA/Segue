@@ -32,31 +32,58 @@ export class PipelineStore {
 
   readonly isEmpty = computed(() => this.nodes().length === 0);
 
+  // ── dirty tracking ──────────────────────────────────────────────────────────
+  // Bumped by every canvas mutation below; `savedRevision` is snapshotted wherever the canvas
+  // matches what's actually persisted (fresh load, reset, or a successful save) — the unsaved-
+  // changes navigation guard reads `dirty` to decide whether leaving needs a confirmation.
+  private readonly revision = signal(0);
+  private readonly savedRevision = signal(0);
+  readonly dirty = computed(() => this.revision() !== this.savedRevision());
+
+  private bump(): void {
+    this.revision.update(v => v + 1);
+  }
+
+  /** Call after a save actually persists — marks the current canvas state as the clean baseline. */
+  markSaved(): void {
+    this.savedRevision.set(this.revision());
+  }
+
+  private syncClean(): void {
+    this.bump();
+    this.markSaved();
+  }
+
   // ── node CRUD ──────────────────────────────────────────────────────────────
   addNode(node: CN): void {
     this.nodes.update(ns => [...ns, node]);
+    this.bump();
   }
 
   removeNode(id: string): void {
     this.nodes.update(ns => ns.filter(n => n.id !== id));
     this.edges.update(es => es.filter(e => e.from !== id && e.to !== id));
+    this.bump();
   }
 
   updateNode(id: string, patch: Partial<CN>): void {
     this.nodes.update(ns =>
       ns.map(n => (n.id === id ? { ...n, ...patch } as CN : n))
     );
+    this.bump();
   }
 
   moveNode(id: string, x: number, y: number): void {
     this.nodes.update(ns =>
       ns.map(n => (n.id === id ? { ...n, x, y } : n))
     );
+    this.bump();
   }
 
   // ── edge CRUD ──────────────────────────────────────────────────────────────
   addEdge(edge: CE): void {
     this.edges.update(es => [...es, edge]);
+    this.bump();
   }
 
   loadGraph(nodes: CN[], edges: CE[]): void {
@@ -64,10 +91,12 @@ export class PipelineStore {
     this.edges.set(edges);
     this.editingNodeId.set(null);
     this.tempConnectorPath.set(null);
+    this.syncClean();
   }
 
   removeEdge(id: string): void {
     this.edges.update(es => es.filter(e => e.id !== id));
+    this.bump();
   }
 
   hasEdge(fromId: string, toId: string): boolean {
@@ -82,6 +111,7 @@ export class PipelineStore {
     this.zoom.set(1);
     this.editingNodeId.set(null);
     this.tempConnectorPath.set(null);
+    this.syncClean();
   }
 
   // ── lookups ────────────────────────────────────────────────────────────────

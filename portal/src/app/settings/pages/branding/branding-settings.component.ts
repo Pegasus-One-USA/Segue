@@ -2,6 +2,8 @@ import { Component, inject, OnInit, OnDestroy, DestroyRef, signal } from '@angul
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime } from 'rxjs';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
+import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { BrandAssetFieldComponent } from '../../components/brand-asset-field/brand-asset-field.component';
 import { BrandingService } from '../../../services/branding.service';
 import { ThemeService } from '../../../services/theme.service';
@@ -16,7 +18,7 @@ const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
   templateUrl: './branding-settings.component.html',
   styleUrl:    './branding-settings.component.scss',
 })
-export class BrandingSettingsComponent implements OnInit, OnDestroy {
+export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedChanges {
   private readonly fb          = inject(FormBuilder);
   private readonly destroyRef  = inject(DestroyRef);
   protected readonly branding  = inject(BrandingService);
@@ -24,6 +26,15 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
 
   protected readonly saved  = signal(false);
   protected readonly saving = signal(false);
+
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+
+  constructor() {
+    this.unsavedChangesRegistry.register(
+      () => this.hasUnsavedChanges() || this.isSaveInProgress(),
+      this.destroyRef,
+    );
+  }
 
   protected readonly themeModeOptions: { id: BrandThemeMode; label: string }[] = [
     { id: 'light',  label: 'Light' },
@@ -104,6 +115,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
       this.savedThisSession  = true;
       this.saving.set(false);
       this.saved.set(true);
+      this.form.markAsPristine();
       setTimeout(() => this.saved.set(false), 3000);
     });
   }
@@ -115,6 +127,16 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
     this.savedThisSession  = true; // the reset itself is the intended persisted state
     this.themeService.set(this.originalThemeMode);
     this.populateForm(this.originalConfig);
+    this.form.markAsPristine();
+  }
+
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  hasUnsavedChanges(): boolean {
+    return this.form.dirty;
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   /** Mirrors BrandingService.effectiveLogoUrl, but off the draft form value so the

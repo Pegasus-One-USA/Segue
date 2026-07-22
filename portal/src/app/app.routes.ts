@@ -3,6 +3,7 @@ import { authGuard } from './auth/guards/auth.guard';
 import { permissionGuard } from './auth/guards/permission.guard';
 import { setupGuard } from './auth/guards/setup.guard';
 import { mfaSetupGuard } from './auth/guards/mfa-setup.guard';
+import { unsavedChangesGuard } from './core/guards/unsaved-changes.guard';
 
 export const routes: Routes = [
 
@@ -49,6 +50,7 @@ export const routes: Routes = [
       // Workflow / Pipeline Builder
       {
         path: 'workflow-builder',
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./pages/workflow-builder/workflow-builder.component').then(
             m => m.WorkflowBuilderComponent
@@ -99,6 +101,7 @@ export const routes: Routes = [
       },
       {
         path: 'account-settings',
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./user/pages/account-settings/account-settings.component').then(
             m => m.AccountSettingsComponent
@@ -111,6 +114,7 @@ export const routes: Routes = [
       },
       {
         path: 'preferences',
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./user/pages/preferences/preferences.component').then(
             m => m.PreferencesComponent
@@ -222,6 +226,7 @@ export const routes: Routes = [
           {
             path: 'alert-rules',
             canActivate: [permissionGuard],
+            canDeactivate: [unsavedChangesGuard],
             data: { permissions: ['governance.read'] },
             loadComponent: () =>
               import('./governance/pages/alert-rules/alert-rules.component').then(m => m.AlertRulesComponent),
