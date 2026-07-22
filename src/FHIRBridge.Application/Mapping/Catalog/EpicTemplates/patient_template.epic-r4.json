@@ -1,405 +1,347 @@
 {
- "resourceType": "Patient",
- "id": "<Id · 1..1 · required>",
- "meta": {
-  "versionId": "<Id · 0..1>",
-  "lastUpdated": "<Instant · 0..1>",
-  "security": [
-   {
-    "code": "<Code · 0..1>",
-    "display": "<String · 0..1>",
-    "system": "<Uri · 0..1>",
-    "userSelected": "<boolean · 0..1>",
-    "version": "<String · 0..1>"
-   }
-  ]
- },
- "text": {
-  "div": "<string · 1..1 · required>",
-  "status": "<Code · 1..1 · required>"
- },
- "extension": [
-  {
-   "valueCode": "<Code · 0..1>",
-   "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex"
-  },
-  {
-   "valueCodeableConcept": {
-    "coding": [
-     {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>",
-      "userSelected": "<boolean · 0..1>",
-      "version": "<String · 0..1>"
-     }
+  "resourceType": "Patient",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>",
+    "profile": [
+      "<Canonical · 0..*>"
     ],
-    "text": "<String · 0..1>"
-   },
-   "url": "http://open.epic.com/FHIR/StructureDefinition/extension/calculated-pronouns-to-use-for-text"
-  },
-  {
-   "valueCodeableConcept": {
-    "coding": [
-     {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>",
-      "userSelected": "<boolean · 0..1>",
-      "version": "<String · 0..1>"
-     }
-    ],
-    "text": "<String · 0..1>"
-   },
-   "url": "http://hl7.org/fhir/StructureDefinition/patient-genderIdentity"
-  },
-  {
-   "extension": [
-    {
-     "valueCodeableConcept": {
-      "coding": [
-       {
-        "code": "<Code · 0..1>",
-        "display": "<String · 0..1>",
-        "system": "<Uri · 0..1>",
-        "userSelected": "<boolean · 0..1>",
-        "version": "<String · 0..1>"
-       }
-      ],
-      "text": "<String · 0..1>"
-     },
-     "url": "value"
-    },
-    {
-     "valuePeriod": {
-      "end": "<DateTime · 0..1>",
-      "start": "<DateTime · 0..1>"
-     },
-     "url": "period"
-    }
-   ],
-   "url": "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
-  },
-  {
-   "valueCodeableConcept": {
-    "coding": [
-     {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>",
-      "userSelected": "<boolean · 0..1>",
-      "version": "<String · 0..1>"
-     }
-    ],
-    "text": "<String · 0..1>"
-   },
-   "url": "http://open.epic.com/FHIR/StructureDefinition/extension/legal-sex"
-  },
-  {
-   "extension": [
-    {
-     "valueCoding": {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>"
-     },
-     "url": "ombCategory"
-    },
-    {
-     "valueString": "<String · 0..1>",
-     "url": "text"
-    }
-   ],
-   "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity"
-  },
-  {
-   "valueCodeableConcept": {
-    "coding": [
-     {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>",
-      "userSelected": "<boolean · 0..1>",
-      "version": "<String · 0..1>"
-     }
-    ],
-    "text": "<String · 0..1>"
-   },
-   "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-genderIdentity"
-  },
-  {
-   "extension": [
-    {
-     "valueCoding": {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>"
-     },
-     "url": "ombCategory"
-    },
-    {
-     "valueCoding": {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>"
-     },
-     "url": "detailed"
-    },
-    {
-     "valueString": "<String · 0..1>",
-     "url": "text"
-    }
-   ],
-   "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race"
-  },
-  {
-   "valueCode": "<Code · 0..1>",
-   "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-sex"
-  },
-  {
-   "extension": [
-    {
-     "valueCodeableConcept": {
-      "coding": [
-       {
-        "code": "<Code · 0..1>",
-        "display": "<String · 0..1>",
-        "system": "<Uri · 0..1>",
-        "userSelected": "<boolean · 0..1>",
-        "version": "<String · 0..1>"
-       }
-      ],
-      "text": "<String · 0..1>"
-     },
-     "url": "tribalAffiliation"
-    }
-   ],
-   "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-tribal-affiliation"
-  }
- ],
- "active": "<boolean · 1..1 · required>",
- "address": [
-  {
-   "city": "<String · 0..1>",
-   "country": "<String · 0..1>",
-   "district": "<String · 0..1>",
-   "line": [
-    "<String · 0..*>"
-   ],
-   "period": {
-    "end": "<DateTime · 0..1>",
-    "start": "<DateTime · 0..1>"
-   },
-   "postalCode": "<String · 0..1>",
-   "state": "<String · 0..1>",
-   "text": "<String · 0..1>",
-   "use": "<Code · 1..1 · required>"
-  }
- ],
- "birthDate": "<Date · 1..1 · required>",
- "_birthDate": {
-  "extension": [
-   {
-    "valueDateTime": "<DateTime · 0..1>",
-    "url": "http://hl7.org/fhir/StructureDefinition/patient-birthTime"
-   }
-  ]
- },
- "communication": [
-  {
-   "extension": [
-    {
-     "extension": [
+    "security": [
       {
-       "valueCoding": {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
         "code": "<Code · 0..1>",
         "display": "<String · 0..1>",
-        "system": "<Uri · 0..1>"
-       },
-       "url": "type"
-      },
-      {
-       "valueCoding": {
-        "code": "<Code · 0..1>",
-        "display": "<String · 0..1>",
-        "system": "<Uri · 0..1>"
-       },
-       "url": "level"
+        "userSelected": "<boolean · 0..1>"
       }
-     ],
-     "url": "http://nictiz.nl/fhir/StructureDefinition/patient-proficiency"
-    }
-   ],
-   "language": {
-    "coding": [
-     {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
-      "system": "<Uri · 0..1>",
-      "userSelected": "<boolean · 0..1>",
-      "version": "<String · 0..1>"
-     }
     ],
-    "text": "<String · 0..1>"
-   },
-   "preferred": "<boolean · 0..1>",
-   "_preferred": {
-    "extension": [
-     {
-      "valueCoding": {
-       "code": "<Code · 0..1>",
-       "display": "<String · 0..1>",
-       "system": "<Uri · 0..1>"
-      },
-      "url": "http://hl7.org/fhir/StructureDefinition/patient-preferenceType"
-     }
+    "tag": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "userSelected": "<boolean · 0..1>"
+      }
     ]
-   }
-  }
- ],
- "contact": [
-  {
-   "address": {
-    "city": "<String · 0..1>",
-    "country": "<String · 0..1>",
-    "district": "<String · 0..1>",
-    "line": [
-     "<String · 0..*>"
-    ],
-    "period": {
-     "end": "<DateTime · 0..1>",
-     "start": "<DateTime · 0..1>"
-    },
-    "postalCode": "<String · 0..1>",
-    "state": "<String · 0..1>",
-    "text": "<String · 0..1>",
-    "use": "<Code · 1..1 · required>"
-   },
-   "name": {
-    "family": "<String · 1..1 · required>",
-    "given": [
-     "<String · 1..*>"
-    ],
-    "prefix": "<String · 0..1>",
-    "suffix": [
-     "<String · 0..*>"
-    ],
-    "text": "<String · 1..1 · required>",
-    "use": "<Code · 1..1 · required>"
-   },
-   "organization": {
-    "display": "<String · 0..1>",
-    "reference": "<String · 0..1>",
-    "type": "<Uri · 0..1>"
-   },
-   "period": {
-    "end": "<DateTime · 0..1>",
-    "start": "<DateTime · 0..1>"
-   },
-   "relationship": [
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
     {
-     "coding": [
-      {
-       "code": "<Code · 0..1>",
-       "display": "<String · 0..1>",
-       "system": "<Uri · 0..1>",
-       "userSelected": "<boolean · 0..1>",
-       "version": "<String · 0..1>"
-      }
-     ],
-     "text": "<String · 0..1>"
-    }
-   ],
-   "telecom": [
-    {
-     "rank": "<PositiveInt · 0..1>",
-     "system": "<Code · 0..1>",
-     "use": "<Code · 0..1>",
-     "value": "<String · 1..1 · required>"
-    }
-   ]
-  }
- ],
- "deceasedBoolean": "<boolean · 0..1>",
- "deceasedDateTime": "<DateTime · 0..1>",
- "gender": "<Code · 1..1 · required>",
- "generalPractitioner": [
-  {
-   "display": "<String · 0..1>",
-   "reference": "<String · 0..1>",
-   "type": "<Uri · 0..1>"
-  }
- ],
- "identifier": [
-  {
-   "period": {
-    "end": "<DateTime · 0..1>",
-    "start": "<DateTime · 0..1>"
-   },
-   "system": "<Uri · 1..1 · required>",
-   "type": {
-    "coding": [
-     {
-      "code": "<Code · 0..1>",
-      "display": "<String · 0..1>",
+      "use": "<Code · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "version": "<String · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "userSelected": "<boolean · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
       "system": "<Uri · 0..1>",
-      "userSelected": "<boolean · 0..1>",
-      "version": "<String · 0..1>"
-     }
+      "value": "<String · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      },
+      "assigner": {
+        "reference": "<String · 0..1>",
+        "type": "<Uri · 0..1>",
+        "identifier": "<Identifier · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "active": "<boolean · 0..1>",
+  "name": [
+    {
+      "use": "<Code · 0..1>",
+      "text": "<String · 0..1>",
+      "family": "<String · 0..1>",
+      "given": [
+        "<String · 0..*>"
+      ],
+      "prefix": [
+        "<String · 0..*>"
+      ],
+      "suffix": [
+        "<String · 0..*>"
+      ],
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      }
+    }
+  ],
+  "telecom": [
+    {
+      "system": "<Code · 0..1>",
+      "value": "<String · 0..1>",
+      "use": "<Code · 0..1>",
+      "rank": "<positiveInt · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      }
+    }
+  ],
+  "gender": "<Code · 0..1>",
+  "birthDate": "<Date · 0..1>",
+  "deceasedBoolean": "<boolean · 0..1>",
+  "deceasedDateTime": "<DateTime · 0..1>",
+  "address": [
+    {
+      "use": "<Code · 0..1>",
+      "type": "<Code · 0..1>",
+      "text": "<String · 0..1>",
+      "line": [
+        "<String · 0..*>"
+      ],
+      "city": "<String · 0..1>",
+      "district": "<String · 0..1>",
+      "state": "<String · 0..1>",
+      "postalCode": "<String · 0..1>",
+      "country": "<String · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      }
+    }
+  ],
+  "maritalStatus": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "userSelected": "<boolean · 0..1>"
+      }
     ],
     "text": "<String · 0..1>"
-   },
-   "value": "<String · 1..1 · required>"
-  }
- ],
- "link": [
-  {
-   "other": {
-    "display": "<String · 0..1>",
-    "reference": "<String · 0..1>",
-    "type": "<Uri · 0..1>"
-   },
-   "type": "<Code · 1..1 · required>"
-  }
- ],
- "managingOrganization": {
-  "display": "<String · 0..1>",
-  "reference": "<String · 0..1>",
-  "type": "<Uri · 0..1>"
- },
- "maritalStatus": {
-  "coding": [
-   {
-    "code": "<Code · 0..1>",
-    "display": "<String · 0..1>",
-    "system": "<Uri · 0..1>",
-    "userSelected": "<boolean · 0..1>",
-    "version": "<String · 0..1>"
-   }
+  },
+  "multipleBirthBoolean": "<boolean · 0..1>",
+  "multipleBirthInteger": "<integer · 0..1>",
+  "photo": [
+    {
+      "contentType": "<Code · 0..1>",
+      "language": "<Code · 0..1>",
+      "data": "<Base64Binary · 0..1>",
+      "url": "<Url · 0..1>",
+      "size": "<unsignedInt · 0..1>",
+      "hash": "<Base64Binary · 0..1>",
+      "title": "<String · 0..1>",
+      "creation": "<DateTime · 0..1>"
+    }
   ],
-  "text": "<String · 0..1>"
- },
- "multipleBirthInteger": "<integer · 0..1>",
- "name": [
-  {
-   "family": "<String · 1..1 · required>",
-   "given": [
-    "<String · 1..*>"
-   ],
-   "prefix": "<String · 0..1>",
-   "suffix": [
-    "<String · 0..*>"
-   ],
-   "text": "<String · 1..1 · required>",
-   "use": "<Code · 1..1 · required>"
-  }
- ],
- "telecom": [
-  {
-   "rank": "<PositiveInt · 0..1>",
-   "system": "<Code · 1..1 · required>",
-   "use": "<Code · 0..1>",
-   "value": "<String · 1..1 · required>"
-  }
- ]
+  "contact": [
+    {
+      "relationship": [
+        {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        }
+      ],
+      "name": {
+        "use": "<Code · 0..1>",
+        "text": "<String · 0..1>",
+        "family": "<String · 0..1>",
+        "given": [
+          "<String · 0..*>"
+        ],
+        "prefix": [
+          "<String · 0..*>"
+        ],
+        "suffix": [
+          "<String · 0..*>"
+        ],
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        }
+      },
+      "telecom": [
+        {
+          "system": "<Code · 0..1>",
+          "value": "<String · 0..1>",
+          "use": "<Code · 0..1>",
+          "rank": "<positiveInt · 0..1>",
+          "period": {
+            "start": "<DateTime · 0..1>",
+            "end": "<DateTime · 0..1>"
+          }
+        }
+      ],
+      "address": {
+        "use": "<Code · 0..1>",
+        "type": "<Code · 0..1>",
+        "text": "<String · 0..1>",
+        "line": [
+          "<String · 0..*>"
+        ],
+        "city": "<String · 0..1>",
+        "district": "<String · 0..1>",
+        "state": "<String · 0..1>",
+        "postalCode": "<String · 0..1>",
+        "country": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        }
+      },
+      "gender": "<Code · 0..1>",
+      "organization": {
+        "reference": "<String · 0..1>",
+        "type": "<Uri · 0..1>",
+        "identifier": {
+          "use": "<Code · 0..1>",
+          "type": {
+            "coding": [
+              {
+                "system": "<Uri · 0..1>",
+                "version": "<String · 0..1>",
+                "code": "<Code · 0..1>",
+                "display": "<String · 0..1>",
+                "userSelected": "<boolean · 0..1>"
+              }
+            ],
+            "text": "<String · 0..1>"
+          },
+          "system": "<Uri · 0..1>",
+          "value": "<String · 0..1>",
+          "period": {
+            "start": "<DateTime · 0..1>",
+            "end": "<DateTime · 0..1>"
+          },
+          "assigner": "<Reference · 0..1>"
+        },
+        "display": "<String · 0..1>"
+      },
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      }
+    }
+  ],
+  "communication": [
+    {
+      "language": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "version": "<String · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "userSelected": "<boolean · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "preferred": "<boolean · 0..1>"
+    }
+  ],
+  "generalPractitioner": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "identifier": {
+        "use": "<Code · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "version": "<String · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "userSelected": "<boolean · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "value": "<String · 0..1>",
+        "period": {
+          "start": "<DateTime · 0..1>",
+          "end": "<DateTime · 0..1>"
+        },
+        "assigner": "<Reference · 0..1>"
+      },
+      "display": "<String · 0..1>"
+    }
+  ],
+  "managingOrganization": {
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>",
+    "identifier": {
+      "use": "<Code · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "version": "<String · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "userSelected": "<boolean · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      },
+      "assigner": "<Reference · 0..1>"
+    },
+    "display": "<String · 0..1>"
+  },
+  "link": [
+    {
+      "other": {
+        "reference": "<String · 0..1>",
+        "type": "<Uri · 0..1>",
+        "identifier": {
+          "use": "<Code · 0..1>",
+          "type": {
+            "coding": [
+              {
+                "system": "<Uri · 0..1>",
+                "version": "<String · 0..1>",
+                "code": "<Code · 0..1>",
+                "display": "<String · 0..1>",
+                "userSelected": "<boolean · 0..1>"
+              }
+            ],
+            "text": "<String · 0..1>"
+          },
+          "system": "<Uri · 0..1>",
+          "value": "<String · 0..1>",
+          "period": {
+            "start": "<DateTime · 0..1>",
+            "end": "<DateTime · 0..1>"
+          },
+          "assigner": "<Reference · 0..1>"
+        },
+        "display": "<String · 0..1>"
+      },
+      "type": "<Code · 1..1 · required>"
+    }
+  ]
 }

@@ -1,6 +1,6 @@
 import {
-  Component, input, output, signal, computed, effect,
-  untracked, inject, OnInit,
+  Component, ElementRef, Injector, input, output, signal, computed, effect,
+  untracked, inject, viewChild, afterNextRender, OnInit,
 } from '@angular/core';
 import {
   FormBuilder, Validators, ReactiveFormsModule,
@@ -12,9 +12,18 @@ import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
-import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { buildConnectionMetadata, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
 import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow } from './field-mapping/field-mapping-model';
+import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
+import { MappingSnapshot, MappingSnapshotSummary } from './field-mapping/mapping-snapshot.model';
+import {
+  MappingSummaryDocument, ChildTableRelation, buildMappingSummaryDocument, applyMappingSummaryDocument,
+} from './field-mapping/field-mapping-summary.model';
+import { MappingSummaryService } from './field-mapping/mapping-summary.service';
+import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
+import { requiredClosureFor, recommendedFor, lockingDependentsOf, sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
@@ -112,7 +121,7 @@ function genericResourceDef(r: string): ResourceDef {
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
-  imports: [ReactiveFormsModule, FieldMappingCanvasComponent],
+  imports: [ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
 })
@@ -122,6 +131,9 @@ export class DestinationWizardComponent implements OnInit {
   private readonly catalogSvc = inject(MappingCatalogService);
   private readonly toast = inject(ToastService);
   private readonly destinationConfigSvc = inject(DestinationConfigurationService);
+  private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
+  private readonly mappingSummarySvc = inject(MappingSummaryService);
+  private readonly injector = inject(Injector);
 
   // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
@@ -137,12 +149,21 @@ export class DestinationWizardComponent implements OnInit {
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
   readonly sourceResources = input<string[]>([]);
+  /** The upstream source's EHR vendor (e.g. "Epic") — the Mapping JSON's top-level "source" field. */
+  readonly sourceVendor = input<string>('');
+  /** The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
+   *  "sourceConnectionId" field. Null if no source is wired up yet. */
+  readonly sourceConnectionId = input<string | null>(null);
   // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
   // the × while a group's mapping canvas is open) — any change triggers the matching action here.
   readonly exitMappingRequest = input<number>(0);
   readonly saveMappingRequest = input<number>(0);
+  // Independent of the two above: saves/restores ONLY the mapping-screen state (see MappingSnapshot) —
+  // never touches the workflow-level `saved` output, PipelineStore, or node.fields at all.
+  readonly saveSnapshotRequest = input<number>(0);
   private _lastExitTrigger = 0;
   private _lastSaveTrigger = 0;
+  private _lastSaveSnapshotTrigger = 0;
   // Same pattern, passed straight through to the mapping canvas — its "Load JSON payload"/"Preview
   // output" actions now live in the dialog header (see NodeLibraryDialogComponent), not this canvas's
   // own toolbar, so the wizard just forwards these without reacting to them itself.
@@ -210,7 +231,7 @@ export class DestinationWizardComponent implements OnInit {
     const src = this.sourceResources();
     return src.length ? src : Object.keys(DEST_RESOURCE_DEFS);
   });
-  readonly selectedResources = signal<string[]>(['Patient', 'Observation', 'Encounter']);
+  readonly selectedResources = signal<string[]>([]);
 
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
@@ -245,6 +266,151 @@ export class DestinationWizardComponent implements OnInit {
     }
   }
 
+  // ── child-table relations (parent table / parent PK / FK) ───────────────────────────────────────
+  // Global, not per-resource/per-canvas — a table's parent/FK relationship doesn't depend on which
+  // resource's canvas happens to be open. Previously lived as local state inside
+  // FieldMappingCanvasComponent, which meant it was lost the moment a different resource's canvas
+  // opened (a fresh component instance) — lifted here so it survives resource navigation, node reload,
+  // and the Mapping JSON export/import.
+  readonly childTableRelationsByTable = signal<Record<string, ChildTableRelation>>({});
+
+  onChildTableRelationAdded(e: { tableName: string; relation: ChildTableRelation }): void {
+    this.childTableRelationsByTable.update(m => ({ ...m, [e.tableName]: e.relation }));
+  }
+
+  // ── Mapping JSON — the one canonical save/load contract for this screen (see field-mapping-summary.
+  // model.ts). Aggregates every resource with at least one mapping in one shot; independent of
+  // dest_mappings/dest_mappings_v2 (still feed workflow-build-assembler.service.ts unmodified). ────────
+  readonly lastMappingSummary = signal<MappingSummaryDocument | null>(null);
+  readonly mappingSummaryPreviewOpen = signal(false);
+  readonly canSaveMappingSummary = computed(() => this.mappingRows().length > 0);
+
+  buildAndShowMappingSummary(): void {
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: this.sourceVendor().toUpperCase(),
+      destType: this.destType(),
+      destLabel: this.destLabel(),
+      mappingRows: this.mappingRows(),
+      sqlTables: this.sqlTables(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+      availableFields: this.availableFieldsFn,
+      sourceConnectionId: this.sourceConnectionId(),
+      destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+    });
+    this.lastMappingSummary.set(doc);
+    this.mappingSummaryPreviewOpen.set(true);
+    this.mappingSummarySvc.save(doc).subscribe(() => {
+      this.toast.success('Mapping saved', `${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} saved.`);
+    });
+  }
+
+  closeMappingSummaryPreview(): void {
+    this.mappingSummaryPreviewOpen.set(false);
+  }
+
+  /** Reconstructs this screen entirely from a previously saved Mapping JSON document — "Edit Mapping". */
+  loadMappingSummary(doc: MappingSummaryDocument): void {
+    const applied = applyMappingSummaryDocument(doc, this.destType());
+    this.mappingRows.set(applied.mappingRows);
+    this.targetByResource.set(applied.targetByResource);
+    this.extraTablesByGroup.set(applied.extraTablesByGroup);
+    this.sqlTables.set(applied.sqlTables);
+    if (applied.sqlTables.length) this.probeState.set('ok');
+    this.childTableRelationsByTable.set(applied.childTableRelationsByTable);
+    this.selectedResources.set(applied.selectedResources);
+  }
+
+  // ── "Load mapping JSON" — paste a previously saved Mapping JSON document back in. Stubbed the same
+  // way MappingSnapshotService is: no real backend endpoint yet, so this only parses/applies pasted
+  // text; MappingSummaryService.save()/load() are ready for a real HttpClient call to slot in later. ──
+  readonly mappingSummaryLoadText = signal('');
+  readonly mappingSummaryLoadError = signal<string | null>(null);
+
+  submitLoadMappingSummary(): void {
+    const raw = this.mappingSummaryLoadText().trim();
+    if (!raw) { this.mappingSummaryLoadError.set('Paste a Mapping JSON document first.'); return; }
+    let doc: MappingSummaryDocument;
+    try { doc = JSON.parse(raw) as MappingSummaryDocument; }
+    catch (e) { this.mappingSummaryLoadError.set(`Invalid JSON: ${(e as Error).message}`); return; }
+    if (!Array.isArray(doc?.mappings)) { this.mappingSummaryLoadError.set('Not a recognized Mapping JSON document (missing "mappings").'); return; }
+    this.mappingSummaryLoadError.set(null);
+    this.loadMappingSummary(doc);
+    this.toast.success('Mapping loaded', `Restored ${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} from the pasted JSON.`);
+  }
+
+  // ── mapping snapshot (independent of the workflow — see mapping-snapshot.model.ts) ─────────────
+  // A self-contained save/load for just this screen's state, addressable by its own id, with no
+  // dependency on nodes/edges/sources/destinations/trigger/workflowId or a live DB connection to
+  // reconstruct. Entirely additive: dest_mappings/dest_mappings_v2-on-the-node (used by the OUTER
+  // workflow save, see _save() below) and the existing Save/Close buttons are untouched by this.
+  readonly savedSnapshots = signal<MappingSnapshotSummary[]>([]);
+  readonly snapshotIdToLoad = signal<string | null>(null);
+  readonly snapshotBusy = signal(false);
+  /** Set once a snapshot has been loaded this session, so a later Save updates that same record
+   *  instead of forking a new one every time. */
+  private _loadedSnapshotId: string | null = null;
+
+  refreshSnapshotList(): void {
+    this.mappingSnapshotSvc.list().subscribe(list => this.savedSnapshots.set(list));
+  }
+
+  private _buildSnapshot(): Omit<MappingSnapshot, 'id' | 'createdAt' | 'updatedAt'> {
+    const group = this.activeMappingGroup();
+    return {
+      name: group ? `${group} mapping` : 'Untitled mapping',
+      destType: this.destType(),
+      selectedResources: this.selectedResources(),
+      activeGroup: group,
+      targetByResource: this.targetByResource(),
+      extraTablesByGroup: this.extraTablesByGroup(),
+      destinationTables: this.sqlTables(),
+      payloadFieldsByResource: this.payloadFieldsByResource(),
+      mappingRows: this.mappingRows(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+    };
+  }
+
+  /** Saves ONLY the mapping-screen state — resource type, destination tables/columns (incl. anything
+   *  user-created), mapping rows, and which group/resources are selected. No workflow-level data at all. */
+  saveMappingSnapshot(): void {
+    this.snapshotBusy.set(true);
+    const draft = { ...this._buildSnapshot(), id: this._loadedSnapshotId ?? undefined };
+    this.mappingSnapshotSvc.save(draft).subscribe(saved => {
+      this._loadedSnapshotId = saved.id;
+      this.snapshotBusy.set(false);
+      this.refreshSnapshotList();
+      this.toast.success('Mapping snapshot saved', `Saved as "${saved.name}" (id: ${saved.id}).`);
+    });
+  }
+
+  /** Rebuilds the Map Fields screen entirely from a previously saved snapshot — no live DB probe, no
+   *  workflow/node context required. */
+  loadMappingSnapshot(id: string): void {
+    if (!id) return;
+    this.snapshotBusy.set(true);
+    this.mappingSnapshotSvc.get(id).subscribe(snapshot => {
+      this.snapshotBusy.set(false);
+      if (!snapshot) { this.toast.error('Load failed', 'That saved mapping could not be found.'); return; }
+      this._restoreFromSnapshot(snapshot);
+      this.toast.success('Mapping loaded', `Restored "${snapshot.name}".`);
+    });
+  }
+
+  private _restoreFromSnapshot(s: MappingSnapshot): void {
+    this._loadedSnapshotId = s.id;
+    this.selectedResources.set(s.selectedResources);
+    this.targetByResource.set(s.targetByResource);
+    this.extraTablesByGroup.set(s.extraTablesByGroup);
+    this.payloadFieldsByResource.set(s.payloadFieldsByResource);
+    this.sqlTables.set(s.destinationTables);
+    // So hasSqlTables()/sqlTableOptions() behave as if a real probe just succeeded, without one.
+    if (s.destinationTables.length) this.probeState.set('ok');
+    this.mappingRows.set(s.mappingRows);
+    // ?? {} covers snapshots saved before this field existed.
+    this.childTableRelationsByTable.set(s.childTableRelationsByTable ?? {});
+    this.selectedGroupForMapping.set(s.activeGroup);
+  }
+
   /** Column names of any already-probed SQL table by its full name — used for extra target tables. */
   readonly columnsForTableFn = (tableFullName: string): string[] => {
     const table = this.sqlTables().find(t => t.fullName === tableFullName);
@@ -273,22 +439,36 @@ export class DestinationWizardComponent implements OnInit {
     };
   });
 
-  /** A column was really added via the canvas's Add Column modal — append it to the known schema locally. */
-  onColumnAdded(e: { tableName: string; column: DestinationColumn }): void {
+  /** A column was really added via the canvas's Add Column modal — append it to the known schema locally.
+   *  Tagged 'userCreated' so a MappingSnapshot can tell it apart from a probed/pre-existing column.
+   *  If `table` is set, the target table didn't already exist and AddColumnAsync auto-created it (e.g. a
+   *  resource's default guessed table name, never chosen from a real probed list) — register it as a
+   *  brand-new sqlTables() entry instead of trying to append to one that was never there. */
+  onColumnAdded(e: { tableName: string; column: DestinationColumn; table?: DestinationTable }): void {
+    if (e.table && !this.sqlTables().some(t => t.fullName === e.table!.fullName)) {
+      this.sqlTables.update(tables => [...tables, {
+        ...e.table!,
+        origin: 'userCreated',
+        columns: e.table!.columns.map(c => ({ ...c, origin: 'userCreated' })),
+      }]);
+      return;
+    }
+    const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
     this.sqlTables.update(tables => tables.map(t =>
-      t.fullName === e.tableName ? { ...t, columns: [...t.columns, e.column] } : t
+      t.fullName === e.tableName ? { ...t, columns: [...t.columns, column] } : t
     ));
   }
 
-  /** A table was really created via the canvas's "+ Add a table" flow — register its known initial schema. */
-  onTableCreated(tableFullName: string): void {
-    if (this.sqlTables().some(t => t.fullName === tableFullName)) return;
-    const dotIndex = tableFullName.indexOf('.');
-    const schemaName = dotIndex >= 0 ? tableFullName.slice(0, dotIndex) : 'dbo';
-    const tableName = dotIndex >= 0 ? tableFullName.slice(dotIndex + 1) : tableFullName;
+  /** A table was really created via the canvas's "Create a new table…" modal — register the exact
+   *  schema the backend returned (including its FK column, if this was made a child of a parent table),
+   *  rather than guessing one locally. Tagged 'userCreated' (table and all its columns) for the same
+   *  reason as onColumnAdded. */
+  onTableCreated(table: DestinationTable): void {
+    if (this.sqlTables().some(t => t.fullName === table.fullName)) return;
     this.sqlTables.update(tables => [...tables, {
-      schemaName, tableName, fullName: tableFullName,
-      columns: [{ name: 'Id', dataType: 'bigint', mappingValueType: 'Integer', isNullable: false, maxLength: null }],
+      ...table,
+      origin: 'userCreated',
+      columns: table.columns.map(c => ({ ...c, origin: 'userCreated' })),
     }]);
   }
 
@@ -297,6 +477,24 @@ export class DestinationWizardComponent implements OnInit {
     this.sqlTables.update(tables => tables.map(t =>
       t.fullName === e.tableName ? { ...t, columns: t.columns.filter(c => c.name !== e.column) } : t
     ));
+  }
+
+  /** A column was really altered (rename and/or data type change) — update its entry in sqlTables()
+   *  (preserving its 'userCreated'/'probed' origin) and, if it was renamed, re-point any mapping that
+   *  targeted the old column name so it doesn't silently point at a column that no longer exists. */
+  onColumnAltered(e: { tableName: string; oldColumnName: string; column: DestinationColumn }): void {
+    this.sqlTables.update(tables => tables.map(t =>
+      t.fullName === e.tableName
+        ? { ...t, columns: t.columns.map(c => c.name === e.oldColumnName ? { ...e.column, origin: c.origin } : c) }
+        : t
+    ));
+    if (e.column.name !== e.oldColumnName) {
+      this.mappingRows.update(rows => rows.map(r =>
+        r.tableName === e.tableName && r.targetName === e.oldColumnName
+          ? { ...r, targetName: e.column.name }
+          : r
+      ));
+    }
   }
 
   /** A real FHIR JSON payload was pasted and parsed via the canvas's "Load JSON payload" modal —
@@ -316,6 +514,15 @@ export class DestinationWizardComponent implements OnInit {
   readonly existingOptions = signal<DestinationConfigurationDto[]>([]);
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
+
+  // Set from the edited node's own fields when a prior build already provisioned a real
+  // DestinationConfiguration for it (see workflow-builder.component.ts's stampBuildResultIds) — distinct
+  // from selectedExistingId, which only reflects a manual "use an existing connection" pick in Step 1.
+  // Also set the moment Step 1 (Configure) is completed in "new connection" mode — see
+  // provisionDestinationConnection() — so a real destinationId exists as soon as the connection is
+  // configured, not only after the whole wizard finishes and the workflow gets built.
+  readonly resolvedDestinationId = signal<string | null>(null);
+  readonly provisioningDestination = signal(false);
 
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
@@ -368,21 +575,30 @@ export class DestinationWizardComponent implements OnInit {
       const v = this.saveMappingRequest();
       if (v !== this._lastSaveTrigger) { this._lastSaveTrigger = v; if (v > 0) this.saveGroupMapping(); }
     });
+    effect(() => {
+      const v = this.saveSnapshotRequest();
+      if (v !== this._lastSaveSnapshotTrigger) { this._lastSaveSnapshotTrigger = v; if (v > 0) this.saveMappingSnapshot(); }
+    });
 
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
-    // over the built-in fallback once loaded. Deduped via _requested so this effect never re-fetches.
+    // over the built-in fallback once loaded. Deduped via _requested, keyed on sourceConnectionId too —
+    // so if that only becomes known partway through this session (e.g. after a save/build round-trip
+    // stamps a real id onto the source node), this refetches with it instead of staying stuck on
+    // whatever (generic-catalog) result was fetched back when it was still null.
     effect(() => {
-      for (const r of this.availableGroups()) this._ensureCatalog(r);
+      const sourceConnectionId = this.sourceConnectionId();
+      for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId);
     });
   }
 
   private readonly _requested = new Set<string>();
 
-  private _ensureCatalog(resource: string): void {
-    if (this._requested.has(resource)) return;
-    this._requested.add(resource);
-    this.catalogSvc.fields(resource).subscribe(fields => {
-      if (!fields.length) { this._requested.delete(resource); return; }
+  private _ensureCatalog(resource: string, sourceConnectionId: string | null): void {
+    const key = `${resource}::${sourceConnectionId ?? ''}`;
+    if (this._requested.has(key)) return;
+    this._requested.add(key);
+    this.catalogSvc.fields(resource, sourceConnectionId).subscribe(fields => {
+      if (!fields.length) { this._requested.delete(key); return; }
       const defs = fields.map(f => this._toFieldDef(resource, f));
       this.catalogByResource.update(m => ({ ...m, [resource]: defs }));
     });
@@ -425,15 +641,14 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.refreshSnapshotList();
     const edit = this.editNode();
     if (edit) {
       this._populateFromNode(edit);
       return;
     }
-    // New destination: default the selected data groups to whatever the upstream source pulls, so the destination
-    // mirrors the source's Resource Type selection instead of a hardcoded set.
-    const src = this.sourceResources();
-    if (src.length) this.selectedResources.set([...src]);
+    // New destination: no data group is pre-selected — the user picks explicitly, even when an upstream
+    // source is connected and could otherwise offer a default.
   }
 
   // ── step helpers ──────────────────────────────────────────────────────────
@@ -452,20 +667,56 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
-    // SQL: leaving Configure auto-tests the connection and loads tables before advancing.
+    // SQL: leaving Configure auto-tests the connection and loads tables before advancing; provisioning the
+    // real DestinationConfiguration happens inside testConnection()'s success handler, right before it advances.
     if (this.step() === 1 && this.isSql() && this.probeState() !== 'ok') {
       this.testConnection();
+      return;
+    }
+    // CSV: no connection probe gate — provision (create/update) the real DestinationConfiguration here,
+    // immediately on leaving Configure, then advance once it succeeds.
+    if (this.step() === 1 && !this.isSql()) {
+      this.provisionDestinationConnection(() => this._advancePastStep1());
       return;
     }
     if (this.step() < this.TOTAL_STEPS) {
       // Leaving Data groups (2) always lands on the group-selection screen, never resuming
       // whichever group's canvas was open last time — even if the user had drilled in before.
-      if (this.step() === 2) this.selectedGroupForMapping.set(null);
+      if (this.step() === 2) {
+        this.selectedGroupForMapping.set(null);
+        // Map fields (3) lists groups in the order they should actually be run — a prerequisite
+        // resource (e.g. Patient) always before whatever requires it — not raw selection-click order.
+        const sorted = sortByDependencyRank(this.selectedResources());
+        this.selectedResources.set(sorted);
+        console.table(sorted.map(resource => ({ resource, rank: dependencyRankFor(resource) })));
+      }
+      // Leaving Map fields (3) — every resource's mapping is done — log the full, rank-ordered Mapping
+      // JSON across every resource that has at least one mapping, so it's there to copy without needing
+      // the (hidden-from-this-screen) Save mapping button.
+      if (this.step() === 3 && this.canSaveMappingSummary()) {
+        const doc = buildMappingSummaryDocument({
+          sourceVendor: this.sourceVendor().toUpperCase(),
+          destType: this.destType(),
+          destLabel: this.destLabel(),
+          mappingRows: this.mappingRows(),
+          sqlTables: this.sqlTables(),
+          childTableRelationsByTable: this.childTableRelationsByTable(),
+          availableFields: this.availableFieldsFn,
+          sourceConnectionId: this.sourceConnectionId(),
+          destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+        });
+        console.log(JSON.stringify(doc, null, 2));
+      }
       this.step.update(x => x + 1);
       this._hasProgressed.set(true);
     } else {
       this._save();
     }
+  }
+
+  private _advancePastStep1(): void {
+    this.step.set(2);
+    this._hasProgressed.set(true);
   }
 
   // ── Step 3: data-group selection screen ────────────────────────────────────
@@ -500,11 +751,14 @@ export class DestinationWizardComponent implements OnInit {
     this.selectedGroupForMapping.set(null);
   }
 
-  /** "Save" below the canvas — keeps whatever's mapped so far and returns to the group list. */
+  /** "Save" below the canvas — keeps whatever's mapped so far, returns to the group list, and shows the
+   *  canonical Mapping JSON built from every resource mapped so far (not just this one). */
   saveGroupMapping(): void {
     const group = this.activeMappingGroup();
     this.closeGroupMapping();
-    if (group) this.toast.success('Mapping saved', `${group} mapping progress saved.`);
+    if (!group) return;
+    if (this.canSaveMappingSummary()) this.buildAndShowMappingSummary();
+    else this.toast.success('Mapping saved', `${group} mapping progress saved.`);
   }
 
   /** "Close" below the canvas — always confirms first, since it discards unsaved changes. */
@@ -549,11 +803,16 @@ export class DestinationWizardComponent implements OnInit {
     }).subscribe({
       next: res => {
         if (res.connected) {
-          this.sqlTables.set(res.tables);
+          // Tagged 'probed' so a MappingSnapshot can tell these apart from anything the user creates
+          // afterwards via "+ Add a table"/"+ Add column" (onTableCreated/onColumnAdded, both 'userCreated').
+          this.sqlTables.set(res.tables.map(t => ({
+            ...t,
+            origin: 'probed',
+            columns: t.columns.map(c => ({ ...c, origin: 'probed' })),
+          })));
           this.probeState.set('ok');
           if (this.step() < this.TOTAL_STEPS) {
-            this.step.update(x => x + 1);
-            this._hasProgressed.set(true);
+            this.provisionDestinationConnection(() => this._advancePastStep1());
           }
         } else {
           this.probeState.set('error');
@@ -709,13 +968,161 @@ export class DestinationWizardComponent implements OnInit {
     return table ? table.columns.map(c => c.name) : [];
   }
 
+  /** Real data type (e.g. "nvarchar(50)") of one column on any already-known SQL table — undefined for
+   *  CSV destinations or free-text/pending columns that have no real schema behind them yet. Purely a
+   *  display concern for the mapping canvas's cards; column identity everywhere else stays the name. */
+  dataTypeForTableColumn(tableFullName: string, column: string): string | undefined {
+    const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
+    return table?.columns.find(c => c.name === column)?.dataType;
+  }
+
   // ── data groups ───────────────────────────────────────────────────────────
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
 
+  /** Currently-selected resources that transitively require `r` — non-empty means `r` can't be
+   *  deselected right now (see resource-dependency.config.ts). */
+  lockingDependentsFor(r: string): string[] { return lockingDependentsOf(r, this.selectedResources()); }
+
+  isResourceLocked(r: string): boolean {
+    return this.isResourceSelected(r) && this.lockingDependentsFor(r).length > 0;
+  }
+
+  /** Currently-selected resources that recommend (but don't require) `r` — only meaningful while `r`
+   *  itself isn't selected yet, since a selected resource has nothing left to be recommended for. */
+  private recommendedByFor(r: string): string[] {
+    if (this.isResourceSelected(r)) return [];
+    return this.selectedResources().filter(sel => recommendedFor(sel).includes(r));
+  }
+
+  /** Small explanatory line rendered under a resource card: why it was auto-selected (required by …),
+   *  or why it's suggested (recommended alongside …). Null when neither applies. */
+  resourceHintFor(r: string): string | null {
+    if (this.isResourceSelected(r)) {
+      const dependents = this.lockingDependentsFor(r);
+      return dependents.length ? `Required by ${dependents.join(', ')}` : null;
+    }
+    const suggestedBy = this.recommendedByFor(r);
+    return suggestedBy.length ? `Recommended alongside ${suggestedBy.join(', ')}` : null;
+  }
+
   toggleResource(r: string): void {
-    this.selectedResources.update(list =>
-      list.includes(r) ? list.filter(x => x !== r) : [...list, r]
-    );
+    if (this.isResourceSelected(r)) {
+      const dependents = this.lockingDependentsFor(r);
+      if (dependents.length) {
+        this.toast.warning(
+          'Required resource',
+          `${r} is required by ${dependents.join(', ')} — remove ${dependents.length > 1 ? 'them' : 'it'} first.`,
+        );
+        return;
+      }
+      this.selectedResources.update(list => list.filter(x => x !== r));
+      return;
+    }
+
+    // Auto-select this resource's required dependencies too (transitively) — but only ones actually
+    // offered as a card here; a dependency the current catalog doesn't offer has nowhere to render.
+    const available = this.availableGroups();
+    const current = this.selectedResources();
+    const autoAdded = requiredClosureFor(r).filter(dep => available.includes(dep) && !current.includes(dep));
+    this.selectedResources.update(list => [...list, r, ...autoAdded]);
+
+    if (autoAdded.length) {
+      this.toast.info('Required resources added', `${autoAdded.join(', ')} added automatically — required by ${r}.`);
+    }
+  }
+
+  // ── drag-to-reorder the Step 3 data-group rows ──────────────────────────────
+  // Plain pointer-capture dragging (no CDK, no native HTML5 DnD) — matches the convention already used
+  // everywhere else in this feature (canvas cards, tree-node drag, join-popover header drag). Smoothed
+  // with a FLIP animation (capture rects before the reorder, let it happen, then animate FROM the old
+  // position TO the new one) since a plain DOM/array reorder otherwise just snaps rows into place —
+  // and a midpoint threshold so hovering right at a row's edge doesn't flicker the order back and forth.
+  readonly draggingResource = signal<string | null>(null);
+  private readonly groupsTableBody = viewChild<ElementRef<HTMLElement>>('groupsBody');
+
+  private moveResource(dragged: string, target: string): void {
+    if (dragged === target) return;
+    this.selectedResources.update(list => {
+      const from = list.indexOf(dragged);
+      const to = list.indexOf(target);
+      if (from === -1 || to === -1) return list;
+      const next = [...list];
+      next.splice(from, 1);
+      next.splice(to, 0, dragged);
+      return next;
+    });
+  }
+
+  /** Runs `reorder`, then slides every displaced row from its pre-reorder position to its new one
+   *  (the classic FLIP technique) instead of letting the browser just snap them into place.
+   *
+   *  Uses afterNextRender() rather than a raw requestAnimationFrame() to read the "after" positions —
+   *  a plain rAF scheduled right after a signal update has NO guaranteed ordering against when Angular
+   *  actually commits that update to the DOM (this matters most under zoneless change detection, where
+   *  there's no zone.js task-boundary flush to piggyback on). Measuring too early reads the still-old
+   *  layout, computes a zero delta for every row, skips the animation entirely, and the reorder then
+   *  just snaps into place a frame later — which is exactly "not smooth". afterNextRender() is the
+   *  API Angular provides specifically to run code only once a render has actually been committed. */
+  private animateReorder(reorder: () => void): void {
+    const body = this.groupsTableBody()?.nativeElement;
+    if (!body) { reorder(); return; }
+
+    const before = new Map<string, DOMRect>();
+    body.querySelectorAll<HTMLElement>('[data-resource-row]').forEach(row => {
+      before.set(row.dataset['resourceRow']!, row.getBoundingClientRect());
+    });
+
+    reorder();
+
+    afterNextRender(() => {
+      body.querySelectorAll<HTMLElement>('[data-resource-row]').forEach(row => {
+        const oldRect = before.get(row.dataset['resourceRow']!);
+        if (!oldRect) return;
+        const dy = oldRect.top - row.getBoundingClientRect().top;
+        if (!dy) return;
+        // Jump back to the old spot with no transition, force a reflow so that's actually painted,
+        // then clear the transform on the NEXT frame — the row's own CSS transition animates this
+        // last step. (This inner part IS a plain browser paint-cycle concern, not an Angular-render
+        // one, so a raw rAF is correct and sufficient here.)
+        row.style.transition = 'none';
+        row.style.transform = `translateY(${dy}px)`;
+        row.getBoundingClientRect();
+        requestAnimationFrame(() => {
+          row.style.transition = '';
+          row.style.transform = '';
+        });
+      });
+    }, { injector: this.injector });
+  }
+
+  onGroupRowDragHandlePointerDown(r: string, ev: PointerEvent): void {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    this.draggingResource.set(r);
+  }
+
+  onGroupRowDragPointerMove(ev: PointerEvent): void {
+    const dragged = this.draggingResource();
+    if (!dragged) return;
+    const overRow = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
+      ?.closest<HTMLElement>('[data-resource-row]');
+    const overResource = overRow?.dataset['resourceRow'];
+    if (!overResource || overResource === dragged) return;
+
+    const list = this.selectedResources();
+    const movingDown = list.indexOf(dragged) < list.indexOf(overResource);
+    const midpoint = overRow!.getBoundingClientRect().top + overRow!.getBoundingClientRect().height / 2;
+    const pastMidpoint = movingDown ? ev.clientY > midpoint : ev.clientY < midpoint;
+    if (!pastMidpoint) return;
+
+    this.animateReorder(() => this.moveResource(dragged, overResource));
+  }
+
+  onGroupRowDragPointerUp(ev: PointerEvent): void {
+    const el = ev.currentTarget as HTMLElement;
+    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    this.draggingResource.set(null);
   }
 
   // ── per-resource target (file name / table) ────────────────────────────────
@@ -736,6 +1143,8 @@ export class DestinationWizardComponent implements OnInit {
   // component doesn't see a new function identity (and re-render) on every change-detection tick.
   readonly availableFieldsFn = (r: string): ResourceFieldDef[] => this.availableFields(r);
   readonly columnsForResourceTargetFn = (r: string): string[] => this.columnsForResourceTarget(r);
+  readonly dataTypeForTableColumnFn = (tableFullName: string, column: string): string | undefined =>
+    this.dataTypeForTableColumn(tableFullName, column);
 
   // ── private ───────────────────────────────────────────────────────────────
   // Seeds the per-resource target (file name / table) for newly-selected resources
@@ -765,6 +1174,7 @@ export class DestinationWizardComponent implements OnInit {
 
   private _populateFromNode(node: CanvasNode): void {
     const f = node.fields ?? {};
+    this.resolvedDestinationId.set(f['destinationId'] || null);
     if (this.destType() === 'sql') {
       this.sqlForm.patchValue({
         name:      f['dest_name']      || 'SQL Production',
@@ -804,6 +1214,15 @@ export class DestinationWizardComponent implements OnInit {
     if (f['dest_sourcePayloadFields']) {
       try { this.payloadFieldsByResource.set(JSON.parse(f['dest_sourcePayloadFields'])); } catch { /* ignore malformed */ }
     }
+    // Preferred: the canonical Mapping JSON — restores tables/relations/mappings in one shot, including
+    // anything dest_mappings_v2 alone can't (e.g. which extra tables are children, and of what). Falls
+    // back to dest_mappings_v2/dest_mappings for nodes saved before this contract existed.
+    if (f['dest_mapping_summary_v1']) {
+      try {
+        this.loadMappingSummary(JSON.parse(f['dest_mapping_summary_v1']) as MappingSummaryDocument);
+        return;
+      } catch { /* fall through to the older loaders below */ }
+    }
     if (f['dest_mappings_v2']) {
       try {
         this.mappingRows.set(JSON.parse(f['dest_mappings_v2']) as MappingRow[]);
@@ -818,13 +1237,11 @@ export class DestinationWizardComponent implements OnInit {
     }
   }
 
-  private _save(): void {
-    const type = this.destType();
-    const config: Record<string, string> = {
-      dest_resources: this.selectedResources().join(','),
-    };
-
-    if (type === 'sql') {
+  // Connection-only fields (server/database/auth for SQL; folder/sftp for CSV), keyed the same way both
+  // _save() and provisionDestinationConnection() need them — shared so the two never drift apart.
+  private _buildConnectionConfig(): Record<string, string> {
+    const config: Record<string, string> = {};
+    if (this.destType() === 'sql') {
       const v = this.sqlForm.value;
       config['dest_name']      = v.name      ?? '';
       config['dest_server']    = v.server    ?? '';
@@ -855,6 +1272,69 @@ export class DestinationWizardComponent implements OnInit {
         config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
       }
     }
+    return config;
+  }
+
+  // Creates (or updates, if Step 1 was already provisioned earlier this session) the real DestinationConfiguration
+  // as soon as Step 1's connection details are complete — so a real destinationId exists immediately, the same way
+  // sourceConnectionId now does for the Epic source wizard (see wizard.service.ts's save()), rather than only after
+  // the whole workflow gets built. Skipped when reusing an existing connection (selectedExistingId already has a
+  // real id) or when editing a destination whose connection came from an "existing" pick (same reason).
+  private provisionDestinationConnection(onDone: () => void): void {
+    if (this.connectionMode() === 'existing') {
+      onDone();
+      return;
+    }
+
+    const config = this._buildConnectionConfig();
+    const isSql = this.isSql();
+    const name = config['dest_name'] || (isSql ? 'SQL Destination' : 'File Destination');
+    const secretName = newSecretName(name);
+    const request: CreateDestinationConfigurationRequest = isSql
+      ? {
+          name,
+          destinationType: 'SqlServer',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: null,
+          inlineSecret: buildSqlConnectionString(config),
+          connectionMetadataJson: buildConnectionMetadata(config, true),
+        }
+      : {
+          name,
+          destinationType: config['dest_storageType'] === 'sftp' ? 'Sftp' : 'Csv',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: config['dest_filePattern'] || null,
+          inlineSecret: config['dest_storageType'] === 'sftp' ? buildSftpUri(config) : (config['dest_folder'] || ''),
+          connectionMetadataJson: buildConnectionMetadata(config, false),
+        };
+
+    const existingId = this.resolvedDestinationId();
+    this.provisioningDestination.set(true);
+    const obs = existingId
+      ? this.destinationConfigSvc.update(existingId, request)
+      : this.destinationConfigSvc.create(request);
+    obs.subscribe({
+      next: dto => {
+        this.resolvedDestinationId.set(dto.id);
+        this.provisioningDestination.set(false);
+        onDone();
+      },
+      error: err => {
+        this.provisioningDestination.set(false);
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to create the destination connection.';
+        this.toast.show('Destination not created', typeof msg === 'string' ? msg : 'Failed to create the destination connection.');
+      },
+    });
+  }
+
+  private _save(): void {
+    const type = this.destType();
+    const config: Record<string, string> = {
+      dest_resources: this.selectedResources().join(','),
+      ...this._buildConnectionConfig(),
+    };
 
     // Reusing an existing DestinationConfiguration — three outcomes depending on what, if anything, the form
     // still differs from what selectExisting() patched in:
@@ -880,6 +1360,12 @@ export class DestinationWizardComponent implements OnInit {
           ? this._resolveUniqueName(currentName, false)
           : this._resolveUniqueName(selected.name, true);
       }
+    } else if (this.connectionMode() === 'new' && this.resolvedDestinationId()) {
+      // Step 1 already created/updated the real DestinationConfiguration with these exact connection details
+      // (see provisionDestinationConnection) — mark it resolved so workflow-build-assembler.service.ts doesn't
+      // redundantly recreate the secret under a new name on every build.
+      config['destinationId'] = this.resolvedDestinationId()!;
+      config['destinationResolved'] = 'true';
     }
 
     // Persist per-resource targets + the actual field mappings (previously discarded).
@@ -892,6 +1378,21 @@ export class DestinationWizardComponent implements OnInit {
     config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
     config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource()));
     config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
+    // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
+    // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
+    // preview modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children
+    // and of what (childTableRelationsByTable).
+    config['dest_mapping_summary_v1'] = JSON.stringify(buildMappingSummaryDocument({
+      sourceVendor: this.sourceVendor().toUpperCase(),
+      destType: type,
+      destLabel: this.destLabel(),
+      mappingRows: this.mappingRows(),
+      sqlTables: this.sqlTables(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+      availableFields: this.availableFieldsFn,
+      sourceConnectionId: this.sourceConnectionId(),
+      destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+    }));
 
     this.saved.emit({
       attachNode:  this.attachNode(),

@@ -21,23 +21,102 @@
       <table class="data-table">
         <thead class="data-table__header">
           <tr>
-            <th>Destination</th>
-            <th>Mode</th>
             <th>Source field(s)</th>
+            <th>Mode</th>
+            <th>Destination</th>
+            <th>Join delimiter</th>
+            <th>Instance selection</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           @for (row of rows(); track rowKey(row)) {
             <tr class="data-table__row">
-              <td class="fm-mono">{{ row.tableName || row.resource }}.{{ row.targetName }}</td>
+              <td class="fm-mono">{{ sourceSummary(row) }}</td>
               <td>
                 {{ modeLabel(row) }}
                 @if (isApproximated()(row)) {
                   <span class="fm-list-caveat" title="Preview only — not yet enforced by the pipeline engine">⚠</span>
                 }
               </td>
-              <td class="fm-mono">{{ sourceSummary(row) }}</td>
+              <td class="fm-mono">{{ row.tableName || row.resource }}.{{ row.targetName }}</td>
+              <td>
+                @if (showsDelimiter(row)) {
+                  <select
+                    class="fm-inline-select"
+                    [value]="isCustomDelimiter(row) ? '__custom' : (row.delimiter ?? ',')"
+                    (change)="onDelimiterSelectChange(row, $any($event.target).value)"
+                  >
+                    @for (d of stdDelimiters; track d) { <option [value]="d">{{ d }}</option> }
+                    <option value="__custom">custom…</option>
+                  </select>
+                  @if (isCustomDelimiter(row)) {
+                    <input
+                      type="text" class="fm-inline-input" placeholder="delim"
+                      [value]="row.delimiter ?? ''"
+                      (input)="onDelimiterCustomInput(row, $any($event.target).value)"
+                    />
+                  }
+                } @else {
+                  <span class="fm-list-dash">—</span>
+                }
+              </td>
+              <td>
+                @if (hasArrayAncestor(row)) {
+                  <select
+                    class="fm-inline-select"
+                    [value]="row.instance?.type ?? 'first'"
+                    (change)="onInstanceTypeChange(row, $any($event.target).value)"
+                  >
+                    <option value="all">All records</option>
+                    <option value="first">First</option>
+                    <option value="nth">Nth</option>
+                    <option value="criteria">Criteria</option>
+                  </select>
+                  @switch (row.instance?.type) {
+                    @case ('nth') {
+                      <input
+                        type="number" min="1" class="fm-inline-input fm-inline-input--narrow"
+                        [value]="row.instance?.n ?? 1"
+                        (change)="onInstanceNChange(row, +$any($event.target).value)"
+                      />
+                    }
+                    @case ('criteria') {
+                      <input
+                        type="text" class="fm-inline-input" placeholder="field"
+                        [value]="row.instance?.field ?? ''"
+                        (change)="onInstanceCriteriaChange(row, $any($event.target).value, row.instance?.op ?? '=', row.instance?.value ?? '')"
+                      />
+                      <select
+                        class="fm-inline-select"
+                        [value]="row.instance?.op ?? '='"
+                        (change)="onInstanceCriteriaChange(row, row.instance?.field ?? '', $any($event.target).value, row.instance?.value ?? '')"
+                      >
+                        <option value="=">equals</option>
+                        <option value="contains">contains</option>
+                        <option value="!=">not equals</option>
+                      </select>
+                      <input
+                        type="text" class="fm-inline-input" placeholder="value"
+                        [value]="row.instance?.value ?? ''"
+                        (change)="onInstanceCriteriaChange(row, row.instance?.field ?? '', row.instance?.op ?? '=', $any($event.target).value)"
+                      />
+                    }
+                    @case ('all') {
+                      <label class="fm-inline-checkbox">
+                        <input
+                          type="checkbox"
+                          [checked]="row.instance?.aggregate === 'csv'"
+                          (change)="onInstanceAggregateChange(row, $any($event.target).checked)"
+                        />
+                        combine as one delimited row
+                      </label>
+                    }
+                  }
+                } @else {
+                  <span class="fm-list-dash">—</span>
+                }
+              </td>
               <td>
                 <button type="button" class="fm-list-link" (click)="onEdit(row, $event)">Edit…</button>
                 <button type="button" class="fm-list-link fm-list-link--danger" (click)="onRemove(row)">Remove</button>
@@ -45,7 +124,7 @@
             </tr>
           }
           @if (!rows().length && !draft()) {
-            <tr><td colspan="4" class="fm-list-empty">No mappings yet — drag a field onto a column, or use "+ Add mapping" below.</td></tr>
+            <tr><td colspan="6" class="fm-list-empty">No mappings yet — drag a field onto a column, or use "+ Add mapping" below.</td></tr>
           }
         </tbody>
       </table>

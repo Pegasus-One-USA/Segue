@@ -1,0 +1,49 @@
+<div
+  class="fm-editcol-backdrop"
+  tabindex="0"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="fm-editcol-title"
+  (click)="onBackdropClick($event)"
+  (keydown.escape)="onEscape()"
+>
+  <div class="fm-editcol-dialog">
+    <h3 class="fm-editcol-title" id="fm-editcol-title">Edit column on {{ tableName() }}</h3>
+    <p class="fm-editcol-subtitle">This runs a real ALTER TABLE (and a rename, if the name changes) against your destination database.</p>
+
+    <label class="fm-editcol-field">
+      <span class="text-label">Column name<span class="req">*</span></span>
+      <input
+        #nameInput
+        class="fm-editcol-input"
+        [value]="columnName()"
+        (input)="onColumnNameInput($any($event.target).value)"
+        placeholder="e.g. MiddleName"
+        [disabled]="submitting()"
+      />
+    </label>
+
+    <label class="fm-editcol-field">
+      <span class="text-label">Data type<span class="req">*</span></span>
+      <select
+        class="fm-editcol-select"
+        [value]="dataType()"
+        (change)="onDataTypeChange($any($event.target).value)"
+        [disabled]="submitting()"
+      >
+        @for (t of dataTypes(); track t) { <option [value]="t">{{ t }}</option> }
+      </select>
+    </label>
+
+    @if (error()) {
+      <p class="fm-editcol-error">{{ error() }}</p>
+    }
+
+    <div class="fm-editcol-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="cancelled.emit()">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="!canSubmit()" (click)="submit()">
+        {{ submitting() ? 'Saving…' : 'Save changes' }}
+      </button>
+    </div>
+  </div>
+</div>

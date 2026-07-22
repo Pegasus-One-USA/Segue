@@ -17,14 +17,25 @@ using System.Text.RegularExpressions;
 (string ResourceName, string FileName)[] targetTemplates =
 [
     ("Patient", "patient_template.epic-r4.json"),
+    ("AllergyIntolerance", "allergyintolerance_template.epic-r4.json"),
+    ("Condition", "condition_template.epic-r4.json"),
+    ("DiagnosticReport", "diagnosticreport_template.epic-r4.json"),
+    ("Encounter", "encounter_template.epic-r4.json"),
+    ("MedicationAdministration", "medicationadministration_template.epic-r4.json"),
+    ("MedicationRequest", "medicationrequest_template.epic-r4.json"),
+    ("Observation", "observation_template.epic-r4.json"),
+    ("Practitioner", "practitioner_template.epic-r4.json"),
+    ("Procedure", "procedure_template.epic-r4.json"),
+    ("ServiceRequest", "servicerequest_template.epic-r4.json"),
 ];
 
 var templatesDir = Path.GetFullPath(Path.Combine(
     AppContext.BaseDirectory, "..", "..", "..", "..", "..",
     "src", "FHIRBridge.Application", "Mapping", "Catalog", "EpicTemplates"));
 
+// Type names are letters, optionally with digits (e.g. "Base64Binary") — [A-Za-z]+ alone missed those.
 var placeholderPattern = new Regex(
-    @"^<(?<type>[A-Za-z]+)\s*·\s*(?<card>\d+\.\.(?:\d+|\*))(?:\s*·\s*(?<req>required))?>$",
+    @"^<(?<type>[A-Za-z][A-Za-z0-9]*)\s*·\s*(?<card>\d+\.\.(?:\d+|\*))(?:\s*·\s*(?<req>required))?>$",
     RegexOptions.Compiled);
 
 // Mirrors FHIRBridge.Infrastructure.Normalization.Steps.ExtensionFlatteningNormalizationStep.DefaultRules —

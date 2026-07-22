@@ -37,6 +37,7 @@
           [sqlTableOptions]="sqlTableOptions()"
           [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
           [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+          [columnDataType]="columnTypeOn(card.tableName)"
           [isArmed]="!!armedId()"
           [isApproximated]="isApproximatedFn"
           [x]="positionForKey(card.tableName, i).x"
@@ -48,6 +49,8 @@
           (positionChange)="onCardPositionChange(card.tableName, $event)"
           (removeTable)="onRemoveExtraTable(card.tableName)"
           (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+          (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
+          (createTableRequested)="openCreateTableModal(card.resource, true)"
         />
       }
 
@@ -67,42 +70,31 @@
         [row]="row"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
-        (close)="closePopover()"
+        (closed)="closePopover()"
       />
     }
 
     @if (resources()[0]; as primaryResource) {
       @if (!drawerOpen()) {
       <div class="fm-add-table-slot">
-        @if (hasSqlTables() && !creatingNewTable()) {
+        @if (hasSqlTables()) {
           <select
             class="fm-add-table-select"
             [value]="''"
             (change)="onAddTableSelectChange(primaryResource, $any($event.target).value); $any($event.target).value = ''"
           >
             <option value="" disabled selected>＋ Add a table from your database…</option>
+            <option [value]="createNewTableOption">✎ Create a new table…</option>
             @for (t of availableTablesToAdd()(primaryResource); track t) {
               <option [value]="t">{{ t }}</option>
             }
-            <option [value]="createNewTableOption">✎ Create a new table…</option>
           </select>
         } @else {
-          <div class="fm-add-table-new-row">
-            <input
-              class="fm-add-table-select"
-              placeholder="＋ Add a table — type a name and press Enter…"
-              (keydown.enter)="onCreateExtraTable(primaryResource, $any($event.target).value); $any($event.target).value = ''"
-            />
-            @if (hasSqlTables()) {
-              <button
-                type="button"
-                class="fm-add-table-cancel"
-                title="Back to existing tables"
-                aria-label="Back to existing tables"
-                (click)="creatingNewTable.set(false)"
-              >✕</button>
-            }
-          </div>
+          <button
+            type="button"
+            class="fm-add-table-select fm-add-table-createbtn"
+            (click)="openCreateTableModal(primaryResource)"
+          >＋ Create a new table…</button>
         }
       </div>
       }
@@ -155,6 +147,8 @@
     (addRow)="onListAddRow($event)"
     (removeRow)="onListRemoveRow($event)"
     (editRow)="onEditRow($event)"
+    (delimiterChanged)="onListDelimiterChange($event)"
+    (instanceChanged)="onListInstanceChange($event)"
   />
 
   <app-field-mapping-preview-drawer
@@ -167,6 +161,17 @@
     (closed)="closeDrawer()"
   />
 
+  @if (creatingNewTable()) {
+    <app-field-mapping-create-table-modal
+      [existingTables]="sqlTableOptions()"
+      [columnsForTable]="columnsForTable()"
+      [submitting]="creatingTableSubmitting()"
+      [error]="creatingTableError()"
+      (submitted)="submitCreateTable($event)"
+      (cancelled)="closeCreateTableModal()"
+    />
+  }
+
   @if (addColumnTarget(); as t) {
     <app-field-mapping-add-column-modal
       [tableName]="t.tableName"
@@ -174,6 +179,18 @@
       [error]="addColumnError()"
       (submitted)="submitAddColumn($event)"
       (cancelled)="closeAddColumnModal()"
+    />
+  }
+
+  @if (editColumnTarget(); as t) {
+    <app-field-mapping-edit-column-modal
+      [tableName]="t.tableName"
+      [currentColumnName]="t.columnName"
+      [currentDataType]="dataTypeForTable()(t.tableName, t.columnName)"
+      [submitting]="editColumnSubmitting()"
+      [error]="editColumnError()"
+      (submitted)="submitEditColumn($event)"
+      (cancelled)="closeEditColumnModal()"
     />
   }
 

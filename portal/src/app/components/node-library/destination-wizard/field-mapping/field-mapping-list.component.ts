@@ -1,7 +1,11 @@
 import { Component, HostBinding, computed, inject, input, output, signal } from '@angular/core';
 import { MappingRow, MappingInstanceSelection } from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
+import { nearestArrayGroupId } from './field-mapping-summary.model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
+
+const STD_DELIMITERS = [',', '|', ';'];
+type InstanceType = MappingInstanceSelection['type'];
 
 interface NewMappingDraft {
   resource: string;
@@ -55,6 +59,10 @@ export class FieldMappingListComponent {
   readonly addRow = output<MappingRow>();
   readonly removeRow = output<{ resource: string; tableName: string; targetName: string }>();
   readonly editRow = output<{ resource: string; tableName: string; targetName: string; invoker: HTMLElement }>();
+  /** Inline edits from this row's own delimiter/instance controls — no popover required, mirroring the
+   *  reference mockup's bottom panel. */
+  readonly delimiterChanged = output<{ resource: string; tableName: string; targetName: string; delimiter: string }>();
+  readonly instanceChanged = output<{ resource: string; tableName: string; targetName: string; instance: MappingInstanceSelection }>();
 
   readonly collapsed = signal(false);
   readonly draft = signal<NewMappingDraft | null>(null);
@@ -121,6 +129,59 @@ export class FieldMappingListComponent {
     return row.sources.length > 1 ? `Joined ×${row.sources.length}` : 'Direct';
   }
 
+  // ── inline delimiter / instance-selection controls ──────────────────────────────────────────────
+  readonly stdDelimiters = STD_DELIMITERS;
+
+  showsDelimiter(row: MappingRow): boolean { return row.mode === 'value' && row.sources.length > 1; }
+
+  /** Whether this row sits under a repeating source (childJson's own node, or the leaf's nearest
+   *  enclosing array group) — showing "which instance?" only makes sense when there's something to pick
+   *  an instance of. */
+  hasArrayAncestor(row: MappingRow): boolean {
+    const startId = row.mode === 'childJson' ? row.childNodeId : row.sources[0]?.fhirPath;
+    if (!startId) return false;
+    const root = this.forest().find(r => r.resource === row.resource);
+    return !!root && nearestArrayGroupId(this.forest(), startId) !== null;
+  }
+
+  isCustomDelimiter(row: MappingRow): boolean {
+    return !STD_DELIMITERS.includes(row.delimiter ?? ',');
+  }
+
+  onDelimiterSelectChange(row: MappingRow, value: string): void {
+    if (value === '__custom') return; // the custom text input drives the actual change
+    this.delimiterChanged.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName, delimiter: value });
+  }
+
+  onDelimiterCustomInput(row: MappingRow, value: string): void {
+    this.delimiterChanged.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName, delimiter: value || ',' });
+  }
+
+  onInstanceTypeChange(row: MappingRow, type: InstanceType): void {
+    this.instanceChanged.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName, instance: { ...row.instance, type } });
+  }
+
+  onInstanceNChange(row: MappingRow, n: number): void {
+    this.instanceChanged.emit({
+      resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+      instance: { ...row.instance, type: 'nth', n: n || 1 },
+    });
+  }
+
+  onInstanceCriteriaChange(row: MappingRow, field: string, op: MappingInstanceSelection['op'], value: string): void {
+    this.instanceChanged.emit({
+      resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+      instance: { ...row.instance, type: 'criteria', field, op, value },
+    });
+  }
+
+  onInstanceAggregateChange(row: MappingRow, checked: boolean): void {
+    this.instanceChanged.emit({
+      resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+      instance: { ...row.instance, type: 'all', aggregate: checked ? 'csv' : 'rows' },
+    });
+  }
+
   onRemove(row: MappingRow): void {
     this.removeRow.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName });
   }
@@ -136,7 +197,7 @@ export class FieldMappingListComponent {
   startDraft(): void {
     const resource = this.resources()[0] ?? '';
     const tableName = this.tablesForResource()(resource)[0] ?? '';
-    this.draft.set({ resource, tableName, mode: 'value', sourcePaths: [''], childNodeId: '', targetName: '', instanceType: 'first' });
+    this.draft.set({ resource, tableName, mode: 'value', sourcePaths: [''], childNodeId: '', targetName: '', instanceType: 'all' });
   }
 
   cancelDraft(): void { this.draft.set(null); }

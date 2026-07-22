@@ -3,12 +3,15 @@
 .fm-source-card {
   position: absolute;
   z-index: 2;
-  width: 340px;
-  height: 420px;
+  // Wider by default (was 340px) so the header has room for kind + name + search without any of them
+  // feeling cramped right out of the gate — still freely resizable beyond this, see below.
+  width: 400px;
+  // Auto-height so the card grows to fit the whole payload tree by default — no inner scrollbar hiding
+  // fields. Still freely resizable (including shorter) via the native resize handle below.
+  height: auto;
   min-width: 260px;
   max-width: 720px;
   min-height: 160px;
-  max-height: 1200px;
   display: flex;
   flex-direction: column;
   // resize needs overflow other than the default `visible` to reliably show the drag handle across
@@ -19,6 +22,26 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-xs);
+
+  // The native resize handle is barely visible against this card's light body — draw an explicit grip
+  // so the affordance is actually discoverable (matches field-mapping-join-popover.component.scss's
+  // same fix). Purely cosmetic (pointer-events: none): the browser's own resize hit-area still does the
+  // real work underneath it.
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    width: 13px;
+    height: 13px;
+    pointer-events: none;
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--color-muted-2) 0 1.5px,
+      transparent 1.5px 4px
+    );
+  }
 }
 
 .fm-source-head {
@@ -47,12 +70,74 @@
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 13px;
+  flex-shrink: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// A "glass" search box on the card's dark header, rather than a standard surface input (which would be
+// unreadable here) — mirrors the translucent-white overlay treatment already used for node rings/badges
+// elsewhere in this feature (e.g. source-node.component.scss), just applied to a header control instead.
+.fm-source-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  cursor: default;
+}
+
+.fm-source-search {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--color-on-primary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: text;
+
+  &::placeholder { color: rgba(255, 255, 255, 0.65); }
+  &::-webkit-search-cancel-button { display: none; }
+
+  &:focus-visible {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+.fm-source-search-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-on-primary);
+  opacity: 0.75;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { opacity: 1; background: rgba(255, 255, 255, 0.14); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+}
+
+.fm-source-no-match {
+  padding: var(--space-8, 16px);
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--color-muted);
 }
 
 .fm-source-rows {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+  // No flex/overflow here on purpose — the card is height:auto specifically so this area never needs
+  // its own scrollbar; it just grows with the card to show every field.
   background: var(--color-surface);
 }
 

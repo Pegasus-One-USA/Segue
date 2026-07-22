@@ -35,6 +35,11 @@ export interface MappingRow {
   instance?: MappingInstanceSelection;
   targetName: string;
   tableName: string;
+  /** No UI control sets these yet (the wire format hardcodes false/null/null) — present only so a
+   *  MappingSnapshot round-trips the full backend field shape once a control exists. */
+  isRequired?: boolean;
+  defaultValue?: string | null;
+  format?: string | null;
 }
 
 /** The legacy flat shape already round-tripped through node.fields['dest_mappings']. */

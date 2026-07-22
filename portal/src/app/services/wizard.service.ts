@@ -5,7 +5,6 @@ import { ToastService } from './toast.service';
 import { EPIC_APPS } from '../data/epic-apps.data';
 import { EPIC_ENV } from '../data/epic-environments.data';
 import { EPIC_INGESTION } from '../data/ingestion-modes.data';
-import { DEFAULT_RESOURCES } from '../data/scope-constants.data';
 import { AppKey, EpicApp } from '../models/epic-app.model';
 import { EnvKey } from '../models/epic-env.model';
 import { SourceNode } from '../models/node.model';
@@ -112,7 +111,9 @@ export class WizardService {
   readonly discovered = signal(false);
 
   // ── resources + scopes ────────────────────────────────────────────────────
-  readonly resources = signal<string[]>([...DEFAULT_RESOURCES]);
+  // Empty until the user actually checks boxes (or an existing node/connection is loaded) — nothing is
+  // ever preselected by default.
+  readonly resources = signal<string[]>([]);
 
   // Live-discovered from the source's /metadata + smart-configuration (populated by the Connect step's Discover).
   readonly discoveredResourceTypes = signal<string[]>([]);
@@ -183,7 +184,7 @@ export class WizardService {
     this.resources.set(
       f['Resources']
         ? f['Resources'].split(',').map(s => s.trim()).filter(Boolean)
-        : [...DEFAULT_RESOURCES]
+        : []
     );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.mode.set(f['Ingestion mode'] || gate?.default || 'search');
@@ -221,7 +222,7 @@ export class WizardService {
     this.resources.set(
       dto?.retrieval?.resourceTypes?.length
         ? [...dto.retrieval.resourceTypes]
-        : [...DEFAULT_RESOURCES]
+        : []
     );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.setMode(gate?.default || 'search');
@@ -344,36 +345,9 @@ export class WizardService {
       fields['Secret Name']     = (formValues.secretName ?? '').trim();
     }
 
-    if (this.wizardMode() === 'canvas') {
-      const editingId = this.store.editingNodeId();
-      if (editingId) {
-        // Merge onto the node's existing fields rather than replacing them outright — this form only manages a
-        // subset of keys (connection/auth/retrieval); server-injected machine keys like sourceConnectionId (added
-        // by create-on-save, never surfaced as a form control) must survive an edit untouched.
-        const previousFields = this.store.byId(editingId)?.fields ?? {};
-        this.store.updateNode(editingId, { fields: { ...previousFields, ...fields }, connected: this.connected() } as any);
-        this.toast.show('Epic updated', `${fields['__name']} saved.`);
-      } else {
-        const count = this.store.nodes().filter(n => !n.kind).length;
-        const newNode: SourceNode = {
-          id:        this.store.nextNodeId(),
-          kind:      undefined,
-          x:         360 + count * 60,
-          y:         320 + count * 40,
-          fields,
-          connected: this.connected(),
-          abbr:      'EP',
-          color:     '#ff5a4f',
-        };
-        this.store.addNode(newNode);
-        this.toast.show('Epic added', `${fields['__name']} added to the canvas.`);
-      }
-
-      this.close();
-      return;
-    }
-
-    // ── entity mode: persist to the backend SourceConnection API ────────────
+    // Build the SourceConnectionRequest — same shape for canvas and entity mode. Canvas mode now also creates/
+    // updates the real backend SourceConnection immediately (rather than deferring to workflow build), so a real
+    // sourceConnectionId exists on the node right away instead of only after the whole workflow gets built.
     // Which of interactive/retrieval to send is driven by the selected audience's own field config
     // (AUDIENCE_FIELD_CONFIG), not app.interactive (a canvas-only, per-App-key concept) — Provider Standalone,
     // for example, shows BOTH a Redirect URI (interactive login) AND a Data Retrieval Method section, so it needs
@@ -424,10 +398,46 @@ export class WizardService {
         : null,
     };
 
-    const id = this.entityId();
+    const isCanvas = this.wizardMode() === 'canvas';
+    const editingId = isCanvas ? this.store.editingNodeId() : null;
+    // Canvas mode has no entityId of its own — the real id (once provisioned) lives on the node's own fields,
+    // exactly where findLaunchSourceId() and every other consumer reads it from.
+    const canvasExistingSourceConnectionId = editingId ? (this.store.byId(editingId)?.fields?.['sourceConnectionId'] || null) : null;
+    const id = isCanvas ? canvasExistingSourceConnectionId : this.entityId();
     const obs = id ? this.sourceConnectionSvc.update(id, request) : this.sourceConnectionSvc.create(request);
+
     obs.subscribe({
-      next: () => {
+      next: dto => {
+        if (isCanvas) {
+          // Stamp the real, server-created id onto the node's fields right away — the same key
+          // findLaunchSourceId()/workflow-build-assembler.service.ts already read as "already resolved".
+          fields['sourceConnectionId'] = dto.id;
+          if (editingId) {
+            // Merge onto the node's existing fields rather than replacing them outright — this form only manages
+            // a subset of keys (connection/auth/retrieval); other machine keys must survive an edit untouched.
+            const previousFields = this.store.byId(editingId)?.fields ?? {};
+            this.store.updateNode(editingId, { fields: { ...previousFields, ...fields }, connected: this.connected() } as any);
+            this.toast.show('Epic updated', `${fields['__name']} saved.`);
+          } else {
+            const count = this.store.nodes().filter(n => !n.kind).length;
+            const newNode: SourceNode = {
+              id:        this.store.nextNodeId(),
+              kind:      undefined,
+              x:         360 + count * 60,
+              y:         320 + count * 40,
+              fields,
+              connected: this.connected(),
+              abbr:      'EP',
+              color:     '#ff5a4f',
+            };
+            this.store.addNode(newNode);
+            this.toast.show('Epic added', `${fields['__name']} added to the canvas.`);
+          }
+          this.close();
+          return;
+        }
+
+        // ── entity mode: persisted to the backend SourceConnection API ──────
         this.toast.show(
           'Source Connection saved',
           id ? 'Source Connection updated successfully.' : 'Source Connection created successfully.'

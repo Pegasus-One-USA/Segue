@@ -1,14 +1,14 @@
 <app-modal-overlay [open]="open()" (closed)="close()">
   <div class="nld" [class.nld--maximized]="isMaximized()">
 
-    <!-- ── Header ──────────────────────────────────────────────────────────── -->
+    <!-- ── Header ── identity + persistent controls only. The mapping badges/tool-buttons live in
+         their own row below (.nld-mapping-toolbar) so this row's item count — and so its layout — never
+         depends on how many mapping-canvas actions exist; it fits at any dialog width, minimized or not. -->
     <div class="nld-header">
       <div class="nld-header-left">
         <span class="nld-brand-hex">⬡</span>
         @if (destMappingTitle(); as title) {
           <h2 class="nld-title">{{ title }}</h2>
-          <span class="nld-mapping-badge nld-mapping-badge--dest">{{ destMappingTypeLabel() === 'SQL Server' ? '🗄️' : '📄' }} {{ destMappingTypeLabel() }}</span>
-          <span class="nld-mapping-badge">{{ destMappingCount() }} field mapping{{ destMappingCount() === 1 ? '' : 's' }}</span>
         } @else {
           <div>
             <h2 class="nld-title">Node Library</h2>
@@ -29,11 +29,6 @@
             <span class="nld-ctx-chip">{{ pickerMeta()?.rule }}</span>
             <span class="nld-ctx-chip">{{ pickerMeta()?.cfg?.context }}</span>
           </div>
-        }
-        @if (destMappingTitle()) {
-          <button type="button" class="nld-mapping-tool-btn" (click)="bumpLoadPayloadTrigger()">⇩ Load JSON payload</button>
-          <button type="button" class="nld-mapping-tool-btn" (click)="bumpPreviewOutputTrigger()">⤢ Preview output</button>
-          <span class="nld-header-divider"></span>
         }
         <button
           class="nld-maximize"
@@ -63,6 +58,22 @@
         }
       </div>
     </div>
+
+    <!-- ── Mapping toolbar ── badges + canvas actions, on their own row so they can wrap independently
+         of the title/Close/Save row above at narrow dialog widths, instead of squeezing the title. -->
+    @if (destMappingTitle()) {
+      <div class="nld-mapping-toolbar">
+        <div class="nld-mapping-toolbar-badges">
+          <span class="nld-mapping-badge nld-mapping-badge--dest">{{ destMappingTypeLabel() === 'SQL Server' ? '🗄️' : '📄' }} {{ destMappingTypeLabel() }}</span>
+          <span class="nld-mapping-badge">{{ destMappingCount() }} field mapping{{ destMappingCount() === 1 ? '' : 's' }}</span>
+        </div>
+        <div class="nld-mapping-toolbar-actions">
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpLoadPayloadTrigger()">⇩ Load JSON payload</button>
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpPreviewOutputTrigger()">⤢ Preview output</button>
+          <button type="button" class="nld-mapping-tool-btn" title="Save just this mapping's fields/tables as an independent, reusable JSON — not the whole workflow" (click)="bumpSaveSnapshotTrigger()">💾 Save mapping snapshot</button>
+        </div>
+      </div>
+    }
 
     <!-- ── Body: sidebar + detail ──────────────────────────────────────────── -->
     <div class="nld-body">
@@ -179,8 +190,11 @@
             [attachNode]="destWizardAttach()!"
             [editNode]="destEditNode()"
             [sourceResources]="sourceResources()"
+            [sourceVendor]="wiz.ehrType()"
+            [sourceConnectionId]="sourceConnectionId()"
             [exitMappingRequest]="exitMappingTrigger()"
             [saveMappingRequest]="saveMappingTrigger()"
+            [saveSnapshotRequest]="saveSnapshotTrigger()"
             [openLoadPayloadRequest]="loadPayloadTrigger()"
             [openPreviewRequest]="previewOutputTrigger()"
             (saved)="onDestWizardSaved($event)"

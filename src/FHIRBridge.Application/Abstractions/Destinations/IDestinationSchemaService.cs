@@ -33,4 +33,11 @@ public interface IDestinationSchemaService
     /// instead. Confirming this with the user is the caller's responsibility.
     /// </summary>
     Task<SchemaMutationResultDto> DropColumnAsync(DropColumnRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes a real ALTER TABLE ... ALTER COLUMN (data type change) and/or an sp_rename (column
+    /// rename) against an ad-hoc SQL Server / Azure SQL connection. Never throws for connection/SQL
+    /// failures; returns <c>Success=false</c> + <c>Error</c> instead.
+    /// </summary>
+    Task<SchemaMutationResultDto> AlterColumnAsync(AlterColumnRequest request, CancellationToken cancellationToken);
 }

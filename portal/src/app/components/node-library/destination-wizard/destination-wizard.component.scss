@@ -193,6 +193,8 @@
   padding-left: 36px;
 }
 
+.dw-section-spacer { flex: 1; }
+
 /* ── Form ─────────────────────────────────────────────────────────────────── */
 .dw-form { width: 100%; }
 
@@ -310,6 +312,10 @@
     border-color: var(--color-primary);
     background: var(--color-primary-soft);
   }
+  &.locked {
+    border-style: dashed;
+    cursor: not-allowed;
+  }
 }
 
 .dw-rc-check {
@@ -356,6 +362,57 @@
   white-space: nowrap;
 }
 
+.dw-rc-hint {
+  display: block;
+  font-size: 10.5px;
+  font-style: italic;
+  color: var(--color-info-strong);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &--locked {
+    color: var(--color-muted-2);
+  }
+}
+
+/* ── Dev/demo: load a previously saved mapping snapshot (independent of any node/workflow) ──── */
+.dw-snapshot-load-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+  padding: 8px 10px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-alt, transparent);
+}
+
+.dw-snapshot-load-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.dw-snapshot-load-error {
+  font-size: 12px;
+  color: var(--color-error);
+  margin: -6px 0 14px;
+}
+
+.dw-snapshot-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
 /* ── Data group selection screen (Step 3, before a group is chosen) ─────────── */
 .dw-groups-table {
   border: 1px solid var(--color-border);
@@ -370,6 +427,42 @@
 }
 
 .dw-groups-actions-col { width: 100px; }
+.dw-groups-drag-col { width: 32px; }
+
+.dw-groups-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-muted-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+
+  &:hover { background: var(--color-side); color: var(--color-ink-2); }
+  &:active { cursor: grabbing; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+// Every row in this table transitions transform (the FLIP slide-into-place, driven from TS) and
+// background/opacity (the dragging-state fade below) — scoped to just this table, not the shared
+// .data-table__row class used elsewhere in the app.
+.dw-groups-table .data-table__row {
+  transition: transform 180ms ease, background-color 150ms ease, opacity 150ms ease;
+}
+
+.dw-groups-row--dragging {
+  position: relative;
+  z-index: 1;
+  opacity: 0.6;
+  background: var(--color-primary-soft);
+  box-shadow: var(--shadow-sm);
+}
 
 .dw-groups-actions {
   display: flex;

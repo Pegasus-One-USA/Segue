@@ -98,6 +98,36 @@
 
 .fm-list-link--danger { color: var(--color-error); }
 
+.fm-list-dash { color: var(--color-muted-2); }
+
+.fm-inline-select, .fm-inline-input {
+  font-family: var(--font-family);
+  font-size: 12px;
+  padding: 2px var(--space-4);
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  margin: 1px 2px 1px 0;
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-mid);
+  }
+}
+
+.fm-inline-input { width: 84px; }
+.fm-inline-input--narrow { width: 52px; }
+
+.fm-inline-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+
 .fm-list-empty {
   text-align: center;
   color: var(--color-muted-2);

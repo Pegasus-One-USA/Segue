@@ -1,5 +1,5 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, inject, input, output, viewChild } from '@angular/core';
-import { FmTreeNode } from './field-mapping-tree.util';
+import { AfterViewInit, Component, ElementRef, OnDestroy, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { FmTreeNode, filterForest, flattenLeaves } from './field-mapping-tree.util';
 import { FieldMappingTreeNodeComponent, FmDragStart, FmDragMove, FmDragEnd } from './field-mapping-tree-node.component';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 
@@ -35,6 +35,35 @@ export class FieldMappingSourceTreeComponent implements AfterViewInit, OnDestroy
   readonly positionChange = output<{ x: number; y: number }>();
 
   private dragOffset: { dx: number; dy: number } | null = null;
+
+  // ── search ────────────────────────────────────────────────────────────────
+  // Filters this card's own forest client-side (no round trip — the whole forest is already in
+  // memory). Kept local to this component: the parent's collapse-state map (isCollapsed) is only
+  // consulted while NOT searching (see effectiveIsCollapsed) so it never has to know about this.
+  readonly searchQuery = signal('');
+  readonly isSearching = computed(() => this.searchQuery().trim().length > 0);
+
+  /** Filtered roots paired with their ORIGINAL forest index, so a resource's rank color never shifts
+   *  as filtering changes which index it lands on within the filtered array. */
+  readonly filteredRoots = computed(() => {
+    const original = this.forest();
+    return filterForest(original, this.searchQuery())
+      .map(node => ({ node, colorIndex: original.findIndex(r => r.id === node.id) }));
+  });
+
+  readonly matchCount = computed(() =>
+    this.isSearching() ? this.filteredRoots().reduce((sum, r) => sum + flattenLeaves(r.node).length, 0) : 0,
+  );
+
+  /** While searching, force every surviving node open so matches are actually visible — the caller's
+   *  own fold/collapse state (isCollapsed) only applies when there's no active query. */
+  readonly effectiveIsCollapsed = computed(() => {
+    if (!this.isSearching()) return this.isCollapsed();
+    return () => false;
+  });
+
+  onSearchInput(value: string): void { this.searchQuery.set(value); }
+  clearSearch(): void { this.searchQuery.set(''); }
 
   ngAfterViewInit(): void {
     // The card is now user-resizable (CSS `resize: both`), which doesn't fire any DOM event on its

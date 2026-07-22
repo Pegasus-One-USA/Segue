@@ -47,8 +47,16 @@ export class FieldMappingWiresComponent {
   }
 
   readonly paths = computed<FmWirePath[]>(() => {
-    // Read the version signal so this recomputes whenever any anchor registers/moves.
+    // Read version/pan/zoom so this recomputes whenever any anchor registers/moves OR the viewport
+    // itself changes. Model-space coordinates are pan/zoom-invariant by construction (leftCenter/
+    // rightCenter divide the scale back out), so none of these three values are actually used in the
+    // math below — but getBoundingClientRect() is a plain, non-reactive DOM read, and without explicitly
+    // depending on pan here, a pan-only interaction (drag, scrollbar, fit-to-view) would never re-trigger
+    // this computed at all, leaving every wire's `d` frozen at stale rects from whenever version/zoom
+    // last happened to change — visibly detached from the cards, which keep moving live via pure CSS.
     this.anchors.version();
+    this.anchors.pan();
+    this.anchors.zoom();
     const out: FmWirePath[] = [];
     for (const row of this.rows()) {
       const key = `${row.resource}::${row.tableName}::${row.targetName}`;
@@ -72,6 +80,7 @@ export class FieldMappingWiresComponent {
   });
 
   readonly tempPath = computed<{ d: string; stroke: string } | null>(() => {
+    this.anchors.pan();
     const temp = this.tempWire();
     if (!temp) return null;
     const a = this.sourceAnchorPoint(temp.fromId);

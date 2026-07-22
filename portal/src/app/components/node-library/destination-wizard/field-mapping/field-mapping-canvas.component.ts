@@ -2,7 +2,7 @@ import {
   Component, ElementRef, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingSourceRef, isApproximated } from './field-mapping-model';
+import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { FieldMappingSourceTreeComponent } from './field-mapping-source-tree.component';
@@ -13,11 +13,14 @@ import { FieldMappingListComponent } from './field-mapping-list.component';
 import { FieldMappingJoinPopoverComponent } from './field-mapping-join-popover.component';
 import { FieldMappingPreviewDrawerComponent } from './field-mapping-preview-drawer.component';
 import { FieldMappingAddColumnModalComponent, FmAddColumnSubmit } from './field-mapping-add-column-modal.component';
+import { FieldMappingEditColumnModalComponent, FmEditColumnSubmit } from './field-mapping-edit-column-modal.component';
+import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './field-mapping-create-table-modal.component';
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
 import { parseSourcePayloadJson } from './field-mapping-payload.util';
+import { ChildTableRelation } from './field-mapping-summary.model';
 import { ZoomDockComponent } from '../../../canvas/zoom-dock/zoom-dock.component';
 import { ToastService } from '../../../../services/toast.service';
-import { DestinationSchemaService, DestinationColumn, DestinationProbeRequest } from '../../../../services/destination-schema.service';
+import { DestinationSchemaService, DestinationColumn, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
 
 export interface FmTargetCardSpec {
   resource: string;
@@ -47,6 +50,8 @@ export interface FmTargetCardSpec {
     FieldMappingJoinPopoverComponent,
     FieldMappingPreviewDrawerComponent,
     FieldMappingAddColumnModalComponent,
+    FieldMappingEditColumnModalComponent,
+    FieldMappingCreateTableModalComponent,
     FieldMappingLoadPayloadModalComponent,
     ZoomDockComponent,
   ],
@@ -77,6 +82,9 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   // probe already found, or (when typed as a new name) created for real via CreateTableAsync.
   readonly extraTables = input<string[]>([]);
   readonly columnsForTable = input<(tableFullName: string) => string[]>(() => []);
+  /** Real data type of one column on any already-known SQL table — undefined for CSV or free-text
+   *  columns with no real schema behind them. Purely a display concern for each target card. */
+  readonly dataTypeForTable = input<(tableFullName: string, column: string) => string | undefined>(() => undefined);
   readonly availableTablesToAdd = input<(resource: string) => string[]>(() => []);
   // Ad-hoc connection details (from the wizard's Step 1 SQL form) — powers the real ALTER TABLE /
   // CREATE TABLE calls below. Only meaningful for destType 'sql'.
@@ -93,14 +101,25 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   readonly mappingRowsChange = output<MappingRow[]>();
   readonly targetByResourceChange = output<Record<string, string>>();
   readonly extraTablesChange = output<string[]>();
-  /** A column was really added (ALTER TABLE succeeded) — the parent appends it to its own sqlTables(). */
-  readonly columnAdded = output<{ tableName: string; column: DestinationColumn }>();
+  /** A column was really added (ALTER TABLE succeeded) — the parent appends it to its own sqlTables().
+   *  `table` is only set when the target table didn't already exist and had to be auto-created — the
+   *  parent registers it as a brand-new entry rather than trying (and failing) to find an existing one. */
+  readonly columnAdded = output<{ tableName: string; column: DestinationColumn; table?: DestinationTable }>();
   /** A table was really created (CREATE TABLE succeeded) — the parent registers it in its own sqlTables(). */
-  readonly tableCreated = output<string>();
+  /** Emits the FULL created table (all columns, including the FK if this was made a child of a parent
+   *  table) — the wizard syncs this straight into its sqlTables() signal, no re-probe needed. */
+  readonly tableCreated = output<DestinationTable>();
   /** A column was really dropped (DROP COLUMN succeeded) — the parent removes it from its own sqlTables(). */
   readonly columnDropped = output<{ tableName: string; column: string }>();
+  /** A column was really altered (ALTER COLUMN + optional sp_rename succeeded) — the parent updates its
+   *  own sqlTables() entry, and re-points any mapping that targeted the old column name. */
+  readonly columnAltered = output<{ tableName: string; oldColumnName: string; column: DestinationColumn }>();
   /** A JSON payload was successfully parsed — the parent stores these fields as the resource's source tree. */
   readonly sourcePayloadLoaded = output<{ resource: string; fields: ResourceFieldDef[] }>();
+  /** A table created via "Create a new table…" was given a parent/FK relationship — the parent wizard
+   *  owns this globally (it outlives any one resource's canvas instance) so it survives navigating
+   *  between resources, node reload, and the Mapping JSON export/import. */
+  readonly childTableRelationAdded = output<{ tableName: string; relation: ChildTableRelation }>();
 
   // ── local UI state ──────────────────────────────────────────────────────
   readonly collapsedIds = signal<Set<string>>(new Set());
@@ -141,12 +160,22 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   // ── target cards: primary table + any extra tables, for the single active resource ──────
+  // The primary card is only shown once it points at a real table — a guessed default ("dbo.Encounter")
+  // that was never actually created has nothing to map onto, so a card for it would just be a dead-end
+  // placeholder. Until then, the canvas-level "+ Add a table…" control is the one way in (see
+  // onAddExtraTable/openCreateTableModal, which route there instead of "extra" while this is false).
+  private isPrimaryTargetValid(resource: string): boolean {
+    return !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetFor(resource));
+  }
+
   readonly targetCards = computed<FmTargetCardSpec[]>(() => {
     const resource = this.resources()[0];
     if (!resource) return [];
-    const primary: FmTargetCardSpec = { resource, tableName: this.targetFor(resource), isExtra: false };
+    const primary: FmTargetCardSpec[] = this.isPrimaryTargetValid(resource)
+      ? [{ resource, tableName: this.targetFor(resource), isExtra: false }]
+      : [];
     const extras: FmTargetCardSpec[] = this.extraTables().map(t => ({ resource, tableName: t, isExtra: true }));
-    return [primary, ...extras];
+    return [...primary, ...extras];
   });
 
   // ── derived data ─────────────────────────────────────────────────────────
@@ -241,13 +270,21 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
 
   /** Plain wheel/trackpad scrolls the canvas vertically (bounded, like a real scrollbar); Ctrl/Cmd+wheel
    *  zooms, anchored at the cursor — matches the vertical scrollbar's own bounded range exactly, since
-   *  both go through clampPanY/setScrollY. */
+   *  both go through clampPanY/setScrollY. Zoom still works no matter what's under the cursor, but plain
+   *  wheel defers entirely to a card's own field/column list when hovering one — preventDefault() here
+   *  would otherwise cancel the browser's native scroll on .fm-source-rows/.fm-target-rows too (it
+   *  cancels the whole wheel event's default action, not just "canvas pan"), leaving no way to actually
+   *  scroll a long list without first moving the cursor off the card entirely. */
   onViewportWheel(ev: WheelEvent): void {
-    ev.preventDefault();
     if (ev.ctrlKey || ev.metaKey) {
+      ev.preventDefault();
       this.anchors.setZoom(this.anchors.zoom() * (ev.deltaY < 0 ? 1.1 : 0.9), ev.clientX, ev.clientY);
       return;
     }
+    if ((ev.target as HTMLElement).closest('.fm-source-rows, .fm-target-rows')) {
+      return;
+    }
+    ev.preventDefault();
     this.anchors.setScrollY(this.anchors.scrollY() + ev.deltaY);
   }
 
@@ -347,6 +384,10 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     return (column: string) => this.rowForColumnFn(resource, tableName, column);
   }
 
+  columnTypeOn(tableName: string) {
+    return (column: string) => this.dataTypeForTable()(tableName, column);
+  }
+
   targetFor(resource: string): string { return this.targetByResource()[resource] ?? ''; }
 
   onTargetChange(resource: string, value: string): void {
@@ -389,25 +430,47 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   // ── extra tables ("+ Add a table from your database…") ─────────────────
-  // Whether the "+ Add a table" slot is currently showing the free-text "create a new table" input
-  // instead of the dropdown of already-known tables — toggled on by picking "Create a new table…" from
-  // the dropdown while connected, and back off once a create attempt resolves (or is cancelled).
+  // Whether the "Create a new table…" modal is currently open — toggled on by picking that option from
+  // the dropdown, and back off once a create attempt resolves (or is cancelled).
   readonly creatingNewTable = signal(false);
   readonly createNewTableOption = '__create_new_table__';
+  readonly creatingTableSubmitting = signal(false);
+  readonly creatingTableError = signal<string | null>(null);
+  private creatingTableResource: string | null = null;
+  private creatingTableAsPrimary = false;
 
-  /** Routes a dropdown selection: the special "create new" sentinel switches to the text-input mode;
+  /** Routes a dropdown selection: the special "create new" sentinel opens the create-table modal;
    *  anything else names an already-probed, already-existing table — no backend call needed. */
   onAddTableSelectChange(resource: string, value: string): void {
     if (value === this.createNewTableOption) {
-      this.creatingNewTable.set(true);
+      this.openCreateTableModal(resource);
       return;
     }
     this.onAddExtraTable(resource, value);
   }
 
+  /** Also the direct entry point when no live schema exists at all (!hasSqlTables()) — there's no
+   *  dropdown of existing tables to choose from in that case, so this is the only "add a table" option.
+   *  asPrimary defaults to "whatever this resource actually needs right now": explicit true from the
+   *  target-card's own "Table" select (it only offers "✎ Create a new table…" when its card is even
+   *  showing, i.e. already valid — a deliberate swap); otherwise auto-detected from the canvas-level
+   *  "+ Add a table…" control, which is the ONLY entry point while there's no primary card to have a
+   *  select of its own yet. */
+  openCreateTableModal(resource: string, asPrimary?: boolean): void {
+    this.creatingTableResource = resource;
+    this.creatingTableAsPrimary = asPrimary ?? !this.isPrimaryTargetValid(resource);
+    this.creatingTableError.set(null);
+    this.creatingNewTable.set(true);
+  }
+
   onAddExtraTable(resource: string, tableName: string): void {
     const name = tableName.trim();
     if (!name) return;
+    if (!this.isPrimaryTargetValid(resource)) {
+      this.onTargetChange(resource, name);
+      this.toast.success('Table set', `${name} is ready to map.`);
+      return;
+    }
     if (this.extraTables().includes(name) || this.targetFor(resource) === name) {
       this.toast.warning('Table already added', `${name} is already on this canvas.`);
       return;
@@ -416,42 +479,97 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     this.toast.success('Table added', `${name} is ready to map.`);
   }
 
+  closeCreateTableModal(): void {
+    if (this.creatingTableSubmitting()) return;
+    this.creatingNewTable.set(false);
+    this.creatingTableError.set(null);
+    this.creatingTableResource = null;
+  }
+
   /**
-   * Typing a new name (shown when !hasSqlTables(), or when the user picked "Create a new table…" from
-   * the dropdown while connected) always attempts a real CREATE TABLE against whatever connection
-   * details are currently in the wizard's Step 1 form — not gated behind a prior successful
+   * Submits the create-table modal — always attempts a real CREATE TABLE against whatever connection
+   * details are currently in the wizard's Step 1 form, not gated behind a prior successful
    * "Test connection". A clean "already exists" failure is treated as a hit (the table is real, just
-   * not one we created) and still added as a reference.
+   * not one we created) and still added as a reference. On success, the backend's returned table shape
+   * (all columns, including the FK if this was a child table) is what actually gets synced — never a
+   * locally-guessed one — since that's the only way to be sure the canvas reflects what's really there.
    */
-  onCreateExtraTable(resource: string, tableName: string): void {
-    const name = tableName.trim();
-    if (!name) return;
-    if (this.extraTables().includes(name) || this.targetFor(resource) === name) {
-      this.toast.warning('Table already added', `${name} is already on this canvas.`);
+  submitCreateTable(submission: FmCreateTableSubmit): void {
+    const resource = this.creatingTableResource;
+    const typed = submission.tableName.trim();
+    if (!resource || !typed) return;
+    // CreateTableAsync always returns a schema-qualified fullName (defaulting to "dbo" when the user
+    // types a bare name — see SqlDestinationSchemaService.SplitTableName). extraTables()/sqlTables() must
+    // agree on that same key everywhere, or the new table's card resolves zero columns via
+    // columnsForTable() even though the table was created successfully (columns silently invisible).
+    const name = typed.includes('.') ? typed : `dbo.${typed}`;
+    // targetFor(resource) may just be an unfulfilled guess (no card shown for it, see isPrimaryTargetValid)
+    // — that's exactly the name this create is most likely trying to fulfill, not a real dupe.
+    const targetAlreadyReal = this.isPrimaryTargetValid(resource) && this.targetFor(resource) === name;
+    if (this.extraTables().includes(name) || targetAlreadyReal) {
+      this.creatingTableError.set(`${name} is already on this canvas.`);
       return;
     }
     const connection = this.connectionInfo();
     if (!connection) return;
 
-    this.schemaSvc.createTable({ connection, tableName: name }).subscribe({
+    this.creatingTableSubmitting.set(true);
+    this.creatingTableError.set(null);
+    this.schemaSvc.createTable({
+      connection,
+      tableName: name,
+      columns: submission.columns,
+      parentTable: submission.parentTable,
+      parentColumn: submission.parentColumn,
+      foreignKeyColumnName: submission.foreignKeyColumnName,
+    }).subscribe({
       next: result => {
-        if (result.success) {
-          this.tableCreated.emit(name);
-          this.extraTablesChange.emit([...this.extraTables(), name]);
-          this.toast.success('Table created', `${name} was created and is ready to map.`);
-          this.creatingNewTable.set(false);
+        this.creatingTableSubmitting.set(false);
+        if (result.success && result.table) {
+          // Use the backend's own fullName (authoritative), not the locally-guessed one, as the key
+          // added to extraTables()/targetByResource — they must be the exact same string for
+          // columnsForTable()/columnsForResourceTarget() to resolve.
+          this.tableCreated.emit(result.table);
+          if (this.creatingTableAsPrimary) {
+            this.onTargetChange(resource, result.table.fullName);
+          } else {
+            this.extraTablesChange.emit([...this.extraTables(), result.table.fullName]);
+          }
+          if (submission.parentTable) {
+            // Server-side defaults (see CreateTableRequest docs): parentColumn defaults to "Id",
+            // foreignKeyColumnName to "{parentTableName}Id" — replicated here since the response never
+            // echoes the relationship back onto DestinationTable.
+            const parentShortName = submission.parentTable.includes('.')
+              ? submission.parentTable.split('.').pop()!
+              : submission.parentTable;
+            this.childTableRelationAdded.emit({
+              tableName: result.table!.fullName,
+              relation: {
+                parentTable: submission.parentTable!,
+                parentColumn: submission.parentColumn || 'Id',
+                foreignKeyColumnName: submission.foreignKeyColumnName || `${parentShortName}Id`,
+              },
+            });
+          }
+          this.toast.success('Table created', `${result.table.fullName} was created and is ready to map.`);
+          this.closeCreateTableModal();
           return;
         }
         if ((result.error ?? '').toLowerCase().includes('already exists')) {
-          this.extraTablesChange.emit([...this.extraTables(), name]);
+          if (this.creatingTableAsPrimary) {
+            this.onTargetChange(resource, name);
+          } else {
+            this.extraTablesChange.emit([...this.extraTables(), name]);
+          }
           this.toast.info('Table added', `${name} already exists — added as a reference.`);
-          this.creatingNewTable.set(false);
+          this.closeCreateTableModal();
           return;
         }
-        this.toast.error('Could not create table', result.error ?? 'Unknown error.');
+        this.creatingTableError.set(result.error ?? 'Failed to create table.');
       },
       error: err => {
-        this.toast.error('Could not create table', err?.error?.error ?? err?.message ?? 'Unknown error.');
+        this.creatingTableSubmitting.set(false);
+        this.creatingTableError.set(err?.error?.error ?? err?.message ?? 'Failed to create table.');
       },
     });
   }
@@ -564,7 +682,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
           // hasSqlTables() true: the wizard's sqlTables() update (from this event) drives the card's
           // real-schema display. hasSqlTables() false: no live schema is consulted for display at all,
           // so track it locally the same way the free-text fallback already does.
-          this.columnAdded.emit({ tableName: target.tableName, column: result.column });
+          this.columnAdded.emit({ tableName: target.tableName, column: result.column, table: result.table ?? undefined });
           if (!this.hasSqlTables()) this.registerPendingColumn(target.resource, target.tableName, submission.columnName);
           this.toast.success('Column added', `${submission.columnName} added to ${target.tableName}.`);
           this.addColumnTarget.set(null);
@@ -575,6 +693,53 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
       error: err => {
         this.addColumnSubmitting.set(false);
         this.addColumnError.set(err?.error?.error ?? err?.message ?? 'Failed to add column.');
+      },
+    });
+  }
+
+  // ── edit column (real ALTER TABLE ... ALTER COLUMN, + sp_rename if the name changes) ───────────
+  readonly editColumnTarget = signal<{ resource: string; tableName: string; columnName: string } | null>(null);
+  readonly editColumnSubmitting = signal(false);
+  readonly editColumnError = signal<string | null>(null);
+
+  openEditColumnModal(resource: string, tableName: string, columnName: string): void {
+    this.editColumnTarget.set({ resource, tableName, columnName });
+    this.editColumnError.set(null);
+  }
+
+  closeEditColumnModal(): void {
+    if (this.editColumnSubmitting()) return;
+    this.editColumnTarget.set(null);
+    this.editColumnError.set(null);
+  }
+
+  submitEditColumn(submission: FmEditColumnSubmit): void {
+    const target = this.editColumnTarget();
+    const connection = this.connectionInfo();
+    if (!target || !connection) return;
+
+    this.editColumnSubmitting.set(true);
+    this.editColumnError.set(null);
+    this.schemaSvc.alterColumn({
+      connection,
+      tableName: target.tableName,
+      columnName: target.columnName,
+      newColumnName: submission.newColumnName,
+      newDataType: submission.newDataType,
+    }).subscribe({
+      next: result => {
+        this.editColumnSubmitting.set(false);
+        if (result.success && result.column) {
+          this.columnAltered.emit({ tableName: target.tableName, oldColumnName: target.columnName, column: result.column });
+          this.toast.success('Column updated', `${target.columnName} → ${result.column.name} on ${target.tableName}.`);
+          this.editColumnTarget.set(null);
+          return;
+        }
+        this.editColumnError.set(result.error ?? 'Failed to update column.');
+      },
+      error: err => {
+        this.editColumnSubmitting.set(false);
+        this.editColumnError.set(err?.error?.error ?? err?.message ?? 'Failed to update column.');
       },
     });
   }
@@ -693,7 +858,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
 
     if (!existing) {
       this.replaceRow(resource, tableName, column, {
-        resource, sources: [source], mode: 'value', instance: { type: 'first' },
+        resource, sources: [source], mode: 'value', instance: { type: 'all' },
         targetName: column, tableName,
       });
       this.toast.info('Mapped', `${source.label} → ${column}`);
@@ -718,7 +883,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
 
     // existing.mode === 'childJson' — a leaf drop takes precedence over a whole-node mapping.
     this.replaceRow(resource, tableName, column, {
-      resource, sources: [source], mode: 'value', instance: { type: 'first' },
+      resource, sources: [source], mode: 'value', instance: { type: 'all' },
       targetName: column, tableName,
     });
     this.toast.info('Replaced', `${source.label} → ${column} (replaced the whole-node JSON mapping).`);
@@ -765,6 +930,18 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
 
   onListRemoveRow(e: { resource: string; tableName: string; targetName: string }): void {
     this.removeRow(e.resource, e.tableName, e.targetName);
+  }
+
+  /** Inline edits from the mapping list's own delimiter/instance controls (no popover needed) — same
+   *  row-identity lookup as the popover path, just applied directly. */
+  onListDelimiterChange(e: { resource: string; tableName: string; targetName: string; delimiter: string }): void {
+    const row = this.rowForColumnFn(e.resource, e.tableName, e.targetName);
+    if (row) this.updateRow({ ...row, delimiter: e.delimiter });
+  }
+
+  onListInstanceChange(e: { resource: string; tableName: string; targetName: string; instance: MappingInstanceSelection }): void {
+    const row = this.rowForColumnFn(e.resource, e.tableName, e.targetName);
+    if (row) this.updateRow({ ...row, instance: e.instance });
   }
 
   closePopover(): void { this.popoverKey.set(null); }

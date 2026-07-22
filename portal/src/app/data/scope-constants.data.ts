@@ -3,10 +3,6 @@ export const FHIR_RESOURCES: string[] = [
   'Encounter', 'Procedure', 'Immunization', 'DiagnosticReport', 'DocumentReference',
 ];
 
-export const DEFAULT_RESOURCES: string[] = [
-  'Patient', 'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
-];
-
 export const CODED_RESOURCES: string[] = [
   'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
   'Procedure', 'Immunization', 'DiagnosticReport',

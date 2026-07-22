@@ -61,9 +61,10 @@ public sealed class DestinationSchemaController : ControllerBase
         => Ok(await _schemaService.AddColumnAsync(request, cancellationToken));
 
     /// <summary>
-    /// Executes a real CREATE TABLE (single auto-increment Id primary key) against an ad-hoc SQL Server /
-    /// Azure SQL connection. Always returns 200 — failures (bad connection, table already exists, etc.)
-    /// come back as <c>success:false</c> + <c>error</c>.
+    /// Executes a real CREATE TABLE (auto-increment Id primary key, plus any requested columns and an
+    /// optional FK to a parent table) against an ad-hoc SQL Server / Azure SQL connection. Always returns
+    /// 200 — failures (bad connection, table/parent-table already exists or missing, etc.) come back as
+    /// <c>success:false</c> + <c>error</c>.
     /// </summary>
     [HttpPost("schema/create-table")]
     [StandardPermission(
@@ -92,6 +93,23 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] DropColumnRequest request,
         CancellationToken cancellationToken)
         => Ok(await _schemaService.DropColumnAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Executes a real ALTER TABLE ... ALTER COLUMN (data type change) and/or an sp_rename (column
+    /// rename) against an ad-hoc SQL Server / Azure SQL connection. Always returns 200 — failures (bad
+    /// connection, invalid identifier/type, incompatible data, name collision, etc.) come back as
+    /// <c>success:false</c> + <c>error</c> so the mapping canvas can surface them inline.
+    /// </summary>
+    [HttpPost("schema/alter-column")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Rename a destination table column and/or change its data type via a real ALTER TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> AlterColumn(
+        [FromBody] AlterColumnRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.AlterColumnAsync(request, cancellationToken));
 
     /// <summary>
     /// Tests an ad-hoc SFTP connection for a CSV destination (storageType 'sftp'). Always returns 200 —

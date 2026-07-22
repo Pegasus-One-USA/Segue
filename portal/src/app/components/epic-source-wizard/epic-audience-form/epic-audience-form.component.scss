@@ -507,7 +507,15 @@
     background: var(--color-primary-soft);
   }
 
+  &:has(input:disabled) {
+    cursor: not-allowed;
+    opacity: 0.55;
+
+    &:hover { border-color: var(--color-border); background: var(--color-surface); }
+  }
+
   input { cursor: pointer; flex-shrink: 0; }
+  input:disabled { cursor: not-allowed; }
 }
 
 .eaf-res-name {

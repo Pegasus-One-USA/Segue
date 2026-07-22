@@ -93,6 +93,36 @@ export function buildForest(
   return resources.map(r => buildResourceTree(r, availableFields(r)));
 }
 
+/**
+ * Filters a tree for a case-insensitive substring match against a node's label (leaf paths also match
+ * on their raw fhirPath, so e.g. "coding.code" finds it even though that's not in the display label).
+ * If a GROUP's own label matches, its entire subtree is kept as-is — searching "address" should surface
+ * every Address field, not just the ones whose own label also happens to contain "address".
+ */
+export function filterTree(node: FmTreeNode, query: string): FmTreeNode | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return node;
+
+  const ownMatch = node.label.toLowerCase().includes(q)
+    || (node.kind === 'leaf' && !!node.field?.fhirPath.toLowerCase().includes(q));
+
+  if (node.kind === 'leaf') return ownMatch ? node : null;
+  if (ownMatch) return node;
+
+  const children = node.children
+    .map(child => filterTree(child, q))
+    .filter((child): child is FmTreeNode => child !== null);
+  return children.length ? { ...node, children } : null;
+}
+
+/** Forest-level filterTree — an empty/blank query returns the forest unchanged. */
+export function filterForest(forest: FmTreeNode[], query: string): FmTreeNode[] {
+  if (!query.trim()) return forest;
+  return forest
+    .map(root => filterTree(root, query))
+    .filter((root): root is FmTreeNode => root !== null);
+}
+
 /** Flattens every leaf under a node (used by auto-map and by the keyboard "+ Add mapping" field picker). */
 export function flattenLeaves(node: FmTreeNode): FmTreeNode[] {
   if (node.kind === 'leaf') return [node];

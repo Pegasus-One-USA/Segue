@@ -7,6 +7,19 @@
   >
     <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : 'file' }}</span>
     <span class="fm-target-name">{{ tableName() || resource() }}</span>
+    <div class="fm-target-search-wrap" (pointerdown)="$event.stopPropagation()">
+      <input
+        type="search"
+        class="fm-target-search"
+        placeholder="Search columns…"
+        aria-label="Search columns in this table"
+        [value]="searchQuery()"
+        (input)="onSearchInput($any($event.target).value)"
+      />
+      @if (isSearching()) {
+        <button type="button" class="fm-target-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
+      }
+    </div>
     @if (isExtra()) {
       <button type="button" class="fm-target-remove" aria-label="Remove this table" title="Remove this table" (click)="removeTable.emit()">✕</button>
     }
@@ -21,9 +34,10 @@
             class="fm-select"
             [attr.id]="'fm-target-' + resource()"
             [value]="targetValue()"
-            (change)="onTargetInput($any($event.target).value)"
+            (change)="onTargetInput($any($event.target).value); $any($event.target).value = targetValue()"
           >
-            <option value="" disabled [selected]="!targetValue()">Select a table…</option>
+            <option value="" disabled [selected]="!hasValidTarget()">Select a table…</option>
+            <option [value]="createTableOption">✎ Create a new table…</option>
             @for (t of sqlTableOptions(); track t) {
               <option [value]="t" [selected]="t === targetValue()">{{ t }}</option>
             }
@@ -42,7 +56,10 @@
   }
 
   <div class="fm-target-rows">
-    @for (col of columns(); track col) {
+    @if (isSearching() && filteredColumns().length === 0) {
+      <div class="fm-target-no-match">No columns match "{{ searchQuery() }}".</div>
+    }
+    @for (col of filteredColumns(); track col) {
       <div
         #columnRow
         class="fm-target-row"
@@ -56,6 +73,9 @@
       >
         <span class="fm-target-port" aria-hidden="true"></span>
         <span class="fm-target-colname">{{ col }}</span>
+        @if (columnDataType()(col); as dt) {
+          <span class="fm-target-coltype">{{ dt }}</span>
+        }
         @if ((rowForColumn()(col)?.sources?.length ?? 0) > 1) {
           <span class="fm-target-tag">×{{ rowForColumn()(col)?.sources?.length }}</span>
         } @else if (rowForColumn()(col)?.mode === 'childJson') {
@@ -64,6 +84,13 @@
         @if (rowForColumn()(col) && isApproximated()(rowForColumn()(col)!)) {
           <span class="fm-target-caveat" title="Preview only — not yet enforced by the pipeline engine">⚠</span>
         }
+        <button
+          type="button"
+          class="fm-target-col-edit"
+          aria-label="Edit this column's name or data type"
+          title="Edit this column's name or data type"
+          (click)="editColumn.emit(col)"
+        >✎</button>
         <button
           type="button"
           class="fm-target-col-delete"
@@ -75,7 +102,13 @@
     }
     @if (destType() === 'sql') {
       <div class="fm-target-row fm-target-row--add">
-        <button type="button" class="fm-target-add-btn" (click)="openAddColumn.emit()">＋ Add column</button>
+        <button
+          type="button"
+          class="fm-target-add-btn"
+          [disabled]="!hasValidTarget()"
+          [title]="hasValidTarget() ? '' : 'Select a real destination table above first'"
+          (click)="openAddColumn.emit()"
+        >＋ Add column</button>
       </div>
     } @else {
       <div class="fm-target-row fm-target-row--add">
