@@ -58,7 +58,8 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
             var token = await ResolveTokenAsync(source, grantType, cancellationToken);
 
             await _governanceLogger.LogAuthenticationAsync(
-                new AuthenticationEntry($"OAuth:{grantType}", Success: !string.IsNullOrEmpty(token), source.Name),
+                new AuthenticationEntry(
+                    $"OAuth:{grantType}", Success: !string.IsNullOrEmpty(token), source.Name, DescribeTokenKey(source)),
                 cancellationToken);
 
             return token;
@@ -66,11 +67,20 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
         catch (Exception exception)
         {
             await _governanceLogger.LogAuthenticationAsync(
-                new AuthenticationEntry($"OAuth:{grantType}", Success: false, source.Name, exception.Message),
+                new AuthenticationEntry(
+                    $"OAuth:{grantType}", Success: false, source.Name, $"{exception.Message} {DescribeTokenKey(source)}"),
                 cancellationToken);
             throw;
         }
     }
+
+    // Appended to the Authentication Logs reason field (even on success, where there was previously no reason at
+    // all) so the Governance portal shows which token-cache slot this attempt actually used — without a schema
+    // change or a new log sink. Never includes the raw CallerId/patientId values, only presence/shape, matching
+    // SmartAuthorizationCodeTokenProvider's own PHI-safe logging discipline.
+    private static string DescribeTokenKey(FhirSourceConfiguration source) =>
+        $"[hasCallerId={!string.IsNullOrWhiteSpace(source.CallerId)} applicationType={source.ApplicationType} " +
+        $"sourceConnectionId={source.SourceConnectionId}]";
 
     private Task<string> ResolveTokenAsync(FhirSourceConfiguration source, string grantType, CancellationToken cancellationToken)
     {

@@ -389,10 +389,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         var effectiveRedirectUri = sourceConnection.Interactive?.RedirectUris.FirstOrDefault() ?? requestedRedirectUri;
         _logger.LogInformation(
             "[Step 3/6] IssueAuthorizationAsync: sourceConnectionId={SourceConnectionId} " +
-            "configuredRedirectUri={ConfiguredRedirectUri} requestedRedirectUri={RequestedRedirectUri} " +
-            "effectiveRedirectUri={EffectiveRedirectUri} launch={Launch}",
-            sourceConnection.Id, sourceConnection.Interactive?.RedirectUris.FirstOrDefault(), requestedRedirectUri,
-            effectiveRedirectUri, launch);
+            "applicationType={ApplicationType} hasCallerId={HasCallerId} configuredRedirectUri={ConfiguredRedirectUri} " +
+            "requestedRedirectUri={RequestedRedirectUri} effectiveRedirectUri={EffectiveRedirectUri} launch={Launch}",
+            sourceConnection.Id, sourceConnection.ApplicationType, !string.IsNullOrWhiteSpace(callerId),
+            sourceConnection.Interactive?.RedirectUris.FirstOrDefault(), requestedRedirectUri, effectiveRedirectUri, launch);
 
         var nonce = CreateNonce();
         var state = _launchTokenProtector.ProtectState(nonce);
@@ -442,9 +442,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         _logger.LogInformation(
             "[Step 5/6] CompleteAsync: sourceConnectionId={SourceConnectionId} sourceName={SourceName} " +
-            "redirectUri={RedirectUri} routeId={RouteId} workflowId={WorkflowId} hasLaunchContext={HasLaunchContext}",
+            "redirectUri={RedirectUri} routeId={RouteId} workflowId={WorkflowId} hasLaunchContext={HasLaunchContext} " +
+            "hasCallerId={HasCallerId}",
             pending.SourceConnectionId, pending.SourceName, pending.RedirectUri, pending.RouteId, pending.WorkflowId,
-            pending.HasLaunchContext);
+            pending.HasLaunchContext, !string.IsNullOrWhiteSpace(pending.CallerId));
 
         // Re-load the source to resolve confidential-client credentials for the token exchange. Secrets are resolved
         // here (not carried in the pending state) so they are never persisted in the short-lived authorization store.
@@ -482,13 +483,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 pending.SourceConnectionId);
 
             await _governanceLogger.LogSmartLaunchAsync(
-                new SmartLaunchEntry(pending.SourceConnectionId, pending.SourceName, launchType, Success: false, exception.Message),
+                new SmartLaunchEntry(
+                    pending.SourceConnectionId, pending.SourceName, launchType, Success: false,
+                    $"{exception.Message} {DescribeTokenKey(pending.CallerId)}"),
                 CancellationToken.None);
             throw;
         }
 
         await _governanceLogger.LogSmartLaunchAsync(
-            new SmartLaunchEntry(pending.SourceConnectionId, pending.SourceName, launchType, Success: true),
+            new SmartLaunchEntry(
+                pending.SourceConnectionId, pending.SourceName, launchType, Success: true, DescribeTokenKey(pending.CallerId)),
             CancellationToken.None);
 
         Guid? workflowRunId = null;
@@ -800,6 +804,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         { RouteId: not null } => "RouteStandalone",
         _ => "SignIn"
     };
+
+    // Appended to the SMART Launch Logs reason field (even on success, where there was previously no reason at all)
+    // so the Governance portal shows whether this launch used the CallerId-keyed token-cache slot — without a
+    // schema change. Never logs the CallerId value itself, only its presence.
+    private static string DescribeTokenKey(string? callerId) => $"[hasCallerId={!string.IsNullOrWhiteSpace(callerId)}]";
 
     // Compares two issuers ignoring a trailing slash and case (FHIR base URLs are compared case-insensitively).
     private static bool IssuersMatch(string trusted, string incoming) =>
