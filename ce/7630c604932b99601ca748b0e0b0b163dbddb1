@@ -1,0 +1,31 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_3679e3048431dc::t_68632f885ef858 25,30-33
+  s_3679e3048431dc::t_8461fe249d3747 141,144-146,1393-1394,1405-1444
+portal/src/app/components/node-library/destination-wizard/field-mapping/mapping-profile-import.service.ts
+  s_3679e3048431dc::t_d47aa78abfe2f1 7-34,43
+  s_3679e3048431dc::t_136faea3520175 4-6
+  s_3679e3048431dc::t_af671e9751a64e 35-37,40-42
+  s_3679e3048431dc::t_d911e5d6aa44a3 1-3,38-39
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_3679e3048431dc::t_368d4211b79774 436,439
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_3679e3048431dc::t_b75e006815f211 66,158,352
+portal/src/app/core/api-endpoints.ts
+  s_3679e3048431dc::t_55c733a467d05a 102-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ce7630c604932b99601ca748b0e0b0b163dbddb1",
+  "prompts": {},
+  "sessions": {
+    "s_3679e3048431dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1568ea7-c9f3-4703-ba4e-28032014b5af",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
