@@ -1,0 +1,65 @@
+portal/src/app/services/destination-schema.service.ts
+  s_2b61b2c58de087::t_32ea3bd328cd06 14-16
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_2b61b2c58de087::t_8bd7f7e0fa0826 69-70
+  s_2b61b2c58de087::t_0128822f381de1 85-94
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_2b61b2c58de087::t_fdf847da48cebc 98-171
+  s_2b61b2c58de087::t_01418ad4cae274 70-76,79,83,86-87,90
+src/FHIRBridge.Application/Abstractions/Destinations/IDestinationDataService.cs
+  s_2b61b2c58de087::t_1cedf8c8ad5236 12-18,23
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationDataService.cs
+  s_2b61b2c58de087::t_5892b3f9004a67 223-264
+  s_2b61b2c58de087::t_7d19a0660b6cea 37,62,68-73,75-77,79-91
+  s_2b61b2c58de087::t_caed25543a3717 275-279,283-284,286
+  s_2b61b2c58de087::t_50a8e0fcc23b52 74
+  s_2b61b2c58de087::t_70e86f105ed787 61
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/WorkflowNodeExecutorBase.cs
+  s_2b61b2c58de087::t_791717b09b31d0 64-75
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_2b61b2c58de087::t_d5c470cce88a6a 11-14,27-41
+  s_2b61b2c58de087::t_61f40c8064e88e 155-158
+src/FHIRBridge.Application/Abstractions/Mapping/IJsonMappingEngine.cs
+  s_2b61b2c58de087::t_9b1a697907dbe8 7-16
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2b61b2c58de087::t_c3ba2d127a512f 395,414-419,421
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_2b61b2c58de087::t_d0ef9e08c91be6 44-47
+portal/src/app/services/mapping-catalog.service.ts
+  s_2b61b2c58de087::t_b3b659523f6e79 67-78,89-91
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_2b61b2c58de087::t_1906c2bd581442 184-216
+  s_2b61b2c58de087::t_039392d1d653e0 53-76
+  s_2b61b2c58de087::t_a2e8f767887e65 147,153
+  s_2b61b2c58de087::t_2cee9b7eeb60f7 304
+  s_2b61b2c58de087::t_cae64f6db75af1 333-334,345-346
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_2b61b2c58de087::t_88cd4b83ef64c3 912-916
+  s_2b61b2c58de087::t_d6ea22d51b3b25 831-833,836-838
+  s_2b61b2c58de087::t_ed7c86ee341e50 725-726
+  s_2b61b2c58de087::t_83bc841f4fa858 604-607,609-611,839-840
+  s_2b61b2c58de087::t_8f5ad8172f7440 841-847
+.claude/settings.json
+  s_2b61b2c58de087::t_a947d6a77a6112 35-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f7d267acef7a2026a67d1b35d4ef0bf768221cd0",
+  "prompts": {},
+  "humans": {
+    "h_537f5ffdfa988f": {
+      "author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  },
+  "sessions": {
+    "s_2b61b2c58de087": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b10e7981-8c72-4d24-a8f0-ae88db6f3c97",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
