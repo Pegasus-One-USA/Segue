@@ -1,0 +1,43 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_a66c35895c7853::t_9c73ff20771ef0 8
+  s_a66c35895c7853::t_c14ddc942caf6b 323,333,429-444,447-479
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowExecutionContext.cs
+  s_a66c35895c7853::t_5b591a0ff14ec4 12-13
+  s_a66c35895c7853::t_b885a0038bf862 22,51-60
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_a66c35895c7853::t_e15c283e8dc9e8 47-53
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_a66c35895c7853::t_e9ec3de1a4018f 574-575
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_a66c35895c7853::t_2be18e544b764d 45-46,137-138,157,182-183,194,201
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/ISourceConnectionRuntimeResolver.cs
+  s_a66c35895c7853::t_9abfe0b0b9e7f5 17-18,23,34
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_a66c35895c7853::t_d9a5f0e0b5de42 56-63
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_a66c35895c7853::t_893b7ae7dde576 190-191
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs
+  s_a66c35895c7853::t_b873042e55a48c 32,100,137,179
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs
+  s_a66c35895c7853::t_864e32c25ad74b 32,83
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorRetryTests.cs
+  s_a66c35895c7853::t_383d13df1f6cc0 32
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_a66c35895c7853::t_cc4462f048bc06 313-314,466-468,512,518,546,553,582,601-602,612,628-629
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f0832d4595d3a48e19f9a3d9cf6fcfb80f5bac12",
+  "prompts": {},
+  "sessions": {
+    "s_a66c35895c7853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2907d4da-9fd4-4481-9632-f9243edf93fa",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
