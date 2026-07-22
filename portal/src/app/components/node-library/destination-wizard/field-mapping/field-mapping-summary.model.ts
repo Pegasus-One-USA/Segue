@@ -190,13 +190,16 @@ function resolveTable(
   destType: 'sql' | 'csv',
 ): ResolvedTable {
   const known = sqlTables.find(t => t.fullName === fullName);
-  const fallbackType = destType === 'sql' ? DEFAULT_SQL_TYPE : DEFAULT_CSV_TYPE;
   return {
     fullName,
     bare: bareName(fullName),
     isNew: known ? known.origin === 'userCreated' : true,
     relation: childTableRelationsByTable[fullName],
-    columns: known?.columns ?? [{ name: 'Id', dataType: fallbackType, mappingValueType: 'string', isNullable: false, maxLength: null }],
+    columns: known?.columns ?? [{
+      name: 'Id',
+      dataType: destType === 'sql' ? DEFAULT_ID_TYPE : DEFAULT_CSV_TYPE,
+      mappingValueType: 'string', isNullable: false, maxLength: null,
+    }],
   };
 }
 
