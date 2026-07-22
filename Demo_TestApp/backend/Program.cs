@@ -164,6 +164,8 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         patientWorkflowId = settings.PatientWorkflowId,
         patientDetailWorkflowId = settings.PatientDetailWorkflowId,
         patientBaseUrl = settings.PatientBaseUrl,
+        patientCsvExportWorkflowId = settings.PatientCsvExportWorkflowId,
+        patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         providerLaunchContext = settings.ProviderLaunchContext
@@ -174,6 +176,8 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
 // base URL from the admin-configured settings (formerly a gitignored per-developer local file) without granting
 // Patient access to the full Admin settings endpoint. Two distinct workflow ids come back: one for the patient
 // list fetch, one for the per-patient detail fetch — each is its own independent FHIRBridge public-launch opt-in.
+// csvExportWorkflowId/csvEmailExportWorkflowId back the "Download Patient Information"/"Email Patient Information"
+// buttons — see launch-standalone-patient.ts's downloadPatientInformation/emailPatientInformation.
 app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
 {
     if (!TryGetSession(http, sessions, out _, out _))
@@ -186,7 +190,9 @@ app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionS
     {
         workflowId = settings.PatientWorkflowId,
         detailWorkflowId = settings.PatientDetailWorkflowId,
-        baseUrl = settings.PatientBaseUrl
+        baseUrl = settings.PatientBaseUrl,
+        csvExportWorkflowId = settings.PatientCsvExportWorkflowId,
+        csvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId
     });
 });
 
@@ -216,6 +222,8 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.PatientWorkflowId = request.PatientWorkflowId?.Trim() ?? string.Empty;
     settings.PatientDetailWorkflowId = request.PatientDetailWorkflowId?.Trim() ?? string.Empty;
     settings.PatientBaseUrl = request.PatientBaseUrl?.Trim() ?? string.Empty;
+    settings.PatientCsvExportWorkflowId = request.PatientCsvExportWorkflowId?.Trim() ?? string.Empty;
+    settings.PatientCsvEmailExportWorkflowId = request.PatientCsvEmailExportWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
     settings.ProviderLaunchContext = request.ProviderLaunchContext?.Trim() ?? string.Empty;
@@ -227,6 +235,8 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         patientWorkflowId = settings.PatientWorkflowId,
         patientDetailWorkflowId = settings.PatientDetailWorkflowId,
         patientBaseUrl = settings.PatientBaseUrl,
+        patientCsvExportWorkflowId = settings.PatientCsvExportWorkflowId,
+        patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         providerLaunchContext = settings.ProviderLaunchContext
@@ -510,6 +520,8 @@ record SaveSettingsRequest(
     string PatientWorkflowId,
     string PatientDetailWorkflowId,
     string PatientBaseUrl,
+    string PatientCsvExportWorkflowId,
+    string PatientCsvEmailExportWorkflowId,
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
     string ProviderLaunchContext);
