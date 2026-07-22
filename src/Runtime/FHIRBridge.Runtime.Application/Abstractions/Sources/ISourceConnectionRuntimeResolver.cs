@@ -14,12 +14,13 @@ public interface ISourceConnectionRuntimeResolver
         string? searchParameters,
         string? targetPatientId,
         CancellationToken cancellationToken,
-        string? patientSearchCriteria = null);
+        string? patientSearchCriteria = null,
+        string? callerId = null);
 
     /// <summary>Discards any cached interactive token for this source connection (both the given patient's slot, if
     /// any, and the unscoped "default" slot) — a no-op for non-interactive (Backend Services) sources, since those
     /// mint tokens on demand rather than caching one. Returns without effect if the connection doesn't exist.</summary>
-    Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken);
+    Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null);
 
     /// <summary>
     /// Cheaply checks whether a real fetch against this source connection would currently succeed authentication-wise
@@ -30,5 +31,5 @@ public interface ISourceConnectionRuntimeResolver
     /// Backend Services source a token can always be minted on demand, so this is effectively always true. Returns
     /// false if the connection doesn't exist or no token provider is configured.
     /// </summary>
-    Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken);
+    Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null);
 }

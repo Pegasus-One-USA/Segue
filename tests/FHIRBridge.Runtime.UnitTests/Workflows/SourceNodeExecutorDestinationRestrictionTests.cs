@@ -29,7 +29,7 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         var typesFetched = new List<string>();
@@ -80,7 +80,7 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         var typesFetched = new List<string>();

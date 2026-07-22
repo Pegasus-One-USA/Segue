@@ -44,6 +44,12 @@ public sealed record WorkflowRunRequest(
     // "identifier=MRN12345", "family=Smith&given=John", "birthdate=1990-01-01" — instead of (or before) knowing a
     // specific PatientId. Passed through as-is (see FhirSourceConnectorBase.ApplyPatientScopeAsync); every other
     // configured resource type is unaffected. Omit for every existing caller/behavior.
-    string? PatientSearchCriteria = null);
+    string? PatientSearchCriteria = null,
+    // Identifies the logged-in end user of the calling third-party app (e.g. HealthApp's Patient Standalone
+    // session). For an ApplicationType.Patient source, lets every pipeline that shares this same logged-in user's
+    // session reuse the one interactive OAuth token their authorization already covers, instead of each
+    // SourceConnection needing its own separate MyChart consent — see FhirSourceConfiguration.CallerId. Omit for
+    // every other ApplicationType, or when this run should keep using the pre-existing per-SourceConnection session.
+    string? CallerId = null);
 
 public sealed record CopyWorkflowRequest(string Name);

@@ -29,7 +29,7 @@ public sealed class SourceNodeExecutorCohortTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         var callOrder = new List<string>();
@@ -97,7 +97,7 @@ public sealed class SourceNodeExecutorCohortTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         IReadOnlyCollection<string>? capturedPatientIds = null;
@@ -134,7 +134,7 @@ public sealed class SourceNodeExecutorCohortTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         FhirBulkExportRequest? capturedObservationRequest = null;
@@ -176,7 +176,7 @@ public sealed class SourceNodeExecutorCohortTests
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
-            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
         FhirBulkExportRequest? capturedObservationRequest = null;

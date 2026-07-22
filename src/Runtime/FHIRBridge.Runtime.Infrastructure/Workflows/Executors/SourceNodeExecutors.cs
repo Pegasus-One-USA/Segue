@@ -187,7 +187,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 searchParameters,
                 context.TargetPatientId,
                 cancellationToken,
-                context.PatientSearchCriteria);
+                context.PatientSearchCriteria,
+                context.CallerId);
         }
 
         // Fallback: an inline source configuration embedded in node config (used by the route→graph projection).
