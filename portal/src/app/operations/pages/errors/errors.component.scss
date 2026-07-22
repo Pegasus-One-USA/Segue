@@ -38,7 +38,7 @@
   border: 1px solid var(--color-border-input);
   border-radius: 6px;
   font-size: 13px;
-  background: var(--color-surface, #fff);
+  background: var(--color-surface);
 }
 
 .btn {
@@ -125,8 +125,8 @@
 }
 
 .status-resolved {
-  background: var(--color-success-soft, #e6f4ea);
-  color: var(--color-success-strong, #1e7e34);
+  background: var(--color-success-soft);
+  color: var(--color-success-strong);
 }
 
 .btn-sm {

@@ -57,7 +57,7 @@ export interface GlobalErrorDialogData {
   styles: [`
     .ge-dialog { min-width: 22rem; max-width: 30rem; }
     .ge-header { display: flex; align-items: center; gap: 0.5rem; }
-    .ge-header mat-icon { color: var(--danger, #d9534f); }
+    .ge-header mat-icon { color: var(--color-error); }
     .ge-header h2 { margin: 0; }
     .ge-message { margin: 0.5rem 0 1rem; line-height: 1.5; }
     .ge-reference {
