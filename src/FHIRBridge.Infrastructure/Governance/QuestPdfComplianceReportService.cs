@@ -90,7 +90,7 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
 
                 page.Header().Column(col =>
                 {
-                    col.Item().Text("FHIRBridge Compliance Report").FontSize(18).Bold();
+                    col.Item().Text("Segue Compliance Report").FontSize(18).Bold();
                     col.Item().Text("HIPAA §164.312(b) Audit Controls & SOC 2 Evidence").FontSize(11);
                     col.Item().PaddingTop(4).Text($"Period: {fromUtc:yyyy-MM-dd} to {toUtc:yyyy-MM-dd} (UTC)  |  Generated: {generatedOnUtc:yyyy-MM-dd HH:mm} UTC");
                 });
@@ -210,7 +210,7 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
 
                 page.Header().Column(col =>
                 {
-                    col.Item().Text("FHIRBridge SOC 2 Evidence Export").FontSize(18).Bold();
+                    col.Item().Text("Segue SOC 2 Evidence Export").FontSize(18).Bold();
                     col.Item().Text("Trust Services Criteria: Security, Availability, Processing Integrity").FontSize(11);
                     col.Item().PaddingTop(4).Text($"Period: {fromUtc:yyyy-MM-dd} to {toUtc:yyyy-MM-dd} (UTC)  |  Generated: {generatedOnUtc:yyyy-MM-dd HH:mm} UTC");
                     col.Item().PaddingTop(2).Text("Manual-trigger export — no automated monthly schedule exists yet.").FontSize(8).Italic();

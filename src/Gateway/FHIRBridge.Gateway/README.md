@@ -1,6 +1,6 @@
 # FHIRBridge.Gateway
 
-> The edge reverse proxy for FHIRBridge: a YARP-based gateway that fronts the API (and future internal services), terminating client traffic and routing it to backend clusters with unified, structured logging and observability.
+> The edge reverse proxy for Segue: a YARP-based gateway that fronts the API (and future internal services), terminating client traffic and routing it to backend clusters with unified, structured logging and observability.
 
 **Layer:** Host (Gateway) · **SDK:** Microsoft.NET.Sdk.Web · **Target:** net9.0
 

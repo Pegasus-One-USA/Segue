@@ -27,13 +27,13 @@ export class EmailNotificationService {
     const email: MockEmail = {
       id:      `email-${Date.now()}`,
       to,
-      subject: `You're invited to join ${orgName} on FHIRBridge`,
+      subject: `You're invited to join ${orgName} on Segue`,
       type:    'invitation',
       sentAt:  new Date(),
       body: `
 Dear ${firstName},
 
-You have been invited to join ${orgName} on FHIRBridge — the Healthcare Integration Platform.
+You have been invited to join ${orgName} on Segue — the Healthcare Integration Platform.
 
 To activate your account, click the button below:
   ${activationUrl}
@@ -42,7 +42,7 @@ This invitation expires on ${expiresAt.toLocaleString()}.
 
 If you did not expect this invitation, you may safely ignore this email.
 
-— The FHIRBridge Team
+— The Segue Team
       `.trim(),
     };
 
@@ -52,26 +52,26 @@ If you did not expect this invitation, you may safely ignore this email.
   }
 
   sendPasswordChangedEmail(to: string, firstName: string): Observable<void> {
-    this.log(to, 'password_changed', `Password changed`, `Dear ${firstName}, your FHIRBridge password was just changed.`);
+    this.log(to, 'password_changed', `Password changed`, `Dear ${firstName}, your Segue password was just changed.`);
     return of(undefined).pipe(delay(100));
   }
 
   sendPasswordResetEmail(to: string, firstName: string, resetUrl: string): Observable<void> {
-    this.log(to, 'password_reset', `Reset your FHIRBridge password`, `Dear ${firstName}, use this link to reset: ${resetUrl}`);
+    this.log(to, 'password_reset', `Reset your Segue password`, `Dear ${firstName}, use this link to reset: ${resetUrl}`);
     return of(undefined).pipe(delay(100));
   }
 
   sendAccountLockedEmail(to: string, minutesLocked: number): Observable<void> {
     this.log(
       to, 'account_locked',
-      'FHIRBridge account locked',
+      'Segue account locked',
       `Your account has been locked for ${minutesLocked} minutes due to too many failed login attempts.`,
     );
     return of(undefined).pipe(delay(100));
   }
 
   sendInvitationAcceptedEmail(to: string, firstName: string): Observable<void> {
-    this.log(to, 'invitation_accepted', 'Welcome to FHIRBridge!', `Dear ${firstName}, your account has been activated. You may now sign in.`);
+    this.log(to, 'invitation_accepted', 'Welcome to Segue!', `Dear ${firstName}, your account has been activated. You may now sign in.`);
     return of(undefined).pipe(delay(100));
   }
 

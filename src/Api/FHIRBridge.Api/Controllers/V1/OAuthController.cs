@@ -332,7 +332,7 @@ public sealed class OAuthController : ControllerBase
 
         return Ok(new
         {
-            message = "Authorization complete. You can close this window and return to FHIRBridge.",
+            message = "Authorization complete. You can close this window and return to Segue.",
             sourceConnectionId = result.SourceConnectionId,
             source = result.SourceName
         });

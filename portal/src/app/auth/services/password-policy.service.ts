@@ -4,7 +4,7 @@ import { PasswordValidation, PasswordRequirement, PasswordStrength } from '../mo
 const COMMON_PASSWORDS = new Set([
   'Password123!', 'Admin123!', 'Welcome1!', 'P@ssword1', 'Qwerty123!',
   'Summer2024!', 'Winter2024!', 'Spring2024!', 'Fall2024!',
-  'FHIRBridge1!', 'Hospital1!', 'Healthcare1!', 'Medical123!',
+  'Segue1!', 'Hospital1!', 'Healthcare1!', 'Medical123!',
   'Abc123456!', 'Test1234!', 'Hello123!', 'Company123!',
   'Passw0rd!', 'Password1!', 'Welcome123!', 'ChangeMe1!',
 ]);

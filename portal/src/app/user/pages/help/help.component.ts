@@ -16,10 +16,10 @@ export class HelpComponent {
   private readonly router = inject(Router);
 
   protected readonly docs: HelpLink[] = [
-    { label: 'Documentation', desc: 'Full FHIRBridge reference and guides', icon: '📚' },
+    { label: 'Documentation', desc: 'Full Segue reference and guides', icon: '📚' },
     { label: 'FHIR R4 Spec', desc: 'Official HL7 FHIR R4 specification', icon: '🏥' },
     { label: 'API Reference', desc: 'REST API docs for integration development', icon: '⚡' },
-    { label: 'Release Notes', desc: 'What\'s new in each FHIRBridge release', icon: '🎉' },
+    { label: 'Release Notes', desc: 'What\'s new in each Segue release', icon: '🎉' },
     { label: 'Video Tutorials', desc: 'Step-by-step video walkthroughs', icon: '▶' },
     { label: 'Community Forum', desc: 'Ask questions, share tips with the community', icon: '💬' },
   ];

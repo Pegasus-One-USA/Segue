@@ -85,9 +85,9 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "FHIRBridge API",
+        Title = "Segue API",
         Version = "v1",
-        Description = "REST API for FHIRBridge — FHIR data integration and transformation platform."
+        Description = "REST API for Segue — FHIR data integration and transformation platform."
     });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -350,10 +350,10 @@ var sessionGates = new[]
 {
     (Claim: "pwd_change_required",
      Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me" },
-     Message: "Password change is required before using FHIRBridge."),
+     Message: "Password change is required before using Segue."),
     (Claim: "mfa_setup_required",
      Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me" },
-     Message: "Two-factor authentication setup is required before using FHIRBridge."),
+     Message: "Two-factor authentication setup is required before using Segue."),
 };
 
 app.Use(async (context, next) =>

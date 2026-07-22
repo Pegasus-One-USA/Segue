@@ -26,7 +26,7 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         var metadata = new Dictionary<string, object?>
         {
             ["executor"] = GetType().Name,
-            ["adapterStatus"] = "Placeholder until existing FHIRBridge service is wired behind this node."
+            ["adapterStatus"] = "Placeholder until existing Segue service is wired behind this node."
         };
 
         return Task.FromResult(new WorkflowNodeOutput(node.Id, node.NodeType, payload, OutputContract, metadata));

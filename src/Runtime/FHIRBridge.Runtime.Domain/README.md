@@ -1,6 +1,6 @@
 # FHIRBridge.Runtime.Domain
 
-> The pure domain model of the pipeline-execution (runtime) side of FHIRBridge: pipeline-run aggregates, runtime enums, value objects, the supported-FHIR catalog, and the ranked workflow graph model.
+> The pure domain model of the pipeline-execution (runtime) side of Segue: pipeline-run aggregates, runtime enums, value objects, the supported-FHIR catalog, and the ranked workflow graph model.
 
 **Layer:** Runtime Domain · **SDK:** Microsoft.NET.Sdk · **Target:** net9.0
 

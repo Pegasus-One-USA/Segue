@@ -2,7 +2,7 @@
       <div class="page-header">
         <div>
           <h1 class="page-title">Preferences</h1>
-          <p class="page-sub">Customize your FHIRBridge experience</p>
+          <p class="page-sub">Customize your Segue experience</p>
         </div>
         @if (saved()) {
           <div class="save-toast">✓ Preferences saved</div>
@@ -17,7 +17,7 @@
           <!-- Appearance / Theme -->
           <section class="settings-card">
             <h2 class="card-title">Appearance</h2>
-            <p class="card-sub">Choose how FHIRBridge looks to you</p>
+            <p class="card-sub">Choose how Segue looks to you</p>
             <div class="theme-cards">
               @for (opt of themeOptions; track opt.id) {
                 <button

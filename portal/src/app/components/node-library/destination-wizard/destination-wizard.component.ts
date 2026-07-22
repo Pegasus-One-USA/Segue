@@ -196,7 +196,7 @@ export class DestinationWizardComponent implements OnInit {
     // ── Email-only fields ─────────────────────────────────────────────────────
     emailTo:              ['', []],
     emailCc:               ['', []],
-    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
+    emailSubjectTemplate: ['Segue CSV Export - {{RouteName}} - {{RunDate}}', []],
     emailBodyTemplate:    ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
     // ── Download-link-only field ─────────────────────────────────────────────
     downloadLinkExpiryMinutes: [60, []],
@@ -533,7 +533,7 @@ export class DestinationWizardComponent implements OnInit {
         sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
         emailTo:              metadata['dest_emailTo']              || '',
         emailCc:               metadata['dest_emailCc']               || '',
-        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'Segue CSV Export - {{RouteName}} - {{RunDate}}',
         emailBodyTemplate:
           metadata['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
         downloadLinkExpiryMinutes: metadata['dest_downloadLinkExpiryMinutes']
@@ -1081,7 +1081,7 @@ export class DestinationWizardComponent implements OnInit {
         sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
         emailTo:              f['dest_emailTo']              || '',
         emailCc:               f['dest_emailCc']               || '',
-        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'Segue CSV Export - {{RouteName}} - {{RunDate}}',
         emailBodyTemplate:
           f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
         downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,

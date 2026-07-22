@@ -52,7 +52,7 @@ export class AppShellComponent implements OnInit {
       return;
     }
     const base = '/' + cleanUrl.split('/')[1];
-    this.pageTitle.set(PAGE_TITLES[base] ?? 'FHIRBridge');
+    this.pageTitle.set(PAGE_TITLES[base] ?? 'Segue');
   }
 
   toggleSidebar(): void {

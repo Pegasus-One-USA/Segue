@@ -185,7 +185,7 @@ public sealed class GovernanceController : ControllerBase
 
         var pdfBytes = await _complianceReportService.GenerateHipaaAuditReportAsync(fromUtc, toUtc, cancellationToken);
 
-        return File(pdfBytes, "application/pdf", $"FHIRBridge-Compliance-Report-{fromUtc:yyyyMMdd}-{toUtc:yyyyMMdd}.pdf");
+        return File(pdfBytes, "application/pdf", $"Segue-Compliance-Report-{fromUtc:yyyyMMdd}-{toUtc:yyyyMMdd}.pdf");
     }
 
     /// <summary>Generates and downloads the SOC2 evidence export PDF for the given UTC date range — a distinct
@@ -201,6 +201,6 @@ public sealed class GovernanceController : ControllerBase
 
         var pdfBytes = await _complianceReportService.GenerateSoc2EvidenceReportAsync(fromUtc, toUtc, cancellationToken);
 
-        return File(pdfBytes, "application/pdf", $"FHIRBridge-SOC2-Evidence-{fromUtc:yyyyMMdd}-{toUtc:yyyyMMdd}.pdf");
+        return File(pdfBytes, "application/pdf", $"Segue-SOC2-Evidence-{fromUtc:yyyyMMdd}-{toUtc:yyyyMMdd}.pdf");
     }
 }

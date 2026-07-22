@@ -1,6 +1,6 @@
 # FHIRBridge.Api
 
-> The public-facing ASP.NET Core Web API host for FHIRBridge: versioned REST/JSON controllers, minimal-API workflow endpoints, JWT/Entra authentication, and the single-org administration and FHIR-aggregation surface that the Angular portal and external callers consume.
+> The public-facing ASP.NET Core Web API host for Segue: versioned REST/JSON controllers, minimal-API workflow endpoints, JWT/Entra authentication, and the single-org administration and FHIR-aggregation surface that the Angular portal and external callers consume.
 
 **Layer:** Host (Web API) · **SDK:** Microsoft.NET.Sdk.Web · **Target:** net9.0
 

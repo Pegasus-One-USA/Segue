@@ -9,7 +9,7 @@ import { MOCK_USERS, ALL_ROLES } from '../mock/mock-db';
 import { User } from '../models/user.model';
 import { MessageResponse } from '../models/user.model';
 
-const ORG_NAME         = 'FHIRBridge Healthcare';
+const ORG_NAME         = 'Segue Healthcare';
 const TOKEN_EXPIRY_MS  = 24 * 60 * 60 * 1000; // 24 hours
 const PASSWORD_HISTORY = 20;
 const STORAGE_KEY      = 'fhirbridge_invitations';

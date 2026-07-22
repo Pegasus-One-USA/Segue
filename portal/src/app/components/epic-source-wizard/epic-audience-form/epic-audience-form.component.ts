@@ -243,7 +243,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
   webhook: {
     value: 'webhook',
     label: 'Webhook',
-    description: 'Epic (or a middleware relay) posts updates to an FHIRBridge callback endpoint.',
+    description: 'Epic (or a middleware relay) posts updates to a Segue callback endpoint.',
     fields: [
       { key: 'webhookResourceType',    label: 'Resource Type',           type: 'multiselect', required: true },
       { key: 'eventType',              label: 'Event Type',              type: 'select',       required: true, options: EVENT_TYPE_OPTIONS },
@@ -258,7 +258,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
   'search-rest': {
     value: 'search-rest',
     label: 'Search (REST)',
-    description: 'FHIRBridge polls Epic’s FHIR REST API on a schedule.',
+    description: 'Segue polls Epic’s FHIR REST API on a schedule.',
     fields: [
       // Resource Type / Search Criteria / Max Results / Include Related Resources are the only four fields shown to
       // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
@@ -417,7 +417,7 @@ export class EpicAudienceFormComponent implements OnInit {
     callbackUrl:       ['http://localhost:5000/api/v1/oauth/callback', [Validators.required, urlValidator]],
     resources:         [[] as string[], Validators.required],
     scopeVersion:      ['v2'],
-    appName:           ['FHIRBridge Epic'],
+    appName:           ['Segue Epic'],
     // ── CDS Hooks ──────────────────────────────────────────────────────────────
     cdsDiscoveryUrl:     [''],
     cdsServiceEndpoint:  [''],

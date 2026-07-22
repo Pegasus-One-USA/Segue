@@ -18,7 +18,7 @@ export const EPIC_MODE_CONFIG: Record<string, ModeConfigSchema> = {
   },
   export: {
     title: 'Bulk export ($export) configuration',
-    note: () => 'FHIRBridge kicks off $export, polls the status endpoint, then streams the NDJSON output files.',
+    note: () => 'Segue kicks off $export, polls the status endpoint, then streams the NDJSON output files.',
     callouts: [
       { type: 'warn', icon: '⚠', html: '<b>Epic constrains bulk export.</b> System-level <code>/$export</code> is generally not available; Epic supports <b>Group-level</b> export behind a Bulk Data-registered client, and the Group must be provisioned by the customer organization.' },
     ],
@@ -33,24 +33,24 @@ export const EPIC_MODE_CONFIG: Record<string, ModeConfigSchema> = {
   },
   subscription: {
     title: 'Subscription configuration',
-    note: () => 'FHIRBridge registers a notification subscription on Epic; Epic POSTs to your callback URL.',
+    note: () => 'Segue registers a notification subscription on Epic; Epic POSTs to your callback URL.',
     callouts: [
       { type: 'warn', icon: '⚠', html: '<b>Epic\'s R4 Subscription support is narrow.</b> It is topic/use-case scoped, not arbitrary FHIR search criteria. Confirm the customer\'s Epic supports the topic before relying on this mode.' },
     ],
     fields: [
-      { key: 'Callback URL',       label: 'Callback URL (notification endpoint)', type: 'text',     def: 'https://ingress.fhirbridge.io/hooks/epic', required: true, hint: 'Your FHIRBridge endpoint Epic will POST to.' },
+      { key: 'Callback URL',       label: 'Callback URL (notification endpoint)', type: 'text',     def: 'https://ingress.fhirbridge.io/hooks/epic', required: true, hint: 'Your Segue endpoint Epic will POST to.' },
       { key: 'Subscription topic', label: 'Subscription topic / criteria',        type: 'textarea', def: 'Observation (vital-signs topic)', hint: 'Use an Epic-supported topic, not a free FHIR search.' },
       { key: 'Channel payload',    label: 'Channel payload type',                 type: 'select',   def: 'id-only', options: ['id-only', 'full-resource', 'empty'] },
-      { key: 'Callback secret',    label: 'Callback shared secret',               type: 'text',     def: '', required: true, hint: 'Header/secret Epic includes so FHIRBridge can verify inbound calls.' },
+      { key: 'Callback secret',    label: 'Callback shared secret',               type: 'text',     def: '', required: true, hint: 'Header/secret Epic includes so Segue can verify inbound calls.' },
       { key: 'Heartbeat period',   label: 'Heartbeat period',                     type: 'select',   def: 'None', options: ['None', '5 min', '1 hour', 'Daily'] },
     ],
   },
   webhook: {
     title: 'Webhook receiver configuration',
-    note: () => 'Passive receiver for callbacks registered out-of-band. FHIRBridge validates each inbound notification.',
+    note: () => 'Passive receiver for callbacks registered out-of-band. Segue validates each inbound notification.',
     callouts: [],
     fields: [
-      { key: 'Listener URL',        label: 'Listener URL (your endpoint)',     type: 'text',   def: 'https://ingress.fhirbridge.io/hooks/epic-webhook', required: true, hint: 'The FHIRBridge URL the notifier calls.' },
+      { key: 'Listener URL',        label: 'Listener URL (your endpoint)',     type: 'text',   def: 'https://ingress.fhirbridge.io/hooks/epic-webhook', required: true, hint: 'The Segue URL the notifier calls.' },
       { key: 'Verification secret', label: 'Verification / signing secret',    type: 'text',   def: '', required: true, hint: 'Validates the signature/header on inbound calls.' },
       { key: 'On receipt',          label: 'On receipt',                       type: 'select', def: 'Fetch + verify', options: ['Fetch on notify', 'Trust payload', 'Fetch + verify'], hint: 'Re-read from Epic vs trust the pushed payload.' },
       { key: 'Allowed source IPs',  label: 'Allowed source IPs',               type: 'text',   def: '', hint: 'Optional CIDR allowlist for the notifier\'s origin.' },

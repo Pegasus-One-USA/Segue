@@ -150,7 +150,7 @@ public sealed class UserManagementService : IUserManagementService
 
         await _emailSender.SendAsync(
             email,
-            "You've been invited to FHIRBridge",
+            "You've been invited to Segue",
             BuildInviteEmailBody(request.FirstName, role.Name, BuildInviteLink(email, rawToken), expiresOnUtc),
             cancellationToken);
 
@@ -180,7 +180,7 @@ public sealed class UserManagementService : IUserManagementService
 
         await _emailSender.SendAsync(
             user.Email!,
-            "Your FHIRBridge invitation (resent)",
+            "Your Segue invitation (resent)",
             BuildInviteEmailBody(user.FirstName, roleName, BuildInviteLink(user.Email!, rawToken), expiresOnUtc),
             cancellationToken);
 
@@ -543,7 +543,7 @@ public sealed class UserManagementService : IUserManagementService
 
         return $"""
             <p>Hi {greetingName},</p>
-            <p>You've been invited to join FHIRBridge as a <strong>{roleName}</strong>. Use the link/token below to
+            <p>You've been invited to join Segue as a <strong>{roleName}</strong>. Use the link/token below to
             accept your invitation and set your password:</p>
             <p><a href="{inviteLinkOrToken}">{inviteLinkOrToken}</a></p>
             <p>This invitation expires at {expiresOnUtc:u}.</p>

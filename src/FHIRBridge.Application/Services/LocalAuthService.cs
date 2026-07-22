@@ -206,7 +206,7 @@ public sealed class LocalAuthService : ILocalAuthService
 
         await _emailSender.SendAsync(
             email,
-            "Reset your FHIRBridge password",
+            "Reset your Segue password",
             BuildPasswordResetEmailBody(user.DisplayName, BuildResetLink(email, token), expiresOnUtc),
             cancellationToken);
 
@@ -392,7 +392,7 @@ public sealed class LocalAuthService : ILocalAuthService
     {
         return $"""
             <p>Hi {displayName},</p>
-            <p>We received a request to reset your FHIRBridge password. Use the link/token below to continue:</p>
+            <p>We received a request to reset your Segue password. Use the link/token below to continue:</p>
             <p><a href="{resetLinkOrToken}">{resetLinkOrToken}</a></p>
             <p>This reset request expires at {expiresOnUtc:u}. If you did not request a password reset, you can ignore this email.</p>
             """;
