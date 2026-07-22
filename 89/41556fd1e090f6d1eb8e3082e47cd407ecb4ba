@@ -1,0 +1,20 @@
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.html
+  s_c8924f0d34965f::t_6c2bc5f53f9a1e 2-3
+  s_c8924f0d34965f::t_f967c1a06c072f 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8941556fd1e090f6d1eb8e3082e47cd407ecb4ba",
+  "prompts": {},
+  "sessions": {
+    "s_c8924f0d34965f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f01de126-fa34-4d6b-98d4-ac698aee3fce",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
