@@ -226,14 +226,35 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         var parts = new List<string>();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         if (!string.IsNullOrWhiteSpace(baseSearchParameters))
         {
-            parts.Add(baseSearchParameters.Trim('&'));
+            var trimmed = baseSearchParameters.Trim('&');
+            parts.Add(trimmed);
+            foreach (var segment in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                seenKeys.Add(ExtractParameterKey(segment));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(retrieval.SearchCriteria))
         {
-            parts.Add(retrieval.SearchCriteria.Trim('&'));
+            // The node-level "Search criteria" field is frequently a wizard-authored snapshot of this same
+            // connection's SearchCriteria (see epic-audience-form.component.ts save()), not an independently
+            // chosen addition — concatenating both unconditionally then re-sends the identical parameter twice
+            // (e.g. "identifier=A,B&identifier=A,B"), which Epic rejects outright for identifier ("Don't support
+            // searching by IDENTIFIER AND IDENTIFIER"). Only carry over parameters whose key isn't already present
+            // in baseSearchParameters.
+            var additional = retrieval.SearchCriteria.Trim('&')
+                .Split('&', StringSplitOptions.RemoveEmptyEntries)
+                .Where(segment => seenKeys.Add(ExtractParameterKey(segment)))
+                .ToList();
+
+            if (additional.Count > 0)
+            {
+                parts.Add(string.Join('&', additional));
+            }
         }
 
         if (retrieval.IncrementalSyncEnabled && retrieval.LastSuccessfulSyncUtc is { } lastSync)
@@ -260,5 +281,11 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         return parts.Count == 0 ? null : string.Join('&', parts);
+    }
+
+    private static string ExtractParameterKey(string segment)
+    {
+        var equalsIndex = segment.IndexOf('=');
+        return equalsIndex < 0 ? segment : segment[..equalsIndex];
     }
 }
