@@ -18,14 +18,17 @@ calls both `.UseWindowsService()`/`AddWindowsService()` and `.UseSystemd()`/`Add
 
 | Service name | Folder | Bind | Role |
 |---|---|---|---|
-| `FHIRBridge.Api` | `C:\inetpub\wwwroot\fhirbridge-api` | `127.0.0.1:5000` (loopback only) | The API; not reachable from outside the server |
-| `FHIRBridge.Gateway` | `C:\inetpub\wwwroot\fhirbridge-gateway` | `0.0.0.0:80` (public) | YARP reverse proxy — routes `/api/**` and `/swagger/**` to the Api, serves the portal for everything else |
+| `FHIRBridge.Api` | `C:\inetpub\wwwroot\fhirbridge-api` | `127.0.0.1:<PROD_API_PORT>` (loopback only) | The API; not reachable from outside the server |
+| `FHIRBridge.Gateway` | `C:\inetpub\wwwroot\fhirbridge-gateway` | `0.0.0.0:<PROD_GATEWAY_PORT>` (public) | YARP reverse proxy — routes `/api/**` and `/swagger/**` to the Api, serves the portal for everything else |
 | *(no service)* | `C:\inetpub\wwwroot\fhirbridge-portal` | — | Angular portal build; static files only, served by Gateway |
 | `FHIRBridge.Worker` | `C:\inetpub\wwwroot\fhirbridge-worker` | none (no HTTP endpoint) | Background scheduler/pipeline processor |
-| `FHIRBridge.DemoApp` | `C:\inetpub\wwwroot\demoapp-api` | `0.0.0.0:5500` (public) | Demo app backend — serves its own frontend, same origin |
+| `FHIRBridge.DemoApp` | `C:\inetpub\wwwroot\demoapp-api` | `0.0.0.0:<PROD_DEMOAPI_PORT>` (public) | Demo app backend — serves its own frontend, same origin |
 | *(no service)* | `C:\inetpub\wwwroot\demoapp-portal` | — | Demo app Angular build; static files only, served by DemoApp |
 
-Both public entry points (Gateway on 80, DemoApp on 5500) currently serve plain HTTP — TLS
+`PROD_API_PORT`, `PROD_GATEWAY_PORT`, `PROD_DEMOAPI_PORT` are **GitHub Environment variables** (see
+step 4) — pick any free ports on this host, there is no hardcoded default (a shared default port,
+like Kestrel's own built-in `5000`, is exactly what caused this to silently collide with an
+unrelated application on the box before). Both public entry points currently serve plain HTTP — TLS
 termination is a deliberate later step, not yet configured.
 
 ## 1. Prerequisites on the server
@@ -34,11 +37,14 @@ termination is a deliberate later step, not yet configured.
   used here): https://dotnet.microsoft.com/download/dotnet/9.0
 - PowerShell 5.1+ (built into Windows Server).
 - Outbound HTTPS access to `github.com` / `*.actions.githubusercontent.com`.
-- Inbound firewall rules opened for ports **80** (Gateway) and **5500** (Demo app) — this is a
-  one-time manual step (`New-NetFirewallRule`), not something CI touches:
+- Confirm the ports you intend to use for `PROD_API_PORT`/`PROD_GATEWAY_PORT`/`PROD_DEMOAPI_PORT`
+  (step 4) aren't already bound by another application on this host —
+  `Get-NetTCPConnection -LocalPort <port> -ErrorAction SilentlyContinue` (or `netstat -ano | findstr :<port>`).
+- Inbound firewall rules opened for the Gateway and Demo app ports — this is a one-time manual step
+  (`New-NetFirewallRule`), not something CI touches:
   ```powershell
-  New-NetFirewallRule -DisplayName "FHIRBridge Gateway (80)" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
-  New-NetFirewallRule -DisplayName "FHIRBridge Demo App (5500)" -Direction Inbound -LocalPort 5500 -Protocol TCP -Action Allow
+  New-NetFirewallRule -DisplayName "FHIRBridge Gateway" -Direction Inbound -LocalPort <PROD_GATEWAY_PORT> -Protocol TCP -Action Allow
+  New-NetFirewallRule -DisplayName "FHIRBridge Demo App" -Direction Inbound -LocalPort <PROD_DEMOAPI_PORT> -Protocol TCP -Action Allow
   ```
 
 ## 2. Install the self-hosted runner
@@ -90,9 +96,11 @@ Sections` table in the repo's `CLAUDE.md` for what each of these does.
 
 **`fhirbridge-gateway`** — set `StaticFiles:RootPath` to
 `C:\inetpub\wwwroot\fhirbridge-portal` (absolute path, so it doesn't matter what working directory
-the service starts in). `ApiBaseUrl` (a single flat setting — `Program.cs` builds the YARP
-routes/clusters in code and only reads the destination address from this key, already
-`http://127.0.0.1:5000/` by default) only needs overriding here if the Api ever moves off port 5000.
+the service starts in), and `ApiBaseUrl` to `http://127.0.0.1:<PROD_API_PORT>/` (a single flat
+setting — `Program.cs` builds the YARP routes/clusters in code and only reads the destination
+address from this key). **Mandatory, no default** — `Program.cs` throws at startup outside
+Development if this is unset, rather than silently falling back to another environment's Api
+address, so this must match whatever `PROD_API_PORT` is set to in step 4.
 
 **`fhirbridge-worker`** — populate `ConnectionStrings:FHIRBridgeDb`, `RuntimeWorker:Enabled`, and
 `Messaging:Provider` (`InMemory` / `RabbitMQ` / `AzureServiceBus` — see `CLAUDE.md`), plus
@@ -100,31 +108,33 @@ routes/clusters in code and only reads the destination address from this key, al
 
 **`demoapp-api`** — populate `ConnectionStrings:Default` (its own SQL Server database — this is a
 separate database from `FHIRBridgeDb`, used only by the demo app) and `AllowedFrontendOrigin` (set
-to this app's own public URL, e.g. `http://<server>:5500`, not the portal's origin — CORS here only
-applies to any cross-origin caller, since the demo frontend is served same-origin already).
+to this app's own public URL, e.g. `http://<server>:<PROD_DEMOAPI_PORT>`, not the portal's origin —
+CORS here only applies to any cross-origin caller, since the demo frontend is served same-origin
+already).
 
 **`fhirbridge-portal` / `demoapp-portal`** — these Angular builds have no runtime config file today;
 their folders under `ConfigRoot` can stay empty. They exist for consistency and in case a
 runtime-loaded config file is ever added later.
 
-## 4. Set each service's bind address (one-time, per service)
+## 4. Set each service's bind address (GitHub Environment variables — no server-side step)
 
-None of this is in `appsettings.Production.json` by default — set it via an `ASPNETCORE_URLS`
-environment variable on each Windows Service (**Environment** tab in `services.msc`, or
-`sc.exe`/`Set-Service` scripting). This is a one-time step per service, not something the deploy
-script touches:
+`Deploy-FHIRBridge.ps1` sets each service's `ASPNETCORE_URLS` (and, for the Demo app,
+`DEMOAPP_PORTAL_PATH`) directly on that Windows Service's registry `Environment` value, on
+**every** deploy — this used to be a one-time manual step via `services.msc` and silently drifted
+back to Kestrel's own built-in default (port 5000) whenever that step was skipped or a service got
+recreated. Nothing to touch on the server itself; instead, set the three port numbers once as
+**Settings → Environments → `production` → Environment variables** in this repo:
 
-| Service | `ASPNETCORE_URLS` |
+| Variable | Used for |
 |---|---|
-| `FHIRBridge.Api` | `http://127.0.0.1:5000` |
-| `FHIRBridge.Gateway` | `http://+:80` |
-| `FHIRBridge.Worker` | *(none — no HTTP endpoint)* |
-| `FHIRBridge.DemoApp` | `http://+:5500` |
+| `PROD_API_PORT` | `FHIRBridge.Api` → `ASPNETCORE_URLS=http://127.0.0.1:<PROD_API_PORT>` |
+| `PROD_GATEWAY_PORT` | `FHIRBridge.Gateway` → `ASPNETCORE_URLS=http://+:<PROD_GATEWAY_PORT>` |
+| `PROD_DEMOAPI_PORT` | `FHIRBridge.DemoApp` → `ASPNETCORE_URLS=http://+:<PROD_DEMOAPI_PORT>` |
 
-`FHIRBridge.DemoApp` also needs a `DEMOAPP_PORTAL_PATH` environment variable set to
-`C:\inetpub\wwwroot\demoapp-portal` — the app reads this directly via
-`Environment.GetEnvironmentVariable`, not through `IConfiguration`, so it can't go in
-`appsettings.json`.
+`FHIRBridge.Worker` has no HTTP endpoint, so no port is needed for it. There is no fallback if
+these variables are unset — `deploy.yml` passes them straight through as mandatory parameters to
+`Deploy-FHIRBridge.ps1`, and the workflow run fails immediately rather than deploying with a guessed
+port. Remember `ApiBaseUrl` in `fhirbridge-gateway`'s config (step 3) must match `PROD_API_PORT`.
 
 ## 5. First deploy
 

@@ -30,6 +30,17 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Every non-dev deployment MUST set ASPNETCORE_URLS explicitly (the Windows Service's registry
+// Environment value — see deploy/windows/Deploy-FHIRBridge*.ps1). Kestrel's own built-in fallback
+// (http://localhost:5000) is a shared, unconfigurable port; silently landing on it risks colliding
+// with another environment's service, or an unrelated application entirely, on the same host.
+if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+{
+    throw new InvalidOperationException(
+        "ASPNETCORE_URLS is not set for this environment. Refusing to fall back to Kestrel's default port — " +
+        "set it explicitly via this Windows Service's registry Environment value (deploy/windows/Deploy-FHIRBridge*.ps1).");
+}
+
 // No-op unless the process is actually started by the Windows Service Control Manager (e.g. `dotnet run`
 // and console execution are unaffected) — lets the same published output run standalone or as a service.
 builder.Host.UseWindowsService(options => options.ServiceName = "FHIRBridge.Api");
