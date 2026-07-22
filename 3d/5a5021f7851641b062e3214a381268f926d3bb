@@ -1,0 +1,28 @@
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineSystemValueTests.cs
+  s_2b61b2c58de087::t_8d51116d517408 46-49,60-61
+  s_2b61b2c58de087::t_1c561c709fc99f 1-45,50-59,62-63
+tests/FHIRBridge.UnitTests/Destinations/SqlDestinationDataServiceTests.cs
+  s_2b61b2c58de087::t_7f9f0819f03baf 1-44,47-51
+  s_2b61b2c58de087::t_d2d6a7aa73d1a4 45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "3d5a5021f7851641b062e3214a381268f926d3bb",
+  "prompts": {},
+  "humans": {
+    "h_537f5ffdfa988f": {
+      "author": "gauravsondkarpegasusone <Gaurav.Sondkar@pegasusone.com>"
+    }
+  },
+  "sessions": {
+    "s_2b61b2c58de087": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b10e7981-8c72-4d24-a8f0-ae88db6f3c97",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
