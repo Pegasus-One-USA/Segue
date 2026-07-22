@@ -163,7 +163,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         CancellationToken cancellationToken)
     {
         var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
-        var searchParameters = ReadStringConfiguration(node, "searchParameters");
+        // "searchParameters" is the canonical key for a hand-authored/route-projected node config; the Epic wizard
+        // (epic-audience-form.component.ts save(), Search REST's "Search Criteria" field) instead writes its own
+        // human-readable field bag under "Search criteria" — without this fallback, anything typed into that field
+        // was silently never read, so a wizard-configured Search Criteria had zero effect on the outbound request.
+        var searchParameters = ReadStringConfiguration(node, "searchParameters")
+            ?? ReadStringConfiguration(node, "Search criteria");
 
         // The wizard-authored, human-readable "Resources" field (e.g. "Patient, Observation, Condition") is this
         // node's own, per-workflow declaration of what it fetches — two workflows can share one SourceConnection

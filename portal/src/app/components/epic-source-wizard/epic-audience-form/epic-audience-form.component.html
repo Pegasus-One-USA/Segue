@@ -683,7 +683,9 @@
                 } @else {
                   <label class="eaf-label" [attr.for]="'eaf-' + field.key">
                     {{ field.label }}
-                    @if (field.required) { <span class="eaf-req">*</span> }
+                    @if (field.required || (field.key === 'searchCriteria' && searchCriteriaRequiredForPatient())) {
+                      <span class="eaf-req">*</span>
+                    }
                   </label>
 
                   @switch (field.type) {
@@ -748,7 +750,11 @@
                 @if (isRetrievalFieldInvalid(field)) {
                   <p class="eaf-error-msg">{{ field.label }} is required.</p>
                 }
-                @if (field.hint) {
+                @if (field.key === 'searchCriteria' && searchCriteriaRequiredForPatient()) {
+                  <p class="eaf-hint">Required: Epic rejects an unscoped Backend System Patient search (no launch
+                    context exists to scope it automatically). Supply an identifier, demographics, or _id here —
+                    e.g. <code>identifier=&lt;system&gt;|&lt;value&gt;</code> or <code>family=Smith&amp;birthdate=1990-01-01</code>.</p>
+                } @else if (field.hint) {
                   <p class="eaf-hint">{{ field.hint }}</p>
                 }
               </div>

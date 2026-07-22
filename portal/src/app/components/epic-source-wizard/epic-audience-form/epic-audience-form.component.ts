@@ -84,8 +84,16 @@ function detectAuthMethod(audience: EpicAudience, authMethodsSupported: string[]
 }
 
 function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
-  if (capabilities.includes('permission-v2')) return 'v2';
-  if (capabilities.includes('permission-v1')) return 'v1';
+  const hasV1 = capabilities.includes('permission-v1');
+  const hasV2 = capabilities.includes('permission-v2');
+  // Only trust the capability token when exactly one is advertised. Epic's system-level (Backend System) scopes
+  // commonly advertise BOTH permission-v1 and permission-v2 at once — that says the server can accept either,
+  // not which one this specific app was actually registered under (same ambiguity detectAuthMethod already
+  // accounts for with token_endpoint_auth_methods_supported). Blindly preferring v2 there previously forced
+  // every Backend System connection onto granular '.rs' scopes even when the app was registered for coarse
+  // '.read' v1 scopes. Fall through to shape-inference from scopes_supported instead of guessing.
+  if (hasV1 && !hasV2) return 'v1';
+  if (hasV2 && !hasV1) return 'v2';
   const suffix = (s: string): string => (s.includes('.') ? s.slice(s.lastIndexOf('.') + 1) : '').toLowerCase();
   if (scopesSupported.some(s => /^[cruds]+$/.test(suffix(s)))) return 'v2';
   if (scopesSupported.some(s => suffix(s) === 'read' || suffix(s) === 'write')) return 'v1';
@@ -582,6 +590,19 @@ export class EpicAudienceFormComponent implements OnInit {
     return field ? this.selectedRetrievalResourceTypes(field.key) : [];
   });
 
+  /**
+   * Epic rejects an unscoped Backend System Patient search outright ("This resource requires demographics or
+   * _id parameter for searching" — business-rule 59159): with no SMART launch context and no discovered patient
+   * cohort, FhirSourceConnectorBase.ApplyPatientScopeAsync has nothing to scope the request with unless this
+   * connection's own Search Criteria supplies one. Search REST + Patient is the only combination where that gap
+   * is guaranteed to hit Epic at runtime, so Search Criteria becomes required exactly there instead of staying
+   * the generally-optional field it is for every other resource type / retrieval method.
+   */
+  protected readonly searchCriteriaRequiredForPatient = computed(() =>
+    this.audience() === 'backend-system'
+    && this.retrievalMethod() === 'search-rest'
+    && this.searchRestResourceTypeValue().includes('Patient'));
+
   /** Section numbers shift depending on which optional sections the current audience shows. */
   protected readonly sectionNumbers = computed(() => {
     const cfg = this.audienceConfig();
@@ -718,6 +739,13 @@ export class EpicAudienceFormComponent implements OnInit {
       .subscribe(() => this.syncRetrievalValidators());
 
     this.form.controls.exportScope.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.syncRetrievalValidators());
+
+    // Toggling Patient in/out of Search REST's own Resource Type picker flips whether Search Criteria is
+    // required (see searchCriteriaRequiredForPatient) — re-sync immediately rather than waiting for some other
+    // field's valueChanges to happen to fire next.
+    this.form.controls.searchRestResourceType.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncRetrievalValidators());
 
@@ -982,6 +1010,12 @@ export class EpicAudienceFormComponent implements OnInit {
       let required = !!field && visibleKeys.has(key) && field.required;
       if (required && field?.requiredUnless && this.form.get(field.requiredUnless.key)?.value === field.requiredUnless.value) {
         required = false;
+      }
+      // Search Criteria is otherwise optional (see RETRIEVAL_METHOD_CONFIG['search-rest']) — Backend System
+      // searching Patient is the one combination Epic guarantees to reject unscoped (see
+      // searchCriteriaRequiredForPatient), so force it required there regardless of the static config.
+      if (key === 'searchCriteria' && this.searchCriteriaRequiredForPatient()) {
+        required = true;
       }
       apply(key, required);
     }
