@@ -6,11 +6,11 @@
  * `enrolled` fires.
  */
 import { Component, OnInit, inject, input, output, signal } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { toDataURL as qrToDataUrl } from 'qrcode';
 import { MfaApiService } from '../../services/mfa-api.service';
 import { MfaEnrollmentResponse } from '../../models/mfa.model';
 import { extractApiErrorMessage } from '../../../core/http-error.util';
+import { ToastService } from '../../../services/toast.service';
 
 @Component({
   selector: 'app-mfa-enrollment-panel',
@@ -21,7 +21,7 @@ import { extractApiErrorMessage } from '../../../core/http-error.util';
 })
 export class MfaEnrollmentPanelComponent implements OnInit {
   private readonly mfaApi   = inject(MfaApiService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast    = inject(ToastService);
 
   /** Hide the Cancel button — for a forced first-login setup, there's nothing to cancel back to. */
   readonly allowCancel = input<boolean>(true);
@@ -105,7 +105,7 @@ export class MfaEnrollmentPanelComponent implements OnInit {
         this.copiedField.set(field);
         setTimeout(() => this.copiedField.set(null), 2000);
       },
-      () => this.snackBar.open('Could not copy to clipboard.', 'Dismiss', { duration: 4000 }),
+      () => this.toast.error('Could not copy to clipboard.'),
     );
   }
 }

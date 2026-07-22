@@ -66,8 +66,8 @@ export class EpicStepTestComponent {
         this.runtimeChecks.set(RUNTIME_CHECKS.map(c => ({ ...c, status: 'error' as const })));
         this.testPassed.set(false);
         this.testing.set(false);
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Could not reach the source endpoint.';
-        this.toast.show('Connection failed', typeof msg === 'string' ? msg : 'Could not reach the source endpoint.');
+        const msg = typeof err?.error?.error === 'string' ? err.error.error : 'Could not reach the source endpoint.';
+        this.toast.show('Connection failed', msg);
       },
     });
   }

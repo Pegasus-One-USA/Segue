@@ -436,8 +436,9 @@ export class WizardService {
         this.close();
       },
       error: (err) => {
-        const msg = err?.error?.title ?? err?.error?.message ?? err?.message ?? 'Failed to save the Source Connection.';
-        this.toast.show('Save failed', typeof msg === 'string' ? msg : 'Failed to save the Source Connection.', 'error');
+        const backendMsg = err?.error?.title ?? err?.error?.message;
+        const msg = typeof backendMsg === 'string' ? backendMsg : (err?.message ?? 'Failed to save the Source Connection.');
+        this.toast.show('Save failed', msg, 'error');
       },
     });
   }

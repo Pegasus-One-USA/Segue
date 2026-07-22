@@ -83,7 +83,33 @@ public sealed record ErrorLogDto(
     string Message,
     string? StackTrace,
     string? Module,
-    string? CorrelationId);
+    string? CorrelationId,
+    string? ErrorReferenceId = null,
+    string? Category = null,
+    string? UserFriendlyMessage = null,
+    string? ExecutionId = null,
+    string? WorkflowId = null,
+    string? EndpointId = null,
+    string? RequestId = null,
+    string? TraceId = null,
+    string? SpanId = null,
+    string? Status = null,
+    string? ResolvedBy = null,
+    DateTime? ResolvedOnUtc = null);
+
+/// <summary>Search filter for the Monitoring → Errors screen (Phase 6A). All criteria optional and AND-combined.</summary>
+public sealed record ErrorLogSearch(
+    string? ErrorReferenceId = null,
+    string? CorrelationId = null,
+    string? ExecutionId = null,
+    string? WorkflowId = null,
+    string? EndpointId = null,
+    string? Severity = null,
+    string? Category = null,
+    string? Status = null,
+    DateTime? FromUtc = null,
+    DateTime? ToUtc = null,
+    int Take = 200);
 
 public sealed record ApiRequestLogDto(
     Guid Id,

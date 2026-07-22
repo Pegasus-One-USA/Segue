@@ -11,8 +11,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
+import { ToastService } from '../../../services/toast.service';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { User, UserRole, UserStatus } from '../../../auth/models/user.model';
 import { UpdateUserRequest } from '../../../auth/models/auth-request.model';
@@ -56,7 +56,7 @@ const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
 export class EditUserDialogComponent implements OnInit {
   private readonly userService = inject(IUserService);
   private readonly dialogRef   = inject(MatDialogRef<EditUserDialogComponent>);
-  private readonly snackBar    = inject(MatSnackBar);
+  private readonly toast       = inject(ToastService);
   private readonly fb          = inject(FormBuilder);
   readonly data                = inject<DialogData>(MAT_DIALOG_DATA);
 
@@ -113,20 +113,12 @@ export class EditUserDialogComponent implements OnInit {
     this.userService.updateUser(this.data.user.id, req).subscribe({
       next: user => {
         this.loading.set(false);
-        this.snackBar.open(
-          `User "${user.fullName}" updated successfully.`,
-          'Dismiss',
-          { duration: 4000, panelClass: 'snack-success' },
-        );
+        this.toast.success(`User "${user.fullName}" updated successfully.`);
         this.dialogRef.close(user);
       },
       error: err => {
         this.loading.set(false);
-        this.snackBar.open(
-          err?.message ?? 'Failed to update user. Please try again.',
-          'Dismiss',
-          { duration: 5000, panelClass: 'snack-error' },
-        );
+        this.toast.error(err?.message ?? 'Failed to update user. Please try again.');
       },
     });
   }

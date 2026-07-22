@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,6 +16,7 @@ import { SourceConnectionModel } from '../../models/source-connection.model';
 import { WizardService } from '../../../services/wizard.service';
 import { EpicAudienceFormComponent } from '../../../components/epic-source-wizard/epic-audience-form/epic-audience-form.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
 
 @Component({
   selector: 'app-source-connection-list',
@@ -40,7 +40,7 @@ import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm
 export class SourceConnectionListComponent implements OnInit {
   private readonly svc    = inject(ISourceConnectionService);
   private readonly dialog = inject(MatDialog);
-  private readonly snack  = inject(MatSnackBar);
+  private readonly toast  = inject(ToastService);
   protected readonly wiz  = inject(WizardService);
 
   readonly searchQuery = signal('');
@@ -125,7 +125,7 @@ export class SourceConnectionListComponent implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snack.open('Failed to load source connections.', 'Dismiss', { duration: 4000 });
+        this.toast.error('Failed to load source connections.');
       },
     });
 
@@ -133,7 +133,7 @@ export class SourceConnectionListComponent implements OnInit {
     // leaves Edit/Delete enabled until it succeeds (fails safe toward "editable", not toward "silently blocked").
     this.svc.getUsedIds().subscribe({
       next: ids => this.usedConnectionIds.set(new Set(ids)),
-      error: () => this.snack.open('Could not check workflow usage — Edit/Delete may be enabled for a connection still in use.', 'Dismiss', { duration: 6000 }),
+      error: () => this.toast.error('Could not check workflow usage — Edit/Delete may be enabled for a connection still in use.'),
     });
   }
 
@@ -189,12 +189,12 @@ export class SourceConnectionListComponent implements OnInit {
         if (!confirmed) return;
         this.svc.delete(connection.id).subscribe({
           next: () => {
-            this.snack.open('Source Connection deleted successfully.', 'Dismiss', { duration: 3000 });
+            this.toast.success('Source Connection deleted successfully.');
             this.loadConnections();
           },
           error: (err: HttpErrorResponse) => {
             const message = err.error?.title ?? 'Failed to delete Source Connection.';
-            this.snack.open(message, 'Dismiss', { duration: 5000 });
+            this.toast.error(message);
           },
         });
       });

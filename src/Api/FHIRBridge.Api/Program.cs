@@ -281,22 +281,42 @@ app.UseExceptionHandler(errorApp =>
 
         var (status, message) = MapException(feature.Error);
 
-        // Governance: every unhandled exception is captured centrally, regardless of which
-        // controller/service raised it — no per-call-site logging needed.
-        var governanceLogger = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGovernanceLogger>();
+        // Phase 6A – Enterprise Global Exception Management: every unhandled exception is funneled through the
+        // Global Exception Manager, which assigns a unique ErrorReferenceId, classifies it, persists the full
+        // technical detail (via IGovernanceLogger → ErrorLogs), and returns a safe, user-friendly report. No
+        // stack trace or internal message is ever written to the response.
+        var exceptionManager = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGlobalExceptionManager>();
         var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
-        await governanceLogger.LogErrorAsync(
-            new FHIRBridge.Governance.ErrorEntry(
-                status >= 500 ? "Error" : "Warning",
-                feature.Error.GetType().Name,
-                feature.Error.Message,
-                feature.Error.StackTrace,
-                "Api",
-                correlationId));
+        var activity = System.Diagnostics.Activity.Current;
+
+        // For expected (non-5xx) domain failures MapException already produced a safe, helpful message — keep it
+        // as the user-facing text. For genuine 5xx errors, let the manager emit a generic category message so no
+        // internal detail leaks.
+        var report = await exceptionManager.CaptureAsync(
+            feature.Error,
+            new FHIRBridge.Governance.ExceptionContext(
+                Module: "Api",
+                Severity: status >= 500 ? "Error" : "Warning",
+                CorrelationId: correlationId,
+                EndpointId: $"{context.Request.Method} {context.Request.Path}",
+                RequestId: context.TraceIdentifier,
+                TraceId: activity?.TraceId.ToString(),
+                SpanId: activity?.SpanId.ToString(),
+                UserFriendlyMessageOverride: status >= 500 ? null : message));
 
         context.Response.StatusCode  = status;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new { error = message });
+        context.Response.Headers["X-Error-Reference-Id"] = report.ErrorReferenceId;
+        // `error`/`message` keep the existing client contract (the Angular sanitizer reads them); the new
+        // `errorReferenceId`/`correlationId`/`category` fields drive the Phase 6A friendly-error dialog.
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = report.UserFriendlyMessage,
+            message = report.UserFriendlyMessage,
+            errorReferenceId = report.ErrorReferenceId,
+            correlationId = report.CorrelationId,
+            category = report.Category.ToString(),
+        });
     });
 });
 

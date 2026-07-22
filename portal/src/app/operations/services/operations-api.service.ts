@@ -7,6 +7,7 @@ import {
   ApiRequestLogEntry,
   EndpointHealthCheckEntry,
   ErrorLogEntry,
+  ErrorLogSearch,
   ExportHistoryEntry,
   NotificationHistoryEntry,
   QueueDepthEntry,
@@ -39,6 +40,35 @@ export class OperationsApiService {
 
   errors(correlationId?: string, take = 200): Observable<ErrorLogEntry[]> {
     return this.http.get<ErrorLogEntry[]>(OPERATIONS_ENDPOINTS.errors, { params: buildParams(correlationId, take) });
+  }
+
+  /** Phase 6A – multi-criteria error search (Monitoring → Errors). */
+  searchErrors(search: ErrorLogSearch): Observable<ErrorLogEntry[]> {
+    let params = new HttpParams().set('take', search.take ?? 200);
+    const set = (key: string, value: string | undefined) => {
+      if (value) { params = params.set(key, value); }
+    };
+    set('errorReferenceId', search.errorReferenceId);
+    set('correlationId', search.correlationId);
+    set('executionId', search.executionId);
+    set('workflowId', search.workflowId);
+    set('endpointId', search.endpointId);
+    set('severity', search.severity);
+    set('category', search.category);
+    set('status', search.status);
+    set('fromUtc', search.fromUtc);
+    set('toUtc', search.toUtc);
+    return this.http.get<ErrorLogEntry[]>(OPERATIONS_ENDPOINTS.errors, { params });
+  }
+
+  /** Phase 6A – mark a captured error Resolved. */
+  resolveError(errorReferenceId: string, notes?: string): Observable<void> {
+    return this.http.post<void>(`${OPERATIONS_ENDPOINTS.errors}/${encodeURIComponent(errorReferenceId)}/resolve`, { notes: notes ?? null });
+  }
+
+  /** Phase 6A – reopen a resolved error. */
+  reopenError(errorReferenceId: string): Observable<void> {
+    return this.http.post<void>(`${OPERATIONS_ENDPOINTS.errors}/${encodeURIComponent(errorReferenceId)}/reopen`, {});
   }
 
   apiRequests(correlationId?: string, take = 200): Observable<ApiRequestLogEntry[]> {

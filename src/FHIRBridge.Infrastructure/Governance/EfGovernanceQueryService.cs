@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -175,7 +176,61 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .OrderByDescending(x => x.OccurredOnUtc)
             .Take(NormalizeTake(take))
             .Select(x => new ErrorLogDto(
-                x.Id, x.OccurredOnUtc, x.Severity, x.ExceptionType, x.Message, x.StackTrace, x.Module, x.CorrelationId))
+                x.Id, x.OccurredOnUtc, x.Severity, x.ExceptionType, x.Message, x.StackTrace, x.Module, x.CorrelationId,
+                x.ErrorReferenceId, x.Category, x.UserFriendlyMessage, x.ExecutionId, x.WorkflowId, x.EndpointId,
+                x.RequestId, x.TraceId, x.SpanId, (string?)null, (string?)null, (DateTime?)null))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ErrorLogDto>> SearchErrorLogsAsync(
+        ErrorLogSearch search, CancellationToken cancellationToken)
+    {
+        var query = _dbContext.ErrorLogs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search.ErrorReferenceId))
+            query = query.Where(x => x.ErrorReferenceId == search.ErrorReferenceId);
+        if (!string.IsNullOrWhiteSpace(search.CorrelationId))
+            query = query.Where(x => x.CorrelationId == search.CorrelationId);
+        if (!string.IsNullOrWhiteSpace(search.ExecutionId))
+            query = query.Where(x => x.ExecutionId == search.ExecutionId);
+        if (!string.IsNullOrWhiteSpace(search.WorkflowId))
+            query = query.Where(x => x.WorkflowId == search.WorkflowId);
+        if (!string.IsNullOrWhiteSpace(search.EndpointId))
+            query = query.Where(x => x.EndpointId == search.EndpointId);
+        if (!string.IsNullOrWhiteSpace(search.Severity))
+            query = query.Where(x => x.Severity == search.Severity);
+        if (!string.IsNullOrWhiteSpace(search.Category))
+            query = query.Where(x => x.Category == search.Category);
+        if (search.FromUtc.HasValue)
+            query = query.Where(x => x.OccurredOnUtc >= search.FromUtc.Value);
+        if (search.ToUtc.HasValue)
+            query = query.Where(x => x.OccurredOnUtc <= search.ToUtc.Value);
+
+        // Left-join resolution triage state; absence of a row means "Open".
+        var joined = from e in query
+                     join r in _dbContext.ErrorResolutions.AsNoTracking()
+                         on e.ErrorReferenceId equals r.ErrorReferenceId into resolutions
+                     from r in resolutions.DefaultIfEmpty()
+                     select new { Error = e, Resolution = r };
+
+        if (!string.IsNullOrWhiteSpace(search.Status))
+        {
+            joined = search.Status == ErrorResolution.StatusResolved
+                ? joined.Where(x => x.Resolution != null && x.Resolution.Status == ErrorResolution.StatusResolved)
+                : joined.Where(x => x.Resolution == null || x.Resolution.Status == ErrorResolution.StatusOpen);
+        }
+
+        return await joined
+            .OrderByDescending(x => x.Error.OccurredOnUtc)
+            .Take(NormalizeTake(search.Take))
+            .Select(x => new ErrorLogDto(
+                x.Error.Id, x.Error.OccurredOnUtc, x.Error.Severity, x.Error.ExceptionType, x.Error.Message,
+                x.Error.StackTrace, x.Error.Module, x.Error.CorrelationId,
+                x.Error.ErrorReferenceId, x.Error.Category, x.Error.UserFriendlyMessage, x.Error.ExecutionId,
+                x.Error.WorkflowId, x.Error.EndpointId, x.Error.RequestId, x.Error.TraceId, x.Error.SpanId,
+                x.Resolution == null ? ErrorResolution.StatusOpen : x.Resolution.Status,
+                x.Resolution == null ? null : x.Resolution.ResolvedBy,
+                x.Resolution == null ? null : x.Resolution.ResolvedOnUtc))
             .ToListAsync(cancellationToken);
     }
 

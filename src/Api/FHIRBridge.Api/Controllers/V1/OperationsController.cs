@@ -20,19 +20,22 @@ public sealed class OperationsController : ControllerBase
     private readonly IApiMetricsSnapshotProvider _apiMetricsSnapshotProvider;
     private readonly ISystemHealthService _systemHealthService;
     private readonly ISchedulerSummaryService _schedulerSummaryService;
+    private readonly IErrorResolutionService _errorResolutionService;
 
     public OperationsController(
         IGovernanceQueryService governanceQueryService,
         IQueueMonitorProvider queueMonitorProvider,
         IApiMetricsSnapshotProvider apiMetricsSnapshotProvider,
         ISystemHealthService systemHealthService,
-        ISchedulerSummaryService schedulerSummaryService)
+        ISchedulerSummaryService schedulerSummaryService,
+        IErrorResolutionService errorResolutionService)
     {
         _governanceQueryService = governanceQueryService;
         _queueMonitorProvider = queueMonitorProvider;
         _apiMetricsSnapshotProvider = apiMetricsSnapshotProvider;
         _systemHealthService = systemHealthService;
         _schedulerSummaryService = schedulerSummaryService;
+        _errorResolutionService = errorResolutionService;
     }
 
     /// <summary>Real per-route Next Run/Last Run summary — see ISchedulerSummaryService's remarks.</summary>
@@ -107,15 +110,59 @@ public sealed class OperationsController : ControllerBase
         return Ok(results);
     }
 
+    /// <summary>Phase 6A – Monitoring → Errors search. All criteria optional and AND-combined; supports search
+    /// by Error Reference ID, Correlation ID, Execution ID, Workflow, Endpoint, Severity, Category, Status, and
+    /// a date range.</summary>
     [HttpGet("errors")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View error logs.")]
     [ProducesResponseType(typeof(IReadOnlyList<ErrorLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetErrorLogs(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId,
+        [FromQuery] int take,
+        [FromQuery] string? errorReferenceId,
+        [FromQuery] string? executionId,
+        [FromQuery] string? workflowId,
+        [FromQuery] string? endpointId,
+        [FromQuery] string? severity,
+        [FromQuery] string? category,
+        [FromQuery] string? status,
+        [FromQuery] DateTime? fromUtc,
+        [FromQuery] DateTime? toUtc,
+        CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetErrorLogsAsync(correlationId, take, cancellationToken);
+        var search = new ErrorLogSearch(
+            errorReferenceId, correlationId, executionId, workflowId, endpointId,
+            severity, category, status, fromUtc, toUtc, take);
+        var results = await _governanceQueryService.SearchErrorLogsAsync(search, cancellationToken);
         return Ok(results);
     }
+
+    /// <summary>Phase 6A – mark a captured error Resolved. The immutable ErrorLog record is never mutated;
+    /// only the separate resolution triage row changes.</summary>
+    [HttpPost("errors/{errorReferenceId}/resolve")]
+    [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Write, description: "Resolve a captured error.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResolveError(
+        string errorReferenceId, [FromBody] ResolveErrorRequest? request, CancellationToken cancellationToken)
+    {
+        var resolved = await _errorResolutionService.ResolveAsync(
+            errorReferenceId, User.Identity?.Name ?? "system", request?.Notes, cancellationToken);
+        return resolved ? NoContent() : NotFound();
+    }
+
+    /// <summary>Phase 6A – reopen a previously resolved error.</summary>
+    [HttpPost("errors/{errorReferenceId}/reopen")]
+    [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Write, description: "Reopen a resolved error.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReopenError(string errorReferenceId, CancellationToken cancellationToken)
+    {
+        var reopened = await _errorResolutionService.ReopenAsync(errorReferenceId, cancellationToken);
+        return reopened ? NoContent() : NotFound();
+    }
+
+    public sealed record ResolveErrorRequest(string? Notes);
 
     [HttpGet("api-requests")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View outbound API request logs.")]

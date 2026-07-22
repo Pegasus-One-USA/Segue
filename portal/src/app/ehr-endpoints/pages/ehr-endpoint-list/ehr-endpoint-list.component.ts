@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -14,6 +13,7 @@ import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
 import { EhrEndpoint } from '../../models/ehr-endpoint.model';
 import { EhrEndpointDialogComponent } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
 
 @Component({
   selector: 'app-ehr-endpoint-list',
@@ -34,7 +34,7 @@ import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm
 export class EhrEndpointListComponent implements OnInit {
   private readonly svc    = inject(IEhrEndpointService);
   private readonly dialog = inject(MatDialog);
-  private readonly snack  = inject(MatSnackBar);
+  private readonly toast  = inject(ToastService);
 
   readonly searchQuery = signal('');
   readonly pageIndex   = signal(0);
@@ -81,7 +81,7 @@ export class EhrEndpointListComponent implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snack.open('Failed to load EHR endpoints.', 'Dismiss', { duration: 4000 });
+        this.toast.error('Failed to load EHR endpoints.');
       },
     });
   }
@@ -112,7 +112,7 @@ export class EhrEndpointListComponent implements OnInit {
       .afterClosed()
       .subscribe(res => {
         if (res) {
-          this.snack.open('EHR endpoint added successfully.', 'Dismiss', { duration: 3000 });
+          this.toast.success('EHR endpoint added successfully.');
           this.loadEndpoints();
         }
       });
@@ -129,7 +129,7 @@ export class EhrEndpointListComponent implements OnInit {
       .afterClosed()
       .subscribe(res => {
         if (res) {
-          this.snack.open('EHR endpoint updated successfully.', 'Dismiss', { duration: 3000 });
+          this.toast.success('EHR endpoint updated successfully.');
           this.loadEndpoints();
         }
       });
@@ -152,12 +152,12 @@ export class EhrEndpointListComponent implements OnInit {
         if (!confirmed) return;
         this.svc.delete(endpoint.id).subscribe({
           next: () => {
-            this.snack.open(`"${endpoint.name}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`"${endpoint.name}" deleted.`);
             this.loadEndpoints();
           },
           error: (err: HttpErrorResponse) => {
             const message = err.error?.title ?? 'Failed to delete EHR endpoint.';
-            this.snack.open(message, 'Dismiss', { duration: 5000 });
+            this.toast.error(message);
           },
         });
       });

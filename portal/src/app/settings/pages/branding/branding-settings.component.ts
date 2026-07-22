@@ -7,6 +7,7 @@ import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-ch
 import { BrandAssetFieldComponent } from '../../components/brand-asset-field/brand-asset-field.component';
 import { BrandingService } from '../../../services/branding.service';
 import { ThemeService } from '../../../services/theme.service';
+import { ToastService } from '../../../services/toast.service';
 import { BrandConfiguration, BrandThemeMode } from '../../../models/brand-configuration.model';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
@@ -23,8 +24,8 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
   private readonly destroyRef  = inject(DestroyRef);
   protected readonly branding  = inject(BrandingService);
   private readonly themeService = inject(ThemeService);
+  private readonly toast = inject(ToastService);
 
-  protected readonly saved  = signal(false);
   protected readonly saving = signal(false);
 
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
@@ -114,9 +115,8 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
       this.originalThemeMode = saved.defaultThemeMode;
       this.savedThisSession  = true;
       this.saving.set(false);
-      this.saved.set(true);
       this.form.markAsPristine();
-      setTimeout(() => this.saved.set(false), 3000);
+      this.toast.success('Branding saved');
     });
   }
 
@@ -128,6 +128,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     this.themeService.set(this.originalThemeMode);
     this.populateForm(this.originalConfig);
     this.form.markAsPristine();
+    this.toast.success('Branding reset to default');
   }
 
   // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────

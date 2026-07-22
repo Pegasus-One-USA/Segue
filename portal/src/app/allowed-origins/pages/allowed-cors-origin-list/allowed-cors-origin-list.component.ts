@@ -2,7 +2,6 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -12,6 +11,7 @@ import { IAllowedCorsOriginService } from '../../services/i-allowed-cors-origin.
 import { AllowedCorsOrigin } from '../../models/allowed-cors-origin.model';
 import { AllowedCorsOriginDialogComponent } from '../../dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
 
 @Component({
   selector: 'app-allowed-cors-origin-list',
@@ -30,7 +30,7 @@ import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm
 export class AllowedCorsOriginListComponent implements OnInit {
   private readonly svc    = inject(IAllowedCorsOriginService);
   private readonly dialog = inject(MatDialog);
-  private readonly snack  = inject(MatSnackBar);
+  private readonly toast  = inject(ToastService);
 
   readonly loading = signal(true);
   readonly origins  = signal<AllowedCorsOrigin[]>([]);
@@ -50,7 +50,7 @@ export class AllowedCorsOriginListComponent implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snack.open('Failed to load allowed origins.', 'Dismiss', { duration: 4000 });
+        this.toast.error('Failed to load allowed origins.');
       },
     });
   }
@@ -65,7 +65,7 @@ export class AllowedCorsOriginListComponent implements OnInit {
       .afterClosed()
       .subscribe(res => {
         if (res) {
-          this.snack.open('Origin added — takes effect immediately, no restart needed.', 'Dismiss', { duration: 4000 });
+          this.toast.success('Origin added — takes effect immediately, no restart needed.');
           this.loadOrigins();
         }
       });
@@ -88,12 +88,12 @@ export class AllowedCorsOriginListComponent implements OnInit {
         if (!confirmed) return;
         this.svc.delete(origin.id).subscribe({
           next: () => {
-            this.snack.open(`"${origin.originUrl}" removed.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`"${origin.originUrl}" removed.`);
             this.loadOrigins();
           },
           error: (err: HttpErrorResponse) => {
             const message = err.error?.title ?? 'Failed to remove origin.';
-            this.snack.open(message, 'Dismiss', { duration: 5000 });
+            this.toast.error(message);
           },
         });
       });

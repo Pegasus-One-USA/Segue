@@ -32,6 +32,9 @@ public sealed class EmptyGovernanceQueryService : IGovernanceQueryService
     public Task<IReadOnlyList<ErrorLogDto>> GetErrorLogsAsync(string? correlationId, int take, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<ErrorLogDto>>([]);
 
+    public Task<IReadOnlyList<ErrorLogDto>> SearchErrorLogsAsync(ErrorLogSearch search, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<ErrorLogDto>>([]);
+
     public Task<IReadOnlyList<ApiRequestLogDto>> GetApiRequestLogsAsync(string? correlationId, int take, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<ApiRequestLogDto>>([]);
 

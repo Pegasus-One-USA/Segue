@@ -8,7 +8,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { PasswordPolicyService } from '../../services/password-policy.service';
 import { PasswordValidation } from '../../models/password-policy.model';
@@ -16,6 +15,7 @@ import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.co
 import { SsoAuthApiService } from '../../services/sso-auth-api.service';
 import { SsoResult } from '../../services/sso.service';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
+import { ToastService } from '../../../services/toast.service';
 
 export type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepted' | 'success';
 
@@ -48,7 +48,7 @@ export class SetPasswordComponent implements OnInit {
   private readonly fb         = inject(FormBuilder);
   private readonly policySvc  = inject(PasswordPolicyService);
   private readonly ssoApi     = inject(SsoAuthApiService);
-  private readonly snackBar   = inject(MatSnackBar);
+  private readonly toast      = inject(ToastService);
 
   protected readonly state      = signal<PageState>('loading');
   /** Email being activated, sourced from the invite link query param. */
@@ -134,7 +134,7 @@ export class SetPasswordComponent implements OnInit {
         const message = err?.error?.message
           ?? 'Could not accept the invitation with that identity. Ensure the email matches your invite.';
         this.serverError.set(message);
-        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+        this.toast.error(message);
       },
     });
   }
@@ -162,7 +162,7 @@ export class SetPasswordComponent implements OnInit {
         this.isLoading.set(false);
         const message = 'This invitation is invalid or has expired.';
         this.serverError.set(message);
-        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+        this.toast.error(message);
       },
     });
   }

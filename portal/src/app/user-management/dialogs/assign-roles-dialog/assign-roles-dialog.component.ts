@@ -13,8 +13,8 @@ import { MatRadioModule, MatRadioChange } from '@angular/material/radio';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
+import { ToastService } from '../../../services/toast.service';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { IRoleService } from '../../services/i-role.service';
 import { User, Role, Permission, PermissionCategory, UserRole } from '../../../auth/models/user.model';
@@ -69,7 +69,7 @@ export class AssignRolesDialogComponent implements OnInit {
   private readonly roleService = inject(IRoleService);
   private readonly authStore   = inject(AuthStore);
   private readonly dialogRef   = inject(MatDialogRef<AssignRolesDialogComponent>);
-  private readonly snackBar    = inject(MatSnackBar);
+  private readonly toast       = inject(ToastService);
   readonly data                = inject<DialogData>(MAT_DIALOG_DATA);
 
   // ─── State signals ────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ export class AssignRolesDialogComponent implements OnInit {
       },
       error: err => {
         this.loading.set(false);
-        this.snackBar.open(backendErrorMessage(err, 'Failed to load roles.'), 'Dismiss', { duration: 4000 });
+        this.toast.error(backendErrorMessage(err, 'Failed to load roles.'));
       },
     });
   }
@@ -190,15 +190,11 @@ export class AssignRolesDialogComponent implements OnInit {
       next: updatedUser => {
         this.localUser.set(updatedUser);
         this.actionLoading.set(null);
-        this.snackBar.open(`Role set to "${role.displayName}".`, 'Dismiss', { duration: 2500 });
+        this.toast.success(`Role set to "${role.displayName}".`);
       },
       error: err => {
         this.actionLoading.set(null);
-        this.snackBar.open(
-          backendErrorMessage(err, `Failed to set role "${role.displayName}".`),
-          'Dismiss',
-          { duration: 4000 },
-        );
+        this.toast.error(backendErrorMessage(err, `Failed to set role "${role.displayName}".`));
       },
     });
   }

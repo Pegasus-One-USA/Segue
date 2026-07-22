@@ -1,8 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { UserProfileService } from '../../services/user-profile.service';
+import { ToastService } from '../../../services/toast.service';
 import { ROLE_DEFINITIONS } from '../../models/user-profile.model';
 import { EditProfileDialogComponent } from '../../dialogs/edit-profile-dialog/edit-profile-dialog.component';
 
@@ -15,7 +15,7 @@ import { EditProfileDialogComponent } from '../../dialogs/edit-profile-dialog/ed
 })
 export class ProfileComponent {
   private readonly dialog  = inject(MatDialog);
-  private readonly snack   = inject(MatSnackBar);
+  private readonly toast   = inject(ToastService);
   protected readonly profSvc = inject(UserProfileService);
 
   protected readonly profile  = this.profSvc.profile;
@@ -43,7 +43,7 @@ export class ProfileComponent {
       })
       .afterClosed()
       .subscribe(saved => {
-        if (saved) this.snack.open('Profile updated successfully.', 'Dismiss', { duration: 3000 });
+        if (saved) this.toast.success('Profile updated successfully.');
       });
   }
 }

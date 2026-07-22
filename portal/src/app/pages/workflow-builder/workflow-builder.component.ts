@@ -17,7 +17,6 @@ import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '
 import { CanvasComponent } from '../../components/canvas/canvas.component';
 import { EpicSourceWizardComponent } from '../../components/epic-source-wizard/epic-source-wizard.component';
 import { PayloadPreviewComponent } from '../../components/modals/payload-preview/payload-preview.component';
-import { ToastComponent } from '../../components/shared/toast/toast.component';
 import {
   NodeLibraryDialogComponent,
   LibraryMode,
@@ -32,7 +31,6 @@ import {
     CanvasComponent,
     EpicSourceWizardComponent,
     PayloadPreviewComponent,
-    ToastComponent,
     NodeLibraryDialogComponent,
   ],
   templateUrl: './workflow-builder.component.html',
@@ -280,8 +278,10 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         this.resetCanvasAndWorkflowState();
       },
       error: err => {
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Create-on-save failed.';
-        this.workflowStatus.set(typeof msg === 'string' ? msg : 'Create-on-save failed.');
+        const msg = typeof err?.error?.error === 'string'
+          ? err.error.error
+          : 'Something went wrong while saving this workflow. Please contact your admin.';
+        this.workflowStatus.set(msg);
         this.toast.show('Create-on-save failed', typeof msg === 'string' ? msg : 'See status for details.');
         this.workflowBusy.set(false);
       },
