@@ -1,0 +1,27 @@
+src/Api/FHIRBridge.Api/Security/CallerIdOriginValidator.cs
+  s_6a2cdaf1b6bfcd::t_0a3511f8be17fb 1-2,7-11
+  s_6a2cdaf1b6bfcd::t_075fd34799a285 12
+  s_6a2cdaf1b6bfcd::t_4166bf14527af6 16-17,24
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_6a2cdaf1b6bfcd::t_18820eebf9a6a2 2
+  s_6a2cdaf1b6bfcd::t_d4ba288695a481 26,33,39,159,161-162,165
+src/Api/FHIRBridge.Api/Controllers/V1/PatientStandaloneLaunchController.cs
+  s_6a2cdaf1b6bfcd::t_a0a1308c05aeca 2
+  s_6a2cdaf1b6bfcd::t_3954080546c476 32,38,43,70,72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "efb865f7fb6ee61919d27b05b710a9a632285227",
+  "prompts": {},
+  "sessions": {
+    "s_6a2cdaf1b6bfcd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "17ce2f21-80a3-41f4-9182-32c716955769",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

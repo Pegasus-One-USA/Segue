@@ -1,0 +1,29 @@
+src/Api/FHIRBridge.Api/Program.cs
+  s_c8924f0d34965f::t_f80f3956f4661b 178
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowDefinitionStore.cs
+  s_29a967ba537f2c::t_6cc4ab80530475 30-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "233f8495194952813520029fec797e38592f532b",
+  "prompts": {},
+  "sessions": {
+    "s_29a967ba537f2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea0894a5-0d0c-496a-9e21-486e7821de47",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_c8924f0d34965f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f01de126-fa34-4d6b-98d4-ac698aee3fce",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

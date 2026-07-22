@@ -1,0 +1,36 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_847aee1e6f20e2::t_aad2841e8703d6 66,72-74
+  s_847aee1e6f20e2::t_d9201444245aa7 75-77
+  s_847aee1e6f20e2::t_18e2dc1c2ea2d5 78-81,83,92,135-195
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_847aee1e6f20e2::t_1b9e4d0837bbb0 1-14,16-69,78-83,87-119,122-136,143-148,151-161
+  s_847aee1e6f20e2::t_0665afd719945c 15
+  s_847aee1e6f20e2::t_dd1ed469daea49 84-86,120-121,149-150
+  s_847aee1e6f20e2::t_50196c97dbb59c 137-142
+  s_847aee1e6f20e2::t_3dafb3224c72eb 70-77
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_847aee1e6f20e2::t_68fc851f20b501 111-118,311-321,329-332,337,347-351,428-435,440-441,444-466,468-481,483-491,493-495,504-505,511-512,518,521,543-544
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_847aee1e6f20e2::t_30fad001026d7f 100-106,137-152,157-163,998-1000
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a29fc185c23d14b61894f2c33438b8141c22e2d2",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_847aee1e6f20e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "107cb5aa-6778-4535-9a6d-82e5bba2513f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

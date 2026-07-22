@@ -1,0 +1,185 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260720190010_AddMappingFieldIsUpsertKey.Designer.cs
+  s_58f5c1011a4de5::t_db5b4741e95de9 1-2947
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_58f5c1011a4de5::t_cd7e02b17f78da 104-106
+  s_58f5c1011a4de5::t_fedf0479c6069a 12
+  s_847aee1e6f20e2::t_daea017cf8eaf6 272-283,572-577,580,599-604,627,632-725,727,735-802,818,899,910,1001
+src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs
+  s_58f5c1011a4de5::t_9219b7b2e2afae 9
+  s_58f5c1011a4de5::t_5da8d24d8299a8 16-20
+  s_847aee1e6f20e2::t_5ef3af833c1cac 55,171,200-205,210-211,217-233
+portal/src/app/system-security/pages/app-secret-list/app-secret-list.component.ts
+  s_f4f8224b51435a::t_61b6d007b562b4 1-90
+portal/src/app/system-security/services/i-app-secrets.service.ts
+  s_f4f8224b51435a::t_d6706a5d362381 1-7
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260720190010_AddMappingFieldIsUpsertKey.cs
+  s_58f5c1011a4de5::t_db5b4741e95de9 1-29
+src/FHIRBridge.Application/Abstractions/Security/AppSecretValueGenerator.cs
+  s_f4f8224b51435a::t_f2e13cb96b4358 1-13
+docs/backend/11-destination-schema-ownership-plan.md
+  s_1a34a6cc778bca::t_b5ad460e674883 81,91-92,99
+  s_1a34a6cc778bca::t_703090de41b92b 53-61,66-67,75-79
+  s_847aee1e6f20e2::t_04ef9374155bbb 128-130,153-154,164,173-174,180-181,183-263
+docs/backend/12-provider-standalone-ehr-launch-fixes.md
+  s_847aee1e6f20e2::t_89ba5609d0a3db 1-61
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_58f5c1011a4de5::t_944b7669d64c76 31-36,44-47,49-52
+  s_58f5c1011a4de5::t_0d246ffee3e96c 29-30,37-43,48
+  s_847aee1e6f20e2::t_63195c479f62a4 120-123,125,128,131-160,245,255,274-277,279,283-285
+src/FHIRBridge.Infrastructure/Destinations/GeneratedFileDownloadLinkService.cs
+  s_f4f8224b51435a::t_5d65285c5b43ca 5
+  s_847aee1e6f20e2::t_3a29fe1783a1fd 21,24,27,91,116
+src/Api/FHIRBridge.Api/Security/FhirBridgeAuthenticationExtensions.cs
+  s_f4f8224b51435a::t_4fd54498a464cc 3
+  s_f4f8224b51435a::t_888b1464728fc7 7
+  s_847aee1e6f20e2::t_d9d4aa596a6201 47-54,97-98,100
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_847aee1e6f20e2::t_67b7c5f1274574 3
+  s_847aee1e6f20e2::t_69169c12d883f9 22
+  s_847aee1e6f20e2::t_a3d8db712be660 31,36,89-105,114
+portal/src/app/system-security/pages/app-secret-list/app-secret-list.component.scss
+  s_f4f8224b51435a::t_78ab214d3a3c49 60-61
+  s_f4f8224b51435a::t_05390c64d00287 1-59,62-83
+src/FHIRBridge.Application/Abstractions/Security/IAppSecretMetadataProvider.cs
+  s_f4f8224b51435a::t_2937affa92a1f7 1-16
+src/FHIRBridge.Application/Abstractions/Security/AppSecretReferences.cs
+  s_f4f8224b51435a::t_35a6908f061823 1-15
+tests/FHIRBridge.UnitTests/Destinations/GeneratedFileDownloadLinkServiceTests.cs
+  s_f4f8224b51435a::t_012aae5033b448 3
+  s_847aee1e6f20e2::t_65446a641bba49 18-23,27-28
+tests/FHIRBridge.ArchitectureTests/DestinationWriterNoDdlTests.cs
+  s_58f5c1011a4de5::t_e2b18a8b7a24fc 1-91
+src/FHIRBridge.Application/Services/IAppSecretsAdminService.cs
+  s_f4f8224b51435a::t_906743d0353efa 1-10
+src/FHIRBridge.Application/Abstractions/Security/IAppSecretAccessor.cs
+  s_f4f8224b51435a::t_f44bf1b3d1e1e7 3-14,22
+  s_f4f8224b51435a::t_a65f02f1c6275a 1-2,15-21
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_f4f8224b51435a::t_abaf574809042c 5
+  s_847aee1e6f20e2::t_334ac90a8a16f6 137-142
+src/FHIRBridge.Application/DTOs/AppSecretDto.cs
+  s_f4f8224b51435a::t_1f7af2b2b249db 1-8
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs
+  s_847aee1e6f20e2::t_4bb87c858593a8 1-117
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_847aee1e6f20e2::t_4b48775690c7b9 33-35
+  s_847aee1e6f20e2::t_70d20d7489147c 7
+  s_847aee1e6f20e2::t_a396b8d22510da 46-47
+  s_847aee1e6f20e2::t_ad288bf35bab58 48,59-61,72-74,85-87,98-100,111-112,147-148
+  s_847aee1e6f20e2::t_c7591b7f5e9b23 20-22
+  s_847aee1e6f20e2::t_bdc60de4c9ff8f 113,139,156,222-230,310-316,318,349-404
+src/FHIRBridge.Infrastructure/Security/AppSecretAccessor.cs
+  s_f4f8224b51435a::t_100e588399d755 1,3-6,9-19,36-37
+  s_f4f8224b51435a::t_10c89a5f0f9755 2,7-8,20-35
+src/FHIRBridge.Infrastructure/Security/DbSecretStore.cs
+  s_f4f8224b51435a::t_42a82d97db697f 15
+  s_847aee1e6f20e2::t_bae226b8c30496 63-77
+portal/src/app/system-security/pages/app-secret-list/app-secret-list.component.html
+  s_f4f8224b51435a::t_be5148ac4036b7 1-77
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_58f5c1011a4de5::t_770e3336c86700 7
+  s_58f5c1011a4de5::t_0d9bf2d19bd17a 16-17
+  s_847aee1e6f20e2::t_53de512a1f87a0 49-50,208-209,293,319-324,329-330,336-352
+portal/src/app/system-security/models/app-secret.model.ts
+  s_f4f8224b51435a::t_ad3be71f1996fe 1-8
+portal/src/app/system-security/services/api-app-secrets.service.ts
+  s_f4f8224b51435a::t_db80f113833822 1-24
+src/Api/FHIRBridge.Api/Controllers/V1/AppSecretsController.cs
+  s_f4f8224b51435a::t_82d9354e967671 1-43
+src/FHIRBridge.Application/Services/AppSecretsAdminService.cs
+  s_f4f8224b51435a::t_ab4330a27fbf0d 1-84
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  s_f4f8224b51435a::t_db94797887da9b 54
+  s_f4f8224b51435a::t_e51620680f42e6 1-3,5-23,26-27,29,31-38,40-43,50-53,55,61-64
+  s_f4f8224b51435a::t_233a31486b7e5d 24-25,28,30,39,44-49,56-60
+  s_f4f8224b51435a::t_4e00d9bf49e21d 4
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/core/config/standalone-launch.config.ts
+  s_847aee1e6f20e2::t_6ee8d8cbbf6af8 13-14
+portal/src/app/app.config.ts
+  s_847aee1e6f20e2::t_78267347c44668 26-27,56
+portal/src/app/app.routes.ts
+  s_847aee1e6f20e2::t_57bafca7b84efb 110-119
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_847aee1e6f20e2::t_0fc363cf153705 359,362-364,371,377,379-393,397-399,408-410,419-421,423-425,431
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_847aee1e6f20e2::t_5c0c6201d7b06a 422-450
+portal/src/app/core/api-endpoints.ts
+  s_847aee1e6f20e2::t_7b13023b3b0205 101-108
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_847aee1e6f20e2::t_3c5dbbaf183830 37
+portal/src/app/services/destination-schema.service.ts
+  s_847aee1e6f20e2::t_0879f11e1bcf94 12-13
+portal/src/app/services/workflow-api.service.ts
+  s_847aee1e6f20e2::t_579d24234da92e 177
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_847aee1e6f20e2::t_2811c74566e238 28,433-441,450,470
+src/Api/FHIRBridge.Api/Program.cs
+  s_847aee1e6f20e2::t_48ecf5057bc1d7 19,333,421-428
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  s_847aee1e6f20e2::t_34f12e029be188 15,17,20,28,31
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_847aee1e6f20e2::t_5cce7035a03999 42-44
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_847aee1e6f20e2::t_810c453881e5bc 19-20
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_847aee1e6f20e2::t_20e2771517b203 158-159,207-208
+src/FHIRBridge.Domain/ValueObjects/MappingField.cs
+  s_847aee1e6f20e2::t_da4feda02a6683 20-21
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_847aee1e6f20e2::t_6deef60940015b 389-392,400,407,410-411
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_847aee1e6f20e2::t_3b781e253aa5df 50
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_847aee1e6f20e2::t_f53b93c856a32b 2452-2456
+src/FHIRBridge.Infrastructure/Security/InMemorySecretStore.cs
+  s_847aee1e6f20e2::t_b1c4d9d034aa7d 13,45-51
+tests/FHIRBridge.Api.IntegrationTests/ApiFactory.cs
+  s_847aee1e6f20e2::t_f897467eb786cc 44-45
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs
+  s_847aee1e6f20e2::t_91171c9e7b62db 36-43,59,67,81-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d823902da337e62ff26617072929bb154b765478",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_1a34a6cc778bca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83c2a180-a50a-40c9-81c2-2588b9c5cbc9",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_58f5c1011a4de5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ff574c2-2810-4961-8555-35b1d13383e3",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_847aee1e6f20e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "107cb5aa-6778-4535-9a6d-82e5bba2513f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f4f8224b51435a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dbe291c8-0b9d-4b02-a786-fbe66383a256",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

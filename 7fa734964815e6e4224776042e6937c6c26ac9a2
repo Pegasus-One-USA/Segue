@@ -1,0 +1,33 @@
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_ffa59507b96e1a::t_04f111b8d564e0 3
+  s_ffa59507b96e1a::t_7aa060bfc54da1 168-188
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_ffa59507b96e1a::t_29544e610776fe 233-243
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_ffa59507b96e1a::t_ebbb3d9965bc9a 432-448
+src/FHIRBridge.Domain/Entities/MappingProfile.cs
+  s_ffa59507b96e1a::t_107add898d1666 69-76
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_ffa59507b96e1a::t_11580a48c0afd5 352-356,640-646,1042-1051,1354-1359
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "7fa734964815e6e4224776042e6937c6c26ac9a2",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_ffa59507b96e1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d5cdeeb-8f57-48f1-9189-805cb81f928e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

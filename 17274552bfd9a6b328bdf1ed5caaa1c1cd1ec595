@@ -1,0 +1,81 @@
+portal/src/app/core/services/unsaved-changes-prompt.service.ts
+  s_c8924f0d34965f::t_c970e96ae3b167 1-45
+portal/src/app/app.config.ts
+  s_c8924f0d34965f::t_6f9c8ec7b2976c 6
+  s_c8924f0d34965f::t_0cf4fcc5ced18b 46-50
+portal/src/app/core/services/unsaved-changes-registry.service.ts
+  s_c8924f0d34965f::t_0e7142174e2e88 1-29
+portal/src/app/user/pages/account-settings/account-settings.component.ts
+  s_c8924f0d34965f::t_39ebb303959f32 6-7
+  s_c8924f0d34965f::t_e5efa39f20c062 16,19
+  s_c8924f0d34965f::t_63e770fc299c72 23-26,53-63
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  s_c8924f0d34965f::t_f16693e150f0e1 21
+  s_c8924f0d34965f::t_6bcc258136590f 5-6
+  s_c8924f0d34965f::t_9447eccadf1ef6 30-38,118,130-139
+portal/src/app/core/guards/has-unsaved-changes.ts
+  s_c8924f0d34965f::t_f31c2b731b17b3 1-11
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_c8924f0d34965f::t_883244681b7c2b 3
+  s_c8924f0d34965f::t_db607b792da64c 34,75,78-81,167-178
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  s_c8924f0d34965f::t_0e7d4d3e553889 17
+  s_c8924f0d34965f::t_2e12e04742c284 18
+  s_c8924f0d34965f::t_0ce690ab95a1bb 62,76-80,287-295
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_c8924f0d34965f::t_36da2fef7a8cf2 1
+portal/src/app/components/wizard/connection-wizard/connection-wizard.component.html
+  s_c8924f0d34965f::t_9513bfd23e01c5 1
+portal/src/app/user/pages/preferences/preferences.component.ts
+  s_c8924f0d34965f::t_437f21bcde3b3c 17,20
+  s_c8924f0d34965f::t_63642438357851 8
+  s_c8924f0d34965f::t_16b46d36e2d376 7
+  s_c8924f0d34965f::t_b3886d5f3b1bd8 24-27,64-75
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_c8924f0d34965f::t_de6d42d48fcdad 7
+  s_c8924f0d34965f::t_6e7cc3ced32e60 1
+  s_c8924f0d34965f::t_51586f5ad6f474 38,43-54
+portal/src/app/core/guards/unsaved-changes.guard.ts
+  s_c8924f0d34965f::t_1e272b53cdc74c 1-13
+portal/src/app/user-management/user-management.routes.ts
+  s_c8924f0d34965f::t_22517f7b1782a7 3
+  s_c8924f0d34965f::t_fd8b9bf30e71c2 27,34
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_c8924f0d34965f::t_acf30d6af98c67 3
+  s_c8924f0d34965f::t_c5c1635b098b3b 4
+  s_c8924f0d34965f::t_183295ef887a4b 41,50-54,618-626
+portal/src/app/governance/pages/alert-rules/alert-rules.component.ts
+  s_c8924f0d34965f::t_d2d6387d608445 23-27
+  s_c8924f0d34965f::t_035f436eaa17f8 8
+  s_c8924f0d34965f::t_8866efcb05567a 61,63-67,74-85
+  s_c8924f0d34965f::t_d9cf3a7df013f0 7
+  s_c8924f0d34965f::t_17a4ba4fdca647 21,30
+portal/src/app/app.routes.ts
+  s_c8924f0d34965f::t_0a295615c9f389 6,53,104,117,229
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.ts
+  s_c8924f0d34965f::t_66c7883386de54 104-106
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.ts
+  s_c8924f0d34965f::t_bac5fe0183d2b4 13-14,23
+portal/src/app/services/pipeline.store.ts
+  s_c8924f0d34965f::t_fcbae3f46498ac 35-56,60,66,73,80,86,94,99,114
+portal/src/app/settings/settings.routes.ts
+  s_c8924f0d34965f::t_7febdcf2a559ec 4,17
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_c8924f0d34965f::t_04c65596cc0d95 19-20,63,70-74,294-302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "17274552bfd9a6b328bdf1ed5caaa1c1cd1ec595",
+  "prompts": {},
+  "sessions": {
+    "s_c8924f0d34965f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f01de126-fa34-4d6b-98d4-ac698aee3fce",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

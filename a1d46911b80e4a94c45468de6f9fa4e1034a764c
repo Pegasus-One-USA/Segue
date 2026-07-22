@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_4cbfee433b5ae2::t_c058407bf08ed5 229-230,233-238,243-257,285-290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a1d46911b80e4a94c45468de6f9fa4e1034a764c",
+  "prompts": {},
+  "sessions": {
+    "s_4cbfee433b5ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80757dfb-c581-46cf-8de9-9df05272ed1a",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

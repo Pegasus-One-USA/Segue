@@ -1,0 +1,135 @@
+README.md
+  s_29a967ba537f2c::t_039c81dcd2cd94 1-2
+docs/backend/README.md
+  s_29a967ba537f2c::t_039c81dcd2cd94 1,3
+  s_29a967ba537f2c::t_0dbb7a6e3a755c 7,9
+docs/backend/11-destination-schema-ownership-plan.md
+  s_29a967ba537f2c::t_039c81dcd2cd94 5,13
+  s_29a967ba537f2c::t_4d2bc8bc2c0e5c 25-28,30,93,100,112-113,155,190,237,257
+docs/backend/08-governance-logging-status.md
+  s_29a967ba537f2c::t_d28ac8bd05957c 82
+docs/backend/12-provider-standalone-ehr-launch-fixes.md
+  s_29a967ba537f2c::t_02965588092edb 9,21,41,59
+portal/src/app/auth/components/auth-card/auth-card.component.html
+  s_29a967ba537f2c::t_678637e0777ece 5
+portal/src/app/auth/mock/mock-db.ts
+  s_29a967ba537f2c::t_ee3d579dde1fd3 44
+portal/src/app/auth/pages/reset-password/reset-password.component.html
+  s_29a967ba537f2c::t_d8a1402d015c1b 15
+portal/src/app/auth/pages/signup/signup.component.html
+  s_29a967ba537f2c::t_3f0ecf452b9a01 20,27
+portal/src/app/auth/services/email-notification.service.ts
+  s_29a967ba537f2c::t_40fc89faf11a20 30,36,45,55,60,67,74
+portal/src/app/auth/services/invitation.service.ts
+  s_29a967ba537f2c::t_e6179e15598ab4 12
+portal/src/app/auth/services/password-policy.service.ts
+  s_29a967ba537f2c::t_1bfc24c2cb3cca 7
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_29a967ba537f2c::t_b0bcf66afd2dca 140,491
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_29a967ba537f2c::t_5b126426160ac3 246,261,420
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.html
+  s_29a967ba537f2c::t_25aa1abcb9214b 58,171,173
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.html
+  s_29a967ba537f2c::t_58cf18f23101dd 25
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.ts
+  s_29a967ba537f2c::t_06d488446c561b 29,163
+portal/src/app/components/epic-source-wizard/steps/epic-step-data/epic-step-data.component.html
+  s_29a967ba537f2c::t_7e4bf6d55d9ed4 113
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.html
+  s_29a967ba537f2c::t_c78c7a81e2be50 23,176
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.ts
+  s_29a967ba537f2c::t_5e331b2dfd7bfd 60,240
+portal/src/app/components/wizard/steps/wizard-step3/wizard-step3.component.html
+  s_29a967ba537f2c::t_455243904d8e41 57
+portal/src/app/data/mode-configs.data.ts
+  s_29a967ba537f2c::t_65b1e87c675eb3 21,36,41,44,50,53
+portal/src/app/governance/pages/compliance-reports/compliance-reports.component.ts
+  s_29a967ba537f2c::t_0a70b4e8f79ef5 64,80
+portal/src/app/governance/pages/smart-launch-logs/smart-launch-logs.component.html
+  s_29a967ba537f2c::t_18ebfe98d79117 4
+portal/src/app/layout/app-footer/app-footer.component.html
+  s_29a967ba537f2c::t_ad7b872e261ba9 7
+portal/src/app/layout/app-footer/app-footer.component.ts
+  s_29a967ba537f2c::t_e560f0d4e34329 13
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_29a967ba537f2c::t_0596dd986250a2 55
+portal/src/app/models/brand-configuration.model.ts
+  s_29a967ba537f2c::t_5667dc1d4e16dc 35,41,45
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.html
+  s_29a967ba537f2c::t_21d829b9bdcdc1 18
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  s_29a967ba537f2c::t_25b45d1dae8444 122,158
+portal/src/app/user/components/user-menu/user-menu.component.html
+  s_29a967ba537f2c::t_fd6820b5b98410 86
+portal/src/app/user/pages/help/help.component.ts
+  s_29a967ba537f2c::t_e1c3042e544163 19,22
+portal/src/app/user/pages/preferences/preferences.component.html
+  s_29a967ba537f2c::t_7bd91d14c0747e 5,20
+portal/src/app/user/services/user-profile.service.ts
+  s_29a967ba537f2c::t_59e9587e8d4619 42
+portal/src/index.html
+  s_29a967ba537f2c::t_65efab9deb4cb9 5
+src/Api/FHIRBridge.Api/Controllers/V1/GovernanceController.cs
+  s_29a967ba537f2c::t_d0c8691979d394 188,204
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_29a967ba537f2c::t_a4c04491afe5f9 335
+src/Api/FHIRBridge.Api/Program.cs
+  s_29a967ba537f2c::t_a66df4f1dba499 88,90,353,356
+src/Api/FHIRBridge.Api/README.md
+  s_29a967ba537f2c::t_3653e520b6e422 3
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_29a967ba537f2c::t_1506f4b074011d 8,44
+src/Api/FHIRBridge.Api/appsettings.json
+  s_29a967ba537f2c::t_2110f19c29d4d8 60
+src/ControlPlane/FHIRBridge.ControlPlane.Application/README.md
+  s_29a967ba537f2c::t_288c5b3a8f4136 3
+src/ControlPlane/FHIRBridge.ControlPlane.Domain/README.md
+  s_29a967ba537f2c::t_68c87fe3cb5d8a 3
+src/FHIRBridge.Application/Security/MfaOptions.cs
+  s_29a967ba537f2c::t_2a7ab43d5655bc 6
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_29a967ba537f2c::t_663826e499ec8d 209,395
+src/FHIRBridge.Application/Services/SsoAuthService.cs
+  s_29a967ba537f2c::t_85c3b5bb914a3a 63
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_29a967ba537f2c::t_75b2c3019cf6bc 153,183,546
+src/FHIRBridge.Infrastructure/Destinations/Delivery/EmailDeliveryStrategy.cs
+  s_29a967ba537f2c::t_14ef7958651ef8 16
+src/FHIRBridge.Infrastructure/Governance/EfAlertEvaluationService.cs
+  s_29a967ba537f2c::t_33dc2330af9a7d 74
+src/FHIRBridge.Infrastructure/Governance/QuestPdfComplianceReportService.cs
+  s_29a967ba537f2c::t_7f0dfdf1090a89 93,213
+src/Gateway/FHIRBridge.Gateway/README.md
+  s_29a967ba537f2c::t_f3056ffbb76ff1 3
+src/Runtime/FHIRBridge.Runtime.Domain/README.md
+  s_29a967ba537f2c::t_f0e3df138c7c14 3
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirRestSubscriptionClient.cs
+  s_29a967ba537f2c::t_adc025901b5e26 134
+src/Runtime/FHIRBridge.Runtime.Infrastructure/README.md
+  s_29a967ba537f2c::t_28057a83252ca0 11,70
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/WorkflowNodeExecutorBase.cs
+  s_29a967ba537f2c::t_81c13658f4e036 29
+src/Worker/FHIRBridge.Worker/README.md
+  s_29a967ba537f2c::t_525983247a8615 3
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_29a967ba537f2c::t_e1b7fd9edb8e2f 97,243
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_29a967ba537f2c::t_99b222526c6881 199,536,1084
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "09beb9f2fc2ef5ffdf0849f35b98a4a3056edc86",
+  "prompts": {},
+  "sessions": {
+    "s_29a967ba537f2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea0894a5-0d0c-496a-9e21-486e7821de47",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
