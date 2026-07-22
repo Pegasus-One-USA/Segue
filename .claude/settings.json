@@ -32,7 +32,16 @@
       "Bash(echo \"API: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html 2>/dev/null || echo down\\)\")",
       "Bash(echo \"Portal: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:4200/ 2>/dev/null || echo down\\)\")",
       "PowerShell($conn = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue; if \\($conn\\) { \"5000 still held by $\\($conn.OwningProcess -join ','\\)\" } else { \"5000 free\" })",
-      "Bash(echo \"API: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html\\)\")"
+      "Bash(echo \"API: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/swagger/index.html\\)\")",
+      "Bash(npm install *)",
+      "Bash(docker-compose up *)",
+      "Bash(curl -sk -o /dev/null -w \"http 5000 -> %{http_code}\\\\n\" http://localhost:5000/swagger/index.html)",
+      "Bash(curl -sk -o /dev/null -w \"https 5001 -> %{http_code}\\\\n\" https://localhost:5001/swagger/index.html)",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -d FHIRBridge -Q \"SET NOCOUNT ON; SELECT COUNT\\(*\\) AS UserCount FROM Users;\")",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -d FHIRBridge -Q \"SET NOCOUNT ON; SELECT Email, DisplayName, Status, MustChangePassword FROM Users;\" -s \"|\" -W)",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -Q \"IF DB_ID\\('FHIRBridge'\\) IS NOT NULL BEGIN ALTER DATABASE [FHIRBridge] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [FHIRBridge]; PRINT 'DROPPED'; END ELSE PRINT 'NO DB';\")",
+      "Bash(curl -sk -o /dev/null -w \"swagger http %{http_code}\\\\n\" http://localhost:5000/swagger/index.html)",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -d FHIRBridge -Q \"SET NOCOUNT ON; SELECT COUNT\\(*\\) AS Users FROM Users;\" -W)"
     ]
   }
 }

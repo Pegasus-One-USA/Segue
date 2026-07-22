@@ -8,7 +8,10 @@ namespace FHIRBridge.Application.Services;
 
 public sealed class JsonMappingEngine : IJsonMappingEngine
 {
-    public MappingTestResultDto Map(string sourceJson, IReadOnlyCollection<MappingFieldDto> fields)
+    public MappingTestResultDto Map(
+        string sourceJson,
+        IReadOnlyCollection<MappingFieldDto> fields,
+        IReadOnlyDictionary<string, object?>? systemValues = null)
     {
         using var document = JsonDocument.Parse(sourceJson);
         var root = document.RootElement;
@@ -21,6 +24,21 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
         foreach (var field in fields)
         {
+            // System-value field: sourced from pipeline/runtime context (run id, write time, resource type, …)
+            // rather than the source JSON. The value flows into the row exactly like a normal mapped column.
+            if (IsSystemToken(field.JsonPath))
+            {
+                object? systemValue = null;
+                systemValues?.TryGetValue(field.JsonPath, out systemValue);
+                if (systemValue is null && field.IsRequired)
+                {
+                    errors.Add($"Required system field '{field.TargetField}' had no value for token '{field.JsonPath}'.");
+                }
+
+                parent[field.TargetField] = systemValue;
+                continue;
+            }
+
             var matches = ResolveAll(root, field.JsonPath);
             var policy = field.ArrayPolicy;
 
@@ -133,6 +151,10 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
         return rows;
     }
+
+    /// <summary>A field is system-sourced when its path is a reserved <c>@token</c> rather than a <c>$</c> JSONPath.</summary>
+    private static bool IsSystemToken(string? jsonPath)
+        => !string.IsNullOrEmpty(jsonPath) && jsonPath[0] == '@';
 
     private static string ChildTableName(MappingFieldDto field)
     {
