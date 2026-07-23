@@ -132,7 +132,8 @@ public sealed class OAuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicWorkflowStandaloneUrl(
-        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, [FromQuery] string? sessionId,
+        CancellationToken cancellationToken)
     {
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url requested: workflowId={WorkflowId} ehrEndpointId={EhrEndpointId}",
@@ -167,9 +168,20 @@ public sealed class OAuthController : ControllerBase
             return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
         }
 
+        // sessionId is an opaque identifier (never a URL, unlike callerId, so no origin check applies) that the
+        // Provider Standalone interactive token cache keys on instead of SourceConnectionId — see
+        // SmartAuthorizationCodeTokenProvider.BuildStoreKey. Reuse whatever the caller already has (a returning
+        // browser session resuming after a token expired) rather than always minting fresh, so its later
+        // hasValidToken/run calls keep finding the same cached token. Mint one here when absent so a first-time
+        // visitor still gets a value to persist and echo back on every later call. Capped defensively — this rides
+        // inside an encrypted token but a client could still send an unreasonably large string.
+        var effectiveSessionId = !string.IsNullOrWhiteSpace(sessionId) && sessionId.Length <= 200
+            ? sessionId
+            : Guid.NewGuid().ToString("N");
+
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
-        var response = BuildLaunchResponse(applicationType, context);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId);
+        var response = BuildLaunchResponse(applicationType, context, effectiveSessionId);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",
             workflowId, applicationType, response);
@@ -359,7 +371,7 @@ public sealed class OAuthController : ControllerBase
     /// EHR appends iss + launch and invokes it — it is not opened directly); standalone / patient sources get the
     /// directly-openable <c>/oauth/authorize</c> entry. <c>opensDirectly</c> + <c>mode</c> let the portal label it.
     /// </summary>
-    private object BuildLaunchResponse(ApplicationType? applicationType, string context)
+    private object BuildLaunchResponse(ApplicationType? applicationType, string context, string? sessionId = null)
     {
         var opensDirectly = applicationType is ApplicationType.Standalone or ApplicationType.Patient;
         var mode = "ehr-launch";
@@ -371,6 +383,7 @@ public sealed class OAuthController : ControllerBase
             mode,
             opensDirectly,
             applicationType = applicationType?.ToString(),
+            sessionId,
         };
     }
 }

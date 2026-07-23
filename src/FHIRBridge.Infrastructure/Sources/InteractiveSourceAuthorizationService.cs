@@ -81,11 +81,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _graphExecutionOptions = graphExecutionOptions?.Value ?? new WorkflowGraphExecutionOptions();
     }
 
-    public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null) =>
-        _launchTokenProtector.ProtectContext(routeId, ehrEndpointId, callerId);
+    public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null) =>
+        _launchTokenProtector.ProtectContext(routeId, ehrEndpointId, callerId, sessionId);
 
-    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null) =>
-        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId);
+    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null) =>
+        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId, sessionId);
 
     public async Task<Uri> StartAsync(
         Guid sourceConnectionId,
@@ -228,11 +228,12 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             PrivateKeyPem: null,
             Scopes: resolvedScopes,
             SourceConnectionId: sourceConnection.Id,
-            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint);
+            AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint,
+            CallerId: context.SessionId);
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: context.CallerId, cancellationToken);
+            callerId: context.CallerId, cancellationToken, sessionId: context.SessionId);
 
         return authorizationUrl;
     }
@@ -261,13 +262,15 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         if (context.WorkflowId is { } workflowId)
         {
             var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
-            return await StartStandaloneCoreAsync(workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, context.CallerId, cancellationToken);
+            return await StartStandaloneCoreAsync(
+                workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken);
         }
 
         if (context.RouteId is { } contextRouteId)
         {
             var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
-            return await StartStandaloneCoreAsync(sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, context.CallerId, cancellationToken);
+            return await StartStandaloneCoreAsync(
+                sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken);
         }
 
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -280,6 +283,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         Guid? workflowId,
         EhrEndpoint? ehrEndpoint,
         string? callerId,
+        string? sessionId,
         CancellationToken cancellationToken)
     {
         // A resolved hospital/organization endpoint overrides the connection's own configured base URL — discovery
@@ -311,11 +315,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             Scopes: resolvedScopes,
             SourceConnectionId: sourceConnection.Id,
             AuthorizationEndpoint: smartConfiguration.AuthorizationEndpoint,
-            CallerId: callerId);
+            CallerId: sessionId);
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: callerId, cancellationToken);
+            callerId: callerId, cancellationToken, sessionId: sessionId);
 
         return authorizationUrl;
     }
@@ -383,16 +387,19 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         Guid? workflowId,
         string requestedRedirectUri,
         string? callerId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? sessionId = null)
     {
         // Prefer a registered redirect URI (must match the EHR registration exactly); fall back to the request-derived one.
         var effectiveRedirectUri = sourceConnection.Interactive?.RedirectUris.FirstOrDefault() ?? requestedRedirectUri;
         _logger.LogInformation(
             "[Step 3/6] IssueAuthorizationAsync: sourceConnectionId={SourceConnectionId} " +
-            "applicationType={ApplicationType} hasCallerId={HasCallerId} configuredRedirectUri={ConfiguredRedirectUri} " +
-            "requestedRedirectUri={RequestedRedirectUri} effectiveRedirectUri={EffectiveRedirectUri} launch={Launch}",
+            "applicationType={ApplicationType} hasCallerId={HasCallerId} hasSessionId={HasSessionId} " +
+            "configuredRedirectUri={ConfiguredRedirectUri} requestedRedirectUri={RequestedRedirectUri} " +
+            "effectiveRedirectUri={EffectiveRedirectUri} launch={Launch}",
             sourceConnection.Id, sourceConnection.ApplicationType, !string.IsNullOrWhiteSpace(callerId),
-            sourceConnection.Interactive?.RedirectUris.FirstOrDefault(), requestedRedirectUri, effectiveRedirectUri, launch);
+            !string.IsNullOrWhiteSpace(sessionId), sourceConnection.Interactive?.RedirectUris.FirstOrDefault(),
+            requestedRedirectUri, effectiveRedirectUri, launch);
 
         var nonce = CreateNonce();
         var state = _launchTokenProtector.ProtectState(nonce);
@@ -418,7 +425,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 // FhirSourceConfiguration from scratch and has no other way to learn which URL was used.
                 ResolvedBaseUrl: source.BaseUrl,
                 HasLaunchContext: launch is not null,
-                CallerId: callerId),
+                CallerId: callerId,
+                SessionId: sessionId),
             cancellationToken);
 
         return new Uri(request.AuthorizationUrl);
@@ -466,7 +474,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             SourceConnectionId: pending.SourceConnectionId,
             ClientSecret: clientSecret,
             ApplicationType: sourceConnection.ApplicationType,
-            CallerId: pending.CallerId);
+            // The interactive token cache keys on SessionId (an opaque, non-URL identifier), never CallerId — that
+            // field is only ever the caller's redirect-back URL (see postLaunchRedirectUri below) and is never
+            // suitable as a cache key.
+            CallerId: pending.SessionId);
 
         var launchType = DetermineLaunchType(pending);
 
@@ -485,14 +496,14 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             await _governanceLogger.LogSmartLaunchAsync(
                 new SmartLaunchEntry(
                     pending.SourceConnectionId, pending.SourceName, launchType, Success: false,
-                    $"{exception.Message} {DescribeTokenKey(pending.CallerId)}"),
+                    $"{exception.Message} {DescribeTokenKey(pending.SessionId)}"),
                 CancellationToken.None);
             throw;
         }
 
         await _governanceLogger.LogSmartLaunchAsync(
             new SmartLaunchEntry(
-                pending.SourceConnectionId, pending.SourceName, launchType, Success: true, DescribeTokenKey(pending.CallerId)),
+                pending.SourceConnectionId, pending.SourceName, launchType, Success: true, DescribeTokenKey(pending.SessionId)),
             CancellationToken.None);
 
         Guid? workflowRunId = null;
@@ -513,13 +524,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             // Deliberately NOT the request token: the callback's caller is the provider's browser, which may
             // disconnect (tab closed, redirect) while the run is still pulling from the EHR. The run must not
             // die with the connection.
-            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None, pending.CallerId);
+            await TriggerRouteRunAsync(pending.SourceConnectionId, routeId, CancellationToken.None, pending.SessionId);
         }
         else if (pending.WorkflowId is { } workflowId && !skipWorkflowTrigger)
         {
             // Same reasoning as the route path above — the run must survive the browser disconnecting/redirecting
             // while it's still in flight, so it uses CancellationToken.None rather than the request's token.
-            var triggerResult = await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, CancellationToken.None, pending.CallerId);
+            var triggerResult = await TriggerWorkflowRunAsync(pending.SourceConnectionId, workflowId, CancellationToken.None, pending.SessionId);
             workflowRunId = triggerResult.WorkflowRunId;
             workflowRunFailed = triggerResult.Failed;
         }

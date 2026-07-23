@@ -48,7 +48,8 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicPatientStandaloneUrl(
-        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, [FromQuery] string? sessionId,
+        CancellationToken cancellationToken)
     {
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
         if (workflow is null || !workflow.IsPubliclyLaunchable)
@@ -75,19 +76,34 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
         }
 
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
-        return Ok(BuildLaunchResponse(context));
+        // sessionId is an opaque identifier (never a URL, unlike callerId, so no origin check applies) that the
+        // Patient Standalone interactive token cache keys on instead of SourceConnectionId — see
+        // SmartAuthorizationCodeTokenProvider.BuildStoreKey. Reuse whatever the caller already has (a returning
+        // browser session resuming after a token expired) rather than always minting fresh, so its later
+        // hasValidToken/run calls keep finding the same cached token. Mint one here (not left to the caller) when
+        // absent so a first-time visitor still gets a value to persist and echo back on every later call. Capped
+        // defensively — this rides inside an encrypted token but a client could still send an unreasonably large
+        // string.
+        var effectiveSessionId = !string.IsNullOrWhiteSpace(sessionId) && sessionId.Length <= 200
+            ? sessionId
+            : Guid.NewGuid().ToString("N");
+
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId);
+        return Ok(BuildLaunchResponse(context, effectiveSessionId));
     }
 
     // This controller only ever reaches here once applicationType has already been confirmed as Patient above, so
     // unlike OAuthController's BuildLaunchResponse, there is no other mode/opensDirectly branch to consider — the
-    // shape returned still matches it (launchUrl, mode, opensDirectly, applicationType) for the frontend's benefit.
-    private object BuildLaunchResponse(string context) => new
+    // shape returned still matches it (launchUrl, mode, opensDirectly, applicationType) for the frontend's benefit,
+    // plus sessionId so a first-time caller can persist and echo it on every later hasValidToken/run/discardToken
+    // call for this same browser session.
+    private object BuildLaunchResponse(string context, string sessionId) => new
     {
         launchUrl = BuildAuthorizeUri(context),
         mode = "patient",
         opensDirectly = true,
         applicationType = ApplicationType.Patient.ToString(),
+        sessionId,
     };
 
     private string BuildAuthorizeUri(string context) =>

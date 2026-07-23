@@ -149,8 +149,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         _logger.LogInformation(
             "{Provider} token cache lookup: sourceConnectionId={SourceConnectionId} applicationType={ApplicationType} " +
             "keyedByCallerId={KeyedByCallerId} hasPatientId={HasPatientId} keyHash={KeyHash} hit={Hit}",
-            ProviderName, source.SourceConnectionId, source.ApplicationType,
-            source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId),
+            ProviderName, source.SourceConnectionId, source.ApplicationType, IsCallerIdKeyed(source),
             !string.IsNullOrWhiteSpace(source.TargetPatientId), HashKey(key), hit);
     }
 
@@ -445,19 +444,22 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         return string.Join(' ', scopes);
     }
 
-    // Token store key: for a Patient Standalone source with a caller id, key on the logged-in end user ALONE
+    // Token store key: for a Patient Standalone or Provider Standalone source with a caller id (both are
+    // "directly-opened" flows with no EHR-supplied identity of their own — see
+    // InteractiveSourceAuthorizationService.StartInteractiveFromContextAsync), key on the logged-in end user ALONE
     // (no SourceConnectionId segment) — every pipeline that shares that same user's session reuses the one token
-    // their authorization already covers, instead of each SourceConnection needing its own separate MyChart
-    // consent. This is a deliberate tradeoff, not an oversight: if two SourceConnections sharing a CallerId request
+    // their authorization already covers, instead of each SourceConnection needing its own separate consent screen.
+    // This is a deliberate tradeoff, not an oversight: if two SourceConnections sharing a CallerId request
     // different scopes, whichever authorizes last silently overwrites the other's cached token in this slot — the
-    // team has accepted that collision risk in favor of zero repeat-consent prompts. Every other ApplicationType
-    // (and a Patient source with no caller id supplied) falls back to the pre-existing behavior: prefer the durable
-    // source-connection id, else the token endpoint + client identity. The patient segment isolates concurrent
-    // sessions on the same key — "default" is the unscoped slot every pre-existing caller (that never set
-    // TargetPatientId) reads/writes, so this is purely additive.
+    // team has accepted that collision risk in favor of zero repeat-consent prompts. EHR Launch (which always
+    // carries its own EHR-anchored patient/encounter context from the first request, with no client-side session
+    // bootstrapping problem to solve) and a Standalone/Patient source with no caller id supplied fall back to the
+    // pre-existing behavior: prefer the durable source-connection id, else the token endpoint + client identity.
+    // The patient segment isolates concurrent sessions on the same key — "default" is the unscoped slot every
+    // pre-existing caller (that never set TargetPatientId) reads/writes, so this is purely additive.
     private string BuildStoreKey(FhirSourceConfiguration source, string? patientId)
     {
-        if (source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId))
+        if (IsCallerIdKeyed(source))
         {
             return $"{ProviderName.ToLowerInvariant()}|{source.CallerId}|{patientId ?? "default"}";
         }
@@ -466,6 +468,14 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             ? $"{ProviderName.ToLowerInvariant()}|{id}|{patientId ?? "default"}"
             : $"{ProviderName.ToLowerInvariant()}|{source.TokenEndpoint}|{source.ClientId}|{patientId ?? "default"}";
     }
+
+    // Whether BuildStoreKey uses the CallerId-keyed slot for this source — Patient Standalone and Provider
+    // Standalone only (both "directly-opened" flows with no EHR-supplied identity of their own), and only when a
+    // caller id was actually supplied. Extracted so LogKeyLookup/LogKeySave's diagnostics can never drift out of
+    // sync with BuildStoreKey's own condition.
+    private static bool IsCallerIdKeyed(FhirSourceConfiguration source) =>
+        source.ApplicationType is ApplicationType.Patient or ApplicationType.Standalone
+            && !string.IsNullOrWhiteSpace(source.CallerId);
 
     // Saves under the CallerId-keyed slot (when applicable) AND the legacy per-SourceConnection slot, so a caller
     // that doesn't yet supply CallerId (the launch's own immediate convenience auto-run, or a consumer app not yet
@@ -482,7 +492,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         LogKeySave(source, key, patientId);
         var saveTask = _tokenStore.SaveAsync(key, stored, cancellationToken);
 
-        if (source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId))
+        if (IsCallerIdKeyed(source))
         {
             var legacyKey = BuildStoreKey(source with { CallerId = null }, patientId);
             if (!string.Equals(legacyKey, key, StringComparison.Ordinal))
@@ -507,8 +517,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         _logger.LogInformation(
             "{Provider} token cache save: sourceConnectionId={SourceConnectionId} applicationType={ApplicationType} " +
             "keyedByCallerId={KeyedByCallerId} hasPatientId={HasPatientId} keyHash={KeyHash}",
-            ProviderName, source.SourceConnectionId, source.ApplicationType,
-            source.ApplicationType == ApplicationType.Patient && !string.IsNullOrWhiteSpace(source.CallerId),
+            ProviderName, source.SourceConnectionId, source.ApplicationType, IsCallerIdKeyed(source),
             !string.IsNullOrWhiteSpace(patientId), HashKey(key));
     }
 
