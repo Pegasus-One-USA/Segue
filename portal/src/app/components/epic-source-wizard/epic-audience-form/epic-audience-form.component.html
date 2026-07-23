@@ -315,10 +315,54 @@
               <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in Epic APP).</p>
             </div>
             @if (audience() === 'backend-system') {
+              <div class="eaf-field eaf-field--full">
+                <label class="eaf-label" for="eaf-keySource">Signing Key Source</label>
+                <div class="eaf-select-wrap">
+                  <select id="eaf-keySource" class="eaf-select" formControlName="keySource">
+                    <option value="manual">Enter Manually</option>
+                    <option value="gen">Generate New Key Pair</option>
+                    <option value="import">Import Existing Private Key</option>
+                  </select>
+                </div>
+                <p class="eaf-hint">"Generate"/"Import" have FHIRBridge provision and store the private key for you — no need to type Key ID/Key Vault Name/Secret Name by hand.</p>
+              </div>
+
+              @if (isGenKey()) {
+                <div class="eaf-field eaf-field--full">
+                  <button type="button" class="eaf-btn eaf-btn--ghost" (click)="generateKeyPair()"
+                          [disabled]="keyGenStatus() === 'generating'">
+                    {{ keyGenStatus() === 'generating' ? 'Generating…' : 'Generate Key Pair' }}
+                  </button>
+                  @if (keyGenStatus() === 'generated') {
+                    <span class="eaf-tag-auto">&#10003; key pair ready</span>
+                  }
+                </div>
+              } @else if (isImportKey()) {
+                <div class="eaf-field eaf-field--full">
+                  <label class="eaf-btn eaf-btn--ghost eaf-file-btn">
+                    Choose Private Key File
+                    <input type="file" accept=".pem,.key,.txt" class="eaf-file-input"
+                           (change)="onPrivateKeyFileSelected($event)" />
+                  </label>
+                  @if (selectedFileName()) {
+                    <span class="eaf-tag-auto">{{ selectedFileName() }}</span>
+                  }
+                  <button type="button" class="eaf-btn eaf-btn--ghost" (click)="importPrivateKey()"
+                          [disabled]="keyGenStatus() === 'generating' || !selectedFileName()">
+                    {{ keyGenStatus() === 'generating' ? 'Importing…' : 'Import Private Key' }}
+                  </button>
+                  @if (keyGenStatus() === 'generated') {
+                    <span class="eaf-tag-auto">&#10003; key imported</span>
+                  }
+                  <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). FHIRBridge validates it and signs with it as-is — no new key is generated.</p>
+                </div>
+              }
+
               <div class="eaf-field" [class.eaf-field--error]="form.controls.jwtKid.touched && form.controls.jwtKid.invalid">
                 <label class="eaf-label" for="eaf-jwtKid">Key ID (kid) <span class="eaf-req">*</span></label>
                 <input id="eaf-jwtKid" class="eaf-input" type="text" formControlName="jwtKid"
-                       placeholder="e.g. 8f2a1c4e-…-jwk-1" />
+                       [readonly]="isGenKey() || isImportKey()"
+                       [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. 8f2a1c4e-…-jwk-1'" />
                 @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
                   <p class="eaf-error-msg">Key ID is required.</p>
                 }
@@ -327,7 +371,8 @@
               <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
                 <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
                 <input id="eaf-privateKeyRef" class="eaf-input" type="text" formControlName="privateKeyRef"
-                       placeholder="e.g. fhirbridge-secrets" />
+                       [readonly]="isGenKey() || isImportKey()"
+                       [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. fhirbridge-secrets'" />
                 @if (form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid) {
                   <p class="eaf-error-msg">Key Vault Name is required.</p>
                 }
@@ -335,12 +380,23 @@
               <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid">
                 <label class="eaf-label" for="eaf-privateKeySecretName">Secret Name <span class="eaf-req">*</span></label>
                 <input id="eaf-privateKeySecretName" class="eaf-input" type="text" formControlName="privateKeySecretName"
-                       placeholder="e.g. epic-backend-private-key" />
+                       [readonly]="isGenKey() || isImportKey()"
+                       [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. epic-backend-private-key'" />
                 @if (form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid) {
                   <p class="eaf-error-msg">Secret Name is required.</p>
                 }
                 <p class="eaf-hint">Where the private key PEM is stored — Azure Key Vault in production, or your configured local secret store for dev/test.</p>
               </div>
+              @if ((isGenKey() || isImportKey()) && keyGenStatus() === 'generated') {
+                <div class="eaf-field eaf-field--full">
+                  <p class="eaf-hint">
+                    <strong>Register the JWKS URL in Epic after saving</strong> — once this connection is saved, its
+                    public key is published at <code>/api/v1/source-connections/&lbrace;id&rbrace;/.well-known/jwks.json</code>.
+                    Copy that URL from the connection's detail view and paste it into the "Private Key / JWKS URL"
+                    field above and your Epic app registration before running test launch.
+                  </p>
+                </div>
+              }
             }
           }
         </div>

@@ -675,3 +675,6 @@
     &:active { transform: translateY(0); }
   }
 }
+
+.eaf-file-btn { cursor: pointer; display: inline-flex; align-items: center; margin-right: 10px; }
+.eaf-file-input { display: none; }
