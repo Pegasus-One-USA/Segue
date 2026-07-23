@@ -812,6 +812,9 @@ export class EpicAudienceFormComponent implements OnInit {
     setIfPresent('jwtKid', 'JWT kid');
     setIfPresent('privateKeyRef', 'Key vault reference');
     setIfPresent('privateKeySecretName', 'Secret Name');
+    // Absent on any node saved before this control existed — form default ('manual') is exactly right there,
+    // since every such node's key material was necessarily hand-entered.
+    setIfPresent('keySource', 'Signing key source');
 
     setIfPresent('cdsDiscoveryUrl', 'CDS discovery URL');
     setIfPresent('cdsServiceEndpoint', 'CDS service endpoint');
@@ -1525,6 +1528,11 @@ export class EpicAudienceFormComponent implements OnInit {
     }, {
       'Client ID':             v.clientId ?? '',
       'Auth method':           v.authMethod ?? 'secret',
+      // Only meaningful for Backend System + JWT — lets a later "was this key FHIRBridge-provisioned?" check (e.g.
+      // WorkflowBuilderComponent auto-filling the real JWKS URL after build assigns a sourceConnectionId) tell a
+      // generated/imported key apart from one pointing at an externally-hosted JWKS, without re-deriving it from
+      // the Key Vault Name/Secret Name values alone (which look identical either way).
+      'Signing key source':    v.keySource ?? 'manual',
       'Epic audience':         aud,
       'SMART version':         'SMART App Launch 2.0 (R4)',
       'Scope version':         v.scopeVersion === 'v1' ? 'v1 (coarse)' : 'v2 (granular)',
