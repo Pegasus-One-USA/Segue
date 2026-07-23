@@ -24,12 +24,6 @@
       </div>
 
       <div class="nld-header-right">
-        @if (!destMappingTitle() && mode() === 'transform' && pickerMeta()) {
-          <div class="nld-ctx-chips">
-            <span class="nld-ctx-chip">{{ pickerMeta()?.rule }}</span>
-            <span class="nld-ctx-chip">{{ pickerMeta()?.cfg?.context }}</span>
-          </div>
-        }
         <button
           class="nld-maximize"
           type="button"

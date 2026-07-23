@@ -985,6 +985,14 @@ export class DestinationWizardComponent implements OnInit {
     return table?.columns.find(c => c.name === column)?.dataType;
   }
 
+  /** Real PK/FK status of one column on any already-known SQL table (see DestinationColumn.isPrimaryKey/
+   *  isForeignKey/references) — undefined for CSV destinations or free-text/pending columns with no real
+   *  schema behind them yet. Same display-only role as dataTypeForTableColumn. */
+  keyInfoForTableColumn(tableFullName: string, column: string): DestinationColumn | undefined {
+    const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
+    return table?.columns.find(c => c.name === column);
+  }
+
   // ── data groups ───────────────────────────────────────────────────────────
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
 
@@ -1154,6 +1162,8 @@ export class DestinationWizardComponent implements OnInit {
   readonly columnsForResourceTargetFn = (r: string): string[] => this.columnsForResourceTarget(r);
   readonly dataTypeForTableColumnFn = (tableFullName: string, column: string): string | undefined =>
     this.dataTypeForTableColumn(tableFullName, column);
+  readonly keyInfoForTableColumnFn = (tableFullName: string, column: string): DestinationColumn | undefined =>
+    this.keyInfoForTableColumn(tableFullName, column);
 
   // ── private ───────────────────────────────────────────────────────────────
   // Seeds the per-resource target (file name / table) for newly-selected resources

@@ -148,6 +148,16 @@
   border-radius: var(--radius-pill, 999px);
 }
 
+.fm-createtable-col-fk {
+  justify-self: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 999px);
+}
+
 .fm-createtable-col-input,
 .fm-createtable-col-select {
   height: 38px;

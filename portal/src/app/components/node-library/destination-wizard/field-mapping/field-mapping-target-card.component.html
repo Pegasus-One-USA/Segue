@@ -20,10 +20,15 @@
         <button type="button" class="fm-target-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
       }
     </div>
-    @if (isExtra()) {
-      <button type="button" class="fm-target-remove" aria-label="Remove this table" title="Remove this table" (click)="removeTable.emit()">✕</button>
-    }
+    <button type="button" class="fm-target-remove" aria-label="Remove this table" title="Remove this table" (click)="removeTable.emit()">✕</button>
   </div>
+
+  @if (relationToShow(); as rel) {
+    <div class="fm-target-relation">
+      <span aria-hidden="true">🔗</span>
+      child of <strong>{{ relationParentLabel() }}</strong> via <code>{{ rel.foreignKeyColumnName }}</code> → <code>{{ rel.parentColumn }}</code>
+    </div>
+  }
 
   @if (!isExtra()) {
     <div class="fm-target-select-row">
@@ -75,6 +80,14 @@
         <span class="fm-target-colname">{{ col }}</span>
         @if (columnDataType()(col); as dt) {
           <span class="fm-target-coltype">{{ dt }}</span>
+        }
+        @if (columnKeyInfo()(col); as key) {
+          @if (key.isPrimaryKey) {
+            <span class="fm-target-key fm-target-key--pk" title="Primary key">PK</span>
+          }
+          @if (key.isForeignKey) {
+            <span class="fm-target-key fm-target-key--fk" [title]="key.references ? 'Foreign key → ' + key.references : 'Foreign key'">FK</span>
+          }
         }
         @if ((rowForColumn()(col)?.sources?.length ?? 0) > 1) {
           <span class="fm-target-tag">×{{ rowForColumn()(col)?.sources?.length }}</span>

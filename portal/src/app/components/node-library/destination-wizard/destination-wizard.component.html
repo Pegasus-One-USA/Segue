@@ -329,6 +329,8 @@
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
           [columnsForTable]="columnsForTableFn"
           [dataTypeForTable]="dataTypeForTableColumnFn"
+          [keyInfoForTable]="keyInfoForTableColumnFn"
+          [childTableRelations]="childTableRelationsByTable()"
           [availableTablesToAdd]="availableTablesToAddFn"
           [connectionInfo]="connectionInfo()"
           [openLoadPayloadRequest]="openLoadPayloadRequest()"

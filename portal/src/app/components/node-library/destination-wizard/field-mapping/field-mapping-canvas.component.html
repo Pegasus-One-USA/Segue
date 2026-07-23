@@ -38,6 +38,8 @@
           [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
           [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
           [columnDataType]="columnTypeOn(card.tableName)"
+          [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+          [relation]="relationFor(card.tableName)"
           [isArmed]="!!armedId()"
           [isApproximated]="isApproximatedFn"
           [x]="positionForKey(card.tableName, i).x"
@@ -47,7 +49,7 @@
           (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
           (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
           (positionChange)="onCardPositionChange(card.tableName, $event)"
-          (removeTable)="onRemoveExtraTable(card.tableName)"
+          (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
           (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
           (createTableRequested)="openCreateTableModal(card.resource, true)"
@@ -203,7 +205,7 @@
     />
   }
 
-  @if (pendingRemoveTable(); as tableName) {
+  @if (pendingRemoveTable(); as pending) {
     <div
       class="fm-remove-confirm-backdrop"
       tabindex="0"
@@ -212,7 +214,7 @@
     >
       <div class="fm-remove-confirm-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
         <div class="fm-remove-confirm-icon">⚠</div>
-        <h3 class="fm-remove-confirm-title">Remove {{ tableName }}?</h3>
+        <h3 class="fm-remove-confirm-title">Remove {{ pending.tableName || pending.resource }}?</h3>
         <p class="fm-remove-confirm-body">
           Any mappings already made onto this table will be discarded.
         </p>

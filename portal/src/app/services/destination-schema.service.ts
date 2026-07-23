@@ -9,6 +9,12 @@ export interface DestinationColumn {
   mappingValueType: string;
   isNullable: boolean;
   maxLength: number | null;
+  /** Read from the live destination's real key constraints (SQL Server / Azure SQL only) — never guessed
+   *  from the column's name. Absent/false for PostgreSQL/MySQL columns, which have no such lookup. */
+  isPrimaryKey?: boolean;
+  isForeignKey?: boolean;
+  /** Set only when isForeignKey — "{schema}.{table}.{column}" of the referenced primary key. */
+  references?: string | null;
   /** Absent (e.g. every real probe() response) is treated as 'probed'. Only the mapping-canvas's own
    *  "+ Add column" flow ever stamps 'userCreated', client-side — the backend never sets this. */
   origin?: 'probed' | 'userCreated';

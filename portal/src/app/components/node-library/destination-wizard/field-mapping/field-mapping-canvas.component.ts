@@ -85,6 +85,13 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   /** Real data type of one column on any already-known SQL table — undefined for CSV or free-text
    *  columns with no real schema behind them. Purely a display concern for each target card. */
   readonly dataTypeForTable = input<(tableFullName: string, column: string) => string | undefined>(() => undefined);
+  /** Real PK/FK status of one column on any already-known SQL table — undefined for CSV or free-text
+   *  columns with no real schema behind them. Same display-only role as dataTypeForTable. */
+  readonly keyInfoForTable = input<(tableFullName: string, column: string) => DestinationColumn | undefined>(() => undefined);
+  /** Parent/PK/FK relation for any table created as a child of another (see ChildTableRelation) — keyed
+   *  by table full name, owned by the wizard so it survives navigating between resources. Read-only here:
+   *  a card just displays it, same display-only role as dataTypeForTable/keyInfoForTable. */
+  readonly childTableRelations = input<Record<string, ChildTableRelation>>({});
   readonly availableTablesToAdd = input<(resource: string) => string[]>(() => []);
   // Ad-hoc connection details (from the wizard's Step 1 SQL form) — powers the real ALTER TABLE /
   // CREATE TABLE calls below. Only meaningful for destType 'sql'.
@@ -138,9 +145,16 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private static readonly SOURCE_KEY = '__source__';
   private readonly cardPositions = signal<Record<string, { x: number; y: number }>>({});
 
+  // Source tree defaults to 400px wide (field-mapping-source-tree.component.scss) starting at x:24, so its
+  // right edge sits at x:424 by default — target cards must start past that with a real gap, not right at
+  // it, or the two panels render touching/overlapping the moment neither has been dragged yet.
+  private static readonly SOURCE_DEFAULT_WIDTH = 400;
+  private static readonly CARD_GAP = 40;
+
   private defaultPositionFor(key: string, index: number): { x: number; y: number } {
     if (key === FieldMappingCanvasComponent.SOURCE_KEY) return { x: 24, y: 24 };
-    return { x: 420, y: 24 + index * 260 };
+    const cardX = 24 + FieldMappingCanvasComponent.SOURCE_DEFAULT_WIDTH + FieldMappingCanvasComponent.CARD_GAP;
+    return { x: cardX, y: 24 + index * 260 };
   }
 
   positionForKey(key: string, index: number): { x: number; y: number } {
@@ -388,6 +402,14 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     return (column: string) => this.dataTypeForTable()(tableName, column);
   }
 
+  columnKeyInfoOn(tableName: string) {
+    return (column: string) => this.keyInfoForTable()(tableName, column);
+  }
+
+  relationFor(tableName: string): ChildTableRelation | undefined {
+    return this.childTableRelations()[tableName];
+  }
+
   targetFor(resource: string): string { return this.targetByResource()[resource] ?? ''; }
 
   onTargetChange(resource: string, value: string): void {
@@ -575,11 +597,13 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   // Removing a table drops any mappings already made onto it, so it's confirmed first rather than
-  // acting immediately on click — matching the wizard's own confirm-before-discarding pattern.
-  readonly pendingRemoveTable = signal<string | null>(null);
+  // acting immediately on click — matching the wizard's own confirm-before-discarding pattern. Covers
+  // both an extra table and the primary one (its own "✕" clears the resource's target instead of
+  // filtering extraTables, since the primary slot isn't a member of that list).
+  readonly pendingRemoveTable = signal<{ resource: string; tableName: string; isExtra: boolean } | null>(null);
 
-  onRemoveExtraTable(tableName: string): void {
-    this.pendingRemoveTable.set(tableName);
+  onRemoveTable(resource: string, tableName: string, isExtra: boolean): void {
+    this.pendingRemoveTable.set({ resource, tableName, isExtra });
   }
 
   cancelRemoveTable(): void {
@@ -587,9 +611,24 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   confirmRemoveTable(): void {
-    const tableName = this.pendingRemoveTable();
-    if (!tableName) return;
-    this.extraTablesChange.emit(this.extraTables().filter(t => t !== tableName));
+    const pending = this.pendingRemoveTable();
+    if (!pending) return;
+    const { resource, tableName, isExtra } = pending;
+
+    if (isExtra) {
+      // The parent (DestinationWizardComponent.onExtraTablesChange) discards mappings onto the removed
+      // table itself once it sees it drop out of the list — no need to also filter mappingRows here.
+      this.extraTablesChange.emit(this.extraTables().filter(t => t !== tableName));
+    } else {
+      // Unlike extraTablesChange, the parent's targetByResourceChange handler is a bare signal.set() with
+      // no cleanup of its own, so this table's mappings are discarded here before clearing the target —
+      // otherwise they'd silently survive, orphaned against a target the resource no longer points at.
+      this.mappingRowsChange.emit(
+        this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName)),
+      );
+      this.targetByResourceChange.emit({ ...this.targetByResource(), [resource]: '' });
+    }
+
     this.pendingRemoveTable.set(null);
   }
 

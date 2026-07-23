@@ -67,8 +67,12 @@ foreach (var (resourceName, fileName) in targetTemplates)
 
     using var document = JsonDocument.Parse(File.ReadAllText(path));
     var fields = new List<CatalogField>();
+    // No re-sort: kept in the template's own declaration order, matching field-mapping-payload.util.ts's
+    // walk() (which iterates Object.entries() — JS preserves insertion order) — the mapping canvas's
+    // "Load JSON payload" affordance is the other producer of this exact FhirElement[] shape, and the two
+    // must render identically whether a resource's tree came from this generated catalog or from pasting
+    // the same template file there directly.
     Walk(document.RootElement, fhirPath: "", jsonPath: "$", arrayAncestors: [], fields, isRoot: true);
-    fields.Sort((a, b) => string.CompareOrdinal(a.FhirPath, b.FhirPath));
     resources[resourceName] = fields;
     Console.WriteLine($"{resourceName}: {fields.Count} fields");
 }
@@ -101,9 +105,15 @@ var json = JsonSerializer.Serialize(catalog, new JsonSerializerOptions { WriteIn
 File.WriteAllText(outPath, json);
 Console.WriteLine($"Wrote {json.Length} bytes -> {outPath}");
 
-// Element names that add noise to a mapping picker, or are FHIR's "primitive extension" carriers
-// (any "_fieldName" sibling) — skipped at every level. "extension" is handled separately below via
-// HandleRootExtensions rather than being walked raw.
+// "resourceType" is the only element name skipped at every level — a constant string on every instance
+// of the resource, never a useful mapping target, same as field-mapping-payload.util.ts's walk() skips
+// it for the same reason. Everything else (meta, text, language, modifierExtension, implicitRules, ...)
+// is walked like any other field: a real uploaded template can legitimately use "text"/"language" as a
+// nested property name (e.g. any CodeableConcept.text, Communication.language) with real mapping value,
+// so it must render there — dropping it here would silently show fewer fields than the same file
+// produces via "Load JSON payload", which has no such skip-list. "_fieldName" primitive-extension
+// siblings are skipped too (FHIR's own convention, never present as a real leaf). "extension" is handled
+// separately below via HandleRootExtensions rather than being walked raw.
 void Walk(
     JsonElement obj,
     string fhirPath,
@@ -121,7 +131,7 @@ void Walk(
             continue;
         }
 
-        if (name is "meta" or "text" or "implicitRules" or "language" or "modifierExtension" or "resourceType")
+        if (name == "resourceType")
         {
             continue;
         }

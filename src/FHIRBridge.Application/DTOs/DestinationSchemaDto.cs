@@ -34,12 +34,22 @@ public sealed record DestinationTableSchemaDto(
     string FullName,
     IReadOnlyList<DestinationColumnSchemaDto> Columns);
 
+/// <summary>
+/// <see cref="IsPrimaryKey"/>/<see cref="IsForeignKey"/>/<see cref="References"/> are read from the live
+/// destination's real key constraints (SQL Server / Azure SQL only — <c>sys.indexes</c>/<c>sys.foreign_key_columns</c>),
+/// never guessed from the column's name. For PostgreSQL/MySQL, and for any column read before this field
+/// existed, they default to false/null rather than a naming-convention guess. <see cref="References"/>,
+/// when set, is "{schema}.{table}.{column}" of the referenced primary key.
+/// </summary>
 public sealed record DestinationColumnSchemaDto(
     string Name,
     string DataType,
     string MappingValueType,
     bool IsNullable,
-    int? MaxLength);
+    int? MaxLength,
+    bool IsPrimaryKey = false,
+    bool IsForeignKey = false,
+    string? References = null);
 
 /// <summary>
 /// Adds one column to an already-existing destination table via a real ALTER TABLE — SQL Server /

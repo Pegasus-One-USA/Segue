@@ -93,6 +93,13 @@
         <span class="fm-createtable-col-type">bigint</span>
         <span class="fm-createtable-col-pk">PK</span>
       </div>
+      @if (relation() === 'child') {
+        <div class="fm-createtable-col-row fm-createtable-col-row--fixed">
+          <span class="fm-createtable-col-name">{{ fkColumnName() || '(FK column name)' }}</span>
+          <span class="fm-createtable-col-type">bigint</span>
+          <span class="fm-createtable-col-fk">FK</span>
+        </div>
+      }
       @for (c of columns(); track $index; let i = $index) {
         <div class="fm-createtable-col-row">
           <input

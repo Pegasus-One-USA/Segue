@@ -9,7 +9,9 @@
 }
 
 <button type="button" class="fm-list-head" (click)="toggleCollapsed()" [attr.aria-expanded]="!collapsed()">
-  <span class="fm-list-caret" aria-hidden="true">{{ collapsed() ? '▸' : '▾' }}</span>
+  <svg class="fm-list-caret" [class.fm-list-caret--collapsed]="collapsed()" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
   Mapping list
   <span class="fm-list-count">{{ rows().length }}</span>
   <span class="fm-list-spacer"></span>
