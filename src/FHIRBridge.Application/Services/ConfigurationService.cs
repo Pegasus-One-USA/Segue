@@ -9,6 +9,7 @@ using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Application.Services;
 
@@ -24,19 +25,22 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly ISecretWriter _secretWriter;
     private readonly IParentReferenceResolver _parentReferenceResolver;
+    private readonly ILogger<ConfigurationService> _logger;
 
     public ConfigurationService(
         IConfigurationRepository repository,
         ISourceCapabilityRepository capabilityRepository,
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
         ISecretWriter secretWriter,
-        IParentReferenceResolver parentReferenceResolver)
+        IParentReferenceResolver parentReferenceResolver,
+        ILogger<ConfigurationService> logger)
     {
         _repository = repository;
         _capabilityRepository = capabilityRepository;
         _capabilityDiscoveryService = capabilityDiscoveryService;
         _secretWriter = secretWriter;
         _parentReferenceResolver = parentReferenceResolver;
+        _logger = logger;
     }
 
     public async Task<SourceConnectionDto> AddSourceConnectionAsync(
@@ -603,7 +607,29 @@ public sealed class ConfigurationService : IConfigurationService
                 return;
             }
 
-            await _capabilityDiscoveryService.DiscoverAsync(sourceConnectionId, cancellationToken);
+            try
+            {
+                await _capabilityDiscoveryService.DiscoverAsync(sourceConnectionId, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Discovery needs a working connection to the source — for Epic Backend Services, a successful
+                // SMART token exchange. A brand-new connection whose key Epic hasn't been told about yet (or any
+                // other transient reachability/auth failure) can't satisfy that, and failing the whole save here
+                // would roll back the mapping AND the source connection this same request just created (both
+                // committed together — see WorkflowEndpoints' build transaction), leaving the caller with no
+                // saved connection and no id to register a JWKS URL against. Fail open exactly like the
+                // "no discovery support" branch above: the resource type is left unverified for this save rather
+                // than blocking it outright.
+                _logger.LogWarning(
+                    ex,
+                    "Capability discovery failed for source connection {SourceConnectionId}; resource type " +
+                    "'{ResourceType}' left unverified for this save.",
+                    sourceConnectionId,
+                    resourceType);
+                return;
+            }
+
             capability = await _capabilityRepository.GetBySourceConnectionIdAsync(sourceConnectionId, cancellationToken);
 
             if (capability is null)

@@ -38,7 +38,8 @@ public sealed class DestinationExecutionHistoryGateTests
             Mock.Of<ISourceCapabilityRepository>(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<ISecretWriter>(),
-            Mock.Of<IParentReferenceResolver>());
+            Mock.Of<IParentReferenceResolver>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 
     private static CreateDestinationConfigurationRequest UpdateRequest() =>
