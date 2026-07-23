@@ -66,6 +66,42 @@ public sealed class PatientScopedSearchTests
         handler.RequestUri.Should().Contain("/Patient?").And.NotContain("_id=").And.NotContain("patient=");
     }
 
+    [Fact]
+    public async Task Cohort_scopes_sibling_resource_search_to_discovered_patient_ids()
+    {
+        var cohortSource = Source with { PatientIds = ["p1", "p2", "p3"] };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        await client.SearchAsync("Observation", cohortSource, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("/Observation?").And.Contain("patient=p1,p2,p3");
+    }
+
+    [Fact]
+    public async Task Cohort_scopes_the_patient_resource_itself_by_id_list()
+    {
+        var cohortSource = Source with { PatientIds = ["p1", "p2"] };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        await client.SearchAsync("Patient", cohortSource, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("/Patient?").And.Contain("_id=p1,p2");
+    }
+
+    [Fact]
+    public async Task Target_patient_id_takes_priority_over_a_cohort()
+    {
+        var cohortSource = Source with { TargetPatientId = PatientId, PatientIds = ["p1", "p2"] };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        await client.SearchAsync("Observation", cohortSource, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain($"patient={PatientId}").And.NotContain("p1").And.NotContain("p2");
+    }
+
     // Access-token provider that also advertises a (possibly absent) launch patient context.
     private sealed class PatientContextProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider
     {

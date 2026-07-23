@@ -6,8 +6,8 @@ namespace FHIRBridge.Application.Abstractions.Pipeline;
 /// <summary>
 /// Records the full fetch/normalize/map/store history for resources processed within a route execution, so
 /// the Execution History screen can answer "what was fetched, what was mapped, what was stored" for a run.
-/// Holds PHI-bearing payloads (unlike the PHI-free <c>ILineageTracker</c>) — implementations are expected to
-/// encrypt the payload fields at rest and implement <c>IPurgeableStore</c> so they're swept by the retention policy.
+/// Holds PHI-bearing payloads — implementations are expected to encrypt the payload fields at rest and implement
+/// <c>IPurgeableStore</c> so they're swept by the retention policy.
 /// </summary>
 public interface IExecutionResourceHistoryRecorder
 {

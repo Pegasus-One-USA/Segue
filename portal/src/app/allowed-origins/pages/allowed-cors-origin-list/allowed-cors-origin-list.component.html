@@ -1,0 +1,98 @@
+<div class="list-page">
+
+  <!-- Filter Bar -->
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="filter-header-text">
+        <p>Browser origins allowed to call the API with credentials. Changes take effect immediately — no restart needed.</p>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-add" type="button" (click)="openAdd()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Add Origin
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table Card -->
+  <div class="table-card">
+
+    @if (loading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="32"></mat-spinner>
+      </div>
+    } @else {
+
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="origins()" class="data-table">
+
+          <!-- Origin URL Column -->
+          <ng-container matColumnDef="originUrl">
+            <th mat-header-cell *matHeaderCellDef>Origin URL</th>
+            <td mat-cell *matCellDef="let o">
+              <div class="cell-name">
+                <div class="endpoint-avatar">
+                  <mat-icon>public</mat-icon>
+                </div>
+                <span class="cell-primary">{{ o.originUrl }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Label Column -->
+          <ng-container matColumnDef="label">
+            <th mat-header-cell *matHeaderCellDef>Label</th>
+            <td mat-cell *matCellDef="let o">{{ o.label || '—' }}</td>
+          </ng-container>
+
+          <!-- Created On Column -->
+          <ng-container matColumnDef="createdOnUtc">
+            <th mat-header-cell *matHeaderCellDef>Added</th>
+            <td mat-cell *matCellDef="let o">{{ o.createdOnUtc | date: 'short' }}</td>
+          </ng-container>
+
+          <!-- Created By Column -->
+          <ng-container matColumnDef="createdBy">
+            <th mat-header-cell *matHeaderCellDef>Added By</th>
+            <td mat-cell *matCellDef="let o">{{ o.createdBy || '—' }}</td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let o" class="col-actions">
+              <div class="actions-cell">
+                <button mat-icon-button class="btn-delete" matTooltip="Remove Origin" (click)="confirmDelete(o)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      @if (origins().length === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon-wrap">
+            <mat-icon>public</mat-icon>
+          </div>
+          <h3 class="empty-state__title">No allowed origins yet</h3>
+          <p class="empty-state__sub">Add the URLs allowed to call the API — e.g. your portal's production domain.</p>
+        </div>
+      }
+
+    }
+
+  </div>
+
+</div>

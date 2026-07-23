@@ -1,5 +1,4 @@
 using System.Data.Common;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -22,8 +21,6 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 {
-    private const string ModuleDestinationSchema = "DestinationSchema";
-
     private const string InformationSchemaSql = """
         SELECT table_schema, table_name, column_name, data_type, is_nullable, character_maximum_length
         FROM information_schema.columns
@@ -33,19 +30,13 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
-    private readonly IUserActivityAuditService _userActivityAuditService;
-    private readonly ICurrentUserService _currentUserService;
 
     public SqlDestinationSchemaService(
         IConfigurationRepository repository,
-        ISecretProvider secretProvider,
-        IUserActivityAuditService userActivityAuditService,
-        ICurrentUserService currentUserService)
+        ISecretProvider secretProvider)
     {
         _repository = repository;
         _secretProvider = secretProvider;
-        _userActivityAuditService = userActivityAuditService;
-        _currentUserService = currentUserService;
     }
 
     public async Task<DestinationSchemaDto> GetSchemaAsync(
@@ -151,11 +142,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             return new SchemaMutationResultDto(false, exception.Message);
         }
 
-        await RecordSchemaAuditAsync(
-            "ColumnAdded",
-            $"Column '{columnName}' ({normalizedDataType}) added to table '{schemaName}.{tableName}'.",
-            cancellationToken);
-
         var typeFamily = normalizedDataType.Split('(')[0];
         var column = new DestinationColumnSchemaDto(
             columnName, normalizedDataType, MapSqlServerType(typeFamily), request.IsNullable, maxLength);
@@ -257,12 +243,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             return new SchemaMutationResultDto(false, exception.Message);
         }
 
-        await RecordSchemaAuditAsync(
-            "TableCreated",
-            $"Table '{schemaName}.{tableName}' created"
-                + (parent is { } auditParent ? $" as a child of '{auditParent.SchemaName}.{auditParent.TableName}'." : "."),
-            cancellationToken);
-
         var resultColumns = new List<DestinationColumnSchemaDto>
         {
             new("Id", "bigint", "Integer", false, null, IsPrimaryKey: true),
@@ -319,11 +299,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             // etc. are expected UI outcomes.
             return new SchemaMutationResultDto(false, exception.Message);
         }
-
-        await RecordSchemaAuditAsync(
-            "ColumnDropped",
-            $"Column '{columnName}' permanently dropped from table '{schemaName}.{tableName}'.",
-            cancellationToken);
 
         return new SchemaMutationResultDto(true, null);
     }
@@ -394,13 +369,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             return new SchemaMutationResultDto(false, exception.Message);
         }
 
-        await RecordSchemaAuditAsync(
-            "ColumnAltered",
-            finalColumnName == columnName
-                ? $"Column '{columnName}' on table '{schemaName}.{tableName}' changed to {normalizedDataType}."
-                : $"Column '{columnName}' on table '{schemaName}.{tableName}' renamed to '{finalColumnName}' and changed to {normalizedDataType}.",
-            cancellationToken);
-
         var typeFamily = normalizedDataType.Split('(')[0];
         var column = new DestinationColumnSchemaDto(
             finalColumnName, normalizedDataType, MapSqlServerType(typeFamily), isNullable, maxLength,
@@ -441,25 +409,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         command.CommandText = $"SELECT OBJECT_ID(N'[{schemaName}].[{tableName}]', N'U');";
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is not null and not DBNull;
-    }
-
-    private async Task RecordSchemaAuditAsync(string action, string message, CancellationToken cancellationToken)
-    {
-        var user = _currentUserService.CurrentUser;
-        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
-        await _userActivityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: user.AuditName,
-                Category: UserActivityCategories.Configuration,
-                Activity: message,
-                Status: UserActivityStatuses.Success,
-                IpAddress: user.IpAddress,
-                UserAgent: user.UserAgent,
-                CorrelationId: user.CorrelationId,
-                Module: ModuleDestinationSchema,
-                Action: action),
-            cancellationToken);
     }
 
     private static bool IsSqlServerFamily(DestinationType type)

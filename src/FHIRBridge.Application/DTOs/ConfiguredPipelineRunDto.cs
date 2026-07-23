@@ -12,4 +12,8 @@ public sealed record ConfiguredPipelineRunDto(
     DateTime CompletedOnUtc,
     bool IsEnabled = true,
     string? TriggeredBy = null,
-    string? TriggerType = null);
+    string? TriggerType = null,
+    GeneratedFileDto? InlineDownload = null,
+    IReadOnlyList<string>? DownloadUrls = null);
+
+public sealed record GeneratedFileDto(string FileName, string ContentType, byte[] Content);

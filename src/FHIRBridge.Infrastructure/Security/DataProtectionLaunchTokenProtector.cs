@@ -26,16 +26,26 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
     // suffix — parsing exactly as before.
     private const string EhrEndpointSuffixPrefix = "|eh:";
 
-    public string ProtectContext(Guid routeId, Guid? ehrEndpointId = null) =>
-        _contextProtector.Protect(AppendEhrEndpointSuffix($"{routeId:N}", ehrEndpointId));
+    // An optional caller-supplied callerId (the URL to redirect to once OAuth completes) rides as a
+    // "|cid:{base64url}" suffix, applied BEFORE the "|eh:" suffix (i.e. it ends up as the inner suffix, "|eh:" stays
+    // the true outermost marker). Base64url output never contains "|", so SplitEhrEndpointSuffix's IndexOf keeps
+    // finding the real "|eh:" marker unambiguously, and a token with neither suffix (every token minted before this
+    // feature) still parses exactly as before.
+    private const string CallerIdSuffixPrefix = "|cid:";
+
+    public string ProtectContext(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null) =>
+        _contextProtector.Protect(AppendEhrEndpointSuffix(AppendCallerIdSuffix($"{routeId:N}", callerId), ehrEndpointId));
 
     // Workflow launch tokens carry a "wf:" discriminator so UnprotectContext can tell a workflow launch from a route
     // launch. Route tokens stay the bare "{guid:N}" form (backward compatible with previously minted launch URLs).
-    public string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null) =>
-        _contextProtector.Protect(AppendEhrEndpointSuffix($"wf:{workflowId:N}", ehrEndpointId));
+    public string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null) =>
+        _contextProtector.Protect(AppendEhrEndpointSuffix(AppendCallerIdSuffix($"wf:{workflowId:N}", callerId), ehrEndpointId));
 
     private static string AppendEhrEndpointSuffix(string value, Guid? ehrEndpointId) =>
         ehrEndpointId is { } id ? $"{value}{EhrEndpointSuffixPrefix}{id:N}" : value;
+
+    private static string AppendCallerIdSuffix(string value, string? callerId) =>
+        string.IsNullOrEmpty(callerId) ? value : $"{value}{CallerIdSuffixPrefix}{Base64UrlEncode(callerId)}";
 
     // Splits a trailing "|eh:{guid:N}" suffix off a decrypted value, returning the value with the suffix removed
     // plus the parsed EhrEndpoint id (null if there was no suffix, or it didn't parse as a guid).
@@ -50,6 +60,41 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
         var head = value[..separatorIndex];
         var suffix = value[(separatorIndex + EhrEndpointSuffixPrefix.Length)..];
         return Guid.TryParseExact(suffix, "N", out var ehrEndpointId) ? (head, ehrEndpointId) : (head, null);
+    }
+
+    // Splits a trailing "|cid:{base64url}" suffix off a decrypted value (with any "|eh:" suffix already removed),
+    // returning the value with the suffix removed plus the decoded callerId (null if there was no suffix, or it
+    // didn't decode as valid base64url).
+    private static (string Value, string? CallerId) SplitCallerIdSuffix(string value)
+    {
+        var separatorIndex = value.IndexOf(CallerIdSuffixPrefix, StringComparison.Ordinal);
+        if (separatorIndex < 0)
+        {
+            return (value, null);
+        }
+
+        var head = value[..separatorIndex];
+        var suffix = value[(separatorIndex + CallerIdSuffixPrefix.Length)..];
+        return TryBase64UrlDecode(suffix, out var callerId) ? (head, callerId) : (head, null);
+    }
+
+    private static string Base64UrlEncode(string value) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static bool TryBase64UrlDecode(string value, out string decoded)
+    {
+        try
+        {
+            var padded = value.Replace('-', '+').Replace('_', '/');
+            padded += new string('=', (4 - padded.Length % 4) % 4);
+            decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(padded));
+            return true;
+        }
+        catch (FormatException)
+        {
+            decoded = string.Empty;
+            return false;
+        }
     }
 
     // Checkpoint tokens carry a third "chk:" discriminator plus both ids, pipe-delimited. Distinct prefix from "wf:"
@@ -83,19 +128,21 @@ public sealed class DataProtectionLaunchTokenProtector : ILaunchTokenProtector
 
             if (value.StartsWith("wf:", StringComparison.Ordinal))
             {
-                var (wfValue, wfEhrEndpointId) = SplitEhrEndpointSuffix(value["wf:".Length..]);
+                var (wfHead, wfEhrEndpointId) = SplitEhrEndpointSuffix(value["wf:".Length..]);
+                var (wfValue, wfCallerId) = SplitCallerIdSuffix(wfHead);
                 if (Guid.TryParseExact(wfValue, "N", out var workflowId))
                 {
-                    return new LaunchContext(RouteId: null, WorkflowId: workflowId, EhrEndpointId: wfEhrEndpointId);
+                    return new LaunchContext(RouteId: null, WorkflowId: workflowId, EhrEndpointId: wfEhrEndpointId, CallerId: wfCallerId);
                 }
 
                 return null;
             }
 
-            var (routeValue, routeEhrEndpointId) = SplitEhrEndpointSuffix(value);
+            var (routeHead, routeEhrEndpointId) = SplitEhrEndpointSuffix(value);
+            var (routeValue, routeCallerId) = SplitCallerIdSuffix(routeHead);
             if (Guid.TryParseExact(routeValue, "N", out var routeId))
             {
-                return new LaunchContext(RouteId: routeId, EhrEndpointId: routeEhrEndpointId);
+                return new LaunchContext(RouteId: routeId, EhrEndpointId: routeEhrEndpointId, CallerId: routeCallerId);
             }
 
             return null;

@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './auth/guards/auth.guard';
 import { permissionGuard } from './auth/guards/permission.guard';
+import { superAdminGuard } from './auth/guards/super-admin.guard';
 import { setupGuard } from './auth/guards/setup.guard';
 import { mfaSetupGuard } from './auth/guards/mfa-setup.guard';
 
@@ -95,6 +96,17 @@ export const routes: Routes = [
           ),
       },
 
+      // Allowed CORS origins (SuperAdmin only — backend enforces AuthorizationPolicies.SuperAdminOnly,
+      // stricter than permissionGuard's isAdmin() bypass which also lets a regular Admin through)
+      {
+        path: 'allowed-origins',
+        canActivate: [superAdminGuard],
+        loadComponent: () =>
+          import('./allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component').then(
+            m => m.AllowedCorsOriginListComponent
+          ),
+      },
+
       // Source Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
       {
         path: 'source-connections',
@@ -163,41 +175,6 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./execution-history/pages/execution-history-detail/execution-history-detail.component').then(
             m => m.ExecutionHistoryDetailComponent
-          ),
-      },
-
-      // ── Governance (permission-gated; SuperAdmin / GlobalAdmin fall through) ──
-
-      // Activity feed list (UserActivityAuditLog — who did what, when, from where)
-      {
-        path: 'activity',
-        canActivate: [permissionGuard],
-        data: { permissions: ['auditlogs.read'] },
-        loadComponent: () =>
-          import('./activity/pages/activity-list/activity-list.component').then(
-            m => m.ActivityListComponent
-          ),
-      },
-
-      // Operational logs (OperationalAuditLog — pipeline/system events)
-      {
-        path: 'operational-logs',
-        canActivate: [permissionGuard],
-        data: { permissions: ['auditlogs.read'] },
-        loadComponent: () =>
-          import('./operational-logs/pages/operational-logs-list/operational-logs-list.component').then(
-            m => m.OperationalLogsListComponent
-          ),
-      },
-
-      // Lineage (ResourceLineageEntry — PHI-free chain of custody)
-      {
-        path: 'lineage',
-        canActivate: [permissionGuard],
-        data: { permissions: ['auditlogs.read'] },
-        loadComponent: () =>
-          import('./lineage/pages/lineage-list/lineage-list.component').then(
-            m => m.LineageListComponent
           ),
       },
 

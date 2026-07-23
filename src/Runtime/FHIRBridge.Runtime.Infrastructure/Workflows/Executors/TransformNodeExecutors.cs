@@ -1,5 +1,4 @@
 using System.Text.Json;
-using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -9,7 +8,6 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
 using FHIRBridge.Runtime.Domain.Workflows;
-using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
@@ -49,20 +47,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 {
     private readonly IJsonMappingEngine? _mappingEngine;
     private readonly IConfigurationRepository? _configurationRepository;
-    private readonly IFieldLineageStore? _fieldLineageStore;
-    private readonly bool _fieldLineageEnabled;
 
     public MappingNodeExecutor(
         IJsonMappingEngine? mappingEngine = null,
-        IConfigurationRepository? configurationRepository = null,
-        IFieldLineageStore? fieldLineageStore = null,
-        IOptions<FieldLineageOptions>? fieldLineageOptions = null)
+        IConfigurationRepository? configurationRepository = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
     {
         _mappingEngine = mappingEngine;
         _configurationRepository = configurationRepository;
-        _fieldLineageStore = fieldLineageStore;
-        _fieldLineageEnabled = fieldLineageOptions?.Value.Enabled ?? false;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -107,13 +99,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     resource.ResourceId,
                     mapped?.Values ?? new Dictionary<string, object?>(),
                     sourceJson));
-
-                if (_fieldLineageEnabled && _fieldLineageStore is not null && mapped is not null)
-                {
-                    await RecordFieldLineageAsync(
-                        context, resolvedMappingProfileId, resource.ResourceType, resource.ResourceId,
-                        destinationObject, fields, mapped.Values, cancellationToken);
-                }
             }
 
             // ArrayPolicy.SeparateDestination rows: one record per array element, routed to its own child table.
@@ -153,53 +138,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         WorkflowNode node,
         IReadOnlyCollection<WorkflowNodeOutput> inputs)
         => new MappedRecordBatch(inputs.Select(input => input.Payload!).Where(payload => payload is not null).ToArray());
-
-    // One record per field rule that actually produced a parent-row column for this resource — answers "why does
-    // this destination column hold this value" by capturing the source FHIR path and transformation, never the
-    // resolved value itself (PHI-free, like the resource-level lineage trail). Child-table (SeparateDestination
-    // array) fields are out of scope for now — mapping a child row's column back to its originating array field
-    // definition isn't exposed by MappedRecordBatch's current shape.
-    private async Task RecordFieldLineageAsync(
-        WorkflowExecutionContext context,
-        Guid? mappingProfileId,
-        string resourceType,
-        string? sourceResourceId,
-        string destinationObject,
-        IReadOnlyCollection<MappingFieldDto> fields,
-        IReadOnlyDictionary<string, object?> mappedValues,
-        CancellationToken cancellationToken)
-    {
-        foreach (var field in fields)
-        {
-            if (!mappedValues.ContainsKey(field.TargetField))
-            {
-                continue;
-            }
-
-            await _fieldLineageStore!.AppendAsync(
-                new FieldLineageRecord(
-                    context.WorkflowRunId,
-                    mappingProfileId,
-                    resourceType,
-                    sourceResourceId,
-                    field.JsonPath,
-                    DescribeTransformation(field),
-                    destinationObject,
-                    field.TargetField,
-                    DateTime.UtcNow),
-                cancellationToken);
-        }
-    }
-
-    private static string DescribeTransformation(MappingFieldDto field)
-    {
-        if (!string.IsNullOrWhiteSpace(field.TerminologySystemJsonPath) || !string.IsNullOrWhiteSpace(field.TerminologyCodeJsonPath))
-        {
-            return "TerminologyTranslation";
-        }
-
-        return string.IsNullOrWhiteSpace(field.NormalizationType) ? "DirectCopy" : field.NormalizationType;
-    }
 }
 
 public sealed class TerminologyNodeExecutor : PassThroughNodeExecutor

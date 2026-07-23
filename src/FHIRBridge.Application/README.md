@@ -29,10 +29,9 @@
 - **Pipeline/** — `IConfiguredPipelineService` (start manual/webhook runs, list recent), `IFhirSubscriptionManagementService`.
 - **Messaging/** — `IPipelineRunDispatcher`, `IWebhookIngestionDispatcher`, `IMessageConsumer`, `IProcessedMessageStore` (idempotency), and command-handler ports.
 - **Scheduling/** — `IScheduleEvaluationService`, `IScheduleDispatcher`.
-- **Governance/** — `IGovernancePolicyService`, `IDeIdentificationService` / `IDataSetDeIdentificationService`, `IRetentionPolicyService`, `ILineageTracker` / `ILineageStore`, `IPurgeableStore`, `IConsentService`, `IGovernanceRule`, `IResourceTypeAccessPolicy`.
+- **Governance/** — `IGovernancePolicyService`, `IDeIdentificationService` / `IDataSetDeIdentificationService`, `IRetentionPolicyService`, `IPurgeableStore`, `IConsentService`, `IGovernanceRule`, `IResourceTypeAccessPolicy`.
 - **Normalization/** — `IResourceNormalizationService`, `IMappedRecordNormalizationService`, `IPatientMatchService`.
 - **Terminology/** — `ITerminologyLookupService`, `ITerminologyTranslationService`, `ITerminologyValidationService`, `ITerminologyExpansionService` (FHIR `$lookup`/`$translate`/`$validate-code`/`$expand`).
-- **Audit/** — `IOperationalAuditService`, `IUserActivityAuditService`.
 - **Security/** — `ISecretProvider`, `ICurrentUserService`, `IPasswordHasher`, `IAccessTokenIssuer`.
 
 ### Services/ (infrastructure-free implementations)
@@ -59,7 +58,7 @@
   group claims onto built-in roles).
 
 ### DTOs/ (~52)
-Request/response contracts for the API: tenant/source/webhook/destination/mapping/route create+read DTOs, `MappingFieldDto`/`MappingTestResultDto`/`MappingChildTableDto`, `ConfiguredPipelineRunDto`, `OperationalAuditLogDto`, `SourceCapabilityProfileDto`, terminology result models, auth/identity DTOs (login, password change/reset, role/permission/user management), `HedisMeasureReportDto`, `RunAnomalyDto`, `ManifestImportResultDto`, `MappedDestinationRecord`, and more.
+Request/response contracts for the API: tenant/source/webhook/destination/mapping/route create+read DTOs, `MappingFieldDto`/`MappingTestResultDto`/`MappingChildTableDto`, `ConfiguredPipelineRunDto`, `SourceCapabilityProfileDto`, terminology result models, auth/identity DTOs (login, password change/reset, role/permission/user management), `HedisMeasureReportDto`, `RunAnomalyDto`, `ManifestImportResultDto`, `MappedDestinationRecord`, and more.
 
 ### Mappings/ & Manifests/ & Messaging/
 - **`TenantConfigurationMapper`** — aggregate → DTO projection.

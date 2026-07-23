@@ -1,0 +1,132 @@
+name: Deploy Environment (reusable)
+
+# Shared build+deploy engine for the four non-production environments (Staging, QA, Dev, Working).
+# Not triggered directly -- called via `uses:` from deploy-staging.yml / deploy-qa.yml /
+# deploy-dev.yml / deploy-working.yml, each of which owns its own branch restriction, blank-commit
+# trigger check, and (for Staging/QA/Dev) chained approval gates *before* calling this workflow.
+# Production's own .github/workflows/deploy.yml and deploy/windows/Deploy-FHIRBridge.ps1 are
+# completely separate and untouched by this file.
+#
+# See deploy/windows/Deploy-FHIRBridge-Environment.ps1 for what the deploy step actually does: each
+# environment gets 6 Windows Services under C:\inetpub\wwwroot\<Environment>\, all reusing the same 4
+# published executables this build job produces (Api, Gateway, Worker, DemoApi) -- Gateway is
+# deployed 3 times per environment in different config-only roles (portal-only, proxy-only,
+# demo-portal-only). See Documents/CICD-Deployment-Guide.html for the full topology/port/service-name
+# reference.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Staging | QA | Dev | Working -- must match deploy/windows/Deploy-FHIRBridge-Environment.ps1's -Environment values exactly"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build-publish
+    runs-on: ubuntu-latest
+    outputs:
+      env_lower: ${{ steps.env-lower.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase environment name (for Angular build configuration + npm cache key)
+        id: env-lower
+        shell: bash
+        run: echo "value=$(echo '${{ inputs.environment }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            portal/package-lock.json
+            Demo_TestApp/frontend/package-lock.json
+
+      - name: Restore
+        run: dotnet restore FHIRBridge.sln
+
+      - name: Publish Api (win-x64, framework-dependent)
+        run: >
+          dotnet publish src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/Api
+
+      - name: Publish Gateway (win-x64, framework-dependent)
+        run: >
+          dotnet publish src/Gateway/FHIRBridge.Gateway/FHIRBridge.Gateway.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/Gateway
+
+      - name: Publish Worker (win-x64, framework-dependent)
+        run: >
+          dotnet publish src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/Worker
+
+      - name: Publish Demo app backend (win-x64, framework-dependent)
+        run: >
+          dotnet publish Demo_TestApp/backend/HealthAppBackend.csproj
+          -c Release -r win-x64 --self-contained false
+          -o publish/DemoApi
+
+      - name: Build portal (${{ inputs.environment }} configuration)
+        working-directory: portal
+        run: |
+          npm ci
+          npm run build -- --configuration ${{ steps.env-lower.outputs.value }}
+
+      - name: Build Demo app frontend (${{ inputs.environment }} configuration)
+        working-directory: Demo_TestApp/frontend
+        run: |
+          npm ci
+          npm run build -- --configuration ${{ steps.env-lower.outputs.value }}
+
+      - name: Stage static frontend builds
+        run: |
+          mkdir -p publish/Portal publish/DemoPortal
+          cp -r portal/dist/fhirbridge-ui/browser/. publish/Portal/
+          cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoPortal/
+
+      - name: Package deploy artifact
+        run: |
+          cd publish
+          zip -r ../fhirbridge-deploy-${{ steps.env-lower.outputs.value }}.zip Api Gateway Worker DemoApi Portal DemoPortal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fhirbridge-deploy-${{ steps.env-lower.outputs.value }}
+          path: fhirbridge-deploy-${{ steps.env-lower.outputs.value }}.zip
+          retention-days: 14
+
+  deploy:
+    name: deploy-to-vm
+    needs: build
+    runs-on: [self-hosted, Windows, fhirbridge-vm]
+    environment: ${{ inputs.environment }}
+    steps:
+      # Needed for deploy/windows/Deploy-FHIRBridge-Environment.ps1 -- not for the app binaries,
+      # those come from the artifact.
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: fhirbridge-deploy-${{ needs.build.outputs.env_lower }}
+
+      - name: Expand artifact
+        shell: powershell
+        run: Expand-Archive -Path fhirbridge-deploy-${{ needs.build.outputs.env_lower }}.zip -DestinationPath extracted -Force
+
+      - name: Run deploy script
+        shell: powershell
+        run: |
+          $artifactPath = (Resolve-Path extracted).Path
+          ./deploy/windows/Deploy-FHIRBridge-Environment.ps1 -Environment "${{ inputs.environment }}" -ArtifactPath $artifactPath

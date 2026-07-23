@@ -13,10 +13,11 @@ public sealed class MappedInMemoryDestinationWriter : IConfiguredDestinationWrit
         _buffer = buffer;
     }
 
-    public Task<int> WriteAsync(
+    public Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         foreach (var group in records.GroupBy(x => x.PipelineRunId))
@@ -24,6 +25,6 @@ public sealed class MappedInMemoryDestinationWriter : IConfiguredDestinationWrit
             _buffer.Add(group.Key, group);
         }
 
-        return Task.FromResult(records.Count);
+        return Task.FromResult(new DestinationWriteResult(records.Count));
     }
 }

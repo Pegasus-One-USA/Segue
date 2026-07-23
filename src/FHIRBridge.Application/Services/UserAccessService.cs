@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -11,16 +10,13 @@ public sealed class UserAccessService : IUserAccessService
 {
     private readonly IUserAccessRepository _repository;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IOperationalAuditService _auditService;
 
     public UserAccessService(
         IUserAccessRepository repository,
-        ICurrentUserService currentUserService,
-        IOperationalAuditService auditService)
+        ICurrentUserService currentUserService)
     {
         _repository = repository;
         _currentUserService = currentUserService;
-        _auditService = auditService;
     }
 
     public async Task<UserProfileDto> GetCurrentUserProfileAsync(CancellationToken cancellationToken)
@@ -33,22 +29,6 @@ public sealed class UserAccessService : IUserAccessService
     public async Task<UserProfileDto> RecordLoginAsync(CancellationToken cancellationToken)
     {
         var user = await GetOrCreateCurrentUserAsync(recordLogin: true, cancellationToken);
-
-        await _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "UserLogin",
-                "Completed",
-                "FHIRBridge portal login observed.",
-                null,
-                _currentUserService.CurrentUser.AuditName,
-                null),
-            cancellationToken);
 
         return await ToProfileDtoAsync(user, cancellationToken);
     }

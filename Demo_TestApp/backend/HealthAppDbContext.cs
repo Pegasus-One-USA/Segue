@@ -26,14 +26,6 @@ public sealed class HospitalEntity
     public int OrganizationId { get; set; }
 }
 
-// Drives the "Login Type" dropdown on the full-screen login page. The selected name determines which
-// component/UI the app loads post-login (e.g. "Patient_Standalone" loads the existing mobile view).
-public sealed class DemoTypeEntity
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-}
-
 // Demographic columns are populated at ingestion time (see Program.cs POST /api/workflow/run) by flattening
 // Payload through PatientFieldExtractor, so reads never need to re-parse the raw FHIR JSON.
 public sealed class PatientEntity
@@ -83,6 +75,31 @@ public sealed class WorkflowSettingsEntity
 {
     public int Id { get; set; }
     public string WorkflowUrl { get; set; } = string.Empty;
+
+    // Patient Standalone's own FHIRBridge connection points — previously a gitignored, per-developer local file
+    // (Demo_TestApp/frontend's standalone-launch.config.ts); moved here so they're admin-configurable through the
+    // same "Workflow Settings" panel as WorkflowUrl above, with no frontend rebuild needed to change them.
+    // PatientWorkflowId drives the patient list fetch; PatientDetailWorkflowId is a second, independent workflow
+    // used only for the per-patient detail fetch (clicking a row in the fetched list) — each needs its own
+    // public-launch opt-in on the FHIRBridge side, so they're never the same id.
+    public string PatientWorkflowId { get; set; } = string.Empty;
+    public string PatientDetailWorkflowId { get; set; } = string.Empty;
+    public string PatientBaseUrl { get; set; } = string.Empty;
+
+    // The two FHIRBridge workflow ids Provider_Standalone's launch-standalone-provider screen needs — "Fetch
+    // Patient List" and "Patient Detail" are deliberately separate workflows (see
+    // launch-standalone-provider.ts's fetchPatientList/viewPatientDetail), so each gets its own settable id here
+    // rather than reusing WorkflowUrl, which is an unrelated, single opaque webhook URL for the Patient_Standalone
+    // demo type.
+    public string StandaloneWorkflowId { get; set; } = string.Empty;
+    public string StandaloneDetailWorkflowId { get; set; } = string.Empty;
+
+    // Provider_InApp's single FHIRBridge launch-context token — previously a gitignored, per-developer local file
+    // (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts); moved here so it's admin-configurable
+    // through its own Settings gear (see launch-provider-in-app.ts) with no frontend rebuild needed to change it.
+    // Unlike Provider_Standalone, this demo type needs only one token: it drives a single EHR-launch exchange
+    // (FHIRBridge's /api/v1/oauth/launch/{context}), not a separate list/detail workflow pair.
+    public string ProviderLaunchContext { get; set; } = string.Empty;
 }
 
 public sealed class HealthAppDbContext : DbContext
@@ -94,8 +111,6 @@ public sealed class HealthAppDbContext : DbContext
     public DbSet<UserEntity> Users => Set<UserEntity>();
 
     public DbSet<HospitalEntity> Hospitals => Set<HospitalEntity>();
-
-    public DbSet<DemoTypeEntity> DemoTypes => Set<DemoTypeEntity>();
 
     public DbSet<PatientEntity> Patients => Set<PatientEntity>();
 
@@ -146,12 +161,6 @@ public sealed class HealthAppDbContext : DbContext
             new HospitalEntity { Id = 4, Name = "Mercy Regional Medical Center", OrganizationId = 6740 },
             new HospitalEntity { Id = 5, Name = "Cedar Grove Hospital", OrganizationId = 1183 });
 
-        modelBuilder.Entity<DemoTypeEntity>().ToTable("DemoType");
-        modelBuilder.Entity<DemoTypeEntity>().HasData(
-            new DemoTypeEntity { Id = 1, Name = "Patient_Standalone" },
-            new DemoTypeEntity { Id = 2, Name = "Provider_Standalone" },
-            new DemoTypeEntity { Id = 3, Name = "Provider_InApp" });
-
         var seedTimestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var seedFields = PatientFieldExtractor.Extract(PatientSeedData.CamilaLopezJson);
 
@@ -194,7 +203,12 @@ public sealed class HealthAppDbContext : DbContext
         modelBuilder.Entity<WorkflowSettingsEntity>().HasData(new WorkflowSettingsEntity
         {
             Id = 1,
-            WorkflowUrl = string.Empty
+            WorkflowUrl = string.Empty,
+            PatientWorkflowId = string.Empty,
+            PatientDetailWorkflowId = string.Empty,
+            PatientBaseUrl = "http://localhost:5000",
+            StandaloneWorkflowId = string.Empty,
+            StandaloneDetailWorkflowId = string.Empty
         });
     }
 }

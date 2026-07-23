@@ -1,5 +1,6 @@
 export const environment = {
   production: true,
-  // TODO: point this at the deployed FHIRBridge.Api base URL before release.
+  // Empty on purpose: the portal is served by FHIRBridge.Gateway from the same origin as
+  // /api/**, so calls resolve as same-origin relative paths (no CORS, no separate API host).
   apiBase: '',
 };

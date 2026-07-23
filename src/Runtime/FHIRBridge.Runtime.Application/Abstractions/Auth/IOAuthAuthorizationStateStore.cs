@@ -38,4 +38,8 @@ public sealed record PendingAuthorization(
     // Epic itself established a patient context before the redirect. False for Standalone/patient-standalone
     // sign-ins, which have no upfront patient context at all — the callback uses this to decide whether its own
     // auto-triggered convenience run has any chance of succeeding (see CompleteAsync).
-    bool HasLaunchContext = false);
+    bool HasLaunchContext = false,
+    // The caller-supplied redirect URL (e.g. the third-party app that requested this launch URL), captured at mint
+    // time and carried here via the encrypted launch-context token — preferred over the source connection's static
+    // PostLaunchRedirectUri when present. Lives only in this cache-backed record, never persisted to SQL.
+    string? CallerId = null);

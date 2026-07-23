@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace FHIRBridge.Application.DTOs;
 
 public sealed record StartConfiguredPipelineRunRequest(
@@ -21,4 +23,12 @@ public sealed record StartConfiguredPipelineRunRequest(
     /// still appears in Runs. Requires a source whose server supports bulk export.
     /// </summary>
     public bool UseBulkExport { get; init; }
+
+    /// <summary>
+    /// Server-set only (never client-supplied — see <see cref="JsonIgnoreAttribute"/>). True only for the
+    /// synchronous, non-bulk-export branch of <c>PipelineRunsController.Start</c>, which is the one call path that
+    /// actually has an HTTP response to carry a Download-mode destination's bytes back through.
+    /// </summary>
+    [JsonIgnore]
+    public bool AllowInlineDownload { get; init; }
 }

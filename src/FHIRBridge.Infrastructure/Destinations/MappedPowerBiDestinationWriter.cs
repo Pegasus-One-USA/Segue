@@ -16,10 +16,11 @@ public sealed class MappedPowerBiDestinationWriter : IConfiguredDestinationWrite
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         var endpointOrFolder = destination.Target ?? await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -33,7 +34,7 @@ public sealed class MappedPowerBiDestinationWriter : IConfiguredDestinationWrite
                 await MappedDestinationSerialization.PostJsonAsync(httpClient, endpointOrFolder, record, cancellationToken);
             }
 
-            return records.Count;
+            return new DestinationWriteResult(records.Count);
         }
 
         var fileName = MappedDestinationSerialization.BuildFileName(destination, mappingProfile, "powerbi.ndjson");
@@ -44,6 +45,6 @@ public sealed class MappedPowerBiDestinationWriter : IConfiguredDestinationWrite
             httpClient,
             cancellationToken);
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 }

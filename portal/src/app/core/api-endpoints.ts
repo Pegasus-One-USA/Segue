@@ -106,6 +106,13 @@ export const MAPPING_PROFILES_ENDPOINTS = {
   import: `${API_V1_BASE}/mapping-profiles/import`,
 };
 
+// ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──
+// SuperAdmin-only: widens which browser origins the API's Portal CORS policy allows.
+export const CORS_ORIGINS_ENDPOINTS = {
+  list: `${API_V1_BASE}/system/allowed-origins`,
+  byId: (id: string) => `${API_V1_BASE}/system/allowed-origins/${id}`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
@@ -119,23 +126,6 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   list:      `${API_V1_BASE}/workflow-runs`,
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
-};
-
-// ─── Governance: user activity (UserActivityLogsController — api/v1/user-activity-logs) ────
-export const USER_ACTIVITY_LOGS_ENDPOINTS = {
-  list: `${API_V1_BASE}/user-activity-logs`,
-};
-
-// ─── Governance: operational/pipeline audit logs (OperationalAuditLogsController — api/v1/audit-logs) ────
-export const OPERATIONAL_LOGS_ENDPOINTS = {
-  list: `${API_V1_BASE}/audit-logs/paged`,
-};
-
-// ─── Governance: resource lineage / chain of custody (LineageController — api/v1/lineage) ────
-export const LINEAGE_ENDPOINTS = {
-  list:   `${API_V1_BASE}/lineage/entries`,
-  chain:  `${API_V1_BASE}/lineage`,
-  fields: `${API_V1_BASE}/lineage/fields`,
 };
 
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────

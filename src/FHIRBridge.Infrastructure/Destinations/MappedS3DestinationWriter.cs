@@ -24,15 +24,16 @@ public sealed class MappedS3DestinationWriter : IConfiguredDestinationWriter
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var target = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
@@ -48,12 +49,12 @@ public sealed class MappedS3DestinationWriter : IConfiguredDestinationWriter
             body.Headers.ContentType = new MediaTypeHeaderValue("application/x-ndjson");
             using var response = await client.PutAsync(endpoint, body, cancellationToken);
             response.EnsureSuccessStatusCode();
-            return records.Count;
+            return new DestinationWriteResult(records.Count);
         }
 
         // Local/dev fallback.
         Directory.CreateDirectory(target);
         await File.WriteAllTextAsync(Path.Combine(target, fileName), content, cancellationToken);
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 }

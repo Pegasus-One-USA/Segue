@@ -1,11 +1,13 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { FHIRBRIDGE_BASE_URL, PATIENT_WORKFLOW_ID } from '../config/standalone-launch.config';
+import { environment } from '../../../../../environments/environment';
 
-// Kept only for rememberSession's "which workflow was this launch for" bookkeeping — the token/run/mint/discard
-// calls below all take an explicit workflowId parameter instead, since the list fetch and the per-patient detail
-// fetch now run against two different workflows (see launch-standalone-patient.ts).
+// The FHIRBridge base URL and both workflow ids (list + detail) are resolved once via loadConfig() from the
+// admin-configured settings (see WorkflowSettingsEntity.PatientWorkflowId/PatientDetailWorkflowId/PatientBaseUrl) —
+// formerly a gitignored per-developer local file (standalone-launch.config.ts). The token/run/mint/discard calls
+// below still take an explicit workflowId parameter (rather than always using one resolved field), since the list
+// fetch and the per-patient detail fetch run against two different workflows (see launch-standalone-patient.ts).
 
 /** Matches FHIRBridge's PublicEhrEpicEndpointDto shape (GET /api/v1/ehr-mychart-endpoints) — anonymous,
  *  EndpointType.MyChart rows only (a specific customer/hospital's own branded production instance, never Epic's
@@ -47,6 +49,9 @@ export interface WorkflowRunResponse {
   outputsByNodeId?: Record<string, {
     nodeType: string;
     payload?: { resources?: Array<{ resourceType: string; resourceId: string; payload: string }> };
+    // Only a CSV destination node using Download-URL delivery populates downloadUrl (see
+    // DestinationNodeExecutor.ExecuteAsync) — absent for every other node type/delivery mode.
+    metadata?: { downloadUrl?: string | null };
   }>;
 }
 
@@ -88,11 +93,22 @@ export interface EpicSessionStatusResponse {
   lastConfirmedValidUtc: string | null;
 }
 
+/** Matches Demo_TestApp/backend's GET /api/patient-standalone-settings — the admin-configured FHIRBridge workflow
+ *  ids + base URL for this flow (see WorkflowSettingsEntity.PatientWorkflowId/PatientDetailWorkflowId/PatientBaseUrl),
+ *  formerly a gitignored per-developer local file (standalone-launch.config.ts). workflowId is the list fetch's
+ *  workflow; detailWorkflowId is the separate workflow used only for the per-patient detail fetch. */
+export interface PatientStandaloneSettingsResponse {
+  workflowId: string;
+  detailWorkflowId: string;
+  baseUrl: string;
+}
+
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge — remembers which patient/workflow this HealthApp user
 // last launched, centrally, without requiring any FHIRBridge change. Same mechanism Provider Standalone already
 // reuses (EpicSessionStore is keyed purely by HealthApp userId, so a distinct Patient Standalone demo login has its
-// own row with no collision).
-const HEALTHAPP_BACKEND_BASE_URL = 'http://localhost:5500';
+// own row with no collision). Also now the source of the FHIRBridge workflow ids + base URL themselves (see
+// loadConfig) — previously a gitignored local file, now an admin-configurable setting.
+const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
 
 /** Pulls the displayable Patient rows out of a /run response's raw Source node output. A Patient Standalone launch
  *  typically resolves to exactly one patient (the signed-in user), but this stays list-shaped in case more than one
@@ -215,21 +231,46 @@ export function indicatesReAuthorizationNeeded(message: string): boolean {
   return message.includes('Re-authorize the source') || message.includes('has no authorized token');
 }
 
+/** Pulls the signed download link out of a /run response for a workflow whose CSV destination uses Download-URL
+ *  delivery — null if no destination node produced one (wrong delivery mode, or zero records written). */
+export function extractDownloadUrl(result: WorkflowRunResponse): string | null {
+  const destinationOutput = Object.values(result.outputsByNodeId ?? {})
+    .find(output => typeof output.metadata?.downloadUrl === 'string');
+  return (destinationOutput?.metadata?.downloadUrl as string | undefined) ?? null;
+}
+
 @Injectable()
 export class PatientStandaloneLaunchService {
+  // Resolved once by loadConfig() before any other method here is called (see
+  // LaunchStandalonePatientComponent.ngOnInit) — every method below assumes both are already populated.
+  private baseUrl = '';
+  private workflowId = '';
+
   constructor(private readonly http: HttpClient) {}
+
+  async loadConfig(): Promise<PatientStandaloneSettingsResponse> {
+    const settings = await firstValueFrom(
+      this.http.get<PatientStandaloneSettingsResponse>(
+        `${HEALTHAPP_BACKEND_BASE_URL}/api/patient-standalone-settings`,
+        { withCredentials: true },
+      ),
+    );
+    this.baseUrl = settings.baseUrl;
+    this.workflowId = settings.workflowId;
+    return settings;
+  }
 
   async loadHospitals(search?: string): Promise<MyChartEndpoint[]> {
     const url = search
-      ? `${FHIRBRIDGE_BASE_URL}/api/v1/ehr-mychart-endpoints?search=${encodeURIComponent(search)}`
-      : `${FHIRBRIDGE_BASE_URL}/api/v1/ehr-mychart-endpoints`;
+      ? `${this.baseUrl}/api/v1/ehr-mychart-endpoints?search=${encodeURIComponent(search)}`
+      : `${this.baseUrl}/api/v1/ehr-mychart-endpoints`;
     return firstValueFrom(this.http.get<MyChartEndpoint[]>(url));
   }
 
   async hasValidToken(workflowId: string, patientId: string | null): Promise<boolean> {
     const status = await firstValueFrom(
       this.http.get<TokenStatusResponse>(
-        `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${workflowId}/token-status`,
+        `${this.baseUrl}/api/v1/workflows/${workflowId}/token-status`,
         { params: patientId ? { patientId } : {} },
       ),
     );
@@ -238,18 +279,18 @@ export class PatientStandaloneLaunchService {
 
   async run(workflowId: string, patientId: string | null): Promise<WorkflowRunResponse> {
     return firstValueFrom(
-      this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${workflowId}/run`, {
+      this.http.post<WorkflowRunResponse>(`${this.baseUrl}/api/v1/workflows/${workflowId}/run`, {
         patientId,
         patientSearchCriteria: null,
       }),
     );
   }
 
-  async mintLaunchUrl(workflowId: string, ehrEndpointId: string): Promise<PublicPatientStandaloneUrlResponse> {
+  async mintLaunchUrl(workflowId: string, ehrEndpointId: string, callerId?: string): Promise<PublicPatientStandaloneUrlResponse> {
     return firstValueFrom(
       this.http.get<PublicPatientStandaloneUrlResponse>(
-        `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${workflowId}/public-patient-standalone-url`,
-        { params: { ehrEndpointId } },
+        `${this.baseUrl}/api/v1/workflows/${workflowId}/public-patient-standalone-url`,
+        { params: callerId ? { ehrEndpointId, callerId } : { ehrEndpointId } },
       ),
     );
   }
@@ -257,7 +298,7 @@ export class PatientStandaloneLaunchService {
   async discardToken(workflowId: string, patientId: string | null): Promise<void> {
     await firstValueFrom(
       this.http.post(
-        `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${workflowId}/discard-token`,
+        `${this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`,
         {},
         { params: patientId ? { patientId } : {} },
       ),
@@ -267,7 +308,7 @@ export class PatientStandaloneLaunchService {
   async loadLaunchResultPatientId(workflowRunId: string): Promise<LaunchResultResponse> {
     return firstValueFrom(
       this.http.get<LaunchResultResponse>(
-        `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
+        `${this.baseUrl}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
       ),
     );
   }
@@ -285,7 +326,7 @@ export class PatientStandaloneLaunchService {
     await firstValueFrom(
       this.http.post(
         `${HEALTHAPP_BACKEND_BASE_URL}/api/epic-session`,
-        { patientId, workflowId: PATIENT_WORKFLOW_ID },
+        { patientId, workflowId: this.workflowId },
         { withCredentials: true },
       ),
     );

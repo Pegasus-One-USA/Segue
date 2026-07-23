@@ -5,6 +5,14 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
 import { FHIRBRIDGE_BASE_URL, STANDALONE_DETAIL_WORKFLOW_ID, STANDALONE_WORKFLOW_ID } from './core/config/standalone-launch.config';
+import { environment } from '../../../environments/environment';
+
+/** Matches Demo_TestApp/backend's GET /api/provider-standalone-settings and /api/provider-standalone-workflow-ids
+ *  responses (also the POST /api/provider-standalone-settings response). */
+interface ProviderStandaloneWorkflowIds {
+  standaloneWorkflowId: string;
+  standaloneDetailWorkflowId: string;
+}
 
 /** Matches FHIRBridge's PublicEhrEpicEndpointDto (GET /api/v1/ehr-epic-endpoints) — anonymous, EndpointType=Epic
  *  rows only (the vendor's own shared sandbox, never a real customer's MyChart instance). */
@@ -212,10 +220,17 @@ function indicatesReAuthorizationNeeded(message: string): boolean {
   return message.includes('Re-authorize the source') || message.includes('has no authorized token');
 }
 
+// "Not configured" covers both an empty value and the literal placeholder left in standalone-launch.config.ts by
+// anyone who hasn't filled it in yet — calling FHIRBridge with either produces the same doomed 404 (an invalid
+// GUID never matches the {workflowId:guid} route constraint), so both are treated as "ask an admin to set one".
+function isConfiguredWorkflowId(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0 && value !== 'REPLACE_WITH_REAL_WORKFLOW_ID';
+}
+
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge — remembers which patient/workflow this HealthApp user
 // last launched, centrally (survives across browsers/devices for the same login, unlike the old sessionStorage-only
 // approach), without requiring any FHIRBridge change. See EpicSessionStatusResponse.
-const HEALTHAPP_BACKEND_BASE_URL = 'http://localhost:5500';
+const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
 
 // Carries the in-progress search box value across the full-page redirect to Epic and back, so the auto-fetch that
 // follows a fresh sign-in (see ngOnInit) replays the same search the user was trying to run when the token turned
@@ -232,6 +247,15 @@ const PENDING_SEARCH_STORAGE_KEY = 'hb_pending_patient_search';
 export class LaunchStandaloneProviderComponent implements OnInit {
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
+
+  // Admin-editable via the unified Admin Settings screen (see AdminSettingsComponent) — persisted on
+  // Demo_TestApp's own backend (WorkflowSettingsEntity), read at runtime rather than baked in at build time.
+  // Falls back to whatever's in standalone-launch.config.ts (the pre-existing, gitignored, compile-time
+  // mechanism) until an admin sets these through the UI, so a repo that already filled in that file keeps
+  // working unchanged.
+  private standaloneWorkflowId = STANDALONE_WORKFLOW_ID;
+  private standaloneDetailWorkflowId = STANDALONE_DETAIL_WORKFLOW_ID;
+  private workflowIdsLoadPromise: Promise<void> | null = null;
 
   // Purely informational badge — never gates whether the Fetch button is shown. The real, authoritative check is
   // always the next actual /run attempt (see fetchPatientList); this is just a "last known good" hint carried over
@@ -294,7 +318,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     // InteractiveSourceAuthorizationService.CompleteAsync's skipWorkflowTrigger, which is the common case for this
     // component). All three only ever appear once the token exchange itself has already succeeded. Read straight
     // off window.location rather than ActivatedRoute: this app never uses a real <router-outlet> for this content
-    // (app.html renders it via a plain selectedDemoType() @if/@else-if), so ActivatedRoute here is only ever
+    // (app.html renders it via a plain role() @if/@else-if), so ActivatedRoute here is only ever
     // reflecting the root route's state, which depends on Angular Router's own async initialization having
     // settled — a race that, on the exact page load right after this full-page redirect back from Epic, could read
     // back an empty query param map before the Router catches up, silently skipping the auto-fetch branch below
@@ -306,7 +330,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     if (workflowRunId || launchError || signedIn) {
       // Consume these once, then strip them from the visible URL — a native History API call, not Angular Router
       // navigation. This app doesn't use <router-outlet> for this content (app.html renders it via a plain
-      // selectedDemoType() @if/@else-if, not routing), so a router.navigate() here has no component tree to target
+      // role() @if/@else-if, not routing), so a router.navigate() here has no component tree to target
       // and risks re-resolving routes/guards this component was never meant to drive. Without stripping the query
       // string at all, though, it stays on the address bar forever — a later Ctrl+F5 (or just revisiting this URL)
       // would re-run this exact branch every time, re-triggering an auto-fetch even after Reset Token deliberately
@@ -409,13 +433,43 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       await firstValueFrom(
         this.http.post(
           `${HEALTHAPP_BACKEND_BASE_URL}/api/epic-session`,
-          { patientId: this.patientId, workflowId: STANDALONE_WORKFLOW_ID },
+          { patientId: this.patientId, workflowId: this.standaloneWorkflowId },
           { withCredentials: true },
         ),
       );
       this.lastConfirmedValidUtc.set(new Date().toISOString());
     } catch {
       // Non-fatal — see comment above.
+    }
+  }
+
+  // Loads the admin-configured workflow ids exactly once per component lifetime (memoized via
+  // workflowIdsLoadPromise) — every method below that needs standaloneWorkflowId/standaloneDetailWorkflowId awaits
+  // this first, so a fetch can never race ahead of the load and use the config-file fallback by accident.
+  private ensureWorkflowIdsLoaded(): Promise<void> {
+    if (!this.workflowIdsLoadPromise) {
+      this.workflowIdsLoadPromise = this.loadStandaloneWorkflowIds();
+    }
+    return this.workflowIdsLoadPromise;
+  }
+
+  private async loadStandaloneWorkflowIds(): Promise<void> {
+    try {
+      const ids = await firstValueFrom(
+        this.http.get<ProviderStandaloneWorkflowIds>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-standalone-workflow-ids`,
+          { withCredentials: true },
+        ),
+      );
+      if (isConfiguredWorkflowId(ids.standaloneWorkflowId)) {
+        this.standaloneWorkflowId = ids.standaloneWorkflowId;
+      }
+      if (isConfiguredWorkflowId(ids.standaloneDetailWorkflowId)) {
+        this.standaloneDetailWorkflowId = ids.standaloneDetailWorkflowId;
+      }
+    } catch {
+      // Non-fatal — falls back to whatever's in standalone-launch.config.ts (possibly still the placeholder,
+      // which isConfiguredWorkflowId's callers below already guard against).
     }
   }
 
@@ -470,6 +524,12 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     this.isFetchingPatientList.set(true);
     this.patientListError.set(null);
     try {
+      await this.ensureWorkflowIdsLoaded();
+      if (!isConfiguredWorkflowId(this.standaloneWorkflowId)) {
+        this.patientListError.set('No "Fetch Patient List" workflow id is configured. Ask an admin to set one in Settings.');
+        return;
+      }
+
       if (!(await this.hasValidToken())) {
         await this.needsReAuthorization();
         return;
@@ -477,7 +537,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
       const criteria = (criteriaOverride ?? this.patientSearchCriteria()).trim();
       const result = await firstValueFrom(
-        this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${STANDALONE_WORKFLOW_ID}/run`, {
+        this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/run`, {
           patientId: this.patientId,
           patientSearchCriteria: criteria || null,
         }),
@@ -530,13 +590,19 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     this.patientDetailError.set(null);
     this.patientDetail.set(null);
     try {
+      await this.ensureWorkflowIdsLoaded();
+      if (!isConfiguredWorkflowId(this.standaloneDetailWorkflowId)) {
+        this.patientDetailError.set('No "Patient Detail" workflow id is configured. Ask an admin to set one in Settings.');
+        return;
+      }
+
       if (!(await this.hasValidToken())) {
         await this.needsReAuthorization();
         return;
       }
 
       const result = await firstValueFrom(
-        this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${STANDALONE_DETAIL_WORKFLOW_ID}/run`, {
+        this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneDetailWorkflowId}/run`, {
           patientId: patient.id,
           patientSearchCriteria: null,
         }),
@@ -584,9 +650,10 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   // never blocks the flow — the real /run call right after is always the authoritative test either way.
   private async hasValidToken(): Promise<boolean> {
     try {
+      await this.ensureWorkflowIdsLoaded();
       const status = await firstValueFrom(
         this.http.get<TokenStatusResponse>(
-          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${STANDALONE_WORKFLOW_ID}/token-status`,
+          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/token-status`,
           { params: this.patientId ? { patientId: this.patientId } : {} },
         ),
       );
@@ -672,6 +739,13 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     this.isRedirectingToEpic.set(true);
     this.hospitalSelectError.set(null);
     try {
+      await this.ensureWorkflowIdsLoaded();
+      if (!isConfiguredWorkflowId(this.standaloneWorkflowId)) {
+        this.isRedirectingToEpic.set(false);
+        this.hospitalSelectError.set('No "Fetch Patient List" workflow id is configured. Ask an admin to set one in Settings.');
+        return;
+      }
+
       const criteria = this.patientSearchCriteria().trim();
       if (criteria) {
         sessionStorage.setItem(PENDING_SEARCH_STORAGE_KEY, criteria);
@@ -679,10 +753,19 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         sessionStorage.removeItem(PENDING_SEARCH_STORAGE_KEY);
       }
 
+      // callerId tells FHIRBridge's OAuthController.Callback to redirect the browser straight back to this exact
+      // page (see ngOnInit, which reads workflowRunId/launchError/signedIn off window.location.search) once the
+      // token exchange completes, instead of falling back to whatever's configured as the source connection's own
+      // static PostLaunchRedirectUri — see InteractiveSourceAuthorizationService.CompleteAsync, where a caller-
+      // supplied callerId always wins over that DB field. Origin + pathname only (no existing query/hash): the
+      // callback appends its own workflowRunId/launchError/signedIn marker on top (QueryHelpers.AddQueryString),
+      // and ngOnInit strips whatever query string is present anyway. FHIRBridge validates the origin against
+      // Portal:AllowedOrigins before honoring it (CallerIdOriginValidator) — this page's origin must be listed there.
+      const callerId = `${window.location.origin}${window.location.pathname}`;
       const result = await firstValueFrom(
         this.http.get<PublicStandaloneUrlResponse>(
-          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${STANDALONE_WORKFLOW_ID}/public-standalone-url`,
-          { params: { ehrEndpointId: endpoint.id } },
+          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/public-standalone-url`,
+          { params: { ehrEndpointId: endpoint.id, callerId } },
         ),
       );
       window.location.href = result.launchUrl;
@@ -715,9 +798,14 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
   private async discardFhirBridgeToken(): Promise<void> {
     try {
+      await this.ensureWorkflowIdsLoaded();
+      if (!isConfiguredWorkflowId(this.standaloneWorkflowId)) {
+        return;
+      }
+
       await firstValueFrom(
         this.http.post(
-          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${STANDALONE_WORKFLOW_ID}/discard-token`,
+          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/discard-token`,
           {},
           { params: this.patientId ? { patientId: this.patientId } : {} },
         ),

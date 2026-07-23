@@ -1,8 +1,6 @@
 using System.Text.Json;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -18,27 +16,20 @@ namespace FHIRBridge.Application.Services;
 /// </summary>
 public sealed class MappingImportService : IMappingImportService
 {
-    private const string Module = "MappingProfileImport";
     private static readonly JsonSerializerOptions DeserializeOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly IConfigurationRepository _repository;
     private readonly IDestinationSchemaService _destinationSchemaService;
     private readonly IMappingSchemaProviderFactory _schemaProviderFactory;
-    private readonly IUserActivityAuditService _userActivityAuditService;
-    private readonly ICurrentUserService _currentUserService;
 
     public MappingImportService(
         IConfigurationRepository repository,
         IDestinationSchemaService destinationSchemaService,
-        IMappingSchemaProviderFactory schemaProviderFactory,
-        IUserActivityAuditService userActivityAuditService,
-        ICurrentUserService currentUserService)
+        IMappingSchemaProviderFactory schemaProviderFactory)
     {
         _repository = repository;
         _destinationSchemaService = destinationSchemaService;
         _schemaProviderFactory = schemaProviderFactory;
-        _userActivityAuditService = userActivityAuditService;
-        _currentUserService = currentUserService;
     }
 
     public async Task<MappingImportResultDto> ImportAsync(JsonElement request, CancellationToken cancellationToken)
@@ -203,8 +194,6 @@ public sealed class MappingImportService : IMappingImportService
             // is disposed without ever being committed, so every table/column created for this resourceType so
             // far rolls back too, rather than being left stranded with no profile referencing it.
             await schemaTransaction.CommitAsync(cancellationToken);
-
-            await RecordImportAuditAsync(mapping.ResourceType, profileId, cancellationToken);
 
             return new ResourceImportResultDto(
                 mapping.ResourceType, profileId, tablesCreated, tablesSkipped, columnsAdded, columnsSkipped,
@@ -389,26 +378,5 @@ public sealed class MappingImportService : IMappingImportService
                 : ArrayPolicy.RepeatParent;
 
         return (policy, "OneToMany", instance.ArrayContext);
-    }
-
-    private async Task RecordImportAuditAsync(string resourceType, Guid mappingProfileId, CancellationToken cancellationToken)
-    {
-        var user = _currentUserService.CurrentUser;
-        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
-        await _userActivityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: user.AuditName,
-                Category: UserActivityCategories.Configuration,
-                Activity: $"Mapping configuration imported for {resourceType}.",
-                Status: UserActivityStatuses.Success,
-                EntityName: resourceType,
-                EntityId: mappingProfileId,
-                IpAddress: user.IpAddress,
-                UserAgent: user.UserAgent,
-                CorrelationId: user.CorrelationId,
-                Module: Module,
-                Action: "Imported"),
-            cancellationToken);
     }
 }

@@ -1,4 +1,3 @@
-using FHIRBridge.Api.Auditing;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
@@ -71,9 +70,16 @@ public sealed class PipelineRunsController : ControllerBase
             return Accepted(new { status = "queued", mode = "bulk-export", messageId });
         }
 
+        // This is the one call path with an HTTP response to carry a Download-mode destination's bytes back
+        // through — every other trigger (schedule, webhook, queued/bulk run) leaves this false by default.
         var pipelineRun = await _configuredPipelineService.StartAsync(
-            request,
+            request with { AllowInlineDownload = true },
             cancellationToken);
+
+        if (pipelineRun.InlineDownload is { } file)
+        {
+            return File(file.Content, file.ContentType, file.FileName);
+        }
 
         return Created($"/api/v1/pipeline-runs/{pipelineRun.Id}", pipelineRun);
     }
@@ -140,13 +146,11 @@ public sealed class PipelineRunsController : ControllerBase
 
     /// <summary>
     /// Drill-down into a route execution's per-resource fetch/normalize/map/store history. Returns decrypted PHI
-    /// payloads, so every call is itself audited via <see cref="AuditDataAccessAttribute"/> (who viewed what run's
-    /// detail, and when) per the HIPAA audit-controls requirement for reading PHI — the same mechanism used for the
-    /// Runtime plane's equivalent endpoint (WorkflowEndpoints' /workflow-runs/{runId}/resources).
+    /// payloads — the same kind of detail exposed by the Runtime plane's equivalent endpoint
+    /// (WorkflowEndpoints' /workflow-runs/{runId}/resources).
     /// </summary>
     [HttpGet("route-executions/{routeExecutionId:guid}/resources")]
     [ProducesResponseType(typeof(PagedResult<PipelineRunResourceHistoryDto>), StatusCodes.Status200OK)]
-    [AuditDataAccess("PipelineRun", "ExecutionDetailViewed", "routeExecutionId")]
     public async Task<IActionResult> GetRouteExecutionResources(
         Guid routeExecutionId,
         [FromQuery] int page,

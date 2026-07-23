@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CI/CD &amp; Deployment Guide — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --windows: #0EA5E9;
+    --windows-bg: #E0F2FE;
+    --linux: #F97316;
+    --linux-bg: #FFEDD5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h2.section-divider {
+    margin-top: 72px;
+    padding: 22px 26px;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 26px;
+  }
+  h2.section-divider.windows-divider { background: linear-gradient(135deg, var(--windows) 0%, #0369A1 100%); }
+  h2.section-divider.linux-divider { background: linear-gradient(135deg, var(--linux) 0%, #C2410C 100%); }
+  h2.section-divider.envs-divider { background: linear-gradient(135deg, var(--backend) 0%, #4C1D95 100%); }
+  .env-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 16px 0 24px; }
+  .env-card { border-radius: 10px; padding: 16px 20px; border: 1px solid var(--border); background: var(--surface); }
+  .env-card h4 { margin: 0 0 6px; }
+  .env-card .env-branch { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--muted); }
+  .gate-chain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 20px; }
+  .gate-chain .gate { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+  .gate-chain .gate.approval { color: var(--modified); border-color: var(--modified); }
+  .gate-chain .gate.deploy { color: var(--new); border-color: var(--new); }
+  .gate-chain .arrow { color: var(--muted); font-size: 16px; }
+  h2.section-divider .os-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  h4 { font-size: 14px; font-weight: 700; margin: 22px 0 8px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 16px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+  nav.toc li.toc-section-head { font-weight: 800; margin-top: 8px; list-style: none; margin-left: -22px; }
+  nav.toc li.toc-section-head a { color: var(--primary); }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-done     { color: #fff; background: var(--new); }
+  .pill-pending  { color: #fff; background: var(--modified); }
+  .pill-gap      { color: #fff; background: var(--deleted); }
+  .pill-windows  { color: var(--windows); background: var(--windows-bg); }
+  .pill-linux    { color: var(--linux); background: var(--linux-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 130px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.bad { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); display: block; }
+
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin: 16px 0 24px;
+  }
+  .compare-card {
+    border-radius: 10px;
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+  }
+  .compare-card.windows-card { background: var(--windows-bg); }
+  .compare-card.linux-card { background: var(--linux-bg); }
+  .compare-card h4 { margin-top: 0; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>CI/CD &amp; Deployment Guide</h1>
+    <p class="subtitle">FHIRBridge &mdash; how the GitHub Actions pipeline builds, ships, and deploys every service today on Windows, and everything required to stand up the same pipeline on a new Linux server.</p>
+    <div class="meta">
+      <div><strong>Branch</strong> main_Prod_Deployment_Prep_CICD</div>
+      <div><strong>Scope</strong> .github/workflows/deploy.yml, deploy/windows/Deploy-FHIRBridge.ps1, deploy/windows/Deploy-FHIRBridge.ps1_Linux</div>
+      <div><strong>Status</strong> Windows path live in production &middot; Linux path scripted, not yet wired into CI</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#triggers">How a Deploy Gets Triggered</a></li>
+      <li><a href="#build-job">The Build Job</a></li>
+      <li class="toc-section-head"><a href="#windows-deployment">&#9654; Windows Deployment</a></li>
+      <li><a href="#win-topology">Server topology</a></li>
+      <li><a href="#win-deploy-job">Deploy job, step by step</a></li>
+      <li><a href="#win-config">Configuration model (ConfigRoot overlay)</a></li>
+      <li><a href="#win-prereqs">One-time server prerequisites</a></li>
+      <li><a href="#win-first-deploy">First deploy walkthrough</a></li>
+      <li><a href="#win-swagger">Swagger access in production</a></li>
+      <li><a href="#win-rollback">Rollback</a></li>
+      <li class="toc-section-head"><a href="#linux-deployment">&#9654; Linux Deployment</a></li>
+      <li><a href="#linux-diff">What's different from Windows</a></li>
+      <li><a href="#linux-script">The Linux deploy script, internals</a></li>
+      <li><a href="#linux-setup">Setting up a new Linux server</a></li>
+      <li><a href="#linux-gaps">Remaining work to fully enable Linux</a></li>
+      <li class="toc-section-head"><a href="#envs-deployment">&#9654; Staging / QA / Dev / Working Environments</a></li>
+      <li><a href="#envs-overview">Overview &amp; topology per environment</a></li>
+      <li><a href="#envs-gateway-roles">Reusing Gateway.exe as a static portal host</a></li>
+      <li><a href="#envs-triggers">Triggers &amp; chained approval gates</a></li>
+      <li><a href="#envs-workflows">Workflow structure</a></li>
+      <li><a href="#envs-angular">Angular build configurations &amp; CORS</a></li>
+      <li><a href="#envs-setup">Manual setup checklist</a></li>
+      <li><a href="#gotchas">Known gotchas &amp; lessons learned</a></li>
+      <li><a href="#reference">Quick reference</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    FHIRBridge ships six build outputs from a single GitHub Actions workflow,
+    <code>.github/workflows/deploy.yml</code>: three Kestrel-hosted backend services, one demo-app
+    backend, and two static Angular builds. Nothing here is IIS-hosted &mdash; every backend is a
+    standalone Kestrel process. On Windows these run today as native Windows Services; the same
+    published output can run under systemd on Linux with <strong>no C# code change</strong>, because
+    every host already calls both <code>.UseWindowsService()</code>/<code>AddWindowsService()</code>
+    <em>and</em> <code>.UseSystemd()</code>/<code>AddSystemd()</code> right after
+    <code>WebApplication.CreateBuilder(args)</code> &mdash; each call is a no-op unless the process is
+    actually launched by that OS's service manager.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">6</div><div class="label">build outputs per deploy (4 backends + 2 frontends)</div></div>
+    <div class="card"><div class="num">1</div><div class="label">workflow file drives everything &mdash; deploy.yml</div></div>
+    <div class="card"><div class="num pill-windows" style="background:none;">Live</div><div class="label">Windows deployment path, in production today</div></div>
+    <div class="card"><div class="num pill-linux" style="background:none;">Scripted</div><div class="label">Linux deployment path, not yet wired into CI</div></div>
+  </div>
+
+  <p>Why a self-hosted runner at all: the production server is not reachable from the internet, so a
+  GitHub-hosted runner can't SSH/WinRM into it. Instead the server itself runs a
+  <strong>self-hosted GitHub Actions runner</strong> that polls GitHub outbound &mdash; no inbound
+  firewall rule is needed for that connection. The <em>build</em> job (compiling, publishing,
+  packaging) always runs on a GitHub-hosted <code>ubuntu-latest</code> runner and never touches the
+  VM directly; only the <em>deploy</em> job runs on the self-hosted runner, and it only unzips an
+  already-built artifact and moves files around locally.</p>
+
+  <h2 id="triggers"><span class="num">2.</span>How a Deploy Gets Triggered</h2>
+  <table class="file-table">
+    <tr><th>Trigger</th><th>How</th><th>Notes</th></tr>
+    <tr>
+      <td class="why">Manual dispatch</td>
+      <td class="why">Actions tab &rarr; <strong>Deploy</strong> workflow &rarr; <strong>Run workflow</strong> (or <code>gh workflow run deploy.yml</code>)</td>
+      <td class="why">Always allowed, on any branch. The only trigger that doesn't depend on commit message text.</td>
+    </tr>
+    <tr>
+      <td class="why">Push with commit message <code>Publish</code></td>
+      <td class="why">Push a commit to <code>main</code> whose <strong>exact</strong> message is <code>Publish</code></td>
+      <td class="why">Deliberately strict equality check so ordinary commits never accidentally trigger a deploy.</td>
+    </tr>
+  </table>
+  <p>Since only the commit <em>message</em> is checked (not whether the commit changes any files), the
+  usual way to trigger a deploy without any real code change is a blank commit:</p>
+  <pre><code>git commit --allow-empty -m "Publish"
+git push origin main</code></pre>
+  <p>The exact condition lives in the <code>build</code> job's <code>if:</code>:</p>
+  <pre><code>if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Publish'</code></pre>
+  <div class="callout">
+    <strong>Which branches</strong>
+    Only <code>main</code> is listed under <code>on.push.branches</code> today. Edit that list in
+    <code>deploy.yml</code> to allow other branches to auto-deploy the same way.
+  </div>
+  <div class="callout warn">
+    <strong>Optional hardening, not yet enabled</strong>
+    <code>workflow_dispatch</code> already requires a manual click. For a <strong>second</strong>
+    approval gate immediately before the deploy job touches the server, create a
+    <code>production</code> environment (Settings &rarr; Environments) with required reviewers &mdash;
+    the <code>deploy</code> job already targets that environment name, so this takes effect with no
+    workflow changes.
+  </div>
+
+  <h2 id="build-job"><span class="num">3.</span>The Build Job</h2>
+  <p>Runs on <code>ubuntu-latest</code> &mdash; shared by both deployment targets today, though right
+  now it only produces Windows binaries (see <a href="#linux-gaps">Linux gaps</a> for what a Linux
+  build path still needs). Steps, in order:</p>
+  <ol>
+    <li><code>actions/checkout@v4</code></li>
+    <li><code>actions/setup-dotnet@v4</code> &mdash; .NET 9.0.x</li>
+    <li><code>actions/setup-node@v4</code> &mdash; Node 20, npm cache keyed on both frontends' lockfiles</li>
+    <li><code>dotnet restore FHIRBridge.sln</code></li>
+    <li>
+      <code>dotnet publish</code> &times;4, each <strong>win-x64, framework-dependent</strong> (<code>--self-contained false</code>):
+      <ul>
+        <li><code>src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj</code> &rarr; <code>publish/Api</code></li>
+        <li><code>src/Gateway/FHIRBridge.Gateway/FHIRBridge.Gateway.csproj</code> &rarr; <code>publish/Gateway</code></li>
+        <li><code>src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj</code> &rarr; <code>publish/Worker</code></li>
+        <li><code>Demo_TestApp/backend/HealthAppBackend.csproj</code> &rarr; <code>publish/DemoApi</code></li>
+      </ul>
+    </li>
+    <li><code>npm ci &amp;&amp; npm run build -- --configuration production</code> in <code>portal/</code></li>
+    <li>Same in <code>Demo_TestApp/frontend/</code></li>
+    <li>
+      Stage static builds:
+      <pre><code>mkdir -p publish/Portal publish/DemoPortal
+cp -r portal/dist/fhirbridge-ui/browser/. publish/Portal/
+cp -r Demo_TestApp/frontend/dist/frontend/browser/. publish/DemoPortal/</code></pre>
+    </li>
+    <li>Zip everything (run from inside <code>publish/</code>): <code>zip -r ../fhirbridge-deploy.zip Api Gateway Worker DemoApi Portal DemoPortal</code></li>
+    <li><code>actions/upload-artifact@v4</code>, name <code>fhirbridge-deploy</code>, <strong>14-day retention</strong></li>
+  </ol>
+  <p>Result: one artifact, <code>fhirbridge-deploy.zip</code>, containing six top-level folders:
+  <code>Api</code>, <code>Gateway</code>, <code>Worker</code>, <code>DemoApi</code>, <code>Portal</code>,
+  <code>DemoPortal</code>.</p>
+
+  <!-- =========================== WINDOWS DEPLOYMENT =========================== -->
+
+  <h2 class="section-divider windows-divider" id="windows-deployment"><span class="os-icon">&#8862;</span>Windows Deployment</h2>
+  <p class="section-intro">
+    The deployment path that is live in production today. Everything in this section describes what
+    actually runs against the real server right now.
+  </p>
+
+  <h3 id="win-topology">Server topology</h3>
+  <table class="file-table">
+    <tr><th>Service</th><th>Folder</th><th>Bind address</th><th>Role</th></tr>
+    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-api</td><td class="why">127.0.0.1:5000 (loopback only)</td><td class="why">The core API &mdash; not reachable from outside the server</td></tr>
+    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-gateway</td><td class="why">0.0.0.0:80 (public)</td><td class="why">YARP reverse proxy &mdash; routes <code>/api/**</code> and <code>/swagger/**</code> to the Api, serves the portal for everything else</td></tr>
+    <tr><td class="why"><em>(no service)</em></td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-portal</td><td class="why">&mdash;</td><td class="why">Angular portal build; static files only, served by Gateway</td></tr>
+    <tr><td class="file-path">FHIRBridge.Worker</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-worker</td><td class="why">none (no HTTP endpoint)</td><td class="why">Background scheduler / pipeline processor</td></tr>
+    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">C:\inetpub\wwwroot\demoapp-api</td><td class="why">0.0.0.0:5500 (public)</td><td class="why">Demo app backend &mdash; serves its own frontend, same origin</td></tr>
+    <tr><td class="why"><em>(no service)</em></td><td class="file-path">C:\inetpub\wwwroot\demoapp-portal</td><td class="why">&mdash;</td><td class="why">Demo app Angular build; static files only, served by DemoApp</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>Plain HTTP for now</strong>
+    Both public entry points (Gateway on 80, DemoApp on 5500) currently serve plain HTTP &mdash; TLS
+    termination is a deliberate later step, not yet configured.
+  </div>
+
+  <h3 id="win-deploy-job">Deploy job, step by step</h3>
+  <p>Runs on <code>runs-on: [self-hosted, Windows, fhirbridge-vm]</code>, targets the
+  <code>production</code> GitHub environment, depends on the build job (<code>needs: build</code>):</p>
+  <ol>
+    <li><code>actions/checkout@v4</code> &mdash; needed only so <code>deploy/windows/Deploy-FHIRBridge.ps1</code> itself is present on the runner; app binaries all come from the artifact, not this checkout.</li>
+    <li><code>actions/download-artifact@v4</code> &mdash; pulls <code>fhirbridge-deploy</code></li>
+    <li><code>Expand-Archive -Path fhirbridge-deploy.zip -DestinationPath extracted -Force</code></li>
+    <li><code>./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath (Resolve-Path extracted).Path</code></li>
+  </ol>
+
+  <h4>Deploy-FHIRBridge.ps1 parameters</h4>
+  <table class="file-table">
+    <tr><th>Parameter</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td class="file-path">ArtifactPath</td><td class="why"><em>(mandatory)</em></td><td class="why">Path to the extracted publish artifact</td></tr>
+    <tr><td class="file-path">DeployRoot</td><td class="file-path">C:\inetpub\wwwroot</td><td class="why">Root under which every app's deploy folder lives</td></tr>
+    <tr><td class="file-path">ConfigRoot</td><td class="file-path">C:\inetpub\FHIRBridge_Configurations</td><td class="why">Root under which every app's hand-provisioned config lives (see next section)</td></tr>
+    <tr><td class="file-path">ServiceStopTimeoutSeconds</td><td class="why">30</td><td class="why">How long to wait for a service to reach Stopped/Running</td></tr>
+    <tr><td class="file-path">HealthCheckRetries</td><td class="why">10</td><td class="why">Health-check retry count after each service starts</td></tr>
+    <tr><td class="file-path">HealthCheckDelaySeconds</td><td class="why">3</td><td class="why">Delay between health-check retries</td></tr>
+  </table>
+
+  <h4>Stage 1 &mdash; static frontends first</h4>
+  <p>Deployed before any service, because Gateway and DemoApp only wire up static-file middleware if
+  their configured folder <em>already exists</em> at process startup &mdash; deploying the frontend
+  after the service starts would leave the portal unserved until the next restart.</p>
+  <table class="file-table">
+    <tr><th>Name</th><th>Artifact folder</th><th>Dest folder</th></tr>
+    <tr><td class="why">Portal</td><td class="file-path">Portal</td><td class="file-path">fhirbridge-portal</td></tr>
+    <tr><td class="why">DemoPortal</td><td class="file-path">DemoPortal</td><td class="file-path">demoapp-portal</td></tr>
+  </table>
+  <p>For each: <code>robocopy $Source $Dest /MIR /NFL /NDL /NP /R:3 /W:5</code> (mirror &mdash; adds
+  new files, deletes ones no longer published), then overlays that site's config folder on top.</p>
+
+  <h4>Stage 2 &mdash; the four Windows Services</h4>
+  <table class="file-table">
+    <tr><th>Service name</th><th>Artifact folder</th><th>Dest folder</th><th>Executable</th><th>Health check</th></tr>
+    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">Api</td><td class="file-path">fhirbridge-api</td><td class="file-path">FHIRBridge.Api.exe</td><td class="file-path">http://127.0.0.1:5000/health</td></tr>
+    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">Gateway</td><td class="file-path">fhirbridge-gateway</td><td class="file-path">FHIRBridge.Gateway.exe</td><td class="file-path">http://localhost/</td></tr>
+    <tr><td class="file-path">FHIRBridge.Worker</td><td class="file-path">Worker</td><td class="file-path">fhirbridge-worker</td><td class="file-path">FHIRBridge.Worker.exe</td><td class="why"><em>none</em></td></tr>
+    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">DemoApi</td><td class="file-path">demoapp-api</td><td class="file-path">HealthAppBackend.exe</td><td class="file-path">http://localhost:5500/</td></tr>
+  </table>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Stop if running</strong><span>If the Windows Service exists and isn't already Stopped: <code>Stop-Service -Force</code>, wait up to ServiceStopTimeoutSeconds for the Stopped state.</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Ensure destination folder exists</strong><span>Created if missing.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Mirror published files</strong><span><code>robocopy $Source $Dest /MIR /XD "logs" /NFL /NDL /NP /R:3 /W:5</code>. Exit codes 0&ndash;7 are success variants (2 = "extras purged", etc.) &mdash; the script clears <code>$LASTEXITCODE</code> to 0 after checking for &ge;8 so a successful-but-nonzero exit can't leak into the workflow's own result.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Overlay config</strong><span>That service's ConfigRoot subfolder copied on top &mdash; see the Configuration Model section below.</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Verify the executable exists</strong><span>Throws if the expected .exe isn't present after the mirror.</span></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Create the service if missing</strong><span><code>New-Service -BinaryPathName "&lt;exe&gt;" -DisplayName "&lt;name&gt;" -StartupType Automatic</code>. Only the very first deploy does this &mdash; every deploy after that is just stop/replace/start against the existing service.</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Start &amp; wait</strong><span><code>Start-Service</code>, wait up to ServiceStopTimeoutSeconds for the Running state.</span></div></div>
+  </div>
+  <p><strong>Stage 3 &mdash; health checks</strong>, run only after every service above has already
+  started: for each service with a HealthCheckUrl, poll it (up to HealthCheckRetries times,
+  HealthCheckDelaySeconds apart) until a <code>200</code> comes back, or throw if it never does.
+  FHIRBridge.Worker has no HTTP endpoint, so it's skipped here &mdash; its Start-Service/Running-state
+  wait in Stage 2 is its only check.</p>
+
+  <h3 id="win-config">Configuration model (ConfigRoot overlay)</h3>
+  <p>
+  Every service's environment-specific config (<code>appsettings.Production.json</code>, etc.) is
+  deliberately <strong>never part of the build artifact</strong>. It lives entirely under a separate
+  root, <code>C:\inetpub\FHIRBridge_Configurations</code>, mirroring the exact same per-app folder
+  names used under <code>C:\inetpub\wwwroot</code>:
+  </p>
+  <pre><code>C:\inetpub\FHIRBridge_Configurations\fhirbridge-api\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\fhirbridge-gateway\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\fhirbridge-worker\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\demoapp-api\appsettings.Production.json
+C:\inetpub\FHIRBridge_Configurations\fhirbridge-portal\   (currently empty)
+C:\inetpub\FHIRBridge_Configurations\demoapp-portal\      (currently empty)</code></pre>
+  <p>
+  After every deploy mirrors an app's published files into its <code>wwwroot</code> folder, the
+  script copies that app's ConfigRoot subfolder <em>on top</em> &mdash; an overlay copy
+  (<code>robocopy $ConfigSource $Dest /E ...</code>, no <code>/MIR</code>), so it only ever
+  adds/overwrites files that already exist from the config side; it never deletes anything the
+  artifact mirror just placed. Because config lives in a folder tree the artifact mirror step never
+  touches, there's no risk of a deploy deleting or overwriting it. Ops can edit these files directly
+  on the server at any time; changes take effect on that service's next restart.
+  </p>
+
+  <h4>What goes in each service's config</h4>
+  <table class="file-table">
+    <tr><th>Service</th><th>Keys to populate</th></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="why"><code>ConnectionStrings:FHIRBridgeDb</code>, <code>Authentication:SigningKey</code>, <code>DataProtection:KeyRingPath</code> (persistent folder, e.g. <code>C:\FHIRBridge\keys</code>, so OAuth/launch tokens survive redeploys and restarts), <code>Portal:AllowedOrigins</code> (Gateway's public origin &mdash; the browser talks to Gateway, not the Api's loopback address), <code>AllowedHosts</code></td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="why"><code>StaticFiles:RootPath</code> = <code>C:\inetpub\wwwroot\fhirbridge-portal</code> (absolute path). <code>ReverseProxy:Clusters:api-cluster:Destinations</code> (already <code>http://127.0.0.1:5000/</code> checked in) only needs overriding if the Api ever moves off port 5000.</td></tr>
+    <tr><td class="file-path">fhirbridge-worker</td><td class="why"><code>ConnectionStrings:FHIRBridgeDb</code>, <code>RuntimeWorker:Enabled</code>, <code>Messaging:Provider</code> (<code>InMemory</code> / <code>RabbitMQ</code> / <code>AzureServiceBus</code>), <code>Hl7MllpOptions</code> if the MLLP listener is in use</td></tr>
+    <tr><td class="file-path">demoapp-api</td><td class="why"><code>ConnectionStrings:Default</code> (a separate database from FHIRBridgeDb, used only by the demo app), <code>AllowedFrontendOrigin</code> (this app's own public URL, e.g. <code>http://&lt;server&gt;:5500</code>)</td></tr>
+    <tr><td class="file-path">fhirbridge-portal / demoapp-portal</td><td class="why">No runtime config file today &mdash; these Angular builds bake their config in at build time. Folders exist under ConfigRoot for consistency and in case a runtime-loaded config file is added later.</td></tr>
+  </table>
+
+  <h4>Bind addresses &mdash; one-time, per service, not managed by the deploy script</h4>
+  <p>None of this lives in <code>appsettings.Production.json</code>. It's set via an
+  <code>ASPNETCORE_URLS</code> environment variable directly on each Windows Service
+  (<strong>Environment</strong> tab in <code>services.msc</code>, or <code>sc.exe</code>/<code>Set-Service</code>
+  scripting) &mdash; a one-time step done once when the service is first created, never touched again
+  by CI.</p>
+  <table class="file-table">
+    <tr><th>Service</th><th>ASPNETCORE_URLS</th></tr>
+    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">http://127.0.0.1:5000</td></tr>
+    <tr><td class="file-path">FHIRBridge.Gateway</td><td class="file-path">http://+:80</td></tr>
+    <tr><td class="file-path">FHIRBridge.Worker</td><td class="why"><em>(none &mdash; no HTTP endpoint)</em></td></tr>
+    <tr><td class="file-path">FHIRBridge.DemoApp</td><td class="file-path">http://+:5500</td></tr>
+  </table>
+  <p>FHIRBridge.DemoApp also needs a <code>DEMOAPP_PORTAL_PATH</code> environment variable set to
+  <code>C:\inetpub\wwwroot\demoapp-portal</code> &mdash; read directly via
+  <code>Environment.GetEnvironmentVariable</code> in its <code>Program.cs</code> (not through
+  <code>IConfiguration</code>), so it can't go in <code>appsettings.json</code> at all.</p>
+
+  <h3 id="win-prereqs">One-time server prerequisites</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>ASP.NET Core 9.0 Runtime</strong><span>Not the Hosting Bundle &mdash; that's only for IIS/ANCM, unused here. <a href="https://dotnet.microsoft.com/download/dotnet/9.0" target="_blank" rel="noopener">dotnet.microsoft.com/download/dotnet/9.0</a></span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>PowerShell 5.1+</strong><span>Built into Windows Server.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Outbound HTTPS</strong><span>To <code>github.com</code> / <code>*.actions.githubusercontent.com</code>, for the self-hosted runner to poll GitHub.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Inbound firewall rules</strong><span>Ports 80 (Gateway) and 5500 (Demo app) &mdash; a one-time manual step, not something CI touches.</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Install the self-hosted runner</strong><span>Repo Settings &rarr; Actions &rarr; Runners &rarr; New self-hosted runner &rarr; Windows, label <code>fhirbridge-vm</code>.</span></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Provision the four appsettings.Production.json files</strong><span>Under ConfigRoot, per the table above.</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Set ASPNETCORE_URLS</strong><span>(and, for DemoApp, DEMOAPP_PORTAL_PATH) once each service exists &mdash; typically right after the first deploy creates it.</span></div></div>
+  </div>
+  <pre><code>New-NetFirewallRule -DisplayName "FHIRBridge Gateway (80)" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "FHIRBridge Demo App (5500)" -Direction Inbound -LocalPort 5500 -Protocol TCP -Action Allow</code></pre>
+  <pre><code># From an elevated PowerShell prompt, in the extracted runner folder:
+.\config.cmd --url https://github.com/&lt;org&gt;/&lt;repo&gt; --token &lt;TOKEN_FROM_GITHUB_UI&gt; --labels fhirbridge-vm
+
+.\svc.cmd install
+.\svc.cmd start</code></pre>
+  <p>Verify it shows <strong>Idle</strong> under Settings &rarr; Actions &rarr; Runners before continuing.</p>
+
+  <h3 id="win-first-deploy">First deploy walkthrough</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Run the workflow</strong><span>Actions tab &rarr; Deploy &rarr; Run workflow.</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Build job compiles everything</strong><span>Api, Gateway, Worker, DemoApi (win-x64, framework-dependent) and both Angular frontends, on a GitHub-hosted runner.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>One artifact ships to the server</strong><span>Six folders, downloaded and expanded by the self-hosted runner.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Deploy-FHIRBridge.ps1 runs</strong><span>Mirrors static frontends + config overlay, then per service: stop (no-op first time) &rarr; mirror &rarr; config overlay &rarr; create service (first run only) &rarr; start &rarr; health-check.</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>All four services now exist</strong><span>Every deploy after this is just stop &rarr; replace &rarr; start.</span></div></div>
+  </div>
+  <div class="callout">
+    <strong>First-run manual step</strong>
+    Right after the very first deploy creates each service, go set its <code>ASPNETCORE_URLS</code>
+    (and DemoApp's <code>DEMOAPP_PORTAL_PATH</code>) via <code>services.msc</code>, then restart that
+    service once by hand so it picks up the new bind address.
+  </div>
+
+  <h3 id="win-swagger">Swagger access in production</h3>
+  <p>Both API projects gate Swagger UI on <code>IsDevelopment()</code> by default &mdash; hidden in
+  Production unless explicitly turned on. Both now support the same config-driven escape hatch:</p>
+  <pre><code>var swaggerEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue("Swagger:Enabled", false);
+...
+if (swaggerEnabled) { app.UseSwagger(); app.UseSwaggerUI(); }</code></pre>
+  <table class="file-table">
+    <tr><th>Project</th><th>Local dev URL</th><th>Production URL once enabled</th></tr>
+    <tr><td class="file-path">FHIRBridge.Api</td><td class="file-path">http://localhost:5000/swagger</td><td class="why">Through the Gateway, which already proxies <code>/swagger/**</code>: <code>http://&lt;gateway-public-host&gt;/swagger</code> (Api itself binds loopback only)</td></tr>
+    <tr><td class="file-path">Demo app backend</td><td class="file-path">http://localhost:5500/swagger</td><td class="file-path">http://&lt;server&gt;:5500/swagger (binds public directly, no gateway in front)</td></tr>
+  </table>
+  <p>To turn it on: add this to that service's <code>appsettings.Production.json</code> under
+  ConfigRoot, then restart the service:</p>
+  <pre><code>{ "Swagger": { "Enabled": true } }</code></pre>
+
+  <h3 id="win-rollback">Rollback</h3>
+  <ul class="feature-list">
+    <li>Re-run the workflow from an earlier commit (Actions &rarr; Deploy &rarr; Run workflow &rarr; choose the branch/tag/SHA to build from), <strong>or</strong></li>
+    <li>Manually re-run <code>Deploy-FHIRBridge.ps1</code> against a previously-downloaded artifact zip you've kept around.</li>
+  </ul>
+  <p>There's no automatic artifact retention beyond GitHub's 14-day default (<code>retention-days: 14</code>
+  in <code>deploy.yml</code>) &mdash; increase it there for a longer rollback window.</p>
+
+  <!-- =========================== LINUX DEPLOYMENT =========================== -->
+
+  <h2 class="section-divider linux-divider" id="linux-deployment"><span class="os-icon">&#128031;</span>Linux Deployment</h2>
+  <p class="section-intro">
+    The application code needs <strong>no changes</strong> to run on Linux. Everything below is
+    already scripted (<code>deploy/windows/Deploy-FHIRBridge.ps1_Linux</code>), but <strong>not yet
+    connected to the GitHub Actions workflow</strong> &mdash; see the gaps list at the end of this
+    section for exactly what's still open.
+  </p>
+
+  <h3 id="linux-diff">What's different from Windows</h3>
+  <table class="file-table">
+    <tr><th></th><th>Windows (current)</th><th>Linux</th></tr>
+    <tr><td class="why">Publish RID</td><td class="file-path">dotnet publish -r win-x64</td><td class="file-path">-r linux-x64 (or linux-arm64)</td></tr>
+    <tr><td class="why">Service management</td><td class="file-path">Get-Service / Stop-Service / New-Service</td><td class="file-path">systemctl + generated .service unit files</td></tr>
+    <tr><td class="why">File mirroring</td><td class="file-path">robocopy /MIR</td><td class="file-path">rsync -a --delete</td></tr>
+    <tr><td class="why">Config overlay</td><td class="file-path">robocopy /E</td><td class="file-path">rsync -a (no --delete)</td></tr>
+    <tr><td class="why">Deploy script</td><td class="file-path">deploy/windows/Deploy-FHIRBridge.ps1</td><td class="file-path">deploy/windows/Deploy-FHIRBridge.ps1_Linux (PowerShell Core / pwsh, shells out to systemctl/rsync)</td></tr>
+    <tr><td class="why">Deploy root</td><td class="file-path">C:\inetpub\wwwroot</td><td class="file-path">/opt/fhirbridge</td></tr>
+    <tr><td class="why">Config root</td><td class="file-path">C:\inetpub\FHIRBridge_Configurations</td><td class="file-path">/etc/fhirbridge-configurations</td></tr>
+    <tr><td class="why">Executable</td><td class="file-path">FHIRBridge.Api.exe, etc.</td><td class="file-path">dotnet FHIRBridge.Api.dll, etc. (framework-dependent linux-x64 publish is a .dll, not a native .exe)</td></tr>
+    <tr><td class="why">Binding port 80 (Gateway)</td><td class="why">No special handling needed</td><td class="why">Binding &lt;1024 as non-root requires <code>AmbientCapabilities=CAP_NET_BIND_SERVICE</code> in the unit (or running as root, or fronting with a reverse proxy on a higher port)</td></tr>
+    <tr><td class="why">Firewall</td><td class="file-path">New-NetFirewallRule</td><td class="file-path">ufw allow / firewall-cmd, depending on distro</td></tr>
+    <tr><td class="why">Self-hosted runner install</td><td class="file-path">config.cmd / svc.cmd install</td><td class="file-path">config.sh / svc.sh install, distinct label from Windows</td></tr>
+    <tr><td class="why">Archive expansion in CI</td><td class="file-path">Expand-Archive (shell: powershell)</td><td class="file-path">unzip, or shell: pwsh to keep using PowerShell Core</td></tr>
+  </table>
+
+  <h3 id="linux-script">The Linux deploy script, internals</h3>
+  <p><code>deploy/windows/Deploy-FHIRBridge.ps1_Linux</code> mirrors the Windows script's structure and
+  parameters closely &mdash; same PowerShell shape, so the two stay easy to compare &mdash; but every
+  OS-specific operation is swapped for its Linux equivalent.</p>
+
+  <h4>Parameters</h4>
+  <table class="file-table">
+    <tr><th>Parameter</th><th>Default</th><th>Notes</th></tr>
+    <tr><td class="file-path">ArtifactPath</td><td class="why"><em>(mandatory)</em></td><td class="why">Must contain linux-x64 (or linux-arm64) publishes &mdash; <strong>not</strong> the win-x64 ones the current workflow builds</td></tr>
+    <tr><td class="file-path">DeployRoot</td><td class="file-path">/opt/fhirbridge</td><td class="why">Auto-created per-app subfolders</td></tr>
+    <tr><td class="file-path">ConfigRoot</td><td class="file-path">/etc/fhirbridge-configurations</td><td class="why">Per-app subfolders must be hand-provisioned, same as Windows</td></tr>
+    <tr><td class="file-path">ServiceUser</td><td class="file-path">root</td><td class="why">Which Linux user each systemd unit runs as. Defaults to root for parity with the Windows script's New-Service (which runs as LocalSystem) &mdash; a dedicated non-root account is a real hardening step worth doing separately.</td></tr>
+    <tr><td class="file-path">ServiceStopTimeoutSeconds</td><td class="why">30</td><td class="why">Same meaning as Windows</td></tr>
+    <tr><td class="file-path">HealthCheckRetries</td><td class="why">10</td><td class="why">Same as Windows</td></tr>
+    <tr><td class="file-path">HealthCheckDelaySeconds</td><td class="why">3</td><td class="why">Same as Windows</td></tr>
+  </table>
+
+  <h4>systemd unit generation</h4>
+  <p>Just like the Windows script only calls <code>New-Service</code> when the service doesn't already
+  exist, the Linux script only writes <code>/etc/systemd/system/&lt;name&gt;.service</code> the first
+  time &mdash; if the unit file is already there, it's left completely alone on every later deploy. A
+  generated unit looks like:</p>
+  <pre><code>[Unit]
+Description=&lt;DisplayName&gt;
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=&lt;DestDir&gt;
+ExecStart=/usr/bin/dotnet &lt;DestDir&gt;/&lt;DllName&gt;
+Restart=on-failure
+RestartSec=5
+User=&lt;ServiceUser&gt;
+[AmbientCapabilities=CAP_NET_BIND_SERVICE   &larr; Gateway only]
+[CapabilityBoundingSet=CAP_NET_BIND_SERVICE &larr; Gateway only]
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+  <p>After writing a new unit, the script runs <code>systemctl daemon-reload</code> then
+  <code>systemctl enable &lt;name&gt;</code> before starting it.</p>
+
+  <h4>Service &amp; site tables (Linux naming)</h4>
+  <table class="file-table">
+    <tr><th>systemd unit name</th><th>Artifact folder</th><th>Dest folder</th><th>Assembly</th><th>Ambient capability</th><th>Health check</th></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="file-path">Api</td><td class="file-path">fhirbridge-api</td><td class="file-path">FHIRBridge.Api.dll</td><td class="why">&mdash;</td><td class="file-path">http://127.0.0.1:5000/health</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="file-path">Gateway</td><td class="file-path">fhirbridge-gateway</td><td class="file-path">FHIRBridge.Gateway.dll</td><td class="file-path">CAP_NET_BIND_SERVICE</td><td class="file-path">http://localhost/</td></tr>
+    <tr><td class="file-path">fhirbridge-worker</td><td class="file-path">Worker</td><td class="file-path">fhirbridge-worker</td><td class="file-path">FHIRBridge.Worker.dll</td><td class="why">&mdash;</td><td class="why"><em>none</em></td></tr>
+    <tr><td class="file-path">fhirbridge-demoapp</td><td class="file-path">DemoApi</td><td class="file-path">demoapp-api</td><td class="file-path">HealthAppBackend.dll</td><td class="why">&mdash;</td><td class="file-path">http://localhost:5500/</td></tr>
+  </table>
+  <table class="file-table">
+    <tr><th>Static site</th><th>Artifact folder</th><th>Dest folder</th></tr>
+    <tr><td class="why">Portal</td><td class="file-path">Portal</td><td class="file-path">fhirbridge-portal</td></tr>
+    <tr><td class="why">DemoPortal</td><td class="file-path">DemoPortal</td><td class="file-path">demoapp-portal</td></tr>
+  </table>
+
+  <h4>Stopping / starting</h4>
+  <p>Instead of <code>Get-Service</code>/<code>WaitForStatus</code>, the script polls
+  <code>systemctl is-active &lt;name&gt;</code> in a loop (once per second, up to
+  ServiceStopTimeoutSeconds) after issuing <code>systemctl stop</code> / <code>systemctl start</code>,
+  throwing if the expected state is never reached in time.</p>
+
+  <h3 id="linux-setup">Setting up a new Linux server</h3>
+
+  <h4>1 &mdash; Runtime &amp; tools</h4>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Install the .NET 9 ASP.NET Core Runtime</strong><span>Not the SDK &mdash; these are framework-dependent publishes. Via your distro's package manager or Microsoft's install script.</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Install PowerShell Core (pwsh)</strong><span>Required to run the deploy script at all &mdash; <code>sudo apt install powershell</code> or the equivalent for your distro / Microsoft's package feed.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Confirm rsync is installed</strong><span>Present on most distros by default; verify anyway.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Confirm dotnet resolves at /usr/bin/dotnet</strong><span>That exact path is hardcoded into every generated unit's ExecStart. If your install puts the binary elsewhere (e.g. /usr/share/dotnet/dotnet), either symlink it to /usr/bin/dotnet or update the script to resolve it dynamically.</span></div></div>
+  </div>
+
+  <h4>2 &mdash; Self-hosted GitHub Actions runner</h4>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Register a Linux runner</strong><span>Repo Settings &rarr; Actions &rarr; Runners &rarr; New self-hosted runner &rarr; choose Linux.</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Grant privilege</strong><span>The runner needs root, or passwordless sudo, for the commands it runs &mdash; managing systemd units and writing to /etc/systemd/system requires it. Decide deliberately how much privilege to grant; this is a real security tradeoff, not a default to accept blindly.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Verify Idle status</strong><span>Under Settings &rarr; Actions &rarr; Runners.</span></div></div>
+  </div>
+  <pre><code>./config.sh --url https://github.com/&lt;org&gt;/&lt;repo&gt; --token &lt;TOKEN_FROM_GITHUB_UI&gt; --labels &lt;your-linux-label&gt;
+
+sudo ./svc.sh install
+sudo ./svc.sh start</code></pre>
+
+  <h4>3 &mdash; Directories</h4>
+  <pre><code>sudo mkdir -p /opt/fhirbridge
+sudo mkdir -p /etc/fhirbridge-configurations/{fhirbridge-api,fhirbridge-gateway,fhirbridge-worker,demoapp-api,fhirbridge-portal,demoapp-portal}</code></pre>
+  <p>The script auto-creates per-app subfolders under DeployRoot on first deploy. The ConfigRoot
+  subfolders and their contents must be created and populated by hand, same as on Windows.</p>
+
+  <h4>4 &mdash; Config files</h4>
+  <table class="file-table">
+    <tr><th>Service</th><th>Path adjustments vs. Windows</th></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="why"><code>DataProtection:KeyRingPath</code> &rarr; e.g. <code>/var/fhirbridge/keys</code> (must be writable by ServiceUser)</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="why"><code>StaticFiles:RootPath</code> &rarr; <code>/opt/fhirbridge/fhirbridge-portal</code></td></tr>
+    <tr><td class="file-path">fhirbridge-worker</td><td class="why">No path changes &mdash; same config keys as Windows</td></tr>
+    <tr><td class="file-path">demoapp-api</td><td class="why">No path changes &mdash; same config keys as Windows</td></tr>
+  </table>
+
+  <h4>5 &mdash; Bind addresses and DemoApp's portal path</h4>
+  <div class="callout bad">
+    <strong>Manual step required &mdash; not automated</strong>
+    The generated systemd unit does <strong>not</strong> set <code>ASPNETCORE_URLS</code> or
+    <code>DEMOAPP_PORTAL_PATH</code>. Without them, every service falls back to Kestrel's default
+    5000/5001 (colliding with each other), and DemoApp won't find its portal folder. After the
+    <em>first</em> deploy creates each bare unit file, add <code>Environment=</code> lines to it by
+    hand, e.g. for <code>/etc/systemd/system/fhirbridge-gateway.service</code>:
+    <pre><code>[Service]
+...
+Environment=ASPNETCORE_URLS=http://+:80</code></pre>
+    Then:
+    <pre><code>sudo systemctl daemon-reload
+sudo systemctl restart fhirbridge-gateway</code></pre>
+    Do this once per service, right after its first deploy &mdash; exactly mirroring the Windows flow
+    of setting <code>ASPNETCORE_URLS</code> via <code>services.msc</code> after the first deploy
+    creates that service.
+  </div>
+  <table class="file-table">
+    <tr><th>Unit</th><th>ASPNETCORE_URLS</th><th>Extra</th></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="file-path">http://127.0.0.1:5000</td><td class="why">&mdash;</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="file-path">http://+:80</td><td class="why">&mdash;</td></tr>
+    <tr><td class="file-path">fhirbridge-worker</td><td class="why"><em>(none)</em></td><td class="why">&mdash;</td></tr>
+    <tr><td class="file-path">fhirbridge-demoapp</td><td class="file-path">http://+:5500</td><td class="file-path">DEMOAPP_PORTAL_PATH=/opt/fhirbridge/demoapp-portal</td></tr>
+  </table>
+
+  <h4>6 &mdash; Firewall</h4>
+  <pre><code># ufw (Debian/Ubuntu)
+sudo ufw allow 80/tcp
+sudo ufw allow 5500/tcp
+
+# firewalld (RHEL/CentOS/Rocky)
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=5500/tcp
+sudo firewall-cmd --reload</code></pre>
+
+  <h4>7 &mdash; SQL Server reachability</h4>
+  <p>If the databases stay on their current host, make sure that host's firewall allows inbound TDS
+  (port 1433) traffic from the new Linux box's IP address &mdash; the app code
+  (Microsoft.Data.SqlClient / EF Core) is unaffected by the app host's OS and connects the same way
+  either way.</p>
+
+  <h4>8 &mdash; First deploy on Linux (once wired into CI &mdash; see gaps below)</h4>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Static frontends mirror first</strong><span>rsync, config overlay applied.</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Each of the four services</strong><span>Stop if active, rsync-mirror published files, overlay config, verify the .dll exists, create the systemd unit if missing, daemon-reload + enable, start, poll for active state.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Health checks</strong><span>Run after every service has started.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>After the very first run</strong><span>Manually add ASPNETCORE_URLS/DEMOAPP_PORTAL_PATH to each unit, then daemon-reload + restart each once.</span></div></div>
+  </div>
+
+  <h3 id="linux-gaps">Remaining work to fully enable Linux</h3>
+  <p class="section-intro">The Linux deploy script exists and is ready to use, but nothing currently
+  invokes it automatically. Here's exactly what's done versus what's still open:</p>
+  <table class="file-table">
+    <tr><th>Item</th><th>Status</th><th>Detail</th></tr>
+    <tr><td class="why">Application code (systemd support)</td><td class="status"><span class="pill pill-done">Done</span></td><td class="why">Every host already calls .UseSystemd() &mdash; no C# changes needed</td></tr>
+    <tr><td class="why">deploy/windows/Deploy-FHIRBridge.ps1_Linux</td><td class="status"><span class="pill pill-done">Done</span></td><td class="why">Full systemd/rsync equivalent of the Windows script</td></tr>
+    <tr><td class="why">deploy.yml &mdash; Linux publish steps</td><td class="status"><span class="pill pill-pending">Not started</span></td><td class="why">Still only publishes -r win-x64 for all four backends. Needs new <code>dotnet publish -r linux-x64 --self-contained false</code> steps (alongside the Windows ones, or as a matrix), producing a separate artifact for the Linux path.</td></tr>
+    <tr><td class="why">deploy.yml &mdash; Linux runner targeting</td><td class="status"><span class="pill pill-pending">Not started</span></td><td class="why">The deploy job still hardcodes <code>runs-on: [self-hosted, Windows, fhirbridge-vm]</code>. Needs either a second job targeting a Linux-labeled runner, or a matrix strategy across both OSes.</td></tr>
+    <tr><td class="why">Archive expansion step for Linux</td><td class="status"><span class="pill pill-pending">Not started</span></td><td class="why"><code>Expand-Archive</code> under <code>shell: powershell</code> doesn't exist on Linux runners; needs <code>unzip</code> (bash) or <code>shell: pwsh</code> with <code>Expand-Archive</code> (works fine under PowerShell Core too).</td></tr>
+    <tr><td class="why">ASPNETCORE_URLS/DEMOAPP_PORTAL_PATH auto-injection</td><td class="status"><span class="pill pill-gap">Known gap</span></td><td class="why">Currently a manual post-first-deploy step, deliberately mirroring the Windows script's design. Could be automated by having the script set these directly in the generated unit instead, if preferred.</td></tr>
+    <tr><td class="why">Non-root ServiceUser hardening</td><td class="status"><span class="pill pill-pending">Not started</span></td><td class="why">Script defaults to root for parity with Windows' LocalSystem-based New-Service. A dedicated service account with narrower permissions is a real hardening step, not yet done.</td></tr>
+    <tr><td class="why">Linux server prerequisites</td><td class="status"><span class="pill pill-pending">Not started</span></td><td class="why">.NET Runtime, pwsh, self-hosted runner registration, directories, config files, firewall rules &mdash; none of this exists on any Linux box yet; this whole section assumes a brand-new server.</td></tr>
+  </table>
+
+  <!-- =========================== SHARED SECTIONS =========================== -->
+
+  <!-- =========================== STAGING/QA/DEV/WORKING ENVIRONMENTS =========================== -->
+
+  <h2 class="section-divider envs-divider" id="envs-deployment"><span class="os-icon">&#127760;</span>Staging / QA / Dev / Working Environments</h2>
+  <p class="section-intro">
+    Four additional, fully isolated environments on the same Windows VM as production, each with its
+    own branch restriction, ports, service names, and folder tree. Production's own
+    <code>deploy.yml</code> / <code>Deploy-FHIRBridge.ps1</code> are untouched by any of this &mdash;
+    everything below is new, additive infrastructure living alongside them.
+  </p>
+
+  <h3 id="envs-overview">Overview &amp; topology per environment</h3>
+  <div class="env-grid">
+    <div class="env-card"><h4>Staging</h4><div class="env-branch">branch: main &middot; 2 approval gates</div></div>
+    <div class="env-card"><h4>QA</h4><div class="env-branch">branch: quality &middot; 2 approval gates</div></div>
+    <div class="env-card"><h4>Dev</h4><div class="env-branch">branch: develop &middot; 1 approval gate</div></div>
+    <div class="env-card"><h4>Working</h4><div class="env-branch">branch: any &middot; no approval</div></div>
+  </div>
+  <p>Each environment gets the same 6 deploy folders, under <code>C:\inetpub\wwwroot\&lt;Environment&gt;\</code>
+  and <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\</code>:</p>
+  <table class="file-table">
+    <tr><th>Folder</th><th>Staging</th><th>QA</th><th>Dev</th><th>Working</th><th>Windows Service name</th></tr>
+    <tr><td class="file-path">fhirbridge-portal</td><td class="file-path">:2000</td><td class="file-path">:3000</td><td class="file-path">:4000</td><td class="file-path">:6000</td><td class="file-path">fhirbridge-&lt;env&gt;-portal</td></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="file-path">:2002</td><td class="file-path">:3002</td><td class="file-path">:4002</td><td class="file-path">:6002</td><td class="file-path">fhirbridge-&lt;env&gt;-api</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="file-path">:2003</td><td class="file-path">:3003</td><td class="file-path">:4003</td><td class="file-path">:6003</td><td class="file-path">fhirbridge-&lt;env&gt;-gateway</td></tr>
+    <tr><td class="file-path">demoapp-portal</td><td class="file-path">:2010</td><td class="file-path">:3010</td><td class="file-path">:4010</td><td class="file-path">:6010</td><td class="file-path">fhirbridge-&lt;env&gt;-demoapp-portal</td></tr>
+    <tr><td class="file-path">demoapp-api</td><td class="file-path">:2011</td><td class="file-path">:3011</td><td class="file-path">:4011</td><td class="file-path">:6011</td><td class="file-path">fhirbridge-&lt;env&gt;-demoapp-api</td></tr>
+    <tr><td class="file-path">fhirbridge-worker</td><td class="file-path">:2020</td><td class="file-path">:3020</td><td class="file-path">:4020</td><td class="file-path">:6020</td><td class="file-path">fhirbridge-&lt;env&gt;-worker</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>The worker port is reserved, not bindable</strong>
+    <code>FHIRBridge.Worker</code> uses <code>Host.CreateApplicationBuilder</code>
+    (<code>src/Worker/FHIRBridge.Worker/Program.cs:14</code>) &mdash; there is no Kestrel, no HTTP
+    endpoint at all, in any environment. The worker port in the table above is kept for naming-scheme
+    consistency only; nothing listens on it.
+  </div>
+
+  <h3 id="envs-gateway-roles">Reusing Gateway.exe as a static portal host</h3>
+  <p>
+  Every non-prod environment decouples the portal from Gateway &mdash; unlike production, where
+  Gateway serves the portal and proxies the API from the same origin/port, here
+  <code>fhirbridge-portal</code> and <code>demoapp-portal</code> are each independently reachable on
+  their own port. This needed <strong>zero new C# code</strong>: <code>FHIRBridge.Gateway</code>'s
+  existing <code>Program.cs</code> already does exactly two independent, config-driven things (see
+  <code>src/Gateway/FHIRBridge.Gateway/Program.cs:19-52</code>) &mdash; serve static files if
+  <code>StaticFiles:RootPath</code> is set, and proxy <code>/api/**</code>/<code>/swagger/**</code> via
+  YARP regardless. So the same published <code>FHIRBridge.Gateway.exe</code> is deployed
+  <strong>three times per environment</strong>, in three different config-only roles:
+  </p>
+  <table class="file-table">
+    <tr><th>Deploy folder</th><th>Role</th><th>Config</th></tr>
+    <tr><td class="file-path">fhirbridge-portal</td><td class="why">Static-only</td><td class="why"><code>StaticFiles:RootPath</code> pointed at this folder's own <code>wwwroot\</code> subfolder (where the built portal lands); <code>ReverseProxy</code> left effectively unused.</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="why">Proxy-only</td><td class="why"><code>StaticFiles:RootPath</code> left empty &mdash; Gateway already just logs a warning and skips static serving in that case; <code>ReverseProxy:Clusters:api-cluster:Destinations</code> points at this environment's own Api instance port.</td></tr>
+    <tr><td class="file-path">demoapp-portal</td><td class="why">Static-only</td><td class="why">Same as <code>fhirbridge-portal</code>, but serving the Demo app's portal build instead.</td></tr>
+  </table>
+  <p><code>deploy/windows/Deploy-FHIRBridge-Environment.ps1</code> (sibling to the production-only
+  <code>Deploy-FHIRBridge.ps1</code>, which it does not modify) implements this via two functions:
+  <code>Deploy-Service</code> (the regular, one-executable-per-service case &mdash; used for Api,
+  Worker, DemoApi, and the proxy-only Gateway) and <code>Deploy-StaticPortal</code> (mirrors the
+  Gateway artifact <em>and</em> a built Angular site into a <code>wwwroot\</code> subfolder alongside
+  it, for the two static-only roles). Both reuse the same <code>robocopy</code> mirror +
+  ConfigRoot-overlay pattern as the production script.</p>
+  <div class="callout">
+    <strong>The proxy-only Gateway's health check needs one added config route</strong>
+    Gateway has no <code>/health</code> endpoint of its own, and its YARP config only proxies
+    <code>/api/**</code> and <code>/swagger/**</code> by default &mdash; neither reaches Api's
+    <code>/health</code>. Add a third route to this instance's <code>appsettings.Production.json</code>
+    matching <code>/health</code> to the same <code>api-cluster</code>, so
+    <code>Deploy-FHIRBridge-Environment.ps1</code>'s health check
+    (<code>http://localhost:&lt;gateway-port&gt;/health</code>) has something real to hit.
+  </div>
+
+  <h3 id="envs-triggers">Triggers &amp; chained approval gates</h3>
+  <p>
+  Each environment auto-deploys only from a <strong>blank</strong> commit whose message is the exact
+  literal string <code>Deploy</code>, pushed to that environment's own branch &mdash; a commit with
+  that message which isn't blank is deliberately ignored. Manual <code>workflow_dispatch</code> is
+  always available too, on any branch, and skips the blank-commit check (an explicit manual run is
+  already a deliberate action).
+  </p>
+  <pre><code>git commit --allow-empty -m "Deploy"
+git push origin develop   # (or main / quality / any branch, depending on the environment)</code></pre>
+  <p>
+  GitHub's native "required reviewers" per Environment only enforces <em>any one</em> of the assigned
+  reviewers approving &mdash; not a true quorum. To genuinely require multiple <em>distinct</em>
+  people, Staging and QA chain two sequential single-reviewer gate environments instead of one
+  multi-reviewer one; Dev uses a single gate; Working has none:
+  </p>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">staging-approval-1</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">staging-approval-2</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (Staging)</span>
+  </div>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">qa-approval-1</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">qa-approval-2</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (QA)</span>
+  </div>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate approval">dev-approval-1</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (Dev)</span>
+  </div>
+  <div class="gate-chain">
+    <span class="gate">guard</span><span class="arrow">&rarr;</span>
+    <span class="gate deploy">deploy (Working)</span>
+  </div>
+  <p>Each <code>approval-N</code> job's only purpose is its <code>environment:</code> protection rule
+  &mdash; it has a single trivial step and exists purely to block until that environment's assigned
+  reviewer clicks approve, before the next job in the chain can start.</p>
+
+  <h3 id="envs-workflows">Workflow structure</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Role</th></tr>
+    <tr><td class="file-path">.github/workflows/deploy-environment.yml</td><td class="why">Reusable engine (<code>workflow_call</code>, input: <code>environment</code>). Builds all 4 backends + both frontends (the frontend builds use that environment's own Angular configuration &mdash; see below), packages one artifact, then runs <code>Deploy-FHIRBridge-Environment.ps1 -Environment &lt;name&gt;</code> on the same self-hosted runner (<code>fhirbridge-vm</code>) production already uses.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-staging.yml</td><td class="why">"Deploy_Staging" &mdash; branch <code>main</code>, guard, 2 gates, calls the engine with <code>environment: Staging</code>.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-qa.yml</td><td class="why">"Deploy_QA" &mdash; branch <code>quality</code>, guard, 2 gates, <code>environment: QA</code>.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-dev.yml</td><td class="why">"Deploy_Dev" &mdash; branch <code>develop</code>, guard, 1 gate, <code>environment: Dev</code>.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-working.yml</td><td class="why">"Deploy_Working" &mdash; no branch filter (any branch), guard, no gates, <code>environment: Working</code>.</td></tr>
+  </table>
+  <p>The <code>guard</code> job in each trigger workflow checks out with <code>fetch-depth: 2</code>
+  and runs <code>git diff --quiet HEAD^ HEAD</code> for push events (always <code>true</code> for
+  <code>workflow_dispatch</code>) to confirm the commit is genuinely blank before setting a
+  <code>proceed</code> output that every later job in that file gates on.</p>
+
+  <h3 id="envs-angular">Angular build configurations &amp; CORS</h3>
+  <p>
+  Production's <code>apiBase</code>/<code>fhirbridgeBase</code> are intentionally empty
+  (<code>environment.prod.ts</code> in both <code>portal/</code> and
+  <code>Demo_TestApp/frontend/</code>) because the portal is same-origin with its API there. Since
+  every non-prod environment's portal is now genuinely cross-origin from its own API (different
+  port), each got its own new Angular build configuration and environment file, mirroring the
+  existing <code>production</code>/<code>development</code> pattern in both apps'
+  <code>angular.json</code>:
+  </p>
+  <table class="file-table">
+    <tr><th>New file</th><th>Sets</th></tr>
+    <tr><td class="file-path">portal/src/environments/environment.{staging,qa,dev,working}.ts</td><td class="why"><code>apiBase</code> &rarr; that environment's own Gateway origin (e.g. Staging: <code>http://localhost:2003</code>)</td></tr>
+    <tr><td class="file-path">Demo_TestApp/frontend/src/environments/environment.{staging,qa,dev,working}.ts</td><td class="why"><code>healthAppBase</code> &rarr; that environment's own demo backend origin, <code>fhirbridgeBase</code> &rarr; that environment's own Gateway origin</td></tr>
+  </table>
+  <div class="callout bad">
+    <strong>CORS must be configured per environment or the portal can't call its API</strong>
+    <code>FHIRBridge.Api</code>'s CORS is already dynamic and config/DB-driven
+    (<code>DynamicPortalCorsPolicyProvider</code>, reads <code>Portal:AllowedOrigins</code> &mdash;
+    <code>src/Api/FHIRBridge.Api/Program.cs:159-167</code> &mdash; and can be edited live via the
+    admin UI with no restart), so no code change is needed, but each environment's Api instance
+    <strong>must</strong> have that environment's portal origin (e.g.
+    <code>http://localhost:2000</code> for Staging) added to its allow-list, or the portal will fail
+    every API call with a CORS error. Same idea for the Demo app backend's
+    <code>AllowedFrontendOrigin</code>.
+  </div>
+
+  <h3 id="envs-setup">Manual setup checklist</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Create the branches</strong><span><code>quality</code> and <code>develop</code>, both from <code>main</code> (already done for this rollout).</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Create 9 GitHub Environments</strong><span>Settings &rarr; Environments: <code>staging-approval-1</code>, <code>staging-approval-2</code>, <code>Staging</code>, <code>qa-approval-1</code>, <code>qa-approval-2</code>, <code>QA</code>, <code>dev-approval-1</code>, <code>Dev</code>, <code>Working</code>. Assign the actual required reviewer (a real person) to each <code>-approval-N</code> environment.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Open firewall ports</strong><span>2000/2002/2003/2010/2011/2020, 3000/3002/3003/3010/3011/3020, 4000/4002/4003/4010/4011/4020, 6000/6002/6003/6010/6011/6020.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Provision 24 appsettings.Production.json files</strong><span>Under <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\&lt;folder&gt;\</code> &mdash; one per folder per environment, with the roles described above (static-only Gateway vs. proxy-only Gateway vs. Api vs. Worker vs. DemoApi).</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Provision separate databases</strong><span>Recommended: a distinct <code>FHIRBridgeDb</code> and demo-app database per environment, so Staging/QA/Dev/Working don't share data with each other or with production.</span></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Set ASPNETCORE_URLS per service</strong><span>Same one-time-manual pattern as production &mdash; via each Windows Service's Environment tab in <code>services.msc</code>, once each service exists after its first deploy.</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Confirm VM headroom</strong><span>4 more environments' worth of services (24 total) now run alongside production's 4 on the same VM.</span></div></div>
+  </div>
+
+  <h2 id="gotchas"><span class="num">5.</span>Known Gotchas &amp; Lessons Learned</h2>
+
+  <div class="callout bad">
+    <strong>Real incident: missing column after a schema change</strong>
+    The demo app backend has <strong>no EF Core migrations</strong> &mdash; it calls
+    <code>db.Database.EnsureCreated()</code> at startup, which only creates the schema the very first
+    time a database doesn't exist yet. It does <em>not</em> add columns to an already-existing
+    database on subsequent runs. This caused a real production failure: a new field
+    (<code>ProviderLaunchContext</code>) was added to <code>WorkflowSettingsEntity</code> for a later
+    feature, but the production <code>HealthAppDb</code> database had already been created before
+    that change &mdash; so its <code>WorkflowSettings</code> table never got the new column. The
+    first request that touched it (<code>GET /api/patient-standalone-settings</code>) threw
+    <code>SqlException: Invalid column name 'ProviderLaunchContext'</code>, which &mdash; because this
+    app has no exception-handling middleware &mdash; surfaced to the browser as a dropped connection /
+    failed fetch rather than a clean 500.
+    <pre><code>ALTER TABLE [WorkflowSettings]
+ADD [ProviderLaunchContext] nvarchar(max) NOT NULL DEFAULT N'';</code></pre>
+    <strong>Takeaway:</strong> every time a field is added to an entity in this app, production (and
+    any other pre-existing database) needs the same kind of manual <code>ALTER TABLE</code>, or the
+    same class of error will recur the moment something queries the new column.
+  </div>
+
+  <div class="callout warn">
+    <strong>Robocopy exit codes</strong>
+    Robocopy returns exit codes 0&ndash;7 for various flavors of <em>success</em> (e.g. 2 = "extra
+    files purged"), not just 0. The deploy script checks for &ge;8 as the actual failure threshold and
+    explicitly resets <code>$global:LASTEXITCODE</code> to 0 afterward &mdash; otherwise a
+    successful-but-nonzero robocopy exit could leak into the script's own final exit code and make
+    GitHub Actions report a false failure.
+  </div>
+
+  <div class="callout warn">
+    <strong>Generic browser error messages aren't diagnostic</strong>
+    Both Swagger UI's "Failed to fetch &mdash; CORS / Network Failure / URL scheme&hellip;" message and
+    Chrome's <code>net::ERR_EMPTY_RESPONSE</code> are shown for a wide range of underlying causes.
+    Neither one, by itself, tells you whether the real cause is CORS, a crashed process, a stuck SQL
+    transaction, or a missing column. Isolate with a control request (does a totally unrelated
+    endpoint on the same origin work?) and check the server side directly (service status, SQL Server
+    blocking-session queries, event logs) before assuming any one specific cause.
+  </div>
+
+  <div class="callout">
+    <strong>appsettings.Production.json is never in the repo or the artifact</strong>
+    It's intentionally excluded from git entirely and provisioned by hand, once, directly on the
+    server (now under ConfigRoot). CI never sees or manages these files.
+  </div>
+
+  <h2 id="reference"><span class="num">6.</span>Quick Reference</h2>
+  <div class="compare-grid">
+    <div class="compare-card windows-card">
+      <h4><span class="pill pill-windows">Windows</span> Trigger a deploy right now</h4>
+      <pre><code>git commit --allow-empty -m "Publish"
+git push origin main</code></pre>
+    </div>
+    <div class="compare-card linux-card">
+      <h4><span class="pill pill-linux">Linux</span> Not yet triggerable via CI</h4>
+      <p style="margin-bottom:0;">Run <code>deploy/windows/Deploy-FHIRBridge.ps1_Linux</code> by hand on the target server until the gaps above are closed.</p>
+    </div>
+  </div>
+  <h4>Key files</h4>
+  <ul class="feature-list">
+    <li><code>.github/workflows/deploy.yml</code> &mdash; the workflow itself</li>
+    <li><code>deploy/windows/Deploy-FHIRBridge.ps1</code> &mdash; Windows deploy logic</li>
+    <li><code>deploy/windows/Deploy-FHIRBridge.ps1_Linux</code> &mdash; Linux deploy logic (not yet wired into CI)</li>
+    <li><code>deploy/windows/README.md</code> &mdash; Windows setup/reference doc</li>
+    <li><code>documents/CICD-Deployment-Guide.html</code> &mdash; this document</li>
+  </ul>
+
+  <footer>
+    FHIRBridge &middot; CI/CD &amp; deployment documentation &middot; branch <code>main_Prod_Deployment_Prep_CICD</code>
+  </footer>
+
+</div>
+</body>
+</html>

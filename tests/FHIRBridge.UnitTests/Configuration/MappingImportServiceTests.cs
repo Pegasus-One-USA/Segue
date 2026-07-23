@@ -1,7 +1,5 @@
 using System.Text.Json;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Destinations;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
@@ -43,16 +41,10 @@ public sealed class MappingImportServiceTests
         var factory = new Mock<IMappingSchemaProviderFactory>();
         factory.Setup(x => x.Create(DestinationType.SqlServer)).Returns(provider);
 
-        var currentUserService = new Mock<ICurrentUserService>();
-        currentUserService.Setup(x => x.CurrentUser).Returns(
-            new CurrentUserInfo("user-1", "user@example.com", "Test User", [], true));
-
         var service = new MappingImportService(
             repository,
             destinationSchemaServiceMock.Object,
-            factory.Object,
-            Mock.Of<IUserActivityAuditService>(),
-            currentUserService.Object);
+            factory.Object);
 
         return (service, repository, provider, destination.Id, Guid.NewGuid());
     }

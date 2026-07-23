@@ -218,12 +218,11 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   readonly csvForm = this.fb.group({
-    name:        ['CSV Export', [Validators.required]],
-    storageType: ['sftp', [Validators.required]],
-    folder:      ['', [Validators.required]],
-    filePattern: ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
-    delimiter:   ['comma', []],
-    encoding:    ['utf-8', []],
+    name:         ['CSV Export', [Validators.required]],
+    deliveryMode: ['download', [Validators.required]],
+    filePattern:  ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
+    delimiter:    ['comma', []],
+    encoding:     ['utf-8', []],
     // ── SFTP-only connection details ─────────────────────────────────────────
     sftpHost:         ['', []],
     sftpPort:         [22, []],
@@ -231,6 +230,13 @@ export class DestinationWizardComponent implements OnInit {
     sftpAuthType:     ['password', []],
     sftpPassword:     ['', []],
     sftpRemoteFolder: ['', []],
+    // ── Email-only fields ─────────────────────────────────────────────────────
+    emailTo:              ['', []],
+    emailCc:               ['', []],
+    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
+    emailBodyTemplate:    ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
+    // ── Download-link-only field ─────────────────────────────────────────────
+    downloadLinkExpiryMinutes: [60, []],
   });
 
   // ── data groups ───────────────────────────────────────────────────────────
@@ -561,9 +567,9 @@ export class DestinationWizardComponent implements OnInit {
       untracked(() => this._rebuildRows(resources, type));
     });
 
-    // SFTP connection fields are required only while Storage type = SFTP.
-    this._syncSftpValidators(this.csvForm.controls.storageType.value);
-    this.csvForm.controls.storageType.valueChanges.subscribe(v => this._syncSftpValidators(v));
+    // SFTP/email/download-link fields are required only while their mode is selected.
+    this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
+    this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -628,8 +634,8 @@ export class DestinationWizardComponent implements OnInit {
     };
   }
 
-  private _syncSftpValidators(storageType: string | null): void {
-    const isSftp = storageType === 'sftp';
+  private _syncDeliveryModeValidators(deliveryMode: string | null): void {
+    const isSftp = deliveryMode === 'sftp';
     // sftpPassword is a secret — selectExisting() deliberately never repopulates it (secrets never come back from
     // the API), so requiring it here would permanently block reusing an existing SFTP connection unless the user
     // types something just to satisfy validation. Reusing-as-is never sends a password anywhere (see _save()'s
@@ -647,6 +653,16 @@ export class DestinationWizardComponent implements OnInit {
     const port = this.csvForm.get('sftpPort')!;
     port.setValidators(isSftp ? [Validators.required, Validators.min(1), Validators.max(65535)] : []);
     port.updateValueAndValidity({ emitEvent: false });
+
+    const isEmail = deliveryMode === 'email';
+    const emailTo = this.csvForm.get('emailTo')!;
+    emailTo.setValidators(isEmail ? [Validators.required] : []);
+    emailTo.updateValueAndValidity({ emitEvent: false });
+
+    const isDownloadUrl = deliveryMode === 'downloadUrl';
+    const expiry = this.csvForm.get('downloadLinkExpiryMinutes')!;
+    expiry.setValidators(isDownloadUrl ? [Validators.required, Validators.min(1), Validators.max(10080)] : []);
+    expiry.updateValueAndValidity({ emitEvent: false });
   }
 
   ngOnInit(): void {
@@ -841,7 +857,7 @@ export class DestinationWizardComponent implements OnInit {
     if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
       this._loadExistingOptions();
     }
-    if (!this.isSql()) this._syncSftpValidators(this.csvForm.value.storageType ?? null);
+    if (!this.isSql()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   private _loadExistingOptions(): void {
@@ -903,8 +919,7 @@ export class DestinationWizardComponent implements OnInit {
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
-        storageType:      metadata['dest_storageType']      || 'sftp',
-        folder:           metadata['dest_folder']            || '',
+        deliveryMode:     metadata['dest_deliveryMode']     || 'download',
         filePattern:      metadata['dest_filePattern']       || selected.target || this.csvForm.value.filePattern,
         delimiter:        metadata['dest_delimiter']         || 'comma',
         encoding:         metadata['dest_encoding']          || 'utf-8',
@@ -914,6 +929,14 @@ export class DestinationWizardComponent implements OnInit {
         sftpAuthType:     metadata['dest_sftpAuthType']      || 'password',
         sftpPassword:     '',
         sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
+        emailTo:              metadata['dest_emailTo']              || '',
+        emailCc:               metadata['dest_emailCc']               || '',
+        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailBodyTemplate:
+          metadata['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
+        downloadLinkExpiryMinutes: metadata['dest_downloadLinkExpiryMinutes']
+          ? Number(metadata['dest_downloadLinkExpiryMinutes'])
+          : 60,
       });
       this._existingBaseline = this.csvForm.getRawValue();
     }
@@ -1207,18 +1230,23 @@ export class DestinationWizardComponent implements OnInit {
       });
     } else {
       this.csvForm.patchValue({
-        name:        f['dest_name']        || 'CSV Export',
-        storageType: f['dest_storageType'] || 'sftp',
-        folder:      f['dest_folder']      || '',
-        filePattern: f['dest_filePattern'] || '{resource}_{yyyyMMdd_HHmmss}.csv',
-        delimiter:   f['dest_delimiter']   || 'comma',
-        encoding:    f['dest_encoding']    || 'utf-8',
+        name:         f['dest_name']         || 'CSV Export',
+        deliveryMode: f['dest_deliveryMode'] || 'download',
+        filePattern:  f['dest_filePattern']  || '{resource}_{yyyyMMdd_HHmmss}.csv',
+        delimiter:    f['dest_delimiter']    || 'comma',
+        encoding:     f['dest_encoding']     || 'utf-8',
         sftpHost:         f['dest_sftpHost']         || '',
         sftpPort:         f['dest_sftpPort'] ? Number(f['dest_sftpPort']) : 22,
         sftpUsername:     f['dest_sftpUsername']     || '',
         sftpAuthType:     f['dest_sftpAuthType']     || 'password',
         sftpPassword:     f['dest_sftpPassword']     || '',
         sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
+        emailTo:              f['dest_emailTo']              || '',
+        emailCc:               f['dest_emailCc']               || '',
+        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailBodyTemplate:
+          f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
+        downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
       });
     }
     if (f['dest_resources']) {
@@ -1276,19 +1304,25 @@ export class DestinationWizardComponent implements OnInit {
       }
     } else {
       const v = this.csvForm.value;
-      config['dest_name']        = v.name        ?? '';
-      config['dest_storageType'] = v.storageType ?? '';
-      config['dest_folder']      = v.folder      ?? '';
-      config['dest_filePattern'] = v.filePattern ?? '';
-      config['dest_delimiter']   = v.delimiter   ?? 'comma';
-      config['dest_encoding']    = v.encoding    ?? 'utf-8';
-      if (v.storageType === 'sftp') {
+      config['dest_name']         = v.name         ?? '';
+      config['dest_deliveryMode'] = v.deliveryMode ?? 'download';
+      config['dest_filePattern']  = v.filePattern  ?? '';
+      config['dest_delimiter']    = v.delimiter    ?? 'comma';
+      config['dest_encoding']     = v.encoding     ?? 'utf-8';
+      if (v.deliveryMode === 'sftp') {
         config['dest_sftpHost']         = v.sftpHost         ?? '';
         config['dest_sftpPort']         = String(v.sftpPort  ?? 22);
         config['dest_sftpUsername']     = v.sftpUsername     ?? '';
         config['dest_sftpAuthType']     = v.sftpAuthType     ?? 'password';
         config['dest_sftpPassword']     = v.sftpPassword     ?? '';
         config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
+      } else if (v.deliveryMode === 'email') {
+        config['dest_emailTo']              = v.emailTo              ?? '';
+        config['dest_emailCc']               = v.emailCc               ?? '';
+        config['dest_emailSubjectTemplate'] = v.emailSubjectTemplate ?? '';
+        config['dest_emailBodyTemplate']    = v.emailBodyTemplate    ?? '';
+      } else if (v.deliveryMode === 'downloadUrl') {
+        config['dest_downloadLinkExpiryMinutes'] = String(v.downloadLinkExpiryMinutes ?? 60);
       }
     }
     return config;
