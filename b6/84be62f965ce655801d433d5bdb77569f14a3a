@@ -1,0 +1,19 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicAccessTokenProvider.cs
+  s_08313b6cd63437::t_36d1ba47358a0a 60,65-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b684be62f965ce655801d433d5bdb77569f14a3a",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

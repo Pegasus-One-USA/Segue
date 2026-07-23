@@ -1,0 +1,131 @@
+portal/src/app/settings/services/notification-settings.service.ts
+  s_08313b6cd63437::t_e93767b57a60ea 1-22
+src/FHIRBridge.Application/DTOs/UpdateNotificationSettingsRequest.cs
+  s_08313b6cd63437::t_e58fd5050c2f43 1-14
+src/FHIRBridge.Application/DTOs/GeneratedSigningKeyDto.cs
+  s_08313b6cd63437::t_c9d4fc631ede00 1-13
+src/FHIRBridge.Application/DTOs/NotificationSettingsDto.cs
+  s_08313b6cd63437::t_540d59adc25667 1-15
+portal/src/app/source-connections/services/api-source-connection.service.ts
+  s_08313b6cd63437::t_9fa895eed9a265 7
+  s_08313b6cd63437::t_9ea427e44075b8 48-62
+src/FHIRBridge.Application/DTOs/SendTestEmailRequest.cs
+  s_08313b6cd63437::t_ab4f8155e7801a 1-3
+src/FHIRBridge.Infrastructure/Sources/SigningKeyGenerationService.cs
+  s_08313b6cd63437::t_3ca4b03a198621 1-86,88-144
+  s_08313b6cd63437::t_6ec58bd2d62ed2 87
+tests/FHIRBridge.UnitTests/Sources/SigningKeyGenerationServiceTests.cs
+  s_08313b6cd63437::t_fa90bcd0339330 71-186
+  s_08313b6cd63437::t_79fbb9f16d69d0 5
+  s_08313b6cd63437::t_c9d4fc631ede00 1-4,6-70,187
+portal/src/app/settings/pages/email-settings/email-settings.component.html
+  s_08313b6cd63437::t_c31e6b2f2ddb64 1-98
+src/FHIRBridge.Application/DTOs/ImportSigningKeyRequest.cs
+  s_08313b6cd63437::t_08b35d97cc6a5f 1-4
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260723030441_AddNotificationSettings.Designer.cs
+  s_08313b6cd63437::t_a0ec1a720678f4 1-3151
+src/Api/FHIRBridge.Api/Controllers/V1/NotificationSettingsController.cs
+  s_08313b6cd63437::t_8940740cacd47e 1-70
+portal/src/app/settings/pages/email-settings/email-settings.component.ts
+  s_08313b6cd63437::t_b375055da2463e 1-134
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.ts
+  s_08313b6cd63437::t_9b34821b057aa8 4
+  s_08313b6cd63437::t_2c61a9320ae8b5 19,21-25,36,96
+  s_08313b6cd63437::t_37a4807b045537 46-50,52-55,57-95,99,111,113-119,122-126,129-130
+  s_08313b6cd63437::t_4bbb2d3a893658 97
+  s_08313b6cd63437::t_63c9e9dc98e40e 98
+  s_08313b6cd63437::t_206f807e56181c 100-102,108-110
+  s_08313b6cd63437::t_474e7484709aa3 112
+  s_08313b6cd63437::t_9ecb33de61274b 120-121
+  s_08313b6cd63437::t_a66c2cd92435f2 127-128
+  s_08313b6cd63437::t_1267132749a3a2 103-107,134-136,139,157-158
+src/FHIRBridge.Application/Abstractions/Persistence/INotificationSettingsRepository.cs
+  s_08313b6cd63437::t_4ee21786fa69e0 1-17
+src/FHIRBridge.Infrastructure/Persistence/EfNotificationSettingsRepository.cs
+  s_08313b6cd63437::t_73b154e69d30a3 1-45
+portal/src/app/source-connections/services/i-source-connection.service.ts
+  s_08313b6cd63437::t_04b10246d7188b 2
+  s_08313b6cd63437::t_0156d487ec8efa 12-18
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260723030441_AddNotificationSettings.cs
+  s_08313b6cd63437::t_a0ec1a720678f4 1-50
+portal/src/app/settings/pages/email-settings/email-settings.component.scss
+  s_08313b6cd63437::t_f57fb742c77de8 1-72
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorResourceTypeResolutionTests.cs
+  s_08313b6cd63437::t_c9d4fc631ede00 1-86
+portal/src/app/settings/models/notification-settings.model.ts
+  s_08313b6cd63437::t_be7abd8aaf9a77 1-25
+src/FHIRBridge.Infrastructure/Email/SmtpEmailSender.cs
+  s_08313b6cd63437::t_432d7bee19f298 4-6,11-15,18-19,22-25,27-28,34-35,43,50,62-63,71,94,97-102,104-108,110-111
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.html
+  s_08313b6cd63437::t_6244b79e78501e 58-59
+  s_08313b6cd63437::t_4636f7b8216cf8 77-79,86-88,91-135,139-149,154-158,177-181
+src/Api/FHIRBridge.Api/Controllers/V1/SourceConnectionsController.cs
+  s_08313b6cd63437::t_431a21645fc681 25,27-29,32-40,48,50,56
+  s_08313b6cd63437::t_39ac424c7bb49d 2
+  s_08313b6cd63437::t_473aef5b18ae96 41-43,45-47
+  s_08313b6cd63437::t_3c8a4a30e1d860 49
+  s_08313b6cd63437::t_210bf5023a30fa 51-55
+  s_08313b6cd63437::t_6bb33ca25f9f6d 57-59
+  s_08313b6cd63437::t_01176cd923babc 44,60-66
+src/FHIRBridge.Domain/Entities/NotificationSettings.cs
+  s_08313b6cd63437::t_b84a0ed02dc59b 1-67
+tests/FHIRBridge.UnitTests/Services/NotificationSettingsServiceTests.cs
+  s_08313b6cd63437::t_67be75603d5e44 43
+  s_08313b6cd63437::t_6364d559228749 1-42,44-112
+src/FHIRBridge.Application/Services/NotificationSettingsService.cs
+  s_08313b6cd63437::t_227514036b7c89 1-87
+src/FHIRBridge.Application/Abstractions/Sources/ISigningKeyGenerationService.cs
+  s_08313b6cd63437::t_cb4217b8481d03 1-24
+src/FHIRBridge.Infrastructure/Persistence/Configurations/NotificationSettingsConfig.cs
+  s_08313b6cd63437::t_f814b54660e7e9 1-32
+src/FHIRBridge.Application/Abstractions/Notifications/INotificationSettingsService.cs
+  s_08313b6cd63437::t_aebaeb4fb3fb57 1-15
+portal/src/app/components/epic-source-wizard/epic-source-wizard.component.ts
+  s_08313b6cd63437::t_afed97ee8aa912 88
+portal/src/app/components/epic-source-wizard/models/epic-config.model.ts
+  s_08313b6cd63437::t_bd3ec2a9505f88 42-45
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_08313b6cd63437::t_d34defd7598532 72-80
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_08313b6cd63437::t_fd4e4b38173cbf 1239-1305,2650-2679
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_08313b6cd63437::t_3aac219072aaf4 165,217,219-221,228-233
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.scss
+  s_08313b6cd63437::t_30304cad6ca801 22-24
+portal/src/app/core/api-endpoints.ts
+  s_08313b6cd63437::t_d25c555142f1bc 69-79
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_08313b6cd63437::t_879f6529353a22 17
+portal/src/app/settings/settings.routes.ts
+  s_08313b6cd63437::t_5114ad737d32f3 22-29
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_a66c35895c7853::t_fda856c8ed7de8 240-241,437
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_a66c35895c7853::t_41a4a4f3222fa4 37
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_08313b6cd63437::t_440e3d1a4edbb0 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "dab79ec634caaf1bdc1974f16c946f24b2ebe93d",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a66c35895c7853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2907d4da-9fd4-4481-9632-f9243edf93fa",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
