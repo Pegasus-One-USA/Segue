@@ -57,7 +57,7 @@
 
 .btn-primary {
   padding: 9px 18px; border-radius: 9px; background: var(--color-primary); border: none;
-  color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+  color: var(--color-on-primary); font-size: 13px; font-weight: 600; cursor: pointer;
   transition: background var(--transition-base);
   &:hover:not(:disabled) { background: var(--color-primary-dark); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
