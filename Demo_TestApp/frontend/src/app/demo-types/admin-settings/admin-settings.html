@@ -66,6 +66,10 @@
           Patient Detail Workflow Id
           <input type="text" [ngModel]="standaloneDetailWorkflowId()" (ngModelChange)="standaloneDetailWorkflowId.set($event)" placeholder="e.g. dc666cee-f674-400f-a4b5-c826e3f4c3a0" />
         </label>
+        <label class="field">
+          Provider Standalone Base URL
+          <input type="text" [ngModel]="standaloneBaseUrl()" (ngModelChange)="standaloneBaseUrl.set($event)" placeholder="http://localhost:5000" />
+        </label>
       </section>
 
       <section class="settings-section">

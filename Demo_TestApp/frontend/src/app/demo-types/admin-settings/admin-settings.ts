@@ -23,6 +23,7 @@ interface AdminSettings {
   patientCsvEmailExportWorkflowId: string;
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
+  standaloneBaseUrl: string;
   providerLaunchContext: string;
 }
 
@@ -50,6 +51,7 @@ export class AdminSettingsComponent implements OnInit {
   readonly patientCsvEmailExportWorkflowId = signal('');
   readonly standaloneWorkflowId = signal('');
   readonly standaloneDetailWorkflowId = signal('');
+  readonly standaloneBaseUrl = signal('');
   readonly providerLaunchContext = signal('');
 
   // Drives a warning under the Launch Context field — this exact mistake (an admin pasting the "Provider InApp"
@@ -82,6 +84,7 @@ export class AdminSettingsComponent implements OnInit {
       this.patientCsvEmailExportWorkflowId.set(current.patientCsvEmailExportWorkflowId);
       this.standaloneWorkflowId.set(current.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
+      this.standaloneBaseUrl.set(current.standaloneBaseUrl);
       this.providerLaunchContext.set(current.providerLaunchContext);
     } catch {
       this.loadError.set('Could not load settings.');
@@ -107,6 +110,7 @@ export class AdminSettingsComponent implements OnInit {
             patientCsvEmailExportWorkflowId: this.patientCsvEmailExportWorkflowId(),
             standaloneWorkflowId: this.standaloneWorkflowId(),
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
+            standaloneBaseUrl: this.standaloneBaseUrl(),
             providerLaunchContext: this.providerLaunchContext(),
           },
           { withCredentials: true }
@@ -120,6 +124,7 @@ export class AdminSettingsComponent implements OnInit {
       this.patientCsvEmailExportWorkflowId.set(result.patientCsvEmailExportWorkflowId);
       this.standaloneWorkflowId.set(result.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
+      this.standaloneBaseUrl.set(result.standaloneBaseUrl);
       this.providerLaunchContext.set(result.providerLaunchContext);
       this.saved.set(true);
     } catch {
