@@ -4,7 +4,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { SOURCE_CONNECTIONS_ENDPOINTS } from '../../core/api-endpoints';
 import { ISourceConnectionService } from './i-source-connection.service';
-import { SourceConnectionModel, SourceConnectionRequest } from '../models/source-connection.model';
+import { GeneratedSigningKeyModel, SourceConnectionModel, SourceConnectionRequest } from '../models/source-connection.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiSourceConnectionService extends ISourceConnectionService {
@@ -42,6 +42,21 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
 
   getUsedIds(): Observable<string[]> {
     return this.http.get<string[]>(SOURCE_CONNECTIONS_ENDPOINTS.usage).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  generateSigningKey(): Observable<GeneratedSigningKeyModel> {
+    return this.http.post<GeneratedSigningKeyModel>(SOURCE_CONNECTIONS_ENDPOINTS.generateSigningKey, {}).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  importSigningKey(privateKeyPem: string): Observable<GeneratedSigningKeyModel> {
+    return this.http.post<GeneratedSigningKeyModel>(
+      SOURCE_CONNECTIONS_ENDPOINTS.importSigningKey,
+      { privateKeyPem }
+    ).pipe(
       catchError(err => throwError(() => err))
     );
   }

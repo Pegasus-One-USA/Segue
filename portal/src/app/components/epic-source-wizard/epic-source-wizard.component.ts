@@ -85,6 +85,7 @@ export class EpicSourceWizardComponent {
       jwksUrl:     av.jwksUrl,
       kid:         av.keyId,
       kvRef:       av.keyVaultRef,
+      secretName:  av.secretName,
       redirectUri: cv.redirectUri,
       launchUrl:   cv.launchUrl,
     };

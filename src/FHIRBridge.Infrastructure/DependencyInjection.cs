@@ -236,8 +236,9 @@ public static class DependencyInjection
         services.AddSingleton<IExternalTokenValidator, CompositeExternalTokenValidator>();
 
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
-        services.Configure<Email.EmailOptions>(configuration.GetSection("Email"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
+        services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
+        services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));
         services.AddHttpClient(nameof(EpicEndpointDirectorySeeder));
@@ -433,6 +434,7 @@ public static class DependencyInjection
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
         services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
+        services.AddScoped<ISigningKeyGenerationService, SigningKeyGenerationService>();
         services.AddHealthChecks()
             .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
             .AddCheck<SqlServerTdeHealthCheck>("sqlserver-tde")
