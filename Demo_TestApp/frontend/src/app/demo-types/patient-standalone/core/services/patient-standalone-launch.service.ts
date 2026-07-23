@@ -19,12 +19,16 @@ export interface MyChartEndpoint {
   status: string;
 }
 
-/** Matches PatientStandaloneLaunchController's response shape. */
+/** Matches PatientStandaloneLaunchController's response shape. sessionId is FHIRBridge-minted (or echoed back, if
+ *  one was supplied to mintLaunchUrl) — persist it and echo it back on every later hasValidToken/run/discardToken
+ *  call for this same browser session (see launch-standalone-patient.ts's sessionId field), NOT pageCallerId, which
+ *  is only ever the OAuth redirect-back URL and is shared by every visitor to this page. */
 export interface PublicPatientStandaloneUrlResponse {
   launchUrl: string;
   mode: string;
   opensDirectly: boolean;
   applicationType: string | null;
+  sessionId: string;
 }
 
 /** Matches WorkflowEndpoints' GET /workflows/{id}/token-status — a cheap, no-pipeline check of whether a real /run
@@ -304,11 +308,24 @@ export class PatientStandaloneLaunchService {
     );
   }
 
-  async mintLaunchUrl(workflowId: string, ehrEndpointId: string, callerId?: string): Promise<PublicPatientStandaloneUrlResponse> {
+  // callerId here is the OAuth redirect-back URL (unrelated to the token cache) — see redirectToMyChart's own
+  // remarks. sessionId is the separate, opaque identifier that becomes the actual token-cache key: pass whatever
+  // this browser already has persisted (a returning session) so FHIRBridge reuses it instead of minting a new one;
+  // omit it on a first-ever visit and persist whatever comes back in the response.
+  async mintLaunchUrl(
+    workflowId: string, ehrEndpointId: string, callerId?: string, sessionId?: string,
+  ): Promise<PublicPatientStandaloneUrlResponse> {
+    const params: Record<string, string> = { ehrEndpointId };
+    if (callerId) {
+      params['callerId'] = callerId;
+    }
+    if (sessionId) {
+      params['sessionId'] = sessionId;
+    }
     return firstValueFrom(
       this.http.get<PublicPatientStandaloneUrlResponse>(
         `${this.baseUrl}/api/v1/workflows/${workflowId}/public-patient-standalone-url`,
-        { params: callerId ? { ehrEndpointId, callerId } : { ehrEndpointId } },
+        { params },
       ),
     );
   }

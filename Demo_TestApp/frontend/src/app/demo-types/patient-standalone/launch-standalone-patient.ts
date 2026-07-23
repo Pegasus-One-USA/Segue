@@ -35,14 +35,43 @@ export class LaunchStandalonePatientComponent implements OnInit {
     window.location.href = '/';
   }
 
-  // Identifies this HealthApp page/session to FHIRBridge's Patient Standalone token cache (see
-  // SmartAuthorizationCodeTokenProvider.BuildStoreKey) — must be the SAME value passed to mintLaunchUrl (below),
-  // hasValidToken, run, and discardToken for every one of this page's workflows (list, detail, csv export, csv
-  // email export) so they all share the one token FHIRBridge cached under this callerId, instead of each workflow's
-  // check missing it and falling back to a per-SourceConnection key that was never written to. Origin + pathname
-  // only, computed fresh each time (not cached) since it's cheap and never changes within one page's lifetime.
+  // The OAuth redirect-back URL passed to mintLaunchUrl's callerId param — tells FHIRBridge's OAuthController.Callback
+  // where to send the browser once the token exchange completes (see redirectToMyChart). Unrelated to the token
+  // cache: do NOT use this for hasValidToken/run/discardToken, since it's shared by every visitor to this page and
+  // was exactly the problem sessionId (below) fixes. Origin + pathname only, computed fresh each time.
   private get pageCallerId(): string {
     return `${window.location.origin}${window.location.pathname}`;
+  }
+
+  // FHIRBridge-minted opaque identifier that its Patient Standalone token cache actually keys on instead of
+  // SourceConnectionId (see SmartAuthorizationCodeTokenProvider.BuildStoreKey) — unlike pageCallerId above, this is
+  // unique per real signed-in patient session, not shared by every visitor to this page. Persisted in localStorage
+  // (not sessionStorage) so it survives the full-page navigation to MyChart and back. Must be sent as the callerId
+  // parameter on hasValidToken/run/discardToken (those endpoints' wire format predates this rename — the field name
+  // there is unrelated to the OAuth-redirect callerId above) for every one of this page's workflows (list, detail,
+  // csv export, csv email export), so they all share the one token FHIRBridge cached under this session id instead
+  // of each workflow's check missing it and falling back to a per-SourceConnection key that was never written to.
+  private static readonly SESSION_ID_STORAGE_KEY = 'patientStandaloneSessionId';
+
+  private get sessionId(): string | null {
+    try {
+      return localStorage.getItem(LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private set sessionId(value: string | null) {
+    try {
+      if (value) {
+        localStorage.setItem(LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY, value);
+      } else {
+        localStorage.removeItem(LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY);
+      }
+    } catch {
+      // Private-browsing/storage-disabled — sessionId just won't persist across the MyChart round trip, falling
+      // back to a fresh one being minted each time (same as a first-ever visit); nothing else is affected.
+    }
   }
 
   // Purely informational badge — never gates whether the Connect button is shown. The real, authoritative check is
@@ -302,7 +331,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.workflowId, this.patientId, this.pageCallerId);
+      const result = await this.launchService.run(this.workflowId, this.patientId, this.sessionId ?? undefined);
 
       if (result.workflowRun.status === 'Succeeded') {
         this.fetchedPatients.set(extractFetchedPatients(result));
@@ -360,7 +389,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.detailWorkflowId, patient.id, this.pageCallerId);
+      const result = await this.launchService.run(this.detailWorkflowId, patient.id, this.sessionId ?? undefined);
 
       if (result.workflowRun.status === 'Succeeded') {
         const detail = extractPatientDetail(result, patient.id);
@@ -418,7 +447,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.csvExportWorkflowId, patientId, this.pageCallerId);
+      const result = await this.launchService.run(this.csvExportWorkflowId, patientId, this.sessionId ?? undefined);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
@@ -471,7 +500,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.csvEmailExportWorkflowId, patientId, this.pageCallerId);
+      const result = await this.launchService.run(this.csvEmailExportWorkflowId, patientId, this.sessionId ?? undefined);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
@@ -555,7 +584,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // call right after is always the authoritative test either way.
   private async hasValidToken(workflowId: string): Promise<boolean> {
     try {
-      return await this.launchService.hasValidToken(workflowId, this.patientId, this.pageCallerId);
+      return await this.launchService.hasValidToken(workflowId, this.patientId, this.sessionId ?? undefined);
     } catch {
       return true;
     }
@@ -633,12 +662,17 @@ export class LaunchStandalonePatientComponent implements OnInit {
       // callerId tells FHIRBridge's OAuthController.Callback to redirect the browser straight back to this exact
       // page (see ngOnInit) once the token exchange completes, instead of falling back to the source connection's
       // static PostLaunchRedirectUri — see InteractiveSourceAuthorizationService.CompleteAsync, where a caller-
-      // supplied callerId always wins over that DB field. It ALSO doubles as the token-cache key FHIRBridge saves
-      // this session's token under (see pageCallerId's own remarks) — every hasValidToken/run/discardToken call for
-      // this page must send this exact same value for that caching to actually work. FHIRBridge validates the
-      // origin against Portal:AllowedOrigins before honoring it (CallerIdOriginValidator) — this page's origin must
-      // be listed there.
-      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id, this.pageCallerId);
+      // supplied callerId always wins over that DB field. FHIRBridge validates the origin against
+      // Portal:AllowedOrigins before honoring it (CallerIdOriginValidator) — this page's origin must be listed
+      // there. sessionId is the SEPARATE, opaque identifier the token cache actually keys on (see sessionId's own
+      // remarks) — send whatever this browser already has persisted (a returning session, e.g. token expired and
+      // needing re-auth) so FHIRBridge reuses the same cache slot instead of starting a new one; omit it on a
+      // first-ever visit. Persist whatever comes back in the response either way, since FHIRBridge mints one when
+      // none was supplied.
+      const result = await this.launchService.mintLaunchUrl(
+        workflowId, endpoint.id, this.pageCallerId, this.sessionId ?? undefined,
+      );
+      this.sessionId = result.sessionId;
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);
@@ -668,7 +702,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
 
   private async discardFhirBridgeToken(): Promise<void> {
     try {
-      await this.launchService.discardToken(this.workflowId, this.patientId, this.pageCallerId);
+      await this.launchService.discardToken(this.workflowId, this.patientId, this.sessionId ?? undefined);
     } catch {
       // Non-fatal — worst case FHIRBridge's cache still has the old token, which the next /run attempt would just
       // successfully reuse (same as if Reset Token had never been clicked); nothing is left in a broken state.

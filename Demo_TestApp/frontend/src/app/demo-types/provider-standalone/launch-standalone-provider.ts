@@ -23,12 +23,16 @@ interface EpicEndpoint {
   status: string;
 }
 
-/** Matches OAuthController's BuildLaunchResponse shape (GET /workflows/{id}/public-standalone-url). */
+/** Matches OAuthController's BuildLaunchResponse shape (GET /workflows/{id}/public-standalone-url). sessionId is
+ *  FHIRBridge-minted (or echoed back, if one was supplied) — persist it and echo it back on every later
+ *  hasValidToken/run/discardToken call for this same browser session (see sessionId's own remarks below), NOT
+ *  pageCallerId, which is only ever the OAuth redirect-back URL and is shared by every visitor to this page. */
 interface PublicStandaloneUrlResponse {
   launchUrl: string;
   mode: 'ehr-launch' | 'standalone' | 'patient';
   opensDirectly: boolean;
   applicationType: string | null;
+  sessionId: string;
 }
 
 interface LaunchResultResponse {
@@ -305,6 +309,38 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
   private patientId: string | null = null;
 
+  // FHIRBridge-minted opaque identifier that its Provider Standalone token cache actually keys on instead of
+  // SourceConnectionId (see SmartAuthorizationCodeTokenProvider.BuildStoreKey) — unique per real signed-in provider
+  // session, not shared by every visitor to this page the way the redirectToEpic's own callerId (the OAuth
+  // redirect-back URL) is. Persisted in localStorage so it survives the full-page navigation to Epic and back. Must
+  // be sent as the callerId parameter on hasValidToken/run/discardToken (those endpoints' wire format predates this
+  // rename — the field name there is unrelated to the OAuth-redirect callerId in redirectToEpic) for every one of
+  // this page's workflows (list, detail), so they both share the one token FHIRBridge cached under this session id
+  // instead of each workflow's check missing it and falling back to a per-SourceConnection key that was never
+  // written to.
+  private static readonly SESSION_ID_STORAGE_KEY = 'providerStandaloneSessionId';
+
+  private get sessionId(): string | null {
+    try {
+      return localStorage.getItem(LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private set sessionId(value: string | null) {
+    try {
+      if (value) {
+        localStorage.setItem(LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY, value);
+      } else {
+        localStorage.removeItem(LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY);
+      }
+    } catch {
+      // Private-browsing/storage-disabled — sessionId just won't persist across the Epic round trip, falling back
+      // to a fresh one being minted each time (same as a first-ever visit); nothing else is affected.
+    }
+  }
+
   constructor(
     private readonly http: HttpClient,
     private readonly ngZone: NgZone,
@@ -540,6 +576,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/run`, {
           patientId: this.patientId,
           patientSearchCriteria: criteria || null,
+          callerId: this.sessionId,
         }),
       );
 
@@ -605,6 +642,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneDetailWorkflowId}/run`, {
           patientId: patient.id,
           patientSearchCriteria: null,
+          callerId: this.sessionId,
         }),
       );
 
@@ -651,10 +689,17 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   private async hasValidToken(): Promise<boolean> {
     try {
       await this.ensureWorkflowIdsLoaded();
+      const params: Record<string, string> = {};
+      if (this.patientId) {
+        params['patientId'] = this.patientId;
+      }
+      if (this.sessionId) {
+        params['callerId'] = this.sessionId;
+      }
       const status = await firstValueFrom(
         this.http.get<TokenStatusResponse>(
           `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/token-status`,
-          { params: this.patientId ? { patientId: this.patientId } : {} },
+          { params },
         ),
       );
       return status.hasValidToken;
@@ -760,14 +805,24 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       // supplied callerId always wins over that DB field. Origin + pathname only (no existing query/hash): the
       // callback appends its own workflowRunId/launchError/signedIn marker on top (QueryHelpers.AddQueryString),
       // and ngOnInit strips whatever query string is present anyway. FHIRBridge validates the origin against
-      // Portal:AllowedOrigins before honoring it (CallerIdOriginValidator) — this page's origin must be listed there.
+      // Portal:AllowedOrigins before honoring it (CallerIdOriginValidator) — this page's origin must be listed
+      // there. sessionId is the SEPARATE, opaque identifier the token cache actually keys on (see sessionId's own
+      // remarks) — send whatever this browser already has persisted (a returning session, e.g. token expired and
+      // needing re-auth) so FHIRBridge reuses the same cache slot instead of starting a new one; omit it on a
+      // first-ever visit. Persist whatever comes back in the response either way, since FHIRBridge mints one when
+      // none was supplied.
       const callerId = `${window.location.origin}${window.location.pathname}`;
+      const params: Record<string, string> = { ehrEndpointId: endpoint.id, callerId };
+      if (this.sessionId) {
+        params['sessionId'] = this.sessionId;
+      }
       const result = await firstValueFrom(
         this.http.get<PublicStandaloneUrlResponse>(
           `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/public-standalone-url`,
-          { params: { ehrEndpointId: endpoint.id, callerId } },
+          { params },
         ),
       );
+      this.sessionId = result.sessionId;
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToEpic.set(false);
@@ -803,11 +858,18 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         return;
       }
 
+      const params: Record<string, string> = {};
+      if (this.patientId) {
+        params['patientId'] = this.patientId;
+      }
+      if (this.sessionId) {
+        params['callerId'] = this.sessionId;
+      }
       await firstValueFrom(
         this.http.post(
           `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/discard-token`,
           {},
-          { params: this.patientId ? { patientId: this.patientId } : {} },
+          { params },
         ),
       );
     } catch {
