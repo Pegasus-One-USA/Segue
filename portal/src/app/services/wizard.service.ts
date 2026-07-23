@@ -90,6 +90,11 @@ export class WizardService {
   readonly ehrType      = signal<EhrVendor>('Epic');
   /** The SourceConnection id being edited in entity mode; null when creating new. */
   readonly entityId     = signal<string | null>(null);
+  /** The full DTO passed to openEntity() — entity mode's equivalent of editingFields() below. Named signals here
+   *  only ever cover a handful of fields; long-tail data entity mode has no other way to restore (JWT key
+   *  material, CDS Hooks, retrieval config, ...) reads back from this directly, the same way canvas-mode editing
+   *  reads from editingFields(). Null when creating new or in canvas mode. */
+  readonly entityDto    = signal<SourceConnectionModel | null>(null);
   /** Bumped after every successful entity-mode save so list pages can react via an effect() without a dialog. */
   readonly saved        = signal(0);
 
@@ -169,6 +174,7 @@ export class WizardService {
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
     this.entityId.set(null);
+    this.entityDto.set(null);
 
     const node = existingNodeId ? this.store.byId(existingNodeId) : undefined;
     const f = (node?.fields ?? {}) as Record<string, string>;
@@ -209,6 +215,7 @@ export class WizardService {
     this.wizardMode.set('entity');
     this.readonlyMode.set(!!opts?.readonly);
     this.entityId.set(dto?.id ?? null);
+    this.entityDto.set(dto);
     this.ehrType.set(dto?.sourceSystemType ?? 'Epic');
 
     this.env.set('sandbox');
@@ -249,6 +256,7 @@ export class WizardService {
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
     this.entityId.set(null);
+    this.entityDto.set(null);
   }
 
   // ── step navigation ───────────────────────────────────────────────────────
