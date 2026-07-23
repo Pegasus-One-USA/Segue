@@ -1,0 +1,19 @@
+portal/src/app/settings/pages/email-settings/email-settings.component.scss
+  s_08313b6cd63437::t_e8b32470bf08d2 60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b94e6970cc197680ba0016cb83d030fa1fc31f9c",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
