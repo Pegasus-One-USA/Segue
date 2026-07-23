@@ -42,7 +42,8 @@ public sealed class ParentReferenceValidationTests
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<ISecretWriter>(),
-            _resolver.Object);
+            _resolver.Object,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 
     [Fact]

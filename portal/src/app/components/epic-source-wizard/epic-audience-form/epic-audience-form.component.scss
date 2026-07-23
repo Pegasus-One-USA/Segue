@@ -679,6 +679,54 @@
 .eaf-file-btn { cursor: pointer; }
 .eaf-file-input { display: none; }
 
+.eaf-existing-key-panel {
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-side);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eaf-key-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+  margin: 0;
+
+  > div { display: flex; flex-direction: column; gap: 2px; }
+
+  dt {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-ink);
+    font-family: monospace;
+    word-break: break-all;
+  }
+}
+
+.eaf-warning-box {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, white);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 // .eaf-field is a flex column (align-items: stretch by default), which would otherwise force this row's
 // button(s) to the field's full width — wrapping them in their own flex row keeps them their natural size.
 .eaf-inline-actions {

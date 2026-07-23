@@ -57,11 +57,59 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
                 ["client_assertion"] = clientAssertion
             })
         };
-
+        TokenResponse tokenResponse;
         HttpResponseMessage response;
         try
         {
             response = await _httpClient.SendAsync(request, cancellationToken);
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    var message = await BuildFailureMessageAsync(
+                        "Epic token endpoint",
+                        response,
+                        cancellationToken);
+
+                    await _auditSink.RecordAsync(
+                        source,
+                        "EpicTokenRequestFailed",
+                        "Failed",
+                        message,
+                        cancellationToken);
+
+                    throw new InvalidOperationException(message);
+                }
+
+                tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken);
+                if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
+                {
+                    await _auditSink.RecordAsync(
+                        source,
+                        "EpicTokenRequestFailed",
+                        "Failed",
+                        "Epic token endpoint returned an empty access token.",
+                        cancellationToken);
+
+                    throw new InvalidOperationException("Epic token endpoint returned an empty access token.");
+                }
+
+                var expiresIn = tokenResponse.ExpiresIn <= 0 ? 300 : tokenResponse.ExpiresIn;
+                await _tokenCache.SetAsync(
+                    cacheKey,
+                    tokenResponse.AccessToken,
+                    DateTimeOffset.UtcNow.AddSeconds(expiresIn),
+                    cancellationToken);
+
+                await _auditSink.RecordAsync(
+                    source,
+                    "EpicTokenRequestSucceeded",
+                    "Completed",
+                    "Epic access token acquired.",
+                    cancellationToken);
+
+                return tokenResponse.AccessToken;
+            }
         }
         catch (Exception exception)
         {
@@ -75,54 +123,7 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
             throw;
         }
 
-        using (response)
-        {
-            if (!response.IsSuccessStatusCode)
-            {
-                var message = await BuildFailureMessageAsync(
-                    "Epic token endpoint",
-                    response,
-                    cancellationToken);
 
-                await _auditSink.RecordAsync(
-                    source,
-                    "EpicTokenRequestFailed",
-                    "Failed",
-                    message,
-                    cancellationToken);
-
-                throw new InvalidOperationException(message);
-            }
-
-            var tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken);
-            if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
-            {
-                await _auditSink.RecordAsync(
-                    source,
-                    "EpicTokenRequestFailed",
-                    "Failed",
-                    "Epic token endpoint returned an empty access token.",
-                    cancellationToken);
-
-                throw new InvalidOperationException("Epic token endpoint returned an empty access token.");
-            }
-
-            var expiresIn = tokenResponse.ExpiresIn <= 0 ? 300 : tokenResponse.ExpiresIn;
-            await _tokenCache.SetAsync(
-                cacheKey,
-                tokenResponse.AccessToken,
-                DateTimeOffset.UtcNow.AddSeconds(expiresIn),
-                cancellationToken);
-
-            await _auditSink.RecordAsync(
-                source,
-                "EpicTokenRequestSucceeded",
-                "Completed",
-                "Epic access token acquired.",
-                cancellationToken);
-
-            return tokenResponse.AccessToken;
-        }
     }
 
     private static void ValidateSource(FhirSourceConfiguration source)

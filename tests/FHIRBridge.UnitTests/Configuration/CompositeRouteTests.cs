@@ -29,7 +29,8 @@ public sealed class CompositeRouteTests
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
-            Mock.Of<IParentReferenceResolver>());
+            Mock.Of<IParentReferenceResolver>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 
     [Fact]

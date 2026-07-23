@@ -275,9 +275,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
-        this.announceGeneratedJwksUrls(result.sourceConnectionIds);
-        this.workflowBusy.set(false);
-        this.resetCanvasAndWorkflowState();
+        this.reconcileGeneratedJwksUrls(result.workflowId, request.name, result.sourceConnectionIds);
       },
       error: err => {
         const msg = typeof err?.error?.error === 'string'
@@ -315,33 +313,66 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
   /**
    * The "Private Key / JWKS URL" field a Backend System + JWT source shows is never actually sent to the backend
-   * (it's a UI-only note-to-self today) — for a node whose signing key FHIRBridge generated/imported, the only
-   * place the real, always-correct URL exists is derived from the sourceConnectionId this build just assigned.
-   * Surfaces it here (before resetCanvasAndWorkflowState() clears the node data below) so there's at least one
-   * copyable, accurate place to get it, since it can't be looked up from the (now-reset) canvas afterward.
+   * SourceConnection (no such column exists there) — the only durable place it CAN live is this node's own
+   * ConfigurationJson, which the workflow definition already persists on every save. For a node whose signing key
+   * FHIRBridge generated/imported, the real URL is only knowable once this build assigns a sourceConnectionId — so
+   * it's wrong (a stale placeholder) on the save that just happened. Corrects it here, in the still-live canvas
+   * node (before resetCanvasAndWorkflowState() would otherwise throw that state away), then persists the
+   * correction with a plain definition save (PUT /workflows/{id} — NOT another /workflows/build) so it doesn't
+   * re-touch the source/destinations/mappings just created/synced above, or re-trigger capability discovery.
    */
-  private announceGeneratedJwksUrls(sourceConnectionIds: Record<string, string>): void {
+  private reconcileGeneratedJwksUrls(
+    workflowId: string,
+    workflowName: string,
+    sourceConnectionIds: Record<string, string>,
+  ): void {
+    let anyCorrected = false;
+
     for (const [nodeId, sourceConnectionId] of Object.entries(sourceConnectionIds)) {
       const node = this.store.byId(nodeId);
       if (!node) continue;
 
-      const fields = node.fields as Record<string, string> | undefined;
+      const fields = node.fields;
       const isGeneratedOrImportedBackendKey =
-        fields?.['Auth method'] === 'jwt' &&
-        fields?.['Epic audience'] === 'backend-system' &&
-        (fields?.['Signing key source'] === 'gen' || fields?.['Signing key source'] === 'import');
+        fields['Auth method'] === 'jwt' &&
+        fields['Epic audience'] === 'backend-system' &&
+        (fields['Signing key source'] === 'gen' || fields['Signing key source'] === 'import');
 
       if (!isGeneratedOrImportedBackendKey) continue;
 
       const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
-      const nodeName = fields?.['__name'] || 'this source';
+      if (fields['JWKS URL'] !== jwksUrl) {
+        this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
+        anyCorrected = true;
+      }
+
       this.toast.show(
-        `JWKS URL for "${nodeName}"`,
+        `JWKS URL for "${fields['__name'] || 'this source'}"`,
         `Register this URL in Epic's app configuration: ${jwksUrl}`,
         'info',
         20000,
       );
     }
+
+    if (!anyCorrected) {
+      this.workflowBusy.set(false);
+      this.resetCanvasAndWorkflowState();
+      return;
+    }
+
+    const definitionRequest = this.graphMapper.toRequest(workflowName, this.buildTrigger());
+    this.workflowApi.save(definitionRequest, workflowId).subscribe({
+      next: () => {
+        this.workflowBusy.set(false);
+        this.resetCanvasAndWorkflowState();
+      },
+      error: () => {
+        // Best-effort: the original build already succeeded and is fully durable — only this cosmetic
+        // JWKS-URL correction failed to re-save. Not worth blocking or re-prompting the user over.
+        this.workflowBusy.set(false);
+        this.resetCanvasAndWorkflowState();
+      },
+    });
   }
 
   onLoadWorkflow(): void {

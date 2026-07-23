@@ -1,5 +1,5 @@
 import {
-  Component, output, inject, signal, computed, OnInit, DestroyRef, ElementRef, ViewChild,
+  Component, output, inject, signal, computed, effect, OnInit, DestroyRef, ElementRef, ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule, FormBuilder, Validators, ValidatorFn, AbstractControl, ValidationErrors } from '@angular/forms';
@@ -14,6 +14,7 @@ import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../mod
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
+import { environment } from '../../../../environments/environment';
 
 export type { EpicAudience };
 
@@ -505,6 +506,53 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly selectedFileName = signal<string | null>(null);
   private pendingPrivateKeyPem: string | null = null;
 
+  // ── existing-key guard (prevents Generate/Import from silently overwriting a key that's already saved) ────────
+  private readonly jwtKidValue = toSignal(this.form.controls.jwtKid.valueChanges, { initialValue: this.form.controls.jwtKid.value });
+  private readonly privateKeyRefValue = toSignal(this.form.controls.privateKeyRef.valueChanges, { initialValue: this.form.controls.privateKeyRef.value });
+  private readonly privateKeySecretNameValue = toSignal(this.form.controls.privateKeySecretName.valueChanges, { initialValue: this.form.controls.privateKeySecretName.value });
+  /** True whenever Key ID/Key Vault Name/Secret Name are all populated right now — regardless of how they got
+   *  there (typed, restored from a saved connection, or just Generated/Imported this session). Drives the
+   *  required-field validation being satisfied; NOT by itself the "show the guard panel" signal below. */
+  protected readonly hasExistingSigningKey = computed(() =>
+    !!(this.jwtKidValue() && this.privateKeyRefValue() && this.privateKeySecretNameValue())
+  );
+  /** True only when the key came from a SAVED connection (restoreExtendedFieldsFromEditingNode() /
+   *  populateFormFromSourceConnection()) — false right after a fresh Generate/Import in this same session, which
+   *  already has its own "✓ key ready" affordance and doesn't need the extra guard. This is what actually decides
+   *  whether the read-only "already configured" panel (vs. the normal selector) renders. */
+  protected readonly keyLoadedFromExistingConnection = signal(false);
+  /** True once the admin has explicitly clicked "Replace Key" past the guard panel — reveals the normal
+   *  Manual/Generate/Import selector so they can proceed. */
+  protected readonly replacingKey = signal(false);
+
+  protected startReplacingKey(): void {
+    this.replacingKey.set(true);
+  }
+
+  protected cancelReplacingKey(): void {
+    this.replacingKey.set(false);
+    this.keyGenStatus.set('idle');
+    this.selectedFileName.set(null);
+    this.pendingPrivateKeyPem = null;
+  }
+
+  // ── real JWKS URL (computed live from the connection id, once known — never typed/stored as free text) ────────
+  /** The real SourceConnection id for whatever this form is currently editing, from whichever restore path
+   *  applies: entity mode (WizardService.entityId) or canvas mode editing an already-built workflow's node
+   *  (WizardService.editingFields()['sourceConnectionId'], embedded there by WorkflowEndpoints on the original
+   *  build). Null for a brand-new node/connection that hasn't been saved yet. */
+  protected readonly resolvedSourceConnectionId = computed(() =>
+    this.wiz.entityId() || this.wiz.editingFields()?.['sourceConnectionId'] || null
+  );
+  /** Only meaningful for a Generated/Imported key — an externally-hosted (manual) JWKS URL is whatever the admin
+   *  typed, not something FHIRBridge can compute. Null until resolvedSourceConnectionId() is known (i.e., before
+   *  the very first save) — see WorkflowBuilderComponent.reconcileGeneratedJwksUrls() for how the placeholder
+   *  gets corrected once it is. */
+  protected readonly liveJwksUrl = computed(() => {
+    const id = this.resolvedSourceConnectionId();
+    return id ? `${environment.apiBase}/api/v1/source-connections/${id}/.well-known/jwks.json` : null;
+  });
+
   // ── Data Retrieval Method (Backend System: all four methods; Standalone: Search REST only, one-shot) ──────────
   /** Standalone only ever offers Search REST — Subscription/Webhook/Bulk Export are async, unattended patterns
    *  that don't fit a user-initiated, one-shot launch. */
@@ -674,6 +722,19 @@ export class EpicAudienceFormComponent implements OnInit {
       .filter(s => !advertised.some(a => a === s || scopeWildcardCovers(a, s)));
   });
 
+  constructor() {
+    // Keeps the "Private Key / JWKS URL" field itself correct for a Generated/Imported key, instead of only
+    // showing the real URL in a toast — once resolvedSourceConnectionId() is known (after the first save, or
+    // immediately when editing an already-saved connection), this is the one real, always-correct value; nothing
+    // typed for a manual/external key is ever touched.
+    effect(() => {
+      const url = this.liveJwksUrl();
+      if (url && (this.isGenKey() || this.isImportKey())) {
+        this.form.controls.jwksUrl.setValue(url, { emitEvent: false });
+      }
+    });
+  }
+
   ngOnInit(): void {
     // "New Source" (the default picker state) needs the same collision defense as "Existing Source" cloning —
     // otherwise a brand-new node left on the default App Name silently collides with a prior connection of that
@@ -797,7 +858,7 @@ export class EpicAudienceFormComponent implements OnInit {
    * so this is safe to call for a node saved before a given field existed.
    */
   private restoreExtendedFieldsFromEditingNode(): void {
-    const fields = this.wiz.editingFields();
+    const fields = this.wiz.editingFields() ?? this.fieldsFromEntityDto();
     if (!fields) return;
 
     const setIfPresent = (control: string, key: string): void => {
@@ -812,9 +873,13 @@ export class EpicAudienceFormComponent implements OnInit {
     setIfPresent('jwtKid', 'JWT kid');
     setIfPresent('privateKeyRef', 'Key vault reference');
     setIfPresent('privateKeySecretName', 'Secret Name');
-    // Absent on any node saved before this control existed — form default ('manual') is exactly right there,
-    // since every such node's key material was necessarily hand-entered.
+    // Absent on any node saved before this control existed, and never present at all for entity mode (the DTO
+    // carries no such field — see fieldsFromEntityDto()) — form default ('manual') is exactly right in both
+    // cases, since a key restored with no known provenance can't safely be assumed Generated/Imported.
     setIfPresent('keySource', 'Signing key source');
+    this.keyLoadedFromExistingConnection.set(
+      !!(fields['JWT kid'] && fields['Key vault reference'] && fields['Secret Name'])
+    );
 
     setIfPresent('cdsDiscoveryUrl', 'CDS discovery URL');
     setIfPresent('cdsServiceEndpoint', 'CDS service endpoint');
@@ -877,6 +942,48 @@ export class EpicAudienceFormComponent implements OnInit {
     setIfPresent('retryPolicy', 'Retry policy');
     setIfPresent('timeoutSeconds', 'Timeout (seconds)');
     setIfPresent('maxRecordsPerRun', 'Max records per run');
+  }
+
+  /**
+   * Entity mode (Settings > Source Connections) has no canvas node/fields-bag at all — editingFields() is
+   * canvas-only and returns null here — so this synthesizes the same string-keyed shape restoreExtendedFieldsFrom-
+   * EditingNode() already knows how to consume, straight from the real, persisted SourceConnectionModel DTO
+   * (see WizardService.entityDto). CDS Hooks and Full Refresh recurrence have no equivalent below because the
+   * backend SourceConnection genuinely doesn't persist them (same caveat WorkflowBuildAssemblerService's own doc
+   * comment notes) — those controls simply keep their form defaults, same as a brand-new node would.
+   */
+  private fieldsFromEntityDto(): Record<string, string> | null {
+    const dto = this.wiz.entityDto();
+    if (!dto) return null;
+
+    const auth = dto.authentication;
+    const retrieval = dto.retrieval;
+    const fields: Record<string, string> = {};
+
+    if (auth?.keyId) fields['JWT kid'] = auth.keyId;
+    if (auth?.privateKeyKeyVaultName) fields['Key vault reference'] = auth.privateKeyKeyVaultName;
+    if (auth?.privateKeySecretName) fields['Secret Name'] = auth.privateKeySecretName;
+    if (dto.interactive?.launchDisplayMode) fields['Launch display mode'] = dto.interactive.launchDisplayMode;
+
+    if (retrieval) {
+      fields['Retrieval method key'] = retrieval.retrievalMethod;
+      if (retrieval.resourceTypes?.length) fields['Retrieval resource type'] = retrieval.resourceTypes.join(',');
+      if (retrieval.searchCriteria) fields['Search criteria'] = retrieval.searchCriteria;
+      fields['Incremental cursor'] = retrieval.incrementalSyncEnabled ? 'enabled' : 'disabled';
+      if (retrieval.exportScope) fields['Export scope'] = retrieval.exportScope;
+      if (retrieval.groupId) fields['Group ID'] = retrieval.groupId;
+      if (retrieval.patientIds?.length) fields['Patient ID / list'] = retrieval.patientIds.join(', ');
+      if (retrieval.outputFormat) fields['FHIR output format'] = retrieval.outputFormat;
+      if (retrieval.pageSize != null) fields['Page size (_count)'] = String(retrieval.pageSize);
+      if (retrieval.sortOrder) fields['Sort (_sort)'] = retrieval.sortOrder;
+      if (retrieval.includeParameters?.length) fields['Include (_include)'] = retrieval.includeParameters.join(',');
+      if (retrieval.revIncludeParameters?.length) fields['Reverse include (_revinclude)'] = retrieval.revIncludeParameters.join(',');
+      if (retrieval.retryPolicy) fields['Retry policy'] = retrieval.retryPolicy;
+      if (retrieval.timeoutSeconds != null) fields['Timeout (seconds)'] = String(retrieval.timeoutSeconds);
+      if (retrieval.maxRecordsPerRun != null) fields['Max records per run'] = String(retrieval.maxRecordsPerRun);
+    }
+
+    return fields;
   }
 
   // ── audience field lifecycle ────────────────────────────────────────────────
@@ -1300,6 +1407,14 @@ export class EpicAudienceFormComponent implements OnInit {
     if (retrievalResourceKey && retrieval?.resourceTypes?.length) {
       this.form.get(retrievalResourceKey)?.setValue([...retrieval.resourceTypes]);
     }
+
+    // Cloned key material still deserves the "already configured, confirm before replacing" guard — clicking
+    // Generate/Import here would fork a brand-new SourceConnection on save (this is a clone into a new node, not
+    // an edit-in-place), but the point of the guard is preventing an accidental click from discarding key info
+    // that took effort to have populated, which applies just as much to cloned data as to the original entity's.
+    this.keyLoadedFromExistingConnection.set(
+      !!(dto.authentication?.keyId && dto.authentication?.privateKeyKeyVaultName && dto.authentication?.privateKeySecretName)
+    );
 
     this.wiz.trustedIssuers.set(dto.interactive?.trustedIssuers?.join(', ') ?? '');
     this.discoveredResourceTypes.set(retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : []);
