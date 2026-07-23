@@ -410,6 +410,11 @@ export class EpicAudienceFormComponent implements OnInit {
     jwtKid:              [''],
     privateKeyRef:       [''],
     privateKeySecretName: [''],
+    // Backend System + JWT only: 'manual' (default — preserves existing behavior for every connection created
+    // before this control existed) lets the admin type kid/vault-name/secret-name themselves, exactly as before.
+    // 'gen'/'import' hand key provisioning to SigningKeyGenerationService instead — see generateKeyPair()/
+    // importPrivateKey() below.
+    keySource:           ['manual' as 'manual' | 'gen' | 'import'],
     launchUrl:         ['https://fhirbridge.com/launch', urlValidator],
     // How the app is registered to open within the EHR (EHR-launch audience only) — mirrors Epic's own Hyperspace/
     // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
@@ -488,6 +493,17 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly audienceConfig = computed(() => AUDIENCE_FIELD_CONFIG[this.audience()]);
   protected readonly showSecret     = computed(() => this.authMethod() === 'secret');
   protected readonly showJwt        = computed(() => this.authMethod() === 'jwt');
+
+  // ── Backend Services signing key: generate / import (see generateKeyPair()/importPrivateKey() below) ──────────
+  private readonly keySourceValue = toSignal(this.form.controls.keySource.valueChanges, { initialValue: this.form.controls.keySource.value });
+  protected readonly keySource = computed(() => this.keySourceValue());
+  protected readonly isGenKey    = computed(() => this.keySource() === 'gen');
+  protected readonly isImportKey = computed(() => this.keySource() === 'import');
+  protected readonly keyGenStatus = signal<'idle' | 'generating' | 'generated'>('idle');
+  /** Name of the file chosen for "Import Existing Private Key" — read client-side only; nothing is sent to the
+   *  backend until "Import Private Key" is clicked. */
+  protected readonly selectedFileName = signal<string | null>(null);
+  private pendingPrivateKeyPem: string | null = null;
 
   // ── Data Retrieval Method (Backend System: all four methods; Standalone: Search REST only, one-shot) ──────────
   /** Standalone only ever offers Search REST — Subscription/Webhook/Bulk Export are async, unattended patterns
@@ -1128,6 +1144,89 @@ export class EpicAudienceFormComponent implements OnInit {
     this.selectedExistingId.set(id);
     const dto = this.existingConnections().find(c => c.id === id);
     if (dto) this.populateFormFromSourceConnection(dto);
+  }
+
+  /** Generates a real RSA key pair server-side (SigningKeyGenerationService) and stores the private key in the
+   *  secret store — no key material ever reaches this component. Populates jwtKid/privateKeyRef/
+   *  privateKeySecretName exactly as a manually-entered key would, so save()/syncValidators() need no special
+   *  casing for how the key was provisioned. */
+  protected generateKeyPair(): void {
+    this.keyGenStatus.set('generating');
+    this.sourceConnectionSvc.generateSigningKey().subscribe({
+      next: (key) => {
+        this.form.patchValue({
+          jwtKid: key.keyId,
+          privateKeyRef: key.keyVaultName,
+          privateKeySecretName: key.secretName,
+        });
+        this.keyGenStatus.set('generated');
+        this.toast.show(
+          'Key pair generated',
+          `Key ID ${key.keyId} generated. The JWKS URL becomes available at this connection's ` +
+          '.well-known/jwks.json once you save — register that URL in Epic.'
+        );
+      },
+      error: (err) => {
+        this.keyGenStatus.set('idle');
+        const message = err?.error?.message ?? err?.error?.title ?? 'Failed to generate a key pair.';
+        this.toast.show('Key generation failed', message, 'error');
+      },
+    });
+  }
+
+  /** Reads the chosen file client-side only — nothing is sent to the backend until "Import Private Key" is
+   *  clicked, so picking the wrong file and re-picking costs nothing. */
+  protected onPrivateKeyFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    this.pendingPrivateKeyPem = null;
+    this.keyGenStatus.set('idle');
+    this.selectedFileName.set(file.name);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.pendingPrivateKeyPem = reader.result as string;
+    };
+    reader.onerror = () => {
+      this.selectedFileName.set(null);
+      this.toast.show('Could not read file', 'Choose the file again.', 'error');
+    };
+    reader.readAsText(file);
+  }
+
+  /** Sends the selected file's contents to the backend, which validates it's a real, unencrypted RSA private key
+   *  (rejecting a public key, certificate, non-RSA key, or a weak/encrypted one) before storing it — the same
+   *  secret-store path generateKeyPair() uses, so jwtKid/privateKeyRef/privateKeySecretName are wired up
+   *  identically either way. */
+  protected importPrivateKey(): void {
+    if (!this.pendingPrivateKeyPem) {
+      this.toast.show('Choose a file', 'Choose your private key file before importing.');
+      return;
+    }
+
+    this.keyGenStatus.set('generating');
+    this.sourceConnectionSvc.importSigningKey(this.pendingPrivateKeyPem).subscribe({
+      next: (key) => {
+        this.form.patchValue({
+          jwtKid: key.keyId,
+          privateKeyRef: key.keyVaultName,
+          privateKeySecretName: key.secretName,
+        });
+        this.keyGenStatus.set('generated');
+        this.toast.show(
+          'Private key imported',
+          `Key ID ${key.keyId} imported. The JWKS URL becomes available at this connection's ` +
+          '.well-known/jwks.json once you save — register that URL in Epic.'
+        );
+      },
+      error: (err) => {
+        this.keyGenStatus.set('idle');
+        const message = err?.error?.message ?? err?.error?.title ?? 'Failed to import the private key.';
+        this.toast.show('Import failed', message, 'error');
+      },
+    });
   }
 
   /** Name + Base URL alone can collide (e.g. two connections both literally named "Epic" against the same

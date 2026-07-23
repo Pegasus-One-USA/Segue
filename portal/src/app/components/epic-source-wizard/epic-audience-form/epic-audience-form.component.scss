@@ -675,3 +675,15 @@
     &:active { transform: translateY(0); }
   }
 }
+
+.eaf-file-btn { cursor: pointer; }
+.eaf-file-input { display: none; }
+
+// .eaf-field is a flex column (align-items: stretch by default), which would otherwise force this row's
+// button(s) to the field's full width — wrapping them in their own flex row keeps them their natural size.
+.eaf-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
