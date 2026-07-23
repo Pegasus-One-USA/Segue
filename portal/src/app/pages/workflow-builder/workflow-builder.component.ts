@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
@@ -67,6 +67,11 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   protected readonly confirmReset = signal(false);
   protected readonly currentWorkflowId = signal<string | null>(null);
   protected readonly workflowName = signal('');
+  // True once the name field has been blurred or a save was attempted while empty — gates the invalid
+  // (red border + inline message) state so it doesn't show before the user has had a chance to type.
+  protected readonly nameTouched = signal(false);
+  protected readonly nameInvalid = computed(() => this.nameTouched() && !this.workflowName().trim());
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   protected readonly workflowIdInput = signal('');
   protected readonly workflowBusy = signal(false);
   protected readonly workflowStatus = signal('Catalog loading...');
@@ -215,6 +220,15 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     this.workflowName.set(value);
   }
 
+  onWorkflowNameBlur(): void {
+    this.nameTouched.set(true);
+  }
+
+  clearWorkflowName(): void {
+    this.workflowName.set('');
+    this.nameInput()?.nativeElement.focus();
+  }
+
   /**
    * Single "Save". Behaves by context:
    * - Canvas carries wizard-drawn source/destination specs → create-on-save (POST /workflows/build). When editing an
@@ -227,12 +241,24 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
    * path activates when a launch source id is present).
    */
   onSave(): void {
+    if (!this.workflowName().trim()) {
+      this.nameTouched.set(true);
+      this.nameInput()?.nativeElement.focus();
+      this.toast.error('Name required', 'Workflow name is missing — give this workflow a name before saving.');
+      return;
+    }
+
+    if (this.store.nodes().length === 0) {
+      this.toast.error('Nothing to save', 'Add at least one node to the canvas before saving.');
+      return;
+    }
+
     if (this.workflowApi.catalog().length === 0) {
       this.workflowStatus.set('Catalog is not loaded yet.');
       return;
     }
 
-    const name = this.workflowName().trim() || 'Untitled workflow';
+    const name = this.workflowName().trim();
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
 

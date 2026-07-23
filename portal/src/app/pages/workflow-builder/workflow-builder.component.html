@@ -1,40 +1,83 @@
 <!-- ── Pipeline sub-header ─────────────────────────────────────────────────── -->
 <header class="builder-subheader">
-  <input
-    class="builder-input builder-input--name"
-    type="text"
-    [value]="workflowName()"
-    (input)="onWorkflowNameInput($any($event.target).value)"
-    placeholder="Untitled workflow"
-    aria-label="Workflow name"
-  />
-  @if (isWizardDrivenTrigger()) {
-    <span class="builder-status" title="Set from the Backend System source's Retrieval Configuration — edit it there to change this.">
-      ⏱ Trigger: {{ wizardTriggerSummary() }}
-    </span>
-  } @else if (isBackendAudience()) {
-    <span class="builder-status" title="Backend Systems run on a schedule">⏱ Trigger</span>
-    <select class="builder-input" aria-label="Trigger schedule"
-            [value]="triggerType()" (change)="onTriggerTypeInput($any($event.target).value)">
-      <option value="Manual">Manual (on demand)</option>
-      <option value="Daily">Daily</option>
-      <option value="Weekly">Weekly</option>
-      <option value="Monthly">Monthly</option>
-      <option value="Cron">Cron…</option>
-      <option value="Poll">Poll every N min</option>
-    </select>
-    @if (triggerType() === 'Cron') {
-      <input class="builder-input" type="text" aria-label="Cron expression"
-             [value]="cronExpression()" (input)="onCronInput($any($event.target).value)" placeholder="0 0 * * *" />
-    }
-    @if (triggerType() === 'Poll') {
-      <input class="builder-input" type="number" min="1" aria-label="Poll interval minutes"
-             [value]="pollMinutes()" (input)="onPollMinutesInput($any($event.target).value)" />
-    }
-  }
-  <span class="builder-status">{{ workflowStatus() }}</span>
-  <button class="builder-btn builder-btn--danger" type="button" (click)="confirmReset.set(true)">Clear canvas</button>
-  <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSave()" title="Save this workflow">Save</button>
+  <div class="dock">
+    <div class="dock__namefield" [class.dock__namefield--invalid]="nameInvalid()">
+      <span class="dock__badge" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="5" cy="12" r="2.3" fill="currentColor" />
+          <circle cx="12" cy="5" r="2.3" fill="currentColor" />
+          <circle cx="12" cy="19" r="2.3" fill="currentColor" />
+          <circle cx="19" cy="12" r="2.3" fill="currentColor" />
+          <path d="M7.1 11 10.6 6.7M7.1 13 10.6 17.3M13.4 6.7 16.9 11M13.4 17.3 16.9 13"
+                stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </span>
+      <input
+        #nameInput
+        class="builder-input builder-input--name dock__name-input"
+        type="text"
+        [value]="workflowName()"
+        (input)="onWorkflowNameInput($any($event.target).value)"
+        (blur)="onWorkflowNameBlur()"
+        placeholder="Workflow Name"
+        aria-label="Workflow name"
+        aria-required="true"
+        [attr.aria-invalid]="nameInvalid() || null"
+        [attr.aria-describedby]="nameInvalid() ? 'dock-name-error' : null"
+      />
+      @if (workflowName()) {
+        <button type="button" class="dock__name-clear" aria-label="Clear workflow name" (click)="clearWorkflowName()">✕</button>
+      }
+      <span class="dock__name-underline" aria-hidden="true"></span>
+      @if (nameInvalid()) {
+        <span id="dock-name-error" class="dock__name-error" role="alert">This field is required.</span>
+      }
+    </div>
+
+    <span class="dock__divider" aria-hidden="true"></span>
+
+    <div class="dock__triggers">
+      @if (isWizardDrivenTrigger()) {
+        <span class="builder-status" title="Set from the Backend System source's Retrieval Configuration — edit it there to change this.">
+          ⏱ Trigger: {{ wizardTriggerSummary() }}
+        </span>
+      } @else if (isBackendAudience()) {
+        <span class="builder-status" title="Backend Systems run on a schedule">⏱ Trigger</span>
+        <select class="builder-input" aria-label="Trigger schedule"
+                [value]="triggerType()" (change)="onTriggerTypeInput($any($event.target).value)">
+          <option value="Manual">Manual (on demand)</option>
+          <option value="Daily">Daily</option>
+          <option value="Weekly">Weekly</option>
+          <option value="Monthly">Monthly</option>
+          <option value="Cron">Cron…</option>
+          <option value="Poll">Poll every N min</option>
+        </select>
+        @if (triggerType() === 'Cron') {
+          <input class="builder-input" type="text" aria-label="Cron expression"
+                 [value]="cronExpression()" (input)="onCronInput($any($event.target).value)" placeholder="0 0 * * *" />
+        }
+        @if (triggerType() === 'Poll') {
+          <input class="builder-input" type="number" min="1" aria-label="Poll interval minutes"
+                 [value]="pollMinutes()" (input)="onPollMinutesInput($any($event.target).value)" />
+        }
+      }
+    </div>
+
+    <div class="dock__actions">
+      <button class="builder-btn builder-btn--danger" type="button" (click)="confirmReset.set(true)">
+        <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
+        </svg>
+        <span>Clear canvas</span>
+      </button>
+      <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSave()" title="Save this workflow">
+        <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+        </svg>
+        <span>Save</span>
+      </button>
+    </div>
+  </div>
 </header>
 
 <!-- ── Canvas ──────────────────────────────────────────────────────────────── -->
