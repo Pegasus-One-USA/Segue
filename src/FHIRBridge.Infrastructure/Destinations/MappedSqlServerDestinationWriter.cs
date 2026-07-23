@@ -17,12 +17,19 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
 {
-    // System-managed columns the writer always emits. A mapping field targeting one of these is ignored (the
-    // system value wins) so the generated CREATE TABLE / INSERT never declares a column twice.
+    // System-managed columns the writer emits when they exist on the target table. A mapping field targeting
+    // one of these is ignored (the system value wins) so the generated CREATE TABLE / INSERT never declares a
+    // column twice. Tables created by the Mapping Config Import feature don't have these columns at all — the
+    // writer detects that per-table (see GetExistingColumnNamesAsync) and simply omits whichever are absent,
+    // rather than assuming every target table was created by this writer's own EnsureTableAsync.
     private static readonly HashSet<string> ReservedColumns = new(StringComparer.OrdinalIgnoreCase)
     {
         "FHIRBridgeRowId", "PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc", "LastUpdatedOnUtc"
     };
+
+    private static readonly string[] InsertSystemColumns = ["PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc"];
+    private static readonly string[] UpsertSystemColumns = ["PipelineRunId", "ResourceType", "SourceResourceId", "WrittenOnUtc", "LastUpdatedOnUtc"];
+    private static readonly IReadOnlyDictionary<string, object?> EmptyColumnValues = new Dictionary<string, object?>();
 
     private readonly ISecretProvider _secretProvider;
 
@@ -66,20 +73,34 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
                 cancellationToken);
         }
 
+        var existingColumns = await GetExistingColumnNamesAsync(connection, target.SchemaName, target.TableName, cancellationToken);
+
         foreach (var record in records)
         {
+            IReadOnlyDictionary<string, object?> capturedParentColumns;
             switch (target.WriteMode)
             {
                 case SqlDestinationWriteMode.Upsert:
-                    await UpsertRecordAsync(connection, target.SchemaName, target.TableName, record, target.KeyColumn, cancellationToken);
+                    capturedParentColumns = await UpsertRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, target.KeyColumn, existingColumns, cancellationToken);
                     break;
                 case SqlDestinationWriteMode.Cdc:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
+                    capturedParentColumns = await InsertRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, existingColumns, cancellationToken);
                     await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
                     break;
                 default:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
+                    capturedParentColumns = await InsertRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, existingColumns, cancellationToken);
                     break;
+            }
+
+            if (record.ChildTables is { Count: > 0 } childTables)
+            {
+                await WriteChildTablesAsync(
+                    connection, record, childTables, capturedParentColumns,
+                    deleteExistingChildRows: target.WriteMode == SqlDestinationWriteMode.Upsert,
+                    cancellationToken);
             }
         }
 
@@ -138,11 +159,39 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         }
     }
 
-    private static async Task InsertRecordAsync(
+    /// <summary>
+    /// Reads the real column set of the target table. Used to tolerate tables the Mapping Config Import
+    /// feature created directly (a PK plus mapped columns only, no reserved system columns) instead of
+    /// assuming every table this writer touches was created by its own <see cref="EnsureTableAsync"/>.
+    /// </summary>
+    private static async Task<HashSet<string>> GetExistingColumnNamesAsync(
+        SqlConnection connection, string schemaName, string tableName, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table;
+            """;
+
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@schema", schemaName);
+        command.Parameters.AddWithValue("@table", tableName);
+
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(reader.GetString(0));
+        }
+
+        return columns;
+    }
+
+    private static async Task<IReadOnlyDictionary<string, object?>> InsertRecordAsync(
         SqlConnection connection,
         string schemaName,
         string tableName,
         MappedDestinationRecord record,
+        IReadOnlySet<string> existingColumns,
         CancellationToken cancellationToken)
     {
         var fieldNames = record.Values.Keys
@@ -150,91 +199,231 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             .Select(ValidateIdentifier)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var columns = new[]
-        {
-            "PipelineRunId",
-            "ResourceType",
-            "SourceResourceId",
-            "WrittenOnUtc"
-        }.Concat(fieldNames).ToList();
-        var parameterNames = columns.Select(column => $"@{column}").ToList();
+        var systemColumns = InsertSystemColumns.Where(existingColumns.Contains).ToList();
+        var columns = systemColumns.Concat(fieldNames).ToList();
+        var outputColumns = ResolveOutputColumns(record);
 
         var sql = $"""
             INSERT INTO [{schemaName}].[{tableName}]
             (
                 {string.Join(", ", columns.Select(column => $"[{column}]"))}
             )
+            {(outputColumns.Count > 0 ? $"OUTPUT {string.Join(", ", outputColumns.Select(c => $"INSERTED.[{c}]"))}" : string.Empty)}
             VALUES
             (
-                {string.Join(", ", parameterNames)}
+                {string.Join(", ", columns.Select(column => $"@{column}"))}
             );
             """;
 
         await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@PipelineRunId", record.PipelineRunId);
-        command.Parameters.AddWithValue("@ResourceType", record.ResourceType);
-        command.Parameters.AddWithValue("@SourceResourceId", (object?)record.SourceResourceId ?? DBNull.Value);
-        command.Parameters.AddWithValue("@WrittenOnUtc", DateTime.UtcNow);
-
-        foreach (var targetField in fieldNames)
+        foreach (var column in columns)
         {
-            command.Parameters.AddWithValue($"@{targetField}", record.Values[targetField] ?? DBNull.Value);
+            command.Parameters.AddWithValue($"@{column}", ResolveColumnValue(record, column) ?? DBNull.Value);
         }
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        if (outputColumns.Count == 0)
+        {
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return EmptyColumnValues;
+        }
+
+        return await ExecuteCapturingOutputAsync(command, outputColumns, cancellationToken);
     }
 
-    private static async Task UpsertRecordAsync(
+    private static async Task<IReadOnlyDictionary<string, object?>> UpsertRecordAsync(
         SqlConnection connection,
         string schemaName,
         string tableName,
         MappedDestinationRecord record,
         string keyColumn,
+        IReadOnlySet<string> existingColumns,
         CancellationToken cancellationToken)
     {
-        if (!TryGetKeyValue(record, keyColumn, out var keyValue))
+        if (!TryGetKeyValue(record, keyColumn, out _))
         {
-            await InsertRecordAsync(connection, schemaName, tableName, record, cancellationToken);
-            return;
+            return await InsertRecordAsync(connection, schemaName, tableName, record, existingColumns, cancellationToken);
         }
 
         var fieldNames = record.Values.Keys
             .Where(key => !ReservedColumns.Contains(key))
             .Select(ValidateIdentifier)
             .ToList();
-        var standardColumns = new[]
-        {
-            "PipelineRunId",
-            "ResourceType",
-            "SourceResourceId",
-            "WrittenOnUtc",
-            "LastUpdatedOnUtc"
-        };
+        var standardColumns = UpsertSystemColumns.Where(existingColumns.Contains).ToList();
         var columns = standardColumns.Concat(fieldNames).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var parameterNames = columns.Select(column => $"@{column}").ToList();
+        var validatedKeyColumn = ValidateIdentifier(keyColumn);
         var updateColumns = columns
             .Where(column => !string.Equals(column, "WrittenOnUtc", StringComparison.OrdinalIgnoreCase))
-            .Where(column => !string.Equals(column, keyColumn, StringComparison.OrdinalIgnoreCase))
-            .Select(column => $"target.[{column}] = source.[{column}]");
+            .Where(column => !string.Equals(column, validatedKeyColumn, StringComparison.OrdinalIgnoreCase))
+            .Select(column => $"target.[{column}] = source.[{column}]")
+            .ToList();
+        var onClause = existingColumns.Contains("ResourceType")
+            ? $"target.[ResourceType] = source.[ResourceType] AND target.[{validatedKeyColumn}] = source.[{validatedKeyColumn}]"
+            : $"target.[{validatedKeyColumn}] = source.[{validatedKeyColumn}]";
+        var outputColumns = ResolveOutputColumns(record);
 
         var sql = $"""
             MERGE [{schemaName}].[{tableName}] AS target
             USING
             (
-                SELECT {string.Join(", ", parameterNames.Select((parameter, index) => $"{parameter} AS [{columns[index]}]"))}
+                SELECT {string.Join(", ", columns.Select(column => $"@{column} AS [{column}]"))}
             ) AS source
-            ON target.[ResourceType] = source.[ResourceType]
-               AND target.[{ValidateIdentifier(keyColumn)}] = source.[{ValidateIdentifier(keyColumn)}]
+            ON {onClause}
             WHEN MATCHED THEN
                 UPDATE SET {string.Join(", ", updateColumns)}
             WHEN NOT MATCHED THEN
                 INSERT ({string.Join(", ", columns.Select(column => $"[{column}]"))})
-                VALUES ({string.Join(", ", columns.Select(column => $"source.[{column}]"))});
+                VALUES ({string.Join(", ", columns.Select(column => $"source.[{column}]"))})
+            {(outputColumns.Count > 0 ? $"OUTPUT {string.Join(", ", outputColumns.Select(c => $"INSERTED.[{c}]"))}" : string.Empty)};
             """;
 
         await using var command = new SqlCommand(sql, connection);
-        AddRecordParameters(command, record, columns, keyColumn, keyValue);
+        foreach (var column in columns)
+        {
+            command.Parameters.AddWithValue($"@{column}", ResolveColumnValue(record, column) ?? DBNull.Value);
+        }
+
+        if (outputColumns.Count == 0)
+        {
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return EmptyColumnValues;
+        }
+
+        return await ExecuteCapturingOutputAsync(command, outputColumns, cancellationToken);
+    }
+
+    /// <summary>The parent-key column(s) any of this record's child tables need captured off the parent
+    /// write — via <c>OUTPUT INSERTED.[col]</c>, which works whether the column's value came from an
+    /// explicit mapped field or was SQL Server-generated (IDENTITY), so no special-casing is needed here.</summary>
+    private static List<string> ResolveOutputColumns(MappedDestinationRecord record)
+    {
+        if (record.ChildTables is not { Count: > 0 } childTables)
+        {
+            return [];
+        }
+
+        return childTables
+            .Select(child => ValidateIdentifier(child.ParentKeyColumn))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static async Task<IReadOnlyDictionary<string, object?>> ExecuteCapturingOutputAsync(
+        SqlCommand command, IReadOnlyList<string> outputColumns, CancellationToken cancellationToken)
+    {
+        var captured = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            for (var i = 0; i < outputColumns.Count; i++)
+            {
+                captured[outputColumns[i]] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+            }
+        }
+
+        return captured;
+    }
+
+    /// <summary>
+    /// Writes every child table attached to a parent record, once the parent row itself has been written.
+    /// Insert mode always appends child rows (matching the parent's own append-only behavior). Upsert mode
+    /// deletes any child rows already linked to this parent key before inserting the fresh set — child rows
+    /// have no dedup key of their own, so without this a re-run of the same resource would duplicate them
+    /// indefinitely even though the parent row itself is correctly upserted in place.
+    /// </summary>
+    private static async Task WriteChildTablesAsync(
+        SqlConnection connection,
+        MappedDestinationRecord record,
+        IReadOnlyList<MappedChildTableRecord> childTables,
+        IReadOnlyDictionary<string, object?> capturedParentColumns,
+        bool deleteExistingChildRows,
+        CancellationToken cancellationToken)
+    {
+        foreach (var childTable in childTables)
+        {
+            if (childTable.Rows.Count == 0)
+            {
+                continue;
+            }
+
+            var parentKeyValue = capturedParentColumns.TryGetValue(childTable.ParentKeyColumn, out var captured)
+                ? captured
+                : record.Values.TryGetValue(childTable.ParentKeyColumn, out var mapped) ? mapped : null;
+
+            if (parentKeyValue is null)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot write child table '{childTable.TableName}': parent key column " +
+                    $"'{childTable.ParentKeyColumn}' had no value after the parent row was written.");
+            }
+
+            var (childSchema, childTableName) = ParseDestinationObject(childTable.TableName);
+
+            if (deleteExistingChildRows)
+            {
+                await DeleteChildRowsAsync(connection, childSchema, childTableName, childTable.ForeignKeyColumn, parentKeyValue, cancellationToken);
+            }
+
+            await InsertChildRowsAsync(connection, childSchema, childTableName, childTable, parentKeyValue, cancellationToken);
+        }
+    }
+
+    private static async Task DeleteChildRowsAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        string foreignKeyColumn,
+        object? parentKeyValue,
+        CancellationToken cancellationToken)
+    {
+        var fk = ValidateIdentifier(foreignKeyColumn);
+        var sql = $"DELETE FROM [{schemaName}].[{tableName}] WHERE [{fk}] = @ParentKey;";
+
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@ParentKey", parentKeyValue ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task InsertChildRowsAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        MappedChildTableRecord childTable,
+        object? parentKeyValue,
+        CancellationToken cancellationToken)
+    {
+        var fk = ValidateIdentifier(childTable.ForeignKeyColumn);
+
+        foreach (var row in childTable.Rows)
+        {
+            // "RowIndex" is a synthetic key JsonMappingEngine adds internally to align SeparateDestination
+            // rows — not a real mapped column, so it must never reach the INSERT.
+            var fieldNames = row.Keys
+                .Where(key => !string.Equals(key, "RowIndex", StringComparison.OrdinalIgnoreCase))
+                .Select(ValidateIdentifier)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var columns = new[] { fk }.Concat(fieldNames).ToList();
+
+            var sql = $"""
+                INSERT INTO [{schemaName}].[{tableName}]
+                (
+                    {string.Join(", ", columns.Select(column => $"[{column}]"))}
+                )
+                VALUES
+                (
+                    {string.Join(", ", columns.Select(column => $"@{column}"))}
+                );
+                """;
+
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue($"@{fk}", parentKeyValue ?? DBNull.Value);
+            foreach (var fieldName in fieldNames)
+            {
+                command.Parameters.AddWithValue($"@{fieldName}", row[fieldName] ?? DBNull.Value);
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     private static async Task EnsureCdcTableAsync(
@@ -304,28 +493,17 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static void AddRecordParameters(
-        SqlCommand command,
-        MappedDestinationRecord record,
-        IReadOnlyCollection<string> columns,
-        string keyColumn,
-        object? keyValue)
+    private static object? ResolveColumnValue(MappedDestinationRecord record, string column)
     {
-        foreach (var column in columns)
+        return column switch
         {
-            var value = column switch
-            {
-                "PipelineRunId" => record.PipelineRunId,
-                "ResourceType" => record.ResourceType,
-                "SourceResourceId" => record.SourceResourceId,
-                "WrittenOnUtc" => DateTime.UtcNow,
-                "LastUpdatedOnUtc" => DateTime.UtcNow,
-                _ when string.Equals(column, keyColumn, StringComparison.OrdinalIgnoreCase) => keyValue,
-                _ => record.Values.TryGetValue(column, out var mappedValue) ? mappedValue : null
-            };
-
-            command.Parameters.AddWithValue($"@{column}", value ?? DBNull.Value);
-        }
+            "PipelineRunId" => record.PipelineRunId,
+            "ResourceType" => record.ResourceType,
+            "SourceResourceId" => record.SourceResourceId,
+            "WrittenOnUtc" => DateTime.UtcNow,
+            "LastUpdatedOnUtc" => DateTime.UtcNow,
+            _ => record.Values.TryGetValue(column, out var mappedValue) ? mappedValue : null
+        };
     }
 
     private static bool TryGetKeyValue(

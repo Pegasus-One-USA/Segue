@@ -106,6 +106,7 @@ public sealed class MappingImportService : IMappingImportService
             var tablesToCreate = mapping.SchemaChanges?.TablesToCreate ?? [];
             var columnsToAdd = mapping.SchemaChanges?.ColumnsToAdd ?? [];
             var processingOrder = (mapping.ProcessingOrder ?? []).OrderBy(s => s.Step).ToList();
+            var destinationObject = ResolveDestinationObject(mapping, processingOrder, warnings);
 
             ValidateDependsOn(mapping.ResourceType, processingOrder, tablesToCreate, knownTables);
 
@@ -130,7 +131,12 @@ public sealed class MappingImportService : IMappingImportService
                     }
                     else
                     {
-                        await schemaTransaction.CreateTableAsync(tableToCreate, cancellationToken);
+                        var explicitlyMappedColumns = new HashSet<string>(
+                            mapping.Tables
+                                .FirstOrDefault(t => string.Equals(t.Name, tableToCreate.Name, StringComparison.OrdinalIgnoreCase))
+                                ?.Columns.Select(c => c.Column) ?? [],
+                            StringComparer.OrdinalIgnoreCase);
+                        await schemaTransaction.CreateTableAsync(tableToCreate, explicitlyMappedColumns, cancellationToken);
                         tablesCreated.Add(tableToCreate.Name);
                     }
 
@@ -161,11 +167,10 @@ public sealed class MappingImportService : IMappingImportService
                 foreach (var column in table.Columns ?? [])
                 {
                     fields.Add(await BuildFieldAsync(
-                        schemaTransaction, mapping, table, column, tablesToCreate, columnsToAdd, cancellationToken));
+                        schemaTransaction, mapping, table, column, destinationObject, tablesToCreate, columnsToAdd,
+                        warnings, cancellationToken));
                 }
             }
-
-            var destinationObject = ResolveDestinationObject(mapping, processingOrder, warnings);
 
             var existing = await _repository.FindMappingProfileAsync(
                 mapping.ResourceType, importRequest.SourceConnectionId, importRequest.DestinationId, cancellationToken);
@@ -264,15 +269,18 @@ public sealed class MappingImportService : IMappingImportService
         ResourceMappingDto mapping,
         TargetTableDto table,
         ColumnMappingDto column,
+        string destinationObject,
         IReadOnlyList<TableDefinitionDto> tablesToCreate,
         IReadOnlyList<ColumnToAddDto> columnsToAdd,
+        List<string> warnings,
         CancellationToken cancellationToken)
     {
-        var (jsonPath, format) = BuildJsonPathAndFormat(column);
+        var (jsonPath, format) = BuildJsonPathAndFormat(column, mapping.ResourceType);
         var dataType = await ResolveDataTypeAsync(
             schemaTransaction, table.Name, column.Column, tablesToCreate, columnsToAdd, cancellationToken);
         var valueType = MapValueType(dataType);
-        var (arrayPolicy, cardinality, arrayAncestors) = ResolveArrayMetadata(column.Instance, table.Relation);
+        var (arrayPolicy, cardinality, arrayAncestors) = ResolveArrayMetadata(
+            column.Instance, table.Relation, table.Name, destinationObject, mapping.ResourceType, warnings);
 
         return new MappingField(
             TargetField: column.Column,
@@ -289,34 +297,89 @@ public sealed class MappingImportService : IMappingImportService
             IsEnabled: true,
             ArrayPolicy: arrayPolicy,
             Cardinality: cardinality,
-            ArrayAncestors: arrayAncestors);
+            ArrayAncestors: arrayAncestors,
+            ParentTable: table.Relation?.ParentTable,
+            ParentKeyColumn: table.Relation?.ParentColumn,
+            ForeignKeyColumn: table.Relation?.ChildColumn);
     }
 
-    private static (string JsonPath, string Format) BuildJsonPathAndFormat(ColumnMappingDto column)
+    /// <summary>
+    /// Builds a JsonPath the hand-rolled <see cref="JsonMappingEngine"/> can actually resolve: strips the
+    /// redundant leading "{ResourceType}." segment the UI's dotted paths carry (the engine already scopes to
+    /// this one resource's own JSON), then — when the column has an <see cref="InstanceSelectorDto.ArrayContext"/>
+    /// — splices <c>[*]</c> onto every segment the array context spans, since a plain segment name against a
+    /// JSON array returns the array itself rather than fanning out over its items (see
+    /// <c>JsonMappingEngine.ResolveAll</c>). A multi-segment array context (e.g. a repeating field nested inside
+    /// another repeating element, such as "contact.relationship") gets a wildcard on each of its segments.
+    /// </summary>
+    private static (string JsonPath, string Format) BuildJsonPathAndFormat(ColumnMappingDto column, string resourceType)
     {
         var aggregate = column.Instance?.Aggregate;
         var aggregateSuffix = !string.IsNullOrWhiteSpace(aggregate) && !string.Equals(aggregate, "rows", StringComparison.OrdinalIgnoreCase)
             ? $";aggregate={aggregate}"
             : string.Empty;
+        var arrayContext = column.Instance?.ArrayContext;
 
         return column.Mode switch
         {
             "directField" => (
-                column.Sources?.FirstOrDefault()
-                    ?? throw new InvalidOperationException($"Column '{column.Column}' (directField) has no source."),
+                BuildResolvableJsonPath(
+                    column.Sources?.FirstOrDefault()
+                        ?? throw new InvalidOperationException($"Column '{column.Column}' (directField) has no source."),
+                    resourceType, arrayContext),
                 $"directField{aggregateSuffix}"),
 
             "joinedFields" => (
-                string.Join('|', column.Sources ?? []),
+                string.Join('|', (column.Sources ?? []).Select(source => BuildResolvableJsonPath(source, resourceType, arrayContext))),
                 $"joinedFields;delimiter={column.Delimiter}{aggregateSuffix}"),
 
             "wholeNodeAsJson" => (
-                column.SourceNode
-                    ?? throw new InvalidOperationException($"Column '{column.Column}' (wholeNodeAsJson) has no sourceNode."),
+                BuildResolvableJsonPath(
+                    column.SourceNode
+                        ?? throw new InvalidOperationException($"Column '{column.Column}' (wholeNodeAsJson) has no sourceNode."),
+                    resourceType, arrayContext),
                 $"wholeNodeAsJson{aggregateSuffix}"),
 
             _ => throw new InvalidOperationException($"Unknown column mode '{column.Mode}' for column '{column.Column}'.")
         };
+    }
+
+    private static string BuildResolvableJsonPath(string rawPath, string resourceType, string? arrayContext)
+    {
+        var strippedPath = StripResourceTypePrefix(rawPath, resourceType);
+
+        if (string.IsNullOrWhiteSpace(arrayContext))
+        {
+            return $"$.{strippedPath}";
+        }
+
+        var contextSegments = StripResourceTypePrefix(arrayContext, resourceType)
+            .Split('.', StringSplitOptions.RemoveEmptyEntries);
+        var pathSegments = strippedPath.Split('.', StringSplitOptions.RemoveEmptyEntries);
+
+        if (contextSegments.Length == 0 || contextSegments.Length > pathSegments.Length)
+        {
+            return $"$.{strippedPath}";
+        }
+
+        for (var i = 0; i < contextSegments.Length; i++)
+        {
+            if (!pathSegments[i].Equals(contextSegments[i], StringComparison.OrdinalIgnoreCase))
+            {
+                // arrayContext isn't actually a prefix of this path (unexpected shape) — fall back, no fan-out.
+                return $"$.{strippedPath}";
+            }
+
+            pathSegments[i] += "[*]";
+        }
+
+        return "$." + string.Join('.', pathSegments);
+    }
+
+    private static string StripResourceTypePrefix(string path, string resourceType)
+    {
+        var prefix = resourceType + ".";
+        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? path[prefix.Length..] : path;
     }
 
     /// <summary>
@@ -374,21 +437,45 @@ public sealed class MappingImportService : IMappingImportService
     /// a nested array into one delimited string) doesn't fit any existing ArrayPolicy value and is instead
     /// encoded onto <see cref="MappingField.Format"/> by <see cref="BuildJsonPathAndFormat"/>.
     /// </summary>
+    /// <remarks>
+    /// <see cref="ArrayPolicy.RepeatParent"/> only makes sense for the profile's own root table (it fans out
+    /// extra rows of that SAME table) — it must never be chosen for a genuinely separate destination table.
+    /// A separate table always needs <paramref name="tableRelation"/> to link its rows back to a parent; if
+    /// one is missing, that's a payload/spec problem surfaced via <paramref name="warnings"/> rather than a
+    /// silent misclassification onto the root table.
+    /// </remarks>
     private static (ArrayPolicy Policy, string? Cardinality, string? ArrayAncestors) ResolveArrayMetadata(
-        InstanceSelectorDto? instance, TableRelationDto? tableRelation)
+        InstanceSelectorDto? instance,
+        TableRelationDto? tableRelation,
+        string tableName,
+        string destinationObject,
+        string resourceType,
+        List<string> warnings)
     {
         if (instance is null)
         {
             return (ArrayPolicy.Scalar, null, null);
         }
 
-        var policy = string.Equals(instance.Type, "first", StringComparison.OrdinalIgnoreCase)
-            ? ArrayPolicy.FirstItem
-            : tableRelation is not null
-                ? ArrayPolicy.SeparateDestination
-                : ArrayPolicy.RepeatParent;
+        if (string.Equals(instance.Type, "first", StringComparison.OrdinalIgnoreCase))
+        {
+            return (ArrayPolicy.FirstItem, "OneToMany", instance.ArrayContext);
+        }
 
-        return (policy, "OneToMany", instance.ArrayContext);
+        var isRootTable = string.Equals(tableName, destinationObject, StringComparison.OrdinalIgnoreCase);
+        if (isRootTable)
+        {
+            return (ArrayPolicy.RepeatParent, "OneToMany", instance.ArrayContext);
+        }
+
+        if (tableRelation is null)
+        {
+            warnings.Add(
+                $"'{resourceType}': table '{tableName}' has repeating field(s) but no declared relation back to " +
+                $"root table '{destinationObject}' — its rows cannot be linked to a parent row.");
+        }
+
+        return (ArrayPolicy.SeparateDestination, "OneToMany", instance.ArrayContext);
     }
 
     private async Task RecordImportAuditAsync(string resourceType, Guid mappingProfileId, CancellationToken cancellationToken)

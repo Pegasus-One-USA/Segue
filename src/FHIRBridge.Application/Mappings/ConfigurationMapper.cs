@@ -155,7 +155,10 @@ public static class ConfigurationMapper
             field.Cardinality,
             string.IsNullOrWhiteSpace(field.ArrayAncestors)
                 ? null
-                : field.ArrayAncestors.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                : field.ArrayAncestors.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            field.ParentTable,
+            field.ParentKeyColumn,
+            field.ForeignKeyColumn);
     }
 
     public static ResourcePipelineRouteDto ToDto(ResourcePipelineRoute route)
@@ -203,7 +206,10 @@ public static class ConfigurationMapper
             IsEnabled: true,
             ArrayPolicy: dto.ArrayPolicy,
             Cardinality: dto.Cardinality,
-            ArrayAncestors: dto.ArrayAncestors is { Count: > 0 } ? string.Join('|', dto.ArrayAncestors) : null);
+            ArrayAncestors: dto.ArrayAncestors is { Count: > 0 } ? string.Join('|', dto.ArrayAncestors) : null,
+            ParentTable: dto.ParentTable,
+            ParentKeyColumn: dto.ParentKeyColumn,
+            ForeignKeyColumn: dto.ForeignKeyColumn);
     }
 
     public static SourceAuthenticationConfiguration ToDomain(SourceAuthenticationDto dto)

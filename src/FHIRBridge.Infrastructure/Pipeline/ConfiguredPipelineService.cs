@@ -30,6 +30,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IConfigurationRepository _configurationRepository;
     private readonly IFhirSourceClientFactory _sourceClientFactory;
     private readonly IJsonMappingEngine _mappingEngine;
+    private readonly IMappingMaterializer _mappingMaterializer;
     private readonly IConfiguredDestinationWriterFactory _destinationWriterFactory;
     private readonly ISecretProvider _secretProvider;
     private readonly IOperationalAuditService _auditService;
@@ -51,6 +52,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IConfigurationRepository configurationRepository,
         IFhirSourceClientFactory sourceClientFactory,
         IJsonMappingEngine mappingEngine,
+        IMappingMaterializer mappingMaterializer,
         IConfiguredDestinationWriterFactory destinationWriterFactory,
         ISecretProvider secretProvider,
         IOperationalAuditService auditService,
@@ -71,6 +73,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
         _mappingEngine = mappingEngine;
+        _mappingMaterializer = mappingMaterializer;
         _destinationWriterFactory = destinationWriterFactory;
         _secretProvider = secretProvider;
         _auditService = auditService;
@@ -1211,14 +1214,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         CancellationToken cancellationToken)
     {
         var mappedRecords = new List<MappedDestinationRecord>();
+        // Note: deliberately NOT filtered by DestinationObject — a profile's Fields span the root table plus
+        // any child tables (ArrayPolicy.SeparateDestination), and the engine (via MappingFieldDto.DestinationObject)
+        // is what routes each field to the right table. Filtering here would starve child tables of their fields.
         var mappingFields = mappingProfile.Fields
             .Select(ConfigurationMapper.ToDto)
             .Where(field =>
                 string.IsNullOrWhiteSpace(field.ResourceType) ||
                 string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
-            .Where(field =>
-                string.IsNullOrWhiteSpace(field.DestinationObject) ||
-                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         foreach (var resource in resources)
@@ -1231,31 +1234,79 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 continue;
             }
 
-            var mappedRecord = new MappedDestinationRecord(
-                pipelineRunId,
-                mappingProfile.ResourceType,
-                mappingProfile.DestinationObject,
-                resource.ResourceId,
-                result.Values,
-                resource.RawJson);
+            var dataset = _mappingMaterializer.Materialize(mappingProfile.DestinationObject, result);
+            var childTables = BuildChildTableRecords(dataset, mappingFields, mappingProfile.ResourceType);
 
-            var normalizedMappedRecord = await _mappedRecordNormalizationService.NormalizeAsync(
-                new MappedRecordNormalizationRequest(
+            foreach (var parentRow in dataset.ParentRows)
+            {
+                var mappedRecord = new MappedDestinationRecord(
+                    pipelineRunId,
+                    mappingProfile.ResourceType,
+                    mappingProfile.DestinationObject,
+                    resource.ResourceId,
+                    parentRow,
                     resource.RawJson,
-                    mappedRecord,
-                    mappingFields),
-                cancellationToken);
-            mappedRecords.Add(normalizedMappedRecord);
+                    childTables);
 
-            await _resourceHistoryRecorder.RecordMappedAsync(
-                routeExecutionId,
-                mappingProfile.ResourceType,
-                resource.ResourceId,
-                normalizedMappedRecord.Values,
-                cancellationToken);
+                var normalizedMappedRecord = await _mappedRecordNormalizationService.NormalizeAsync(
+                    new MappedRecordNormalizationRequest(
+                        resource.RawJson,
+                        mappedRecord,
+                        mappingFields),
+                    cancellationToken);
+                mappedRecords.Add(normalizedMappedRecord);
+
+                await _resourceHistoryRecorder.RecordMappedAsync(
+                    routeExecutionId,
+                    mappingProfile.ResourceType,
+                    resource.ResourceId,
+                    normalizedMappedRecord.Values,
+                    cancellationToken);
+            }
         }
 
         return mappedRecords;
+    }
+
+    /// <summary>
+    /// Converts the materializer's <see cref="MappingChildTableDto"/> output into writer-ready
+    /// <see cref="MappedChildTableRecord"/>s, resolving each child table's FK/parent-key column names from the
+    /// (already import-populated) <see cref="MappingFieldDto.ForeignKeyColumn"/>/<see cref="MappingFieldDto.ParentKeyColumn"/>
+    /// metadata on one of its own fields. A child table with no field carrying that metadata can't be linked back
+    /// to a parent row — skipped with a warning rather than attempted with a garbage/missing FK value.
+    /// </summary>
+    private IReadOnlyList<MappedChildTableRecord>? BuildChildTableRecords(
+        MaterializedDataset dataset, IReadOnlyList<MappingFieldDto> mappingFields, string resourceType)
+    {
+        if (dataset.ChildTables.Count == 0)
+        {
+            return null;
+        }
+
+        var records = new List<MappedChildTableRecord>();
+        foreach (var childTable in dataset.ChildTables)
+        {
+            var fkField = mappingFields.FirstOrDefault(f =>
+                string.Equals(f.DestinationObject, childTable.Name, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(f.ForeignKeyColumn));
+
+            if (fkField is null)
+            {
+                _logger.LogWarning(
+                    "{ResourceType}: child table '{ChildTable}' produced {RowCount} row(s) but no mapped field " +
+                    "carries ForeignKeyColumn metadata for it — its rows cannot be linked to a parent and were not written.",
+                    resourceType, childTable.Name, childTable.Rows.Count);
+                continue;
+            }
+
+            records.Add(new MappedChildTableRecord(
+                childTable.Name,
+                fkField.ForeignKeyColumn!,
+                fkField.ParentKeyColumn ?? "Id",
+                childTable.Rows));
+        }
+
+        return records.Count > 0 ? records : null;
     }
 
     // Loads the flat configuration once per run and indexes it for the in-memory joins the pipeline performs.

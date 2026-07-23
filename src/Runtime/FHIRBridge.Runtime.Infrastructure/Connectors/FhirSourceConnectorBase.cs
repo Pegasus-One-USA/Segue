@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
@@ -256,9 +257,12 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// (<c>launch/patient</c> flows), falling back to the request-time <see cref="FhirSourceConfiguration.TargetPatientId"/>
     /// otherwise (e.g. a patient the caller picked from a prior name search, via WorkflowRunRequest.PatientId — see
     /// WorkflowExecutionContext). Without one of these, a provider such as Epic rejects an unscoped <c>Patient</c>
-    /// search. The known patient targets its own resource by <c>_id</c>; every other resource type is filtered by
-    /// <c>patient</c>. Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>)
-    /// are left untouched.
+    /// search. The known patient targets its own resource by <c>_id</c>; every other resource type IN THE
+    /// PATIENT COMPARTMENT (<see cref="PatientCompartmentResourceTypes"/> — Encounter, Observation, etc.) is
+    /// filtered by <c>patient</c>. A resource type outside that compartment (e.g. <c>Practitioner</c>,
+    /// <c>Organization</c>) has no <c>patient</c> search parameter at all — Epic rejects it outright — so those
+    /// are left unscoped, using only the caller-supplied search criteria. Caller-supplied parameters that
+    /// already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left untouched.
     /// </summary>
     private async Task<string?> ApplyPatientScopeAsync(
         string resourceType,
@@ -267,6 +271,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     {
         var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
         var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
+        var isCompartmentResource = isPatientResource || PatientCompartmentResourceTypes.IsSupported(resourceType);
 
         // A request-time raw search criteria string (e.g. "active=true", "identifier=MRN12345",
         // "family=Smith&given=John", "birthdate=1990-01-01" — from a third-party app's own free-text search box,
@@ -288,7 +293,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         patientId ??= source.TargetPatientId;
-        if (string.IsNullOrWhiteSpace(patientId))
+        if (string.IsNullOrWhiteSpace(patientId) || !isCompartmentResource)
         {
             return source.SearchParameters;
         }

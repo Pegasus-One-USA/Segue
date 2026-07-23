@@ -47,7 +47,10 @@ public sealed class SqlServerMappingSchemaTransaction : IMappingSchemaTransactio
         return count > 0;
     }
 
-    public async Task CreateTableAsync(TableDefinitionDto table, CancellationToken cancellationToken)
+    public async Task CreateTableAsync(
+        TableDefinitionDto table,
+        IReadOnlySet<string> explicitlyMappedColumns,
+        CancellationToken cancellationToken)
     {
         var (schemaName, tableName) = SplitTableName(table.Name);
 
@@ -64,7 +67,9 @@ public sealed class SqlServerMappingSchemaTransaction : IMappingSchemaTransactio
             if (column.IsPrimaryKey)
             {
                 primaryKeyColumn = columnName;
-                var identity = IsIntegerFamily(normalizedType) ? " IDENTITY(1,1)" : string.Empty;
+                var identity = IsIntegerFamily(normalizedType) && !explicitlyMappedColumns.Contains(column.Name)
+                    ? " IDENTITY(1,1)"
+                    : string.Empty;
                 columnDefinitions.Add($"[{columnName}] {normalizedType}{identity} NOT NULL");
             }
             else

@@ -43,6 +43,21 @@ public sealed class PatientScopedSearchTests
     }
 
     [Fact]
+    public async Task Non_compartment_resource_is_left_unscoped()
+    {
+        // Practitioner has no "patient" search parameter in FHIR at all (it's not patient-compartment scoped) —
+        // Epic rejects it outright ("Unknown parameter: PATIENT") if a request auto-adds one.
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
+
+        await client.SearchAsync("Practitioner", Source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("/Practitioner?");
+        handler.RequestUri.Should().NotContain("patient=");
+        handler.RequestUri.Should().NotContain("_id=");
+    }
+
+    [Fact]
     public async Task Failed_patient_scoped_request_redacts_patient_identifier_from_exception()
     {
         var handler = new CapturingHandler(HttpStatusCode.BadRequest);

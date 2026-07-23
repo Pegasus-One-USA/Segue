@@ -17,4 +17,7 @@ public sealed record MappingField(
     bool IsEnabled = true,
     ArrayPolicy ArrayPolicy = ArrayPolicy.Scalar,
     string? Cardinality = null,
-    string? ArrayAncestors = null);
+    string? ArrayAncestors = null,
+    string? ParentTable = null,
+    string? ParentKeyColumn = null,
+    string? ForeignKeyColumn = null);

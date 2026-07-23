@@ -15,7 +15,13 @@ public interface IMappingSchemaTransaction : IAsyncDisposable
 
     Task<bool> ColumnExistsAsync(string tableName, string columnName, CancellationToken cancellationToken);
 
-    Task CreateTableAsync(TableDefinitionDto table, CancellationToken cancellationToken);
+    /// <param name="explicitlyMappedColumns">Names (case-insensitive) of columns on this table that a
+    /// <c>MappingField</c> already supplies a value for. A primary-key column in this set is created without
+    /// <c>IDENTITY</c> so the mapped value round-trips as-is instead of being rejected/ignored by SQL Server.</param>
+    Task CreateTableAsync(
+        TableDefinitionDto table,
+        IReadOnlySet<string> explicitlyMappedColumns,
+        CancellationToken cancellationToken);
 
     Task AddColumnAsync(string tableName, ColumnToAddDto column, CancellationToken cancellationToken);
 

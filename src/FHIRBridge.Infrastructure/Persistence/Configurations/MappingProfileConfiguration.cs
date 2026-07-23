@@ -48,6 +48,9 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
             field.Property(x => x.ArrayPolicy).HasConversion<string>().HasMaxLength(50).IsRequired().HasDefaultValue(Domain.Enums.ArrayPolicy.Scalar);
             field.Property(x => x.Cardinality).HasMaxLength(100);
             field.Property(x => x.ArrayAncestors).HasMaxLength(2000);
+            field.Property(x => x.ParentTable).HasMaxLength(300);
+            field.Property(x => x.ParentKeyColumn).HasMaxLength(200);
+            field.Property(x => x.ForeignKeyColumn).HasMaxLength(200);
         });
 
         builder.Navigation(x => x.Fields)

@@ -72,7 +72,12 @@ public sealed class MappingImportServiceTests
         result.Profiles.Should().HaveCount(1);
         var patientResult = result.Profiles[0];
         patientResult.ResourceType.Should().Be("Patient");
-        patientResult.Warnings.Should().BeEmpty();
+        // PatientContactRelation and PatientAddCombo are genuinely separate (non-root) tables with repeating
+        // fields but no declared `relation` back to Patient — the import surfaces that as a warning rather
+        // than silently mis-linking their rows to the root table (see ResolveArrayMetadata).
+        patientResult.Warnings.Should().HaveCount(2);
+        patientResult.Warnings.Should().Contain(w => w.Contains("PatientContactRelation"));
+        patientResult.Warnings.Should().Contain(w => w.Contains("PatientAddCombo"));
         patientResult.TablesCreated.Should().BeEquivalentTo(
             ["PatientName", "PatientTelecom", "PatientAddres", "PatientPractitioner", "PatientContactRelation", "PatientAddCombo"]);
         patientResult.TablesSkippedAlreadyExisted.Should().BeEmpty();
@@ -87,9 +92,9 @@ public sealed class MappingImportServiceTests
         profile.MappingJson.Should().NotBeNullOrWhiteSpace();
         profile.MappingJson.Should().Contain("\"resourceType\"");
 
-        // directField
+        // directField — resourceType prefix stripped, "$." prefixed so JsonMappingEngine can resolve it
         var idField = profile.Fields.Single(f => f.DestinationObject == "Patient" && f.TargetField == "Id");
-        idField.JsonPath.Should().Be("Patient.id");
+        idField.JsonPath.Should().Be("$.id");
         idField.Format.Should().Be("directField");
         idField.ValueType.Should().Be(MappingValueType.Integer); // resolved live via GetColumnDataTypeAsync
 
@@ -97,25 +102,35 @@ public sealed class MappingImportServiceTests
         var deceasedField = profile.Fields.Single(f => f.TargetField == "DeceasedBoolean");
         deceasedField.ValueType.Should().Be(MappingValueType.Boolean);
 
-        // directField + a nested-array "csv" aggregate, on a genuine child (FK) table → SeparateDestination
+        // directField + a nested-array "csv" aggregate, on a genuine child (FK) table → SeparateDestination.
+        // arrayContext "Patient.name" (stripped: "name") splices [*] onto that segment only.
         var givenField = profile.Fields.Single(f => f.DestinationObject == "PatientName" && f.TargetField == "given");
-        givenField.JsonPath.Should().Be("Patient.name.given");
+        givenField.JsonPath.Should().Be("$.name[*].given");
         givenField.Format.Should().Be("directField;aggregate=csv");
         givenField.ArrayPolicy.Should().Be(ArrayPolicy.SeparateDestination);
         givenField.Cardinality.Should().Be("OneToMany");
         givenField.ArrayAncestors.Should().Be("Patient.name");
+        givenField.ParentTable.Should().Be("Patient");
+        givenField.ParentKeyColumn.Should().Be("Id");
+        givenField.ForeignKeyColumn.Should().Be("PatientId");
 
-        // joinedFields, on a table with no parent relation → RepeatParent
+        // joinedFields, on a table with NO parent relation → SeparateDestination + import warning (not the
+        // old, incorrect RepeatParent — that would silently fold these values onto extra root-table rows).
+        // Each '|'-joined sub-path independently gets [*] spliced at its own arrayContext boundary ("contact").
         var comboField = profile.Fields.Single(f => f.DestinationObject == "PatientAddCombo");
         comboField.JsonPath.Should().Be(
-            "Patient.contact.address.city|Patient.contact.address.district|Patient.contact.address.state|Patient.contact.address.postalCode");
+            "$.contact[*].address.city|$.contact[*].address.district|$.contact[*].address.state|$.contact[*].address.postalCode");
         comboField.Format.Should().Be("joinedFields;delimiter=,");
-        comboField.ArrayPolicy.Should().Be(ArrayPolicy.RepeatParent);
+        comboField.ArrayPolicy.Should().Be(ArrayPolicy.SeparateDestination);
+        comboField.ParentTable.Should().BeNull();
+        comboField.ForeignKeyColumn.Should().BeNull();
 
-        // wholeNodeAsJson
+        // wholeNodeAsJson — arrayContext "Patient.contact.relationship" spans TWO repeating segments
+        // (contact is repeating, and each contact's relationship is itself repeating), so both get [*].
         var relationField = profile.Fields.Single(f => f.DestinationObject == "PatientContactRelation");
-        relationField.JsonPath.Should().Be("Patient.contact.relationship");
+        relationField.JsonPath.Should().Be("$.contact[*].relationship[*]");
         relationField.Format.Should().Be("wholeNodeAsJson");
+        relationField.ArrayPolicy.Should().Be(ArrayPolicy.SeparateDestination);
     }
 
     [Fact]
@@ -152,6 +167,13 @@ public sealed class MappingImportServiceTests
 
         result.Profiles.Single().Warnings.Should().BeEmpty();
         provider.CreatedTables.Should().Equal("CParent", "CChild");
+
+        // CParent's own PK column ("Id") is explicitly mapped from "C.parent.id" — it must be passed through
+        // as "explicitly mapped" so SqlServerMappingSchemaTransaction skips IDENTITY on it (an explicit insert
+        // value would otherwise be rejected/ignored by a true identity column). CChild's PK ("Id") has no
+        // field mapped to it (only its FK "ParentId" does), so it must NOT appear in that set.
+        provider.ExplicitlyMappedColumnsByTable["CParent"].Should().Contain("Id");
+        provider.ExplicitlyMappedColumnsByTable["CChild"].Should().Contain("ParentId").And.NotContain("Id");
     }
 
     [Fact]
@@ -574,6 +596,7 @@ public sealed class MappingImportServiceTests
     {
         public List<string> CreatedTables { get; } = [];
         public List<string> AddedColumns { get; } = [];
+        public Dictionary<string, IReadOnlySet<string>> ExplicitlyMappedColumnsByTable { get; } = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _existingTables;
         private readonly HashSet<(string Table, string Column)> _existingColumns = new();
 
@@ -608,13 +631,15 @@ public sealed class MappingImportServiceTests
                     _owner._existingColumns.Contains((tableName, columnName))
                     || _pendingColumns.Contains((tableName, columnName)));
 
-            public Task CreateTableAsync(TableDefinitionDto table, CancellationToken cancellationToken)
+            public Task CreateTableAsync(
+                TableDefinitionDto table, IReadOnlySet<string> explicitlyMappedColumns, CancellationToken cancellationToken)
             {
                 if (_owner.FailOnCreateTable.Contains(table.Name))
                 {
                     throw new InvalidOperationException($"Simulated DDL failure creating '{table.Name}'.");
                 }
 
+                _owner.ExplicitlyMappedColumnsByTable[table.Name] = explicitlyMappedColumns;
                 _pendingTables.Add(table.Name);
                 return Task.CompletedTask;
             }

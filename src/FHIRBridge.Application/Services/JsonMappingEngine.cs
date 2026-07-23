@@ -21,10 +21,16 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
         foreach (var field in fields)
         {
-            var matches = ResolveAll(root, field.JsonPath);
+            var isJoinedFields = field.Format?.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) == true;
             var policy = field.ArrayPolicy;
 
-            if (matches.Count == 0)
+            var resolved = isJoinedFields
+                ? ResolveJoinedFields(root, field)
+                : ResolveAll(root, field.JsonPath)
+                    .Select(m => (Value: (object?)ConvertElement(m.Element, field.ValueType, field.Format, field.TargetField, errors), m.Indices))
+                    .ToList();
+
+            if (resolved.Count == 0)
             {
                 if (!string.IsNullOrWhiteSpace(field.DefaultValue))
                 {
@@ -41,9 +47,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 continue;
             }
 
-            var values = matches
-                .Select(m => ConvertElement(m.Element, field.ValueType, field.Format, field.TargetField, errors))
-                .ToList();
+            var values = resolved.Select(r => r.Value).ToList();
 
             switch (policy)
             {
@@ -60,9 +64,9 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                         childTables[table] = rows;
                     }
 
-                    for (var i = 0; i < matches.Count; i++)
+                    for (var i = 0; i < resolved.Count; i++)
                     {
-                        var key = string.Join('-', matches[i].Indices);
+                        var key = string.Join('-', resolved[i].Indices);
                         if (!rows.TryGetValue(key, out var row))
                         {
                             row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["RowIndex"] = key };
@@ -148,6 +152,65 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         var pascal = string.Concat(ancestor.Split('.', StringSplitOptions.RemoveEmptyEntries)
             .Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
         return "dbo." + pascal;
+    }
+
+    /// <summary>
+    /// Resolves a "joinedFields" field: <see cref="MappingFieldDto.JsonPath"/> is a <c>|</c>-delimited list of
+    /// sub-paths (see <c>MappingImportService.BuildJsonPathAndFormat</c>), each resolved independently and then
+    /// joined per row with the delimiter encoded in <see cref="MappingFieldDto.Format"/> (<c>;delimiter=X</c>).
+    /// Rows are aligned by position across sub-paths — they're expected to share the same array context, so the
+    /// first sub-path that yields any matches determines the row indices; a sub-path with fewer/no matches at a
+    /// given position contributes an empty string for that row rather than dropping the row.
+    /// </summary>
+    private static List<(object? Value, IReadOnlyList<int> Indices)> ResolveJoinedFields(JsonElement root, MappingFieldDto field)
+    {
+        var delimiter = ParseDelimiter(field.Format);
+        var subPaths = field.JsonPath.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var resolvedSubPaths = subPaths.Select(subPath => ResolveAll(root, subPath)).ToList();
+
+        var shape = resolvedSubPaths.OrderByDescending(r => r.Count).FirstOrDefault() ?? [];
+        if (shape.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = new List<(object? Value, IReadOnlyList<int> Indices)>(shape.Count);
+        for (var i = 0; i < shape.Count; i++)
+        {
+            var pieces = resolvedSubPaths.Select(matches => i < matches.Count ? ElementToJoinString(matches[i].Element) : string.Empty);
+            rows.Add((string.Join(delimiter, pieces), shape[i].Indices));
+        }
+
+        return rows;
+    }
+
+    private static string ParseDelimiter(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+        {
+            return ",";
+        }
+
+        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var equalsIndex = part.IndexOf('=', StringComparison.Ordinal);
+            if (equalsIndex > 0 && part[..equalsIndex].Equals("delimiter", StringComparison.OrdinalIgnoreCase))
+            {
+                return part[(equalsIndex + 1)..];
+            }
+        }
+
+        return ",";
+    }
+
+    private static string ElementToJoinString(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
+            JsonValueKind.String => element.GetString() ?? string.Empty,
+            _ => element.ToString()
+        };
     }
 
     /// <summary>
