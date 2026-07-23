@@ -102,6 +102,11 @@ public sealed class WorkflowSettingsEntity
     // demo type.
     public string StandaloneWorkflowId { get; set; } = string.Empty;
     public string StandaloneDetailWorkflowId { get; set; } = string.Empty;
+    // Provider_Standalone's own FHIRBridge connection point — previously the frontend's hardcoded
+    // environment.fhirbridgeBase (a build-time constant), which only ever worked when the browser and the
+    // FHIRBridge Api happened to share a host (e.g. both localhost in local dev). Moved here for the same reason
+    // as PatientBaseUrl above: this demo type is meant to be admin-configurable and rebuild-free per environment.
+    public string StandaloneBaseUrl { get; set; } = string.Empty;
 
     // Provider_InApp's single FHIRBridge launch-context token — previously a gitignored, per-developer local file
     // (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts); moved here so it's admin-configurable
@@ -233,7 +238,9 @@ public sealed class HealthAppDbContext : DbContext
             PatientCsvExportWorkflowId = "a0de009e-9a60-494f-9ff8-d83cefdd1a3b",
             PatientCsvEmailExportWorkflowId = "c5e813f5-04fe-4223-8465-fba1a1e83b75",
             StandaloneWorkflowId = string.Empty,
-            StandaloneDetailWorkflowId = string.Empty
+            StandaloneDetailWorkflowId = string.Empty,
+            // Same sourcing rationale as PatientBaseUrl above (DefaultWorkflowSettings:StandaloneBaseUrl).
+            StandaloneBaseUrl = _configuration["DefaultWorkflowSettings:StandaloneBaseUrl"] ?? string.Empty
         });
     }
 }
