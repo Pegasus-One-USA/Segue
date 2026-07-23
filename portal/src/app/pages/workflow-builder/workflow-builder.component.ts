@@ -13,6 +13,7 @@ import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node.model';
+import { environment } from '../../../environments/environment';
 
 import { CanvasComponent } from '../../components/canvas/canvas.component';
 import { EpicSourceWizardComponent } from '../../components/epic-source-wizard/epic-source-wizard.component';
@@ -274,6 +275,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
+        this.announceGeneratedJwksUrls(result.sourceConnectionIds);
         this.workflowBusy.set(false);
         this.resetCanvasAndWorkflowState();
       },
@@ -308,6 +310,37 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
           `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every pipeline currently using it).`,
         );
       }
+    }
+  }
+
+  /**
+   * The "Private Key / JWKS URL" field a Backend System + JWT source shows is never actually sent to the backend
+   * (it's a UI-only note-to-self today) — for a node whose signing key FHIRBridge generated/imported, the only
+   * place the real, always-correct URL exists is derived from the sourceConnectionId this build just assigned.
+   * Surfaces it here (before resetCanvasAndWorkflowState() clears the node data below) so there's at least one
+   * copyable, accurate place to get it, since it can't be looked up from the (now-reset) canvas afterward.
+   */
+  private announceGeneratedJwksUrls(sourceConnectionIds: Record<string, string>): void {
+    for (const [nodeId, sourceConnectionId] of Object.entries(sourceConnectionIds)) {
+      const node = this.store.byId(nodeId);
+      if (!node) continue;
+
+      const fields = node.fields as Record<string, string> | undefined;
+      const isGeneratedOrImportedBackendKey =
+        fields?.['Auth method'] === 'jwt' &&
+        fields?.['Epic audience'] === 'backend-system' &&
+        (fields?.['Signing key source'] === 'gen' || fields?.['Signing key source'] === 'import');
+
+      if (!isGeneratedOrImportedBackendKey) continue;
+
+      const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+      const nodeName = fields?.['__name'] || 'this source';
+      this.toast.show(
+        `JWKS URL for "${nodeName}"`,
+        `Register this URL in Epic's app configuration: ${jwksUrl}`,
+        'info',
+        20000,
+      );
     }
   }
 
