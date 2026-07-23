@@ -84,18 +84,18 @@
             </div>
           </div>
           <div class="form-field">
-            <label>Key ID <span class="tag-auto">auto</span></label>
-            <input type="text" readonly formControlName="keyId"
+            <label for="gen-keyId">Key ID <span class="tag-auto">auto</span></label>
+            <input id="gen-keyId" type="text" readonly formControlName="keyId"
                    placeholder="Click Generate Key Pair" />
           </div>
           <div class="form-field">
-            <label>Key Vault Reference <span class="tag-auto">auto</span></label>
-            <input type="text" readonly formControlName="keyVaultRef"
+            <label for="gen-keyVaultRef">Key Vault Reference <span class="tag-auto">auto</span></label>
+            <input id="gen-keyVaultRef" type="text" readonly formControlName="keyVaultRef"
                    placeholder="Click Generate Key Pair" />
           </div>
           <div class="form-field">
-            <label>Secret Name <span class="tag-auto">auto</span></label>
-            <input type="text" readonly formControlName="secretName"
+            <label for="gen-secretName">Secret Name <span class="tag-auto">auto</span></label>
+            <input id="gen-secretName" type="text" readonly formControlName="secretName"
                    placeholder="Click Generate Key Pair" />
           </div>
           @if (keyGenStatus() === 'generated') {
@@ -134,18 +134,18 @@
             </p>
           </div>
           <div class="form-field">
-            <label>Key ID <span class="tag-auto">auto</span></label>
-            <input type="text" readonly formControlName="keyId"
+            <label for="import-keyId">Key ID <span class="tag-auto">auto</span></label>
+            <input id="import-keyId" type="text" readonly formControlName="keyId"
                    placeholder="Import a private key" />
           </div>
           <div class="form-field">
-            <label>Key Vault Reference <span class="tag-auto">auto</span></label>
-            <input type="text" readonly formControlName="keyVaultRef"
+            <label for="import-keyVaultRef">Key Vault Reference <span class="tag-auto">auto</span></label>
+            <input id="import-keyVaultRef" type="text" readonly formControlName="keyVaultRef"
                    placeholder="Import a private key" />
           </div>
           <div class="form-field">
-            <label>Secret Name <span class="tag-auto">auto</span></label>
-            <input type="text" readonly formControlName="secretName"
+            <label for="import-secretName">Secret Name <span class="tag-auto">auto</span></label>
+            <input id="import-secretName" type="text" readonly formControlName="secretName"
                    placeholder="Import a private key" />
           </div>
           @if (keyGenStatus() === 'generated') {
@@ -175,8 +175,8 @@
                    placeholder="vault-ref, ARN, or resource ID" />
           </div>
           <div class="form-field">
-            <label>Secret Name</label>
-            <input type="text" formControlName="secretName"
+            <label for="ext-secretName">Secret Name</label>
+            <input id="ext-secretName" type="text" formControlName="secretName"
                    placeholder="name of the secret holding the private key PEM" />
           </div>
         }
