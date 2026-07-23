@@ -12,6 +12,7 @@ import { environment } from '../../../environments/environment';
 interface ProviderStandaloneWorkflowIds {
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
+  standaloneBaseUrl: string;
 }
 
 /** Matches FHIRBridge's PublicEhrEpicEndpointDto (GET /api/v1/ehr-epic-endpoints) — anonymous, EndpointType=Epic
@@ -231,6 +232,13 @@ function isConfiguredWorkflowId(value: string | null | undefined): boolean {
   return !!value && value.trim().length > 0 && value !== 'REPLACE_WITH_REAL_WORKFLOW_ID';
 }
 
+// Same "not configured" shape as isConfiguredWorkflowId above, but for StandaloneBaseUrl — guards against both an
+// empty value and the literal placeholder left in appsettings.json's DefaultWorkflowSettings:StandaloneBaseUrl
+// (REPLACE_WITH_PUBLIC_URL) for any environment that hasn't set a real one yet.
+function isConfiguredBaseUrl(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0 && value !== 'http://REPLACE_WITH_PUBLIC_URL';
+}
+
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge — remembers which patient/workflow this HealthApp user
 // last launched, centrally (survives across browsers/devices for the same login, unlike the old sessionStorage-only
 // approach), without requiring any FHIRBridge change. See EpicSessionStatusResponse.
@@ -259,6 +267,11 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   // working unchanged.
   private standaloneWorkflowId = STANDALONE_WORKFLOW_ID;
   private standaloneDetailWorkflowId = STANDALONE_DETAIL_WORKFLOW_ID;
+  // Same admin-editable/fallback story as the workflow ids above — falls back to the build-time
+  // FHIRBRIDGE_BASE_URL constant (only ever correct when the browser and FHIRBridge Api share a host, e.g. local
+  // dev) until loadStandaloneWorkflowIds() resolves the admin-configured WorkflowSettingsEntity.StandaloneBaseUrl,
+  // matching Patient Standalone's own PatientStandaloneLaunchService.baseUrl.
+  private baseUrl = FHIRBRIDGE_BASE_URL;
   private workflowIdsLoadPromise: Promise<void> | null = null;
 
   // Purely informational badge — never gates whether the Fetch button is shown. The real, authoritative check is
@@ -503,6 +516,9 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       if (isConfiguredWorkflowId(ids.standaloneDetailWorkflowId)) {
         this.standaloneDetailWorkflowId = ids.standaloneDetailWorkflowId;
       }
+      if (isConfiguredBaseUrl(ids.standaloneBaseUrl)) {
+        this.baseUrl = ids.standaloneBaseUrl;
+      }
     } catch {
       // Non-fatal — falls back to whatever's in standalone-launch.config.ts (possibly still the placeholder,
       // which isConfiguredWorkflowId's callers below already guard against).
@@ -522,9 +538,10 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
   private async loadLaunchResultPatientId(workflowRunId: string): Promise<boolean> {
     try {
+      await this.ensureWorkflowIdsLoaded();
       const result = await firstValueFrom(
         this.http.get<LaunchResultResponse>(
-          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
+          `${this.baseUrl}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
         ),
       );
       if (result.patientId) {
@@ -573,7 +590,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
       const criteria = (criteriaOverride ?? this.patientSearchCriteria()).trim();
       const result = await firstValueFrom(
-        this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/run`, {
+        this.http.post<WorkflowRunResponse>(`${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/run`, {
           patientId: this.patientId,
           patientSearchCriteria: criteria || null,
           callerId: this.sessionId,
@@ -639,7 +656,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
 
       const result = await firstValueFrom(
-        this.http.post<WorkflowRunResponse>(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneDetailWorkflowId}/run`, {
+        this.http.post<WorkflowRunResponse>(`${this.baseUrl}/api/v1/workflows/${this.standaloneDetailWorkflowId}/run`, {
           patientId: patient.id,
           patientSearchCriteria: null,
           callerId: this.sessionId,
@@ -698,7 +715,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
       const status = await firstValueFrom(
         this.http.get<TokenStatusResponse>(
-          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/token-status`,
+          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/token-status`,
           { params },
         ),
       );
@@ -754,10 +771,11 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   private async loadHospitals(): Promise<void> {
     this.isLoadingHospitals.set(true);
     try {
+      await this.ensureWorkflowIdsLoaded();
       const query = this.hospitalSearchQuery().trim();
       const url = query
-        ? `${FHIRBRIDGE_BASE_URL}/api/v1/ehr-epic-endpoints?search=${encodeURIComponent(query)}`
-        : `${FHIRBRIDGE_BASE_URL}/api/v1/ehr-epic-endpoints`;
+        ? `${this.baseUrl}/api/v1/ehr-epic-endpoints?search=${encodeURIComponent(query)}`
+        : `${this.baseUrl}/api/v1/ehr-epic-endpoints`;
       const endpoints = await firstValueFrom(this.http.get<EpicEndpoint[]>(url));
       this.hospitals.set(endpoints);
     } catch {
@@ -818,7 +836,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
       const result = await firstValueFrom(
         this.http.get<PublicStandaloneUrlResponse>(
-          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/public-standalone-url`,
+          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/public-standalone-url`,
           { params },
         ),
       );
@@ -867,7 +885,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
       await firstValueFrom(
         this.http.post(
-          `${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${this.standaloneWorkflowId}/discard-token`,
+          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/discard-token`,
           {},
           { params },
         ),

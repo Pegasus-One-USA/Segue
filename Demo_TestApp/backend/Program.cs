@@ -168,6 +168,7 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
+        standaloneBaseUrl = settings.StandaloneBaseUrl,
         providerLaunchContext = settings.ProviderLaunchContext
     });
 });
@@ -226,6 +227,7 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.PatientCsvEmailExportWorkflowId = request.PatientCsvEmailExportWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
+    settings.StandaloneBaseUrl = request.StandaloneBaseUrl?.Trim() ?? string.Empty;
     settings.ProviderLaunchContext = request.ProviderLaunchContext?.Trim() ?? string.Empty;
     await db.SaveChangesAsync();
 
@@ -239,12 +241,13 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
+        standaloneBaseUrl = settings.StandaloneBaseUrl,
         providerLaunchContext = settings.ProviderLaunchContext
     });
 });
 
 // Read-only, any authenticated role — lets launch-standalone-provider.ts's fetch/detail/redirect calls resolve the
-// configured workflow ids without needing the full settings endpoint's role check.
+// configured workflow ids + base URL without needing the full settings endpoint's role check.
 app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
 {
     if (!TryGetSession(http, sessions, out _, out _))
@@ -256,7 +259,8 @@ app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, Ses
     return Results.Ok(new
     {
         standaloneWorkflowId = settings?.StandaloneWorkflowId ?? string.Empty,
-        standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty
+        standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty,
+        standaloneBaseUrl = settings?.StandaloneBaseUrl ?? string.Empty
     });
 });
 
@@ -524,6 +528,7 @@ record SaveSettingsRequest(
     string PatientCsvEmailExportWorkflowId,
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
+    string StandaloneBaseUrl,
     string ProviderLaunchContext);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
