@@ -1,0 +1,60 @@
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_f2c84423ce0bfa::t_b62ae17f04b812 69
+  s_f2c84423ce0bfa::t_e69bcffedaf256 24,27-33,50,67
+  s_f2c84423ce0bfa::t_8f6868419cc885 157-215
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_f2c84423ce0bfa::t_e69bcffedaf256 33,55
+  s_f2c84423ce0bfa::t_6d572b7696d9a2 76,1217-1219,1237-1238,1240-1247,1249,1251-1265,1271-1311
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_f2c84423ce0bfa::t_e69bcffedaf256 5
+  s_f2c84423ce0bfa::t_81225f439b7a53 260-265,274,296
+src/FHIRBridge.Application/DTOs/MappedDestinationRecord.cs
+  s_f2c84423ce0bfa::t_e69bcffedaf256 14-17
+  s_f2c84423ce0bfa::t_9174d5b86395e0 18-30
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_f2c84423ce0bfa::t_e69bcffedaf256 20-24,30-33,76-77,80,84-85,88-89,93-94,97-104,162-186,188-189,194,202-204,211,214,219-222,224,226-227,233,239,262,280-283,285-289,298,300,302,312,314,316,318,320-321,326,332,340,342,344,346,353,357,362,364,367,377,381,393,397,421,423,425-426
+  s_f2c84423ce0bfa::t_aaaf8c4ccf5987 187,230,291-292,308,324,368,427
+  s_f2c84423ce0bfa::t_b151d0822d0654 242,244,251,253,256-261,268,270,275-276,284,290,293-297,299,301,303-307,309-311,313,315,317,319,322-323,325,327-331,333-339,341,343,345,347-352,354-356,358-361,363,365-366,369-376,378-380,382,386-392,394-396,398-420,422,424,428,496,498,500-506
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260723112744_AddMappingFieldRelationMetadata.cs
+  s_f2c84423ce0bfa::t_245bf15060c4ce 1-51
+tests/FHIRBridge.UnitTests/Configuration/JsonMappingEngineTests.cs
+  s_f2c84423ce0bfa::t_a992d873885c48 1-115
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260723112744_AddMappingFieldRelationMetadata.Designer.cs
+  s_f2c84423ce0bfa::t_245bf15060c4ce 1-2364
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaTransaction.cs
+  s_f2c84423ce0bfa::t_fd398c824cd134 18-24
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_f2c84423ce0bfa::t_867d2140618185 19-22
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_f2c84423ce0bfa::t_2e8b4b000f62ad 158-161,209-212
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_f2c84423ce0bfa::t_63097537be4a75 109,134-139,170-171,272,275,278,282-283,300-303,306-315,321,326-329,333,337-340,347-384,440-446,448-453,460-476,478
+src/FHIRBridge.Domain/ValueObjects/MappingField.cs
+  s_f2c84423ce0bfa::t_bcaeb8729a9d10 20-23
+src/FHIRBridge.Infrastructure/Destinations/SqlServerMappingSchemaTransaction.cs
+  s_f2c84423ce0bfa::t_1c1687b7578b57 50-53,70-72
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f2c84423ce0bfa::t_fa403989b3ce58 1852-1855,1878-1885
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_f2c84423ce0bfa::t_c7bb72898080bd 45-59
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_f2c84423ce0bfa::t_5102c7ffaf66fc 51-53
+tests/FHIRBridge.UnitTests/Configuration/MappingImportServiceTests.cs
+  s_f2c84423ce0bfa::t_b50bc739d6a36f 75-80,95,97,105-106,108,113-115,117-119,122,124-126,128-129,131,133,170-176,599,634-635,642
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "23c407253ef2712ee7952ad54e0f7abeed8a8ab1",
+  "prompts": {},
+  "sessions": {
+    "s_f2c84423ce0bfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c970d4-a48d-47fd-a18b-d7240753202d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
