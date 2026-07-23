@@ -1,0 +1,28 @@
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_08313b6cd63437::t_285a6b9fc94883 15
+  s_08313b6cd63437::t_06eafaa19280b9 235-241,270-274,519-521,541,544,593,659,718,774,777-778,839,888
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_08313b6cd63437::t_b31ff7cdc269da 105-109,241-243
+Demo_TestApp/backend/Program.cs
+  s_08313b6cd63437::t_0751c098f575ea 171,230,244,250,262-263,531
+Demo_TestApp/backend/appsettings.Development.json
+  s_08313b6cd63437::t_542227780ea116 10-11
+Demo_TestApp/backend/appsettings.json
+  s_08313b6cd63437::t_c72c350b15a116 14-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "bfeb5e9032b47db64ffcaed92120044703609a59",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

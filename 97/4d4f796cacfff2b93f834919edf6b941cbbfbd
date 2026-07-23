@@ -1,0 +1,22 @@
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_08313b6cd63437::t_363e7798034b54 16
+  s_08313b6cd63437::t_54d11f04c99fa7 278,316-346
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_08313b6cd63437::t_1610e198cfefb4 815-817,1531-1535
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "974d4f796cacfff2b93f834919edf6b941cbbfbd",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

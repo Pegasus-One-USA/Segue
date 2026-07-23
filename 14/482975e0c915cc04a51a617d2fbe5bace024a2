@@ -1,0 +1,21 @@
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.ts
+  s_08313b6cd63437::t_9c9df2f5320518 1
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.html
+  s_08313b6cd63437::t_67fb7b4179ee80 87-88,92-93,97-98,137-138,142-143,147-148,178-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "14482975e0c915cc04a51a617d2fbe5bace024a2",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

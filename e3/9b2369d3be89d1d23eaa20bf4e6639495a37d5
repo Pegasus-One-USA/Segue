@@ -1,0 +1,28 @@
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_08313b6cd63437::t_cca08c8c28484d 12,28
+  s_08313b6cd63437::t_b3bc116a8fc280 35-36,43,610-632
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  s_08313b6cd63437::t_2f0d69d8d40ef2 32-33
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  s_08313b6cd63437::t_5e3968a101e948 41-42
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  s_08313b6cd63437::t_634ebbafee5264 32-33,62-83
+tests/FHIRBridge.UnitTests/Configuration/ParentReferenceValidationTests.cs
+  s_08313b6cd63437::t_3ef7bbb12034bf 45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e39b2369d3be89d1d23eaa20bf4e6639495a37d5",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
