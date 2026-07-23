@@ -69,3 +69,12 @@ export interface SourceConnectionRequest {
   interactive?: SourceInteractiveConfigurationModel | null;
   retrieval?: SourceRetrievalConfigurationModel | null;
 }
+
+/** Matches the API's GeneratedSigningKeyDto shape exactly (see GeneratedSigningKeyDto.cs). The private key itself
+ *  is never returned — only what's needed to wire it into SourceAuthenticationModel on save. */
+export interface GeneratedSigningKeyModel {
+  keyId: string;
+  keyVaultName: string;
+  secretName: string;
+  algorithm: string;
+}

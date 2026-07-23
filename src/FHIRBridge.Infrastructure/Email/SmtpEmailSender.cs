@@ -1,25 +1,38 @@
 using System.Net;
 using System.Net.Mail;
 using FHIRBridge.Application.Abstractions.Notifications;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Domain.Entities;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Infrastructure.Email;
 
+/// <summary>
+/// Sends email via the global <see cref="NotificationSettings"/> row (Settings hub &gt; Email Settings) instead of
+/// the "Email" appsettings.json section this replaced. Resolved fresh on every send rather than cached — outbound
+/// email isn't a hot path, and this guarantees a settings change takes effect immediately without a restart.
+/// </summary>
 public sealed class SmtpEmailSender : IEmailSender
 {
-    private readonly EmailOptions _options;
+    private readonly INotificationSettingsRepository _settingsRepository;
+    private readonly ISecretProvider _secretProvider;
     private readonly ILogger<SmtpEmailSender> _logger;
 
-    public SmtpEmailSender(IOptions<EmailOptions> options, ILogger<SmtpEmailSender> logger)
+    public SmtpEmailSender(
+        INotificationSettingsRepository settingsRepository,
+        ISecretProvider secretProvider,
+        ILogger<SmtpEmailSender> logger)
     {
-        _options = options.Value;
+        _settingsRepository = settingsRepository;
+        _secretProvider = secretProvider;
         _logger = logger;
     }
 
     public async Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
+        var settings = await _settingsRepository.GetAsync(cancellationToken);
+        if (settings is not { IsEnabled: true })
         {
             _logger.LogInformation("Email sending is disabled; skipped '{Subject}' to {ToEmail}.", subject, toEmail);
             return;
@@ -27,14 +40,14 @@ public sealed class SmtpEmailSender : IEmailSender
 
         using var message = new MailMessage
         {
-            From = new MailAddress(_options.FromAddress, _options.FromName),
+            From = new MailAddress(settings.FromAddress, settings.FromName),
             Subject = subject,
             Body = htmlBody,
             IsBodyHtml = true
         };
         message.To.Add(toEmail);
 
-        await SendAsync(message, subject, toEmail, cancellationToken);
+        await SendAsync(settings, message, subject, toEmail, cancellationToken);
     }
 
     public async Task SendAsync(
@@ -46,7 +59,8 @@ public sealed class SmtpEmailSender : IEmailSender
         CancellationToken cancellationToken)
     {
         var recipients = string.Join(", ", toEmails);
-        if (!_options.Enabled)
+        var settings = await _settingsRepository.GetAsync(cancellationToken);
+        if (settings is not { IsEnabled: true })
         {
             _logger.LogInformation("Email sending is disabled; skipped '{Subject}' to {ToEmails}.", subject, recipients);
             return;
@@ -54,7 +68,7 @@ public sealed class SmtpEmailSender : IEmailSender
 
         using var message = new MailMessage
         {
-            From = new MailAddress(_options.FromAddress, _options.FromName),
+            From = new MailAddress(settings.FromAddress, settings.FromName),
             Subject = subject,
             Body = htmlBody,
             IsBodyHtml = true
@@ -77,15 +91,24 @@ public sealed class SmtpEmailSender : IEmailSender
             message.Attachments.Add(new Attachment(new MemoryStream(attachment.Content), attachment.FileName, attachment.ContentType));
         }
 
-        await SendAsync(message, subject, recipients, cancellationToken);
+        await SendAsync(settings, message, subject, recipients, cancellationToken);
     }
 
-    private async Task SendAsync(MailMessage message, string subject, string recipients, CancellationToken cancellationToken)
+    private async Task SendAsync(
+        NotificationSettings settings,
+        MailMessage message,
+        string subject,
+        string recipients,
+        CancellationToken cancellationToken)
     {
-        using var client = new SmtpClient(_options.Host, _options.Port)
+        var password = settings.PasswordSecretReference is { } passwordReference
+            ? await _secretProvider.GetSecretAsync(passwordReference, cancellationToken)
+            : string.Empty;
+
+        using var client = new SmtpClient(settings.Host, settings.Port)
         {
-            EnableSsl = _options.EnableSsl,
-            Credentials = new NetworkCredential(_options.Username, _options.Password)
+            EnableSsl = settings.EnableSsl,
+            Credentials = new NetworkCredential(settings.Username, password)
         };
 
         try
