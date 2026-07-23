@@ -1,0 +1,21 @@
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_08313b6cd63437::t_7d8cd947277e7b 69-72
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_08313b6cd63437::t_3f855b0b373fef 26,54,87,113,127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "90bf77651b9c2128cbcba734d3e8dd23c5b873c0",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
