@@ -55,7 +55,8 @@
         <div class="form-field">
           <label>Key Source <span class="req">*</span></label>
           <select formControlName="keySource">
-            <option value="gen">Segue-generated</option>
+            <option value="gen">Generate New Key Pair</option>
+            <option value="import">Import Existing Private Key</option>
             <option value="customer-kv">Customer Key Vault</option>
             <option value="customer-kms">Customer AWS KMS</option>
             <option value="customer-hsm">Customer HSM</option>
@@ -73,29 +74,88 @@
         @if (isGenKey) {
           <div class="form-field full">
             <div class="btn-toolbar">
-              <button class="btn btn-primary" type="button" (click)="generateKeyPair()">
-                Generate Key Pair
+              <button class="btn btn-primary" type="button" (click)="generateKeyPair()"
+                      [disabled]="keyGenStatus() === 'generating'">
+                {{ keyGenStatus() === 'generating' ? 'Generating…' : 'Generate Key Pair' }}
               </button>
               @if (keyGenStatus() === 'generated') {
                 <span class="pill-success">&#10003; Key pair ready</span>
               }
             </div>
           </div>
-          <div class="form-field full">
-            <label>Generated JWKS URL <span class="tag-auto">auto</span></label>
-            <input type="text" readonly formControlName="jwksUrl"
-                   placeholder="Click Generate Key Pair" />
-          </div>
           <div class="form-field">
             <label>Key ID <span class="tag-auto">auto</span></label>
             <input type="text" readonly formControlName="keyId"
                    placeholder="Click Generate Key Pair" />
           </div>
+          <div class="form-field">
+            <label>Key Vault Reference <span class="tag-auto">auto</span></label>
+            <input type="text" readonly formControlName="keyVaultRef"
+                   placeholder="Click Generate Key Pair" />
+          </div>
+          <div class="form-field">
+            <label>Secret Name <span class="tag-auto">auto</span></label>
+            <input type="text" readonly formControlName="secretName"
+                   placeholder="Click Generate Key Pair" />
+          </div>
           @if (keyGenStatus() === 'generated') {
             <div class="form-field full">
               <div class="note-box">
-                <strong>Register this JWKS URL in Epic</strong> — paste the URL above into your
-                Epic app registration as the JWKS endpoint before running test launch.
+                <strong>Register the JWKS URL in Epic after saving</strong> — once this connection is saved, its
+                public key is published at <code>/api/v1/source-connections/&lbrace;id&rbrace;/.well-known/jwks.json</code>.
+                Copy that URL from the connection's detail view and paste it into your Epic app registration
+                before running test launch.
+              </div>
+            </div>
+          }
+        } @else if (isImportKey) {
+          <div class="form-field full">
+            <div class="btn-toolbar">
+              <label class="btn file-btn">
+                Choose Private Key File
+                <input type="file" accept=".pem,.key,.txt" class="file-input"
+                       (change)="onPrivateKeyFileSelected($event)" />
+              </label>
+              @if (selectedFileName()) {
+                <span class="pill-neutral">{{ selectedFileName() }}</span>
+              }
+              <button class="btn btn-primary" type="button" (click)="importPrivateKey()"
+                      [disabled]="keyGenStatus() === 'generating' || !selectedFileName()">
+                {{ keyGenStatus() === 'generating' ? 'Importing…' : 'Import Private Key' }}
+              </button>
+              @if (keyGenStatus() === 'generated') {
+                <span class="pill-success">&#10003; Key imported</span>
+              }
+            </div>
+            <p class="help-text">
+              Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 "BEGIN RSA PRIVATE
+              KEY" or PKCS#8 "BEGIN PRIVATE KEY", unencrypted, 2048-bit or stronger). FHIRBridge validates it and
+              signs with it as-is — no new key is generated.
+            </p>
+          </div>
+          <div class="form-field">
+            <label>Key ID <span class="tag-auto">auto</span></label>
+            <input type="text" readonly formControlName="keyId"
+                   placeholder="Import a private key" />
+          </div>
+          <div class="form-field">
+            <label>Key Vault Reference <span class="tag-auto">auto</span></label>
+            <input type="text" readonly formControlName="keyVaultRef"
+                   placeholder="Import a private key" />
+          </div>
+          <div class="form-field">
+            <label>Secret Name <span class="tag-auto">auto</span></label>
+            <input type="text" readonly formControlName="secretName"
+                   placeholder="Import a private key" />
+          </div>
+          @if (keyGenStatus() === 'generated') {
+            <div class="form-field full">
+              <div class="note-box">
+                <strong>Register the JWKS URL in Epic after saving</strong> — once this connection is saved, its
+                public key (derived from your imported private key) is published at
+                <code>/api/v1/source-connections/&lbrace;id&rbrace;/.well-known/jwks.json</code>. Copy that URL
+                from the connection's detail view and paste it into your Epic app registration before running
+                test launch.
               </div>
             </div>
           }
@@ -113,6 +173,11 @@
             <label>Key Vault Reference</label>
             <input type="text" formControlName="keyVaultRef"
                    placeholder="vault-ref, ARN, or resource ID" />
+          </div>
+          <div class="form-field">
+            <label>Secret Name</label>
+            <input type="text" formControlName="secretName"
+                   placeholder="name of the secret holding the private key PEM" />
           </div>
         }
       }

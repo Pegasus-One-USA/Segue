@@ -66,6 +66,17 @@ export const SOURCE_CONNECTIONS_ENDPOINTS = {
   // WorkflowEndpoints, not ConfigurationsController — the usage check has to walk every workflow's Source
   // nodes, which only the Runtime workflow store can answer.
   usage: `${API_V1_BASE}/workflows/source-connection-usage`,
+  // SourceConnectionsController — not scoped to an existing connection id, since the wizard calls this before
+  // a connection is saved.
+  generateSigningKey: `${API_V1_BASE}/source-connections/generate-signing-key`,
+  importSigningKey: `${API_V1_BASE}/source-connections/import-signing-key`,
+};
+
+// ─── Notification Settings (NotificationSettingsController — api/v1/notification-settings) ─
+export const NOTIFICATION_SETTINGS_ENDPOINTS = {
+  get:      `${API_V1_BASE}/notification-settings`,
+  update:   `${API_V1_BASE}/notification-settings`,
+  testSend: `${API_V1_BASE}/notification-settings/test-send`,
 };
 
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────

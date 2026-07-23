@@ -20,6 +20,14 @@ export const SETTINGS_ROUTES: Routes = [
           import('./pages/branding/branding-settings.component').then(m => m.BrandingSettingsComponent),
       },
       {
+        path: 'email-settings',
+        canActivate: [permissionGuard],
+        canDeactivate: [unsavedChangesGuard],
+        data: { permissions: ['configuration.write'] },
+        loadComponent: () =>
+          import('./pages/email-settings/email-settings.component').then(m => m.EmailSettingsComponent),
+      },
+      {
         path: 'ehr-endpoints',
         canActivate: [permissionGuard],
         data: { permissions: ['configuration.write'] },

@@ -14,6 +14,7 @@ interface SettingsTab {
 
 const SETTINGS_TABS: SettingsTab[] = [
   { label: 'Branding', route: 'branding', permissions: ['configuration.write'] },
+  { label: 'Email Settings', route: 'email-settings', permissions: ['configuration.write'] },
   { label: 'EHR Endpoints', route: 'ehr-endpoints', permissions: ['configuration.write'] },
   { label: 'Source Connections', route: 'source-connections', permissions: ['sourceconnections.view'] },
   { label: 'Destination Connections', route: 'destination-connections', permissions: ['configuration.write'] },

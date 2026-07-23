@@ -162,7 +162,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
+        var configuredResourceType = ReadStringConfiguration(node, "resourceType");
         // "searchParameters" is the canonical key for a hand-authored/route-projected node config; the Epic wizard
         // (epic-audience-form.component.ts save(), Search REST's "Search Criteria" field) instead writes its own
         // human-readable field bag under "Search criteria" — without this fallback, anything typed into that field
@@ -214,16 +214,23 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // SMART scopes (e.g. "patient/Observation.rs" -> "Observation") rather than silently defaulting to a single
         // resource type: the scopes are the authoritative record of what this connection is actually authorized to
         // fetch, so deriving from them can't drift out of sync the way a separately hand-maintained resource-type
-        // list can. Only falls back to the single node-config resourceType when nothing above has anything to say
+        // list can. Falls back to the single node-config resourceType only when nothing above has anything to say
         // (e.g. a non-interactive/no-scope source) — unchanged behavior for the route→graph projection and any
-        // hand-authored node config.
+        // hand-authored node config. If even that is absent, there is no way to know what this node should fetch —
+        // silently defaulting to "Patient" here previously meant a misconfigured node would quietly under-fetch
+        // instead of failing the run, so this now fails loudly and tells the caller what to configure.
         var resourceTypes = configuredResources is { Count: > 0 }
             ? configuredResources
             : source.ResourceTypes is { Count: > 0 } configured
                 ? configured
                 : DeriveResourceTypesFromScopes(source.Scopes) is { Count: > 0 } fromScopes
                     ? fromScopes
-                    : [resourceType];
+                    : !string.IsNullOrWhiteSpace(configuredResourceType)
+                        ? [configuredResourceType]
+                        : throw new InvalidOperationException(
+                            $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: " +
+                            "no 'Resources'/'resourceType' node configuration, no connection-level ResourceTypes, " +
+                            "and no SMART scopes to derive one from. Configure at least one resource type for this node.");
 
         // Narrow to whatever this node's downstream destination(s) actually selected — a destination wizard's own
         // "dest_resources" picker is the real record of what's ever written anywhere; without this, a source

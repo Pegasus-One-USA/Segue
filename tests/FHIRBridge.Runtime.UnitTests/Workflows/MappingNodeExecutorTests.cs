@@ -38,8 +38,8 @@ public sealed class MappingNodeExecutorTests
     {
         var engine = new Mock<IJsonMappingEngine>();
         engine
-            .Setup(e => e.Map(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<MappingFieldDto>>()))
-            .Returns((string _, IReadOnlyCollection<MappingFieldDto> fields) =>
+            .Setup(e => e.Map(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<MappingFieldDto>>(), It.IsAny<IReadOnlyDictionary<string, object?>?>()))
+            .Returns((string _, IReadOnlyCollection<MappingFieldDto> fields, IReadOnlyDictionary<string, object?>? _) =>
                 new MappingTestResultDto(
                     fields.ToDictionary(f => f.TargetField, object? (f) => f.JsonPath),
                     []));

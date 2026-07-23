@@ -39,6 +39,10 @@ export interface AuthValues {
   jwksUrl: string;
   keyId: string;
   keyVaultRef: string;
+  /** Key Vault secret name for the private key PEM — set from generateSigningKey() for 'gen', or typed by the
+   *  admin for an externally-managed key. Required alongside keyVaultRef for the private key to actually resolve
+   *  (ConfigurationMapper only builds a SecretReference when both are present). */
+  secretName: string;
   jwksMethod: string;
 }
 
