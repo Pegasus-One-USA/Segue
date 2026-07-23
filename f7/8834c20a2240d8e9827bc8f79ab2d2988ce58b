@@ -1,0 +1,83 @@
+portal/src/app/app.routes.ts
+  s_62affcfc9947ba::t_343247aba019d3 4,99-109
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_eb0d1f206749f4::t_fbef67e440f116 88
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_eb0d1f206749f4::t_b9b086e9896b17 353-361,1034-1035,1140-1141,1145-1155,1222,1228,1233-1240,1294-1301,1303,1306-1312,1397-1403
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_3679e3048431dc::t_2d999d001fea9e 169,171-173,175,178-181,214-288,468-469
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_3679e3048431dc::t_71dac8cc9275be 291-295
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_3679e3048431dc::t_8494c6fa6d33ff 221-225,233-239,570-572,637-638,656-665,860,922,932-939,1233-1237,1244-1249,1307-1312,1319-1325
+portal/src/app/core/api-endpoints.ts
+  s_3679e3048431dc::t_8e5f0fbe150dce 109-115
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.scss
+  s_62affcfc9947ba::t_840914452eb33b 54-60
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_62affcfc9947ba::t_8bfd562d291db3 14-16,36,57
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_3679e3048431dc::t_cd82cd4a32225c 20-22,58-61,65,68-70,76-85,91-93,109-113,117-127,134-136,138-139,155-173,180-181,195-198,209-216,221-225,236-238,243-246,253-255,260-262,266-268,272-274,286-288,294-296,306-317,323,333-337,340-341,350-353,355-380,393-396,409-413,425,429-436,441-444,446,487-490,492-495,516-527,540-544,558-559,565-568,575-578,580-583,591-597
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_d68f9144c308b2::t_ef1505fb4c5279 35
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_3679e3048431dc::t_8acbe3d53931ce 28
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_f2e735b2ad7f17::t_294da8348385dc 34,38,43,87
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_3679e3048431dc::t_a82b83e3449643 36
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorRetryTests.cs
+  s_3679e3048431dc::t_861606504692ac 16-18,22,54
+tests/FHIRBridge.UnitTests/Configuration/MappingImportServiceTests.cs
+  s_3679e3048431dc::t_a79f7d97901b78 47
+tests/FHIRBridge.UnitTests/Infrastructure/SqlDestinationSchemaServiceTests.cs
+  s_3679e3048431dc::t_050c9e95557077 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f78834c20a2240d8e9827bc8f79ab2d2988ce58b",
+  "prompts": {},
+  "sessions": {
+    "s_3679e3048431dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1568ea7-c9f3-4703-ba4e-28032014b5af",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_eb0d1f206749f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "351d7e8b-1b39-490a-9b77-b1fee0394685",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_f2e735b2ad7f17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4add3300-65d3-4739-b657-bd4a95e31c89",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
