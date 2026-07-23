@@ -329,31 +329,35 @@
 
               @if (isGenKey()) {
                 <div class="eaf-field eaf-field--full">
-                  <button type="button" class="eaf-btn eaf-btn--ghost" (click)="generateKeyPair()"
-                          [disabled]="keyGenStatus() === 'generating'">
-                    {{ keyGenStatus() === 'generating' ? 'Generating…' : 'Generate Key Pair' }}
-                  </button>
-                  @if (keyGenStatus() === 'generated') {
-                    <span class="eaf-tag-auto">&#10003; key pair ready</span>
-                  }
+                  <div class="eaf-inline-actions">
+                    <button type="button" class="eaf-btn eaf-btn--ghost" (click)="generateKeyPair()"
+                            [disabled]="keyGenStatus() === 'generating'">
+                      {{ keyGenStatus() === 'generating' ? 'Generating…' : 'Generate Key Pair' }}
+                    </button>
+                    @if (keyGenStatus() === 'generated') {
+                      <span class="eaf-tag-auto">&#10003; key pair ready</span>
+                    }
+                  </div>
                 </div>
               } @else if (isImportKey()) {
                 <div class="eaf-field eaf-field--full">
-                  <label class="eaf-btn eaf-btn--ghost eaf-file-btn">
-                    Choose Private Key File
-                    <input type="file" accept=".pem,.key,.txt" class="eaf-file-input"
-                           (change)="onPrivateKeyFileSelected($event)" />
-                  </label>
-                  @if (selectedFileName()) {
-                    <span class="eaf-tag-auto">{{ selectedFileName() }}</span>
-                  }
-                  <button type="button" class="eaf-btn eaf-btn--ghost" (click)="importPrivateKey()"
-                          [disabled]="keyGenStatus() === 'generating' || !selectedFileName()">
-                    {{ keyGenStatus() === 'generating' ? 'Importing…' : 'Import Private Key' }}
-                  </button>
-                  @if (keyGenStatus() === 'generated') {
-                    <span class="eaf-tag-auto">&#10003; key imported</span>
-                  }
+                  <div class="eaf-inline-actions">
+                    <label class="eaf-btn eaf-btn--ghost eaf-file-btn">
+                      Choose Private Key File
+                      <input type="file" accept=".pem,.key,.txt" class="eaf-file-input"
+                             (change)="onPrivateKeyFileSelected($event)" />
+                    </label>
+                    <button type="button" class="eaf-btn eaf-btn--ghost" (click)="importPrivateKey()"
+                            [disabled]="keyGenStatus() === 'generating' || !selectedFileName()">
+                      {{ keyGenStatus() === 'generating' ? 'Importing…' : 'Import Private Key' }}
+                    </button>
+                    @if (selectedFileName()) {
+                      <span class="eaf-tag-auto">{{ selectedFileName() }}</span>
+                    }
+                    @if (keyGenStatus() === 'generated') {
+                      <span class="eaf-tag-auto">&#10003; key imported</span>
+                    }
+                  </div>
                   <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). FHIRBridge validates it and signs with it as-is — no new key is generated.</p>
                 </div>
               }
