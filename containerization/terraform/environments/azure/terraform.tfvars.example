@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (gitignored) and fill in real secrets before `terraform apply`.
+# See ../../../README.md for the bootstrap order (ACR must exist and have images pushed before
+# the Container Apps that reference them can be created).
+
+name_prefix     = "fhirbridge"
+location        = "eastus"
+image_tag       = "v1"
+sql_sa_password = "Ch4ngeMe!Str0ng"
+jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"

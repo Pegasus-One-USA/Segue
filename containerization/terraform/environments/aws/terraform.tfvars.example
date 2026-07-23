@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (gitignored) and fill in real secrets before `terraform apply`.
+# See ../../../README.md for the bootstrap order (ECR repos must exist and have images pushed
+# before the ECS services that reference them can start).
+
+name_prefix     = "fhirbridge"
+aws_region      = "us-east-1"
+image_tag       = "v1"
+sql_sa_password = "Ch4ngeMe!Str0ng"
+jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"
