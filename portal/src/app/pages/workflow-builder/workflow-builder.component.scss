@@ -32,7 +32,6 @@
   border:        1px solid var(--color-border);
   border-radius: var(--radius-card);
   box-shadow:    var(--shadow-xs);
-  overflow:      hidden;
   // Card hover-lift per the design spec's §22 Micro Animations table (translateY(-2px), 200ms ease) —
   // not the button-hover-lift values (-1px, 150ms) this was drafted with initially.
   transition:    box-shadow var(--transition-slow), transform var(--transition-slow);
@@ -42,6 +41,9 @@
     position:        absolute;
     inset:           0 0 auto 0;
     height:          var(--space-1);
+    // Matches .dock's own top corners directly rather than relying on overflow:hidden on .dock, which
+    // would otherwise also clip the name field's below-the-field validation message.
+    border-radius:   var(--radius-card) var(--radius-card) 0 0;
     background:      linear-gradient(
                         90deg,
                         var(--color-primary),
@@ -96,6 +98,31 @@
   &:focus-within .dock__badge {
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
   }
+
+  // Required-field validation (design spec §8.1 Text Input — Error state), triggered on blur or a
+  // failed save attempt — takes priority over the default hover/focus-within teal styling.
+  &--invalid,
+  &--invalid:hover,
+  &--invalid:focus-within {
+    border-color: var(--color-error);
+    box-shadow:   0 0 0 3px color-mix(in srgb, var(--color-error) 10%, transparent);
+  }
+}
+
+.dock__name-error {
+  position:       absolute;
+  left:           var(--space-2);
+  top:            100%;
+  margin-top:     var(--space-2);
+  padding:        var(--space-2) var(--space-6);
+  background:     var(--color-error-soft);
+  color:          var(--color-error-strong);
+  font-size:      11.5px;
+  font-weight:    600;
+  white-space:    nowrap;
+  border-radius:  var(--radius-sm);
+  box-shadow:     var(--shadow-sm);
+  z-index:        1;
 }
 
 .dock__badge {
@@ -130,6 +157,33 @@
   &:focus {
     border-color: transparent;
     box-shadow:   none;
+  }
+}
+
+.dock__name-clear {
+  flex-shrink:     0;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  width:           18px;
+  height:          18px;
+  border:          none;
+  border-radius:   50%;
+  background:      transparent;
+  color:           var(--color-muted-2);
+  font-size:       11px;
+  line-height:     1;
+  cursor:          pointer;
+  transition:      background var(--transition-fast), color var(--transition-fast);
+
+  &:hover {
+    background: var(--color-border);
+    color:      var(--color-ink-2);
+  }
+
+  &:focus-visible {
+    outline:    none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent);
   }
 }
 

@@ -1,7 +1,7 @@
 <!-- ── Pipeline sub-header ─────────────────────────────────────────────────── -->
 <header class="builder-subheader">
   <div class="dock">
-    <div class="dock__namefield">
+    <div class="dock__namefield" [class.dock__namefield--invalid]="nameInvalid()">
       <span class="dock__badge" aria-hidden="true">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="5" cy="12" r="2.3" fill="currentColor" />
@@ -13,14 +13,25 @@
         </svg>
       </span>
       <input
+        #nameInput
         class="builder-input builder-input--name dock__name-input"
         type="text"
         [value]="workflowName()"
         (input)="onWorkflowNameInput($any($event.target).value)"
-        placeholder="Untitled workflow"
+        (blur)="onWorkflowNameBlur()"
+        placeholder="Workflow Name"
         aria-label="Workflow name"
+        aria-required="true"
+        [attr.aria-invalid]="nameInvalid() || null"
+        [attr.aria-describedby]="nameInvalid() ? 'dock-name-error' : null"
       />
+      @if (workflowName()) {
+        <button type="button" class="dock__name-clear" aria-label="Clear workflow name" (click)="clearWorkflowName()">✕</button>
+      }
       <span class="dock__name-underline" aria-hidden="true"></span>
+      @if (nameInvalid()) {
+        <span id="dock-name-error" class="dock__name-error" role="alert">This field is required.</span>
+      }
     </div>
 
     <span class="dock__divider" aria-hidden="true"></span>
