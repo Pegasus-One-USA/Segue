@@ -138,10 +138,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string issuer,
         string launch,
         string redirectUri,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? callerId = null)
     {
         var context = _launchTokenProtector.UnprotectContext(launchContext)
             ?? throw new InvalidOperationException("The launch context is invalid or has been tampered with.");
+
+        // A live callerId (the calling app's current origin) wins over whatever was baked into the context at mint
+        // time — a statically pre-minted EHR-launch context can't otherwise reflect which environment is actually
+        // calling right now (see StartEhrLaunchFromContextAsync's XML doc).
+        var effectiveCallerId = !string.IsNullOrWhiteSpace(callerId) ? callerId : context.CallerId;
 
         // Workflow launch: the graph's source node names the connection to OAuth against and validate iss for.
         if (context.WorkflowId is { } workflowId)
@@ -149,7 +155,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId,
-                callerId: context.CallerId, cancellationToken);
+                callerId: effectiveCallerId, cancellationToken);
         }
 
         if (context.RouteId is { } contextRouteId)
@@ -157,7 +163,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null,
-                callerId: context.CallerId, cancellationToken);
+                callerId: effectiveCallerId, cancellationToken);
         }
 
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
