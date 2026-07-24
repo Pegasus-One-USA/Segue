@@ -103,6 +103,8 @@ mat-dialog-content {
 .form-field {
   width: 100%;
 
+  // Outline border colors and the raw-input border/shadow reset are handled
+  // sitewide now via MDC token overrides + global rules in styles.scss.
   ::ng-deep {
     .mat-mdc-text-field-wrapper {
       border-radius: var(--radius-base);
@@ -110,46 +112,6 @@ mat-dialog-content {
 
     // White background for the select panel dropdown
     .mat-mdc-select-panel { background: var(--color-surface) !important; }
-
-    // Drive the whole outline box (not a separate ring) for every state —
-    // a single solid border reads as one clean box instead of the global
-    // raw-input focus ring showing through as a mismatched inner ring.
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-border-input) !important;
-      transition: border-color 0.15s ease !important;
-    }
-
-    input.mat-mdc-input-element,
-    textarea.mat-mdc-input-element {
-      border: none !important;
-      box-shadow: none !important;
-    }
-  }
-
-  &:not(.mat-focused):not(.mat-form-field-invalid):hover ::ng-deep {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: #9CA3AF !important;
-    }
-  }
-
-  &.mat-focused ::ng-deep {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-primary) !important;
-    }
-  }
-
-  &.mat-form-field-invalid ::ng-deep {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-error) !important;
-    }
   }
 }
 

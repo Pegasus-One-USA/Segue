@@ -211,51 +211,11 @@
 
 // ── Material Overrides ────────────────────────────────────────────────────────
 ::ng-deep {
+  // Outline border/label colors and icon-prefix focus/error tint are handled
+  // sitewide now via MDC token overrides + global rules in styles.scss.
 
-  // Outline: default
-  .mat-mdc-form-field .mdc-notched-outline__leading,
-  .mat-mdc-form-field .mdc-notched-outline__notch,
-  .mat-mdc-form-field .mdc-notched-outline__trailing {
-    border-color: var(--color-border-input) !important;
-    transition:   border-color 0.15s ease, border-width 0.12s ease !important;
-  }
-
-  // Outline: hover
-  .mat-mdc-form-field:not(.mat-focused):not(.mat-form-field-invalid):hover {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: #9CA3AF !important;
-    }
-  }
-
-  // Outline: focused
-  .mat-mdc-form-field.mat-focused {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-primary) !important;
-    }
-  }
-
-  // Outline: error
-  .mat-mdc-form-field.mat-form-field-invalid {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-error) !important;
-    }
-  }
-
-  // Label colors
-  .mat-mdc-form-field .mat-mdc-floating-label      { color: var(--color-muted) !important; }
-  .mat-mdc-form-field.mat-focused .mat-mdc-floating-label       { color: var(--color-primary) !important; }
-  .mat-mdc-form-field.mat-form-field-invalid .mat-mdc-floating-label { color: var(--color-error) !important; }
-
-  // Prefix icon
-  .mat-mdc-form-field .mat-mdc-form-field-icon-prefix .field-icon          { color: var(--color-muted-2); transition: color 0.15s ease; }
-  .mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix .field-icon { color: var(--color-primary) !important; }
-  .mat-mdc-form-field.mat-form-field-invalid .mat-mdc-form-field-icon-prefix .field-icon { color: var(--color-error) !important; }
+  // Prefix icon (default/resting state only)
+  .mat-mdc-form-field .mat-mdc-form-field-icon-prefix .field-icon { color: var(--color-muted-2); transition: color 0.15s ease; }
 
   // Input
   .mat-mdc-input-element {

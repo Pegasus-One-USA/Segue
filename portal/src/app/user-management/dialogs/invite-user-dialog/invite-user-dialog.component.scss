@@ -95,68 +95,12 @@ mat-dialog-content {
 
   &--full { grid-column: 1 / -1; }
 
+  // Outline border/label colors, icon-prefix centering/padding, the resting
+  // label's vertical position, and the raw-input border/shadow reset are all
+  // handled sitewide now via MDC token overrides + global rules in
+  // styles.scss — nothing left to override locally.
   ::ng-deep {
     .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
-
-    .mat-mdc-form-field-icon-prefix {
-      padding: 0 !important;
-
-      mat-icon {
-        color: var(--color-muted);
-        font-size: 18px;
-        height: 18px;
-        width: 18px;
-        margin: 0 4px 0 0 !important;
-      }
-    }
-
-    // Only the resting (unfocused + empty) label sits low — its vertical
-    // anchor point is off, but its horizontal offset (which clears the
-    // icon) comes from a separate inline `transform` we must not touch.
-    .mdc-floating-label:not(.mdc-floating-label--float-above) {
-      top: 50% !important;
-    }
-
-    // Drive the whole outline box (not a separate ring) for every state,
-    // same pattern as the auth pages — a single solid border reads as one
-    // clean box instead of the global raw-input focus ring showing through.
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-border-input) !important;
-      transition: border-color 0.15s ease, border-width 0.12s ease !important;
-    }
-
-    input.mat-mdc-input-element {
-      border: none !important;
-      box-shadow: none !important;
-    }
-  }
-
-  &:not(.mat-focused):not(.mat-form-field-invalid):hover ::ng-deep {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: #9CA3AF !important;
-    }
-  }
-
-  // Color-only change (no border-width bump) — widening an already-painted
-  // outline creates a stray extra stroke near the icon-prefix's leading edge.
-  &.mat-focused ::ng-deep {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-primary) !important;
-    }
-  }
-
-  &.mat-form-field-invalid ::ng-deep {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-error) !important;
-    }
   }
 }
 
@@ -216,7 +160,7 @@ mat-dialog-actions {
 
 .btn-submit {
   background: var(--color-primary) !important;
-  color: #fff !important;
+  color: var(--color-on-primary) !important;
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;

@@ -1,8 +1,11 @@
 // auth/pages/login/login.component.scss
 // Enterprise polish — all theming via ::ng-deep only.
-// The :host MDC-custom-property approach is intentionally avoided because
-// --mdc-outlined-text-field-container-shape and -focus-outline-width interfere
-// with Angular Material's JS-driven notch-width calculation for the floating label.
+// Outline/label color and icon-prefix state styling live in styles.scss
+// (sitewide) — this file only touches what's specific to the login page.
+// Note: --mdc-outlined-text-field-container-shape/-focus-outline-width are
+// deliberately NOT set anywhere (color-only tokens are used instead) since
+// those two interfere with Angular Material's JS-driven notch-width
+// calculation for the floating label.
 
 // ── Animations ────────────────────────────────────────────────────────────────
 @keyframes card-enter {
@@ -215,73 +218,15 @@
 // at :host level (which break the notch-width calculation).
 ::ng-deep {
 
-  // ── Hide internal MDC line ripple ────────────────────────────────────────
-  .mat-mdc-form-field .mdc-line-ripple {
-    display: none !important;
-  }
+  // Outline border/label colors (default/hover/focus/error), the MDC
+  // line-ripple, and icon-prefix centering + focus/error tint are all
+  // handled sitewide now via MDC token overrides + global rules in
+  // styles.scss — no need to duplicate them here.
 
-  // ── Outline border: default ───────────────────────────────────────────────
-  .mat-mdc-form-field .mdc-notched-outline__leading,
-  .mat-mdc-form-field .mdc-notched-outline__notch,
-  .mat-mdc-form-field .mdc-notched-outline__trailing {
-    border-color: var(--color-border-input) !important;
-    transition:   border-color 0.15s ease, border-width 0.12s ease !important;
-  }
-
-  // ── Outline border: hover ─────────────────────────────────────────────────
-  .mat-mdc-form-field:not(.mat-focused):not(.mat-form-field-invalid):hover {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: #9CA3AF !important;
-    }
-  }
-
-  // ── Outline border: focused ───────────────────────────────────────────────
-  // Color-only change (no border-width bump) — widening an already-painted
-  // outline creates a stray extra stroke near the icon-prefix's leading edge.
-  .mat-mdc-form-field.mat-focused {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-primary) !important;
-    }
-  }
-
-  // ── Outline border: error ─────────────────────────────────────────────────
-  .mat-mdc-form-field.mat-form-field-invalid {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: var(--color-error) !important;
-    }
-  }
-
-  // ── Floating label ────────────────────────────────────────────────────────
-  .mat-mdc-form-field .mat-mdc-floating-label {
-    color: var(--color-muted) !important;
-  }
-
-  .mat-mdc-form-field.mat-focused .mat-mdc-floating-label {
-    color: var(--color-primary) !important;
-  }
-
-  .mat-mdc-form-field.mat-form-field-invalid .mat-mdc-floating-label {
-    color: var(--color-error) !important;
-  }
-
-  // ── Prefix icon color ─────────────────────────────────────────────────────
+  // ── Prefix icon color (default/resting state only) ────────────────────────
   .mat-mdc-form-field .mat-mdc-form-field-icon-prefix .field-icon {
     color: var(--color-muted-2);
     transition: color 0.15s ease;
-  }
-
-  .mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix .field-icon {
-    color: var(--color-primary) !important;
-  }
-
-  .mat-mdc-form-field.mat-form-field-invalid .mat-mdc-form-field-icon-prefix .field-icon {
-    color: var(--color-error) !important;
   }
 
   // ── Input text & placeholder ──────────────────────────────────────────────
@@ -290,13 +235,6 @@
     font-size:   14.5px !important;
     caret-color: var(--color-primary) !important;
     font-family: var(--font-family) !important;
-
-    // The global raw-input focus/error rules (meant for plain HTML inputs
-    // elsewhere in the app) also match this <input matInput> by attribute
-    // selector and paint their own border + ring directly on it — showing
-    // through as a second, mismatched ring alongside the outline above.
-    border:      none !important;
-    box-shadow:  none !important;
 
     &::placeholder { color: var(--color-muted-2) !important; opacity: 1 !important; }
 

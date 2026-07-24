@@ -1002,7 +1002,10 @@ input:-webkit-autofill:active {
    shadow, color) via the notched-outline elements — not via the raw <input>.
    The global input-field block above adds a conflicting border + error shadow
    that produce a duplicate rectangle inside every mat-form-field. This block
-   resets those overrides for any input that lives inside a mat-form-field. */
+   resets those overrides for any input that lives inside a mat-form-field.
+   .mat-mdc-input-element (matInput's own class) is included alongside the
+   type-attribute list because an <input matInput> with no explicit type=""
+   attribute (defaults to text) won't match input[type='text']. */
 .mat-mdc-form-field {
   input[type='text'],
   input[type='email'],
@@ -1011,6 +1014,7 @@ input:-webkit-autofill:active {
   input[type='search'],
   input[type='url'],
   input[type='tel'],
+  .mat-mdc-input-element,
   select,
   textarea {
     border:        none        !important;
@@ -1045,6 +1049,13 @@ input:-webkit-autofill:active {
   mat-icon, .mat-icon {
     margin-right: 6px;
   }
+}
+
+/* MDC's line-ripple underline is redundant on outlined fields (the outline
+   already shows focus) — every auth page and dialog was hiding this
+   individually. */
+.mat-mdc-form-field .mdc-line-ripple {
+  display: none !important;
 }
 
 .mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix mat-icon,
