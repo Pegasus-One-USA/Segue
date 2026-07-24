@@ -1,0 +1,72 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_fa586afed025e9::t_746fcdb764ef98 230,232-233
+portal/src/app/components/epic-source-wizard/steps/epic-step-data/epic-step-data.component.html
+  s_fa586afed025e9::t_c4a2d85393aaf4 148-149
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_4f58135a9738c5::t_762ff56b55f9b1 213-215
+  s_4f58135a9738c5::t_18b44abced74d7 159-161
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_4f58135a9738c5::t_335cae09897fe7 109-112
+  s_4f58135a9738c5::t_7510887d4473dd 129-170
+  s_4f58135a9738c5::t_2fbdfcc48c66a6 171-172
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_4f58135a9738c5::t_0f446df21874bf 344-352
+src/FHIRBridge.Domain/Fhir/PatientCompartmentResourceTypes.cs
+  s_4f58135a9738c5::t_e2b626853633dd 25,29
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_4f58135a9738c5::t_da3628768c3f02 51-52
+src/FHIRBridge.Infrastructure/Terminology/UsCoreValueSetCatalog.cs
+  s_4f58135a9738c5::t_c622a28165488a 75-76
+  s_4f58135a9738c5::t_f3d202caa645e1 32
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_4f58135a9738c5::t_0e5e0293ddafbb 206-209,213-214
+  s_4f58135a9738c5::t_72fdfafad42f86 1002-1004,1009-1010
+  s_4f58135a9738c5::t_5167d39a5dd470 1101-1102
+  s_4f58135a9738c5::t_6a4996ab5d5df7 1049-1050
+  s_4f58135a9738c5::t_33a4454a77a815 141-150
+  s_4f58135a9738c5::t_aec9c8caca8981 240-258
+  s_4f58135a9738c5::t_03c582b2f80b19 259
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260724144718_AddMappingFieldCorrelationCode.cs
+  s_4f58135a9738c5::t_7b204bb4eb77f0 1-40
+src/FHIRBridge.Infrastructure/Normalization/Steps/UsCoreValidationNormalizationStep.cs
+  s_4f58135a9738c5::t_e7ee66bc0bf31c 50-51
+  s_4f58135a9738c5::t_a4a9457660c3d2 76-78
+  s_4f58135a9738c5::t_eb8237077fff1b 79-80
+portal/src/app/services/workflow-api.service.ts
+  s_4f58135a9738c5::t_7efe1336a28090 175,178-183
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_4f58135a9738c5::t_7b204bb4eb77f0 2580-2587
+src/FHIRBridge.Domain/Enums/ArrayPolicy.cs
+  s_4f58135a9738c5::t_6e212fbebff0ce 28-31
+  s_4f58135a9738c5::t_80a9f51f770b2e 25-27,32-33
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_4f58135a9738c5::t_a81f2cfdbb51d6 20-26
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260724144718_AddMappingFieldCorrelationCode.Designer.cs
+  s_4f58135a9738c5::t_7b204bb4eb77f0 1-3159
+src/FHIRBridge.Domain/ValueObjects/MappingField.cs
+  s_4f58135a9738c5::t_b0a7faa7a6ca75 21-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "4e1a265a169bc6d4f2d2bf4894773190aee8c8b1",
+  "prompts": {},
+  "sessions": {
+    "s_4f58135a9738c5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be6b94ef-7089-4d41-a9c6-e395475915fe",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_fa586afed025e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "00059ca7-a93c-4156-a5b2-0e588e86c93b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
