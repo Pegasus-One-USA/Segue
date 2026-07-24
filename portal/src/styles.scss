@@ -23,6 +23,28 @@ html {
   --mat-sys-outline:              var(--color-border);
   --mat-sys-outline-variant:      var(--color-border-input);
 
+  /* Outlined text field (mat-form-field appearance="outline") doesn't
+     consistently pick up --mat-sys-outline for its per-state border/label
+     colors across Material versions — every dialog in this app was
+     re-implementing these as local !important overrides on the rendered
+     .mdc-notched-outline/.mat-mdc-floating-label DOM instead, and some of
+     those copies also bumped border-width on focus (1.5px -> 2px), which
+     creates a stray extra stroke near an icon-prefix's leading edge on an
+     already-painted outline. Bridging the MDC tokens directly here — color
+     only, no width change — makes every outlined field sitewide consistent
+     for free, with no DOM-class hacks. */
+  --mdc-outlined-text-field-outline-color:                var(--color-border-input);
+  --mdc-outlined-text-field-hover-outline-color:           #9CA3AF;
+  --mdc-outlined-text-field-focus-outline-color:           var(--color-primary);
+  --mdc-outlined-text-field-error-outline-color:           var(--color-error);
+  --mdc-outlined-text-field-error-hover-outline-color:     var(--color-error);
+  --mdc-outlined-text-field-error-focus-outline-color:     var(--color-error);
+  --mdc-outlined-text-field-label-text-color:              var(--color-muted);
+  --mdc-outlined-text-field-hover-label-text-color:        var(--color-muted);
+  --mdc-outlined-text-field-focus-label-text-color:        var(--color-primary);
+  --mdc-outlined-text-field-error-label-text-color:        var(--color-error);
+  --mdc-outlined-text-field-error-focus-label-text-color:  var(--color-error);
+
   /* Checkbox/radio label text doesn't consistently key off --mat-sys-on-surface
      across Material versions — bridge the MDC token directly too (e.g. the
      "Remember me" checkbox was unreadably dim in dark mode without this). */
@@ -1007,6 +1029,40 @@ input:-webkit-autofill:active {
       box-shadow: none !important;
     }
   }
+}
+
+/* ─── Angular Material Form Field — Icon Prefix ────────────────────────────── */
+/* matPrefix/matIcon prefixes reserve Material's own default top-padding on
+   their wrapping container, which pushes the icon above the label/input's
+   true center — every dialog that used an icon prefix was re-fixing this
+   locally. Centralized here, plus a matching color tint on focus/error since
+   Material has no system token for prefix-icon color. */
+.mat-mdc-form-field-icon-prefix {
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+
+  mat-icon, .mat-icon {
+    margin-right: 6px;
+  }
+}
+
+.mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix mat-icon,
+.mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix .mat-icon {
+  color: var(--color-primary) !important;
+}
+
+.mat-mdc-form-field.mat-form-field-invalid .mat-mdc-form-field-icon-prefix mat-icon,
+.mat-mdc-form-field.mat-form-field-invalid .mat-mdc-form-field-icon-prefix .mat-icon {
+  color: var(--color-error) !important;
+}
+
+/* Only the resting (unfocused + empty) label sits low relative to an icon
+   prefix — Material's own transform for that state already carries the
+   horizontal offset that clears the icon, so only `top` is safe to touch;
+   overriding `transform` here would wipe that horizontal offset out too. */
+.mat-mdc-form-field-icon-prefix ~ .mat-mdc-form-field-infix .mdc-floating-label:not(.mdc-floating-label--float-above) {
+  top: 50% !important;
 }
 
 /* ─── Sidebar Utility Classes ─────────────────────────────────────────────── */

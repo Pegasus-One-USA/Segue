@@ -9,6 +9,13 @@
 
 // ── Pipeline sub-header ────────────────────────────────────────────────────────
 .builder-subheader {
+  // Positioned + given an explicit stacking order so its content can visually spill past its own
+  // flex-item box (the name field's absolutely-positioned required-field error message extends below
+  // .dock's normal-flow height) without .builder-canvas-area — the next flex sibling, later in DOM order
+  // — painting over it. Two plain non-positioned/static siblings paint strictly in DOM order, so without
+  // this the canvas area's own opaque background covers whatever overflows below the subheader's box.
+  position:    relative;
+  z-index:     1;
   display:     flex;
   align-items: flex-start;
   padding:     var(--space-6) var(--space-9) 0;
@@ -22,6 +29,12 @@
 // technique the skeleton-shimmer utility already uses) as a quiet "flow" cue.
 .dock {
   position:      relative;
+  // Establishes .dock's stacking context unconditionally. Without this, :hover's transform below is what
+  // creates one (transform: != none always forces a new stacking context) — meaning the context pops in
+  // and out of existence exactly when you hover the field, and z-index values inside (e.g. the required-
+  // field error message) get scoped differently each time, flickering behind sibling elements right when
+  // you interact with the input. Isolating it permanently keeps that scoping stable at all times.
+  isolation:     isolate;
   display:       flex;
   align-items:   center;
   gap:           var(--space-6);
@@ -73,6 +86,10 @@
 // ── Name field: hero control — gradient node badge + borderless pill input ─────
 .dock__namefield {
   position:      relative;
+  // So this subtree (including the required-field error message below) reliably paints above .dock's
+  // other children (trigger controls, status pill, action buttons) inside .dock's now-permanent stacking
+  // context, rather than depending on DOM order alone.
+  z-index:       1;
   display:       flex;
   align-items:   center;
   gap:           var(--space-4);
@@ -122,7 +139,10 @@
   white-space:    nowrap;
   border-radius:  var(--radius-sm);
   box-shadow:     var(--shadow-sm);
-  z-index:        1;
+  z-index:        2;
+  // Purely informational — hovering it (or anything happening to sit under it) shouldn't be able to
+  // capture the pointer or otherwise interfere.
+  pointer-events: none;
 }
 
 .dock__badge {

@@ -15,7 +15,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 24px;
+  padding: 20px 24px 24px;
 
   &__icon {
     width: 44px;
@@ -33,23 +33,34 @@
   &__text {
     flex: 1;
 
-    h2 {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--color-ink);
-      margin: 0 0 2px;
-      padding: 0;
+    // mat-dialog-title's own class carries a tall default box (built for a
+    // standalone headline, not one paired with a subtitle right underneath) —
+    // collapse it down to just the text instead of guessing at a
+    // compensating margin.
+    ::ng-deep h2.mat-mdc-dialog-title {
+      display: block !important;
+      height: auto !important;
+      min-height: 0 !important;
+      padding: 0 !important;
+      margin: 0 0 2px !important;
+      font-size: 18px !important;
+      font-weight: 700 !important;
+      color: var(--color-ink) !important;
+      line-height: 1.2 !important;
     }
 
     p {
       font-size: 13px;
       color: var(--color-muted);
+      line-height: 1.3;
       margin: 0;
     }
   }
 }
 
 .dialog-close {
+  align-self: center;
+  flex-shrink: 0;
   color: var(--color-muted) !important;
   &:hover { background: var(--color-bg) !important; }
 }
@@ -85,20 +96,66 @@ mat-dialog-content {
   &--full { grid-column: 1 / -1; }
 
   ::ng-deep {
-    .mat-mdc-form-field-infix {
-      min-height: 44px;
-      padding-top: 10px !important;
-      padding-bottom: 10px !important;
-    }
-
     .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
 
-    .mat-mdc-form-field-icon-prefix mat-icon {
-      color: var(--color-muted);
-      font-size: 18px;
-      height: 18px;
-      width: 18px;
-      margin-right: 6px;
+    .mat-mdc-form-field-icon-prefix {
+      padding: 0 !important;
+
+      mat-icon {
+        color: var(--color-muted);
+        font-size: 18px;
+        height: 18px;
+        width: 18px;
+        margin: 0 4px 0 0 !important;
+      }
+    }
+
+    // Only the resting (unfocused + empty) label sits low — its vertical
+    // anchor point is off, but its horizontal offset (which clears the
+    // icon) comes from a separate inline `transform` we must not touch.
+    .mdc-floating-label:not(.mdc-floating-label--float-above) {
+      top: 50% !important;
+    }
+
+    // Drive the whole outline box (not a separate ring) for every state,
+    // same pattern as the auth pages — a single solid border reads as one
+    // clean box instead of the global raw-input focus ring showing through.
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--color-border-input) !important;
+      transition: border-color 0.15s ease, border-width 0.12s ease !important;
+    }
+
+    input.mat-mdc-input-element {
+      border: none !important;
+      box-shadow: none !important;
+    }
+  }
+
+  &:not(.mat-focused):not(.mat-form-field-invalid):hover ::ng-deep {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: #9CA3AF !important;
+    }
+  }
+
+  // Color-only change (no border-width bump) — widening an already-painted
+  // outline creates a stray extra stroke near the icon-prefix's leading edge.
+  &.mat-focused ::ng-deep {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--color-primary) !important;
+    }
+  }
+
+  &.mat-form-field-invalid ::ng-deep {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--color-error) !important;
     }
   }
 }
@@ -164,11 +221,17 @@ mat-dialog-actions {
   font-weight: 600;
   height: 40px;
   min-width: 140px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 
-  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+  &__content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; flex-shrink: 0; }
+  mat-spinner { flex-shrink: 0; }
 
   &:hover:not(:disabled) { background: var(--color-primary-dark) !important; }
   &:disabled { background: var(--color-muted) !important; opacity: 0.7; cursor: not-allowed; }

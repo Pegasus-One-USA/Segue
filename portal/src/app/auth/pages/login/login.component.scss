@@ -238,12 +238,13 @@
   }
 
   // ── Outline border: focused ───────────────────────────────────────────────
+  // Color-only change (no border-width bump) — widening an already-painted
+  // outline creates a stray extra stroke near the icon-prefix's leading edge.
   .mat-mdc-form-field.mat-focused {
     .mdc-notched-outline__leading,
     .mdc-notched-outline__notch,
     .mdc-notched-outline__trailing {
       border-color: var(--color-primary) !important;
-      border-width: 2px !important;
     }
   }
 
@@ -253,14 +254,6 @@
     .mdc-notched-outline__notch,
     .mdc-notched-outline__trailing {
       border-color: var(--color-error) !important;
-    }
-  }
-
-  .mat-mdc-form-field.mat-form-field-invalid.mat-focused {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-width: 2px !important;
     }
   }
 
@@ -298,6 +291,13 @@
     caret-color: var(--color-primary) !important;
     font-family: var(--font-family) !important;
 
+    // The global raw-input focus/error rules (meant for plain HTML inputs
+    // elsewhere in the app) also match this <input matInput> by attribute
+    // selector and paint their own border + ring directly on it — showing
+    // through as a second, mismatched ring alongside the outline above.
+    border:      none !important;
+    box-shadow:  none !important;
+
     &::placeholder { color: var(--color-muted-2) !important; opacity: 1 !important; }
 
     &:-webkit-autofill,
@@ -333,6 +333,7 @@
     color:      var(--color-muted-2) !important;
     width:      36px !important;
     height:     36px !important;
+    margin-right: 4px !important;
     transition: color 0.15s ease !important;
 
     &:hover { color: var(--color-primary) !important; }

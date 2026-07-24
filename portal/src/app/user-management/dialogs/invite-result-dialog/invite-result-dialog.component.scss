@@ -1,12 +1,25 @@
 .invite-result {
-  padding: 4px;
+  padding: 20px 24px 24px;
   max-width: 520px;
+
+  // mat-dialog-content/mat-dialog-actions carry their own default padding,
+  // which stacks on top of ours and throws off alignment with the header.
+  ::ng-deep mat-dialog-content {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  ::ng-deep mat-dialog-actions {
+    padding: 20px 0 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+  }
 
   &__header {
     display: flex;
     gap: 14px;
-    align-items: flex-start;
-    margin-bottom: 8px;
+    align-items: center;
+    margin-bottom: 20px;
   }
 
   &__icon {
@@ -22,12 +35,30 @@
     mat-icon { font-size: 24px; width: 24px; height: 24px; }
   }
 
-  h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  &__text {
+    flex: 1;
+  }
+
+  // mat-dialog-title's own class carries a tall default box (built for a
+  // standalone headline, not one paired with a subtitle right underneath) —
+  // collapse it down to just the text instead of guessing at a compensating
+  // margin.
+  ::ng-deep h2.mat-mdc-dialog-title {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+  }
 
   &__sub {
     margin: 4px 0 0;
     font-size: 13px;
     color: var(--color-muted);
+    line-height: 1.3;
   }
 
   &__label {
@@ -40,7 +71,7 @@
 
   &__link-row {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     align-items: stretch;
   }
 
@@ -56,16 +87,36 @@
     background: var(--color-side);
   }
 
-  &__copy { flex: 0 0 auto; }
+  &__copy {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: auto;
+    background: var(--color-primary) !important;
+    color: #fff !important;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: background 0.15s ease;
+
+    mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+    &:hover { background: var(--color-primary-dark) !important; }
+
+    &--copied {
+      background: var(--color-success) !important;
+    }
+  }
 
   &__hint {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: flex-start;
-    margin: 12px 0 0;
+    margin: 14px 0 0;
+    padding-top: 2px;
     font-size: 12px;
     color: var(--color-muted);
 
-    mat-icon { font-size: 16px; width: 16px; height: 16px; margin-top: 1px; }
+    mat-icon { font-size: 16px; width: 16px; height: 16px; margin-top: 1px; flex-shrink: 0; }
   }
 }
