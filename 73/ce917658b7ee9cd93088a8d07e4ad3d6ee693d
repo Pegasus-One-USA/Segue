@@ -1,0 +1,56 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_d68f9144c308b2::t_24a5daf33d3b61 916-918
+  s_d68f9144c308b2::t_08aa308c0e422f 404-409
+  s_d68f9144c308b2::t_1bb4694e699c41 1406,1408-1410,1412
+  s_d68f9144c308b2::t_71012d35f4d20c 1331,1344-1345,1407
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_d68f9144c308b2::t_1d5993c2ccd0a8 7-23
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_d68f9144c308b2::t_fc622056549bc0 238,240-242,245-246
+portal/src/app/services/wizard.service.ts
+  s_d68f9144c308b2::t_df2afb35abd44f 377-382
+  s_d68f9144c308b2::t_791ba2f02177e4 414-419,422
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_d68f9144c308b2::t_31dd0ca648cc85 506,509
+  s_d68f9144c308b2::t_3f752382796ddc 416
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_d68f9144c308b2::t_3631c441fa70d3 8-9
+  s_d68f9144c308b2::t_d444fc40f9c9ac 18
+  s_d68f9144c308b2::t_3f15eca4db7646 529-593
+  s_d68f9144c308b2::t_9abd3967a632a3 811-816
+  s_d68f9144c308b2::t_793592ded1ab7b 457-464,466-471,475-480,483-489,491-495
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_d68f9144c308b2::t_685f30611938b7 129-132
+  s_d68f9144c308b2::t_1cb8eee87526cb 682-694
+  s_d68f9144c308b2::t_0aaa00969ad9ca 781-804,807-808
+  s_3679e3048431dc::t_c8a79889501927 680-681
+  s_d68f9144c308b2::t_a616d39003915c 23
+  s_d68f9144c308b2::t_d822e7626d2298 515-519,525-527,539-602,605-606
+  s_d68f9144c308b2::t_b60a0db986d605 5
+  s_d68f9144c308b2::t_8e6379685fa7c0 672-676,678-679
+  s_d68f9144c308b2::t_9f867a3486ed4c 723-724,726-754,756-757
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "73ce917658b7ee9cd93088a8d07e4ad3d6ee693d",
+  "prompts": {},
+  "sessions": {
+    "s_3679e3048431dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1568ea7-c9f3-4703-ba4e-28032014b5af",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
