@@ -1,0 +1,19 @@
+src/Api/FHIRBridge.Api/appsettings.json
+  s_186f29e2f1d77f::t_fb574d992bbe79 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "34ccf1adcfdd0a98db38b4b5be43127aa1d15cbd",
+  "prompts": {},
+  "sessions": {
+    "s_186f29e2f1d77f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3782aae-101c-4e63-a586-dcb771d80883",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

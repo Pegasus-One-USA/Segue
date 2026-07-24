@@ -1,0 +1,26 @@
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_d68f9144c308b2::t_1ca78ca77e7f1f 1
+  s_d68f9144c308b2::t_e6108a3e89f8f2 70-74,223-231,244-255,261
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_d68f9144c308b2::t_057873689fdb7c 44-46
+  s_d68f9144c308b2::t_c3f4ddfa68278f 101-125,163-189
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_d68f9144c308b2::t_ecdae222cd6bff 4
+  s_d68f9144c308b2::t_d2db9d40a451a8 16,21-22,24-26,28-30,32-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "07222e13f1cc3c3ab938ca68a448e1ed301c3c63",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}

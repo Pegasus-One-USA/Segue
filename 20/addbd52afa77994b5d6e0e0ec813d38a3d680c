@@ -1,0 +1,25 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_d68f9144c308b2::t_284abe35bea2c3 239
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_d68f9144c308b2::t_c85feb4c300d95 381-385,388,676,795-805,1033-1037
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_d68f9144c308b2::t_8113b9ce2e4e55 16,207-210
+portal/src/app/user-management/pages/role-list/role-list.component.scss
+  s_d68f9144c308b2::t_93d73c9980911e 198,262-263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "20addbd52afa77994b5d6e0e0ec813d38a3d680c",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
