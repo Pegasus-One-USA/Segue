@@ -118,11 +118,15 @@ export class DestinationConnectionDialogComponent {
           }
         : {
             name,
-            destinationType: config['dest_storageType'] === 'sftp' ? 'Sftp' : 'Csv',
+            // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson
+            // field (dest_deliveryMode), not the DestinationType — a single writer dispatches on it internally.
+            destinationType: 'Csv',
             keyVaultName: 'workflow-secrets',
             secretName: newSecretName(name),
             target: config['dest_filePattern'] || null,
-            inlineSecret: config['dest_storageType'] === 'sftp' ? buildSftpUri(config) : config['dest_folder'] || '',
+            // Only SFTP delivery actually reads this secret; the other three modes never resolve it, so any
+            // placeholder value is fine there.
+            inlineSecret: config['dest_deliveryMode'] === 'sftp' ? buildSftpUri(config) : '',
             connectionMetadataJson: buildConnectionMetadata(config, false),
           };
 
@@ -154,9 +158,9 @@ export class DestinationConnectionDialogComponent {
       const isSql = this.chosenType() === 'sql';
       request.inlineSecret = isSql
         ? buildSqlConnectionString(config)
-        : config['dest_storageType'] === 'sftp'
+        : config['dest_deliveryMode'] === 'sftp'
           ? buildSftpUri(config)
-          : config['dest_folder'] || '';
+          : '';
       request.connectionMetadataJson = buildConnectionMetadata(config, isSql);
     }
 

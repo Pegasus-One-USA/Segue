@@ -15,14 +15,12 @@
 | `TenantConfigurationsController` | `/tenants` | tenant CRUD; source-connections (add/update/deactivate/test); tenant users; webhooks; destinations (+schema); mapping-profiles; resources + routes; `/tenants/import` YAML manifest |
 | `MappingController` | `/mapping` | test mapping; catalog resources + fields |
 | `PipelineRunsController` | `/tenants/{id}/pipeline-runs` | start (supports bulk), list, deactivate |
-| `FhirBridgeAggregationController` | `/tenants/{id}/fhirbridge/Patient/{id}` | synchronous patient read → FHIR searchset Bundle; PHI-free audit |
+| `FhirBridgeAggregationController` | `/tenants/{id}/fhirbridge/Patient/{id}` | synchronous patient read → FHIR searchset Bundle |
 | `WebhookIngestionController` | `/tenants/{id}/webhooks/{id}/ingest` | **anonymous**; sync inline or async queue |
 | `OAuthController` | `/tenants/.../oauth/*` | `authorize`, `launch` (anon SMART EHR-launch), `/oauth/callback` (anon) |
 | `SourceCapabilitiesController` | `/tenants/.../source-connections/{id}` | `capabilities/discover`, `smart-configuration`, get capabilities, `catalog/resources` |
 | `SubscriptionsController` | `/tenants/{id}/subscriptions` | register/delete FHIR rest-hook Subscriptions on source |
 | `InsightsController` | `/tenants/{id}/insights` | `measure-report` (HEDIS), `anomalies` |
-| `LineageController` | `/tenants/{id}/lineage` | chain-of-custody query (PHI-free) |
-| `OperationalAuditLogsController` | `/tenants/{id}/audit-logs` | list operational events |
 | `ObservabilityController` | `/observability/metrics` | pipeline metrics snapshot (aggregates API + Worker) |
 | `WorkflowEndpoints` (minimal API, `Workflows/`) | `/tenants/{id}/workflows` | workflow-catalog, workflow CRUD, validate, run, activate/deactivate |
 

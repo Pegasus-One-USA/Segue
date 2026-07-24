@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
@@ -17,9 +16,8 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -30,9 +28,8 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -43,9 +40,8 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -56,9 +52,8 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -69,9 +64,8 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -82,9 +76,8 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -95,9 +88,8 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -108,9 +100,8 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, auditService)
+        IFhirBulkExportClient? bulkExportClient = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
     {
     }
 }
@@ -136,7 +127,6 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly ISourceConnectionRuntimeResolver? _sourceResolver;
     private readonly ISourceConnectionSyncCursorStore? _syncCursorStore;
     private readonly IFhirBulkExportClient? _bulkExportClient;
-    private readonly IOperationalAuditService? _auditService;
 
     protected SourceNodeExecutor(
         string nodeType,
@@ -144,8 +134,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IFhirSourceClientFactory? sourceClientFactory,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null,
-        IOperationalAuditService? auditService = null)
+        IFhirBulkExportClient? bulkExportClient = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
@@ -153,7 +142,6 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _sourceResolver = sourceResolver;
         _syncCursorStore = syncCursorStore;
         _bulkExportClient = bulkExportClient;
-        _auditService = auditService;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -225,17 +213,43 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
             && _bulkExportClient is not null;
 
+        // Extract "Patient" first (regardless of where it falls in the wizard-authored order) so its resulting ids
+        // become a cohort every sibling resource type is scoped to below — without this, a multi-resource selection
+        // (e.g. Patient + Observation) would fetch Observation completely unscoped against the whole tenant.
+        var executionOrder = resourceTypes
+            .OrderBy(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ToList();
+
+        IReadOnlyList<string>? cohortPatientIds = null;
         var resources = new List<ResourceEnvelope>();
-        foreach (var type in resourceTypes)
+        foreach (var type in executionOrder)
         {
+            var isPatientType = string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase);
+
             IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page = useBulkExport
-                ? await _bulkExportClient!.ExportAsync(BuildBulkExportRequest(source, type), source, cancellationToken)
-                : await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken);
+                ? await _bulkExportClient!.ExportAsync(
+                    await BuildBulkExportRequestAsync(
+                        source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
+                    source,
+                    cancellationToken)
+                : isPatientType || cohortPatientIds is not { Count: > 0 }
+                    ? await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken)
+                    : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
 
             resources.AddRange(page.Select(resource => new ResourceEnvelope(
                 resource.ResourceType,
                 resource.ResourceId ?? string.Empty,
                 resource.RawJson)));
+
+            if (isPatientType)
+            {
+                cohortPatientIds = page
+                    .Select(resource => resource.ResourceId)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id!)
+                    .Distinct()
+                    .ToList();
+            }
         }
 
         if (source.MaxRecords is { } maxRecords && resources.Count > maxRecords)
@@ -263,8 +277,39 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 // Reflects what actually ran (bulk client available and configured), not just what was configured —
                 // lets a caller (e.g. the /run endpoint's Activity Feed summary) label a run as a Bulk Export
                 // without duplicating this resolution logic.
-                ["retrievalMethod"] = useBulkExport ? "bulk-export" : "search-rest"
+                ["retrievalMethod"] = useBulkExport ? "bulk-export" : "search-rest",
+                // Non-null only when "Patient" was among this node's resource types — how many patients its own
+                // extraction found, and so how many sibling resource types (Observation, Condition, ...) got scoped
+                // to. Absent/zero means every other resource type in this node ran unscoped (no Patient selected).
+                ["cohortSize"] = cohortPatientIds?.Count
             });
+    }
+
+    /// <summary>
+    /// Batches a cohort-scoped search: <see cref="FhirSourceConfiguration.PatientIds"/> is OR'd into a single
+    /// <c>patient=</c> parameter by <c>FhirSourceConnectorBase.ApplyPatientScopeAsync</c>, but most FHIR servers
+    /// (Epic included) cap how many comma-separated reference values one request reasonably supports — so the
+    /// cohort is split into fixed-size batches, each run through the existing per-type retry/timeout wrapper, and
+    /// the pages concatenated. A cohort at or under one batch still makes exactly one request, unchanged.
+    /// </summary>
+    private const int CohortBatchSize = 50;
+
+    private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> SearchCohortScopedAsync(
+        IFhirSourceClient client,
+        string resourceType,
+        FhirSourceConfiguration source,
+        IReadOnlyList<string> cohortPatientIds,
+        Guid workflowRunId,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
+        foreach (var batch in cohortPatientIds.Chunk(CohortBatchSize))
+        {
+            var batchSource = source with { PatientIds = batch, TargetPatientId = null };
+            results.AddRange(await SearchWithPolicyAsync(client, resourceType, batchSource, workflowRunId, cancellationToken));
+        }
+
+        return results;
     }
 
     /// <summary>
@@ -344,27 +389,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             try
             {
                 var result = await client.SearchAsync(resourceType, source, timeoutCts?.Token ?? cancellationToken);
-                if (attempt > 1)
-                {
-                    await RecordRetryOutcomeAsync(
-                        workflowRunId, source, resourceType, OperationalLogSeverities.Information,
-                        "ResourceFetchRetrySucceeded", "Succeeded",
-                        $"Fetching {resourceType} succeeded on retry attempt {attempt}.", cancellationToken);
-                }
-
                 return result;
             }
-            catch (Exception exception) when (attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
+            catch (Exception) when (attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
             {
                 // The outer token is still live, so whatever was caught is either a timeout (inner token fired) or a
                 // transient failure the connector's own retries didn't recover from — back off and try the whole
                 // resource-type fetch again.
-                await RecordRetryOutcomeAsync(
-                    workflowRunId, source, resourceType, OperationalLogSeverities.Warning,
-                    "ResourceFetchRetried", "Retrying",
-                    $"Fetching {resourceType} failed on attempt {attempt}/{maxAttempts}: {exception.Message}. Retrying.",
-                    cancellationToken);
-
                 var delay = source.RetryPolicy == "exponential"
                     ? TimeSpan.FromSeconds(Math.Pow(2, attempt - 1))
                     : TimeSpan.FromSeconds(1);
@@ -373,51 +404,46 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
     }
 
-    private Task RecordRetryOutcomeAsync(
-        Guid workflowRunId,
-        FhirSourceConfiguration source,
-        string resourceType,
-        string severity,
-        string action,
-        string status,
-        string message,
-        CancellationToken cancellationToken)
-    {
-        if (_auditService is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        return _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                workflowRunId,
-                null,
-                source.SourceConnectionId,
-                null,
-                null,
-                resourceType,
-                action,
-                status,
-                message,
-                null,
-                null,
-                null,
-                severity),
-            cancellationToken);
-    }
-
     // Projects the resolved source's bulk-export settings onto a $export request for one resource type — mirrors the
     // configured-pipeline plane so a graph run and a route run scope the export identically. Scope drives which id
-    // narrows the export (Group id vs patient list); System carries neither.
-    private static FhirBulkExportRequest BuildBulkExportRequest(FhirSourceConfiguration source, string resourceType)
+    // narrows the export (Group id vs patient list); System carries neither. When this node's own Patient
+    // extraction discovered a cohort (cohortPatientIds), an unset or already-Patient-scoped export is narrowed to
+    // it. System/Group scope can't be narrowed to an ad hoc cohort by $export semantics — left as configured.
+    private async Task<FhirBulkExportRequest> BuildBulkExportRequestAsync(
+        FhirSourceConfiguration source,
+        string resourceType,
+        IReadOnlyList<string>? cohortPatientIds,
+        Guid workflowRunId,
+        CancellationToken cancellationToken)
     {
-        var scope = BulkExportScopes.Parse(source.ExportScope);
+        var configuredScope = BulkExportScopes.Parse(source.ExportScope);
+        var hasCohort = cohortPatientIds is { Count: > 0 };
+
+        // An unset ExportScope parses to System (BulkExportScopes.Parse's default), indistinguishable from an
+        // explicit "system" — but only an *explicit* System/Group choice should be left un-narrowed below; an
+        // unset scope should still pick up the cohort like the Patient-scope branch does.
+        var explicitlyUnscopable = hasCohort
+            && !string.IsNullOrWhiteSpace(source.ExportScope)
+            && configuredScope is BulkExportScope.System or BulkExportScope.Group;
+
+        if (explicitlyUnscopable)
+        {
+            return new FhirBulkExportRequest(
+                configuredScope,
+                GroupId: configuredScope == BulkExportScope.Group ? source.GroupId : null,
+                ResourceTypes: [resourceType],
+                Since: source.Since,
+                PatientIds: null,
+                OutputFormat: source.OutputFormat);
+        }
+
+        var effectiveScope = hasCohort ? BulkExportScope.Patient : configuredScope;
         return new FhirBulkExportRequest(
-            scope,
-            GroupId: scope == BulkExportScope.Group ? source.GroupId : null,
+            effectiveScope,
+            GroupId: effectiveScope == BulkExportScope.Group ? source.GroupId : null,
             ResourceTypes: [resourceType],
             Since: source.Since,
-            PatientIds: scope == BulkExportScope.Patient ? source.PatientIds : null,
+            PatientIds: effectiveScope == BulkExportScope.Patient ? (cohortPatientIds ?? source.PatientIds) : null,
             OutputFormat: source.OutputFormat);
     }
 

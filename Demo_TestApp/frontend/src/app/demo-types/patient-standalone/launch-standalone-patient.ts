@@ -1,23 +1,26 @@
 import { Component, NgZone, OnInit, input, output, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {
   FetchedPatient,
   MyChartEndpoint,
   PatientDetail,
   PatientStandaloneLaunchService,
+  extractDownloadUrl,
   extractFetchedPatients,
   extractPatientDetail,
   indicatesReAuthorizationNeeded,
 } from './core/services/patient-standalone-launch.service';
-import { PATIENT_DETAIL_WORKFLOW_ID, PATIENT_WORKFLOW_ID } from './core/config/standalone-launch.config';
+import {
+  CSV_EMAIL_EXPORT_WORKFLOW_ID,
+  CSV_EXPORT_WORKFLOW_ID,
+} from './core/config/standalone-launch.config';
 
 @Component({
   selector: 'app-launch-standalone-patient',
   standalone: true,
-  imports: [DatePipe, MatCardModule, MatProgressSpinnerModule],
+  imports: [DatePipe, MatProgressSpinnerModule],
   providers: [PatientStandaloneLaunchService],
   templateUrl: './launch-standalone-patient.html',
   styleUrl: './launch-standalone-patient.scss',
@@ -26,6 +29,16 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
 
+  // Deliberately a fixed redirect to the app root, not window.history.back(): a real MyChart sign-in round trip
+  // pushes several history entries (dashboard → this page → the external MyChart login page → back here), so one
+  // history.back() would land on the external MyChart page rather than the demo-type-1 dashboard this component is
+  // always reached from. The root path re-renders that dashboard directly (the Patient role persists in
+  // sessionStorage — see app.ts's AUTH_ROLE_STORAGE_KEY — and app.html's isOnPatientStandaloneLaunchPath check is
+  // false there).
+  goHome(): void {
+    window.location.href = '/';
+  }
+
   // Purely informational badge — never gates whether the Connect button is shown. The real, authoritative check is
   // always the next actual /run attempt (see fetchPatient); this is just a "last known good" hint carried over from
   // HealthApp's own remembered session or the most recent successful fetch.
@@ -33,6 +46,11 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly lastConfirmedValidUtc = signal<string | null>(null);
 
   readonly launchError = signal<string | null>(null);
+
+  // Set when loadConfig() comes back with no PatientWorkflowId configured yet (WorkflowSettingsEntity's default is
+  // empty — see HealthAppDbContext) — every other call in this component assumes a real workflow id, so this short-
+  // circuits ngOnInit before any of them fire instead of letting them all 404 individually.
+  readonly configError = signal<string | null>(null);
 
   readonly isFetchingPatient = signal(false);
   readonly patientError = signal<string | null>(null);
@@ -45,6 +63,19 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly isFetchingPatientDetail = signal(false);
   readonly patientDetailError = signal<string | null>(null);
   readonly patientDetail = signal<PatientDetail | null>(null);
+
+  // "Download Patient Information" — a third, independent workflow (CSV_EXPORT_WORKFLOW_ID) whose destination uses
+  // Download-URL delivery. Only enabled once a specific patient's detail is open, since it downloads for whichever
+  // patientId is currently selected (see downloadPatientInformation).
+  readonly isDownloadingPatientInfo = signal(false);
+  readonly downloadError = signal<string | null>(null);
+
+  // "Email Patient Information" — same shape as the download button above, but backed by CSV_EMAIL_EXPORT_WORKFLOW_ID
+  // (Email delivery instead of Download-URL). A Succeeded run means the file was already sent server-side, so there's
+  // nothing to navigate to — emailSuccess just confirms it happened.
+  readonly isEmailingPatientInfo = signal(false);
+  readonly emailError = signal<string | null>(null);
+  readonly emailSuccess = signal(false);
 
   // True while a remembered session is still being checked (on load) or a just-completed launch's patientId is
   // still being resolved from /launch-result — gates the Connect button so a click can't race ahead of patientId
@@ -66,67 +97,118 @@ export class LaunchStandalonePatientComponent implements OnInit {
 
   private patientId: string | null = null;
 
+  // Resolved once by initialize()'s loadConfig() call before anything below runs — see WorkflowSettingsEntity for
+  // where these now live (formerly a gitignored per-developer local file, standalone-launch.config.ts). Two
+  // distinct workflow ids: workflowId drives the list fetch, detailWorkflowId the separate per-patient detail fetch
+  // triggered by viewPatientDetail — each has its own independent FHIRBridge public-launch opt-in.
+  private workflowId = '';
+  private detailWorkflowId = '';
+
   constructor(
     private readonly launchService: PatientStandaloneLaunchService,
     private readonly ngZone: NgZone,
   ) {}
 
   ngOnInit(): void {
+    void this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
     // FHIRBridge's OAuth callback redirects back here with one of three markers (see OAuthController.Callback):
     // ?workflowRunId=... when its own no-criteria convenience run got a real run id, ?launchError=... when that run
     // was attempted but threw, or ?signedIn=1 when the convenience run was deliberately skipped altogether (the
     // common case for a Patient Standalone sign-in with no upfront search criteria). All three only ever appear
     // once the token exchange itself has already succeeded. Read straight off window.location rather than
     // ActivatedRoute: this app never uses a real <router-outlet> for this content (app.html renders it via a plain
-    // selectedDemoType() @if/@else-if), so ActivatedRoute here could race Angular Router's own async
-    // initialization on the exact page load right after this full-page redirect back from MyChart.
+    // role() @if/@else-if), so ActivatedRoute here could race Angular Router's own async
+    // initialization on the exact page load right after this full-page redirect back from MyChart. This read is
+    // synchronous and needs no config, so it happens before loadConfig() even starts.
     const params = new URLSearchParams(window.location.search);
     const workflowRunId = params.get('workflowRunId');
     const launchError = params.get('launchError');
     const signedIn = params.get('signedIn');
-    if (workflowRunId || launchError || signedIn) {
-      // Consume these once, then strip them from the visible URL via the native History API — this app doesn't use
-      // <router-outlet> for this content, so a router.navigate() here has no component tree to target. Without
-      // stripping the query string, a later Ctrl+F5 (or just revisiting this URL) would re-run this exact branch
-      // every time, re-triggering an auto-fetch even after Reset Token deliberately cleared the session.
-      window.history.replaceState(null, '', window.location.pathname);
-      void this.loadHospitals();
+    const isOAuthCallback = !!(workflowRunId || launchError || signedIn);
 
-      this.hasMyChartToken.set(true);
-      this.launchError.set(launchError);
+    // checkRememberedSession() hits HealthApp's own backend and has no dependency on the FHIRBridge workflow
+    // id/base URL loadConfig() resolves below — kick it off in parallel rather than serializing it behind a
+    // request it doesn't need. Skipped entirely on the OAuth-callback path, matching the original behavior (that
+    // branch calls rememberSession() itself once the token exchange is confirmed, not this "was there already a
+    // remembered session" check).
+    const rememberedSessionCheck = isOAuthCallback ? null : this.checkRememberedSession();
 
-      // The OAuth token exchange itself has already succeeded by the time either query param appears — that's true
-      // regardless of whether the workflow it auto-triggered afterward found a specific patient. Remember the
-      // session now, with whatever patientId we have (often none yet) — a null patientId is valid; FHIRBridge falls
-      // back to its unscoped "default" token slot, which this exact login's token was also saved under.
-      void this.rememberSession();
+    // Resolve the admin-configured workflow id + base URL before anything else that needs them runs — every other
+    // call this component makes (loadHospitals, hasValidToken, run, ...) goes through
+    // PatientStandaloneLaunchService's own baseUrl/workflowId fields, which loadConfig() is what populates. See
+    // WorkflowSettingsEntity for where these now live (formerly a gitignored per-developer local file).
+    let settings;
+    try {
+      settings = await this.launchService.loadConfig();
+    } catch {
+      this.configError.set('Could not load Patient Standalone configuration from HealthApp. Check your connection and try again.');
+      return;
+    }
 
-      // Fire the real fetch now that the token is in place — this is the "get grant access and token and fetch the
-      // data" leg completing in one flow, rather than requiring a second manual click. Gating only on
-      // `if (workflowRunId)` would silently skip this for the extremely common "convenience run skipped, signedIn=1
-      // only" case (see InteractiveSourceAuthorizationService.CompleteAsync's skipWorkflowTrigger) — the fetch below
-      // must not depend on which query param came back, only on the token exchange having succeeded (true for
-      // either one).
-      if (workflowRunId) {
-        this.isResolvingPatientContext.set(true);
-        void this.loadLaunchResultPatientId(workflowRunId).then(succeeded => {
-          // Explicitly re-entering NgZone here is load-bearing, not defensive — two chained promise hops deep from
-          // ngOnInit (this .then(), then fetchPatient's own await), the continuation can land outside Angular's
-          // zone, so a signal write happens but no change-detection tick ever follows it.
-          if (succeeded) {
-            void this.ngZone.run(() => this.fetchPatient());
-          }
-        });
-      } else {
-        void this.ngZone.run(() => this.fetchPatient());
-      }
+    if (!settings.workflowId || !settings.baseUrl) {
+      this.configError.set(
+        'Patient Standalone is not configured yet. Ask an admin to set the Workflow Id and Base URL in Workflow Settings.',
+      );
+      return;
+    }
+
+    this.workflowId = settings.workflowId;
+    this.detailWorkflowId = settings.detailWorkflowId;
+
+    if (isOAuthCallback) {
+      await this.handleOAuthCallback(workflowRunId, launchError);
       return;
     }
 
     // The hospital list is always visible from the start (step 1 of the flow), regardless of whether a remembered
     // session exists — the user may still want to pick/change the target hospital before clicking Connect.
     void this.loadHospitals();
-    void this.checkRememberedSession();
+    void rememberedSessionCheck;
+  }
+
+  // The "just redirected back from MyChart" leg of initialize() — consumes the OAuth callback's query params once,
+  // then either resolves the auto-triggered convenience run's patient before fetching, or fetches directly.
+  // Extracted out of initialize() so that method reads as "resolve config, then pick a branch" rather than mixing
+  // config-resolution with this branch's own multi-step logic.
+  private async handleOAuthCallback(workflowRunId: string | null, launchError: string | null): Promise<void> {
+    // Consume these once, then strip them from the visible URL via the native History API — this app doesn't use
+    // <router-outlet> for this content, so a router.navigate() here has no component tree to target. Without
+    // stripping the query string, a later Ctrl+F5 (or just revisiting this URL) would re-run this exact branch
+    // every time, re-triggering an auto-fetch even after Reset Token deliberately cleared the session.
+    window.history.replaceState(null, '', window.location.pathname);
+    void this.loadHospitals();
+
+    this.hasMyChartToken.set(true);
+    this.launchError.set(launchError);
+
+    // The OAuth token exchange itself has already succeeded by the time either query param appears — that's true
+    // regardless of whether the workflow it auto-triggered afterward found a specific patient. Remember the
+    // session now, with whatever patientId we have (often none yet) — a null patientId is valid; FHIRBridge falls
+    // back to its unscoped "default" token slot, which this exact login's token was also saved under.
+    void this.rememberSession();
+
+    // Fire the real fetch now that the token is in place — this is the "get grant access and token and fetch the
+    // data" leg completing in one flow, rather than requiring a second manual click. Gating only on
+    // `if (workflowRunId)` would silently skip this for the extremely common "convenience run skipped, signedIn=1
+    // only" case (see InteractiveSourceAuthorizationService.CompleteAsync's skipWorkflowTrigger) — the fetch below
+    // must not depend on which query param came back, only on the token exchange having succeeded (true for
+    // either one).
+    if (workflowRunId) {
+      this.isResolvingPatientContext.set(true);
+      void this.loadLaunchResultPatientId(workflowRunId).then(succeeded => {
+        // Explicitly re-entering NgZone here is load-bearing, not defensive — two chained promise hops deep from
+        // ngOnInit (this .then(), then fetchPatient's own await), the continuation can land outside Angular's
+        // zone, so a signal write happens but no change-detection tick ever follows it.
+        if (succeeded) {
+          void this.ngZone.run(() => this.fetchPatient());
+        }
+      });
+    } else {
+      void this.ngZone.run(() => this.fetchPatient());
+    }
   }
 
   // Asks HealthApp's own backend (not FHIRBridge) whether this user has a remembered session — survives across
@@ -201,12 +283,12 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.isFetchingPatient.set(true);
     this.patientError.set(null);
     try {
-      if (!(await this.hasValidToken(PATIENT_WORKFLOW_ID))) {
-        await this.needsReAuthorization(PATIENT_WORKFLOW_ID);
+      if (!(await this.hasValidToken(this.workflowId))) {
+        await this.needsReAuthorization(this.workflowId);
         return;
       }
 
-      const result = await this.launchService.run(PATIENT_WORKFLOW_ID, this.patientId);
+      const result = await this.launchService.run(this.workflowId, this.patientId);
 
       if (result.workflowRun.status === 'Succeeded') {
         this.fetchedPatients.set(extractFetchedPatients(result));
@@ -223,7 +305,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       }
 
       await this.handleFetchFailure(
-        result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.', PATIENT_WORKFLOW_ID,
+        result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.', this.workflowId,
       );
     } catch (err) {
       // A failure resolved before the run even starts (e.g. no token cached at all, or an expired one) throws past
@@ -233,16 +315,17 @@ export class LaunchStandalonePatientComponent implements OnInit {
         : null;
       await this.handleFetchFailure(
         backendMessage ?? 'Could not reach FHIRBridge to trigger the workflow. Check your connection and try again.',
-        PATIENT_WORKFLOW_ID,
+        this.workflowId,
       );
     } finally {
       this.isFetchingPatient.set(false);
     }
   }
 
-  // Clicking a patient row triggers a second, patient-scoped /run against PATIENT_DETAIL_WORKFLOW_ID — a
-  // deliberately different workflow from the one that produced the list (PATIENT_WORKFLOW_ID), each with its own
-  // public-launch opt-in. Still reuses whatever token that workflow's own source connection already has cached, not
+  // Clicking a patient row triggers a second, patient-scoped /run against the detail workflow — a deliberately
+  // different workflow from the one that produced the list, each with its own public-launch opt-in (see
+  // detailWorkflowId/workflowId, both resolved once by initialize()'s loadConfig()). Still reuses whatever token
+  // that workflow's own source connection already has cached, not
   // an unconditional fresh sign-in — same token-status-then-run shape as fetchPatient() above, so an out-of-band
   // token revocation (or this workflow simply never having been signed into yet) is handled the same way (redirect
   // to MyChart) rather than silently failing.
@@ -256,12 +339,12 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.patientDetailError.set(null);
     this.patientDetail.set(null);
     try {
-      if (!(await this.hasValidToken(PATIENT_DETAIL_WORKFLOW_ID))) {
-        await this.needsReAuthorization(PATIENT_DETAIL_WORKFLOW_ID);
+      if (!(await this.hasValidToken(this.detailWorkflowId))) {
+        await this.needsReAuthorization(this.detailWorkflowId);
         return;
       }
 
-      const result = await this.launchService.run(PATIENT_DETAIL_WORKFLOW_ID, patient.id);
+      const result = await this.launchService.run(this.detailWorkflowId, patient.id);
 
       if (result.workflowRun.status === 'Succeeded') {
         const detail = extractPatientDetail(result, patient.id);
@@ -274,7 +357,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
 
       const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
       if (indicatesReAuthorizationNeeded(errorMessage)) {
-        await this.needsReAuthorization(PATIENT_DETAIL_WORKFLOW_ID);
+        await this.needsReAuthorization(this.detailWorkflowId);
         return;
       }
       this.patientDetailError.set(errorMessage);
@@ -285,7 +368,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       const errorMessage = backendMessage
         ?? 'Could not reach FHIRBridge to fetch this patient\'s detail. Check your connection and try again.';
       if (indicatesReAuthorizationNeeded(errorMessage)) {
-        await this.needsReAuthorization(PATIENT_DETAIL_WORKFLOW_ID);
+        await this.needsReAuthorization(this.detailWorkflowId);
         return;
       }
       this.patientDetailError.set(errorMessage);
@@ -298,6 +381,110 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.selectedPatientId.set(null);
     this.patientDetail.set(null);
     this.patientDetailError.set(null);
+    this.downloadError.set(null);
+    this.emailError.set(null);
+    this.emailSuccess.set(false);
+  }
+
+  // Triggers CSV_EXPORT_WORKFLOW_ID for whichever patient's detail is currently open. That workflow's destination
+  // uses Download-URL delivery, so a Succeeded run returns a signed link (extractDownloadUrl) rather than resource
+  // JSON — navigating the browser to it is enough to download, since the response carries
+  // Content-Disposition: attachment (no synthetic anchor/blob handling needed). Same token-status-then-run shape as
+  // fetchPatient/viewPatientDetail: an already-invalid token redirects to MyChart rather than wasting a /run call.
+  async downloadPatientInformation(): Promise<void> {
+    const patientId = this.selectedPatientId();
+    if (!patientId || this.isDownloadingPatientInfo() || this.isRedirectingToMyChart()) {
+      return;
+    }
+
+    this.isDownloadingPatientInfo.set(true);
+    this.downloadError.set(null);
+    try {
+      if (!(await this.hasValidToken(CSV_EXPORT_WORKFLOW_ID))) {
+        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+        return;
+      }
+
+      const result = await this.launchService.run(CSV_EXPORT_WORKFLOW_ID, patientId);
+
+      if (result.workflowRun.status !== 'Succeeded') {
+        const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
+        if (indicatesReAuthorizationNeeded(errorMessage)) {
+          await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+          return;
+        }
+        this.downloadError.set(errorMessage);
+        return;
+      }
+
+      const downloadUrl = extractDownloadUrl(result);
+      if (!downloadUrl) {
+        this.downloadError.set('FHIRBridge did not return a download link for this export.');
+        return;
+      }
+
+      window.location.href = downloadUrl;
+    } catch (err) {
+      const backendMessage = err instanceof HttpErrorResponse && typeof err.error?.error === 'string'
+        ? err.error.error
+        : null;
+      const errorMessage = backendMessage
+        ?? 'Could not reach FHIRBridge to generate this download. Check your connection and try again.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+        return;
+      }
+      this.downloadError.set(errorMessage);
+    } finally {
+      this.isDownloadingPatientInfo.set(false);
+    }
+  }
+
+  // Triggers CSV_EMAIL_EXPORT_WORKFLOW_ID for whichever patient's detail is currently open. That workflow's
+  // destination uses Email delivery, so a Succeeded run has already sent the file server-side — there is no link or
+  // bytes to hand back, just a status. Same token-status-then-run shape as downloadPatientInformation.
+  async emailPatientInformation(): Promise<void> {
+    const patientId = this.selectedPatientId();
+    if (!patientId || this.isEmailingPatientInfo() || this.isRedirectingToMyChart()) {
+      return;
+    }
+
+    this.isEmailingPatientInfo.set(true);
+    this.emailError.set(null);
+    this.emailSuccess.set(false);
+    try {
+      if (!(await this.hasValidToken(CSV_EMAIL_EXPORT_WORKFLOW_ID))) {
+        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+        return;
+      }
+
+      const result = await this.launchService.run(CSV_EMAIL_EXPORT_WORKFLOW_ID, patientId);
+
+      if (result.workflowRun.status !== 'Succeeded') {
+        const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
+        if (indicatesReAuthorizationNeeded(errorMessage)) {
+          await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+          return;
+        }
+        this.emailError.set(errorMessage);
+        return;
+      }
+
+      this.emailSuccess.set(true);
+    } catch (err) {
+      const backendMessage = err instanceof HttpErrorResponse && typeof err.error?.error === 'string'
+        ? err.error.error
+        : null;
+      const errorMessage = backendMessage
+        ?? 'Could not reach FHIRBridge to send this email. Check your connection and try again.';
+      if (indicatesReAuthorizationNeeded(errorMessage)) {
+        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+        return;
+      }
+      this.emailError.set(errorMessage);
+    } finally {
+      this.isEmailingPatientInfo.set(false);
+    }
   }
 
   // Cheap pre-check: does FHIRBridge currently have (or can it silently refresh) a usable token, without running
@@ -326,9 +513,9 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // Clears the stale local/FHIRBridge state and redirects to MyChart using whichever hospital the user already
   // selected above — the "if not valid, goto MyChart, grant access, fetch data and display" leg. If the user hasn't
   // selected a hospital yet, there's nothing to redirect to, so this just asks them to pick one instead of guessing.
-  // workflowId is whichever workflow's token-status/run call discovered the problem (PATIENT_WORKFLOW_ID for the
-  // list, PATIENT_DETAIL_WORKFLOW_ID for a per-patient detail click) — the mint call below must target that same
-  // workflow, since each has its own independent public-launch opt-in and (potentially) its own source connection.
+  // workflowId is whichever workflow's token-status/run call discovered the problem (this.workflowId for the list,
+  // this.detailWorkflowId for a per-patient detail click) — the mint call below must target that same workflow,
+  // since each has its own independent public-launch opt-in and (potentially) its own source connection.
   private async needsReAuthorization(workflowId: string): Promise<void> {
     void this.forgetSession();
     this.patientId = null;
@@ -380,7 +567,15 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.isRedirectingToMyChart.set(true);
     this.hospitalSelectError.set(null);
     try {
-      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id);
+      // callerId tells FHIRBridge's OAuthController.Callback to redirect the browser straight back to this exact
+      // page (see ngOnInit) once the token exchange completes, instead of falling back to the source connection's
+      // static PostLaunchRedirectUri — see InteractiveSourceAuthorizationService.CompleteAsync, where a caller-
+      // supplied callerId always wins over that DB field. Origin + pathname only (no existing query/hash): the
+      // callback appends its own workflowRunId/launchError/signedIn marker on top, and ngOnInit strips whatever
+      // query string is present anyway. FHIRBridge validates the origin against Portal:AllowedOrigins before
+      // honoring it (CallerIdOriginValidator) — this page's origin must be listed there.
+      const callerId = `${window.location.origin}${window.location.pathname}`;
+      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id, callerId);
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);
@@ -405,11 +600,14 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.selectedPatientId.set(null);
     this.patientDetail.set(null);
     this.patientDetailError.set(null);
+    this.downloadError.set(null);
+    this.emailError.set(null);
+    this.emailSuccess.set(false);
   }
 
   private async discardFhirBridgeToken(): Promise<void> {
     try {
-      await this.launchService.discardToken(PATIENT_WORKFLOW_ID, this.patientId);
+      await this.launchService.discardToken(this.workflowId, this.patientId);
     } catch {
       // Non-fatal — worst case FHIRBridge's cache still has the old token, which the next /run attempt would just
       // successfully reuse (same as if Reset Token had never been clicked); nothing is left in a broken state.

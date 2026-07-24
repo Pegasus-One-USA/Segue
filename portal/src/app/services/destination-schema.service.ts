@@ -124,6 +124,15 @@ export class DestinationSchemaService {
     return this.http.post<DestinationSchemaProbe>(DESTINATION_ENDPOINTS.schemaPreview, request);
   }
 
+  /** Tables/columns of an already-saved destination, read server-side via its stored secret reference —
+   *  unlike probe(), never needs a plaintext password on the client (which is deliberately never persisted
+   *  back onto a workflow node's own config; see workflow-graph-mapper.service.ts's SECRET_FIELD_KEYS). */
+  getSchema(destinationId: string): Observable<{ destinationId: string; tables: DestinationTable[] }> {
+    return this.http.get<{ destinationId: string; tables: DestinationTable[] }>(
+      DESTINATION_ENDPOINTS.schema(destinationId),
+    );
+  }
+
   addColumn(request: AddColumnRequest): Observable<SchemaMutationResult> {
     return this.http.post<SchemaMutationResult>(DESTINATION_ENDPOINTS.addColumn, request);
   }

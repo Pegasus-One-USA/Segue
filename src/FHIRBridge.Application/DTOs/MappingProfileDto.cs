@@ -8,4 +8,8 @@ public sealed record MappingProfileDto(
     Guid DestinationId,
     string DestinationObject,
     IReadOnlyList<MappingFieldDto> Fields,
-    bool IsEnabled);
+    bool IsEnabled,
+    /// <summary>Set only by <c>MappingImportService</c> (the Mapping Config Import wizard). Null for a profile
+    /// created/updated via the simpler workflow-build path (<c>ConfigurationService.AddMappingProfileAsync</c>)
+    /// — the reliable signal for "this profile's JsonPaths were properly derived, don't overwrite them."</summary>
+    string? MappingJson = null);

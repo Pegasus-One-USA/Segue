@@ -13,6 +13,7 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
 using FHIRBridge.Runtime.Domain.Workflows;
+using RuntimeDestinationWriteResult = FHIRBridge.Runtime.Application.Workflows.Payloads.DestinationWriteResult;
 
 namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
@@ -184,7 +185,7 @@ public sealed class InMemoryDestinationNodeExecutor : DestinationNodeExecutor
     }
 }
 
-/// <summary>Phase 2 example node: consumes an upstream destination's <see cref="DestinationWriteResult"/> (not
+/// <summary>Phase 2 example node: consumes an upstream destination's <see cref="RuntimeDestinationWriteResult"/> (not
 /// fresh mapped records) and notifies a webhook that the write completed. Not currently exposed in the catalog
 /// (see the "GATED" comment in DefaultWorkflowNodeCatalog.cs) — implemented and DI-registered so it's ready to
 /// re-list once this capability is actually in scope, matching the same gating pattern already used for the other
@@ -209,9 +210,9 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        var upstreamWrite = inputs.Select(input => input.Payload).OfType<DestinationWriteResult>().FirstOrDefault();
+        var upstreamWrite = inputs.Select(input => input.Payload).OfType<RuntimeDestinationWriteResult>().FirstOrDefault();
         var config = ReadWebhookConfiguration(node);
-        var result = new DestinationWriteResult(
+        var result = new RuntimeDestinationWriteResult(
             upstreamWrite?.DestinationId ?? node.Id.ToString("N"),
             upstreamWrite?.RecordsWritten ?? 0,
             DateTimeOffset.UtcNow);
@@ -261,8 +262,8 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
         WorkflowNode node,
         IReadOnlyCollection<WorkflowNodeOutput> inputs)
     {
-        var upstreamWrite = inputs.Select(input => input.Payload).OfType<DestinationWriteResult>().FirstOrDefault();
-        return new DestinationWriteResult(
+        var upstreamWrite = inputs.Select(input => input.Payload).OfType<RuntimeDestinationWriteResult>().FirstOrDefault();
+        return new RuntimeDestinationWriteResult(
             upstreamWrite?.DestinationId ?? node.Id.ToString("N"),
             upstreamWrite?.RecordsWritten ?? 0,
             DateTimeOffset.UtcNow);
@@ -359,7 +360,7 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
     }
 
     private static string BuildPayloadJson(
-        WebhookConfiguration config, WorkflowExecutionContext context, DestinationWriteResult? upstreamWrite)
+        WebhookConfiguration config, WorkflowExecutionContext context, RuntimeDestinationWriteResult? upstreamWrite)
     {
         if (config.PayloadTemplate == WebhookPayloadTemplate.Custom
             && !string.IsNullOrWhiteSpace(config.CustomPayloadTemplate))
@@ -381,7 +382,7 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
     }
 
     private static string RenderCustomTemplate(
-        string template, WorkflowExecutionContext context, DestinationWriteResult? upstreamWrite)
+        string template, WorkflowExecutionContext context, RuntimeDestinationWriteResult? upstreamWrite)
         => template
             .Replace("{{destinationId}}", upstreamWrite?.DestinationId ?? string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace("{{recordsWritten}}", (upstreamWrite?.RecordsWritten ?? 0).ToString(), StringComparison.OrdinalIgnoreCase)
@@ -492,8 +493,16 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         }
 
         var writer = _writerFactory.Create(_destinationType);
-        var written = await writer.WriteAsync(destination, mappingProfile, records, cancellationToken);
-        var result = new DestinationWriteResult(destination.Id.ToString("N"), written, DateTimeOffset.UtcNow);
+        // The Runtime DAG engine has no HTTP response to carry Download-mode bytes back through — this run always
+        // executes as a background node, not a synchronous API call — so inline delivery is never allowed here.
+        var writeContext = new PipelineWriteContext(
+            AllowInlineDelivery: false,
+            node.NodeType,
+            DateTimeOffset.UtcNow);
+        var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
+        var written = writeResult.Count;
+        var result = new RuntimeDestinationWriteResult(
+            destination.Id.ToString("N"), written, DateTimeOffset.UtcNow);
 
         return new WorkflowNodeOutput(
             node.Id,
@@ -504,7 +513,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             {
                 ["executor"] = GetType().Name,
                 ["destinationType"] = _destinationType.ToString(),
-                ["recordsWritten"] = written
+                ["recordsWritten"] = written,
+                // Populated only for a CSV destination using Download-URL delivery — the caller of /run reads this
+                // back to fetch the generated file. Download (inline-bytes) delivery is not supported on this engine
+                // (see the AllowInlineDelivery comment above) and will have already thrown before reaching here.
+                ["downloadUrl"] = writeResult.DownloadUrl
             });
     }
 
@@ -518,7 +531,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             ?.Value
             ?? node.Id.ToString("N");
 
-        return new DestinationWriteResult(destinationId, inputs.Count, DateTimeOffset.UtcNow);
+        return new RuntimeDestinationWriteResult(destinationId, inputs.Count, DateTimeOffset.UtcNow);
     }
 
     private DestinationConfiguration CreateDestinationConfiguration(WorkflowExecutionContext context, WorkflowNode node)
@@ -532,7 +545,38 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             node.DisplayName,
             _destinationType,
             new SecretReference(keyVaultName, secretName),
-            target);
+            target,
+            BuildConnectionMetadataJson(node));
+    }
+
+    // The wizard stores a destination node's dest_* fields (delivery mode, email/SFTP/download-link settings, ...)
+    // as flat top-level properties on the node's own ConfigurationJson — the same shape
+    // DestinationConfiguration.ConnectionMetadataJson expects. Without this, a graph-driven run reconstructs the
+    // destination with ConnectionMetadataJson permanently null, silently losing every dest_* setting (e.g. a CSV
+    // destination's delivery mode always defaulting to Download regardless of what was actually configured).
+    private static string? BuildConnectionMetadataJson(WorkflowNode node)
+    {
+        if (string.IsNullOrWhiteSpace(node.ConfigurationJson))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(node.ConfigurationJson);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var metadata = new Dictionary<string, JsonElement>();
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            if (property.Name.StartsWith("dest_", StringComparison.Ordinal))
+            {
+                metadata[property.Name] = property.Value.Clone();
+            }
+        }
+
+        return metadata.Count == 0 ? null : JsonSerializer.Serialize(metadata, JsonOptions);
     }
 
     private static MappingProfile CreateMappingProfile(

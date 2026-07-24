@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
@@ -22,16 +21,12 @@ public sealed class MappingProfileCapabilityGatingTests
     private readonly InMemoryConfigurationRepository _repository = new();
     private readonly InMemorySourceCapabilityRepository _capabilityRepository = new();
     private readonly Mock<ISourceCapabilityDiscoveryService> _discovery = new();
-    private readonly Mock<IUserActivityAuditService> _activityAudit = new();
-    private readonly Mock<ICurrentUserService> _currentUser = new();
     private readonly ConfigurationService _sut;
 
     public MappingProfileCapabilityGatingTests()
     {
-        _currentUser.SetupGet(x => x.CurrentUser)
-            .Returns(new CurrentUserInfo("admin", "admin@example.com", "Admin", ["Administrator"], true));
         _sut = new ConfigurationService(
-            _repository, _capabilityRepository, _discovery.Object, _activityAudit.Object, _currentUser.Object,
+            _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>());
     }
 
@@ -58,43 +53,6 @@ public sealed class MappingProfileCapabilityGatingTests
 
         _discovery.Verify(
             x => x.DiscoverAsync(source.Id, It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    // Governance Activity Feed coverage: every configuration change dual-writes a business-level activity entry
-    // alongside the existing technical/operational one, so mapping/source/destination changes actually show up on
-    // the Activity Feed instead of only the Operational Log.
-    [Fact]
-    public async Task Adding_a_mapping_profile_records_a_business_level_activity_entry()
-    {
-        var source = await AddEpicSourceAsync(ApplicationType.EhrLaunch);
-        _activityAudit.Invocations.Clear();
-
-        await _sut.AddMappingProfileAsync(NewMappingRequest(source.Id, "Patient"), CancellationToken.None);
-
-        _activityAudit.Verify(
-            x => x.RecordAsync(
-                It.Is<RecordUserActivityRequest>(request =>
-                    request.Category == UserActivityCategories.Configuration
-                    && request.Status == UserActivityStatuses.Success
-                    && request.UserEmail == "admin@example.com"),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Fact]
-    public async Task Adding_a_source_connection_records_a_business_level_activity_entry()
-    {
-        await AddEpicSourceAsync(ApplicationType.EhrLaunch);
-
-        _activityAudit.Verify(
-            x => x.RecordAsync(
-                It.Is<RecordUserActivityRequest>(request =>
-                    request.Category == UserActivityCategories.Configuration
-                    && request.Module == "SourceConnection"
-                    && request.Action == "Created"
-                    && request.EntityName == "Epic"),
-                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

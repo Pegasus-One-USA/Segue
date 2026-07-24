@@ -11,6 +11,9 @@ interface NavItem {
   exact?: boolean;
   /** Omit for entries every authenticated user may see; otherwise hidden unless the user has one of these. */
   permissions?: string[];
+  /** Hidden unless the user has the SuperAdmin role — stricter than `permissions`, which a regular Admin
+   *  also satisfies via isAdmin(). Takes precedence over `permissions` when both are set. */
+  superAdminOnly?: boolean;
 }
 
 interface NavSection {
@@ -30,10 +33,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '🏥', label: 'EHR Endpoints',    route: '/ehr-endpoints',     permissions: ['configuration.write'] },
   { type: 'item', icon: '🔌', label: 'Source Connections', route: '/source-connections', permissions: ['sourceconnections.view'] },
   { type: 'item', icon: '🔌', label: 'Destination Connections', route: '/destination-connections', permissions: ['configuration.write'] },
-  { type: 'section', label: 'Governance' },
-  { type: 'item', icon: '📋', label: 'Activity Feed',    route: '/activity',           permissions: ['auditlogs.read'] },
-  { type: 'item', icon: '🧾', label: 'Operational Logs', route: '/operational-logs',   permissions: ['auditlogs.read'] },
-  { type: 'item', icon: '🔗', label: 'Lineage',          route: '/lineage',            permissions: ['auditlogs.read'] },
+  { type: 'item', icon: '🌐', label: 'Allowed Origins',    route: '/allowed-origins',   superAdminOnly: true },
 ];
 
 @Component({
@@ -54,6 +54,7 @@ export class SidebarComponent {
   readonly navEntries = computed<NavEntry[]>(() =>
     NAV_ENTRIES.filter(entry => {
       if (this.isSection(entry)) return true;
+      if (entry.superAdminOnly) return this.store.hasRole('SuperAdmin');
       if (!entry.permissions?.length) return true;
       if (this.store.isAdmin()) return true;
       return entry.permissions.some(p => this.store.hasPermission(p));

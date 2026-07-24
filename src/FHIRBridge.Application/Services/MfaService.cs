@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -13,7 +12,6 @@ public sealed class MfaService : IMfaService
     private readonly ITotpService _totpService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IUserActivityAuditService _activityAuditService;
     private readonly MfaOptions _options;
 
     public MfaService(
@@ -21,14 +19,12 @@ public sealed class MfaService : IMfaService
         ITotpService totpService,
         IPasswordHasher passwordHasher,
         ICurrentUserService currentUserService,
-        IUserActivityAuditService activityAuditService,
         IOptions<MfaOptions> options)
     {
         _repository = repository;
         _totpService = totpService;
         _passwordHasher = passwordHasher;
         _currentUserService = currentUserService;
-        _activityAuditService = activityAuditService;
         _options = options.Value;
     }
 
@@ -69,8 +65,6 @@ public sealed class MfaService : IMfaService
 
         if (!_totpService.ValidateCode(user.MfaSecret, request.Code))
         {
-            await RecordAsync(user.Id, user.Email, "MfaEnrollFailed", UserActivityStatuses.Failed,
-                UserActivitySeverities.Warning, "Invalid TOTP code during enrollment.", cancellationToken);
             throw new InvalidOperationException("The verification code is invalid.");
         }
 
@@ -78,9 +72,6 @@ public sealed class MfaService : IMfaService
         var hashes = backupCodes.Select(code => _passwordHasher.Hash(code.ToUpperInvariant()));
         user.ConfirmMfaEnrollment(hashes);
         await _repository.UpdateUserAsync(user, cancellationToken);
-
-        await RecordAsync(user.Id, user.Email, "MfaEnabled", UserActivityStatuses.Success,
-            UserActivitySeverities.Information, null, cancellationToken);
 
         return new MfaEnrollmentConfirmedResponse(backupCodes);
     }
@@ -100,16 +91,11 @@ public sealed class MfaService : IMfaService
 
         if (!codeValid)
         {
-            await RecordAsync(user.Id, user.Email, "MfaDisableFailed", UserActivityStatuses.Denied,
-                UserActivitySeverities.Warning, "Invalid code when attempting to disable MFA.", cancellationToken);
             throw new InvalidOperationException("A valid MFA code is required to disable MFA.");
         }
 
         user.DisableMfa();
         await _repository.UpdateUserAsync(user, cancellationToken);
-
-        await RecordAsync(user.Id, user.Email, "MfaDisabled", UserActivityStatuses.Success,
-            UserActivitySeverities.Warning, null, cancellationToken);
     }
 
     private async Task<Domain.Entities.User> GetCurrentUserAsync(CancellationToken cancellationToken)
@@ -122,28 +108,5 @@ public sealed class MfaService : IMfaService
 
         return await _repository.GetUserByExternalIdAsync(externalUserId, cancellationToken)
             ?? throw new InvalidOperationException("User was not found.");
-    }
-
-    private Task RecordAsync(
-        Guid userId,
-        string? email,
-        string activity,
-        string status,
-        string severity,
-        string? failureReason,
-        CancellationToken cancellationToken)
-    {
-        return _activityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: email ?? _currentUserService.CurrentUser.AuditName,
-                Category: UserActivityCategories.Authentication,
-                Activity: activity,
-                Status: status,
-                EntityName: nameof(Domain.Entities.User),
-                EntityId: userId,
-                FailureReason: failureReason,
-                Severity: severity),
-            cancellationToken);
     }
 }

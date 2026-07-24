@@ -1,7 +1,5 @@
 using System.Text.Json;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Destinations;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
@@ -43,16 +41,10 @@ public sealed class MappingImportServiceTests
         var factory = new Mock<IMappingSchemaProviderFactory>();
         factory.Setup(x => x.Create(DestinationType.SqlServer)).Returns(provider);
 
-        var currentUserService = new Mock<ICurrentUserService>();
-        currentUserService.Setup(x => x.CurrentUser).Returns(
-            new CurrentUserInfo("user-1", "user@example.com", "Test User", [], true));
-
         var service = new MappingImportService(
             repository,
             destinationSchemaServiceMock.Object,
-            factory.Object,
-            Mock.Of<IUserActivityAuditService>(),
-            currentUserService.Object);
+            factory.Object);
 
         return (service, repository, provider, destination.Id, Guid.NewGuid());
     }
@@ -228,6 +220,48 @@ public sealed class MappingImportServiceTests
     }
 
     [Fact]
+    public async Task Falls_back_to_the_tables_real_foreign_key_when_the_payload_relation_is_null()
+    {
+        var (service, repository, provider, destinationId, sourceConnectionId) = CreateSut(existingDestinationTables: []);
+        // Simulates a child table an earlier import already created correctly (real FK in the destination),
+        // but whose relation THIS payload simply omits — e.g. a UI re-mapping that only carries per-column
+        // sources without table-level DDL metadata for a table it now considers already-existing.
+        provider.LiveForeignKeys["DChild"] = new TableRelationDto("ParentId", "dbo.D", "Id");
+
+        var body = RelationFallbackFixture(sourceConnectionId, destinationId);
+        var result = await service.ImportAsync(Parse(body), CancellationToken.None);
+
+        var profileResult = result.Profiles.Single();
+        profileResult.Warnings.Should().BeEmpty(
+            "the table's real FK was discovered in the destination, so this isn't actually a relation-less table");
+
+        var profiles = await repository.GetMappingProfilesAsync(CancellationToken.None);
+        var childField = profiles.Single().Fields.Single(f => f.DestinationObject == "DChild");
+        childField.ArrayPolicy.Should().Be(ArrayPolicy.SeparateDestination);
+        childField.ForeignKeyColumn.Should().Be("ParentId");
+        childField.ParentKeyColumn.Should().Be("Id");
+        childField.ParentTable.Should().Be("dbo.D");
+    }
+
+    [Fact]
+    public async Task A_renamed_root_table_is_recognized_as_the_root_not_collapsed_to_the_resourceType_name()
+    {
+        // Regression guard: renaming the root table (e.g. to avoid two Patient mappings colliding on the same
+        // destination) must actually take effect — ResolveDestinationObject must not require the root step's
+        // table NAME to equal the resourceType, only that it's the level-1, no-dependency step.
+        var (service, repository, _, destinationId, sourceConnectionId) = CreateSut(existingDestinationTables: ["PatientV2"]);
+
+        var body = RenamedRootTableFixture(sourceConnectionId, destinationId);
+        var result = await service.ImportAsync(Parse(body), CancellationToken.None);
+
+        var profileResult = result.Profiles.Single();
+        profileResult.Warnings.Should().BeEmpty();
+
+        var profiles = await repository.GetMappingProfilesAsync(CancellationToken.None);
+        profiles.Single().DestinationObject.Should().Be("PatientV2");
+    }
+
+    [Fact]
     public async Task Import_throws_when_mappings_is_missing()
     {
         var (service, _, _, destinationId, sourceConnectionId) = CreateSut(existingDestinationTables: []);
@@ -240,6 +274,57 @@ public sealed class MappingImportServiceTests
     }
 
     // ── Fixtures ──────────────────────────────────────────────────────────────
+
+    private static string RenamedRootTableFixture(Guid sourceConnectionId, Guid destinationId) => $$"""
+        {
+          "source": "EPIC", "destination": "SQL",
+          "sourceConnectionId": "{{sourceConnectionId}}", "destinationId": "{{destinationId}}",
+          "mappings": [
+            {
+              "resourceType": "Patient", "rank": 1, "generatedAt": "2026-07-21T16:10:52.564Z",
+              "schemaChanges": { "tablesToCreate": [], "columnsToAdd": [], "summary": null },
+              "processingOrder": [
+                { "step": 1, "table": "PatientV2", "level": 1, "dependsOn": null, "note": null }
+              ],
+              "destination": "SQL",
+              "tables": [
+                { "name": "PatientV2", "isNew": false, "relation": null, "columns": [
+                  { "column": "Id", "mode": "directField", "sources": ["Patient.id"], "instance": null }
+                ] }
+              ]
+            }
+          ]
+        }
+        """;
+
+    private static string RelationFallbackFixture(Guid sourceConnectionId, Guid destinationId) => $$"""
+        {
+          "source": "EPIC", "destination": "SQL",
+          "sourceConnectionId": "{{sourceConnectionId}}", "destinationId": "{{destinationId}}",
+          "mappings": [
+            {
+              "resourceType": "D", "rank": 1, "generatedAt": "2026-07-21T16:10:52.564Z",
+              "schemaChanges": { "tablesToCreate": [], "columnsToAdd": [], "summary": null },
+              "processingOrder": [
+                { "step": 1, "table": "D", "level": 1, "dependsOn": null, "note": null },
+                { "step": 2, "table": "DChild", "level": 2, "dependsOn": null, "note": null }
+              ],
+              "destination": "SQL",
+              "tables": [
+                { "name": "D", "isNew": false, "relation": null, "columns": [
+                  { "column": "Id", "mode": "directField", "sources": ["D.id"], "instance": null }
+                ] },
+                { "name": "DChild", "isNew": false, "relation": null, "columns": [
+                  {
+                    "column": "ParentId", "mode": "directField", "sources": ["D.child.parentId"],
+                    "instance": { "arrayContext": "D.child", "type": "all", "aggregate": "rows" }
+                  }
+                ] }
+              ]
+            }
+          ]
+        }
+        """;
 
     private static string FullPatientFixture(Guid sourceConnectionId, Guid destinationId) => $$"""
         {
@@ -601,6 +686,7 @@ public sealed class MappingImportServiceTests
         private readonly HashSet<(string Table, string Column)> _existingColumns = new();
 
         public Dictionary<(string Table, string Column), string> LiveColumnTypes { get; } = new();
+        public Dictionary<string, TableRelationDto> LiveForeignKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Table names that should throw when <c>CreateTableAsync</c> is called for them, to simulate
         /// a DDL failure partway through a resourceType's schema changes.</summary>
@@ -654,6 +740,12 @@ public sealed class MappingImportServiceTests
             {
                 _owner.LiveColumnTypes.TryGetValue((tableName, columnName), out var type);
                 return Task.FromResult(type);
+            }
+
+            public Task<TableRelationDto?> GetForeignKeyAsync(string tableName, CancellationToken cancellationToken)
+            {
+                _owner.LiveForeignKeys.TryGetValue(tableName, out var relation);
+                return Task.FromResult(relation);
             }
 
             public Task CommitAsync(CancellationToken cancellationToken)

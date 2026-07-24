@@ -45,6 +45,12 @@
           },
           "configurations": {
             "production": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ],
               "optimization": {
                 "scripts": true,
                 "styles": {
@@ -73,6 +79,90 @@
               "extractLicenses": false,
               "sourceMap": true,
               "namedChunks": true
+            },
+            "staging": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.staging.ts"
+                }
+              ],
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": true
+                },
+                "fonts": {
+                  "inline": false
+                }
+              },
+              "outputHashing": "all",
+              "sourceMap": false,
+              "namedChunks": false
+            },
+            "qa": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.qa.ts"
+                }
+              ],
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": true
+                },
+                "fonts": {
+                  "inline": false
+                }
+              },
+              "outputHashing": "all",
+              "sourceMap": false,
+              "namedChunks": false
+            },
+            "dev": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.dev.ts"
+                }
+              ],
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": true
+                },
+                "fonts": {
+                  "inline": false
+                }
+              },
+              "outputHashing": "all",
+              "sourceMap": false,
+              "namedChunks": false
+            },
+            "working": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.working.ts"
+                }
+              ],
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": true
+                },
+                "fonts": {
+                  "inline": false
+                }
+              },
+              "outputHashing": "all",
+              "sourceMap": false,
+              "namedChunks": false
             }
           },
           "defaultConfiguration": "production"
@@ -88,6 +178,18 @@
             },
             "development": {
               "buildTarget": "fhirbridge-ui:build:development"
+            },
+            "staging": {
+              "buildTarget": "fhirbridge-ui:build:staging"
+            },
+            "qa": {
+              "buildTarget": "fhirbridge-ui:build:qa"
+            },
+            "dev": {
+              "buildTarget": "fhirbridge-ui:build:dev"
+            },
+            "working": {
+              "buildTarget": "fhirbridge-ui:build:working"
             }
           },
           "defaultConfiguration": "development"

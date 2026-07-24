@@ -256,13 +256,13 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// Scopes the search to a known patient — the SMART launch's own context when the token grant carries one
     /// (<c>launch/patient</c> flows), falling back to the request-time <see cref="FhirSourceConfiguration.TargetPatientId"/>
     /// otherwise (e.g. a patient the caller picked from a prior name search, via WorkflowRunRequest.PatientId — see
-    /// WorkflowExecutionContext). Without one of these, a provider such as Epic rejects an unscoped <c>Patient</c>
-    /// search. The known patient targets its own resource by <c>_id</c>; every other resource type IN THE
-    /// PATIENT COMPARTMENT (<see cref="PatientCompartmentResourceTypes"/> — Encounter, Observation, etc.) is
-    /// filtered by <c>patient</c>. A resource type outside that compartment (e.g. <c>Practitioner</c>,
-    /// <c>Organization</c>) has no <c>patient</c> search parameter at all — Epic rejects it outright — so those
-    /// are left unscoped, using only the caller-supplied search criteria. Caller-supplied parameters that
-    /// already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left untouched.
+    /// WorkflowExecutionContext). Without one of these, falls back to <see cref="FhirSourceConfiguration.PatientIds"/>
+    /// — a cohort of patient ids (e.g. discovered by this same workflow run's own Patient extraction, threaded in by
+    /// <c>SourceNodeExecutor</c>) OR'd together via a comma-separated reference list. Without either, a provider such
+    /// as Epic rejects an unscoped <c>Patient</c> search but every other resource type is left unscoped (pre-existing
+    /// behavior — see <c>No_patient_context_leaves_the_query_unscoped</c>). The known patient(s) target their own
+    /// resource(s) by <c>_id</c>; every other resource type is filtered by <c>patient</c>. Caller-supplied parameters
+    /// that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left untouched.
     /// </summary>
     private async Task<string?> ApplyPatientScopeAsync(
         string resourceType,
@@ -293,14 +293,24 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         patientId ??= source.TargetPatientId;
-        if (string.IsNullOrWhiteSpace(patientId) || !isCompartmentResource)
+
+        var alreadyScoped = ContainsQueryParameter(query, "patient") ||
+            ContainsQueryParameter(query, "subject") ||
+            ContainsQueryParameter(query, "_id");
+
+        if (string.IsNullOrWhiteSpace(patientId))
         {
-            return source.SearchParameters;
+            if (alreadyScoped || !isCompartmentResource || source.PatientIds is not { Count: > 0 } cohort)
+            {
+                return source.SearchParameters;
+            }
+
+            var cohortIdList = string.Join(',', cohort);
+            var cohortScope = isPatientResource ? $"_id={cohortIdList}" : $"patient={cohortIdList}";
+            return string.IsNullOrWhiteSpace(query) ? cohortScope : $"{query}&{cohortScope}";
         }
 
-        if (ContainsQueryParameter(query, "patient") ||
-            ContainsQueryParameter(query, "subject") ||
-            ContainsQueryParameter(query, "_id"))
+        if (alreadyScoped || !isCompartmentResource)
         {
             return source.SearchParameters;
         }

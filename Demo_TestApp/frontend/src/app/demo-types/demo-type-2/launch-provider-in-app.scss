@@ -15,6 +15,11 @@
     font-weight: 800;
     color: var(--color-primary-dark);
   }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+  }
 }
 
 .launch-page {

@@ -166,23 +166,19 @@
             </div>
 
             <div class="dw-field">
-              <label class="dw-label" for="dw-storageType">Storage type <span class="dw-req">*</span></label>
+              <label class="dw-label" for="dw-deliveryMode">Delivery mode <span class="dw-req">*</span></label>
               <div class="dw-select-wrap">
-                <select id="dw-storageType" class="dw-select" formControlName="storageType">
+                <select id="dw-deliveryMode" class="dw-select" formControlName="deliveryMode">
+                  <option value="download">Download (returned directly from the run)</option>
+                  <option value="email">Email</option>
                   <option value="sftp">SFTP</option>
-                  <option value="azure-blob">Azure Blob Storage</option>
-                  <option value="aws-s3">AWS S3</option>
-                  <option value="local">Local / Network Folder</option>
-                  <option value="gcs">Google Cloud Storage</option>
+                  <option value="downloadUrl">Download link</option>
                 </select>
               </div>
-            </div>
-
-            <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched">
-              <label class="dw-label" for="dw-folder">Base folder / container <span class="dw-req">*</span></label>
-              <input id="dw-folder" class="dw-input" formControlName="folder" placeholder="/exports/fhirbridge" />
-              @if (csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched) {
-                <span class="dw-error">Base folder is required.</span>
+              @if (csvForm.get('deliveryMode')!.value === 'download') {
+                <span class="dw-hint">
+                  Only works when this destination's route is triggered manually — not on a schedule or webhook.
+                </span>
               }
             </div>
 
@@ -214,6 +210,81 @@
                 </select>
               </div>
             </div>
+
+            @if (csvForm.get('deliveryMode')!.value === 'sftp') {
+              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched">
+                <label class="dw-label" for="dw-sftpHost">SFTP host <span class="dw-req">*</span></label>
+                <input id="dw-sftpHost" class="dw-input" formControlName="sftpHost" placeholder="sftp.company.com" />
+                @if (csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched) {
+                  <span class="dw-error">SFTP host is required.</span>
+                }
+              </div>
+
+              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPort')!.invalid && csvForm.get('sftpPort')!.touched">
+                <label class="dw-label" for="dw-sftpPort">Port</label>
+                <input id="dw-sftpPort" type="number" class="dw-input" formControlName="sftpPort" />
+              </div>
+
+              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched">
+                <label class="dw-label" for="dw-sftpUsername">Username <span class="dw-req">*</span></label>
+                <input id="dw-sftpUsername" class="dw-input" formControlName="sftpUsername" autocomplete="off" />
+                @if (csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched) {
+                  <span class="dw-error">SFTP username is required.</span>
+                }
+              </div>
+
+              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched">
+                <label class="dw-label" for="dw-sftpPassword">Password <span class="dw-req">*</span></label>
+                <input id="dw-sftpPassword" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password" />
+                @if (csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched) {
+                  <span class="dw-error">SFTP password is required.</span>
+                }
+              </div>
+
+              <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
+                <label class="dw-label" for="dw-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
+                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
+                @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
+                  <span class="dw-error">Remote folder is required.</span>
+                }
+              </div>
+            }
+
+            @if (csvForm.get('deliveryMode')!.value === 'email') {
+              <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('emailTo')!.invalid && csvForm.get('emailTo')!.touched">
+                <label class="dw-label" for="dw-emailTo">Recipient(s) <span class="dw-req">*</span></label>
+                <input id="dw-emailTo" class="dw-input" formControlName="emailTo" placeholder="alice@company.com, bob@company.com" />
+                @if (csvForm.get('emailTo')!.invalid && csvForm.get('emailTo')!.touched) {
+                  <span class="dw-error">At least one recipient is required.</span>
+                }
+              </div>
+
+              <div class="dw-field dw-field--full">
+                <label class="dw-label" for="dw-emailCc">Cc</label>
+                <input id="dw-emailCc" class="dw-input" formControlName="emailCc" placeholder="optional, comma-separated" />
+              </div>
+
+              <div class="dw-field dw-field--full">
+                <label class="dw-label" for="dw-emailSubjectTemplate">Subject template</label>
+                <input id="dw-emailSubjectTemplate" class="dw-input" formControlName="emailSubjectTemplate" />
+                <span class="dw-hint">Placeholders: {{ '{{RouteName}}' }}, {{ '{{RunDate}}' }}, {{ '{{RowCount}}' }}</span>
+              </div>
+
+              <div class="dw-field dw-field--full">
+                <label class="dw-label" for="dw-emailBodyTemplate">Body template</label>
+                <textarea id="dw-emailBodyTemplate" class="dw-input" rows="3" formControlName="emailBodyTemplate"></textarea>
+              </div>
+            }
+
+            @if (csvForm.get('deliveryMode')!.value === 'downloadUrl') {
+              <div class="dw-field" [class.dw-field--error]="csvForm.get('downloadLinkExpiryMinutes')!.invalid && csvForm.get('downloadLinkExpiryMinutes')!.touched">
+                <label class="dw-label" for="dw-downloadLinkExpiryMinutes">Link expiry (minutes) <span class="dw-req">*</span></label>
+                <input id="dw-downloadLinkExpiryMinutes" type="number" class="dw-input" formControlName="downloadLinkExpiryMinutes" />
+                @if (csvForm.get('downloadLinkExpiryMinutes')!.invalid && csvForm.get('downloadLinkExpiryMinutes')!.touched) {
+                  <span class="dw-error">Enter a value between 1 and 10080 minutes (7 days).</span>
+                }
+              </div>
+            }
 
           </div><!-- /dw-grid-2 -->
         </form>
@@ -392,12 +463,8 @@
             <span class="dw-review-val">{{ csvForm.value.name }}</span>
           </div>
           <div class="dw-review-card">
-            <span class="dw-review-key">Storage</span>
-            <span class="dw-review-val">{{ csvForm.value.storageType }}</span>
-          </div>
-          <div class="dw-review-card">
-            <span class="dw-review-key">Folder</span>
-            <span class="dw-review-val dw-mono">{{ csvForm.value.folder || '—' }}</span>
+            <span class="dw-review-key">Delivery mode</span>
+            <span class="dw-review-val">{{ csvForm.value.deliveryMode }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">File pattern</span>

@@ -1,5 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
-using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 using Microsoft.Extensions.DependencyInjection;
@@ -63,21 +61,8 @@ public static class WorkflowInfrastructureServiceCollectionExtensions
 
         services.AddHttpClient(nameof(WebhookNotifierNodeExecutor));
 
-        // Wraps every registered executor so a workflow-graph run reports lineage the same way the Configured
-        // Pipeline path does. Registered after AddWorkflowCore()'s plain WorkflowNodeExecutorRegistry so this wins
-        // the single-instance resolution (same "last registration wins" pattern used for the SQL-backed stores).
-        // Falls back to the unwrapped registry when no ILineageTracker is registered (e.g. a composition root that
-        // never called AddFHIRBridgeInfrastructure), matching the optional-dependency style used elsewhere.
         services.AddScoped<IWorkflowNodeExecutorRegistry>(serviceProvider =>
-        {
-            var executors = serviceProvider.GetServices<IWorkflowNodeExecutor>();
-            var lineageTracker = serviceProvider.GetService<ILineageTracker>();
-            var auditService = serviceProvider.GetService<IOperationalAuditService>();
-
-            return lineageTracker is null
-                ? new WorkflowNodeExecutorRegistry(executors)
-                : new LineageTrackingWorkflowNodeExecutorRegistry(executors, lineageTracker, auditService);
-        });
+            new WorkflowNodeExecutorRegistry(serviceProvider.GetServices<IWorkflowNodeExecutor>()));
 
         return services;
     }

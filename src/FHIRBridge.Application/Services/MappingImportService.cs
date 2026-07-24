@@ -1,8 +1,6 @@
 using System.Text.Json;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
-using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -18,27 +16,20 @@ namespace FHIRBridge.Application.Services;
 /// </summary>
 public sealed class MappingImportService : IMappingImportService
 {
-    private const string Module = "MappingProfileImport";
     private static readonly JsonSerializerOptions DeserializeOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly IConfigurationRepository _repository;
     private readonly IDestinationSchemaService _destinationSchemaService;
     private readonly IMappingSchemaProviderFactory _schemaProviderFactory;
-    private readonly IUserActivityAuditService _userActivityAuditService;
-    private readonly ICurrentUserService _currentUserService;
 
     public MappingImportService(
         IConfigurationRepository repository,
         IDestinationSchemaService destinationSchemaService,
-        IMappingSchemaProviderFactory schemaProviderFactory,
-        IUserActivityAuditService userActivityAuditService,
-        ICurrentUserService currentUserService)
+        IMappingSchemaProviderFactory schemaProviderFactory)
     {
         _repository = repository;
         _destinationSchemaService = destinationSchemaService;
         _schemaProviderFactory = schemaProviderFactory;
-        _userActivityAuditService = userActivityAuditService;
-        _currentUserService = currentUserService;
     }
 
     public async Task<MappingImportResultDto> ImportAsync(JsonElement request, CancellationToken cancellationToken)
@@ -162,13 +153,14 @@ public sealed class MappingImportService : IMappingImportService
             }
 
             var fields = new List<MappingField>();
+            var relationLookupCache = new Dictionary<string, TableRelationDto?>(StringComparer.OrdinalIgnoreCase);
             foreach (var table in mapping.Tables)
             {
                 foreach (var column in table.Columns ?? [])
                 {
                     fields.Add(await BuildFieldAsync(
                         schemaTransaction, mapping, table, column, destinationObject, tablesToCreate, columnsToAdd,
-                        warnings, cancellationToken));
+                        warnings, relationLookupCache, cancellationToken));
                 }
             }
 
@@ -209,8 +201,6 @@ public sealed class MappingImportService : IMappingImportService
             // far rolls back too, rather than being left stranded with no profile referencing it.
             await schemaTransaction.CommitAsync(cancellationToken);
 
-            await RecordImportAuditAsync(mapping.ResourceType, profileId, cancellationToken);
-
             return new ResourceImportResultDto(
                 mapping.ResourceType, profileId, tablesCreated, tablesSkipped, columnsAdded, columnsSkipped,
                 fields.Count, warnings);
@@ -246,12 +236,17 @@ public sealed class MappingImportService : IMappingImportService
         }
     }
 
+    /// <summary>
+    /// A level-1, no-dependency processingOrder step is, by construction, this resourceType's own root table —
+    /// whatever the user actually named it (e.g. a renamed "PatientV2" to avoid colliding with another mapping
+    /// profile sharing the same destination). Matching on the table NAME too (requiring it to literally equal
+    /// the resourceType) would silently undo any such rename and collapse every renamed root table back onto
+    /// the bare resourceType name — exactly the bug this method must not have.
+    /// </summary>
     private static string ResolveDestinationObject(
         ResourceMappingDto mapping, IReadOnlyList<ProcessingOrderStepDto> processingOrder, List<string> warnings)
     {
-        var rootStep = processingOrder.FirstOrDefault(
-            s => s.Level == 1 && s.DependsOn is null
-                && string.Equals(s.Table, mapping.ResourceType, StringComparison.OrdinalIgnoreCase));
+        var rootStep = processingOrder.FirstOrDefault(s => s.Level == 1 && s.DependsOn is null);
 
         if (rootStep is not null)
         {
@@ -259,7 +254,7 @@ public sealed class MappingImportService : IMappingImportService
         }
 
         warnings.Add(
-            $"No level-1 processingOrder step named '{mapping.ResourceType}' was found; " +
+            $"No level-1 processingOrder step was found for '{mapping.ResourceType}'; " +
             $"defaulting DestinationObject to the resourceType name.");
         return mapping.ResourceType;
     }
@@ -273,14 +268,17 @@ public sealed class MappingImportService : IMappingImportService
         IReadOnlyList<TableDefinitionDto> tablesToCreate,
         IReadOnlyList<ColumnToAddDto> columnsToAdd,
         List<string> warnings,
+        Dictionary<string, TableRelationDto?> relationLookupCache,
         CancellationToken cancellationToken)
     {
         var (jsonPath, format) = BuildJsonPathAndFormat(column, mapping.ResourceType);
         var dataType = await ResolveDataTypeAsync(
             schemaTransaction, table.Name, column.Column, tablesToCreate, columnsToAdd, cancellationToken);
         var valueType = MapValueType(dataType);
+        var effectiveRelation = await ResolveEffectiveRelationAsync(
+            schemaTransaction, table, destinationObject, relationLookupCache, cancellationToken);
         var (arrayPolicy, cardinality, arrayAncestors) = ResolveArrayMetadata(
-            column.Instance, table.Relation, table.Name, destinationObject, mapping.ResourceType, warnings);
+            column.Instance, effectiveRelation, table.Name, destinationObject, mapping.ResourceType, warnings);
 
         return new MappingField(
             TargetField: column.Column,
@@ -298,9 +296,42 @@ public sealed class MappingImportService : IMappingImportService
             ArrayPolicy: arrayPolicy,
             Cardinality: cardinality,
             ArrayAncestors: arrayAncestors,
-            ParentTable: table.Relation?.ParentTable,
-            ParentKeyColumn: table.Relation?.ParentColumn,
-            ForeignKeyColumn: table.Relation?.ChildColumn);
+            ParentTable: effectiveRelation?.ParentTable,
+            ParentKeyColumn: effectiveRelation?.ParentColumn,
+            ForeignKeyColumn: effectiveRelation?.ChildColumn);
+    }
+
+    /// <summary>
+    /// Prefers the payload's own declared <c>table.Relation</c>; when that's missing for a genuinely separate
+    /// (non-root) table, falls back to the table's real FK constraint already in the destination — e.g. a
+    /// child table an earlier import created correctly, but whose relation the current payload simply omits.
+    /// Cached per table name since every column of the same table would otherwise repeat the same lookup.
+    /// </summary>
+    private static async Task<TableRelationDto?> ResolveEffectiveRelationAsync(
+        IMappingSchemaTransaction schemaTransaction,
+        TargetTableDto table,
+        string destinationObject,
+        Dictionary<string, TableRelationDto?> relationLookupCache,
+        CancellationToken cancellationToken)
+    {
+        if (table.Relation is not null)
+        {
+            return table.Relation;
+        }
+
+        if (string.Equals(table.Name, destinationObject, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (relationLookupCache.TryGetValue(table.Name, out var cached))
+        {
+            return cached;
+        }
+
+        var discovered = await schemaTransaction.GetForeignKeyAsync(table.Name, cancellationToken);
+        relationLookupCache[table.Name] = discovered;
+        return discovered;
     }
 
     /// <summary>
@@ -478,24 +509,4 @@ public sealed class MappingImportService : IMappingImportService
         return (ArrayPolicy.SeparateDestination, "OneToMany", instance.ArrayContext);
     }
 
-    private async Task RecordImportAuditAsync(string resourceType, Guid mappingProfileId, CancellationToken cancellationToken)
-    {
-        var user = _currentUserService.CurrentUser;
-        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
-        await _userActivityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: user.AuditName,
-                Category: UserActivityCategories.Configuration,
-                Activity: $"Mapping configuration imported for {resourceType}.",
-                Status: UserActivityStatuses.Success,
-                EntityName: resourceType,
-                EntityId: mappingProfileId,
-                IpAddress: user.IpAddress,
-                UserAgent: user.UserAgent,
-                CorrelationId: user.CorrelationId,
-                Module: Module,
-                Action: "Imported"),
-            cancellationToken);
-    }
 }

@@ -24,6 +24,10 @@ export type DestinationType =
   | 'Protobuf'
   | 'Databricks';
 
+/** Must match the backend's ArtifactDeliveryMode enum member names. Stored as `dest_deliveryMode` in
+ *  ConnectionMetadataJson for Csv destinations — replaces the old `dest_storageType` field. */
+export type ArtifactDeliveryMode = 'download' | 'email' | 'sftp' | 'downloadUrl';
+
 /** Matches the API's DestinationConfigurationDto shape exactly, so no DTO↔model mapping is needed. */
 export interface DestinationConfigurationDto {
   id: string;

@@ -11,7 +11,7 @@ namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
 /// Writes mapped records to SQL Server / Azure SQL, auto-creating the target schema and table.
-/// Supports Insert, Upsert (MERGE on resource type + key column), and CDC write modes.
+/// Supports Insert, Upsert, Update-only (all three MERGE on resource type + key column), and CDC write modes.
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
 /// </summary>
@@ -38,15 +38,16 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         _secretProvider = secretProvider;
     }
 
-    public async Task<int> WriteAsync(
+    public async Task<DestinationWriteResult> WriteAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
         if (records.Count == 0)
         {
-            return 0;
+            return new DestinationWriteResult(0);
         }
 
         var connectionString = await _secretProvider.GetSecretAsync(
@@ -75,6 +76,16 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
 
         var existingColumns = await GetExistingColumnNamesAsync(connection, target.SchemaName, target.TableName, cancellationToken);
 
+        // A table created outside EnsureTableAsync (e.g. by the Mapping Config Import feature) never has the
+        // system SourceResourceId column, so the configured/default key column for Upsert/Update mode won't
+        // exist on it. See ResolveNaturalKeyColumn for why the fallback is a mapped "$.id" field, not the
+        // table's own primary key.
+        var needsKeyFallback = target.WriteMode is SqlDestinationWriteMode.Upsert or SqlDestinationWriteMode.Update
+            && !existingColumns.Contains(target.KeyColumn);
+        var keyColumn = needsKeyFallback
+            ? ResolveNaturalKeyColumn(mappingProfile, target.TableName) ?? target.KeyColumn
+            : target.KeyColumn;
+
         foreach (var record in records)
         {
             IReadOnlyDictionary<string, object?> capturedParentColumns;
@@ -82,7 +93,18 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             {
                 case SqlDestinationWriteMode.Upsert:
                     capturedParentColumns = await UpsertRecordAsync(
-                        connection, target.SchemaName, target.TableName, record, target.KeyColumn, existingColumns, cancellationToken);
+                        connection, target.SchemaName, target.TableName, record, keyColumn, existingColumns, cancellationToken);
+                    break;
+                case SqlDestinationWriteMode.Update:
+                    capturedParentColumns = await UpdateOnlyRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, keyColumn, existingColumns, cancellationToken);
+                    if (capturedParentColumns.Count == 0 && record.ChildTables is { Count: > 0 })
+                    {
+                        // Nothing matched — the "parent" row being updated doesn't exist, so there's no real
+                        // parent for these children to attach to. Skip them entirely rather than writing
+                        // orphaned/wrongly-keyed child rows off of a record that was never actually updated.
+                        continue;
+                    }
                     break;
                 case SqlDestinationWriteMode.Cdc:
                     capturedParentColumns = await InsertRecordAsync(
@@ -99,12 +121,12 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             {
                 await WriteChildTablesAsync(
                     connection, record, childTables, capturedParentColumns,
-                    deleteExistingChildRows: target.WriteMode == SqlDestinationWriteMode.Upsert,
+                    deleteExistingChildRows: target.WriteMode is SqlDestinationWriteMode.Upsert or SqlDestinationWriteMode.Update,
                     cancellationToken);
             }
         }
 
-        return records.Count;
+        return new DestinationWriteResult(records.Count);
     }
 
     private static async Task EnsureTableAsync(
@@ -186,6 +208,50 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         return columns;
     }
 
+    /// <summary>
+    /// Used as the Upsert/Update join key when the configured/default key column (normally SourceResourceId)
+    /// doesn't exist on the target table — see the comment in <see cref="WriteAsync"/>. Deliberately NOT the
+    /// table's own primary key: an auto-generated IDENTITY PK is never present in a mapped record's Values and
+    /// never equal to the resource's own id, so it can never actually match on Upsert/Update — silently
+    /// degrading "Upsert" into "always insert" (the exact bug this replaces). Instead, use whichever root-level
+    /// mapped field's JsonPath is exactly "$.id" — the FHIR resource's own identifier, guaranteed by the FHIR
+    /// spec to exist exactly once at the resource root, and always sourced identically to
+    /// <see cref="MappedDestinationRecord.SourceResourceId"/>. Returns null if no such field is mapped; the
+    /// caller then leaves the key column as configured, so a missing/misconfigured key fails loudly (an
+    /// "Invalid column name" SQL error) instead of silently duplicating data forever.
+    /// </summary>
+    /// <param name="destinationTableName">The already-parsed plain table name (<see cref="SqlDestinationTarget.TableName"/>),
+    /// NOT <c>mappingProfile.DestinationObject</c> — for a Runtime-DAG destination node, that property can be the
+    /// compound SQL target descriptor (e.g. "dbo.Patient;mode=upsert") rather than the plain object name every
+    /// individual field's own <c>DestinationObject</c> actually carries (e.g. "Patient"), which would make this
+    /// lookup silently fail to match any field.</param>
+    private static string? ResolveNaturalKeyColumn(MappingProfile mappingProfile, string destinationTableName) =>
+        mappingProfile.Fields
+            .Where(field =>
+                string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, destinationTableName, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(field => IsRootIdJsonPath(field.JsonPath))
+            ?.TargetField;
+
+    /// <summary>
+    /// True when a field's JsonPath resolves to the FHIR resource's own root "id". Two conventions reach this
+    /// method for the same field: a <see cref="MappingProfile"/> loaded from the DB (built via the
+    /// mapping-profiles/import wizard) always uses the "$."-prefixed form ("$.id"), while a MappingProfile
+    /// assembled inline from a Runtime-DAG node's own embedded field list (built via /workflows/build, see
+    /// <c>DestinationNodeExecutor.CreateMappingProfile</c>) carries the unprefixed form ("id"). Both mean the
+    /// same thing and must both match, or this fallback silently fails for one of the two paths.
+    /// </summary>
+    private static bool IsRootIdJsonPath(string? jsonPath)
+    {
+        if (string.IsNullOrWhiteSpace(jsonPath))
+        {
+            return false;
+        }
+
+        var normalized = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath;
+        return string.Equals(normalized, "id", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<IReadOnlyDictionary<string, object?>> InsertRecordAsync(
         SqlConnection connection,
         string schemaName,
@@ -244,6 +310,48 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             return await InsertRecordAsync(connection, schemaName, tableName, record, existingColumns, cancellationToken);
         }
 
+        return await MergeRecordAsync(
+            connection, schemaName, tableName, record, keyColumn, existingColumns, insertWhenNotMatched: true, cancellationToken);
+    }
+
+    /// <summary>Updates an existing row matched by <paramref name="keyColumn"/>; a record whose key matches
+    /// nothing is left alone entirely — the opposite trade-off from <see cref="UpsertRecordAsync"/>, which
+    /// always creates a new row for an unmatched key. A record with no usable key value at all has nothing to
+    /// match, so (like an unmatched key) nothing is written for it.</summary>
+    private static async Task<IReadOnlyDictionary<string, object?>> UpdateOnlyRecordAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        MappedDestinationRecord record,
+        string keyColumn,
+        IReadOnlySet<string> existingColumns,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetKeyValue(record, keyColumn, out _))
+        {
+            return EmptyColumnValues;
+        }
+
+        return await MergeRecordAsync(
+            connection, schemaName, tableName, record, keyColumn, existingColumns, insertWhenNotMatched: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Shared MERGE construction for both Upsert and Update-only: identical column/key/OUTPUT handling either
+    /// way — the only difference is whether an unmatched source row also gets inserted. Omitting the
+    /// "WHEN NOT MATCHED THEN INSERT" branch is what makes Update-only genuinely update-or-nothing: SQL Server
+    /// simply leaves an unmatched source row alone when that branch is absent.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<string, object?>> MergeRecordAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        MappedDestinationRecord record,
+        string keyColumn,
+        IReadOnlySet<string> existingColumns,
+        bool insertWhenNotMatched,
+        CancellationToken cancellationToken)
+    {
         var fieldNames = record.Values.Keys
             .Where(key => !ReservedColumns.Contains(key))
             .Select(ValidateIdentifier)
@@ -260,6 +368,13 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             ? $"target.[ResourceType] = source.[ResourceType] AND target.[{validatedKeyColumn}] = source.[{validatedKeyColumn}]"
             : $"target.[{validatedKeyColumn}] = source.[{validatedKeyColumn}]";
         var outputColumns = ResolveOutputColumns(record);
+        var insertClause = insertWhenNotMatched
+            ? $"""
+                WHEN NOT MATCHED THEN
+                    INSERT ({string.Join(", ", columns.Select(column => $"[{column}]"))})
+                    VALUES ({string.Join(", ", columns.Select(column => $"source.[{column}]"))})
+                """
+            : string.Empty;
 
         var sql = $"""
             MERGE [{schemaName}].[{tableName}] AS target
@@ -270,9 +385,7 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             ON {onClause}
             WHEN MATCHED THEN
                 UPDATE SET {string.Join(", ", updateColumns)}
-            WHEN NOT MATCHED THEN
-                INSERT ({string.Join(", ", columns.Select(column => $"[{column}]"))})
-                VALUES ({string.Join(", ", columns.Select(column => $"source.[{column}]"))})
+            {insertClause}
             {(outputColumns.Count > 0 ? $"OUTPUT {string.Join(", ", outputColumns.Select(c => $"INSERTED.[{c}]"))}" : string.Empty)};
             """;
 
@@ -581,6 +694,7 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         return value.Trim().ToLowerInvariant() switch
         {
             "upsert" => SqlDestinationWriteMode.Upsert,
+            "update" => SqlDestinationWriteMode.Update,
             "cdc" => SqlDestinationWriteMode.Cdc,
             _ => SqlDestinationWriteMode.Insert
         };
@@ -612,6 +726,10 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
     {
         Insert,
         Upsert,
+
+        /// <summary>Updates an existing row matched by key; a record whose key matches nothing is left alone
+        /// (never inserted) — the opposite trade-off from Upsert.</summary>
+        Update,
 
         /// <summary>
         /// Application-level change history: the row is inserted into the target table and also appended to a

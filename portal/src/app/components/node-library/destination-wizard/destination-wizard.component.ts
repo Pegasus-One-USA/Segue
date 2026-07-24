@@ -26,6 +26,7 @@ import { MappingProfileImportService } from './field-mapping/mapping-profile-imp
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
 import { requiredClosureFor, recommendedFor, lockingDependentsOf, sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
+import { PipelineStore } from '../../../services/pipeline.store';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
@@ -139,6 +140,7 @@ export class DestinationWizardComponent implements OnInit {
   private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
   private readonly mappingSummarySvc = inject(MappingSummaryService);
   private readonly mappingProfileImportSvc = inject(MappingProfileImportService);
+  private readonly pipelineStore = inject(PipelineStore);
   private readonly injector = inject(Injector);
 
   // True while "Add to Pipeline"/"Update" is waiting on POST mapping-profiles/import.
@@ -218,12 +220,11 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   readonly csvForm = this.fb.group({
-    name:        ['CSV Export', [Validators.required]],
-    storageType: ['sftp', [Validators.required]],
-    folder:      ['', [Validators.required]],
-    filePattern: ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
-    delimiter:   ['comma', []],
-    encoding:    ['utf-8', []],
+    name:         ['CSV Export', [Validators.required]],
+    deliveryMode: ['download', [Validators.required]],
+    filePattern:  ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
+    delimiter:    ['comma', []],
+    encoding:     ['utf-8', []],
     // ── SFTP-only connection details ─────────────────────────────────────────
     sftpHost:         ['', []],
     sftpPort:         [22, []],
@@ -231,6 +232,13 @@ export class DestinationWizardComponent implements OnInit {
     sftpAuthType:     ['password', []],
     sftpPassword:     ['', []],
     sftpRemoteFolder: ['', []],
+    // ── Email-only fields ─────────────────────────────────────────────────────
+    emailTo:              ['', []],
+    emailCc:               ['', []],
+    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
+    emailBodyTemplate:    ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
+    // ── Download-link-only field ─────────────────────────────────────────────
+    downloadLinkExpiryMinutes: [60, []],
   });
 
   // ── data groups ───────────────────────────────────────────────────────────
@@ -531,6 +539,13 @@ export class DestinationWizardComponent implements OnInit {
   // provisionDestinationConnection() — so a real destinationId exists as soon as the connection is
   // configured, not only after the whole wizard finishes and the workflow gets built.
   readonly resolvedDestinationId = signal<string | null>(null);
+  // The real secret reference for resolvedDestinationId — stamped alongside it by provisionDestinationConnection()
+  // (new-connection path) or restored from the node's own config by _populateFromNode() (editing a prior save).
+  // _save() needs these on the "new connection" branch so the node carries a real secretKeyVaultName/secretName
+  // instead of leaving them blank (ConfigurationSecretProvider throws "Secret '' was not found for vault ''" at
+  // run time otherwise).
+  readonly resolvedSecretKeyVaultName = signal<string | null>(null);
+  readonly resolvedSecretName = signal<string | null>(null);
   readonly provisioningDestination = signal(false);
 
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
@@ -561,9 +576,9 @@ export class DestinationWizardComponent implements OnInit {
       untracked(() => this._rebuildRows(resources, type));
     });
 
-    // SFTP connection fields are required only while Storage type = SFTP.
-    this._syncSftpValidators(this.csvForm.controls.storageType.value);
-    this.csvForm.controls.storageType.valueChanges.subscribe(v => this._syncSftpValidators(v));
+    // SFTP/email/download-link fields are required only while their mode is selected.
+    this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
+    this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -628,8 +643,8 @@ export class DestinationWizardComponent implements OnInit {
     };
   }
 
-  private _syncSftpValidators(storageType: string | null): void {
-    const isSftp = storageType === 'sftp';
+  private _syncDeliveryModeValidators(deliveryMode: string | null): void {
+    const isSftp = deliveryMode === 'sftp';
     // sftpPassword is a secret — selectExisting() deliberately never repopulates it (secrets never come back from
     // the API), so requiring it here would permanently block reusing an existing SFTP connection unless the user
     // types something just to satisfy validation. Reusing-as-is never sends a password anywhere (see _save()'s
@@ -647,6 +662,16 @@ export class DestinationWizardComponent implements OnInit {
     const port = this.csvForm.get('sftpPort')!;
     port.setValidators(isSftp ? [Validators.required, Validators.min(1), Validators.max(65535)] : []);
     port.updateValueAndValidity({ emitEvent: false });
+
+    const isEmail = deliveryMode === 'email';
+    const emailTo = this.csvForm.get('emailTo')!;
+    emailTo.setValidators(isEmail ? [Validators.required] : []);
+    emailTo.updateValueAndValidity({ emitEvent: false });
+
+    const isDownloadUrl = deliveryMode === 'downloadUrl';
+    const expiry = this.csvForm.get('downloadLinkExpiryMinutes')!;
+    expiry.setValidators(isDownloadUrl ? [Validators.required, Validators.min(1), Validators.max(10080)] : []);
+    expiry.updateValueAndValidity({ emitEvent: false });
   }
 
   ngOnInit(): void {
@@ -841,7 +866,7 @@ export class DestinationWizardComponent implements OnInit {
     if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
       this._loadExistingOptions();
     }
-    if (!this.isSql()) this._syncSftpValidators(this.csvForm.value.storageType ?? null);
+    if (!this.isSql()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   private _loadExistingOptions(): void {
@@ -903,8 +928,7 @@ export class DestinationWizardComponent implements OnInit {
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
-        storageType:      metadata['dest_storageType']      || 'sftp',
-        folder:           metadata['dest_folder']            || '',
+        deliveryMode:     metadata['dest_deliveryMode']     || 'download',
         filePattern:      metadata['dest_filePattern']       || selected.target || this.csvForm.value.filePattern,
         delimiter:        metadata['dest_delimiter']         || 'comma',
         encoding:         metadata['dest_encoding']          || 'utf-8',
@@ -914,6 +938,14 @@ export class DestinationWizardComponent implements OnInit {
         sftpAuthType:     metadata['dest_sftpAuthType']      || 'password',
         sftpPassword:     '',
         sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
+        emailTo:              metadata['dest_emailTo']              || '',
+        emailCc:               metadata['dest_emailCc']               || '',
+        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailBodyTemplate:
+          metadata['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
+        downloadLinkExpiryMinutes: metadata['dest_downloadLinkExpiryMinutes']
+          ? Number(metadata['dest_downloadLinkExpiryMinutes'])
+          : 60,
       });
       this._existingBaseline = this.csvForm.getRawValue();
     }
@@ -1184,6 +1216,8 @@ export class DestinationWizardComponent implements OnInit {
   private _populateFromNode(node: CanvasNode): void {
     const f = node.fields ?? {};
     this.resolvedDestinationId.set(f['destinationId'] || null);
+    this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
+    this.resolvedSecretName.set(f['secretName'] || null);
     if (this.destType() === 'sql') {
       this.sqlForm.patchValue({
         name:      f['dest_name']      || 'SQL Production',
@@ -1197,20 +1231,31 @@ export class DestinationWizardComponent implements OnInit {
       });
     } else {
       this.csvForm.patchValue({
-        name:        f['dest_name']        || 'CSV Export',
-        storageType: f['dest_storageType'] || 'sftp',
-        folder:      f['dest_folder']      || '',
-        filePattern: f['dest_filePattern'] || '{resource}_{yyyyMMdd_HHmmss}.csv',
-        delimiter:   f['dest_delimiter']   || 'comma',
-        encoding:    f['dest_encoding']    || 'utf-8',
+        name:         f['dest_name']         || 'CSV Export',
+        deliveryMode: f['dest_deliveryMode'] || 'download',
+        filePattern:  f['dest_filePattern']  || '{resource}_{yyyyMMdd_HHmmss}.csv',
+        delimiter:    f['dest_delimiter']    || 'comma',
+        encoding:     f['dest_encoding']     || 'utf-8',
         sftpHost:         f['dest_sftpHost']         || '',
         sftpPort:         f['dest_sftpPort'] ? Number(f['dest_sftpPort']) : 22,
         sftpUsername:     f['dest_sftpUsername']     || '',
         sftpAuthType:     f['dest_sftpAuthType']     || 'password',
         sftpPassword:     f['dest_sftpPassword']     || '',
         sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
+        emailTo:              f['dest_emailTo']              || '',
+        emailCc:               f['dest_emailCc']               || '',
+        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailBodyTemplate:
+          f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
+        downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
       });
     }
+    // The mapping-restore branches below (loadMappingSummary included, each of which returns early) only
+    // ever populate sqlTables() with tables this mapping already uses — a saved Mapping JSON was never
+    // meant to carry the destination's FULL schema. That left "+ Add a table from your database" offering
+    // nothing on reopen (everything it knew about was already used). Re-probe the live database now that
+    // the connection form above is populated — must run before any of the early returns below, not after.
+    this._refreshSqlTablesFromLiveSchema();
     if (f['dest_resources']) {
       this.selectedResources.set(f['dest_resources'].split(',').filter(Boolean));
     }
@@ -1246,6 +1291,56 @@ export class DestinationWizardComponent implements OnInit {
     }
   }
 
+  /** Silently re-loads the live table list and replaces sqlTables() with it — unlike testConnection(),
+   *  this never touches probeState()'s error path, step navigation, or provisioning; a failed reconnect
+   *  just leaves the mapping-summary-restored (partial) list in place rather than blocking the editor.
+   *
+   *  Reopening an EXISTING/resolved destination never has a plaintext password to probe with — it's
+   *  deliberately stripped before the node is persisted (see workflow-graph-mapper.service.ts's
+   *  SECRET_FIELD_KEYS), so dest_password is always empty here. Using resolvedDestinationId() instead
+   *  reads the schema server-side via the destination's real, already-provisioned secret reference
+   *  (DestinationSchemaController's GetSchema), which needs no password from the client at all. The
+   *  ad-hoc probe() (needs a real password) only applies to a brand-new, not-yet-saved connection, which
+   *  never reaches this method — see _populateFromNode's only caller, editing an existing node.*/
+  private _refreshSqlTablesFromLiveSchema(): void {
+    if (this.destType() !== 'sql') return;
+
+    const destinationId = this.resolvedDestinationId();
+    const applyTables = (tables: DestinationTable[]) => {
+      this.sqlTables.set(tables.map(t => ({
+        ...t,
+        origin: 'probed' as const,
+        columns: t.columns.map(c => ({ ...c, origin: 'probed' as const })),
+      })));
+      this.probeState.set('ok');
+    };
+
+    if (destinationId) {
+      this.schemaSvc.getSchema(destinationId).subscribe({
+        next: res => applyTables(res.tables),
+        error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reload */ },
+      });
+      return;
+    }
+
+    const v = this.sqlForm.value;
+    if (!v.server || !v.database || !v.password) return;
+
+    this.schemaSvc.probe({
+      destinationType: 'SqlServer',
+      server: v.server ?? '',
+      database: v.database ?? '',
+      authentication: v.auth ?? 'sql-auth',
+      username: v.username ?? undefined,
+      password: v.password ?? undefined,
+      trustServerCertificate: true,
+      encrypt: true,
+    }).subscribe({
+      next: res => { if (res.connected) applyTables(res.tables); },
+      error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */ },
+    });
+  }
+
   // Connection-only fields (server/database/auth for SQL; folder/sftp for CSV), keyed the same way both
   // _save() and provisionDestinationConnection() need them — shared so the two never drift apart.
   private _buildConnectionConfig(): Record<string, string> {
@@ -1266,19 +1361,25 @@ export class DestinationWizardComponent implements OnInit {
       }
     } else {
       const v = this.csvForm.value;
-      config['dest_name']        = v.name        ?? '';
-      config['dest_storageType'] = v.storageType ?? '';
-      config['dest_folder']      = v.folder      ?? '';
-      config['dest_filePattern'] = v.filePattern ?? '';
-      config['dest_delimiter']   = v.delimiter   ?? 'comma';
-      config['dest_encoding']    = v.encoding    ?? 'utf-8';
-      if (v.storageType === 'sftp') {
+      config['dest_name']         = v.name         ?? '';
+      config['dest_deliveryMode'] = v.deliveryMode ?? 'download';
+      config['dest_filePattern']  = v.filePattern  ?? '';
+      config['dest_delimiter']    = v.delimiter    ?? 'comma';
+      config['dest_encoding']     = v.encoding     ?? 'utf-8';
+      if (v.deliveryMode === 'sftp') {
         config['dest_sftpHost']         = v.sftpHost         ?? '';
         config['dest_sftpPort']         = String(v.sftpPort  ?? 22);
         config['dest_sftpUsername']     = v.sftpUsername     ?? '';
         config['dest_sftpAuthType']     = v.sftpAuthType     ?? 'password';
         config['dest_sftpPassword']     = v.sftpPassword     ?? '';
         config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
+      } else if (v.deliveryMode === 'email') {
+        config['dest_emailTo']              = v.emailTo              ?? '';
+        config['dest_emailCc']               = v.emailCc               ?? '';
+        config['dest_emailSubjectTemplate'] = v.emailSubjectTemplate ?? '';
+        config['dest_emailBodyTemplate']    = v.emailBodyTemplate    ?? '';
+      } else if (v.deliveryMode === 'downloadUrl') {
+        config['dest_downloadLinkExpiryMinutes'] = String(v.downloadLinkExpiryMinutes ?? 60);
       }
     }
     return config;
@@ -1327,6 +1428,8 @@ export class DestinationWizardComponent implements OnInit {
     obs.subscribe({
       next: dto => {
         this.resolvedDestinationId.set(dto.id);
+        this.resolvedSecretKeyVaultName.set(dto.keyVaultName);
+        this.resolvedSecretName.set(dto.secretName);
         this.provisioningDestination.set(false);
         onDone();
       },
@@ -1374,6 +1477,8 @@ export class DestinationWizardComponent implements OnInit {
       // (see provisionDestinationConnection) — mark it resolved so workflow-build-assembler.service.ts doesn't
       // redundantly recreate the secret under a new name on every build.
       config['destinationId'] = this.resolvedDestinationId()!;
+      config['secretKeyVaultName'] = this.resolvedSecretKeyVaultName() ?? '';
+      config['secretName'] = this.resolvedSecretName() ?? '';
       config['destinationResolved'] = 'true';
     }
 
@@ -1428,6 +1533,19 @@ export class DestinationWizardComponent implements OnInit {
             this.toast.show('Mapping profile import had issues', failed.map(p => `${p.resourceType}: ${p.warnings.join(' ')}`).join(' '));
           } else {
             this.toast.success('Mapping profile saved', `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`);
+          }
+          // Stamp the real, server-assigned mappingProfileId straight onto the Field Mapping node this wizard is
+          // attached to — without this, the id this call just returned is discarded, workflow-build-assembler.service.ts
+          // sends existingId: null on Save, and /workflows/build mints an unrelated duplicate profile instead of
+          // reusing this one (one mapping profile per destination, so only the primary/first resource is wired).
+          const primary = result.profiles.find(p => p.resourceType === doc.mappings[0]?.resourceType) ?? result.profiles[0];
+          if (primary && primary.mappingProfileId !== EMPTY_GUID) {
+            const mappingNode = this.pipelineStore.byId(this.attachNode().id);
+            if (mappingNode) {
+              this.pipelineStore.updateNode(mappingNode.id, {
+                fields: { ...mappingNode.fields, mappingProfileId: primary.mappingProfileId },
+              });
+            }
           }
           emitSaved();
         },

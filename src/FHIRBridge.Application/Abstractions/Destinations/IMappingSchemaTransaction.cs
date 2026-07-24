@@ -29,6 +29,12 @@ public interface IMappingSchemaTransaction : IAsyncDisposable
     /// — used to resolve <c>MappingField.ValueType</c> when a column is neither newly created nor newly added.</summary>
     Task<string?> GetColumnDataTypeAsync(string tableName, string columnName, CancellationToken cancellationToken);
 
+    /// <summary>Reads a pre-existing table's own single foreign key constraint (null if it has none, or more
+    /// than one). Used to backfill <c>MappingField.ForeignKeyColumn</c>/<c>ParentKeyColumn</c>/<c>ParentTable</c>
+    /// when the import payload's own <c>table.Relation</c> is null but the table already has a real FK in the
+    /// destination — e.g. a table created by an earlier import whose relation the current payload omits.</summary>
+    Task<TableRelationDto?> GetForeignKeyAsync(string tableName, CancellationToken cancellationToken);
+
     /// <summary>Commits every DDL action executed on this transaction so far. Call this only once the
     /// caller's own persistence (e.g. the MappingProfile/Fields write) has also succeeded, so a failure there
     /// rolls the destination schema changes back too instead of leaving them applied with nothing referencing

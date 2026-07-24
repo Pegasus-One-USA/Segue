@@ -1,6 +1,6 @@
 using FHIRBridge.Application.Abstractions.Aggregation;
 using FHIRBridge.Application.Abstractions.Destinations;
-using FHIRBridge.Application.Abstractions.Audit;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Normalization;
@@ -13,8 +13,9 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
-using FHIRBridge.Infrastructure.Audit;
+using FHIRBridge.Infrastructure.Caching;
 using FHIRBridge.Infrastructure.Destinations;
+using FHIRBridge.Infrastructure.Destinations.Delivery;
 using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Infrastructure.Health;
 using FHIRBridge.Infrastructure.Messaging;
@@ -78,34 +79,25 @@ public static class DependencyInjection
         // Registered unconditionally — it has no DB dependency of its own.
         services.AddSingleton<IPhiFieldEncryptor, AesGcmPhiFieldEncryptor>();
 
+        // Registered unconditionally (before the in-memory/DB branch below) — it resolves
+        // IAllowedCorsOriginRepository lazily through a scope, so it works against either repository.
+        services.AddSingleton<IAllowedCorsOriginsCache, InProcessAllowedCorsOriginsCache>();
+
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             services.AddSingleton<IConfigurationRepository, InMemoryConfigurationRepository>();
             services.AddSingleton<IUserAccessRepository, InMemoryUserAccessRepository>();
-            services.AddSingleton<IOperationalAuditService, InMemoryOperationalAuditService>();
-            services.AddSingleton<IUserActivityAuditService, InMemoryUserActivityAuditService>();
             services.AddSingleton<IConfiguredPipelineRunRepository, InMemoryConfiguredPipelineRunRepository>();
             services.AddSingleton<IPipelineRunRouteExecutionRepository, InMemoryPipelineRunRouteExecutionRepository>();
             services.AddSingleton<IExecutionResourceHistoryRecorder, InMemoryExecutionResourceHistoryRecorder>();
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
+            services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
-
-            // G2: in-memory lineage store/query/purge. Not durable across restarts (dev only).
-            services.AddSingleton<InMemoryLineageStore>();
-            services.AddSingleton<ILineageStore>(sp => sp.GetRequiredService<InMemoryLineageStore>());
-            services.AddSingleton<ILineageQueryService>(sp => sp.GetRequiredService<InMemoryLineageStore>());
-            services.AddSingleton<IPurgeableStore>(sp => sp.GetRequiredService<InMemoryLineageStore>());
-
-            // P3: in-memory field-level lineage store/query/purge. Not durable across restarts (dev only).
-            services.AddSingleton<InMemoryFieldLineageStore>();
-            services.AddSingleton<IFieldLineageStore>(sp => sp.GetRequiredService<InMemoryFieldLineageStore>());
-            services.AddSingleton<IFieldLineageQueryService>(sp => sp.GetRequiredService<InMemoryFieldLineageStore>());
-            services.AddSingleton<IPurgeableStore>(sp => sp.GetRequiredService<InMemoryFieldLineageStore>());
         }
         else
         {
@@ -130,11 +122,10 @@ public static class DependencyInjection
             // is registering one more IEhrEndpointDirectorySeeder here; Program.cs runs every registered one.
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
             services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
+            services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
-            services.AddScoped<IOperationalAuditService, EfOperationalAuditService>();
-            services.AddScoped<IUserActivityAuditService, EfUserActivityAuditService>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
             services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
             services.AddScoped<EfExecutionResourceHistoryRecorder>();
@@ -144,21 +135,7 @@ public static class DependencyInjection
 
             // Durable, multi-instance idempotency backed by the ProcessedMessages table.
             services.AddScoped<IProcessedMessageStore, EfProcessedMessageStore>();
-
-            // G2: durable, EF-backed lineage store/query/purge (ResourceLineageEntries table).
-            services.AddScoped<EfLineageStore>();
-            services.AddScoped<ILineageStore>(sp => sp.GetRequiredService<EfLineageStore>());
-            services.AddScoped<ILineageQueryService>(sp => sp.GetRequiredService<EfLineageStore>());
-            services.AddScoped<IPurgeableStore>(sp => sp.GetRequiredService<EfLineageStore>());
-
-            // P3: durable, EF-backed field-level lineage store/query/purge (FieldLineageEntries table).
-            services.AddScoped<EfFieldLineageStore>();
-            services.AddScoped<IFieldLineageStore>(sp => sp.GetRequiredService<EfFieldLineageStore>());
-            services.AddScoped<IFieldLineageQueryService>(sp => sp.GetRequiredService<EfFieldLineageStore>());
-            services.AddScoped<IPurgeableStore>(sp => sp.GetRequiredService<EfFieldLineageStore>());
         }
-
-        services.Configure<FieldLineageOptions>(configuration.GetSection(FieldLineageOptions.SectionName));
 
         services.AddRuntimeInfrastructure(configuration);
         services.AddMessaging(configuration);
@@ -179,7 +156,6 @@ public static class DependencyInjection
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.Configure<Email.EmailOptions>(configuration.GetSection("Email"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
-        services.AddScoped<IFhirAccessTokenAuditSink, FhirAccessTokenAuditSink>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));
         services.AddHttpClient(nameof(EpicEndpointDirectorySeeder));
@@ -227,6 +203,21 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IConfiguredDestinationWriterFactory, ConfiguredDestinationWriterFactory>();
+
+        // Generated-file delivery strategies (Download/Email/SFTP/Download-link) — currently used by the CSV writer
+        // only, but format-agnostic so future Excel/PDF/XML writers reuse the same four without new plumbing.
+        services.AddScoped<DownloadDeliveryStrategy>();
+        services.AddScoped<EmailDeliveryStrategy>();
+        services.AddScoped<SftpDeliveryStrategy>();
+        services.AddScoped<DownloadUrlDeliveryStrategy>();
+        foreach (var registration in ArtifactDeliveryStrategyFactory.DefaultRegistrations)
+        {
+            services.AddSingleton(registration);
+        }
+
+        services.AddScoped<IArtifactDeliveryStrategyFactory, ArtifactDeliveryStrategyFactory>();
+        services.Configure<GeneratedFileDownloadOptions>(configuration.GetSection("GeneratedFileDownload"));
+        services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
 
@@ -360,7 +351,6 @@ public static class DependencyInjection
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
         services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
-        services.AddScoped<ILineageTracker, OperationalAuditLineageTracker>();
         services.AddHealthChecks()
             .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
             .AddCheck<SqlServerTdeHealthCheck>("sqlserver-tde")

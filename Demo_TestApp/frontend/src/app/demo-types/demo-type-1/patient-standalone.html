@@ -12,9 +12,6 @@
           <span class="login-type-badge">{{ loginTypeLabel() }}</span>
         </div>
         <div class="app-topbar__actions">
-          @if (role() === 'Admin') {
-            <button type="button" class="icon-btn" (click)="openSettings()" aria-label="Workflow settings">⚙</button>
-          }
           <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -49,13 +46,9 @@
           </div>
         </section>
 
-        @if (errorMessage()) {
-          <p class="error-banner">{{ errorMessage() }}</p>
-        }
-
         <button type="button" class="link-btn" (click)="openRecords()">View All Records →</button>
 
-        <button type="button" class="connect-btn" (click)="openConnectFlow()" [disabled]="processing()">
+        <button type="button" class="connect-btn" (click)="openConnectFlow()">
           Connect Get Data
         </button>
       </main>
@@ -93,71 +86,6 @@
           <p class="error-banner">No patient records yet — use "Connect Get Data" to fetch some.</p>
         }
       </main>
-    }
-
-    <!-- Hospital selector popup -->
-    @if (hospitalModalOpen()) {
-      <div class="sheet-backdrop" (click)="closeHospitalModal()">
-        <div class="sheet" (click)="$event.stopPropagation()">
-          <div class="sheet__handle"></div>
-          <div class="sheet__title">Select a Hospital</div>
-          <input
-            type="search"
-            class="hospital-search"
-            placeholder="Search hospitals..."
-            [value]="hospitalSearch()"
-            (input)="onHospitalSearch($any($event.target).value)"
-          />
-          <ul class="hospital-list">
-            @for (hospital of filteredHospitals(); track hospital.id) {
-              <li
-                class="hospital-row"
-                [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
-                (click)="selectHospital(hospital.id)"
-              >
-                <span class="hospital-row__name">{{ hospital.name }}</span>
-              </li>
-            } @empty {
-              <li class="hospital-empty">No hospitals matched your search.</li>
-            }
-          </ul>
-          <div class="sheet__actions">
-            <button type="button" class="btn-secondary" (click)="closeHospitalModal()">Cancel</button>
-            <button type="button" class="btn-primary" [disabled]="!selectedHospital()" (click)="process()">Process</button>
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- Processing overlay -->
-    @if (processing()) {
-      <div class="sheet-backdrop">
-        <div class="processing-card">
-          <div class="spinner"></div>
-          <div class="processing-card__step">{{ processingStep() }}</div>
-        </div>
-      </div>
-    }
-
-    <!-- Admin workflow settings popup -->
-    @if (settingsOpen()) {
-      <div class="sheet-backdrop" (click)="closeSettings()">
-        <div class="sheet" (click)="$event.stopPropagation()">
-          <div class="sheet__handle"></div>
-          <div class="sheet__title">Workflow Settings</div>
-          <label class="field">
-            Workflow URL
-            <input type="text" [ngModel]="workflowUrlDraft()" (ngModelChange)="workflowUrlDraft.set($event)" placeholder="https://..." />
-          </label>
-          @if (settingsError()) {
-            <p class="error-banner">{{ settingsError() }}</p>
-          }
-          <div class="sheet__actions">
-            <button type="button" class="btn-secondary" (click)="closeSettings()">Cancel</button>
-            <button type="button" class="btn-primary" (click)="saveSettings()">Save</button>
-          </div>
-        </div>
-      </div>
     }
   </div>
 </div>

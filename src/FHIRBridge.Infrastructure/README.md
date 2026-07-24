@@ -20,9 +20,9 @@
 ## Key components
 
 ### Persistence (`Persistence/`)
-- **FHIRBridgeDbContext** — the EF Core context. Exposes `DbSet`s for tenants, source connections, webhooks, destinations, mapping profiles, pipeline routes, source-capability profiles, pipeline-run records, operational/user-activity audit logs, lineage entries, processed messages, and the RBAC entities (users, roles, permissions, role-permissions, user-roles, tenant-users). Applies all `IEntityTypeConfiguration` from the assembly, then layers cross-cutting conventions: a global soft-delete query filter for every `ISoftDeletable`, automatic `RowVersion` concurrency tokens, and a `SaveChanges` guard that makes audit logs append-only (modify/delete throws).
+- **FHIRBridgeDbContext** — the EF Core context. Exposes `DbSet`s for tenants, source connections, webhooks, destinations, mapping profiles, pipeline routes, source-capability profiles, pipeline-run records, processed messages, and the RBAC entities (users, roles, permissions, role-permissions, user-roles, tenant-users). Applies all `IEntityTypeConfiguration` from the assembly, then layers cross-cutting conventions: a global soft-delete query filter for every `ISoftDeletable` and automatic `RowVersion` concurrency tokens.
 - **AuditingSaveChangesInterceptor** — stamps created/modified provenance on `IAuditableEntity` rows and converts physical deletes of `ISoftDeletable` rows into soft deletes, using `ICurrentUserService` as the actor.
-- **Configurations/** — one `IEntityTypeConfiguration` per entity (tenant, source connection, mapping profile, destination, pipeline route, processed message, audit logs, lineage, RBAC tables) plus `SeedConstants` for deterministic seed ids.
+- **Configurations/** — one `IEntityTypeConfiguration` per entity (tenant, source connection, mapping profile, destination, pipeline route, processed message, RBAC tables) plus `SeedConstants` for deterministic seed ids.
 - **Repositories** — EF + in-memory pairs for each aggregate: `Ef/InMemoryTenantConfigurationRepository`, `…UserAccessRepository`, `…ConfiguredPipelineRunRepository`, `…SourceCapabilityRepository`. The in-memory variants let the whole stack run with no database.
 - **Migrations/** — `InitialCreate` and `AddSourceCapabilityProfiles`, plus the model snapshot.
 - **FHIRBridgeDbContextDesignTimeFactory** — `IDesignTimeDbContextFactory` so `dotnet ef` can build the context outside the host.
@@ -42,13 +42,7 @@
 - **ConfiguredResourceTypeAccessPolicy** / **ConfiguredConsentService** / **FhirConsentParser** — resource-type allow/deny policy and FHIR Consent resource interpretation.
 - **SafeHarborDeIdentificationService** — HIPAA Safe Harbor JSON redaction (remove/hash identifiers, dates→year, ZIP→3 digits) driven by configurable FHIR-path rules.
 - **KAnonymityDeIdentificationService** — Expert-Determination set-level de-identification: generalizes quasi-identifiers and suppresses equivalence classes smaller than `k`.
-- **ConfiguredRetentionPolicyService** + **RetentionPurgeService** — configurable retention windows and a purge over `IPurgeableStore`s (audit is never purged).
-- **OperationalAuditLineageTracker**, **EfLineageStore**, **InMemoryLineageStore** — record/query/purge resource lineage (durable or in-memory).
-
-### Audit (`Audit/`)
-- **Ef/InMemoryOperationalAuditService** + **OperationalAuditMapper** — append-only operational/pipeline audit.
-- **Ef/InMemoryUserActivityAuditService** — tamper-evident, per-tenant hash-chained user-activity log (each entry seals the previous entry's hash).
-- **FhirAccessTokenAuditSink** — records FHIR access-token acquisition events.
+- **ConfiguredRetentionPolicyService** + **RetentionPurgeService** — configurable retention windows and a purge over `IPurgeableStore`s.
 
 ### Messaging (`Messaging/`)
 - **MessagingServiceCollectionExtensions** — selects the transport from `Messaging:Provider` (`InMemory` default, `RabbitMq`, `AzureServiceBus`); registers transport-agnostic command handlers and retry options regardless of provider.

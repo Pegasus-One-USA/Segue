@@ -32,6 +32,15 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
             if (resolved.Count == 0)
             {
+                if (policy == ArrayPolicy.SeparateDestination)
+                {
+                    // No matching element for this occurrence (e.g. an optional sub-field absent on this
+                    // particular array item) — this field belongs to a CHILD table, not the parent row, so it
+                    // must never fall through to `parent[...]` below. Nothing to contribute for this field on
+                    // this occurrence; other fields on the same child table are unaffected.
+                    continue;
+                }
+
                 if (!string.IsNullOrWhiteSpace(field.DefaultValue))
                 {
                     parent[field.TargetField] = ConvertValue(field.DefaultValue, field.ValueType, field.Format, field.TargetField, errors);

@@ -1,6 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.Json;
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -15,12 +13,10 @@ namespace FHIRBridge.Application.Services;
 public sealed class UserManagementService : IUserManagementService
 {
     private const int InvitationTokenLifetimeHours = 48;
-    private const string ModuleUser = "User";
 
     private readonly IUserAccessRepository _repository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IUserActivityAuditService _userActivityAuditService;
     private readonly IEmailSender _emailSender;
     private readonly IExternalTokenValidator _externalTokenValidator;
     private readonly ILocalAuthService _localAuthService;
@@ -30,7 +26,6 @@ public sealed class UserManagementService : IUserManagementService
         IUserAccessRepository repository,
         IPasswordHasher passwordHasher,
         ICurrentUserService currentUserService,
-        IUserActivityAuditService userActivityAuditService,
         IEmailSender emailSender,
         IExternalTokenValidator externalTokenValidator,
         ILocalAuthService localAuthService,
@@ -39,7 +34,6 @@ public sealed class UserManagementService : IUserManagementService
         _repository = repository;
         _passwordHasher = passwordHasher;
         _currentUserService = currentUserService;
-        _userActivityAuditService = userActivityAuditService;
         _emailSender = emailSender;
         _externalTokenValidator = externalTokenValidator;
         _localAuthService = localAuthService;
@@ -85,7 +79,6 @@ public sealed class UserManagementService : IUserManagementService
 
         await _repository.AddUserAsync(user, cancellationToken);
         await SetUserRolesAsync(user.Id, request.RoleNames, cancellationToken);
-        await AuditAsync("Created", user.Id, email, $"Local user created: {email}.", cancellationToken);
 
         return await ToManagementDtoAsync(user, cancellationToken);
     }
@@ -125,12 +118,6 @@ public sealed class UserManagementService : IUserManagementService
 
         await _repository.UpdateUserAsync(user, cancellationToken);
         await SetUserRolesAsync(user.Id, request.RoleNames, cancellationToken);
-        await AuditAsync(
-            "Updated",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"Local user updated: {user.Email ?? user.ExternalUserId}.",
-            cancellationToken);
 
         return await ToManagementDtoAsync(user, cancellationToken);
     }
@@ -161,8 +148,6 @@ public sealed class UserManagementService : IUserManagementService
         await _repository.AddUserAsync(user, cancellationToken);
         await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);
 
-        await AuditAsync("Invited", user.Id, email, $"User invited: {email}.", cancellationToken);
-
         await _emailSender.SendAsync(
             email,
             "You've been invited to FHIRBridge",
@@ -192,13 +177,6 @@ public sealed class UserManagementService : IUserManagementService
 
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
         var roleName = roles.FirstOrDefault()?.Name ?? "user";
-
-        await AuditAsync(
-            "InvitationResent",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"Invitation resent: {user.Email ?? user.ExternalUserId}.",
-            cancellationToken);
 
         await _emailSender.SendAsync(
             user.Email!,
@@ -234,7 +212,6 @@ public sealed class UserManagementService : IUserManagementService
             request.LastName);
 
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("InviteAccepted", user.Id, email, $"User accepted invitation: {email}.", cancellationToken);
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }
@@ -275,7 +252,6 @@ public sealed class UserManagementService : IUserManagementService
             lastName: null);
 
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync("InviteAcceptedSso", user.Id, email, $"User accepted invitation via SSO: {email}.", cancellationToken);
 
         return await _localAuthService.IssueSessionAsync(user, cancellationToken);
     }
@@ -291,14 +267,6 @@ public sealed class UserManagementService : IUserManagementService
         var wasEnabled = user.IsEnabled;
         user.SetEnabled(request.IsEnabled);
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync(
-            request.IsEnabled ? "Activated" : "Deactivated",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"User {(request.IsEnabled ? "activated" : "deactivated")}: {user.Email ?? user.ExternalUserId}.",
-            cancellationToken,
-            wasEnabled.ToString(),
-            request.IsEnabled.ToString());
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }
@@ -312,12 +280,6 @@ public sealed class UserManagementService : IUserManagementService
         {
             user.DisableMfa();
             await _repository.UpdateUserAsync(user, cancellationToken);
-            await AuditAsync(
-                "MfaDisabledByAdmin",
-                user.Id,
-                user.Email ?? user.ExternalUserId,
-                $"MFA disabled by an administrator for {user.Email ?? user.ExternalUserId}.",
-                cancellationToken);
         }
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
@@ -336,14 +298,6 @@ public sealed class UserManagementService : IUserManagementService
         var wasRequired = user.MustSetupMfa;
         user.SetMustSetupMfa(required);
         await _repository.UpdateUserAsync(user, cancellationToken);
-        await AuditAsync(
-            required ? "MfaRequiredByAdmin" : "MfaRequirementRemovedByAdmin",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"MFA {(required ? "required" : "no longer required")} by an administrator for {user.Email ?? user.ExternalUserId}.",
-            cancellationToken,
-            wasRequired.ToString(),
-            required.ToString());
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }
@@ -354,12 +308,6 @@ public sealed class UserManagementService : IUserManagementService
             ?? throw new InvalidOperationException("User was not found.");
 
         await _repository.DeleteUserAsync(user, cancellationToken);
-        await AuditAsync(
-            "Deleted",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"User permanently deleted: {user.Email ?? user.ExternalUserId}.",
-            cancellationToken);
     }
 
     public async Task<IReadOnlyList<RoleDto>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)
@@ -399,13 +347,6 @@ public sealed class UserManagementService : IUserManagementService
         }
 
         await _repository.AddUserRoleAsync(userId, role.Id, cancellationToken);
-        await AuditAsync(
-            "RoleAssigned",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"Role '{role.Name}' assigned to user {user.Email ?? user.ExternalUserId}.",
-            cancellationToken,
-            newValue: role.Name);
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }
@@ -427,13 +368,6 @@ public sealed class UserManagementService : IUserManagementService
         }
 
         await _repository.RemoveUserRoleAsync(userId, roleId, cancellationToken);
-        await AuditAsync(
-            "RoleRemoved",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"Role '{role.Name}' removed from user {user.Email ?? user.ExternalUserId}.",
-            cancellationToken,
-            oldValue: role.Name);
     }
 
     public async Task<IReadOnlyList<PermissionAllocationDto>> GetUserPermissionAllocationsAsync(
@@ -459,13 +393,6 @@ public sealed class UserManagementService : IUserManagementService
             ?? throw new InvalidOperationException("Permission was not found.");
 
         await _repository.AddUserPermissionAllocationAsync(userId, permissionId, request.IsEnabled, cancellationToken);
-        await AuditAsync(
-            request.IsEnabled ? "PermissionGranted" : "PermissionDenied",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"Permission '{permission.Name}' {(request.IsEnabled ? "granted" : "denied")} directly to user {user.Email ?? user.ExternalUserId}.",
-            cancellationToken,
-            newValue: $"{permission.Name}={request.IsEnabled}");
         await ForceReauthenticationAsync(user, cancellationToken);
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
@@ -480,13 +407,6 @@ public sealed class UserManagementService : IUserManagementService
             ?? throw new InvalidOperationException("Permission was not found.");
 
         await _repository.RemoveUserPermissionAllocationAsync(userId, permissionId, cancellationToken);
-        await AuditAsync(
-            "PermissionAllocationRemoved",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            $"Direct permission override for '{permission.Name}' removed from user {user.Email ?? user.ExternalUserId}; now inherits role grants.",
-            cancellationToken,
-            oldValue: permission.Name);
         await ForceReauthenticationAsync(user, cancellationToken);
     }
 
@@ -499,15 +419,6 @@ public sealed class UserManagementService : IUserManagementService
             ?? throw new InvalidOperationException("User was not found.");
 
         await _repository.SetUserPermissionAllocationsAsync(userId, request.PermissionIdToIsEnabled, cancellationToken);
-        await AuditAsync(
-            "PermissionAllocationsReplaced",
-            user.Id,
-            user.Email ?? user.ExternalUserId,
-            request.PermissionIdToIsEnabled.Count == 0
-                ? $"All direct permission overrides cleared for user {user.Email ?? user.ExternalUserId}; now fully inherits role grants."
-                : $"Direct permission overrides replaced for user {user.Email ?? user.ExternalUserId} ({request.PermissionIdToIsEnabled.Count} override(s)).",
-            cancellationToken,
-            newValue: JsonSerializer.Serialize(request.PermissionIdToIsEnabled));
         await ForceReauthenticationAsync(user, cancellationToken);
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
@@ -599,36 +510,6 @@ public sealed class UserManagementService : IUserManagementService
             user.LastLoginOnUtc,
             user.MfaEnabled,
             user.MustSetupMfa);
-    }
-
-    private async Task AuditAsync(
-        string action,
-        Guid? entityId,
-        string? entityName,
-        string message,
-        CancellationToken cancellationToken,
-        string? oldValue = null,
-        string? newValue = null)
-    {
-        var user = _currentUserService.CurrentUser;
-        var userId = Guid.TryParse(user.ExternalUserId, out var parsed) ? parsed : (Guid?)null;
-        await _userActivityAuditService.RecordAsync(
-            new RecordUserActivityRequest(
-                UserId: userId,
-                UserEmail: user.AuditName,
-                Category: UserActivityCategories.Administration,
-                Activity: message,
-                Status: UserActivityStatuses.Success,
-                EntityName: entityName,
-                EntityId: entityId,
-                IpAddress: user.IpAddress,
-                UserAgent: user.UserAgent,
-                CorrelationId: user.CorrelationId,
-                Module: ModuleUser,
-                Action: action,
-                OldValue: oldValue,
-                NewValue: newValue),
-            cancellationToken);
     }
 
     private static string NormalizeEmail(string email)

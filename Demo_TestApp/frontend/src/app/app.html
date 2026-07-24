@@ -2,23 +2,10 @@
   <main class="login-fullscreen">
     <div class="login-card">
       <div class="login-card__brand-row">
-        <div class="login-card__brand">HealthApp</div>
-        @if (lockedDemoTypeName(); as lockedName) {
-          <span class="login-type-badge">{{ lockedName }}</span>
-        }
+        <div class="login-card__brand">HealthApp (V1)</div>
       </div>
       <p class="login-card__subtitle">Sign in to view your health dashboard</p>
 
-      @if (!lockedDemoTypeName()) {
-        <label class="field">
-          Login Type
-          <select [ngModel]="selectedDemoType()" (ngModelChange)="onDemoTypeChange($event)">
-            @for (type of demoTypes(); track type.id) {
-              <option [value]="type.name">{{ type.name }}</option>
-            }
-          </select>
-        </label>
-      }
       <label class="field">
         Email
         <input type="email" [ngModel]="loginEmail()" (ngModelChange)="loginEmail.set($event)" placeholder="you@example.com" />
@@ -35,25 +22,29 @@
       <button type="button" class="connect-btn" (click)="login()">Log In</button>
     </div>
   </main>
-} @else if (selectedDemoType() === 'DemoType2' || selectedDemoType() === 'Provider_InApp') {
+} @else if (isProviderInAppLaunch || role() === 'ProviderInApp') {
   <app-launch-provider-in-app
-    [loginTypeLabel]="selectedDemoType()"
+    [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-launch-provider-in-app>
-} @else if (selectedDemoType() === 'Provider_Standalone') {
+} @else if (role() === 'ProviderStandalone') {
   <app-launch-standalone-provider
-    [loginTypeLabel]="selectedDemoType()"
+    [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-launch-standalone-provider>
-} @else if (selectedDemoType() === 'Patient_Standalone') {
+} @else if (role() === 'Patient' && isOnPatientStandaloneLaunchPath) {
   <app-launch-standalone-patient
-    [loginTypeLabel]="selectedDemoType()"
+    [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-launch-standalone-patient>
+} @else if (role() === 'Admin') {
+  <app-admin-settings
+    [loginTypeLabel]="loginTypeLabel()"
+    (logout)="logout()"
+  ></app-admin-settings>
 } @else {
   <app-patient-standalone
-    [role]="role()"
-    [loginTypeLabel]="selectedDemoType()"
+    [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-patient-standalone>
 }

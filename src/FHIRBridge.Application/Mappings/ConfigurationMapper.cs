@@ -134,7 +134,8 @@ public static class ConfigurationMapper
             mappingProfile.Fields
                 .Select(ToDto)
                 .ToList(),
-            mappingProfile.IsEnabled);
+            mappingProfile.IsEnabled,
+            mappingProfile.MappingJson);
     }
 
     public static MappingFieldDto ToDto(MappingField field)

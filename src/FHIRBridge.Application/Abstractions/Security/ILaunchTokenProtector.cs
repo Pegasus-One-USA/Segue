@@ -7,13 +7,15 @@ namespace FHIRBridge.Application.Abstractions.Security;
 /// </summary>
 public interface ILaunchTokenProtector
 {
-    /// <summary>Encrypts the routeId (and, optionally, a hospital/organization EhrEndpoint id to launch against)
-    /// into an opaque, URL-safe token for the registered launch URL.</summary>
-    string ProtectContext(Guid routeId, Guid? ehrEndpointId = null);
+    /// <summary>Encrypts the routeId (and, optionally, a hospital/organization EhrEndpoint id to launch against, and
+    /// a caller-supplied callerId — the URL to redirect to on completion instead of the source's static
+    /// PostLaunchRedirectUri) into an opaque, URL-safe token for the registered launch URL.</summary>
+    string ProtectContext(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null);
 
-    /// <summary>Encrypts a workflowId (and, optionally, a hospital/organization EhrEndpoint id to launch against)
-    /// into an opaque launch token (launch runs the referenced workflow graph).</summary>
-    string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null);
+    /// <summary>Encrypts a workflowId (and, optionally, a hospital/organization EhrEndpoint id to launch against, and
+    /// a caller-supplied callerId — the URL to redirect to on completion instead of the source's static
+    /// PostLaunchRedirectUri) into an opaque launch token (launch runs the referenced workflow graph).</summary>
+    string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null);
 
     /// <summary>Encrypts a (workflowId, targetNodeId) pair into an opaque checkpoint-launch token — hitting it runs
     /// only that node's ancestor closure, not the full workflow graph.</summary>
@@ -33,5 +35,7 @@ public interface ILaunchTokenProtector
 /// within a workflow graph (when <see cref="TargetNodeId"/> is set, <see cref="WorkflowId"/> is also set).
 /// <see cref="EhrEndpointId"/> optionally names a specific hospital/organization endpoint (from the <c>EhrEndpoints</c>
 /// directory) to launch against instead of the bound source connection's own configured base URL — set when a
-/// third-party app carries a user's hospital selection through the launch.</summary>
-public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null, Guid? TargetNodeId = null, Guid? EhrEndpointId = null);
+/// third-party app carries a user's hospital selection through the launch. <see cref="CallerId"/> optionally carries
+/// the caller-supplied return URL (e.g. the third-party app that requested this launch URL) to redirect to on
+/// completion instead of the source's static PostLaunchRedirectUri.</summary>
+public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null, Guid? TargetNodeId = null, Guid? EhrEndpointId = null, string? CallerId = null);

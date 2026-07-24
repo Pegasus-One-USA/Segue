@@ -112,4 +112,37 @@ public sealed class JsonMappingEngineTests
         result.Errors.Should().BeEmpty();
         result.Values["AddressCombo"].Should().BeNull();
     }
+
+    [Fact]
+    public void A_SeparateDestination_field_with_zero_matches_never_leaks_into_the_parent_row()
+    {
+        // Regression guard for a real production bug: "period.end" is an optional sub-field FHIR often omits
+        // (e.g. an ongoing address has no end date). Before the fix, a zero-match SeparateDestination field
+        // fell through to `parent[field.TargetField] = null`, polluting the PARENT record with a column that
+        // only exists on the child table — causing "Invalid column name 'periodEndDate'" against the root table.
+        const string json = """
+            {
+              "address": [
+                { "city": "Springfield", "period": { "start": "2019-05-24" } }
+              ]
+            }
+            """;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("city", "$.address[*].city", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", DestinationObject: "PatientAddress", ArrayPolicy: ArrayPolicy.SeparateDestination),
+            new MappingFieldDto("periodEndDate", "$.address[*].period.end", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", DestinationObject: "PatientAddress", ArrayPolicy: ArrayPolicy.SeparateDestination),
+        };
+
+        var result = _engine.Map(json, fields);
+
+        result.Errors.Should().BeEmpty();
+        result.Values.Should().NotContainKey("periodEndDate");
+        result.ChildTables.Should().ContainSingle(t => t.Name == "PatientAddress");
+        var row = result.ChildTables!.Single().Rows.Single();
+        row["city"].Should().Be("Springfield");
+        row.Should().NotContainKey("periodEndDate", "the field had zero matches on this occurrence, so it contributes nothing rather than a spurious null column");
+    }
 }

@@ -157,6 +157,41 @@ public sealed class SqlServerMappingSchemaTransaction : IMappingSchemaTransactio
         };
     }
 
+    public async Task<TableRelationDto?> GetForeignKeyAsync(string tableName, CancellationToken cancellationToken)
+    {
+        var (schemaName, table) = SplitTableName(tableName);
+
+        await using var command = CreateCommand();
+        command.CommandText = """
+            SELECT
+                cp.name AS ChildColumn,
+                SCHEMA_NAME(tp.schema_id) AS ParentSchema,
+                tp.name AS ParentTable,
+                cr.name AS ParentColumn
+            FROM sys.foreign_keys fk
+            JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+            JOIN sys.tables tp ON tp.object_id = fk.referenced_object_id
+            JOIN sys.columns cp ON cp.object_id = fkc.parent_object_id AND cp.column_id = fkc.parent_column_id
+            JOIN sys.columns cr ON cr.object_id = fkc.referenced_object_id AND cr.column_id = fkc.referenced_column_id
+            WHERE fk.parent_object_id = OBJECT_ID(@fullTableName, N'U');
+            """;
+        command.Parameters.AddWithValue("@fullTableName", $"[{schemaName}].[{table}]");
+
+        var relations = new List<TableRelationDto>();
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                relations.Add(new TableRelationDto(
+                    reader.GetString(0), $"{reader.GetString(1)}.{reader.GetString(2)}", reader.GetString(3)));
+            }
+        }
+
+        // Only a single, single-column FK is unambiguous — a composite key or multiple FKs on this table
+        // can't be resolved to "the" parent relation without more information, so leave it null rather than guess.
+        return relations.Count == 1 ? relations[0] : null;
+    }
+
     public async Task CommitAsync(CancellationToken cancellationToken)
     {
         await _transaction.CommitAsync(cancellationToken);

@@ -434,11 +434,16 @@ export class WorkflowBuilderComponent implements OnInit {
       .map(edge => this.store.byId(edge.to))
       .filter(n => n?.kind === 'transform' && (n as TransformNode).transformId === 'field-mapping').length;
 
+    // Strip mappingProfileId — the clone needs its OWN mapping profile (its own destination/resource
+    // mapping), never the original's. Left in place, a build before the clone's own field-mapping wizard
+    // save would send the ORIGINAL's real profile id as this clone's existingId too, and /workflows/build
+    // would overwrite the original's profile with the clone's (different) fields — silently corrupting it.
+    const { mappingProfileId: _clonedMappingProfileId, ...clonedFields } = original.fields;
     const clone: TransformNode = {
       ...(original as TransformNode),
       id:     this.store.nextTransformId(),
       y:      original.y + siblingMappingCount * 170,
-      fields: { ...original.fields },
+      fields: clonedFields,
     };
     this.store.addNode(clone);
     this.store.addEdge({ id: this.store.nextEdgeId(), from: parent.id, to: clone.id });

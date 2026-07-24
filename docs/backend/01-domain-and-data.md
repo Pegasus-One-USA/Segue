@@ -26,9 +26,6 @@
 |---|---|
 | `ConfiguredPipelineRunRecord` | Run metrics: extracted/mapped/written counts, status, errors, trigger type. |
 | `SourceCapabilityProfile` | Cached FHIR CapabilityStatement; gates which resource types a mapping may target. |
-| `OperationalAuditLog` | Append-only system/pipeline events (PHI-free). |
-| `UserActivityAuditLog` | Append-only, **SHA-256 hash-chained tamper-evident** per-tenant chain (`PreviousHash` + `EntryHash` via `SealChain`). HIPAA §164.312. |
-| `ResourceLineageEntry` | PHI-free chain-of-custody; purgeable per retention. |
 | `ProcessedMessage` | Idempotency key store. |
 
 ### Value objects
@@ -39,12 +36,11 @@
 **`FHIRBridgeDbContext`** — 18 DbSets. Conventions applied in `OnModelCreating`:
 - **Soft-delete** global query filter for `ISoftDeletable` (deleted rows hidden, never physically removed).
 - **`RowVersion`** → optimistic concurrency token.
-- **Append-only audit guard** in `SaveChanges`/`SaveChangesAsync` — throws if an `OperationalAuditLog`/`UserActivityAuditLog` row is modified or deleted.
 
 **`AuditingSaveChangesInterceptor`** stamps `CreatedOnUtc`/`CreatedBy` + `ModifiedOnUtc`/`ModifiedBy`, and converts hard deletes of `ISoftDeletable` into soft deletes. Actor comes from `ICurrentUserService` (defaults to "System" off-HTTP).
 
 **Repositories** have EF Core + InMemory implementations, selected by connection-string presence in `DependencyInjection.cs`:
-`ITenantConfigurationRepository`, `IUserAccessRepository`, `IConfiguredPipelineRunRepository`, `ISourceCapabilityRepository`, plus `IProcessedMessageStore` and lineage store.
+`ITenantConfigurationRepository`, `IUserAccessRepository`, `IConfiguredPipelineRunRepository`, `ISourceCapabilityRepository`, plus `IProcessedMessageStore`.
 
 **Migrations** (`Persistence/Migrations`, in order):
 `20260617131626_InitialCreate` → `AddSourceCapabilityProfiles` → `20260701112851_AddSourceApplicationType` → `AddPatientSelectionMethod` → `20260701125943_AddRbac`.

@@ -96,23 +96,19 @@
       </div>
 
       <div class="dw-field">
-        <label class="dw-label" for="dcf-storageType">Storage type <span class="dw-req">*</span></label>
+        <label class="dw-label" for="dcf-deliveryMode">Delivery mode <span class="dw-req">*</span></label>
         <div class="dw-select-wrap">
-          <select id="dcf-storageType" class="dw-select" formControlName="storageType">
+          <select id="dcf-deliveryMode" class="dw-select" formControlName="deliveryMode">
+            <option value="download">Download (returned directly from the run)</option>
+            <option value="email">Email</option>
             <option value="sftp">SFTP</option>
-            <option value="azure-blob">Azure Blob Storage</option>
-            <option value="aws-s3">AWS S3</option>
-            <option value="local">Local / Network Folder</option>
-            <option value="gcs">Google Cloud Storage</option>
+            <option value="downloadUrl">Download link</option>
           </select>
         </div>
-      </div>
-
-      <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched">
-        <label class="dw-label" for="dcf-folder">Base folder / container <span class="dw-req">*</span></label>
-        <input id="dcf-folder" class="dw-input" formControlName="folder" placeholder="/exports/fhirbridge" />
-        @if (csvForm.get('folder')!.invalid && csvForm.get('folder')!.touched) {
-          <span class="dw-error">Base folder is required.</span>
+        @if (csvForm.get('deliveryMode')!.value === 'download') {
+          <span class="dw-hint">
+            Only works when this destination's route is triggered manually — not on a schedule or webhook.
+          </span>
         }
       </div>
 
@@ -145,7 +141,7 @@
         </div>
       </div>
 
-      @if (csvForm.get('storageType')!.value === 'sftp') {
+      @if (csvForm.get('deliveryMode')!.value === 'sftp') {
         <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched">
           <label class="dw-label" for="dcf-sftpHost">SFTP host <span class="dw-req">*</span></label>
           <input id="dcf-sftpHost" class="dw-input" formControlName="sftpHost" placeholder="sftp.company.com" />
@@ -184,6 +180,42 @@
         </div>
       }
 
+      @if (csvForm.get('deliveryMode')!.value === 'email') {
+        <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('emailTo')!.invalid && csvForm.get('emailTo')!.touched">
+          <label class="dw-label" for="dcf-emailTo">Recipient(s) <span class="dw-req">*</span></label>
+          <input id="dcf-emailTo" class="dw-input" formControlName="emailTo" placeholder="alice@company.com, bob@company.com" />
+          @if (csvForm.get('emailTo')!.invalid && csvForm.get('emailTo')!.touched) {
+            <span class="dw-error">At least one recipient is required.</span>
+          }
+        </div>
+
+        <div class="dw-field dw-field--full">
+          <label class="dw-label" for="dcf-emailCc">Cc</label>
+          <input id="dcf-emailCc" class="dw-input" formControlName="emailCc" placeholder="optional, comma-separated" />
+        </div>
+
+        <div class="dw-field dw-field--full">
+          <label class="dw-label" for="dcf-emailSubjectTemplate">Subject template</label>
+          <input id="dcf-emailSubjectTemplate" class="dw-input" formControlName="emailSubjectTemplate" />
+          <span class="dw-hint">Placeholders: {{ '{{RouteName}}' }}, {{ '{{RunDate}}' }}, {{ '{{RowCount}}' }}</span>
+        </div>
+
+        <div class="dw-field dw-field--full">
+          <label class="dw-label" for="dcf-emailBodyTemplate">Body template</label>
+          <textarea id="dcf-emailBodyTemplate" class="dw-input" rows="3" formControlName="emailBodyTemplate"></textarea>
+        </div>
+      }
+
+      @if (csvForm.get('deliveryMode')!.value === 'downloadUrl') {
+        <div class="dw-field" [class.dw-field--error]="csvForm.get('downloadLinkExpiryMinutes')!.invalid && csvForm.get('downloadLinkExpiryMinutes')!.touched">
+          <label class="dw-label" for="dcf-downloadLinkExpiryMinutes">Link expiry (minutes) <span class="dw-req">*</span></label>
+          <input id="dcf-downloadLinkExpiryMinutes" type="number" class="dw-input" formControlName="downloadLinkExpiryMinutes" />
+          @if (csvForm.get('downloadLinkExpiryMinutes')!.invalid && csvForm.get('downloadLinkExpiryMinutes')!.touched) {
+            <span class="dw-error">Enter a value between 1 and 10080 minutes (7 days).</span>
+          }
+        </div>
+      }
+
     </div>
   </form>
 
@@ -202,9 +234,5 @@
     @if (probeState() === 'ok') {
       <div class="dw-callout dw-callout--info">Connected successfully.</div>
     }
-  } @else if (csvForm.get('storageType')!.value !== 'sftp') {
-    <div class="dw-callout dw-callout--info">
-      Test Connection isn't available yet for this storage type.
-    </div>
   }
 }

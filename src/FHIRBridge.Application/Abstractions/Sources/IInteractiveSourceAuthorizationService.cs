@@ -54,13 +54,17 @@ public interface IInteractiveSourceAuthorizationService
 
     /// <summary>Builds the opaque, encrypted launch-context token to embed in the launch URL registered with the EHR
     /// for a given pipeline route. <paramref name="ehrEndpointId"/> optionally names a specific hospital/organization
-    /// EhrEndpoint to launch against instead of the source connection's own configured base URL.</summary>
-    string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null);
+    /// EhrEndpoint to launch against instead of the source connection's own configured base URL. <paramref name="callerId"/>
+    /// optionally carries the caller-supplied return URL (e.g. the third-party app requesting this launch URL) to
+    /// redirect to on completion instead of the source's static PostLaunchRedirectUri.</summary>
+    string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null);
 
     /// <summary>Builds the opaque, encrypted launch token for a workflow graph: launching it runs that workflow (its
     /// source node's connection drives the OAuth + trusted-issuer validation). <paramref name="ehrEndpointId"/>
-    /// optionally names a specific hospital/organization EhrEndpoint to launch against.</summary>
-    string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null);
+    /// optionally names a specific hospital/organization EhrEndpoint to launch against. <paramref name="callerId"/>
+    /// optionally carries the caller-supplied return URL (e.g. the third-party app requesting this launch URL) to
+    /// redirect to on completion instead of the source's static PostLaunchRedirectUri.</summary>
+    string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null);
 
     /// <summary>
     /// Starts a standalone / patient interactive sign-in directly from an encrypted launch-context token — no EHR

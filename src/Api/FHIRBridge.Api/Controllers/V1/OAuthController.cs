@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -21,17 +22,20 @@ public sealed class OAuthController : ControllerBase
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
     private readonly IEhrEndpointService _ehrEndpointService;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<OAuthController> _logger;
 
     public OAuthController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
         IEhrEndpointService ehrEndpointService,
+        IConfiguration configuration,
         ILogger<OAuthController> logger)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
         _ehrEndpointService = ehrEndpointService;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -85,10 +89,10 @@ public sealed class OAuthController : ControllerBase
     [Authorize]
     [HttpGet("pipelines/{routeId:guid}/launch-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetLaunchUrl(Guid routeId, [FromQuery] Guid? ehrEndpointId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetLaunchUrl(Guid routeId, [FromQuery] Guid? ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
     {
         var applicationType = await _authorizationService.GetRouteApplicationTypeAsync(routeId, cancellationToken);
-        var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId);
+        var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId, callerId);
         return Ok(BuildLaunchResponse(applicationType, context));
     }
 
@@ -102,10 +106,11 @@ public sealed class OAuthController : ControllerBase
     [Authorize]
     [HttpGet("workflows/{workflowId:guid}/launch-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetWorkflowLaunchUrl(Guid workflowId, [FromQuery] Guid? ehrEndpointId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetWorkflowLaunchUrl(
+        Guid workflowId, [FromQuery] Guid? ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
     {
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
         return Ok(BuildLaunchResponse(applicationType, context));
     }
 
@@ -123,9 +128,10 @@ public sealed class OAuthController : ControllerBase
     [EnableRateLimiting("oauth")]
     [HttpGet("workflows/{workflowId:guid}/public-standalone-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicWorkflowStandaloneUrl(
-        Guid workflowId, [FromQuery] Guid ehrEndpointId, CancellationToken cancellationToken)
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url requested: workflowId={WorkflowId} ehrEndpointId={EhrEndpointId}",
@@ -148,8 +154,19 @@ public sealed class OAuthController : ControllerBase
             return NotFound();
         }
 
+        // This endpoint is anonymous — anyone who knows workflowId can call it — so a caller-supplied callerId is
+        // validated against Portal:AllowedOrigins (the same trust boundary already used for CORS) before it's
+        // honored, to keep it from being an open redirect off a real Epic login.
+        if (!string.IsNullOrWhiteSpace(callerId) && !CallerIdOriginValidator.IsAllowedOrigin(callerId, _configuration))
+        {
+            _logger.LogWarning(
+                "[Step 1/6] public-standalone-url rejected: callerId origin is not in Portal:AllowedOrigins for workflowId={WorkflowId}",
+                workflowId);
+            return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
+        }
+
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
         var response = BuildLaunchResponse(applicationType, context);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",
@@ -196,9 +213,9 @@ public sealed class OAuthController : ControllerBase
     [Authorize]
     [HttpGet("pipelines/{routeId:guid}/standalone-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetStandaloneUrl(Guid routeId, [FromQuery] Guid? ehrEndpointId)
+    public IActionResult GetStandaloneUrl(Guid routeId, [FromQuery] Guid? ehrEndpointId, [FromQuery] string? callerId)
     {
-        var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId);
+        var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId, callerId);
         return Ok(new { standaloneUrl = BuildStandaloneUri(context) });
     }
 

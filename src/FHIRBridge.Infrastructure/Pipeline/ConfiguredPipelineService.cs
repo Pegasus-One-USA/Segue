@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
@@ -21,6 +20,7 @@ using FHIRBridge.Runtime.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Exceptions;
 using FHIRBridge.SharedKernel.Observability;
 using Microsoft.Extensions.Logging;
+using System.IO.Compression;
 using System.Text.Json.Nodes;
 
 namespace FHIRBridge.Infrastructure.Pipeline;
@@ -33,7 +33,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IMappingMaterializer _mappingMaterializer;
     private readonly IConfiguredDestinationWriterFactory _destinationWriterFactory;
     private readonly ISecretProvider _secretProvider;
-    private readonly IOperationalAuditService _auditService;
     private readonly IConfiguredPipelineRunRepository _pipelineRunRepository;
     private readonly IPipelineRunRouteExecutionRepository _routeExecutionRepository;
     private readonly IExecutionResourceHistoryRecorder _resourceHistoryRecorder;
@@ -42,7 +41,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IGovernancePolicyService _governancePolicyService;
     private readonly IDeIdentificationService _deIdentificationService;
     private readonly IDataSetDeIdentificationService? _dataSetDeIdentificationService;
-    private readonly ILineageTracker _lineageTracker;
     private readonly IFhirBulkExportClient? _bulkExportClient;
     private readonly IPipelineMetrics? _pipelineMetrics;
     private readonly IncrementalSyncOptions _incrementalSyncOptions;
@@ -55,7 +53,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IMappingMaterializer mappingMaterializer,
         IConfiguredDestinationWriterFactory destinationWriterFactory,
         ISecretProvider secretProvider,
-        IOperationalAuditService auditService,
         IConfiguredPipelineRunRepository pipelineRunRepository,
         IPipelineRunRouteExecutionRepository routeExecutionRepository,
         IExecutionResourceHistoryRecorder resourceHistoryRecorder,
@@ -64,7 +61,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IMappedRecordNormalizationService? mappedRecordNormalizationService = null,
         IGovernancePolicyService? governancePolicyService = null,
         IDeIdentificationService? deIdentificationService = null,
-        ILineageTracker? lineageTracker = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IPipelineMetrics? pipelineMetrics = null,
         IncrementalSyncOptions? incrementalSyncOptions = null,
@@ -76,7 +72,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _mappingMaterializer = mappingMaterializer;
         _destinationWriterFactory = destinationWriterFactory;
         _secretProvider = secretProvider;
-        _auditService = auditService;
         _pipelineRunRepository = pipelineRunRepository;
         _routeExecutionRepository = routeExecutionRepository;
         _resourceHistoryRecorder = resourceHistoryRecorder;
@@ -84,7 +79,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _mappedRecordNormalizationService = mappedRecordNormalizationService ?? new PassThroughMappedRecordNormalizationService();
         _governancePolicyService = governancePolicyService ?? new DefaultGovernancePolicyService();
         _deIdentificationService = deIdentificationService ?? new PassThroughDeIdentificationService();
-        _lineageTracker = lineageTracker ?? new NoOpLineageTracker();
         _bulkExportClient = bulkExportClient;
         _pipelineMetrics = pipelineMetrics;
         _incrementalSyncOptions = incrementalSyncOptions ?? IncrementalSyncOptions.Default;
@@ -108,21 +102,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             pipelineRunId,
             isEnabled,
             cancellationToken);
-
-        await RecordAuditAsync(
-            pipelineRunId,
-            null,
-            null,
-            null,
-            null,
-            null,
-            isEnabled ? "PipelineRunActivated" : "PipelineRunDeactivated",
-            "Completed",
-            $"Pipeline run {pipelineRunId} was {(isEnabled ? "activated" : "deactivated")}.",
-            null,
-            null,
-            null,
-            cancellationToken);
     }
 
     public async Task<ConfiguredPipelineRunDto> StartAsync(
@@ -135,6 +114,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var extractedCount = 0;
         var mappedCount = 0;
         var writtenCount = 0;
+        var inlineDownloads = new List<GeneratedFileDto>();
+        var downloadUrls = new List<string>();
 
         var config = await LoadConfigurationAsync(cancellationToken);
         var scheduledAtUtc = request.ScheduledAtUtc ?? DateTime.UtcNow;
@@ -147,20 +128,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 ? "Scheduled"
                 : "Manual";
 
-        await RecordAuditAsync(
-            pipelineRunId,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "PipelineRunStarted",
-            "Started",
-            "Configured scheduled/manual pipeline run started.",
-            null,
-            request.TriggeredBy,
-            request.CorrelationId,
-            cancellationToken);
+        // Only the synchronous, non-bulk-export API trigger (PipelineRunsController.Start) sets AllowInlineDownload —
+        // schedules, dispatched/queued runs, and webhooks have no HTTP response to carry Download-mode bytes back
+        // through, so a Download-mode CSV destination reached from those paths fails loudly instead of silently.
+        var runStartedAtUtc = new DateTimeOffset(startedOnUtc, TimeSpan.Zero);
 
         var routesByResourceType = ResolveRoutesByResourceType(config, request.ResourceTypes);
         var processedResourceTypes = new List<string>();
@@ -203,21 +174,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         config.SourceConnections,
                         routeGroup.Key.SourceConnectionId,
                         "SourceConnection");
-
-                    await RecordAuditAsync(
-                        pipelineRunId,
-                        null,
-                        sourceConnection.Id,
-                        null,
-                        null,
-                        resourceType,
-                        "SourceExtractionStarted",
-                        "Started",
-                        "FHIR source extraction started.",
-                        null,
-                        request.TriggeredBy,
-                        request.CorrelationId,
-                        cancellationToken);
 
                     // Bulk export runs either when the caller explicitly requests it (legacy API flag) or when the
                     // source connection itself is configured for it (RetrievalMethod == "bulk-export") — so a
@@ -273,21 +229,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         request.TriggeredBy,
                         request.CorrelationId,
                         cancellationToken);
-
-                    await RecordAuditAsync(
-                        pipelineRunId,
-                        null,
-                        sourceConnection.Id,
-                        null,
-                        null,
-                        resourceType,
-                        "SourceExtractionCompleted",
-                        "Completed",
-                        "FHIR source extraction completed.",
-                        resources.Count,
-                        request.TriggeredBy,
-                        request.CorrelationId,
-                        cancellationToken);
                 }
                 catch (Exception exception)
                 {
@@ -299,26 +240,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
                     errors.Add($"{resourceType}/{routeGroup.Key.SourceConnectionId}: {exception.Message}");
 
-                    await RecordAuditAsync(
-                        pipelineRunId,
-                        null,
-                        routeGroup.Key.SourceConnectionId,
-                        null,
-                        null,
-                        resourceType,
-                        "SourceExtractionFailed",
-                        "Failed",
-                        exception.Message,
-                        null,
-                        request.TriggeredBy,
-                        request.CorrelationId,
-                        cancellationToken);
-
                     continue;
                 }
 
                 foreach (var route in routeGroup)
                 {
+                    var writeContext = new PipelineWriteContext(
+                        request.AllowInlineDownload,
+                        route.MappingProfile.Name,
+                        runStartedAtUtc);
+
                     var result = await ExecuteRouteAsync(
                         config,
                         pipelineRunId,
@@ -329,10 +260,20 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         triggerType,
                         request.CorrelationId,
                         errors,
+                        writeContext,
                         cancellationToken);
 
                     mappedCount += result.MappedCount;
                     writtenCount += result.WrittenCount;
+                    if (result.InlineDownload is not null)
+                    {
+                        inlineDownloads.Add(result.InlineDownload);
+                    }
+
+                    if (result.DownloadUrl is not null)
+                    {
+                        downloadUrls.Add(result.DownloadUrl);
+                    }
                 }
             }
         }
@@ -348,6 +289,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             request.TriggeredBy,
             triggerType,
             request.CorrelationId,
+            CombineInlineDownloads(inlineDownloads),
+            downloadUrls,
             cancellationToken);
     }
 
@@ -361,6 +304,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var errors = new List<string>();
         var mappedCount = 0;
         var writtenCount = 0;
+        var inlineDownloads = new List<GeneratedFileDto>();
+        var downloadUrls = new List<string>();
+        var runStartedAtUtc = new DateTimeOffset(startedOnUtc, TimeSpan.Zero);
 
         var config = await LoadConfigurationAsync(cancellationToken);
         var webhookConfiguration = GetRequired(
@@ -389,21 +335,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var processedResourceTypes = new List<string>();
         const string triggerType = "Webhook";
 
-        await RecordAuditAsync(
-            pipelineRunId,
-            null,
-            webhookConfiguration.SourceConnectionId,
-            null,
-            null,
-            null,
-            "WebhookPayloadReceived",
-            "Completed",
-            "FHIR webhook payload received.",
-            extractedCount,
-            request.TriggeredBy,
-            request.CorrelationId,
-            cancellationToken);
-
         foreach (var resourcesForType in resourcesByType)
         {
             var resourceType = resourcesForType.Key;
@@ -430,6 +361,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             foreach (var route in webhookRoutes)
             {
+                // Webhook-triggered runs never have an HTTP caller waiting to consume Download-mode bytes (the
+                // caller here is the webhook sender, not a CSV consumer) — always false, never derived from a flag.
+                var writeContext = new PipelineWriteContext(
+                    AllowInlineDelivery: false,
+                    route.MappingProfile.Name,
+                    runStartedAtUtc);
+
                 var result = await ExecuteRouteAsync(
                     config,
                     pipelineRunId,
@@ -440,10 +378,20 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     triggerType,
                     request.CorrelationId,
                     errors,
+                    writeContext,
                     cancellationToken);
 
                 mappedCount += result.MappedCount;
                 writtenCount += result.WrittenCount;
+                if (result.InlineDownload is not null)
+                {
+                    inlineDownloads.Add(result.InlineDownload);
+                }
+
+                if (result.DownloadUrl is not null)
+                {
+                    downloadUrls.Add(result.DownloadUrl);
+                }
             }
         }
 
@@ -458,6 +406,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             request.TriggeredBy,
             triggerType,
             request.CorrelationId,
+            CombineInlineDownloads(inlineDownloads),
+            downloadUrls,
             cancellationToken);
     }
 
@@ -471,6 +421,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         string? triggerType,
         string? correlationId,
         List<string> errors,
+        PipelineWriteContext writeContext,
         CancellationToken cancellationToken)
     {
         // Source, destination, and resource type are all owned by the route's mapping profile.
@@ -504,21 +455,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         {
             if (!RouteDependenciesAreEnabled(config, route))
             {
-                await RecordAuditAsync(
-                    pipelineRunId,
-                    route.Route.Id,
-                    mappingProfile.SourceConnectionId,
-                    mappingProfile.DestinationId,
-                    mappingProfile.Id,
-                    resourceType,
-                    "RouteExecutionSkipped",
-                    "Skipped",
-                    "Resource pipeline route was skipped because one or more lifecycle dependencies are disabled.",
-                    resources.Count,
-                    triggeredBy,
-                    correlationId,
-                    cancellationToken);
-
                 await _routeExecutionRepository.CompleteAsync(
                     routeExecutionId,
                     PipelineRunRouteExecutionStatus.Skipped,
@@ -536,21 +472,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 config.DestinationConfigurations,
                 mappingProfile.DestinationId,
                 "DestinationConfiguration");
-
-            await RecordAuditAsync(
-                pipelineRunId,
-                route.Route.Id,
-                mappingProfile.SourceConnectionId,
-                destination.Id,
-                mappingProfile.Id,
-                resourceType,
-                "RouteExecutionStarted",
-                "Started",
-                "Resource pipeline route execution started.",
-                resources.Count,
-                triggeredBy,
-                correlationId,
-                cancellationToken);
 
             var governedResources = await PrepareResourcesForRouteAsync(
                 pipelineRunId,
@@ -574,11 +495,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
 
             var destinationWriter = _destinationWriterFactory.Create(destination.DestinationType);
-            var writtenCount = await destinationWriter.WriteAsync(
+            var writeResult = await destinationWriter.WriteAsync(
                 destination,
                 mappingProfile,
                 mappedRecords,
+                writeContext,
                 cancellationToken);
+            var writtenCount = writeResult.Count;
 
             if (writtenCount > 0)
             {
@@ -587,21 +510,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     mappedRecords.Select(record => record.SourceResourceId).ToList(),
                     cancellationToken);
             }
-
-            await RecordAuditAsync(
-                pipelineRunId,
-                route.Route.Id,
-                mappingProfile.SourceConnectionId,
-                destination.Id,
-                mappingProfile.Id,
-                resourceType,
-                "RouteExecutionCompleted",
-                "Completed",
-                "Resource pipeline route execution completed.",
-                writtenCount,
-                triggeredBy,
-                correlationId,
-                cancellationToken);
 
             var routeHadErrors = errors.Count > errorCountBefore;
             var routeStatus = !routeHadErrors
@@ -620,7 +528,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 DateTime.UtcNow,
                 cancellationToken);
 
-            return new RouteExecutionResult(mappedRecords.Count, writtenCount);
+            return new RouteExecutionResult(
+                mappedRecords.Count,
+                writtenCount,
+                writeResult.InlineDownload is { } inlineFile
+                    ? new GeneratedFileDto(inlineFile.FileName, inlineFile.ContentType, inlineFile.Content)
+                    : null,
+                writeResult.DownloadUrl);
         }
         catch (Exception exception)
         {
@@ -631,21 +545,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 route.Route.Id);
 
             errors.Add($"{resourceType}/route/{route.Route.Id}: {exception.Message}");
-
-            await RecordAuditAsync(
-                pipelineRunId,
-                route.Route.Id,
-                mappingProfile.SourceConnectionId,
-                mappingProfile.DestinationId,
-                mappingProfile.Id,
-                resourceType,
-                "RouteExecutionFailed",
-                "Failed",
-                exception.Message,
-                null,
-                triggeredBy,
-                correlationId,
-                cancellationToken);
 
             await _routeExecutionRepository.CompleteAsync(
                 routeExecutionId,
@@ -699,21 +598,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 var denialReason = governanceDecision.DenialReason ?? "Governance policy denied resource access.";
                 errors.Add($"{resourceType}/{resource.ResourceId ?? "unknown"}: Governance denied resource access. {governanceDecision.DenialReason}");
 
-                await RecordAuditAsync(
-                    pipelineRunId,
-                    route.Id,
-                    mappingProfile.SourceConnectionId,
-                    destination.Id,
-                    mappingProfile.Id,
-                    resourceType,
-                    "ResourceAccessDenied",
-                    "Denied",
-                    denialReason,
-                    1,
-                    triggeredBy,
-                    correlationId,
-                    cancellationToken);
-
                 await _resourceHistoryRecorder.RecordFailedAsync(
                     routeExecutionId, resourceType, resource.ResourceId, denialReason, cancellationToken);
 
@@ -740,10 +624,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 normalizationResult.MasterPatientId,
                 cancellationToken);
 
-            await RecordLineageAsync(
-                pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
-                "ResourceNormalized", cancellationToken);
-
             if (governanceDecision.RequiresDeIdentification)
             {
                 governedJson = await _deIdentificationService.DeIdentifyAsync(
@@ -753,20 +633,43 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         governedJson,
                         governanceDecision.AppliedPolicies),
                     cancellationToken);
-
-                await RecordLineageAsync(
-                    pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
-                    "ResourceDeIdentified", cancellationToken);
             }
 
             preparedResources.Add(resource with { RawJson = governedJson });
-
-            await RecordLineageAsync(
-                pipelineRunId, route, destination, mappingProfile, resourceType, resource.ResourceId,
-                "ResourceAccessed", cancellationToken);
         }
 
         return preparedResources;
+    }
+
+    /// <summary>
+    /// A run normally produces at most one Download-mode file (one destination reached via a manual "Run Now").
+    /// If more than one route in the same run happened to write one, they're zipped together rather than silently
+    /// dropping all but the first.
+    /// </summary>
+    private static GeneratedFileDto? CombineInlineDownloads(IReadOnlyList<GeneratedFileDto> files)
+    {
+        if (files.Count == 0)
+        {
+            return null;
+        }
+
+        if (files.Count == 1)
+        {
+            return files[0];
+        }
+
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var file in files)
+            {
+                var entry = archive.CreateEntry(file.FileName);
+                using var entryStream = entry.Open();
+                entryStream.Write(file.Content);
+            }
+        }
+
+        return new GeneratedFileDto("download.zip", "application/zip", buffer.ToArray());
     }
 
     private async Task<ConfiguredPipelineRunDto> CompleteRunAsync(
@@ -780,6 +683,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         string? triggeredBy,
         string? triggerType,
         string? correlationId,
+        GeneratedFileDto? inlineDownload,
+        IReadOnlyList<string> downloadUrls,
         CancellationToken cancellationToken)
     {
         var status = errors.Count == 0
@@ -787,21 +692,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             : writtenCount > 0
                 ? "CompletedWithErrors"
                 : "Failed";
-
-        await RecordAuditAsync(
-            pipelineRunId,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "PipelineRunCompleted",
-            status,
-            $"Configured pipeline run completed with status {status}.",
-            writtenCount,
-            triggeredBy,
-            correlationId,
-            cancellationToken);
 
         var completedOnUtc = DateTime.UtcNow;
 
@@ -817,7 +707,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             completedOnUtc,
             IsEnabled: true,
             TriggeredBy: triggeredBy,
-            TriggerType: triggerType);
+            TriggerType: triggerType,
+            InlineDownload: inlineDownload,
+            DownloadUrls: downloadUrls.Count == 0 ? null : downloadUrls);
 
         await _pipelineRunRepository.AddAsync(pipelineRun, cancellationToken);
 
@@ -831,64 +723,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             completedOnUtc));
 
         return pipelineRun;
-    }
-
-    private Task RecordAuditAsync(
-        Guid? pipelineRunId,
-        Guid? routeId,
-        Guid? sourceConnectionId,
-        Guid? destinationId,
-        Guid? mappingProfileId,
-        string? resourceType,
-        string action,
-        string status,
-        string message,
-        int? resourceCount,
-        string? triggeredBy,
-        string? correlationId,
-        CancellationToken cancellationToken)
-    {
-        return _auditService.RecordAsync(
-            new RecordOperationalAuditLogRequest(
-                pipelineRunId,
-                routeId,
-                sourceConnectionId,
-                destinationId,
-                mappingProfileId,
-                resourceType,
-                action,
-                status,
-                message,
-                resourceCount,
-                triggeredBy,
-                correlationId),
-            cancellationToken);
-    }
-
-    // Records a PHI-free lineage step (access/normalize/de-id) for the resource so the full chain can be queried.
-    private Task RecordLineageAsync(
-        Guid pipelineRunId,
-        ResourcePipelineRoute route,
-        DestinationConfiguration destination,
-        MappingProfile mappingProfile,
-        string resourceType,
-        string? sourceResourceId,
-        string action,
-        CancellationToken cancellationToken)
-    {
-        return _lineageTracker.RecordAsync(
-            new ResourceLineageRecord(
-                pipelineRunId,
-                route.Id,
-                mappingProfile.SourceConnectionId,
-                destination.Id,
-                mappingProfile.Id,
-                resourceType,
-                sourceResourceId,
-                action,
-                "Completed",
-                DateTime.UtcNow),
-            cancellationToken);
     }
 
     /// <summary>
@@ -966,21 +800,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             .Select(json => EnvelopeFromDeIdentifiedJson(json, resourceType))
             .ToList();
 
-        await RecordAuditAsync(
-            pipelineRunId,
-            null,
-            null,
-            null,
-            null,
-            resourceType,
-            "DataSetDeIdentified",
-            "Completed",
-            $"Expert Determination (k={result.KAnonymity}) de-identification suppressed {result.SuppressedCount} of {result.InputCount} record(s).",
-            deidentified.Count,
-            triggeredBy,
-            correlationId,
-            cancellationToken);
-
         return deidentified;
     }
 
@@ -1014,17 +833,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         int ExecutionOrder,
         string? SearchParameters);
 
-    private sealed record RouteExecutionResult(int MappedCount, int WrittenCount);
-
-    private sealed class NoOpLineageTracker : ILineageTracker
-    {
-        public Task RecordAsync(
-            ResourceLineageRecord record,
-            CancellationToken cancellationToken)
-        {
-            return Task.CompletedTask;
-        }
-    }
+    private sealed record RouteExecutionResult(
+        int MappedCount,
+        int WrittenCount,
+        GeneratedFileDto? InlineDownload = null,
+        string? DownloadUrl = null);
 
     private static bool IsScheduledPullMode(IngestionMode ingestionMode)
     {

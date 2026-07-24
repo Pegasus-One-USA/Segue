@@ -124,7 +124,6 @@ public static class RbacSeedData
         // Original platform permissions.
         new("Manage source, destination, mapping, webhook, and route configuration.", PermissionGroupCode.Configuration, PermissionActionCode.Write),
         new("Execute configured pipeline routes.", PermissionGroupCode.Pipeline, PermissionActionCode.Execute),
-        new("Read operational audit logs.", PermissionGroupCode.AuditLogs, PermissionActionCode.Read),
         new("Test source system connectivity.", PermissionGroupCode.SourceConnections, PermissionActionCode.Test),
         new(
             "Add or edit a source connection for a vendor with no dedicated permission group of its own.",

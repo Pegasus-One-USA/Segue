@@ -1,4 +1,3 @@
-using FHIRBridge.Application.Abstractions.Audit;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -18,8 +17,6 @@ public sealed class LocalAuthServiceMfaTests
     private readonly Mock<IPasswordHasher> _passwordHasher = new();
     private readonly Mock<IAccessTokenIssuer> _accessTokenIssuer = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
-    private readonly Mock<IOperationalAuditService> _audit = new();
-    private readonly Mock<IUserActivityAuditService> _activityAudit = new();
     private readonly Mock<IEmailSender> _email = new();
     private readonly Mock<ITotpService> _totp = new();
     private readonly LocalAuthOptions _options = new();
@@ -29,8 +26,6 @@ public sealed class LocalAuthServiceMfaTests
         _passwordHasher.Object,
         _accessTokenIssuer.Object,
         _currentUser.Object,
-        _audit.Object,
-        _activityAudit.Object,
         _email.Object,
         _totp.Object,
         Options.Create(_options));
