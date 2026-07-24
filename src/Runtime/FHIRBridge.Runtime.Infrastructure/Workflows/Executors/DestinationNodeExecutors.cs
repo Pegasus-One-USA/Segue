@@ -484,6 +484,20 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
 
 public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 {
+    // Destination types backed by a real relational schema, where each resource type in a mixed batch normally
+    // targets its OWN table (Patient -> dbo.Patient_New, Condition -> dbo.Condition, ...). Only these route a
+    // mixed batch per resource type at write time (see ExecuteAsync) — every other destination type keeps writing
+    // the whole batch in one call, unchanged, since e.g. a CSV/Blob writer already groups multi-resource output
+    // itself (a multi-resource ZIP, say) and splitting the call here would silently break that.
+    private static readonly HashSet<DestinationType> MultiTableRelationalDestinationTypes =
+    [
+        DestinationType.SqlServer,
+        DestinationType.AzureSql,
+        DestinationType.MySql,
+        DestinationType.PostgreSql,
+        DestinationType.Snowflake,
+    ];
+
     private readonly DestinationType _destinationType;
     private readonly IConfiguredDestinationWriterFactory? _writerFactory;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
@@ -509,8 +523,6 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var records = PassThroughNodeExecutor.ReadMappedRecords(inputs).ToArray();
         var destination = ReadConfiguration<DestinationConfiguration>(node, "destination")
             ?? CreateDestinationConfiguration(context, node);
-        var mappingProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile")
-            ?? CreateMappingProfile(context, node, records);
 
         if (_writerFactory is null)
         {
@@ -527,8 +539,44 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             AllowInlineDelivery: false,
             workflowName,
             DateTimeOffset.UtcNow);
-        var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
-        var written = writeResult.Count;
+
+        int written;
+        string? downloadUrl;
+        var explicitProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile");
+
+        if (explicitProfile is null && MultiTableRelationalDestinationTypes.Contains(_destinationType))
+        {
+            // A relational destination handling more than one resource type normally sends each to its own table
+            // (Patient -> dbo.Patient_New, Condition -> dbo.Condition, ...) with its own columns/upsert key. Writing
+            // the whole mixed batch through one MappingProfile forced every resource type through whichever one's
+            // shape happened to be saved first on this node, routing every other resource type at the wrong
+            // table/columns and failing with "Invalid column name". Write each resource type's records against its
+            // own resolved profile instead.
+            var profilesByResourceType = CreateMappingProfiles(node, records);
+            var totalWritten = 0;
+            string? firstDownloadUrl = null;
+            foreach (var group in records.GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase))
+            {
+                var groupRecords = group.ToArray();
+                var profile = profilesByResourceType.TryGetValue(group.Key, out var matched)
+                    ? matched
+                    : CreateMappingProfile(node, group.Key, groupRecords);
+                var groupResult = await writer.WriteAsync(destination, profile, groupRecords, writeContext, cancellationToken);
+                totalWritten += groupResult.Count;
+                firstDownloadUrl ??= groupResult.DownloadUrl;
+            }
+
+            written = totalWritten;
+            downloadUrl = firstDownloadUrl;
+        }
+        else
+        {
+            var mappingProfile = explicitProfile ?? CreateMappingProfile(node, preferredResourceType: null, records);
+            var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
+            written = writeResult.Count;
+            downloadUrl = writeResult.DownloadUrl;
+        }
+
         var result = new RuntimeDestinationWriteResult(
             destination.Id.ToString("N"), written, DateTimeOffset.UtcNow);
 
@@ -545,7 +593,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 // Populated only for a CSV destination using Download-URL delivery — the caller of /run reads this
                 // back to fetch the generated file. Download (inline-bytes) delivery is not supported on this engine
                 // (see the AllowInlineDelivery comment above) and will have already thrown before reaching here.
-                ["downloadUrl"] = writeResult.DownloadUrl
+                ["downloadUrl"] = downloadUrl
             });
     }
 
@@ -618,19 +666,69 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         return metadata.Count == 0 ? null : JsonSerializer.Serialize(metadata, JsonOptions);
     }
 
-    private static MappingProfile CreateMappingProfile(
-        WorkflowExecutionContext context,
+    /// <summary>
+    /// Builds one <see cref="MappingProfile"/> per resource type this destination node knows about — from the
+    /// per-resource <c>resourceMappings</c> config (see <see cref="DestinationResourceMappingConfig"/>) plus, for
+    /// backward compatibility, whichever resource type the legacy single resourceType/destinationObject/fields
+    /// trio describes (a destination saved before resourceMappings existed, or never re-saved since). Used by
+    /// <see cref="ExecuteAsync"/> to route each resource type in a mixed batch to its own table/columns instead of
+    /// forcing every resource type through one profile.
+    /// </summary>
+    private static IReadOnlyDictionary<string, MappingProfile> CreateMappingProfiles(
         WorkflowNode node,
         IReadOnlyCollection<MappedDestinationRecord> records)
     {
-        var resourceType = ReadStringConfiguration(node, "resourceType")
+        var profiles = new Dictionary<string, MappingProfile>(StringComparer.OrdinalIgnoreCase);
+
+        var perResourceConfig = ReadConfiguration<Dictionary<string, DestinationResourceMappingConfig>>(node, "resourceMappings");
+        if (perResourceConfig is not null)
+        {
+            foreach (var (resourceType, config) in perResourceConfig)
+            {
+                var fields = config.Fields.Select(ConfigurationMapper.ToDomain).ToList();
+                profiles[resourceType] = new MappingProfile(
+                    node.DisplayName, resourceType, Guid.Empty, Guid.Empty, config.DestinationObject, fields);
+            }
+        }
+
+        var legacyResourceType = ReadStringConfiguration(node, "resourceType");
+        if (legacyResourceType is not null && !profiles.ContainsKey(legacyResourceType))
+        {
+            profiles[legacyResourceType] = CreateMappingProfile(node, legacyResourceType, records);
+        }
+
+        return profiles;
+    }
+
+    private static MappingProfile CreateMappingProfile(
+        WorkflowNode node,
+        string? preferredResourceType,
+        IReadOnlyCollection<MappedDestinationRecord> records)
+    {
+        var staticResourceType = ReadStringConfiguration(node, "resourceType");
+        var resourceType = preferredResourceType
+            ?? staticResourceType
             ?? records.FirstOrDefault()?.ResourceType
             ?? "Patient";
-        var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
+
+        // The node's static destinationObject/fields only actually describe `resourceType` when nothing more
+        // specific was requested, or when the caller explicitly asked for the same resource type the static shape
+        // covers. Applying Patient's static shape to a Condition (or Observation) fallback would silently
+        // reintroduce the very "Invalid column name" bug this method exists to avoid — fall back to what the
+        // record itself carries instead, since MappingNodeExecutor already stamps each record with its own
+        // correct DestinationObject.
+        var staticShapeAppliesToThisType = staticResourceType is null
+            || string.Equals(staticResourceType, resourceType, StringComparison.OrdinalIgnoreCase);
+
+        var destinationObject = (staticShapeAppliesToThisType ? ReadStringConfiguration(node, "destinationObject") : null)
+            ?? records.FirstOrDefault()?.DestinationObject
+            ?? resourceType;
 
         // The writer creates/aligns the target table's columns from these fields, so carry them from node config
         // (the projection embeds the same fields the mapping node used) rather than defaulting to none.
-        var fields = (ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [])
+        var fields = ((staticShapeAppliesToThisType
+                ? ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields")
+                : null) ?? [])
             .Select(ConfigurationMapper.ToDomain)
             .ToList();
 

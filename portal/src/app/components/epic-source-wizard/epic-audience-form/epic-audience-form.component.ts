@@ -378,12 +378,15 @@ export class EpicAudienceFormComponent implements OnInit {
   // snapshotting immediately would make those auto-detected values look like user edits on every single clone.
   private _awaitingBaselineSnapshot = false;
 
-  // Resource Type list: auto-detected from the source's /metadata after Discover; falls back to the static list.
+  // Resource Type list: always the platform's curated MVP1 set (FHIR_RESOURCES), regardless of what Discover
+  // returns — the backend's /metadata probe reflects everything the endpoint's CapabilityStatement supports
+  // (often 50+ types, filtered only by read-interaction support), not what this pipeline can actually process.
+  // discoveredResourceTypes is still populated for the separate scope-validation cross-check below
+  // (unsupportedScopes/scopesValidatedByDiscovery) — it just no longer drives which checkboxes are offered.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
   protected get resources(): string[] {
-    return this.discoveredResourceTypes().length ? this.discoveredResourceTypes() : FHIR_RESOURCES;
+    return FHIR_RESOURCES;
   }
-  protected get resourcesAreAuto(): boolean { return this.discoveredResourceTypes().length > 0; }
 
   /** Editing an existing source: resource types are locked (identity-defining) — shown prepopulated but disabled. */
   protected get isEditing(): boolean { return this.wiz.isEditing(); }
@@ -670,7 +673,7 @@ export class EpicAudienceFormComponent implements OnInit {
   /** Section numbers shift depending on which optional sections the current audience shows. */
   protected readonly sectionNumbers = computed(() => {
     const cfg = this.audienceConfig();
-    let n = 5; // 1 Audience/Env · 2 FHIR Base URL · 3 OAuth Endpoints · 4 Credentials · 5 Resource Type & Scopes
+    let n = 4; // 1 Audience/Env · 2 FHIR Base URL · 3 OAuth Endpoints · 4 Credentials
     const urls              = (cfg.showLaunchUrl || cfg.showRedirect) ? ++n : null;
     const cds                = cfg.showCdsHooks ? ++n : null;
     const test                = ++n;
@@ -789,6 +792,17 @@ export class EpicAudienceFormComponent implements OnInit {
     }
 
     this.prevAudience = this.audience();
+
+    // New (non-editing) connections whose audience uses the shared Resource Type picker (removed from the UI —
+    // see AUDIENCE_FIELD_CONFIG.showResourcePicker) always request every MVP1-supported resource type's scope
+    // up front, rather than asking the user to hand-pick a subset before a destination even exists. Editing an
+    // existing connection keeps whatever was actually saved (restored above), never overwritten here.
+    if (!this.wiz.isEditing()
+      && AUDIENCE_FIELD_CONFIG[this.audience()].showResourcePicker
+      && this.form.controls.resources.value.length === 0) {
+      this.form.controls.resources.setValue([...FHIR_RESOURCES]);
+    }
+
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
 
@@ -1016,6 +1030,11 @@ export class EpicAudienceFormComponent implements OnInit {
     if (prevCfg.showResourcePicker && !nextCfg.showResourcePicker) {
       this.form.patchValue({ resources: [] });
     }
+    // Switching the other way: default to every MVP1-supported resource type's scope, same as the initial
+    // load — there's no visible picker for the user to fill this in themselves anymore.
+    if (!prevCfg.showResourcePicker && nextCfg.showResourcePicker) {
+      this.form.patchValue({ resources: [...FHIR_RESOURCES] });
+    }
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
       this.form.controls.incrementalCursor.enable({ emitEvent: false });
@@ -1158,9 +1177,6 @@ export class EpicAudienceFormComponent implements OnInit {
     const cur: string[] = ctrl.value ?? [];
     ctrl.setValue(cur.length === all.length ? [] : [...all]);
   }
-
-  protected toggleResource(r: string): void { this.toggleArrayControl('resources', r); }
-  protected toggleAllResources(): void { this.toggleAllArrayControl('resources', this.resources); }
 
   /** Each retrieval method owns its own Resource Type control — `key` picks which one. */
   protected toggleRetrievalResource(key: RetrievalFieldKey, r: string): void { this.toggleArrayControl(key, r); }
