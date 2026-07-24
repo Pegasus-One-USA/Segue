@@ -82,7 +82,15 @@ if (staticRoot is not null && Directory.Exists(staticRoot))
         branch =>
         {
             branch.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
-            branch.UseStaticFiles(new StaticFileOptions { FileProvider = fileProvider });
+            // ServeUnknownFileTypes: ACME HTTP-01 challenge tokens (under .well-known/acme-challenge/)
+            // have no file extension, so the default FileExtensionContentTypeProvider would 404 them —
+            // needed so Gateway can serve certbot's --webroot challenge files without taking the site down.
+            branch.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = fileProvider,
+                ServeUnknownFileTypes = true,
+                DefaultContentType = "application/octet-stream"
+            });
 
             // SPA fallback: unmatched paths (Angular client-side routes) resolve to index.html
             // rather than 404ing, so deep links and refreshes work.
