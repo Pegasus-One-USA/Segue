@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
@@ -57,8 +58,53 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
-        var searchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
-        searchParameters = ApplyDefaultObservationCategory(resourceType, searchParameters);
+        var scopedSearchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
+
+        // Some default parameters (category, status) list several values for the resource type — Epic (confirmed;
+        // likely other EHRs too) doesn't OR multiple comma-joined tokens together in one request the way a single
+        // combined query would assume, and silently returns an empty bundle instead of erroring. Splitting into one
+        // request per value and merging/deduping the results is the only way to actually get the full breadth of
+        // data — see GetDefaultParameterValuesToSplit for which resource types/values this applies to.
+        var valuesToSplit = GetDefaultParameterValuesToSplit(resourceType, scopedSearchParameters);
+        if (valuesToSplit is null)
+        {
+            var searchParameters = ApplyDefaultSearchParameters(resourceType, scopedSearchParameters);
+            return await SearchPagesAsync(resourceType, source, searchParameters, accessToken, cancellationToken);
+        }
+
+        var seenResourceIds = new HashSet<string>(StringComparer.Ordinal);
+        var mergedResources = new List<ResourceEnvelope>();
+        foreach (var (parameterName, value) in valuesToSplit)
+        {
+            var query = string.IsNullOrWhiteSpace(scopedSearchParameters)
+                ? $"{parameterName}={value}"
+                : $"{scopedSearchParameters}&{parameterName}={value}";
+
+            var page = await SearchPagesAsync(resourceType, source, query, accessToken, cancellationToken);
+            foreach (var resource in page)
+            {
+                // The FHIR id alone is enough to dedupe within one resource type — the same resource can legitimately
+                // appear under more than one category value (e.g. an Observation tagged both "vital-signs" and
+                // "smartdata").
+                if (!string.IsNullOrWhiteSpace(resource.ResourceId) && !seenResourceIds.Add(resource.ResourceId))
+                {
+                    continue;
+                }
+
+                mergedResources.Add(resource);
+            }
+        }
+
+        return mergedResources;
+    }
+
+    private async Task<IReadOnlyList<ResourceEnvelope>> SearchPagesAsync(
+        string resourceType,
+        FhirSourceConfiguration source,
+        string? searchParameters,
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
         var resources = new List<ResourceEnvelope>();
         var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, searchParameters);
         var maxPages = source.MaxPages <= 0 ? 1 : source.MaxPages;
@@ -260,16 +306,25 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// <c>SourceNodeExecutor</c>) OR'd together via a comma-separated reference list. Without either, a provider such
     /// as Epic rejects an unscoped <c>Patient</c> search but every other resource type is left unscoped (pre-existing
     /// behavior — see <c>No_patient_context_leaves_the_query_unscoped</c>). The known patient(s) target their own
-    /// resource(s) by <c>_id</c>; every other resource type is filtered by <c>patient</c>. Caller-supplied parameters
-    /// that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left untouched.
+    /// resource(s) by <c>_id</c>; every other patient-compartment resource type is filtered by <c>patient</c>.
+    /// Resource types outside the patient compartment (e.g. <c>Practitioner</c> — see
+    /// <see cref="PatientCompartmentResourceTypes"/>) are never patient-scoped: a <c>patient=</c> search parameter
+    /// is not meaningful for them, so caller-supplied criteria (identifier, <c>_id</c>, name, etc.) pass through
+    /// untouched instead. Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/
+    /// <c>subject</c>) are left untouched.
     /// </summary>
     private async Task<string?> ApplyPatientScopeAsync(
         string resourceType,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken)
     {
-        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
         var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
+        if (!isPatientResource && !PatientCompartmentResourceTypes.IsSupported(resourceType))
+        {
+            return source.SearchParameters;
+        }
+
+        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
 
         // A request-time raw search criteria string (e.g. "active=true", "identifier=MRN12345",
         // "family=Smith&given=John", "birthdate=1990-01-01" — from a third-party app's own free-text search box,
@@ -318,29 +373,72 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     }
 
     /// <summary>
-    /// Epic (enforcing the underlying US Core profile) rejects an <c>Observation</c> search with neither
-    /// <c>category</c> nor <c>code</c> present — "Must have either code or category." Defaults to every standard US
-    /// Core Observation category so an otherwise-unscoped Observation fetch still succeeds and returns the full
-    /// breadth of a patient's observations, rather than requiring every caller to separately know and supply this
-    /// Epic/US-Core-specific requirement. A caller-supplied <c>category</c> or <c>code</c> (however that search
-    /// parameter reached <paramref name="searchParameters"/> — connection-level SearchParameters, PatientSearchCriteria,
-    /// etc.) is left untouched. Every other resource type is unaffected.
+    /// Epic (enforcing the underlying US Core profile) rejects an <c>Observation</c> or <c>Condition</c> search with
+    /// neither <c>category</c> nor <c>code</c> present — "Must have either code or category." This table defaults
+    /// every standard US Core category for the resource types that require one, so an otherwise-unscoped fetch still
+    /// succeeds and returns the full breadth of a patient's data, rather than requiring every caller to separately
+    /// know and supply this Epic/US-Core-specific requirement. Medication resource types default to a <c>status</c>
+    /// filter instead, to avoid Epic returning an unbounded/ambiguous set of historical orders. A caller-supplied
+    /// parameter of the same kind (however it reached <paramref name="searchParameters"/> — connection-level
+    /// SearchParameters, PatientSearchCriteria, etc.) is left untouched. Resource types with no entry here are
+    /// unaffected — registry lookup, not a switch/if-chain, so adding a new default is a table entry, not a branch.
     /// </summary>
-    private static string? ApplyDefaultObservationCategory(string resourceType, string? searchParameters)
+    private static readonly IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> DefaultSearchParametersByResourceType =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Observation"] = ("category", "social-history,vital-signs,imaging,laboratory,procedure,survey,exam,therapy,activity,smartdata,core-characteristics"),
+            // The original 4-category default silently missed real US-Core data Epic categorizes under the other
+            // four (infection, medical-history, reason-for-visit, dental) — a Condition search scoped to only the
+            // first four never surfaces them at all, regardless of the single-request-vs-split-per-value fix below.
+            ["Condition"] = ("category", "problem-list-item,health-concern,encounter-diagnosis,genomics,infection,medical-history,reason-for-visit,dental"),
+            ["MedicationRequest"] = ("status", "active,completed,stopped"),
+            ["MedicationAdministration"] = ("status", "completed,in-progress,stopped"),
+        };
+
+    private static string? ApplyDefaultSearchParameters(string resourceType, string? searchParameters)
     {
-        if (!string.Equals(resourceType, "Observation", StringComparison.OrdinalIgnoreCase))
+        if (!DefaultSearchParametersByResourceType.TryGetValue(resourceType, out var defaultParameter))
         {
             return searchParameters;
         }
 
         var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
-        if (ContainsQueryParameter(query, "category") || ContainsQueryParameter(query, "code"))
+        if (ContainsQueryParameter(query, defaultParameter.ParameterName) ||
+            ContainsQueryParameter(query, "code"))
         {
             return searchParameters;
         }
 
-        const string defaultCategories = "social-history,vital-signs,imaging,laboratory,procedure,survey,exam,therapy,activity";
-        return string.IsNullOrWhiteSpace(query) ? $"category={defaultCategories}" : $"{query}&category={defaultCategories}";
+        var defaultAssignment = $"{defaultParameter.ParameterName}={defaultParameter.DefaultValue}";
+        return string.IsNullOrWhiteSpace(query) ? defaultAssignment : $"{query}&{defaultAssignment}";
+    }
+
+    /// <summary>
+    /// Returns one <c>(parameterName, value)</c> pair per value in this resource type's default parameter (see
+    /// <see cref="DefaultSearchParametersByResourceType"/>), so <see cref="SearchAsync"/> can issue a separate
+    /// request per value and merge the results — instead of one request with every value comma-joined, which Epic
+    /// (and potentially other EHRs) doesn't OR together the way a single combined query would assume. Returns null
+    /// when this resource type has no default parameter, or the caller already supplied that parameter (or
+    /// <c>code</c>) themselves — same "don't override caller-supplied criteria" rule <see cref="ApplyDefaultSearchParameters"/>
+    /// already follows, just checked here first since the split path bypasses that method entirely.
+    /// </summary>
+    private static IReadOnlyList<(string ParameterName, string Value)>? GetDefaultParameterValuesToSplit(
+        string resourceType, string? searchParameters)
+    {
+        if (!DefaultSearchParametersByResourceType.TryGetValue(resourceType, out var defaultParameter))
+        {
+            return null;
+        }
+
+        var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        if (ContainsQueryParameter(query, defaultParameter.ParameterName) ||
+            ContainsQueryParameter(query, "code"))
+        {
+            return null;
+        }
+
+        var values = defaultParameter.DefaultValue.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return values.Select(value => (defaultParameter.ParameterName, value)).ToList();
     }
 
     /// <summary>
