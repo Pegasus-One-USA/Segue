@@ -3,7 +3,7 @@
     <div class="invite-result__icon">
       <mat-icon>mark_email_read</mat-icon>
     </div>
-    <div>
+    <div class="invite-result__text">
       <h2 mat-dialog-title>Invitation ready</h2>
       <p class="invite-result__sub">
         Share this secure link with <strong>{{ data.email }}</strong> so they can set their password.
@@ -17,7 +17,7 @@
       <div class="invite-result__link-row">
         <input class="invite-result__link" type="text" [value]="shareValue" readonly
                (focus)="$any($event.target).select()" />
-        <button mat-flat-button class="invite-result__copy" (click)="copy()">
+        <button mat-flat-button class="invite-result__copy" [class.invite-result__copy--copied]="copied()" (click)="copy()">
           <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
           {{ copied() ? 'Copied' : 'Copy' }}
         </button>

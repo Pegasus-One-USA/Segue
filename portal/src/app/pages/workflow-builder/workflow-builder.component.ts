@@ -719,6 +719,10 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     this.store.reset();
     this.currentWorkflowId.set(null);
     this.workflowName.set('');
+    // Otherwise the freshly-blanked name field reads as invalid immediately — nameTouched stays true from
+    // whatever earlier interaction/failed-save-attempt set it, and nameInvalid() only checks
+    // nameTouched() && !workflowName().trim(), which is now true again on a field nobody has touched yet.
+    this.nameTouched.set(false);
     this.workflowIdInput.set('');
     this.triggerType.set('Manual');
     this.cronExpression.set('0 0 * * *');
