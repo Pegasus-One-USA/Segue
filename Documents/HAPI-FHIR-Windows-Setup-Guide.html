@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HAPI FHIR Test Server — Native Windows Setup Guide — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --windows: #0EA5E9;
+    --windows-bg: #E0F2FE;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 { font-size: 16px; font-weight: 700; color: var(--ink); margin: 32px 0 12px; }
+  h4 { font-size: 14px; font-weight: 700; margin: 22px 0 8px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 16px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-windows  { color: var(--windows); background: var(--windows-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 22px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.bad { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); display: block; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>HAPI FHIR Test Server &mdash; Native Windows Setup Guide</h1>
+    <p class="subtitle">How to run <code>fhirbridge-hapi-fhir</code> directly on Windows (no Docker) as a
+    Windows Service, for use as a plain "generic FHIR" test source &mdash; the same role it plays in
+    local <code>docker-compose.yml</code>, replicated on a Windows VM.</p>
+    <div class="meta">
+      <div><strong>Purpose</strong> Generic FHIR test source (no OAuth/SMART) for FHIRBridge's GenericFhir source connector</div>
+      <div><strong>Runs as</strong> Windows Service via NSSM, wrapping a plain <code>java -jar</code> process</div>
+      <div><strong>Database</strong> Embedded H2 &mdash; see Configuration section for a critical default-persistence gotcha</div>
+      <div><strong>Port on this VM</strong> 7011 (HAPI's own software default is 8080 &mdash; see Configuration reference)</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#prereqs">Prerequisites</a></li>
+      <li><a href="#step-jdk">1. Install the JDK</a></li>
+      <li><a href="#step-maven">2. Install Maven</a></li>
+      <li><a href="#step-build">3. Clone &amp; build</a></li>
+      <li><a href="#step-test">4. Manual test run</a></li>
+      <li><a href="#config">Configuration reference</a></li>
+      <li><a href="#step-nssm">5. Install NSSM</a></li>
+      <li><a href="#step-service">6. Register as a Windows Service</a></li>
+      <li><a href="#step-firewall">7. Firewall</a></li>
+      <li><a href="#step-verify">8. Verify</a></li>
+      <li><a href="#gotchas">Gotchas encountered while setting this up</a></li>
+      <li><a href="#reference">Quick reference</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    FHIRBridge's local E2E environment (<code>docker-compose.yml</code>) runs a plain, no-auth
+    <code>hapiproject/hapi</code> FHIR R4 server as a stand-in "generic FHIR" source &mdash; used by the
+    <code>GenericFhir</code> source connector path (see <code>SourceConnectionRuntimeResolver.cs</code>) for
+    testing without a real EHR. This guide covers running the same underlying software
+    (<a href="https://github.com/hapifhir/hapi-fhir-jpaserver-starter" target="_blank" rel="noopener">hapi-fhir-jpaserver-starter</a>)
+    directly on a Windows Server VM as a native Windows Service &mdash; no Docker, no container runtime &mdash;
+    which is the option chosen after weighing three alternatives:
+  </p>
+  <div class="summary-grid">
+    <div class="card"><strong>A. Docker on Windows</strong><p style="margin:6px 0 0;font-size:13px;">Needs WSL2 + Docker Engine (Docker Desktop isn't supported on Windows Server); reuses <code>docker-compose.yml</code> as-is. Not chosen &mdash; introduces a whole new deployment technology to a box that's 100% native Windows Services today.</p></div>
+    <div class="card"><strong>B. Native Java + Windows Service &mdash; chosen</strong><p style="margin:6px 0 0;font-size:13px;">Build the HAPI FHIR JPA starter with Maven, run the resulting WAR with <code>java -jar</code>, wrap it as a Windows Service with NSSM. Most consistent with the existing "no Docker, native service" model.</p></div>
+    <div class="card"><strong>C. Azure-hosted FHIR service</strong><p style="margin:6px 0 0;font-size:13px;">Azure Health Data Services FHIR service (managed PaaS) or Azure Container Instances running the same image. Best parity/least effort, but a separate Azure resource outside this VM. Not chosen for this setup.</p></div>
+  </div>
+
+  <h2 id="prereqs"><span class="num">2.</span>Prerequisites</h2>
+  <table class="file-table">
+    <tr><th>Tool</th><th>Version</th><th>Why</th></tr>
+    <tr><td class="file-path">JDK</td><td class="why">17 or newer (this guide uses Temurin 21)</td><td class="why">Required to build (Maven/<code>javac</code>) and to run (<code>java -jar</code>) the HAPI FHIR JPA starter</td></tr>
+    <tr><td class="file-path">Maven</td><td class="why">3.9.x</td><td class="why">Builds the starter project into a runnable WAR</td></tr>
+    <tr><td class="file-path">Git</td><td class="why">any recent version</td><td class="why">Clones the starter project source (or download the repo as a zip instead if Git isn't available)</td></tr>
+    <tr><td class="file-path">NSSM</td><td class="why">latest from nssm.cc</td><td class="why">Wraps the plain <code>java -jar</code> process as a real Windows Service (<code>New-Service</code> alone can't manage a bare Java process the way it manages a native .NET published exe)</td></tr>
+  </table>
+
+  <h2 id="step-jdk"><span class="num">3.</span>1. Install the JDK</h2>
+  <p>Download Temurin 21 for Windows x64 from
+  <a href="https://adoptium.net/temurin/releases/?version=21&amp;os=windows&amp;arch=x64" target="_blank" rel="noopener">adoptium.net</a>.
+  Either the MSI installer (offers to set <code>PATH</code>/<code>JAVA_HOME</code> for you) or the zip archive
+  works &mdash; if you use the zip, you must set the environment variables yourself:</p>
+  <pre><code># Extract the zip somewhere permanent first, e.g. D:\Software\jdk-21.0.11+10, then:
+[Environment]::SetEnvironmentVariable("JAVA_HOME", "D:\Software\jdk-21.0.11+10", "Machine")
+$currentPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+[Environment]::SetEnvironmentVariable("PATH", "$currentPath;D:\Software\jdk-21.0.11+10\bin", "Machine")</code></pre>
+  <div class="callout warn">
+    <strong>Open a genuinely new terminal window to verify</strong>
+    A PowerShell window that was already open when you set these keeps its own stale copy of
+    <code>PATH</code> &mdash; changing the Machine-level registry value doesn't retroactively update it.
+    See the <a href="#gotchas">Gotchas</a> section for a way to force-refresh an already-open window
+    instead of closing it.
+  </div>
+  <pre><code>java -version
+javac -version</code></pre>
+
+  <h2 id="step-maven"><span class="num">4.</span>2. Install Maven</h2>
+  <p>Download the <strong>Binary zip archive</strong> (not source) from
+  <a href="https://maven.apache.org/download.cgi" target="_blank" rel="noopener">maven.apache.org/download.cgi</a>.
+  Extract it, then confirm the real path to <code>mvn.cmd</code> before setting env vars &mdash; some zip builds
+  nest an extra folder level (e.g. extracting <code>apache-maven-3.9.16-bin.zip</code> into a folder literally
+  named <code>apache-maven-3.9.16-bin</code> puts the actual tool one level deeper, at
+  <code>apache-maven-3.9.16-bin\apache-maven-3.9.16\bin\mvn.cmd</code>):</p>
+  <pre><code>Get-ChildItem -Path "D:\Software\apache-maven-3.9.16-bin" -Recurse -Filter "mvn.cmd"</code></pre>
+  <p>Then, using whatever path that actually shows:</p>
+  <pre><code>[Environment]::SetEnvironmentVariable("MAVEN_HOME", "&lt;path containing bin\mvn.cmd&gt;", "Machine")
+$currentPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+[Environment]::SetEnvironmentVariable("PATH", "$currentPath;&lt;path containing bin\mvn.cmd&gt;\bin", "Machine")</code></pre>
+  <p>Verify (new window, or force-refresh &mdash; see Gotchas):</p>
+  <pre><code>mvn -version</code></pre>
+  <p>Confirm the output's <code>Java version:</code> line matches the JDK you installed in step 1 &mdash; if it
+  shows something else, <code>JAVA_HOME</code> isn't set correctly.</p>
+
+  <h2 id="step-build"><span class="num">5.</span>3. Clone &amp; build</h2>
+  <pre><code>git clone https://github.com/hapifhir/hapi-fhir-jpaserver-starter.git C:\inetpub\wwwroot\hapi-fhir-source
+cd C:\inetpub\wwwroot\hapi-fhir-source
+mvn clean package spring-boot:repackage -DskipTests=true -Pboot</code></pre>
+  <p>The first build takes a while (Maven downloads a large dependency tree, including FHIR structure
+  definitions for multiple FHIR versions). Watch for <code>BUILD SUCCESS</code>. The runnable artifact lands at
+  <code>C:\inetpub\wwwroot\hapi-fhir-source\target\ROOT.war</code> &mdash; despite the <code>.war</code>
+  extension it's a self-contained Spring Boot executable; no application server (Tomcat etc.) is needed.</p>
+  <p>Stage it into its own deploy folder, matching the <code>fhirbridge-*</code> naming convention already used
+  under <code>C:\inetpub\wwwroot\</code> by the rest of the deployment:</p>
+  <pre><code>New-Item -ItemType Directory -Path "C:\inetpub\wwwroot\fhirbridge-hapi-fhir" -Force
+New-Item -ItemType Directory -Path "C:\inetpub\wwwroot\fhirbridge-hapi-fhir\logs" -Force
+Copy-Item "C:\inetpub\wwwroot\hapi-fhir-source\target\ROOT.war" "C:\inetpub\wwwroot\fhirbridge-hapi-fhir\hapi-fhir.war"</code></pre>
+
+  <h2 id="step-test"><span class="num">6.</span>4. Manual test run</h2>
+  <p>Always test in the foreground before wrapping as a service, so any startup error is visible directly
+  instead of buried in an NSSM log file:</p>
+  <pre><code>cd C:\inetpub\wwwroot\fhirbridge-hapi-fhir
+java -jar hapi-fhir.war --server.port=7011</code></pre>
+  <p>First boot takes a minute or two (initializes the H2 schema). Once the log settles, check from a second
+  window:</p>
+  <pre><code>Invoke-WebRequest -Uri http://localhost:7011/fhir/metadata -UseBasicParsing</code></pre>
+  <div class="callout warn">
+    <strong>Run this from inside the deploy folder</strong>
+    <code>java -jar hapi-fhir.war</code> only works if your current directory actually contains
+    <code>hapi-fhir.war</code> &mdash; if you see <code>Error: Unable to access jarfile hapi-fhir.war</code>,
+    you're either in the wrong folder (<code>cd</code> into
+    <code>C:\inetpub\wwwroot\fhirbridge-hapi-fhir</code> first) or the staging copy step above didn't run.
+  </div>
+  <p>A <code>200</code> with a large JSON <code>CapabilityStatement</code> body confirms it's genuinely
+  working. <code>Ctrl+C</code> to stop before moving on.</p>
+
+  <h2 id="config"><span class="num">7.</span>Configuration reference</h2>
+
+  <h4>Port &mdash; HAPI's own default is 8080; <strong>this deployment uses 7011</strong></h4>
+  <p>The starter listens on <code>8080</code> by default, with the FHIR endpoint at <code>/fhir</code>. On
+  this VM it's explicitly overridden to <strong>7011</strong> instead, so the actual base URL here is
+  <code>http://&lt;host&gt;:7011/fhir</code> (<code>/fhir/metadata</code> for the CapabilityStatement).</p>
+  <div class="callout">
+    <strong>How the port is set / how to change it</strong>
+    Pass <code>--server.port=&lt;port&gt;</code> as a Spring Boot argument &mdash; either directly when testing
+    manually:
+    <pre><code>java -jar hapi-fhir.war --server.port=7011</code></pre>
+    or, once it's registered as a service (see below), by editing the NSSM <code>AppParameters</code> setting
+    and restarting:
+    <pre><code>C:\Tools\nssm\nssm.exe set FHIRBridge.HapiFhir AppParameters "-jar C:\inetpub\wwwroot\fhirbridge-hapi-fhir\hapi-fhir.war --server.port=7011"
+Restart-Service FHIRBridge.HapiFhir</code></pre>
+    To move it to a different port later, just repeat this with the new number, restart the service, and
+    update the matching firewall rule (step 10) if one is in use.
+  </div>
+
+  <h4>Database &mdash; embedded H2, <strong>in-memory by default</strong></h4>
+  <div class="callout bad">
+    <strong>Default persistence: none &mdash; data is lost on every restart</strong>
+    The starter project's checked-in default (<code>application.yaml</code>) is:
+    <pre><code>spring:
+  datasource:
+    url: 'jdbc:h2:mem:test_mem'
+    username: sa
+    password: null</code></pre>
+    <code>mem:</code> means H2 runs entirely in memory inside the JVM process &mdash; there is no database
+    file on disk at all with this default, and every resource you create disappears the moment the service
+    restarts or the process is stopped. This is fine for a quick manual smoke test, but almost certainly
+    <strong>not</strong> what you want for something meant to behave like a persistent test source.
+  </div>
+  <p>To make it persist to disk, override the datasource URL to use H2's <code>file:</code> mode instead of
+  <code>mem:</code>. Either edit <code>src\main\resources\application.yaml</code> before building, or (simpler,
+  no rebuild needed) pass it as a Spring Boot argument/env var at runtime:</p>
+  <pre><code># As a command-line argument:
+java -jar hapi-fhir.war --spring.datasource.url="jdbc:h2:file:C:/inetpub/wwwroot/fhirbridge-hapi-fhir/database/h2db"
+
+# Or as an environment variable (useful for the NSSM service definition):
+SPRING_DATASOURCE_URL=jdbc:h2:file:C:/inetpub/wwwroot/fhirbridge-hapi-fhir/database/h2db</code></pre>
+  <p>With <code>file:</code> mode, H2 creates <code>h2db.mv.db</code> (and related files) under the given
+  folder on first run &mdash; that's what needs to be included in any backup if you want the test data to
+  survive a server rebuild, and it's also what you'd delete to reset the server back to an empty database.</p>
+  <div class="callout warn">
+    <strong>Production-grade note</strong>
+    HAPI's own documentation is explicit that H2 (in either mode) is meant for dev/test, not production load
+    &mdash; and that the starter project ships with <strong>no security implementation</strong> out of the box.
+    Given this server's role here is a generic FHIR <em>test</em> source, that's an acceptable tradeoff; it is
+    not a substitute for a real, access-controlled FHIR datastore. If heavier/production-grade use is ever
+    needed, HAPI supports pointing <code>spring.datasource.*</code> at Postgres or SQL Server instead &mdash;
+    the same SQL Server instance already used elsewhere in this deployment would work.
+  </div>
+
+  <h2 id="step-nssm"><span class="num">8.</span>5. Install NSSM</h2>
+  <p>Download from <a href="https://nssm.cc/download" target="_blank" rel="noopener">nssm.cc/download</a>,
+  extract, and copy the right architecture's <code>nssm.exe</code> (from the <code>win64\</code> folder on a
+  64-bit server) somewhere on <code>PATH</code>, e.g. <code>C:\Tools\nssm\nssm.exe</code>.</p>
+
+  <h2 id="step-service"><span class="num">9.</span>6. Register as a Windows Service</h2>
+  <pre><code>$java = (Get-Command java).Source
+C:\Tools\nssm\nssm.exe install FHIRBridge.HapiFhir "$java" "-jar C:\inetpub\wwwroot\fhirbridge-hapi-fhir\hapi-fhir.war --server.port=7011"
+C:\Tools\nssm\nssm.exe set FHIRBridge.HapiFhir AppDirectory "C:\inetpub\wwwroot\fhirbridge-hapi-fhir"
+C:\Tools\nssm\nssm.exe set FHIRBridge.HapiFhir DisplayName "FHIRBridge HAPI FHIR (test source)"
+C:\Tools\nssm\nssm.exe set FHIRBridge.HapiFhir Start SERVICE_AUTO_START
+C:\Tools\nssm\nssm.exe set FHIRBridge.HapiFhir AppStdout "C:\inetpub\wwwroot\fhirbridge-hapi-fhir\logs\stdout.log"
+C:\Tools\nssm\nssm.exe set FHIRBridge.HapiFhir AppStderr "C:\inetpub\wwwroot\fhirbridge-hapi-fhir\logs\stderr.log"</code></pre>
+  <p>Useful NSSM commands afterward:</p>
+  <table class="file-table">
+    <tr><th>Command</th><th>Effect</th></tr>
+    <tr><td class="file-path">nssm start FHIRBridge.HapiFhir</td><td class="why">Same as <code>Start-Service</code></td></tr>
+    <tr><td class="file-path">nssm stop FHIRBridge.HapiFhir</td><td class="why">Same as <code>Stop-Service</code></td></tr>
+    <tr><td class="file-path">nssm edit FHIRBridge.HapiFhir</td><td class="why">Opens a GUI to change any setting (path, args, env vars, log files)</td></tr>
+    <tr><td class="file-path">nssm remove FHIRBridge.HapiFhir confirm</td><td class="why">Uninstalls the service entirely</td></tr>
+  </table>
+
+  <h2 id="step-firewall"><span class="num">10.</span>7. Firewall</h2>
+  <p>Only needed if something outside this VM calls it directly. If FHIRBridge's own Api/Worker (running on
+  the same box) are the only callers, skip this and bind loopback-only instead by adding
+  <code>--server.address=127.0.0.1</code> to the NSSM <code>AppParameters</code>.</p>
+  <pre><code>New-NetFirewallRule -DisplayName "FHIRBridge HAPI FHIR" -Direction Inbound -LocalPort 7011 -Protocol TCP -Action Allow</code></pre>
+
+  <h2 id="step-verify"><span class="num">11.</span>8. Verify</h2>
+  <pre><code>Start-Service FHIRBridge.HapiFhir
+Get-Service FHIRBridge.HapiFhir</code></pre>
+  <div class="callout warn">
+    <strong>"Running" only means the process launched &mdash; not that it's ready yet</strong>
+    <code>Get-Service</code> showing <code>Running</code> just confirms NSSM successfully started the
+    process; it does <strong>not</strong> mean Spring Boot has finished booting. First boot re-initializes
+    the H2 schema and can genuinely take a minute or more. Immediately calling the FHIR endpoint at that
+    point will fail with <code>Unable to connect to the remote server</code>. Check readiness properly
+    instead of guessing:
+    <pre><code># Is anything actually listening on the port yet?
+Get-NetTCPConnection -LocalPort 7011 -State Listen -ErrorAction SilentlyContinue
+
+# What is it actually doing? (this is exactly why AppStdout/AppStderr were wired up in step 6)
+Get-Content "C:\inetpub\wwwroot\fhirbridge-hapi-fhir\logs\stdout.log" -Tail 50
+Get-Content "C:\inetpub\wwwroot\fhirbridge-hapi-fhir\logs\stderr.log" -Tail 50</code></pre>
+    Look for a line like <code>Started Application in NN seconds</code> near the end of <code>stdout.log</code>
+    &mdash; that's the actual "ready" signal, not the Windows Service status.
+  </div>
+  <pre><code>Invoke-WebRequest -Uri http://localhost:7011/fhir/metadata -UseBasicParsing</code></pre>
+
+  <h2 id="gotchas"><span class="num">12.</span>Gotchas encountered while setting this up</h2>
+  <div class="callout warn">
+    <strong>Setting a Machine-level env var doesn't update an already-open PowerShell window</strong>
+    <code>[Environment]::SetEnvironmentVariable(..., "Machine")</code> writes to the registry, but a PowerShell
+    process only reads <code>PATH</code>/env vars once, at startup. Rather than closing and reopening a
+    window every time, force the current session to re-read it:
+    <pre><code>$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")</code></pre>
+  </div>
+  <div class="callout warn">
+    <strong>Copy-pasted commands with a placeholder left in literally</strong>
+    Commands containing an obvious placeholder like <code>&lt;ACTUAL_PATH&gt;</code> need that text replaced
+    with a real path before running &mdash; running it verbatim sets the env var to a literal string
+    containing angle brackets, which silently doesn't point at anything real.
+  </div>
+  <div class="callout bad">
+    <strong>Zip archives sometimes nest an extra folder level</strong>
+    Don't assume a downloaded zip's internal folder name matches the zip's filename minus
+    <code>.zip</code>/<code>-bin</code> &mdash; e.g. extracting <code>apache-maven-3.9.16-bin.zip</code> here
+    produced <code>apache-maven-3.9.16-bin\apache-maven-3.9.16\bin\mvn.cmd</code>, one level deeper than
+    expected, and the NSSM zip did the exact same thing (<code>nssm-2.24\nssm-2.24\win64\nssm.exe</code>).
+    Always confirm with <code>Get-ChildItem -Recurse -Filter</code> before wiring up <code>PATH</code> or a
+    variable pointing at the executable.
+  </div>
+  <div class="callout bad">
+    <strong>The default database is in-memory, not file-based</strong>
+    Easy to miss: the starter project's shipped default (<code>jdbc:h2:mem:test_mem</code>) discards all data
+    on every restart. If you test it, add real data, then restart the service and find it "empty" again,
+    this is why &mdash; see the <a href="#config">Configuration reference</a> above for switching to
+    <code>file:</code> mode.
+  </div>
+
+  <h2 id="reference"><span class="num">13.</span>Quick reference</h2>
+  <table class="file-table">
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td class="why">Source checkout</td><td class="file-path">C:\inetpub\wwwroot\hapi-fhir-source</td></tr>
+    <tr><td class="why">Deployed artifact</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-hapi-fhir\hapi-fhir.war</td></tr>
+    <tr><td class="why">Windows Service name</td><td class="file-path">FHIRBridge.HapiFhir</td></tr>
+    <tr><td class="why">Port used on this VM</td><td class="file-path">7011 (HAPI's own software default is 8080)</td></tr>
+    <tr><td class="why">FHIR base URL</td><td class="file-path">http://&lt;host&gt;:&lt;port&gt;/fhir</td></tr>
+    <tr><td class="why">CapabilityStatement check</td><td class="file-path">GET /fhir/metadata</td></tr>
+    <tr><td class="why">Default database</td><td class="file-path">Embedded H2, in-memory (jdbc:h2:mem:test_mem) &mdash; not persistent unless changed to file: mode</td></tr>
+    <tr><td class="why">Logs</td><td class="file-path">C:\inetpub\wwwroot\fhirbridge-hapi-fhir\logs\{stdout,stderr}.log</td></tr>
+  </table>
+
+  <footer>
+    FHIRBridge &middot; HAPI FHIR native Windows setup guide &middot; not yet wired into CI/CD (manual setup only, by design)
+  </footer>
+
+</div>
+</body>
+</html>
