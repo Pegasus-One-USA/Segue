@@ -126,6 +126,11 @@ public static class WorkflowEndpoints
             // node's config rather than overwrite it, or only the last-processed resource would survive on the node
             // (MappingNodeExecutor resolves its fields from whichever mappingProfileId(s) end up there).
             var profileIdsByNode = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            // Same accumulate-don't-overwrite need applies on the DESTINATION side: a destination node fed by
+            // several specs (Patient + Condition + Observation sharing one SQL Server destination) must remember
+            // every resource's own target table + fields, not just the first one saved — see the destination
+            // mirroring block below and DestinationNodeExecutor.CreateMappingProfiles.
+            var resourceMappingsByNode = new Dictionary<string, Dictionary<string, DestinationResourceMappingConfig>>(StringComparer.OrdinalIgnoreCase);
             foreach (var spec in request.Mappings ?? [])
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
@@ -188,21 +193,35 @@ public static class WorkflowEndpoints
                 });
 
                 // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
-                // from its OWN node config rather than resolving the mapping by id, so mirror the mapping's target and
-                // fields onto the destination node — the same shape the route→graph projection embeds. Without this the
-                // writer defaults the target table to the resource type and creates no data columns. Only the FIRST
-                // resource's shape survives here across multiple specs for the same destination — this is a
-                // last-resort fallback for table-existence validation and upsert-key-name resolution only (see
-                // DestinationNodeExecutor.CreateMappingProfile); the actual per-resource records always come from
-                // this mapping node's own output, never from this mirrored config.
-                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode) &&
-                    ReadConfigString(destinationNode, "resourceType") is null)
+                // from its OWN node config rather than resolving the mapping by id, so mirror every spec's target and
+                // fields onto the destination node under resourceMappings, keyed by resource type — the same
+                // accumulate-don't-overwrite treatment as profileIdsByNode above, and for the same reason: a
+                // destination fed by more than one resource spec (Patient + Condition + Observation sharing one SQL
+                // Server destination, say) must let DestinationNodeExecutor route each resource type's records to its
+                // own table/columns instead of forcing every resource type through whichever one saved first (that
+                // used to silently misroute every resource but the first into the wrong table, failing with
+                // "Invalid column name"). The single legacy resourceType/destinationObject/fields trio is still
+                // mirrored from the first spec only, kept only for any older consumer still reading that single shape.
+                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
                 {
+                    if (!resourceMappingsByNode.TryGetValue(spec.DestinationNodeId, out var resourceMappingsForNode))
+                    {
+                        resourceMappingsForNode = new Dictionary<string, DestinationResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
+                        resourceMappingsByNode[spec.DestinationNodeId] = resourceMappingsForNode;
+                    }
+                    resourceMappingsForNode[spec.ResourceType] = new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields);
+
+                    var mirrorLegacyShape = ReadConfigString(destinationNode, "resourceType") is null;
                     nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
                     {
-                        config["resourceType"] = spec.ResourceType;
-                        config["destinationObject"] = spec.DestinationObject;
-                        config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
+                        if (mirrorLegacyShape)
+                        {
+                            config["resourceType"] = spec.ResourceType;
+                            config["destinationObject"] = spec.DestinationObject;
+                            config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
+                        }
+
+                        config["resourceMappings"] = JsonSerializer.SerializeToNode(resourceMappingsForNode, WebJsonOptions);
                     });
                 }
             }
