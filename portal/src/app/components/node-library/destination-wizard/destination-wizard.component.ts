@@ -13,6 +13,7 @@ import { DestinationSchemaService, DestinationColumn, DestinationTable } from '.
 import { MappingCatalogService, FhirElement, resolveParentReferenceField } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -203,12 +204,10 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   // ── data groups ───────────────────────────────────────────────────────────
-  // The groups offered come from the upstream source's selected resource types when available; otherwise the
-  // built-in catalog is the fallback (e.g. a destination added before any source is configured).
-  readonly availableGroups = computed(() => {
-    const src = this.sourceResources();
-    return src.length ? src : Object.keys(DEST_RESOURCE_DEFS);
-  });
+  // Always the platform's full curated resource set (FHIR_RESOURCES) — every Epic source now requests scopes
+  // for all of these regardless of what's picked here, so this no longer needs to derive from (and be capped
+  // by) the specific upstream source's saved resource list, which could also just be stale on older nodes.
+  readonly availableGroups = computed(() => FHIR_RESOURCES);
   readonly selectedResources = signal<string[]>(['Patient', 'Observation', 'Encounter']);
 
   // Which other selected resources each resource is configured as a "child" of — e.g.
