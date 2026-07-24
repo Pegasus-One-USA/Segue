@@ -1,0 +1,32 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_f25f365950cfaa::t_4dbe04e827ccba 390-393,414-441
+  s_4f58135a9738c5::t_fec3e3d332ace7 5
+  s_4f58135a9738c5::t_041b428be0a9a8 389
+  s_4f58135a9738c5::t_dab2c497504242 376-384,386-388,394-398,400,406-407,412-413
+  s_f25f365950cfaa::t_c6159b9c18e897 61-107
+  s_4f58135a9738c5::t_8c2bae415cc79a 309-314,322-327
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "d90243a8ded2c97af82119516700718d307a55b3",
+  "prompts": {},
+  "sessions": {
+    "s_4f58135a9738c5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be6b94ef-7089-4d41-a9c6-e395475915fe",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f25f365950cfaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c468680b-ea36-4815-89f3-0f719670723d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
