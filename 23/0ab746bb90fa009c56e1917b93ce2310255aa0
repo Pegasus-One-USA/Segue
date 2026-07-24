@@ -1,0 +1,64 @@
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.scss
+  s_d68f9144c308b2::t_44d9ea2c8489b0 5-6,10-15
+  s_d68f9144c308b2::t_a375efeb0b02d2 42-55
+  s_d68f9144c308b2::t_a01f8bd020c98d 7-9,16-17
+  s_d68f9144c308b2::t_b515870bcc92ea 38-40,61
+  s_d68f9144c308b2::t_00dc281cc9c394 2,21-22,41,74,90-109,113,115-116,120
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_d68f9144c308b2::t_46973aac10a25b 142-145
+  s_d68f9144c308b2::t_fd54db082625f4 12-18
+  s_d68f9144c308b2::t_0b7dbf4aaa1bf0 89-92
+  s_d68f9144c308b2::t_f7d94a423ade05 32-37
+portal/src/app/auth/pages/login/login.component.scss
+  s_d68f9144c308b2::t_a31485759d14e2 241-242
+  s_d68f9144c308b2::t_ade33164b539e0 294-300
+  s_d68f9144c308b2::t_cc2407d4b18900 336
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.scss
+  s_d68f9144c308b2::t_6e2eb858edfcdf 113-152
+portal/src/app/auth/pages/forgot-password/forgot-password.component.scss
+  s_d68f9144c308b2::t_bc85afd73642db 108-111
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.html
+  s_d68f9144c308b2::t_2987134da01555 91-94,96-99
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_d68f9144c308b2::t_278cd08cb68cbd 722-725
+portal/src/styles.scss
+  s_d68f9144c308b2::t_3afe6df0daba70 26-47
+  s_d68f9144c308b2::t_3ff58d4f831ba3 1034-1067
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.scss
+  s_d68f9144c308b2::t_f58db291be6746 100
+  s_d68f9144c308b2::t_c9e8d5dbc6a279 63,99
+  s_d68f9144c308b2::t_4bd0df92d0985b 18
+  s_d68f9144c308b2::t_d413e1176af18e 62
+  s_d68f9144c308b2::t_464fe5f83fca68 113-118
+  s_d68f9144c308b2::t_d32ecf602d962d 101-110
+  s_d68f9144c308b2::t_ae60fcf1a10779 55
+  s_d68f9144c308b2::t_3494b41cd45a9e 120-129,133,135,141,143,153
+  s_d68f9144c308b2::t_2c5f784e2148f3 130-132,134,136-140,142,146-152,154-158
+  s_d68f9144c308b2::t_d3dd3a9134af34 144-145
+  s_d68f9144c308b2::t_c7db820b6428f6 36-49
+  s_d68f9144c308b2::t_da6dda1e3f9583 225-234
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.scss
+  s_d68f9144c308b2::t_9aecfb4fd7b677 36-49
+  s_d68f9144c308b2::t_a2a2b15c29e018 97-107,110-114
+  s_d68f9144c308b2::t_caa64182f09133 96,115-140,143-149,151-155
+  s_d68f9144c308b2::t_19d487e1715928 141-142
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.html
+  s_d68f9144c308b2::t_6c4019ad2c7336 6
+  s_d68f9144c308b2::t_c7c57367272d8a 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "230ab746bb90fa009c56e1917b93ce2310255aa0",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
