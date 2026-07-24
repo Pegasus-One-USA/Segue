@@ -1,0 +1,146 @@
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_f2c84423ce0bfa::t_8ddb4c991f70e0 42-47
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_f2c84423ce0bfa::t_e08605992b90dc 271,278-279,281,299-334
+  s_f2c84423ce0bfa::t_2f36e758e479a7 239-245,249,257
+  s_75dca83bfa1300::t_f8ad7efd5098c9 28
+  s_f2c84423ce0bfa::t_35fa9254282b38 156,163
+src/FHIRBridge.Infrastructure/Destinations/SqlServerMappingSchemaTransaction.cs
+  s_f2c84423ce0bfa::t_6226f89d45453a 160-194
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f2c84423ce0bfa::t_245bf15060c4ce 26-59,63
+  s_f2c84423ce0bfa::t_2a6947af4b03c9 25
+  s_f2c84423ce0bfa::t_d6e6d3534fc786 60-62
+  s_f2c84423ce0bfa::t_96fbafc607f3a7 64-66
+src/FHIRBridge.Application/DTOs/MappingProfileDto.cs
+  s_f2c84423ce0bfa::t_8175015319a839 13
+  s_f2c84423ce0bfa::t_06d9a5a6a9f12a 11-12,14-15
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_f2c84423ce0bfa::t_350ba94db35709 14
+  s_f2c84423ce0bfa::t_e41e84e476dcc4 223-228,232
+  s_f2c84423ce0bfa::t_fab3d7a927145a 697
+  s_f2c84423ce0bfa::t_43c0285db92860 730-733
+  s_f2c84423ce0bfa::t_aaaf8c4ccf5987 97
+  s_f2c84423ce0bfa::t_189fba014d2ff0 86
+  s_f2c84423ce0bfa::t_ced746e79c5299 212-221,229-231,234
+  s_24cbe30dc03ef3::t_40e30a92e9dd34 211,222,254
+  s_f2c84423ce0bfa::t_ec7ae4f8aa7148 80-85,98-107,124
+  s_f2c84423ce0bfa::t_0c172ab6dfc710 233,235-253
+  s_f2c84423ce0bfa::t_f1733ec7066a25 313-354,371-377,388
+  s_24cbe30dc03ef3::t_9b17128a500756 79,87-88,96
+  s_f2c84423ce0bfa::t_fc3ce8588360cc 41,45,50,129
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_f2c84423ce0bfa::t_ba376ab2d35d9c 437-441,446
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_f2c84423ce0bfa::t_e999e5c0295b07 143-151
+  s_f2c84423ce0bfa::t_5bc0374420abd5 126-141
+  s_f2c84423ce0bfa::t_b9085c35a0afed 850,866
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_f2c84423ce0bfa::t_e6753440737978 531-532,673-674,836-837
+  s_f2c84423ce0bfa::t_d7ec6b1f7443e8 533-535
+  s_f2c84423ce0bfa::t_9ed36b6b0089fd 670-672
+  s_f2c84423ce0bfa::t_aa3c6288730e7c 838-840
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_f2c84423ce0bfa::t_11a2296ef3c37c 303,313
+  s_f2c84423ce0bfa::t_7ea473aa0c28a0 304-306
+  s_f2c84423ce0bfa::t_cd2b21a68481c0 259-265,296-301,307-310
+tests/FHIRBridge.UnitTests/Configuration/MappingImportServiceTests.cs
+  s_f2c84423ce0bfa::t_7c4fdde119ecb4 278-299
+  s_f2c84423ce0bfa::t_8b48b6ec8f66f7 300-328
+  s_f2c84423ce0bfa::t_a031e8fea3d4ce 222
+  s_f2c84423ce0bfa::t_724ecdddfa8916 247-263
+  s_f2c84423ce0bfa::t_70dd0220b4bd98 689
+  s_f2c84423ce0bfa::t_184c7d3f11362c 745-750
+  s_f2c84423ce0bfa::t_a5ab890604ca78 223-246
+  s_75dca83bfa1300::t_0e34372adf5550 47
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_f2c84423ce0bfa::t_c90c5ebd2e38f8 86,88-89,94,96,98-101,106,108-124,126,128-129,134
+  s_f2c84423ce0bfa::t_e6b1439dd6756b 84-85
+  s_f2c84423ce0bfa::t_228f8281fd6009 87
+  s_f2c84423ce0bfa::t_5d74fc4026d7ae 90-93
+  s_f2c84423ce0bfa::t_03ec03cd565b52 95
+  s_f2c84423ce0bfa::t_6dd1e5dc9ce1b2 97
+  s_f2c84423ce0bfa::t_5cdba182eef565 102-105
+  s_f2c84423ce0bfa::t_229cfccd9e9546 107
+  s_f2c84423ce0bfa::t_909c3411c4d08c 125
+  s_f2c84423ce0bfa::t_19cd5fd6d260b2 127
+  s_f2c84423ce0bfa::t_10c60a959940a1 130-133
+  s_f2c84423ce0bfa::t_ac8b2c3c9d4998 135
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_f2c84423ce0bfa::t_9d96013ba1789f 288-295
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaTransaction.cs
+  s_f2c84423ce0bfa::t_6078fcdc3ef066 32-37
+tests/FHIRBridge.UnitTests/Configuration/JsonMappingEngineTests.cs
+  s_f2c84423ce0bfa::t_3666c593b1ce7b 115-147
+portal/src/app/services/destination-schema.service.ts
+  s_24cbe30dc03ef3::t_2368f47d1a487b 127-135
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_f2c84423ce0bfa::t_2876822952a539 125-130
+  s_f2c84423ce0bfa::t_b164c771c9e02c 7
+  s_f2c84423ce0bfa::t_5a33f872abfe53 74-81,83-96
+  s_f2c84423ce0bfa::t_31415e2cb68cc4 50,55-56,60,111,114-116,119-124,132-133,136-137,154-162,164-170,172-176,181-182,185
+  s_f2c84423ce0bfa::t_0592e62b73d661 187-192
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_f2c84423ce0bfa::t_15d026566f2123 117-118,120-187,194-198
+  s_f2c84423ce0bfa::t_918b1a0f6ab20b 1-2,4,6,8,10-13,15-116,119,188-193,199-218
+  s_f2c84423ce0bfa::t_7f21e804e2c386 9
+  s_f2c84423ce0bfa::t_c1a51058a03c49 3,5,7,14
+tests/FHIRBridge.UnitTests/Configuration/ConfigurationServiceMappingProfileLookupTests.cs
+  s_f2c84423ce0bfa::t_4f122d947fb95a 1-80,85-105
+  s_f2c84423ce0bfa::t_404800015596cb 81-84
+tests/FHIRBridge.UnitTests/Infrastructure/SqlDestinationSchemaServiceTests.cs
+  s_75dca83bfa1300::t_0ab304973bfa96 22
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_75dca83bfa1300::t_e683d726700f7d 36
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_f2c84423ce0bfa::t_02fd5112c43eae 143
+  s_24cbe30dc03ef3::t_7bc803acba830f 1480-1481
+  s_f2c84423ce0bfa::t_264ea13d6a354b 1537-1549
+  s_24cbe30dc03ef3::t_22172f6c2bc8f7 1431-1432
+  s_24cbe30dc03ef3::t_0f833642d420e4 1305-1306,1326,1328-1338,1340-1341
+  s_24cbe30dc03ef3::t_271a46f3eb7718 542-548
+  s_24cbe30dc03ef3::t_65aa679ceeb5c5 1219-1220
+  s_f2c84423ce0bfa::t_32d5c4f322269b 29
+  s_24cbe30dc03ef3::t_b569a93a60dabf 1294-1304,1307-1325,1327,1339
+  s_24cbe30dc03ef3::t_622dfa6f0c347d 1253-1258
+  s_24cbe30dc03ef3::t_1b75000f2fab03 1342-1343
+  s_24cbe30dc03ef3::t_1b735bb0adf147 223-227,235-241,579-581,646-647,665-674,869,931,941-948,1234-1238,1245-1250,1364-1369,1376-1382
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_f2c84423ce0bfa::t_dfa06886376efa 35-43
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_f2c84423ce0bfa::t_9b9ea19ac03785 137-138
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorRetryTests.cs
+  s_75dca83bfa1300::t_3b287686e77127 16-18,22,54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c9784fe140bed506684e51a0e0a06fa4d8e0f0de",
+  "prompts": {},
+  "sessions": {
+    "s_24cbe30dc03ef3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84dacba1-6a62-409d-85ed-9aa862ca7457",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    },
+    "s_75dca83bfa1300": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d69f69-0a00-47fb-8b81-5ba6e743e1cb",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    },
+    "s_f2c84423ce0bfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c970d4-a48d-47fd-a18b-d7240753202d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
