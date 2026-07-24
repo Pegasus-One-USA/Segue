@@ -325,6 +325,48 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     }
 
     [Fact]
+    public async Task StartEhrLaunchFromContextAsync_carries_a_live_callerId_into_the_pending_authorization_when_context_has_none()
+    {
+        var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, ["https://ehr.trusted.com/fhir"]));
+        SetupDiscovery();
+        var context = _protector.ProtectContext(routeId);
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns((FhirSourceConfiguration _, string _, string state, string? _) =>
+                new SmartAuthorizationRequest($"https://auth.example.com/authorize?state={state}", "verifier-1", state));
+
+        var url = await Service().StartEhrLaunchFromContextAsync(
+            context, "https://ehr.trusted.com/fhir", "launch-token", "https://fallback/cb", CancellationToken.None,
+            callerId: "https://healthapp.example.com/launchproviderinapp");
+
+        var state = System.Web.HttpUtility.ParseQueryString(url.Query)["state"]!;
+        var nonce = _protector.UnprotectState(state)!;
+        var pending = await _stateStore.TakeAsync(nonce, CancellationToken.None);
+        pending!.CallerId.Should().Be("https://healthapp.example.com/launchproviderinapp");
+    }
+
+    [Fact]
+    public async Task StartEhrLaunchFromContextAsync_live_callerId_overrides_the_contexts_baked_in_callerId()
+    {
+        var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, ["https://ehr.trusted.com/fhir"]));
+        SetupDiscovery();
+        var context = _protector.ProtectContext(routeId, callerId: "https://stale.example.com/launchproviderinapp");
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns((FhirSourceConfiguration _, string _, string state, string? _) =>
+                new SmartAuthorizationRequest($"https://auth.example.com/authorize?state={state}", "verifier-1", state));
+
+        var url = await Service().StartEhrLaunchFromContextAsync(
+            context, "https://ehr.trusted.com/fhir", "launch-token", "https://fallback/cb", CancellationToken.None,
+            callerId: "https://healthapp.example.com/launchproviderinapp");
+
+        var state = System.Web.HttpUtility.ParseQueryString(url.Query)["state"]!;
+        var nonce = _protector.UnprotectState(state)!;
+        var pending = await _stateStore.TakeAsync(nonce, CancellationToken.None);
+        pending!.CallerId.Should().Be("https://healthapp.example.com/launchproviderinapp");
+    }
+
+    [Fact]
     public async Task StartStandaloneFromContextAsync_uses_the_selected_hospital_endpoints_base_url_when_one_is_carried_in_the_context()
     {
         var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(

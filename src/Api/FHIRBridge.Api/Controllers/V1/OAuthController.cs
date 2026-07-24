@@ -193,6 +193,9 @@ public sealed class OAuthController : ControllerBase
     /// carried in the encrypted <paramref name="context"/> segment — no raw GUIDs in the URL. The EHR appends the
     /// issuer (<c>iss</c>) + opaque <c>launch</c> token; on callback the resolved route is run for the launched
     /// patient. Anonymous — the launching user has no FHIRBridge session; security comes from the trusted-issuer check.
+    /// <paramref name="callerId"/> optionally carries the calling app's own current origin as a live override for
+    /// whatever return URL was baked into <paramref name="context"/> at mint time — see
+    /// <see cref="IInteractiveSourceAuthorizationService.StartEhrLaunchFromContextAsync"/>.
     /// </summary>
     [AllowAnonymous]
     [EnableRateLimiting("oauth")]
@@ -203,6 +206,7 @@ public sealed class OAuthController : ControllerBase
         string context,
         [FromQuery] string? iss,
         [FromQuery] string? launch,
+        [FromQuery] string? callerId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(iss) || string.IsNullOrWhiteSpace(launch))
@@ -210,8 +214,18 @@ public sealed class OAuthController : ControllerBase
             return BadRequest(new { error = "invalid_request", error_description = "Missing iss or launch." });
         }
 
+        // This endpoint is anonymous — anyone who knows the context can call it — so a caller-supplied callerId is
+        // validated against the live allowed-origins set (same trust boundary already used for CORS) before it's
+        // honored, to keep it from being an open redirect off a real EHR login.
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
+        {
+            _logger.LogWarning("[Step 2/6] oauth/launch/{{context}} rejected: callerId origin is not in the allowed-origins set.");
+            return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
+        }
+
         var authorizationUrl = await _authorizationService.StartEhrLaunchFromContextAsync(
-            context, iss, launch, BuildCallbackUri(), cancellationToken);
+            context, iss, launch, BuildCallbackUri(), cancellationToken, callerId);
 
         return Redirect(authorizationUrl.ToString());
     }

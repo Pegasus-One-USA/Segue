@@ -101,9 +101,14 @@ export class LaunchProviderInAppComponent implements OnInit {
     const launch = params.get('launch');
     if (iss && launch) {
       await this.ensureLaunchContextLoaded();
+      // Passes our own current origin as a live callerId override, so FHIRBridge redirects back here after OAuth
+      // completes regardless of which environment (local/staging/production) is actually running this page — the
+      // static providerLaunchContext token can't otherwise reflect that per-environment. See OAuthController.LaunchPipeline.
+      const callerId = `${window.location.origin}/launchproviderinapp`;
       const launchUrl =
         `${FHIRBRIDGE_BASE_URL}/api/v1/oauth/launch/${this.providerLaunchContext}` +
-        `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}`;
+        `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}` +
+        `&callerId=${encodeURIComponent(callerId)}`;
       window.location.href = launchUrl;
       return;
     }
