@@ -341,7 +341,15 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var results = new List<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
         foreach (var batch in cohortPatientIds.Chunk(CohortBatchSize))
         {
-            var batchSource = source with { PatientIds = batch, TargetPatientId = null };
+            // This node's connection-wide SearchParameters (e.g. an "identifier=<MRN list>" criteria the wizard's
+            // "Search criteria" field used to find the Patient cohort in the first place — see the ExecuteAsync
+            // comment on the "Search criteria" fallback) identified WHICH patients to fetch; it does not describe a
+            // valid filter for any other resource type. Once a patient cohort exists, siblings are scoped purely by
+            // patient={id} (plus their own category/status defaults from ApplyDefaultSearchParameters) — carrying
+            // the raw criteria forward made every cohort-scoped sibling search additionally (and meaninglessly)
+            // filter by the patients' MRNs, which Condition/Observation don't recognize, silently returning zero
+            // results instead of the patient's actual data.
+            var batchSource = source with { PatientIds = batch, TargetPatientId = null, SearchParameters = null };
             results.AddRange(await SearchWithPolicyAsync(client, resourceType, batchSource, workflowRunId, cancellationToken));
         }
 

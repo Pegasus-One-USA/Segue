@@ -29,6 +29,7 @@ public static class UsCoreValueSetCatalog
     public const string MeasureReportStatus = "http://hl7.org/fhir/ValueSet/measure-report-status";
     public const string SubscriptionStatus = "http://hl7.org/fhir/ValueSet/subscription-status";
     public const string LocationStatus = "http://hl7.org/fhir/ValueSet/location-status";
+    public const string MedicationAdministrationStatus = "http://hl7.org/fhir/ValueSet/medication-admin-status";
 
     private const string GenderSystem = "http://hl7.org/fhir/administrative-gender";
 
@@ -71,6 +72,8 @@ public static class UsCoreValueSetCatalog
                 "requested", "active", "error", "off"),
             [LocationStatus] = Vs("http://hl7.org/fhir/location-status",
                 "active", "suspended", "inactive"),
+            [MedicationAdministrationStatus] = Vs("http://hl7.org/fhir/CodeSystem/medication-admin-status",
+                "in-progress", "not-done", "on-hold", "completed", "entered-in-error", "stopped", "unknown"),
         };
 
     public static bool TryGet(string valueSetUrl, out ValueSetDefinition definition)
