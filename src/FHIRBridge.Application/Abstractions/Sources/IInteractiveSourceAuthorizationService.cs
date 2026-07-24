@@ -30,13 +30,18 @@ public interface IInteractiveSourceAuthorizationService
     /// <summary>
     /// Prepares an EHR launch from an encrypted launch-context token (which resolves to the pipeline route).
     /// Resolves the source from the route, validates the issuer, and — on callback — the resolved route is run.
+    /// <paramref name="callerId"/> is a live return-URL override supplied by the caller of this request (e.g. the
+    /// third-party app's own current origin) — it wins over whatever <c>CallerId</c> was baked into the context at
+    /// mint time, if any, since a statically pre-minted EHR-launch context can't otherwise reflect which environment
+    /// is actually calling right now. Callers must validate it (e.g. against allowed origins) before passing it in.
     /// </summary>
     Task<Uri> StartEhrLaunchFromContextAsync(
         string launchContext,
         string issuer,
         string launch,
         string redirectUri,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? callerId = null);
 
     /// <summary>
     /// Prepares a provider-standalone sign-in from an encrypted launch-context token (which resolves to the pipeline
