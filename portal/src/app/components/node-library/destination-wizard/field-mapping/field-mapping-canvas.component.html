@@ -235,16 +235,15 @@
     >
       <div class="fm-remove-confirm-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
         <div class="fm-remove-confirm-icon fm-remove-confirm-icon--danger">🗑</div>
-        <h3 class="fm-remove-confirm-title">Permanently delete "{{ target.column }}"?</h3>
+        <h3 class="fm-remove-confirm-title">Remove "{{ target.column }}"?</h3>
         <p class="fm-remove-confirm-body">
-          This runs a real <strong>ALTER TABLE ... DROP COLUMN</strong> against {{ target.tableName }}.
-          The column and any data in it will be gone for good — this cannot be undone.
+          This queues a real <strong>ALTER TABLE ... DROP COLUMN</strong> against {{ target.tableName }},
+          which runs when you click "Add to Pipeline" — at that point the column and any data in it will
+          be gone for good.
         </p>
         <div class="fm-remove-confirm-actions">
-          <button type="button" class="btn btn-secondary" [disabled]="dropColumnSubmitting()" (click)="cancelDropColumn()">Cancel</button>
-          <button type="button" class="btn btn-danger" [disabled]="dropColumnSubmitting()" (click)="confirmDropColumn()">
-            {{ dropColumnSubmitting() ? 'Deleting…' : 'Permanently delete' }}
-          </button>
+          <button type="button" class="btn btn-secondary" (click)="cancelDropColumn()">Cancel</button>
+          <button type="button" class="btn btn-danger" (click)="confirmDropColumn()">Remove column</button>
         </div>
       </div>
     </div>

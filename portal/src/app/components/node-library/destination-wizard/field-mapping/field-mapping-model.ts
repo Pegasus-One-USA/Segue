@@ -4,6 +4,23 @@
 // nth/criteria), while keeping the legacy flat dest_mappings wire format alive
 // so workflow-build-assembler.service.ts keeps working unmodified.
 
+import {
+  CreateTableRequest, AddColumnRequest, DropColumnRequest, AlterColumnRequest,
+} from '../../../../services/destination-schema.service';
+
+/**
+ * A schema-authoring action (create table / add column / drop column / alter column) the user has
+ * triggered on the mapping canvas, queued instead of executed immediately — the real DDL only runs
+ * once "Add to Pipeline" flushes the queue (see DestinationWizardComponent.flushPendingSchemaOps), so
+ * nothing touches the live database while the user is still just exploring/mapping. Each request object
+ * is already the exact shape DestinationSchemaService's corresponding method expects.
+ */
+export type PendingSchemaOp =
+  | { kind: 'createTable'; request: CreateTableRequest }
+  | { kind: 'addColumn'; request: AddColumnRequest }
+  | { kind: 'dropColumn'; request: DropColumnRequest }
+  | { kind: 'alterColumn'; request: AlterColumnRequest };
+
 export interface MappingSourceRef {
   fhirPath: string;
   label: string;
