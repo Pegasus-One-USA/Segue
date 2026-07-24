@@ -138,6 +138,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var routesByResourceType = ResolveRoutesByResourceType(config, request.ResourceTypes);
         var processedResourceTypes = new List<string>();
 
+        // Patient-compartment resource types (Observation, Condition, ServiceRequest, …) need a resolved patient id
+        // to scope their search — normally supplied by an interactive SMART launch context, but Backend Services
+        // has none (see FhirSourceConnectorBase.ApplyPatientScopeAsync). When the run also includes a "Patient"
+        // route for the same source connection (processed first — see ResolveRoutesByResourceType's ordering),
+        // the ids it resolves are cached here and threaded into every later resource type's search for that same
+        // connection via FhirSourceConfiguration.PatientIds, mirroring the Runtime DAG's cohort-scoping
+        // (SourceNodeExecutors' SearchCohortScopedAsync). No-op for connections that already have an interactive
+        // patient context or an explicitly configured TargetPatientId/PatientIds.
+        var patientIdsBySourceConnection = new Dictionary<Guid, List<string>>();
+
         foreach (var (resourceType, routesForType) in routesByResourceType)
         {
             processedResourceTypes.Add(resourceType);
@@ -193,10 +203,15 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                             routeGroup.Key.SearchParameters,
                             cancellationToken);
 
+                    var cohortPatientIds = patientIdsBySourceConnection.TryGetValue(sourceConnection.Id, out var cachedCohort)
+                        ? cachedCohort
+                        : null;
+
                     var sourceConfiguration = await BuildSourceConfigurationAsync(
                         sourceConnection,
                         effectiveSearchParameters,
-                        cancellationToken);
+                        cancellationToken,
+                        cohortPatientIds);
 
                     if (useBulkExport)
                     {
@@ -221,6 +236,26 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     }
 
                     extractedCount += resources.Count;
+
+                    if (string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var resolvedIds = resources
+                            .Select(r => r.ResourceId)
+                            .Where(id => !string.IsNullOrWhiteSpace(id))
+                            .Select(id => id!)
+                            .ToList();
+
+                        if (resolvedIds.Count > 0)
+                        {
+                            if (!patientIdsBySourceConnection.TryGetValue(sourceConnection.Id, out var existingIds))
+                            {
+                                existingIds = [];
+                                patientIdsBySourceConnection[sourceConnection.Id] = existingIds;
+                            }
+
+                            existingIds.AddRange(resolvedIds.Except(existingIds));
+                        }
+                    }
 
                     // Expert Determination (k-anonymity) set-level de-identification across the extracted cohort.
                     // No-op passthrough unless explicitly enabled in configuration.
@@ -964,11 +999,15 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Resource type is resolved from each route's mapping profile — the single source of truth for what to pull.
+        // "Patient" is ordered first (ties otherwise broken alphabetically) so any patient cohort it resolves is
+        // already cached in patientIdsBySourceConnection by the time other patient-compartment resource types in
+        // this same run reach BuildSourceConfigurationAsync.
         var groups = ExpandRouteMappingWorkItems(config)
             .Where(x => !string.IsNullOrWhiteSpace(x.MappingProfile.ResourceType))
             .Where(x => requested is null || requested.Contains(x.MappingProfile.ResourceType))
             .GroupBy(x => x.MappingProfile.ResourceType, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => string.Equals(group.Key, "Patient", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
             .Select(group => (ResourceType: group.Key, Routes: group.ToList()))
             .ToList();
 
@@ -1007,7 +1046,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private async Task<FhirSourceConfiguration> BuildSourceConfigurationAsync(
         SourceConnection sourceConnection,
         string? searchParameters,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? patientIds = null)
     {
         var sourceType = sourceConnection.SourceSystemType switch
         {
@@ -1058,7 +1098,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             sourceConnection.Id,
             searchParameters,
             clientSecret,
-            ApplicationType: isLoopback ? null : sourceConnection.ApplicationType);
+            ApplicationType: isLoopback ? null : sourceConnection.ApplicationType,
+            PatientIds: patientIds);
     }
 
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(

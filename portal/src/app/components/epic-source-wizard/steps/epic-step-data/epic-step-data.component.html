@@ -145,13 +145,8 @@
     <div class="form-grid">
 
       @if (showAdvanced()) {
-        <div class="form-field">
-          <label>Scope Version <span class="tag-gated">gated by discovery</span></label>
-          <select formControlName="scopeVersion">
-            <option value="v2">v2 granular</option>
-            <option value="v1">v1 read</option>
-          </select>
-        </div>
+        <!-- Scope Version field hidden from the wizard; scopeVersion control stays in the form
+             (default 'v2', still auto-detected/submitted) — see epic-step-data.component.ts. -->
         <div class="form-field">
           <label>Base / Launch Scopes</label>
           <input type="text" formControlName="baseScopes" />
