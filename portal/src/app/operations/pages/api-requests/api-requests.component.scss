@@ -93,6 +93,24 @@
   color: var(--color-error-strong);
 }
 
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  text-decoration: underline;
+}
+
+.detail-panel {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--color-border);
+  border-radius: 6px;
+  font-size: 12px;
+  max-width: 420px;
+  white-space: pre-wrap;
+}
+
 .empty-state {
   padding: 32px;
   text-align: center;

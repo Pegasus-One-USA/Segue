@@ -4,6 +4,15 @@
     <p class="page-sub">Real alert-rule firings — each row is an actual evaluated condition that reached its threshold, with a real email sent to its recipients.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one time an Alert Rule you configured actually fired</strong> — a background job checked its condition on a schedule, found it was met, and emailed the configured recipients. This is history of firings, not the rules themselves — configure those under <strong>Alert Rules</strong>.</p>
+
+      <p class="info-note">Rules can currently only be built against Security Events (lockouts, secret rotations, etc.) — not against other log types like Errors or Pipeline Executions.</p>
+    </div>
+  </details>
+
   <div class="table-card">
     <div class="table-wrapper">
       <table mat-table [dataSource]="entries()" class="data-table">

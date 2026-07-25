@@ -1,10 +1,12 @@
 import { Component, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../auth/store/auth.store';
 
 interface SettingsTab {
   label: string;
   route: string;
+  icon: string;
   /** Omit for tabs every authenticated user with settings access may see. */
   permissions?: string[];
   /** Hidden unless the user has the SuperAdmin role — stricter than `permissions`, which a
@@ -13,19 +15,19 @@ interface SettingsTab {
 }
 
 const SETTINGS_TABS: SettingsTab[] = [
-  { label: 'Branding', route: 'branding', permissions: ['configuration.write'] },
-  { label: 'Email Settings', route: 'email-settings', permissions: ['configuration.write'] },
-  { label: 'EHR Endpoints', route: 'ehr-endpoints', permissions: ['configuration.write'] },
-  { label: 'Source Connections', route: 'source-connections', permissions: ['sourceconnections.view'] },
-  { label: 'Destination Connections', route: 'destination-connections', permissions: ['configuration.write'] },
-  { label: 'Allowed Origins', route: 'allowed-origins', superAdminOnly: true },
-  { label: 'System Security', route: 'system-security', superAdminOnly: true },
+  { label: 'Branding', route: 'branding', icon: 'palette', permissions: ['configuration.write'] },
+  { label: 'Email Settings', route: 'email-settings', icon: 'mail', permissions: ['configuration.write'] },
+  { label: 'EHR Endpoints', route: 'ehr-endpoints', icon: 'hub', permissions: ['configuration.write'] },
+  { label: 'Source Connections', route: 'source-connections', icon: 'input', permissions: ['sourceconnections.view'] },
+  { label: 'Destination Connections', route: 'destination-connections', icon: 'output', permissions: ['configuration.write'] },
+  { label: 'Allowed Origins', route: 'allowed-origins', icon: 'public', superAdminOnly: true },
+  { label: 'System Security', route: 'system-security', icon: 'security', superAdminOnly: true },
 ];
 
 @Component({
   selector: 'app-settings-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, MatIconModule],
   templateUrl: './settings-shell.component.html',
   styleUrl: './settings-shell.component.scss',
 })

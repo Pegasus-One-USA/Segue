@@ -2,16 +2,14 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { GovernanceApiService } from '../../services/governance-api.service';
-import { AuditLogEntry } from '../../models/governance.model';
+import { AuditLogEntry, PagedResult } from '../../models/governance.model';
 import { LocalDateTimePipe } from '../../../core/pipes/local-date-time.pipe';
-
-interface FieldDiff {
-  field: string;
-  oldValue: string;
-  newValue: string;
-  changeType: 'added' | 'removed' | 'changed';
-}
+import { DiffDetailDialogComponent, FieldDiff } from '../../dialogs/diff-detail-dialog/diff-detail-dialog.component';
 
 function formatValue(value: unknown): string {
   return value === undefined || value === null ? '—' : String(value);
@@ -20,7 +18,7 @@ function formatValue(value: unknown): string {
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, LocalDateTimePipe, MatTableModule],
+  imports: [CommonModule, LocalDateTimePipe, MatTableModule, MatPaginatorModule, MatIconModule, MatTooltipModule, MatDialogModule],
   templateUrl: './audit-logs.component.html',
   styleUrl: './audit-logs.component.scss',
 })
@@ -28,20 +26,22 @@ export class AuditLogsComponent implements OnInit {
   private readonly api = inject(GovernanceApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
   readonly loading = signal(false);
   readonly correlationId = signal('');
   readonly entityType = signal('');
   readonly entityId = signal('');
-  readonly entries = signal<AuditLogEntry[]>([]);
-  readonly expandedId = signal<string | null>(null);
+  readonly result = signal<PagedResult<AuditLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(25);
 
-  /** Only meaningful once scoped to one entity via viewEntityHistory() — entries() is newest-first
+  /** Only meaningful once scoped to one entity via viewEntityHistory() — result().items is newest-first
    *  (SequenceNumber descending), so the oldest entry is v1. */
   readonly historyMode = computed(() => !!this.entityType() && !!this.entityId());
 
   readonly versionByEntryId = computed(() => {
-    const oldestFirst = [...this.entries()].reverse();
+    const oldestFirst = [...this.result().items].reverse();
     const map = new Map<string, number>();
     oldestFirst.forEach((entry, index) => map.set(entry.id, index + 1));
     return map;
@@ -65,13 +65,20 @@ export class AuditLogsComponent implements OnInit {
     this.loading.set(true);
     this.api.auditLogs(
       this.correlationId() || undefined,
-      200,
+      this.pageIndex() + 1,
+      this.pageSize(),
       this.entityType() || undefined,
       this.entityId() || undefined,
     ).subscribe({
-      next: entries => { this.entries.set(entries); this.loading.set(false); },
+      next: result => { this.result.set(result); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+  }
+
+  onPageChange(e: PageEvent): void {
+    this.pageIndex.set(e.pageIndex);
+    this.pageSize.set(e.pageSize);
+    this.load();
   }
 
   onCorrelationIdChange(value: string): void {
@@ -82,6 +89,7 @@ export class AuditLogsComponent implements OnInit {
     this.correlationId.set('');
     this.entityType.set('');
     this.entityId.set('');
+    this.pageIndex.set(0);
     this.load();
   }
 
@@ -93,11 +101,15 @@ export class AuditLogsComponent implements OnInit {
     this.correlationId.set('');
     this.entityType.set(entry.entityType);
     this.entityId.set(entry.entityId);
+    this.pageIndex.set(0);
     this.load();
   }
 
-  toggleDiff(id: string): void {
-    this.expandedId.set(this.expandedId() === id ? null : id);
+  openDiff(entry: AuditLogEntry): void {
+    this.dialog.open(DiffDetailDialogComponent, {
+      data: { module: entry.module, action: entry.action, diffs: this.diffFields(entry) },
+      autoFocus: false,
+    });
   }
 
   version(entry: AuditLogEntry): number | null {

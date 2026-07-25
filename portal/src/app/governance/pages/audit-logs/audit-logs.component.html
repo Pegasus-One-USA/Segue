@@ -4,6 +4,20 @@
     <p class="page-sub">Immutable, hash-chained record of every configuration and entity change — who, what, when.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one configuration or record change</strong> — creating, editing, or deleting a source connection, destination, mapping profile, user, role, or any other governed setting. It's tamper-evident: each row is cryptographically chained to the one before it, so a row can never be quietly altered or deleted without breaking the chain.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Reading a row</h4>
+        <p><strong>Actor</strong> is who made the change. <strong>Entity</strong> shows the display name of the record that was changed — not who changed it. If Actor shows <span class="info-tag">anonymous</span>, that usually means a self-service action taken before login (like a password reset) — not a suspicious unauthenticated change.</p>
+      </section>
+
+      <p class="info-note">Click <strong>"View diff"</strong> on a row to see exactly which fields changed, old value vs. new value.</p>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"
@@ -19,7 +33,7 @@
 
   @if (historyMode()) {
     <div class="scope-banner">
-      Showing version history for <strong>{{ entityType() }}</strong> <code class="mono">{{ entityId() }}</code> ({{ entries().length }} version{{ entries().length === 1 ? '' : 's' }})
+      Showing version history for <strong>{{ entityType() }}</strong> <code class="mono">{{ entityId() }}</code> ({{ result().totalCount }} version{{ result().totalCount === 1 ? '' : 's' }})
       <button class="btn-link" type="button" (click)="compareVersions()">Compare versions…</button>
       <button class="btn-link" type="button" (click)="reset()">Clear scope</button>
     </div>
@@ -27,7 +41,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="version">
           <th mat-header-cell *matHeaderCellDef>Version</th>
@@ -76,15 +90,20 @@
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef></th>
           <td mat-cell *matCellDef="let r">
-            <button
-              class="btn-link"
-              type="button"
-              [disabled]="!r.oldValueJson && !r.newValueJson"
-              (click)="toggleDiff(r.id)"
-            >{{ expandedId() === r.id ? 'Hide diff' : 'View diff' }}</button>
-            @if (r.entityType && r.entityId) {
-              <button class="btn-link" type="button" (click)="viewEntityHistory(r)">History</button>
-            }
+            <div class="row-actions">
+              <button
+                class="icon-btn"
+                type="button"
+                [disabled]="!r.oldValueJson && !r.newValueJson"
+                matTooltip="View diff"
+                (click)="openDiff(r)"
+              ><mat-icon>difference</mat-icon></button>
+              @if (r.entityType && r.entityId) {
+                <button class="icon-btn" type="button" matTooltip="Version history" (click)="viewEntityHistory(r)">
+                  <mat-icon>history</mat-icon>
+                </button>
+              }
+            </div>
           </td>
         </ng-container>
 
@@ -93,39 +112,22 @@
       </table>
     </div>
 
-    @if (expandedId(); as id) {
-      @for (r of entries(); track r.id) {
-        @if (r.id === id) {
-          <div class="diff-panel">
-            <h4>Change detail — {{ r.module }} / {{ r.action }}</h4>
-            @if (diffFields(r).length === 0) {
-              <p class="empty-state">No field-level changes recorded for this entry.</p>
-            } @else {
-              <table class="diff-table">
-                <thead>
-                  <tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>
-                </thead>
-                <tbody>
-                  @for (diff of diffFields(r); track diff.field) {
-                    <tr [class]="'diff-' + diff.changeType">
-                      <td>{{ diff.field }}</td>
-                      <td>{{ diff.oldValue }}</td>
-                      <td>{{ diff.newValue }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            }
-          </div>
-        }
-      }
-    }
-
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No audit entries found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

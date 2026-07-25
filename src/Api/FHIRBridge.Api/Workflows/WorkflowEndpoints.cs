@@ -14,7 +14,9 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Enums;
+using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Api.Workflows;
 
@@ -557,6 +559,7 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
             ICurrentUserService currentUserService,
+            IGlobalExceptionManager exceptionManager,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -565,17 +568,56 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            // Reuse the ambient request's correlation id (the same one ApiRequestLoggingHandler already stamps on
+            // every outbound HTTP call this run triggers) rather than minting an unrelated one — otherwise an
+            // ErrorLogs row from this run can never be found via its own outbound API Requests, and vice versa.
             var context = new WorkflowExecutionContext(
                 Guid.NewGuid(),
-                request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
+                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
                 targetPatientId: request?.PatientId,
                 patientSearchCriteria: request?.PatientSearchCriteria,
                 callerId: request?.CallerId);
-            var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
-            return Results.Ok(result);
+            try
+            {
+                var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
+                return Results.Ok(result);
+            }
+            catch (FHIRBridgeException businessRule)
+            {
+                // Expected business-rule rejection — return the safe UserMessage inline; NOT a technical error.
+                return Results.Json(
+                    new { error = businessRule.UserMessage, message = businessRule.UserMessage },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Unexpected/technical failure (e.g. an external system returned an error page). Capture the FULL
+                // technical detail to ErrorLogs with a reference id, and return ONLY a generic, PHI-safe message +
+                // that reference — never the raw exception text (which can contain an entire HTML error page).
+                var report = await exceptionManager.CaptureAsync(
+                    exception,
+                    new ExceptionContext(
+                        Module: "Runtime",
+                        Severity: "Error",
+                        CorrelationId: context.CorrelationId,
+                        ExecutionId: context.WorkflowRunId.ToString(),
+                        WorkflowId: workflowId.ToString()),
+                    cancellationToken);
+
+                return Results.Json(
+                    new
+                    {
+                        error = report.UserFriendlyMessage,
+                        message = report.UserFriendlyMessage,
+                        errorReferenceId = report.ErrorReferenceId,
+                        correlationId = report.CorrelationId,
+                        category = report.Category.ToString(),
+                    },
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
         });
 
         // Discards FHIRBridge's cached token for this workflow's source connection (both the given patientId's slot,
@@ -711,6 +753,7 @@ public static class WorkflowEndpoints
             ILaunchTokenProtector tokenProtector,
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
+            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var launchContext = tokenProtector.UnprotectContext(token);
@@ -726,9 +769,11 @@ public static class WorkflowEndpoints
                 return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
             }
 
+            // See the /run endpoint's matching comment: reuse the ambient correlation id so this run's ErrorLogs
+            // (if any) can be found via the same id as its outbound API Requests.
             var context = new WorkflowExecutionContext(
                 Guid.NewGuid(),
-                Guid.NewGuid().ToString("N"),
+                currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: "checkpoint-url",
                 triggerType: "Checkpoint");
             var result = await orchestrator.ExecuteAsync(workflow, context, targetNodeId, cancellationToken);

@@ -79,9 +79,9 @@ export class RoleListComponent implements OnInit {
         this.roles.set(roles);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.toast.error('Failed to load roles.');
+        this.toast.error(err.message || 'Failed to load roles.');
       },
     });
   }
@@ -160,7 +160,7 @@ export class RoleListComponent implements OnInit {
             this.loadRoles();
           },
           error: (err: HttpErrorResponse) => {
-            const message = err.error?.title ?? 'Failed to delete role.';
+            const message = typeof err.error?.title === 'string' ? err.error.title : err.message || 'Failed to delete role.';
             this.toast.error(message);
           },
         });

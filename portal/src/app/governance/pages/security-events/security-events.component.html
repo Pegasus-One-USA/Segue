@@ -4,6 +4,20 @@
     <p class="page-sub">Lockouts, threshold breaches, and other security-relevant events outside normal auth/config flows.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>a notable security event</strong> — an account getting locked out after too many failed logins, an admin regenerating an application secret, or the system detecting the audit trail itself may have been tampered with. These are rarer and generally more serious than routine authentication activity.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Severity</h4>
+        <p><span class="info-tag">Critical</span> (e.g. audit chain broken) needs immediate attention. <span class="info-tag">High</span> (e.g. account locked, secret regenerated) is worth reviewing. <span class="info-tag">Medium</span> (e.g. a login attempt on an already-locked account) is informational.</p>
+      </section>
+
+      <p class="info-note">This is also the only data source the Alert Rules engine watches — if you want an email when something like a lockout threshold is hit, build the rule against this event data.</p>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"
@@ -19,7 +33,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
@@ -67,11 +81,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No security events found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

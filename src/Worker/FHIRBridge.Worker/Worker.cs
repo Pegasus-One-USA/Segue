@@ -123,8 +123,10 @@ public sealed class Worker : BackgroundService
             // this BackgroundService, silently stopping all future scheduled runs. Logging and continuing matches
             // RunDueWorkflowsAsync's existing per-item resilience below.
             _logger.LogError(exception, "Scheduled unified pipeline run failed at {ScheduledAtUtc}.", nowUtc);
-            await governanceLogger.LogErrorAsync(
-                new ErrorEntry("Error", exception.GetType().Name, exception.Message, exception.StackTrace, "Worker", correlationId),
+            var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+            await exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(Module: "Scheduler", CorrelationId: correlationId),
                 CancellationToken.None);
         }
     }
@@ -176,8 +178,10 @@ public sealed class Worker : BackgroundService
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogError(exception, "Scheduled workflow {WorkflowId} '{Name}' failed.", workflow.Id, workflow.Name);
-                await governanceLogger.LogErrorAsync(
-                    new ErrorEntry("Error", exception.GetType().Name, exception.Message, exception.StackTrace, "Worker", correlationId),
+                var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+                await exceptionManager.CaptureAsync(
+                    exception,
+                    new ExceptionContext(Module: "Scheduler", CorrelationId: correlationId),
                     CancellationToken.None);
             }
         }

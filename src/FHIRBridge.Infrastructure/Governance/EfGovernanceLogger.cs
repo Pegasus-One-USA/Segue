@@ -175,7 +175,9 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.EndpointId,
             entry.RequestId,
             entry.TraceId,
-            entry.SpanId));
+            entry.SpanId,
+            entry.DiagnosisAction?.ToString(),
+            Truncate(entry.DiagnosisCause, 500)));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

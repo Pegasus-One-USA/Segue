@@ -4,6 +4,15 @@
     <p class="page-sub">The real, currently-effective retention period for every governance and operations log type. The four HIPAA audit tables are never purged.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">This isn't a settings form — it's a <strong>read-only view of what's actually enforced</strong> right now. A background job periodically deletes rows older than the shown retention period for each log type marked "Purgeable" — this genuinely happens automatically, it's not just a policy on paper.</p>
+
+      <p class="info-note">A handful of tables (Audit Logs, Authentication Logs, SMART Launch Logs, Data Access Logs) are marked "immutable" and never purged — these are the tables HIPAA requires to be kept as permanent evidence.</p>
+    </div>
+  </details>
+
   <div class="table-card">
     <div class="table-wrapper">
       <table mat-table [dataSource]="entries()" class="data-table">

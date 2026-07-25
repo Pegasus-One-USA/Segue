@@ -81,7 +81,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.loading.set(false);
-        this.toast.error('Failed to load workflows.', this.messageOf(err, ''));
+        this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
       },
     });
   }
@@ -112,7 +112,7 @@ export class WorkflowListComponent implements OnInit {
         },
         error: err => {
           this.busyId.set(null);
-          this.toast.error('Launch URL', this.messageOf(err, 'Could not generate a launch URL.'));
+          this.toast.error(this.messageOf(err, 'Could not generate a launch URL.'));
         },
       });
       return;
@@ -127,7 +127,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.busyId.set(null);
-        this.toast.error('Workflow run', this.messageOf(err, 'The run could not be started.'));
+        this.toast.error(this.runFailureMessage(err));
       },
     });
   }
@@ -176,7 +176,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.rowBusyId.set(null);
-        this.toast.error('Update failed', this.messageOf(err, 'Could not change the workflow state.'));
+        this.toast.error(this.messageOf(err, 'Could not change the workflow state.'));
       },
     });
   }
@@ -206,7 +206,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.rowBusyId.set(null);
-        this.toast.error('Update failed', this.messageOf(err, 'Could not change the public-launch state.'));
+        this.toast.error(this.messageOf(err, 'Could not change the public-launch state.'));
       },
     });
   }
@@ -233,7 +233,7 @@ export class WorkflowListComponent implements OnInit {
       error: err => {
         this.rowBusyId.set(null);
         this.confirmDelete.set(null);
-        this.toast.error('Delete failed', this.messageOf(err, 'Could not delete the workflow.'));
+        this.toast.error(this.messageOf(err, 'Could not delete the workflow.'));
       },
     });
   }
@@ -267,7 +267,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.copyModal.update(current => (current ? { ...current, busy: false } : current));
-        this.toast.error('Copy failed', this.messageOf(err, 'Could not copy the workflow.'));
+        this.toast.error(this.messageOf(err, 'Could not copy the workflow.'));
       },
     });
   }
@@ -294,7 +294,7 @@ export class WorkflowListComponent implements OnInit {
   copy(text: string): void {
     navigator.clipboard?.writeText(text).then(
       () => this.toast.success('Copied', 'Launch URL copied to clipboard.'),
-      () => this.toast.error('Copy failed', 'Could not copy to the clipboard.'),
+      () => this.toast.error('Could not copy to the clipboard.'),
     );
   }
 
@@ -314,5 +314,20 @@ export class WorkflowListComponent implements OnInit {
       return body.error_description || body.title || e?.message || fallback;
     }
     return e?.message || fallback;
+  }
+
+  /** The backend's Error Reference ID (ERR-…) when a run failed technically — quotable to support. */
+  private refOf(err: unknown): string | null {
+    const body = (err as { error?: { errorReferenceId?: string } })?.error;
+    return body && typeof body === 'object' ? body.errorReferenceId ?? null : null;
+  }
+
+  /** A generic, PHI-safe failure message for a run — with the reference id appended when present so it can be
+   *  looked up in Operations → Errors. Never surfaces the raw exception text. */
+  private runFailureMessage(err: unknown): string {
+    const ref = this.refOf(err);
+    return ref
+      ? `The run could not be started. Reference: ${ref}`
+      : this.messageOf(err, 'The run could not be started.');
   }
 }

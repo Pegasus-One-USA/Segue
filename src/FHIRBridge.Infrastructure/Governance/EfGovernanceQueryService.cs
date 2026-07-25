@@ -29,8 +29,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         _retentionPolicyService = retentionPolicyService;
     }
 
-    public async Task<IReadOnlyList<AuditLogDto>> GetAuditLogsAsync(
-        string? correlationId, string? entityType, string? entityId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
+        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.AuditLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -46,17 +46,22 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.EntityId == entityId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.SequenceNumber)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new AuditLogDto(
                 x.Id, x.OccurredOnUtc, x.Actor, x.Module, x.Action, x.EntityType, x.EntityId, x.EntityName,
                 x.OldValueJson, x.NewValueJson, x.Status, x.IpAddress, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<DataAccessLogDto>> GetDataAccessLogsAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<DataAccessLogDto>> GetDataAccessLogsAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.DataAccessLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -64,17 +69,22 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new DataAccessLogDto(
                 x.Id, x.OccurredOnUtc, x.Actor, x.ResourceType, x.ResourceId, x.Action,
                 x.PatientId, x.Purpose, x.PipelineRunId, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<AuthenticationLogDto>> GetAuthenticationLogsAsync(
-        string? correlationId, int take, CancellationToken cancellationToken, string? authenticationTypePrefix = null)
+    public async Task<PagedResult<AuthenticationLogDto>> GetAuthenticationLogsAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken, string? authenticationTypePrefix = null)
     {
         var query = _dbContext.AuthenticationLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -86,17 +96,22 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.AuthenticationType.StartsWith(authenticationTypePrefix));
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new AuthenticationLogDto(
                 x.Id, x.OccurredOnUtc, x.UserEmail, x.AuthenticationType, x.Success,
                 x.FailureReason, x.IpAddress, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<SecurityEventDto>> GetSecurityEventsAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<SecurityEventDto>> GetSecurityEventsAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.SecurityEvents.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -104,17 +119,22 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new SecurityEventDto(
                 x.Id, x.OccurredOnUtc, x.Severity, x.EventType, x.UserEmail,
                 x.IpAddress, x.Details, x.Resolved, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<AuthorizationLogDto>> GetAuthorizationLogsAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<AuthorizationLogDto>> GetAuthorizationLogsAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.AuthorizationLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -122,16 +142,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new AuthorizationLogDto(
                 x.Id, x.OccurredOnUtc, x.UserEmail, x.RequestPath, x.PermissionCode, x.Result, x.IpAddress, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<SchedulerHistoryDto>> GetSchedulerHistoryAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<SchedulerHistoryDto>> GetSchedulerHistoryAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.SchedulerHistory.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -139,15 +164,20 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.RunTimeUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new SchedulerHistoryDto(x.Id, x.SchedulerId, x.RunTimeUtc, x.Status, x.RouteCount, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<RetryHistoryDto>> GetRetryHistoryAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<RetryHistoryDto>> GetRetryHistoryAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.RetryHistory.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -155,16 +185,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new RetryHistoryDto(
                 x.Id, x.OccurredOnUtc, x.Context, x.RetryNumber, x.DelayMilliseconds, x.Reason, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<ErrorLogDto>> GetErrorLogsAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<ErrorLogDto>> GetErrorLogsAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.ErrorLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -172,17 +207,23 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new ErrorLogDto(
                 x.Id, x.OccurredOnUtc, x.Severity, x.ExceptionType, x.Message, x.StackTrace, x.Module, x.CorrelationId,
                 x.ErrorReferenceId, x.Category, x.UserFriendlyMessage, x.ExecutionId, x.WorkflowId, x.EndpointId,
-                x.RequestId, x.TraceId, x.SpanId, (string?)null, (string?)null, (DateTime?)null))
+                x.RequestId, x.TraceId, x.SpanId, (string?)null, (string?)null, (DateTime?)null,
+                x.DiagnosisAction, x.DiagnosisCause))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<ErrorLogDto>> SearchErrorLogsAsync(
+    public async Task<PagedResult<ErrorLogDto>> SearchErrorLogsAsync(
         ErrorLogSearch search, CancellationToken cancellationToken)
     {
         var query = _dbContext.ErrorLogs.AsNoTracking().AsQueryable();
@@ -220,9 +261,12 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
                 : joined.Where(x => x.Resolution == null || x.Resolution.Status == ErrorResolution.StatusOpen);
         }
 
-        return await joined
+        var normalizedTake = NormalizeTake(search.Take);
+        var totalCount = await joined.CountAsync(cancellationToken);
+        var items = await joined
             .OrderByDescending(x => x.Error.OccurredOnUtc)
-            .Take(NormalizeTake(search.Take))
+            .Skip(NormalizeSkip(search.Skip))
+            .Take(normalizedTake)
             .Select(x => new ErrorLogDto(
                 x.Error.Id, x.Error.OccurredOnUtc, x.Error.Severity, x.Error.ExceptionType, x.Error.Message,
                 x.Error.StackTrace, x.Error.Module, x.Error.CorrelationId,
@@ -230,12 +274,15 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
                 x.Error.WorkflowId, x.Error.EndpointId, x.Error.RequestId, x.Error.TraceId, x.Error.SpanId,
                 x.Resolution == null ? ErrorResolution.StatusOpen : x.Resolution.Status,
                 x.Resolution == null ? null : x.Resolution.ResolvedBy,
-                x.Resolution == null ? null : x.Resolution.ResolvedOnUtc))
+                x.Resolution == null ? null : x.Resolution.ResolvedOnUtc,
+                x.Error.DiagnosisAction, x.Error.DiagnosisCause))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, search.Skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<ApiRequestLogDto>> GetApiRequestLogsAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<ApiRequestLogDto>> GetApiRequestLogsAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.ApiRequestLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -243,16 +290,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new ApiRequestLogDto(
                 x.Id, x.OccurredOnUtc, x.Method, x.Url, x.StatusCode, x.DurationMs, x.Error, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<ExportHistoryDto>> GetExportHistoryAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<ExportHistoryDto>> GetExportHistoryAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.ExportHistory.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -260,17 +312,22 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new ExportHistoryDto(
                 x.Id, x.OccurredOnUtc, x.PipelineRunId, x.DestinationName, x.Format, x.RowCount,
                 x.FileSizeBytes, x.Status, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<NotificationHistoryDto>> GetNotificationHistoryAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<NotificationHistoryDto>> GetNotificationHistoryAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.NotificationHistory.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -278,16 +335,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new NotificationHistoryDto(
                 x.Id, x.OccurredOnUtc, x.NotificationType, x.Recipient, x.Subject, x.Status, x.Error, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<ValidationFailureDto>> GetValidationFailuresAsync(
-        string? correlationId, int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<ValidationFailureDto>> GetValidationFailuresAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken)
     {
         var query = _dbContext.ValidationFailureLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -295,24 +357,36 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.CorrelationId == correlationId);
         }
 
-        return await query
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new ValidationFailureDto(
                 x.Id, x.OccurredOnUtc, x.ResourceType, x.ResourceId, x.WarningsJson,
                 x.DataQualityScore, x.PipelineRunId, x.CorrelationId))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
-    public async Task<IReadOnlyList<EndpointHealthCheckDto>> GetEndpointHealthChecksAsync(
-        int take, CancellationToken cancellationToken)
+    public async Task<PagedResult<EndpointHealthCheckDto>> GetEndpointHealthChecksAsync(
+        int skip, int take, CancellationToken cancellationToken)
     {
-        return await _dbContext.EndpointHealthChecks.AsNoTracking()
+        var query = _dbContext.EndpointHealthChecks.AsNoTracking().AsQueryable();
+
+        var normalizedTake = NormalizeTake(take);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(x => x.OccurredOnUtc)
-            .Take(NormalizeTake(take))
+            .Skip(NormalizeSkip(skip))
+            .Take(normalizedTake)
             .Select(x => new EndpointHealthCheckDto(
                 x.Id, x.OccurredOnUtc, x.EndpointName, x.EndpointType, x.Status, x.LatencyMs, x.Message))
             .ToListAsync(cancellationToken);
+
+        return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
     public async Task<IReadOnlyList<SmartLaunchLogDto>> GetSmartLaunchLogsAsync(
@@ -332,22 +406,23 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         const int take = 500;
 
         var pipelineRun = await _pipelineRunRepository.GetByCorrelationIdAsync(correlationId, cancellationToken);
-        var auditLogs = await GetAuditLogsAsync(correlationId, null, null, take, cancellationToken);
-        var dataAccessLogs = await GetDataAccessLogsAsync(correlationId, take, cancellationToken);
-        var authenticationLogs = await GetAuthenticationLogsAsync(correlationId, take, cancellationToken);
-        var securityEvents = await GetSecurityEventsAsync(correlationId, take, cancellationToken);
-        var authorizationLogs = await GetAuthorizationLogsAsync(correlationId, take, cancellationToken);
-        var schedulerHistory = await GetSchedulerHistoryAsync(correlationId, take, cancellationToken);
-        var retryHistory = await GetRetryHistoryAsync(correlationId, take, cancellationToken);
-        var errors = await GetErrorLogsAsync(correlationId, take, cancellationToken);
-        var apiRequests = await GetApiRequestLogsAsync(correlationId, take, cancellationToken);
-        var exports = await GetExportHistoryAsync(correlationId, take, cancellationToken);
-        var notifications = await GetNotificationHistoryAsync(correlationId, take, cancellationToken);
-        var validationFailures = await GetValidationFailuresAsync(correlationId, take, cancellationToken);
+        var auditLogs = await GetAuditLogsAsync(correlationId, null, null, 0, take, cancellationToken);
+        var dataAccessLogs = await GetDataAccessLogsAsync(correlationId, 0, take, cancellationToken);
+        var authenticationLogs = await GetAuthenticationLogsAsync(correlationId, 0, take, cancellationToken);
+        var securityEvents = await GetSecurityEventsAsync(correlationId, 0, take, cancellationToken);
+        var authorizationLogs = await GetAuthorizationLogsAsync(correlationId, 0, take, cancellationToken);
+        var schedulerHistory = await GetSchedulerHistoryAsync(correlationId, 0, take, cancellationToken);
+        var retryHistory = await GetRetryHistoryAsync(correlationId, 0, take, cancellationToken);
+        var errors = await GetErrorLogsAsync(correlationId, 0, take, cancellationToken);
+        var apiRequests = await GetApiRequestLogsAsync(correlationId, 0, take, cancellationToken);
+        var exports = await GetExportHistoryAsync(correlationId, 0, take, cancellationToken);
+        var notifications = await GetNotificationHistoryAsync(correlationId, 0, take, cancellationToken);
+        var validationFailures = await GetValidationFailuresAsync(correlationId, 0, take, cancellationToken);
 
         return new CorrelationSearchResultDto(
-            correlationId, pipelineRun, auditLogs, dataAccessLogs, authenticationLogs, securityEvents, authorizationLogs,
-            schedulerHistory, retryHistory, errors, apiRequests, exports, notifications, validationFailures);
+            correlationId, pipelineRun, auditLogs.Items, dataAccessLogs.Items, authenticationLogs.Items,
+            securityEvents.Items, authorizationLogs.Items, schedulerHistory.Items, retryHistory.Items,
+            errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items);
     }
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)
@@ -380,5 +455,10 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .ToListAsync(cancellationToken);
     }
 
+    private static PagedResult<T> ToPaged<T>(IReadOnlyList<T> items, int totalCount, int skip, int take) =>
+        new(items, totalCount, (NormalizeSkip(skip) / take) + 1, take);
+
     private static int NormalizeTake(int take) => take is <= 0 or > 500 ? 200 : take;
+
+    private static int NormalizeSkip(int skip) => skip < 0 ? 0 : skip;
 }

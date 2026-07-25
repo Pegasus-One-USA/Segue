@@ -30,7 +30,9 @@ public sealed class ErrorLog : Entity<Guid>, IAppendOnlyEntity
         string? endpointId = null,
         string? requestId = null,
         string? traceId = null,
-        string? spanId = null)
+        string? spanId = null,
+        string? diagnosisAction = null,
+        string? diagnosisCause = null)
     {
         Id = id;
         OccurredOnUtc = occurredOnUtc;
@@ -49,6 +51,8 @@ public sealed class ErrorLog : Entity<Guid>, IAppendOnlyEntity
         RequestId = requestId;
         TraceId = traceId;
         SpanId = spanId;
+        DiagnosisAction = diagnosisAction;
+        DiagnosisCause = diagnosisCause;
     }
 
     public DateTime OccurredOnUtc { get; private set; }
@@ -76,4 +80,14 @@ public sealed class ErrorLog : Entity<Guid>, IAppendOnlyEntity
     public string? RequestId { get; private set; }
     public string? TraceId { get; private set; }
     public string? SpanId { get; private set; }
+
+    /// <summary>Persisted <c>DiagnosisAction</c> name (SelfFix/ContactSupport/Unknown) — who should act on this
+    /// error, computed once by <c>IFailureDiagnosisClassifier</c> at capture time. Stored as a plain string (like
+    /// <see cref="Category"/>) rather than referencing the FHIRBridge.Governance enum directly, since Domain must
+    /// not depend on that building block.</summary>
+    public string? DiagnosisAction { get; private set; }
+
+    /// <summary>Plain-language cause paired with <see cref="DiagnosisAction"/> — sourced from the same computation
+    /// as <see cref="UserFriendlyMessage"/>, so message text and any UI badge can't disagree.</summary>
+    public string? DiagnosisCause { get; private set; }
 }
