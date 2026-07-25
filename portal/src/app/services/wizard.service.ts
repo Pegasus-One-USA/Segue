@@ -374,7 +374,12 @@ export class WizardService {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,
         tokenEndpoint:       fields['Token endpoint'] || null,
-        scopes:              this.resources().length ? this.scopeString().split(' ').filter(Boolean) : [],
+        // ScopeBuilderService.buildScopes already includes the base auth-flow scopes (openid/fhirUser/
+        // launch/offline_access) for an interactive app regardless of how many resources are passed — so
+        // this stays correct even with zero resources (the common case for a brand-new source; real
+        // resource-derived scopes get filled in later by EpicSourceConnectionScopeSyncService once a
+        // workflow wires this source to a destination — see epic-audience-form.component.ts).
+        scopes:              this.scopeString().split(' ').filter(Boolean),
         clientSecretKeyVaultName: null,
         clientSecretName:         null,
         privateKeyKeyVaultName:   liveAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
@@ -406,8 +411,15 @@ export class WizardService {
     const id = isCanvas ? canvasExistingSourceConnectionId : this.entityId();
     const obs = id ? this.sourceConnectionSvc.update(id, request) : this.sourceConnectionSvc.create(request);
 
+    console.log(
+      `%c[WizardService] ${id ? 'PUT (update)' : 'POST (create)'} SourceConnection — real request JSON:`,
+      'color:#0076A8;font-weight:700',
+      request,
+    );
+
     obs.subscribe({
       next: dto => {
+        console.log('%c[WizardService] SourceConnection saved — server response:', 'color:#10B981;font-weight:700', dto);
         if (isCanvas) {
           // Stamp the real, server-created id onto the node's fields right away — the same key
           // findLaunchSourceId()/workflow-build-assembler.service.ts already read as "already resolved".

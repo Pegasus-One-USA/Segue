@@ -18,6 +18,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         var repeatFields = new List<(string Target, List<object?> Values)>();
         // table name -> ordered rows keyed by index path
         var childTables = new Dictionary<string, Dictionary<string, Dictionary<string, object?>>>(StringComparer.OrdinalIgnoreCase);
+        var referenceLookups = new List<MappingReferenceLookupDto>();
 
         foreach (var field in fields)
         {
@@ -107,6 +108,25 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                     parent[field.TargetField] = values[0];
                     break;
             }
+
+            // A field marked as a FHIR reference (e.g. "$.subject.reference" = "Patient/xyz") can't be written
+            // verbatim — the target column is normally a FK expecting another table's real primary key, not a
+            // bare FHIR id string. Extract that id and record what to resolve it against; the writer performs
+            // the actual lookup once the referenced table's own rows have been written. Only meaningful for the
+            // single-value policies above (RepeatParent/SeparateDestination/StoreJson fields aren't references).
+            if (!string.IsNullOrWhiteSpace(field.ReferenceLookupTable)
+                && !string.IsNullOrWhiteSpace(field.ReferenceLookupKeyColumn)
+                && policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple)
+            {
+                var rawReference = parent.TryGetValue(field.TargetField, out var rawValue) ? rawValue as string : null;
+                referenceLookups.Add(new MappingReferenceLookupDto(
+                    field.TargetField, field.ReferenceLookupTable!, field.ReferenceLookupKeyColumn!, ExtractReferenceId(rawReference)));
+
+                // Clear the raw string: an unresolved lookup should fail loudly at write time with a clear
+                // "no matching row" error, not a confusing type-conversion error from inserting "Patient/xyz"
+                // as-is into what's normally a bigint column.
+                parent[field.TargetField] = null;
+            }
         }
 
         var rowsList = BuildParentRows(parent, repeatFields);
@@ -114,7 +134,24 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             .Select(kv => new MappingChildTableDto(kv.Key, kv.Value.Values.Cast<IReadOnlyDictionary<string, object?>>().ToList()))
             .ToList();
 
-        return new MappingTestResultDto(rowsList[0], errors, rowsList, childTableDtos);
+        return new MappingTestResultDto(
+            rowsList[0], errors, rowsList, childTableDtos,
+            referenceLookups.Count > 0 ? referenceLookups : null);
+    }
+
+    /// <summary>Extracts the resource-local id from a FHIR reference string — "Patient/xyz" or an absolute URL
+    /// ending "…/Patient/xyz" both yield "xyz"; a bare id with no "/" is returned as-is. Null/blank input (no
+    /// reference present on this resource) yields null — nothing to resolve, so the target column is left
+    /// unpopulated rather than guessing.</summary>
+    private static string? ExtractReferenceId(string? rawReference)
+    {
+        if (string.IsNullOrWhiteSpace(rawReference))
+        {
+            return null;
+        }
+
+        var slashIndex = rawReference.LastIndexOf('/');
+        return slashIndex >= 0 ? rawReference[(slashIndex + 1)..] : rawReference;
     }
 
     private static List<IReadOnlyDictionary<string, object?>> BuildParentRows(

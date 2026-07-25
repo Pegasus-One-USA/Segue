@@ -245,13 +245,15 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         var resultColumns = new List<DestinationColumnSchemaDto>
         {
-            new("Id", "bigint", "Integer", false, null),
+            new("Id", "bigint", "Integer", false, null, IsPrimaryKey: true),
         };
         resultColumns.AddRange(columns.Select(c =>
             new DestinationColumnSchemaDto(c.Name, c.NormalizedType, MapSqlServerType(c.NormalizedType.Split('(')[0]), true, c.MaxLength)));
-        if (parent is not null)
+        if (parent is { } fkParent)
         {
-            resultColumns.Add(new DestinationColumnSchemaDto(fkColumnName!, "bigint", "Integer", false, null));
+            resultColumns.Add(new DestinationColumnSchemaDto(
+                fkColumnName!, "bigint", "Integer", false, null,
+                IsForeignKey: true, References: $"{fkParent.SchemaName}.{fkParent.TableName}.{fkParent.ColumnName}"));
         }
 
         var table = new DestinationTableSchemaDto(schemaName, tableName, $"{schemaName}.{tableName}", resultColumns);
@@ -332,6 +334,8 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         var finalColumnName = columnName;
         bool isNullable;
+        bool isPrimaryKey;
+        string? references;
         try
         {
             await using var connection = await OpenConnectionAsync(
@@ -356,6 +360,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             }
 
             isNullable = await GetColumnNullableAsync(connection, schemaName, tableName, finalColumnName, cancellationToken);
+            (isPrimaryKey, references) = await GetColumnKeyInfoAsync(connection, schemaName, tableName, finalColumnName, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -366,7 +371,8 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         var typeFamily = normalizedDataType.Split('(')[0];
         var column = new DestinationColumnSchemaDto(
-            finalColumnName, normalizedDataType, MapSqlServerType(typeFamily), isNullable, maxLength);
+            finalColumnName, normalizedDataType, MapSqlServerType(typeFamily), isNullable, maxLength,
+            isPrimaryKey, references is not null, references);
         return new SchemaMutationResultDto(true, null, column);
     }
 
@@ -428,13 +434,77 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
+        var isSqlServerFamily = type is DestinationType.SqlServer or DestinationType.AzureSql;
+
+        // PK/FK constraints are only readable from SQL Server's own sys.* catalog views — PostgreSQL/MySQL
+        // columns keep IsPrimaryKey=false/References=null (see DestinationColumnSchemaDto's own doc comment).
+        var keyMetadata = isSqlServerFamily
+            ? await ReadSqlServerKeyMetadataAsync(connection, cancellationToken)
+            : new Dictionary<string, (bool IsPrimaryKey, string? References)>();
+
         await using var command = connection.CreateCommand();
-        command.CommandText = type is DestinationType.SqlServer or DestinationType.AzureSql
-            ? SqlServerColumnsSql
-            : InformationSchemaSql;
+        command.CommandText = isSqlServerFamily ? SqlServerColumnsSql : InformationSchemaSql;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await ReadColumnsAsync(reader, MapType(type), cancellationToken);
+        return await ReadColumnsAsync(reader, MapType(type), keyMetadata, cancellationToken);
+    }
+
+    /// <summary>
+    /// One row per column that is a primary key and/or a foreign key, across every table in the database —
+    /// read once per probe/schema-load and merged into ReadColumnsAsync's per-column output by "schema.table.column"
+    /// key, rather than guessing PK/FK from a column's name (e.g. "Id", "{Table}Id"). Composite keys spanning
+    /// several columns still report each participating column's own IsPrimaryKey/References independently.
+    /// </summary>
+    private static async Task<Dictionary<string, (bool IsPrimaryKey, string? References)>> ReadSqlServerKeyMetadataAsync(
+        DbConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var metadata = new Dictionary<string, (bool IsPrimaryKey, string? References)>(StringComparer.OrdinalIgnoreCase);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = SqlServerBulkKeyMetadataSql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var key = $"{reader.GetString(0)}.{reader.GetString(1)}.{reader.GetString(2)}";
+            var isPrimaryKey = reader.GetInt32(3) == 1;
+            string? references = reader.IsDBNull(4)
+                ? null
+                : $"{reader.GetString(4)}.{reader.GetString(5)}.{reader.GetString(6)}";
+
+            metadata[key] = metadata.TryGetValue(key, out var existing)
+                ? (existing.IsPrimaryKey || isPrimaryKey, existing.References ?? references)
+                : (isPrimaryKey, references);
+        }
+
+        return metadata;
+    }
+
+    /// <summary>Same PK/FK lookup as <see cref="ReadSqlServerKeyMetadataAsync"/>, scoped to one already-known
+    /// column — used right after AlterColumnAsync's rename/retype, where re-running the bulk, whole-database
+    /// query would be wasteful for a single column whose key status could only be reported stale otherwise.</summary>
+    private static async Task<(bool IsPrimaryKey, string? References)> GetColumnKeyInfoAsync(
+        DbConnection connection,
+        string schemaName,
+        string tableName,
+        string columnName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = SqlServerSingleColumnKeyMetadataSql;
+        AddParameter(command, "@schema", schemaName);
+        AddParameter(command, "@table", tableName);
+        AddParameter(command, "@column", columnName);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return (false, null);
+        }
+
+        var isPrimaryKey = reader.GetInt32(0) == 1;
+        string? references = reader.IsDBNull(1) ? null : $"{reader.GetString(1)}.{reader.GetString(2)}.{reader.GetString(3)}";
+        return (isPrimaryKey, references);
     }
 
     private static string BuildConnectionString(DestinationConnectionProbeRequest request)
@@ -518,9 +588,53 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION;
         """;
 
+    // Only columns that ARE a primary key and/or a foreign key are returned — every other column is
+    // implicitly neither, so the result set stays small regardless of database size. ReferencedSchema/
+    // ReferencedTable/ReferencedColumn are NULL for a plain (non-FK) primary key column.
+    private const string SqlServerBulkKeyMetadataSql = """
+        SELECT s.name, t.name, c.name,
+               CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END,
+               rs.name, rt.name, rc.name
+        FROM sys.columns c
+        JOIN sys.tables t ON t.object_id = c.object_id
+        JOIN sys.schemas s ON s.schema_id = t.schema_id
+        LEFT JOIN (
+            SELECT ic.object_id, ic.column_id
+            FROM sys.index_columns ic
+            JOIN sys.indexes i ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+            WHERE i.is_primary_key = 1
+        ) pk ON pk.object_id = c.object_id AND pk.column_id = c.column_id
+        LEFT JOIN sys.foreign_key_columns fkc ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
+        LEFT JOIN sys.tables rt ON rt.object_id = fkc.referenced_object_id
+        LEFT JOIN sys.schemas rs ON rs.schema_id = rt.schema_id
+        LEFT JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+        WHERE s.name NOT IN ('sys', 'INFORMATION_SCHEMA') AND (pk.column_id IS NOT NULL OR fkc.parent_column_id IS NOT NULL);
+        """;
+
+    // Same PK/FK shape as SqlServerBulkKeyMetadataSql, scoped to one column via @schema/@table/@column.
+    private const string SqlServerSingleColumnKeyMetadataSql = """
+        SELECT CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END,
+               rs.name, rt.name, rc.name
+        FROM sys.columns c
+        JOIN sys.tables t ON t.object_id = c.object_id AND t.name = @table
+        JOIN sys.schemas s ON s.schema_id = t.schema_id AND s.name = @schema
+        LEFT JOIN (
+            SELECT ic.object_id, ic.column_id
+            FROM sys.index_columns ic
+            JOIN sys.indexes i ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+            WHERE i.is_primary_key = 1
+        ) pk ON pk.object_id = c.object_id AND pk.column_id = c.column_id
+        LEFT JOIN sys.foreign_key_columns fkc ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
+        LEFT JOIN sys.tables rt ON rt.object_id = fkc.referenced_object_id
+        LEFT JOIN sys.schemas rs ON rs.schema_id = rt.schema_id
+        LEFT JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+        WHERE c.name = @column;
+        """;
+
     private static async Task<List<DestinationTableSchemaDto>> ReadColumnsAsync(
         DbDataReader reader,
         Func<string, string> mapType,
+        IReadOnlyDictionary<string, (bool IsPrimaryKey, string? References)> keyMetadata,
         CancellationToken cancellationToken)
     {
         var tables = new Dictionary<string, List<DestinationColumnSchemaDto>>(StringComparer.OrdinalIgnoreCase);
@@ -530,6 +644,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         {
             var schemaName = reader.GetString(0);
             var tableName = reader.GetString(1);
+            var columnName = reader.GetString(2);
             var fullName = $"{schemaName}.{tableName}";
             var dataType = reader.GetString(3);
 
@@ -548,12 +663,19 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 tableNames[fullName] = (schemaName, tableName);
             }
 
+            var (isPrimaryKey, references) = keyMetadata.TryGetValue($"{fullName}.{columnName}", out var key)
+                ? key
+                : (false, null);
+
             columns.Add(new DestinationColumnSchemaDto(
-                reader.GetString(2),
+                columnName,
                 dataType,
                 mapType(dataType),
                 string.Equals(reader.GetString(4), "YES", StringComparison.OrdinalIgnoreCase),
-                maxLength));
+                maxLength,
+                isPrimaryKey,
+                references is not null,
+                references));
         }
 
         return tables

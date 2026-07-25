@@ -82,13 +82,7 @@ public sealed class TerminologyMappedRecordNormalizationService : IMappedRecordN
             values[field.TargetField] = lookup.Display;
         }
 
-        return new MappedDestinationRecord(
-            request.Record.PipelineRunId,
-            request.Record.ResourceType,
-            request.Record.DestinationObject,
-            request.Record.SourceResourceId,
-            values,
-            request.Record.SourceJson);
+        return request.Record with { Values = values };
     }
 
     private static string? ResolveString(JsonElement root, string? jsonPath)

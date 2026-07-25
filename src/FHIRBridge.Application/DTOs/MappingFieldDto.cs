@@ -19,4 +19,6 @@ public sealed record MappingFieldDto(
     IReadOnlyList<string>? ArrayAncestors = null,
     string? ParentTable = null,
     string? ParentKeyColumn = null,
-    string? ForeignKeyColumn = null);
+    string? ForeignKeyColumn = null,
+    string? ReferenceLookupTable = null,
+    string? ReferenceLookupKeyColumn = null);

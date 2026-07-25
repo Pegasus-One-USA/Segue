@@ -67,74 +67,115 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        IReadOnlyCollection<MappingFieldDto> fields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
-        var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
-        var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
+        var configuredFields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
+        var configuredResourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
+        var configuredDestinationObject = ReadStringConfiguration(node, "destinationObject") ?? configuredResourceType;
+        Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId);
+        Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId);
+        Guid.TryParse(ReadStringConfiguration(node, "mappingProfileId"), out var configuredMappingProfileId);
 
-        // Resolve a real MappingProfile (fields + resource type + destination object) preferring the SAME
-        // natural key (resourceType, sourceConnectionId, destinationId) MappingImportService/ConfigurationService
-        // already de-duplicate on — this is what actually exists for this node's source/destination combination
-        // right now, rather than trusting whatever mappingProfileId happened to get stamped onto the node at
-        // the last save (which can go stale: a later save can mint a different profile for the same
-        // combination, or the stamp can simply be wrong — see the mapping-profile-id bugs this guards against).
-        MappingProfile? profile = null;
-        if (_configurationRepository is not null)
+        var records = new List<MappedDestinationRecord>();
+
+        // A single Field Mapping node can receive a heterogeneous batch — e.g. an EpicSource node configured
+        // for both Patient and Observation scopes feeds one Mapping node before a single Destination node.
+        // Every resource type MUST be mapped through its OWN MappingProfile: applying the node's one resolved
+        // profile to every envelope regardless of its real ResourceType isn't just "the other types go
+        // unmapped" — their JSON still gets walked against whatever fields happen to exist (almost always just
+        // the root "id"), silently producing bogus rows (e.g. an Observation's id landing in the Patient table
+        // as a garbage "patient" row with every other column null — a real incident this grouping prevents).
+        foreach (var group in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs)
+            .GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase))
         {
-            if (Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId) &&
-                Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId))
+            var resourceType = group.Key;
+
+            // Resolve a real MappingProfile (fields + resource type + destination object) preferring the SAME
+            // natural key (resourceType, sourceConnectionId, destinationId) MappingImportService/ConfigurationService
+            // already de-duplicate on — this is what actually exists for this node's source/destination combination
+            // right now, rather than trusting whatever mappingProfileId happened to get stamped onto the node at
+            // the last save (which can go stale: a later save can mint a different profile for the same
+            // combination, or the stamp can simply be wrong — see the mapping-profile-id bugs this guards against).
+            MappingProfile? profile = null;
+            if (_configurationRepository is not null)
             {
-                profile = await _configurationRepository.FindMappingProfileAsync(
-                    resourceType, sourceConnectionId, destinationId, cancellationToken);
+                if (sourceConnectionId != Guid.Empty && destinationId != Guid.Empty)
+                {
+                    profile = await _configurationRepository.FindMappingProfileAsync(
+                        resourceType, sourceConnectionId, destinationId, cancellationToken);
+                }
+
+                // Fallback for a node saved before sourceConnectionId/destinationId were stamped onto it, or
+                // where the natural-key lookup finds nothing — only for the node's OWN configured resource
+                // type, since the stamped mappingProfileId can only ever refer to one specific profile; it must
+                // never be reused as a stand-in for a different resource type's mapping.
+                if (profile is null
+                    && string.Equals(resourceType, configuredResourceType, StringComparison.OrdinalIgnoreCase)
+                    && configuredMappingProfileId != Guid.Empty)
+                {
+                    profile = await _configurationRepository.GetMappingProfileAsync(configuredMappingProfileId, cancellationToken);
+                }
             }
 
-            // Fallback for a node saved before sourceConnectionId/destinationId were stamped onto it, or where
-            // the natural-key lookup finds nothing (e.g. the profile's own resourceType was edited since).
-            if (profile is null && Guid.TryParse(ReadStringConfiguration(node, "mappingProfileId"), out var mappingProfileId))
-            {
-                profile = await _configurationRepository.GetMappingProfileAsync(mappingProfileId, cancellationToken);
-            }
-
+            IReadOnlyCollection<MappingFieldDto> fields;
+            string destinationObject;
             if (profile is not null)
             {
                 fields = profile.Fields.Select(ConfigurationMapper.ToDto).ToArray();
                 resourceType = profile.ResourceType;
                 destinationObject = profile.DestinationObject;
             }
-        }
-
-        var records = new List<MappedDestinationRecord>();
-
-        foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
-        {
-            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
-            var mapped = _mappingEngine?.Map(sourceJson, fields);
-            if (mapped is null)
+            else if (string.Equals(resourceType, configuredResourceType, StringComparison.OrdinalIgnoreCase))
             {
-                records.Add(new MappedDestinationRecord(
-                    context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
-                    new Dictionary<string, object?>(), sourceJson));
+                // No repository (e.g. unit tests) or nothing resolvable at all for the node's own configured
+                // resource type — fall back to whatever fields were embedded directly on the node's config.
+                fields = configuredFields;
+                destinationObject = configuredDestinationObject;
+            }
+            else
+            {
+                // No profile exists for this OTHER resource type — nothing tells us how to map it, so skip it
+                // rather than guess; guessing (reusing a different resource type's fields) is exactly the
+                // silent-corruption bug this method guards against.
                 continue;
             }
 
-            // ArrayPolicy.SeparateDestination child-table rows travel as MappedChildTableRecords attached to
-            // the parent row (not as separate flat records with their own DestinationObject) — the writer
-            // resolves a single target table per write call, so a flat child record would otherwise get
-            // written straight into the PARENT's table ("Invalid column name" for every child-only column).
-            var childTables = BuildChildTableRecords(mapped.ChildTables, fields, resourceType);
-
-            // Parent row (Scalar/FirstItem/RejectIfMultiple/RepeatParent fields land here). Skipped only when
-            // there's truly nothing to write — no parent-level field AND no child table either. A node whose
-            // fields are entirely SeparateDestination still needs a parent row emitted (even with empty Values)
-            // because the writer captures the child rows' FK value off THAT row's own write (OUTPUT INSERTED) —
-            // dropping it would silently lose the child data instead of just writing an extra near-empty row.
-            if (mapped.Values.Count > 0 || childTables is not null)
+            foreach (var resource in group)
             {
-                var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
-                foreach (var parentRow in dataset?.ParentRows ?? [mapped.Values])
+                var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                var mapped = _mappingEngine?.Map(sourceJson, fields);
+                if (mapped is null)
                 {
                     records.Add(new MappedDestinationRecord(
                         context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
-                        parentRow, sourceJson, childTables));
+                        new Dictionary<string, object?>(), sourceJson));
+                    continue;
+                }
+
+                // ArrayPolicy.SeparateDestination child-table rows travel as MappedChildTableRecords attached to
+                // the parent row (not as separate flat records with their own DestinationObject) — the writer
+                // resolves a single target table per write call, so a flat child record would otherwise get
+                // written straight into the PARENT's table ("Invalid column name" for every child-only column).
+                var childTables = BuildChildTableRecords(mapped.ChildTables, fields, resourceType);
+                var referenceLookups = mapped.ReferenceLookups is { Count: > 0 }
+                    ? mapped.ReferenceLookups
+                        .Select(l => new MappedReferenceLookup(l.TargetField, l.LookupTable, l.LookupKeyColumn, l.ReferenceId))
+                        .ToArray()
+                    : null;
+
+                // Parent row (Scalar/FirstItem/RejectIfMultiple/RepeatParent fields land here). Skipped only
+                // when there's truly nothing to write — no parent-level field AND no child table either. A node
+                // whose fields are entirely SeparateDestination still needs a parent row emitted (even with
+                // empty Values) because the writer captures the child rows' FK value off THAT row's own write
+                // (OUTPUT INSERTED) — dropping it would silently lose the child data instead of just writing an
+                // extra near-empty row.
+                if (mapped.Values.Count > 0 || childTables is not null)
+                {
+                    var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
+                    foreach (var parentRow in dataset?.ParentRows ?? [mapped.Values])
+                    {
+                        records.Add(new MappedDestinationRecord(
+                            context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
+                            parentRow, sourceJson, childTables, referenceLookups));
+                    }
                 }
             }
         }

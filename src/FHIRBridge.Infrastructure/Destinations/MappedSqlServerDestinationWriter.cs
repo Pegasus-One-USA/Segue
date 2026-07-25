@@ -88,17 +88,19 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
 
         foreach (var record in records)
         {
+            var resolvedRecord = await ResolveReferenceLookupsAsync(connection, record, cancellationToken);
+
             IReadOnlyDictionary<string, object?> capturedParentColumns;
             switch (target.WriteMode)
             {
                 case SqlDestinationWriteMode.Upsert:
                     capturedParentColumns = await UpsertRecordAsync(
-                        connection, target.SchemaName, target.TableName, record, keyColumn, existingColumns, cancellationToken);
+                        connection, target.SchemaName, target.TableName, resolvedRecord, keyColumn, existingColumns, cancellationToken);
                     break;
                 case SqlDestinationWriteMode.Update:
                     capturedParentColumns = await UpdateOnlyRecordAsync(
-                        connection, target.SchemaName, target.TableName, record, keyColumn, existingColumns, cancellationToken);
-                    if (capturedParentColumns.Count == 0 && record.ChildTables is { Count: > 0 })
+                        connection, target.SchemaName, target.TableName, resolvedRecord, keyColumn, existingColumns, cancellationToken);
+                    if (capturedParentColumns.Count == 0 && resolvedRecord.ChildTables is { Count: > 0 })
                     {
                         // Nothing matched — the "parent" row being updated doesn't exist, so there's no real
                         // parent for these children to attach to. Skip them entirely rather than writing
@@ -108,19 +110,19 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
                     break;
                 case SqlDestinationWriteMode.Cdc:
                     capturedParentColumns = await InsertRecordAsync(
-                        connection, target.SchemaName, target.TableName, record, existingColumns, cancellationToken);
-                    await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
+                        connection, target.SchemaName, target.TableName, resolvedRecord, existingColumns, cancellationToken);
+                    await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, resolvedRecord, cancellationToken);
                     break;
                 default:
                     capturedParentColumns = await InsertRecordAsync(
-                        connection, target.SchemaName, target.TableName, record, existingColumns, cancellationToken);
+                        connection, target.SchemaName, target.TableName, resolvedRecord, existingColumns, cancellationToken);
                     break;
             }
 
-            if (record.ChildTables is { Count: > 0 } childTables)
+            if (resolvedRecord.ChildTables is { Count: > 0 } childTables)
             {
                 await WriteChildTablesAsync(
-                    connection, record, childTables, capturedParentColumns,
+                    connection, resolvedRecord, childTables, capturedParentColumns,
                     deleteExistingChildRows: target.WriteMode is SqlDestinationWriteMode.Upsert or SqlDestinationWriteMode.Update,
                     cancellationToken);
             }
@@ -250,6 +252,55 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
 
         var normalized = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath;
         return string.Equals(normalized, "id", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves every <see cref="MappedDestinationRecord.ReferenceLookups"/> entry (e.g. Observation.PatientId,
+    /// sourced from "$.subject.reference") against the table it actually points at, and returns a record whose
+    /// <see cref="MappedDestinationRecord.Values"/> carry the resolved real primary key instead of the raw FHIR
+    /// reference id the mapping engine extracted. Requires the referenced row to already exist — the Runtime-DAG
+    /// destination executor orders resource-type groups so a referenced table's group is written before any
+    /// group that references it, within one destination write.
+    /// </summary>
+    private static async Task<MappedDestinationRecord> ResolveReferenceLookupsAsync(
+        SqlConnection connection, MappedDestinationRecord record, CancellationToken cancellationToken)
+    {
+        if (record.ReferenceLookups is not { Count: > 0 } lookups)
+        {
+            return record;
+        }
+
+        var resolvedValues = new Dictionary<string, object?>(record.Values, StringComparer.OrdinalIgnoreCase);
+        foreach (var lookup in lookups)
+        {
+            if (string.IsNullOrWhiteSpace(lookup.ReferenceId))
+            {
+                // The source resource had no reference at that path — nothing to resolve; the target column is
+                // left as whatever JsonMappingEngine already put there (null), so a NOT NULL column fails with
+                // its own clear error rather than this method guessing a value.
+                continue;
+            }
+
+            var (schema, table) = ParseDestinationObject(lookup.LookupTable);
+            var lookupColumn = ValidateIdentifier(lookup.LookupKeyColumn);
+            var sql = $"SELECT TOP (1) [Id] FROM [{schema}].[{table}] WHERE [{lookupColumn}] = @referenceId;";
+
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@referenceId", lookup.ReferenceId);
+            var resolved = await command.ExecuteScalarAsync(cancellationToken);
+
+            if (resolved is null or DBNull)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot resolve '{lookup.TargetField}': no row in [{schema}].[{table}] has " +
+                    $"[{lookupColumn}] = '{lookup.ReferenceId}'. The referenced resource must be written before " +
+                    "this one, in the same destination write.");
+            }
+
+            resolvedValues[lookup.TargetField] = resolved;
+        }
+
+        return record with { Values = resolvedValues };
     }
 
     private static async Task<IReadOnlyDictionary<string, object?>> InsertRecordAsync(

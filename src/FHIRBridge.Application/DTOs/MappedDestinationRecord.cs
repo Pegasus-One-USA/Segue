@@ -16,7 +16,21 @@ public sealed record MappedDestinationRecord(
     /// Child-table rows (from SeparateDestination-array fields) produced alongside this parent row. Null/empty
     /// when the mapping has no child tables.
     /// </summary>
-    IReadOnlyList<MappedChildTableRecord>? ChildTables = null);
+    IReadOnlyList<MappedChildTableRecord>? ChildTables = null,
+    /// <summary>Fields whose value must be resolved against another already-written table before this row is
+    /// written (see <see cref="MappedReferenceLookup"/>). Null/empty when the mapping has no reference fields.</summary>
+    IReadOnlyList<MappedReferenceLookup>? ReferenceLookups = null);
+
+/// <summary>
+/// One field on a <see cref="MappedDestinationRecord"/> whose written value must come from looking up another
+/// table rather than being written verbatim — e.g. Observation.PatientId resolved from the id embedded in
+/// "$.subject.reference" against Patient.PatientId, to obtain Patient's real (bigint) primary key.
+/// </summary>
+public sealed record MappedReferenceLookup(
+    string TargetField,
+    string LookupTable,
+    string LookupKeyColumn,
+    string? ReferenceId);
 
 /// <summary>
 /// One child table's rows for a single parent <see cref="MappedDestinationRecord"/>. The writer links each

@@ -145,4 +145,59 @@ public sealed class JsonMappingEngineTests
         row["city"].Should().Be("Springfield");
         row.Should().NotContainKey("periodEndDate", "the field had zero matches on this occurrence, so it contributes nothing rather than a spurious null column");
     }
+
+    [Fact]
+    public void A_reference_field_extracts_the_resource_local_id_and_clears_the_raw_value()
+    {
+        // Regression coverage for the Observation -> Patient FK gap: "$.subject.reference" resolves to
+        // "Patient/eAB3mDIBBcyUKviyzrxsnAw", which is never itself a valid value for a bigint FK column — the
+        // engine must extract just the id and hand the raw reference off for the WRITER to resolve, rather than
+        // leaving the un-resolvable string sitting in Values.
+        const string json = """{ "subject": { "reference": "Patient/eAB3mDIBBcyUKviyzrxsnAw", "display": "Jane Doe" } }""";
+
+        var field = new MappingFieldDto(
+            TargetField: "PatientId",
+            JsonPath: "$.subject.reference",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "directField",
+            ReferenceLookupTable: "Patient",
+            ReferenceLookupKeyColumn: "PatientId");
+
+        var result = _engine.Map(json, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Values["PatientId"].Should().BeNull("the raw reference string is never a valid value for the target column — the writer resolves it");
+        result.ReferenceLookups.Should().ContainSingle();
+        var lookup = result.ReferenceLookups!.Single();
+        lookup.TargetField.Should().Be("PatientId");
+        lookup.LookupTable.Should().Be("Patient");
+        lookup.LookupKeyColumn.Should().Be("PatientId");
+        lookup.ReferenceId.Should().Be("eAB3mDIBBcyUKviyzrxsnAw");
+    }
+
+    [Fact]
+    public void A_reference_field_with_no_reference_present_yields_a_null_reference_id_not_an_error()
+    {
+        const string json = """{ "status": "final" }""";
+
+        var field = new MappingFieldDto(
+            TargetField: "PatientId",
+            JsonPath: "$.subject.reference",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "directField",
+            ReferenceLookupTable: "Patient",
+            ReferenceLookupKeyColumn: "PatientId");
+
+        var result = _engine.Map(json, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Values["PatientId"].Should().BeNull();
+        // No reference lookup is even recorded — there's nothing to resolve, so the writer leaves the column
+        // as whatever's already there and lets a NOT NULL constraint fail with its own clear message.
+        (result.ReferenceLookups ?? []).Should().BeEmpty();
+    }
 }

@@ -401,9 +401,12 @@ export class EpicAudienceFormComponent implements OnInit {
     // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
     launchDisplayMode: ['Embedded'],
     callbackUrl:       ['http://localhost:5000/api/v1/oauth/callback', [Validators.required, urlValidator]],
-    // No UI picks this anymore (Resource Type & Scopes was removed from the form) — every showResourcePicker
-    // audience always gets the full supported set; see clearInapplicableFields for the audience-switch case.
-    resources:         [[...SUPPORTED_RESOURCE_TYPES] as string[], Validators.required],
+    // No UI picks this anymore (Resource Type & Scopes was removed from the form) — a brand-new source
+    // starts with no resource-derived scopes at all. EpicSourceConnectionScopeSyncService (backend) fills
+    // this in for real the first time a workflow referencing this source is built, from the union of every
+    // connected destination's own selected resource types (dest_resources) — see clearInapplicableFields
+    // for the audience-switch case.
+    resources:         [[] as string[]],
     scopeVersion:      ['v2'],
     appName:           ['FHIRBridge Epic'],
     // ── CDS Hooks ──────────────────────────────────────────────────────────────
@@ -830,10 +833,6 @@ export class EpicAudienceFormComponent implements OnInit {
 
     if (prevCfg.showResourcePicker && !nextCfg.showResourcePicker) {
       this.form.patchValue({ resources: [] });
-    } else if (!prevCfg.showResourcePicker && nextCfg.showResourcePicker && !this.isEditing) {
-      // Switching back into a showResourcePicker audience — there's no picker to re-populate it, so
-      // restore the fixed supported set (same default the form starts with).
-      this.form.patchValue({ resources: [...SUPPORTED_RESOURCE_TYPES] });
     }
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
@@ -914,7 +913,9 @@ export class EpicAudienceFormComponent implements OnInit {
     apply('authzEndpoint', !isLoopback, true);
     apply('callbackUrl',   cfg.showRedirect, true);
     apply('launchUrl',     cfg.showLaunchUrl, true);
-    apply('resources',     cfg.showResourcePicker);
+    // Never required — there's no picker to fill it in, and a brand-new source is meant to start with no
+    // resource-derived scopes at all (see the `resources` FormBuilder default above).
+    apply('resources',     false);
     apply('clientSecret',  method === 'secret');
     apply('jwksUrl',       method === 'jwt', true);
     // Epic Backend Services signs a JWT assertion with an RS384 private key referenced by (Key ID, Key Vault Name,
@@ -1327,7 +1328,7 @@ export class EpicAudienceFormComponent implements OnInit {
     // retrieval method's own Resource Type list is currently set.
     this.wiz.resources.set(cfg.showResourcePicker ? (v.resources ?? []) : this.activeRetrievalResourceTypes());
 
-    this.wiz.save({
+    const formValuesToSave = {
       stepName:    resolvedName,
       baseUrl:     v.epicBaseUrl ?? '',
       token:       v.tokenEndpoint ?? '',
@@ -1340,7 +1341,8 @@ export class EpicAudienceFormComponent implements OnInit {
       secretName:  v.privateKeySecretName ?? '',
       redirectUri: v.callbackUrl ?? '',
       launchUrl:   v.launchUrl ?? '',
-    }, {
+    };
+    const fieldsToSave = {
       'Client ID':             v.clientId ?? '',
       'Auth method':           v.authMethod ?? 'secret',
       'Epic audience':         aud,
@@ -1401,8 +1403,13 @@ export class EpicAudienceFormComponent implements OnInit {
         sourceConnectionId: resolvedSourceConnectionId,
         sourceConnectionResolved: 'true',
       } : {}),
-    });
+    };
 
+    console.log('%c[Epic Configuration] "Add to Pipeline" clicked — node data about to be saved:', 'color:#00A89D;font-weight:700');
+    console.log('formValues (connection basics):', formValuesToSave);
+    console.log('fields (everything else stored on the node):', fieldsToSave);
+
+    this.wiz.save(formValuesToSave, fieldsToSave);
     this.saved.emit();
   }
 

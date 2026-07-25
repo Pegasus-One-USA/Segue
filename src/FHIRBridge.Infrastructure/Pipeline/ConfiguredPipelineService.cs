@@ -1049,6 +1049,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             var dataset = _mappingMaterializer.Materialize(mappingProfile.DestinationObject, result);
             var childTables = BuildChildTableRecords(dataset, mappingFields, mappingProfile.ResourceType);
+            var referenceLookups = result.ReferenceLookups is { Count: > 0 }
+                ? result.ReferenceLookups
+                    .Select(l => new MappedReferenceLookup(l.TargetField, l.LookupTable, l.LookupKeyColumn, l.ReferenceId))
+                    .ToArray()
+                : null;
 
             foreach (var parentRow in dataset.ParentRows)
             {
@@ -1059,7 +1064,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     resource.ResourceId,
                     parentRow,
                     resource.RawJson,
-                    childTables);
+                    childTables,
+                    referenceLookups);
 
                 var normalizedMappedRecord = await _mappedRecordNormalizationService.NormalizeAsync(
                     new MappedRecordNormalizationRequest(

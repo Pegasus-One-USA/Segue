@@ -159,7 +159,9 @@ public static class ConfigurationMapper
                 : field.ArrayAncestors.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             field.ParentTable,
             field.ParentKeyColumn,
-            field.ForeignKeyColumn);
+            field.ForeignKeyColumn,
+            field.ReferenceLookupTable,
+            field.ReferenceLookupKeyColumn);
     }
 
     public static ResourcePipelineRouteDto ToDto(ResourcePipelineRoute route)
@@ -210,7 +212,9 @@ public static class ConfigurationMapper
             ArrayAncestors: dto.ArrayAncestors is { Count: > 0 } ? string.Join('|', dto.ArrayAncestors) : null,
             ParentTable: dto.ParentTable,
             ParentKeyColumn: dto.ParentKeyColumn,
-            ForeignKeyColumn: dto.ForeignKeyColumn);
+            ForeignKeyColumn: dto.ForeignKeyColumn,
+            ReferenceLookupTable: dto.ReferenceLookupTable,
+            ReferenceLookupKeyColumn: dto.ReferenceLookupKeyColumn);
     }
 
     public static SourceAuthenticationConfiguration ToDomain(SourceAuthenticationDto dto)

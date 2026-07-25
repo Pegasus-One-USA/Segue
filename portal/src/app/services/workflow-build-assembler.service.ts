@@ -22,9 +22,9 @@ interface DestMappingRow {
   column: string; // destination column
   // Array-aware metadata stamped by the wizard from the backend FHIR catalog. When present these are
   // authoritative; when absent (offline/degraded) we fall back to the naive path conversion below.
-  jsonPath?: string; // e.g. "$.name[*].given[*]"
-  valueType?: string; // String | Integer | Decimal | Boolean | Date | DateTime | Json
-  arrays?: string[]; // array-ancestor fhir paths
+  jsonPath?: string;       // e.g. "$.name[*].given[*]"
+  valueType?: string;      // String | Integer | Decimal | Boolean | Date | DateTime | Json
+  arrays?: string[];       // array-ancestor fhir paths
   // Stamped by field-mapping-model.ts#resolveArrayPolicy — present on every row created by the visual
   // field-mapping canvas; absent on rows saved before that feature existed (pre-migration dest_mappings).
   arrayPolicy?: string;

@@ -5,8 +5,8 @@ import {
 import {
   FormBuilder, Validators, ReactiveFormsModule,
 } from '@angular/forms';
-import { forkJoin, of } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { forkJoin, of, from, Observable } from 'rxjs';
+import { catchError, map, switchMap, concatMap, toArray, finalize } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
@@ -15,7 +15,7 @@ import { DestinationConfigurationService } from '../../../destination-connection
 import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 import { buildConnectionMetadata, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
-import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow } from './field-mapping/field-mapping-model';
+import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow, PendingSchemaOp } from './field-mapping/field-mapping-model';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
 import { MappingSnapshot, MappingSnapshotSummary } from './field-mapping/mapping-snapshot.model';
 import {
@@ -456,37 +456,45 @@ export class DestinationWizardComponent implements OnInit {
     };
   });
 
-  /** A column was really added via the canvas's Add Column modal — append it to the known schema locally.
-   *  Tagged 'userCreated' so a MappingSnapshot can tell it apart from a probed/pre-existing column.
-   *  If `table` is set, the target table didn't already exist and AddColumnAsync auto-created it (e.g. a
-   *  resource's default guessed table name, never chosen from a real probed list) — register it as a
-   *  brand-new sqlTables() entry instead of trying to append to one that was never there. */
+  /** A column was added via the canvas's Add Column modal — upserted (not blindly appended) into the
+   *  known schema, since this fires TWICE for the same column: once immediately with a locally-synthesized
+   *  preview (see field-mapping-canvas.component.ts's submitAddColumn — no DB call has happened yet at
+   *  that point), and again with the backend's authoritative shape once "Add to Pipeline" actually flushes
+   *  the queued ALTER TABLE for real (see flushPendingSchemaOps). Tagged 'userCreated' so a MappingSnapshot
+   *  can tell it apart from a probed/pre-existing column.
+   *  If `table` is set, the target table didn't already exist locally — upserted the same way, by fullName,
+   *  rather than trying (and failing) to append to a table that was never there. */
   onColumnAdded(e: { tableName: string; column: DestinationColumn; table?: DestinationTable }): void {
-    if (e.table && !this.sqlTables().some(t => t.fullName === e.table!.fullName)) {
-      this.sqlTables.update(tables => [...tables, {
-        ...e.table!,
-        origin: 'userCreated',
-        columns: e.table!.columns.map(c => ({ ...c, origin: 'userCreated' })),
-      }]);
+    if (e.table) {
+      const tagged = { ...e.table, origin: 'userCreated' as const, columns: e.table.columns.map(c => ({ ...c, origin: 'userCreated' as const })) };
+      this.sqlTables.update(tables => {
+        const idx = tables.findIndex(t => t.fullName === tagged.fullName);
+        return idx === -1 ? [...tables, tagged] : tables.map((t, i) => i === idx ? tagged : t);
+      });
       return;
     }
     const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
-    this.sqlTables.update(tables => tables.map(t =>
-      t.fullName === e.tableName ? { ...t, columns: [...t.columns, column] } : t
-    ));
+    this.sqlTables.update(tables => tables.map(t => {
+      if (t.fullName !== e.tableName) return t;
+      const idx = t.columns.findIndex(c => c.name === column.name);
+      const columns = idx === -1 ? [...t.columns, column] : t.columns.map((c, i) => i === idx ? column : c);
+      return { ...t, columns };
+    }));
   }
 
-  /** A table was really created via the canvas's "Create a new table…" modal — register the exact
-   *  schema the backend returned (including its FK column, if this was made a child of a parent table),
-   *  rather than guessing one locally. Tagged 'userCreated' (table and all its columns) for the same
-   *  reason as onColumnAdded. */
+  /** A table was created via the canvas's "Create a new table…" modal — upserted (not skipped when
+   *  already present) into the known schema, since this fires TWICE for the same table: once immediately
+   *  with a locally-synthesized preview (no DB call has happened yet at that point — see
+   *  field-mapping-canvas.component.ts's submitCreateTable), and again with the backend's authoritative
+   *  shape (including its FK column, if this was made a child table) once "Add to Pipeline" actually
+   *  flushes the queued CREATE TABLE for real (see flushPendingSchemaOps). Tagged 'userCreated' (table and
+   *  all its columns) for the same reason as onColumnAdded. */
   onTableCreated(table: DestinationTable): void {
-    if (this.sqlTables().some(t => t.fullName === table.fullName)) return;
-    this.sqlTables.update(tables => [...tables, {
-      ...table,
-      origin: 'userCreated',
-      columns: table.columns.map(c => ({ ...c, origin: 'userCreated' })),
-    }]);
+    const tagged = { ...table, origin: 'userCreated' as const, columns: table.columns.map(c => ({ ...c, origin: 'userCreated' as const })) };
+    this.sqlTables.update(tables => {
+      const idx = tables.findIndex(t => t.fullName === tagged.fullName);
+      return idx === -1 ? [...tables, tagged] : tables.map((t, i) => i === idx ? tagged : t);
+    });
   }
 
   /** A column was really dropped via the canvas's delete-column flow — remove it from the known schema. */
@@ -518,6 +526,71 @@ export class DestinationWizardComponent implements OnInit {
    *  store its fields so the source tree for this resource mirrors the payload's actual shape. */
   onSourcePayloadLoaded(e: { resource: string; fields: ResourceFieldDef[] }): void {
     this.payloadFieldsByResource.update(m => ({ ...m, [e.resource]: e.fields }));
+  }
+
+  // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
+  // Every schema-authoring action on the canvas is staged here instead of hitting the database the
+  // moment the user clicks it — nothing real happens until "Add to Pipeline" flushes this queue (see
+  // next()/onSave() calling flushPendingSchemaOps below). The canvas has already applied a local preview
+  // of each op by the time it's queued (see field-mapping-canvas.component.ts), so the mapping UI works
+  // normally throughout; this queue exists purely to run the real DDL, in order, once confirmed.
+  readonly pendingSchemaOps = signal<PendingSchemaOp[]>([]);
+  readonly applyingSchemaOps = signal(false);
+
+  onSchemaOpQueued(op: PendingSchemaOp): void {
+    this.pendingSchemaOps.update(ops => [...ops, op]);
+  }
+
+  /** Runs every queued schema op for real, strictly in the order they were queued (a later op — e.g. add
+   *  column — may depend on an earlier one — e.g. create table — having actually landed first). Stops at
+   *  the first failure: already-applied ops are dropped from the queue (so a retry doesn't repeat them),
+   *  the failing op and anything still after it stay queued, and the caller is told not to proceed with
+   *  the rest of the save so a mapping profile is never persisted against schema that doesn't exist. */
+  flushPendingSchemaOps(): Observable<boolean> {
+    const ops = this.pendingSchemaOps();
+    if (ops.length === 0) return of(true);
+
+    this.applyingSchemaOps.set(true);
+    return from(ops).pipe(
+      concatMap(op => this._applyOneSchemaOp(op).pipe(
+        map(() => {
+          this.pendingSchemaOps.update(list => list.filter(o => o !== op));
+          return true;
+        }),
+      )),
+      toArray(),
+      map(results => results.every(Boolean)),
+      catchError(err => {
+        const msg = err instanceof Error ? err.message : 'Failed to apply a queued schema change.';
+        this.toast.error('Schema change failed', msg);
+        return of(false);
+      }),
+      finalize(() => this.applyingSchemaOps.set(false)),
+    );
+  }
+
+  private _applyOneSchemaOp(op: PendingSchemaOp): Observable<void> {
+    switch (op.kind) {
+      case 'createTable':
+        return this.schemaSvc.createTable(op.request).pipe(map(result => {
+          if (!result.success) throw new Error(`Create table "${op.request.tableName}" failed: ${result.error ?? 'unknown error'}`);
+          if (result.table) this.onTableCreated(result.table);
+        }));
+      case 'addColumn':
+        return this.schemaSvc.addColumn(op.request).pipe(map(result => {
+          if (!result.success || !result.column) throw new Error(`Add column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
+          this.onColumnAdded({ tableName: op.request.tableName, column: result.column, table: result.table ?? undefined });
+        }));
+      case 'dropColumn':
+        return this.schemaSvc.dropColumn(op.request).pipe(map(result => {
+          if (!result.success) throw new Error(`Drop column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
+        }));
+      case 'alterColumn':
+        return this.schemaSvc.alterColumn(op.request).pipe(map(result => {
+          if (!result.success || !result.column) throw new Error(`Update column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
+          this.onColumnAltered({ tableName: op.request.tableName, oldColumnName: op.request.columnName, column: result.column });
+        }));
+    }
   }
 
   // ── select an existing DestinationConfiguration instead of building a new one ───────────────
@@ -744,7 +817,12 @@ export class DestinationWizardComponent implements OnInit {
       this.step.update(x => x + 1);
       this._hasProgressed.set(true);
     } else {
-      this._save();
+      // Nothing hits the real database until this exact moment: every create-table/add-column/drop-column/
+      // alter-column queued while mapping runs for real here, in order, before the mapping profile itself
+      // is ever saved — see flushPendingSchemaOps.
+      this.flushPendingSchemaOps().subscribe(ok => {
+        if (ok) this._save();
+      });
     }
   }
 
@@ -1017,6 +1095,14 @@ export class DestinationWizardComponent implements OnInit {
     return table?.columns.find(c => c.name === column)?.dataType;
   }
 
+  /** Real PK/FK status of one column on any already-known SQL table (see DestinationColumn.isPrimaryKey/
+   *  isForeignKey/references) — undefined for CSV destinations or free-text/pending columns with no real
+   *  schema behind them yet. Same display-only role as dataTypeForTableColumn. */
+  keyInfoForTableColumn(tableFullName: string, column: string): DestinationColumn | undefined {
+    const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
+    return table?.columns.find(c => c.name === column);
+  }
+
   // ── data groups ───────────────────────────────────────────────────────────
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
 
@@ -1186,6 +1272,8 @@ export class DestinationWizardComponent implements OnInit {
   readonly columnsForResourceTargetFn = (r: string): string[] => this.columnsForResourceTarget(r);
   readonly dataTypeForTableColumnFn = (tableFullName: string, column: string): string | undefined =>
     this.dataTypeForTableColumn(tableFullName, column);
+  readonly keyInfoForTableColumnFn = (tableFullName: string, column: string): DestinationColumn | undefined =>
+    this.keyInfoForTableColumn(tableFullName, column);
 
   // ── private ───────────────────────────────────────────────────────────────
   // Seeds the per-resource target (file name / table) for newly-selected resources

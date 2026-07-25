@@ -55,7 +55,15 @@
   &:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-primary); }
 }
 
-.fm-list-caret { font-size: 11px; color: var(--color-muted); width: 12px; }
+.fm-list-caret {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-muted);
+  transition: transform var(--transition-base, 150ms ease);
+
+  &--collapsed { transform: rotate(-90deg); }
+}
 
 .fm-list-count {
   font-family: var(--font-mono);

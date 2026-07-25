@@ -3,6 +3,14 @@ import {
 } from '@angular/core';
 import { MappingRow } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
+import { ChildTableRelation } from './field-mapping-summary.model';
+
+/** Just the PK/FK-relevant slice of DestinationColumn — this card only ever needs to show a badge. */
+export interface FmColumnKeyInfo {
+  isPrimaryKey?: boolean;
+  isForeignKey?: boolean;
+  references?: string | null;
+}
 
 /**
  * One destination card per resource — the table/file-name selector (unchanged from the original
@@ -39,6 +47,13 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   /** Real data type (e.g. "nvarchar(50)") for a probed/created SQL column — undefined for CSV or
    *  free-text columns that have no real schema behind them, in which case no type badge is shown. */
   readonly columnDataType = input<(column: string) => string | undefined>(() => undefined);
+  /** Real PK/FK status for a probed/created SQL column (see DestinationColumn.isPrimaryKey/isForeignKey/
+   *  references) — undefined for CSV or free-text columns that have no real schema behind them, in which
+   *  case no key badge is shown. */
+  readonly columnKeyInfo = input<(column: string) => FmColumnKeyInfo | undefined>(() => undefined);
+  /** Set only when this table was created as a child of another (see ChildTableRelation) — read-only
+   *  display of an already-known relation, same display-only role as columnDataType/columnKeyInfo. */
+  readonly relation = input<ChildTableRelation | undefined>(undefined);
   readonly isArmed = input.required<boolean>();
   readonly isApproximated = input.required<(row: MappingRow) => boolean>();
   readonly x = input.required<number>();
@@ -72,6 +87,32 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly hasValidTarget = computed(() =>
     this.isExtra() || !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetValue())
   );
+
+  /**
+   * Derives the same "child of X via Y" relation straight from the real per-column FK metadata
+   * (columnKeyInfo/DestinationColumn.references) — unlike the `relation` input (only ever populated for
+   * a table created THIS session via "Create a new table…"), this also covers an already-existing table
+   * picked from the database dropdown that just happens to have a real FK constraint. Whichever column
+   * actually has isForeignKey wins; a table normally has at most one FK back to its logical parent.
+   */
+  readonly detectedRelation = computed<ChildTableRelation | undefined>(() => {
+    for (const col of this.columns()) {
+      const info = this.columnKeyInfo()(col);
+      if (info?.isForeignKey && info.references) {
+        const lastDot = info.references.lastIndexOf('.');
+        return {
+          parentTable: info.references.slice(0, lastDot),
+          parentColumn: info.references.slice(lastDot + 1),
+          foreignKeyColumnName: col,
+        };
+      }
+    }
+    return undefined;
+  });
+
+  /** DB-detected relation wins when known; falls back to the explicit `relation` input for a table whose
+   *  columns aren't live yet (e.g. right after creation, before a re-probe, or CSV with no real schema). */
+  readonly relationToShow = computed(() => this.detectedRelation() ?? this.relation());
 
   // ── search ────────────────────────────────────────────────────────────────
   readonly searchQuery = signal('');
@@ -149,6 +190,12 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   }
 
   targetLabel(): string { return this.destType() === 'sql' ? 'Table' : 'File name'; }
+
+  /** "dbo.Patient" -> "Patient" — the relation banner reads better without the repeated schema prefix. */
+  relationParentLabel(): string {
+    const parent = this.relationToShow()?.parentTable ?? '';
+    return parent.includes('.') ? parent.slice(parent.lastIndexOf('.') + 1) : parent;
+  }
 
   onTargetInput(value: string): void {
     if (value === this.createTableOption) { this.createTableRequested.emit(); return; }

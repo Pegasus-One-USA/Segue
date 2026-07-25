@@ -38,6 +38,8 @@
           [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
           [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
           [columnDataType]="columnTypeOn(card.tableName)"
+          [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+          [relation]="relationFor(card.tableName)"
           [isArmed]="!!armedId()"
           [isApproximated]="isApproximatedFn"
           [x]="positionForKey(card.tableName, i).x"
@@ -47,7 +49,7 @@
           (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
           (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
           (positionChange)="onCardPositionChange(card.tableName, $event)"
-          (removeTable)="onRemoveExtraTable(card.tableName)"
+          (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
           (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
           (createTableRequested)="openCreateTableModal(card.resource, true)"
@@ -203,7 +205,7 @@
     />
   }
 
-  @if (pendingRemoveTable(); as tableName) {
+  @if (pendingRemoveTable(); as pending) {
     <div
       class="fm-remove-confirm-backdrop"
       tabindex="0"
@@ -212,7 +214,7 @@
     >
       <div class="fm-remove-confirm-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
         <div class="fm-remove-confirm-icon">⚠</div>
-        <h3 class="fm-remove-confirm-title">Remove {{ tableName }}?</h3>
+        <h3 class="fm-remove-confirm-title">Remove {{ pending.tableName || pending.resource }}?</h3>
         <p class="fm-remove-confirm-body">
           Any mappings already made onto this table will be discarded.
         </p>
@@ -233,16 +235,15 @@
     >
       <div class="fm-remove-confirm-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
         <div class="fm-remove-confirm-icon fm-remove-confirm-icon--danger">🗑</div>
-        <h3 class="fm-remove-confirm-title">Permanently delete "{{ target.column }}"?</h3>
+        <h3 class="fm-remove-confirm-title">Remove "{{ target.column }}"?</h3>
         <p class="fm-remove-confirm-body">
-          This runs a real <strong>ALTER TABLE ... DROP COLUMN</strong> against {{ target.tableName }}.
-          The column and any data in it will be gone for good — this cannot be undone.
+          This queues a real <strong>ALTER TABLE ... DROP COLUMN</strong> against {{ target.tableName }},
+          which runs when you click "Add to Pipeline" — at that point the column and any data in it will
+          be gone for good.
         </p>
         <div class="fm-remove-confirm-actions">
-          <button type="button" class="btn btn-secondary" [disabled]="dropColumnSubmitting()" (click)="cancelDropColumn()">Cancel</button>
-          <button type="button" class="btn btn-danger" [disabled]="dropColumnSubmitting()" (click)="confirmDropColumn()">
-            {{ dropColumnSubmitting() ? 'Deleting…' : 'Permanently delete' }}
-          </button>
+          <button type="button" class="btn btn-secondary" (click)="cancelDropColumn()">Cancel</button>
+          <button type="button" class="btn btn-danger" (click)="confirmDropColumn()">Remove column</button>
         </div>
       </div>
     </div>

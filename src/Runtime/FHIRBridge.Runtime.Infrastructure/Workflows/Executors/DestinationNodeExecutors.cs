@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
@@ -19,168 +20,168 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
 public sealed class SqlServerDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory)
+    public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class AzureSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory)
+    public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class BlobDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory)
+    public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class PowerBiDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory)
+    public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class PostgreSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory)
+    public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class MySqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory)
+    public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class SnowflakeDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory)
+    public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class TableauDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory)
+    public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class DatabricksDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory)
+    public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class S3DestinationNodeExecutor : DestinationNodeExecutor
 {
-    public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory)
+    public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory)
+    public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory)
+    public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class ExcelDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory)
+    public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class NdjsonDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory)
+    public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class ParquetDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory)
+    public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class AvroDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory)
+    public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class ProtobufDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory)
+    public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class PdfDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory)
+    public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class SftpDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory)
+    public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class RestApiDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory)
+    public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, configurationRepository)
     {
     }
 }
 
 public sealed class InMemoryDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null)
-        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory)
+    public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, configurationRepository)
     {
     }
 }
@@ -464,15 +465,18 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 {
     private readonly DestinationType _destinationType;
     private readonly IConfiguredDestinationWriterFactory? _writerFactory;
+    private readonly IConfigurationRepository? _configurationRepository;
 
     protected DestinationNodeExecutor(
         string nodeType,
         DestinationType destinationType,
-        IConfiguredDestinationWriterFactory? writerFactory)
+        IConfiguredDestinationWriterFactory? writerFactory,
+        IConfigurationRepository? configurationRepository = null)
         : base(nodeType, WorkflowDataContract.DestinationWriteResult)
     {
         _destinationType = destinationType;
         _writerFactory = writerFactory;
+        _configurationRepository = configurationRepository;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -484,8 +488,6 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var records = PassThroughNodeExecutor.ReadMappedRecords(inputs).ToArray();
         var destination = ReadConfiguration<DestinationConfiguration>(node, "destination")
             ?? CreateDestinationConfiguration(context, node);
-        var mappingProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile")
-            ?? CreateMappingProfile(context, node, records);
 
         if (_writerFactory is null)
         {
@@ -499,8 +501,35 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             AllowInlineDelivery: false,
             node.NodeType,
             DateTimeOffset.UtcNow);
-        var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
-        var written = writeResult.Count;
+
+        var written = 0;
+        string? downloadUrl = null;
+        // The wizard stamps the destination's Write mode onto this node's own "dest_writeMode" config — the
+        // ONLY place it actually lives; MappedSqlServerDestinationWriter otherwise only ever reads it back out
+        // of a ";mode=..." suffix on the string it resolves as (destination.Target ?? mappingProfile.DestinationObject).
+        // The legacy synthetic profile built by CreateMappingProfile happens to already carry that suffix (its
+        // DestinationObject IS the compound "dbo.Patient;mode=upsert" string), which is what made Upsert work
+        // at all before real per-resource-type profile resolution existed. A REAL MappingProfile's DestinationObject
+        // is just the plain table name ("Patient") — splicing the mode back on here is what keeps Upsert/Update
+        // working now that every resource-type group resolves its own real profile instead of that one synthetic one.
+        var writeModeSuffix = BuildWriteModeSuffix(node);
+
+        // Records reaching one Destination node can span multiple resource types (e.g. Patient AND Observation
+        // feeding the same SQL destination, once MappingNodeExecutor maps each resource type through its own
+        // profile). Each group needs writing against ITS OWN MappingProfile — own DestinationObject, fields,
+        // and natural key — never a single profile derived for just one of them; without this grouping, only
+        // whichever resource type that one profile matched would ever reach its table.
+        var groups = records.GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var group in OrderGroupsByReferenceDependency(groups))
+        {
+            var groupRecords = group.ToArray();
+            var mappingProfile = await ResolveMappingProfileAsync(context, node, group.Key, groupRecords, cancellationToken);
+            var effectiveProfile = ApplyWriteModeSuffix(mappingProfile, writeModeSuffix);
+            var writeResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
+            written += writeResult.Count;
+            downloadUrl ??= writeResult.DownloadUrl;
+        }
+
         var result = new RuntimeDestinationWriteResult(
             destination.Id.ToString("N"), written, DateTimeOffset.UtcNow);
 
@@ -517,8 +546,131 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 // Populated only for a CSV destination using Download-URL delivery — the caller of /run reads this
                 // back to fetch the generated file. Download (inline-bytes) delivery is not supported on this engine
                 // (see the AllowInlineDelivery comment above) and will have already thrown before reaching here.
-                ["downloadUrl"] = writeResult.DownloadUrl
+                ["downloadUrl"] = downloadUrl
             });
+    }
+
+    /// <summary>
+    /// Resolves the real MappingProfile for one resource-type group of records within this destination write,
+    /// preferring (in order): a profile object embedded directly on the node (only if it actually matches this
+    /// group's resource type — a single embedded profile can't stand in for every resource type in a mixed
+    /// batch); the real MappingProfile persisted for this destination + resource type, looked up by DestinationId
+    /// (a destination node's own config carries no sourceConnectionId to key a natural-key lookup on, so this
+    /// matches on DestinationId + ResourceType alone — in practice unique, since a destination maps a given
+    /// resource type one way at a time); and finally the legacy synthetic profile built straight from whatever
+    /// "fields" happen to be embedded on the node (pre-existing fallback, kept for graphs/tests with neither of
+    /// the above).
+    /// </summary>
+    private async Task<MappingProfile> ResolveMappingProfileAsync(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        string resourceType,
+        IReadOnlyCollection<MappedDestinationRecord> groupRecords,
+        CancellationToken cancellationToken)
+    {
+        var embedded = ReadConfiguration<MappingProfile>(node, "mappingProfile");
+        if (embedded is not null && string.Equals(embedded.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
+        {
+            return embedded;
+        }
+
+        if (_configurationRepository is not null
+            && Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId))
+        {
+            var profiles = await _configurationRepository.GetMappingProfilesAsync(cancellationToken);
+            var match = profiles.FirstOrDefault(profile =>
+                profile.DestinationId == destinationId
+                && string.Equals(profile.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        return CreateMappingProfile(context, node, groupRecords);
+    }
+
+    /// <summary>Reads the destination-wide Write mode (Upsert/Update/Insert/CDC — same for every resource type
+    /// this destination writes) straight off the node's own "dest_writeMode" config, as a ";mode=X" suffix ready
+    /// to splice onto a resolved profile's plain DestinationObject. Null when no write mode is configured (the
+    /// writer's own "Insert" default then applies, exactly as if this suffix were never spliced on).</summary>
+    private static string? BuildWriteModeSuffix(WorkflowNode node)
+    {
+        var writeMode = ReadStringConfiguration(node, "dest_writeMode");
+        return string.IsNullOrWhiteSpace(writeMode) ? null : $"mode={writeMode}";
+    }
+
+    /// <summary>Splices the destination's write-mode suffix onto a profile's DestinationObject so
+    /// MappedSqlServerDestinationWriter's <c>ParseDestinationTarget</c> picks it up — needed because a REAL
+    /// MappingProfile (resolved per resource-type group) carries a plain table name with no mode information at
+    /// all, unlike the legacy synthetic profile this destination node used to always get. Skipped when the
+    /// profile already carries a ';' (the legacy synthetic-profile path already has its own suffix baked in —
+    /// splicing another on would duplicate rather than override it).</summary>
+    private static MappingProfile ApplyWriteModeSuffix(MappingProfile profile, string? suffix)
+    {
+        if (suffix is null || profile.DestinationObject.Contains(';'))
+        {
+            return profile;
+        }
+
+        return new MappingProfile(
+            profile.Name, profile.ResourceType, profile.SourceConnectionId, profile.DestinationId,
+            $"{profile.DestinationObject};{suffix}", profile.Fields, profile.MappingJson);
+    }
+
+    /// <summary>
+    /// Orders resource-type groups so a group referenced by another (via <see cref="MappedReferenceLookup"/>,
+    /// e.g. Observation's PatientId lookup pointing at "Patient") is written first — the referenced table's rows
+    /// must already exist for <see cref="MappedSqlServerDestinationWriter"/>'s lookup to find them. A simple
+    /// topological sort (Kahn/DFS style); any cycle (which shouldn't occur for real FHIR reference graphs) just
+    /// falls back to the original grouping order for whichever groups are involved in it, rather than looping.
+    /// </summary>
+    private static List<IGrouping<string, MappedDestinationRecord>> OrderGroupsByReferenceDependency(
+        List<IGrouping<string, MappedDestinationRecord>> groups)
+    {
+        var tableToGroup = groups
+            .Select(g => (Table: g.Select(r => r.DestinationObject).FirstOrDefault(), Group: g))
+            .Where(x => x.Table is not null)
+            .GroupBy(x => x.Table!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First().Group, StringComparer.OrdinalIgnoreCase);
+
+        var dependencies = groups.ToDictionary(
+            g => g,
+            g => g
+                .SelectMany(r => r.ReferenceLookups ?? [])
+                .Select(l => l.LookupTable)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(table => tableToGroup.ContainsKey(table) && !ReferenceEquals(tableToGroup[table], g))
+                .Select(table => tableToGroup[table])
+                .ToList());
+
+        var ordered = new List<IGrouping<string, MappedDestinationRecord>>();
+        var visited = new HashSet<IGrouping<string, MappedDestinationRecord>>();
+        var visiting = new HashSet<IGrouping<string, MappedDestinationRecord>>();
+
+        void Visit(IGrouping<string, MappedDestinationRecord> group)
+        {
+            if (visited.Contains(group) || !visiting.Add(group))
+            {
+                return; // already ordered, or a cycle — stop recursing rather than looping forever
+            }
+
+            foreach (var dependency in dependencies[group])
+            {
+                Visit(dependency);
+            }
+
+            visiting.Remove(group);
+            visited.Add(group);
+            ordered.Add(group);
+        }
+
+        foreach (var group in groups)
+        {
+            Visit(group);
+        }
+
+        return ordered;
     }
 
     protected override object CreatePayload(

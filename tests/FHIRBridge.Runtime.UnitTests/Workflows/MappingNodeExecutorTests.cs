@@ -181,6 +181,105 @@ public sealed class MappingNodeExecutorTests
         repository.Verify(r => r.GetMappingProfileAsync(profileId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// Regression test for a real production incident: a single Field Mapping node fed by an EpicSource node
+    /// configured for BOTH Patient and Observation scopes received a mixed batch, and the executor applied its
+    /// one resolved Patient profile to every envelope — Observation JSON got walked against Patient's fields,
+    /// matching only the shared root "id", and silently produced a garbage "Patient" row (Observation's id as
+    /// PatientId, every real Patient column null). Each resource type must resolve and use its OWN profile.
+    /// </summary>
+    [Fact]
+    public async Task Different_resource_types_in_the_same_batch_are_each_mapped_through_their_own_profile()
+    {
+        var sourceConnectionId = Guid.NewGuid();
+        var destinationId = Guid.NewGuid();
+        var patientProfile = new MappingProfile(
+            "Patient", "Patient", sourceConnectionId, destinationId, "Patient",
+            [
+                new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField"),
+                new MappingField("Active", "$.active", MappingValueType.Boolean, IsRequired: false, DefaultValue: null, Format: "directField"),
+            ]);
+        var observationProfile = new MappingProfile(
+            "Observation", "Observation", sourceConnectionId, destinationId, "Observation",
+            [
+                new MappingField("ObservationId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField"),
+                new MappingField("Status", "$.status", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField"),
+            ]);
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(patientProfile);
+        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(observationProfile);
+
+        var executor = new MappingNodeExecutor(
+            new RoutingFakeJsonMappingEngine(),
+            mappingMaterializer: null,
+            configurationRepository: repository.Object);
+        var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
+        {
+            ["sourceConnectionId"] = sourceConnectionId.ToString(),
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(
+            new ResourceEnvelope("Patient", "p1", """{"id":"p1","active":true}"""),
+            new ResourceEnvelope("Observation", "o1", """{"id":"o1","status":"final"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        batch.Records.Should().HaveCount(2);
+        var records = batch.Records.Cast<MappedDestinationRecord>().ToList();
+
+        var patientRecord = records.Single(r => r.ResourceType == "Patient");
+        patientRecord.DestinationObject.Should().Be("Patient");
+        patientRecord.Values["PatientId"].Should().Be("p1");
+        patientRecord.Values["Active"].Should().Be(true);
+        patientRecord.Values.Should().NotContainKey("Status", "Observation's field must never be applied to a Patient record");
+
+        var observationRecord = records.Single(r => r.ResourceType == "Observation");
+        observationRecord.DestinationObject.Should().Be("Observation");
+        observationRecord.Values["ObservationId"].Should().Be("o1");
+        observationRecord.Values["Status"].Should().Be("final");
+        observationRecord.Values.Should().NotContainKey("Active", "Patient's field must never be applied to an Observation record");
+    }
+
+    [Fact]
+    public async Task A_resource_type_with_no_resolvable_profile_is_skipped_not_mapped_through_the_nodes_own_profile()
+    {
+        var sourceConnectionId = Guid.NewGuid();
+        var destinationId = Guid.NewGuid();
+        var patientProfile = new MappingProfile(
+            "Patient", "Patient", sourceConnectionId, destinationId, "Patient",
+            [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(patientProfile);
+        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MappingProfile?)null);
+
+        var executor = new MappingNodeExecutor(
+            new RoutingFakeJsonMappingEngine(),
+            mappingMaterializer: null,
+            configurationRepository: repository.Object);
+        // Node's own configured resourceType is "Patient" — the Observation envelope must NOT fall back to it.
+        var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
+        {
+            ["sourceConnectionId"] = sourceConnectionId.ToString(),
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(
+            new ResourceEnvelope("Patient", "p1", """{"id":"p1"}"""),
+            new ResourceEnvelope("Observation", "o1", """{"id":"o1","status":"final"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        batch.Records.Should().HaveCount(1, "the Observation envelope has no resolvable profile and must be skipped, not mapped through Patient's fields");
+        ((MappedDestinationRecord)batch.Records.Single()).ResourceType.Should().Be("Patient");
+    }
+
     private static WorkflowNode CreateNode(
         string resourceType, string destinationObject, IReadOnlyCollection<MappingFieldDto> fields,
         IReadOnlyDictionary<string, object>? extraConfig = null)
@@ -214,5 +313,35 @@ public sealed class MappingNodeExecutorTests
         private readonly MappingTestResultDto _result;
         public FakeJsonMappingEngine(MappingTestResultDto result) => _result = result;
         public MappingTestResultDto Map(string sourceJson, IReadOnlyCollection<MappingFieldDto> fields) => _result;
+    }
+
+    /// <summary>A minimal real mapper (unlike <see cref="FakeJsonMappingEngine"/>'s fixed canned result) that
+    /// resolves each field's simple root-level "$.property" JsonPath against the actual source JSON — needed to
+    /// prove that different resource types in one batch really do get mapped through their OWN distinct fields,
+    /// not a fixed stand-in result that couldn't tell the two apart.</summary>
+    private sealed class RoutingFakeJsonMappingEngine : IJsonMappingEngine
+    {
+        public MappingTestResultDto Map(string sourceJson, IReadOnlyCollection<MappingFieldDto> fields)
+        {
+            using var document = JsonDocument.Parse(sourceJson);
+            var values = new Dictionary<string, object?>();
+            foreach (var field in fields)
+            {
+                var propertyName = field.JsonPath.TrimStart('$', '.');
+                if (!document.RootElement.TryGetProperty(propertyName, out var element))
+                {
+                    continue;
+                }
+
+                values[field.TargetField] = element.ValueKind switch
+                {
+                    JsonValueKind.String => element.GetString(),
+                    JsonValueKind.True or JsonValueKind.False => element.GetBoolean(),
+                    _ => null
+                };
+            }
+
+            return new MappingTestResultDto(values, []);
+        }
     }
 }

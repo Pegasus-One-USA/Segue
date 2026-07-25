@@ -2,7 +2,7 @@ import {
   Component, ElementRef, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated } from './field-mapping-model';
+import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { FieldMappingSourceTreeComponent } from './field-mapping-source-tree.component';
@@ -20,7 +20,7 @@ import { parseSourcePayloadJson } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ZoomDockComponent } from '../../../canvas/zoom-dock/zoom-dock.component';
 import { ToastService } from '../../../../services/toast.service';
-import { DestinationSchemaService, DestinationColumn, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
+import { DestinationColumn, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
 
 export interface FmTargetCardSpec {
   resource: string;
@@ -62,7 +62,6 @@ export interface FmTargetCardSpec {
 export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private readonly anchors = inject(FieldMappingAnchorService);
   private readonly toast = inject(ToastService);
-  private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly canvasInner = viewChild.required<ElementRef<HTMLElement>>('canvasInner');
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
   private resizeObserver: ResizeObserver | null = null;
@@ -85,6 +84,13 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   /** Real data type of one column on any already-known SQL table — undefined for CSV or free-text
    *  columns with no real schema behind them. Purely a display concern for each target card. */
   readonly dataTypeForTable = input<(tableFullName: string, column: string) => string | undefined>(() => undefined);
+  /** Real PK/FK status of one column on any already-known SQL table — undefined for CSV or free-text
+   *  columns with no real schema behind them. Same display-only role as dataTypeForTable. */
+  readonly keyInfoForTable = input<(tableFullName: string, column: string) => DestinationColumn | undefined>(() => undefined);
+  /** Parent/PK/FK relation for any table created as a child of another (see ChildTableRelation) — keyed
+   *  by table full name, owned by the wizard so it survives navigating between resources. Read-only here:
+   *  a card just displays it, same display-only role as dataTypeForTable/keyInfoForTable. */
+  readonly childTableRelations = input<Record<string, ChildTableRelation>>({});
   readonly availableTablesToAdd = input<(resource: string) => string[]>(() => []);
   // Ad-hoc connection details (from the wizard's Step 1 SQL form) — powers the real ALTER TABLE /
   // CREATE TABLE calls below. Only meaningful for destType 'sql'.
@@ -120,6 +126,10 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
    *  owns this globally (it outlives any one resource's canvas instance) so it survives navigating
    *  between resources, node reload, and the Mapping JSON export/import. */
   readonly childTableRelationAdded = output<{ tableName: string; relation: ChildTableRelation }>();
+  /** A schema-authoring action (create table / add column / drop column / alter column) was triggered —
+   *  queued for the wizard to actually execute (via a real DDL call) only once "Add to Pipeline" is
+   *  clicked, instead of hitting the live database immediately. See PendingSchemaOp's own doc comment. */
+  readonly schemaOpQueued = output<PendingSchemaOp>();
 
   // ── local UI state ──────────────────────────────────────────────────────
   readonly collapsedIds = signal<Set<string>>(new Set());
@@ -138,9 +148,16 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private static readonly SOURCE_KEY = '__source__';
   private readonly cardPositions = signal<Record<string, { x: number; y: number }>>({});
 
+  // Source tree defaults to 400px wide (field-mapping-source-tree.component.scss) starting at x:24, so its
+  // right edge sits at x:424 by default — target cards must start past that with a real gap, not right at
+  // it, or the two panels render touching/overlapping the moment neither has been dragged yet.
+  private static readonly SOURCE_DEFAULT_WIDTH = 400;
+  private static readonly CARD_GAP = 40;
+
   private defaultPositionFor(key: string, index: number): { x: number; y: number } {
     if (key === FieldMappingCanvasComponent.SOURCE_KEY) return { x: 24, y: 24 };
-    return { x: 420, y: 24 + index * 260 };
+    const cardX = 24 + FieldMappingCanvasComponent.SOURCE_DEFAULT_WIDTH + FieldMappingCanvasComponent.CARD_GAP;
+    return { x: cardX, y: 24 + index * 260 };
   }
 
   positionForKey(key: string, index: number): { x: number; y: number } {
@@ -388,6 +405,14 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     return (column: string) => this.dataTypeForTable()(tableName, column);
   }
 
+  columnKeyInfoOn(tableName: string) {
+    return (column: string) => this.keyInfoForTable()(tableName, column);
+  }
+
+  relationFor(tableName: string): ChildTableRelation | undefined {
+    return this.childTableRelations()[tableName];
+  }
+
   targetFor(resource: string): string { return this.targetByResource()[resource] ?? ''; }
 
   onTargetChange(resource: string, value: string): void {
@@ -487,21 +512,19 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Submits the create-table modal — always attempts a real CREATE TABLE against whatever connection
-   * details are currently in the wizard's Step 1 form, not gated behind a prior successful
-   * "Test connection". A clean "already exists" failure is treated as a hit (the table is real, just
-   * not one we created) and still added as a reference. On success, the backend's returned table shape
-   * (all columns, including the FK if this was a child table) is what actually gets synced — never a
-   * locally-guessed one — since that's the only way to be sure the canvas reflects what's really there.
+   * Submits the create-table modal — no database call happens here. The real CREATE TABLE only runs
+   * once "Add to Pipeline" flushes the queue (see schemaOpQueued/DestinationWizardComponent), so the
+   * table shown here is a locally-synthesized preview (mirroring SqlDestinationSchemaService.
+   * CreateTableAsync's own shape/defaults) rather than the backend's authoritative response — the flush
+   * overwrites it with the real one once it actually executes.
    */
   submitCreateTable(submission: FmCreateTableSubmit): void {
     const resource = this.creatingTableResource;
     const typed = submission.tableName.trim();
     if (!resource || !typed) return;
-    // CreateTableAsync always returns a schema-qualified fullName (defaulting to "dbo" when the user
-    // types a bare name — see SqlDestinationSchemaService.SplitTableName). extraTables()/sqlTables() must
-    // agree on that same key everywhere, or the new table's card resolves zero columns via
-    // columnsForTable() even though the table was created successfully (columns silently invisible).
+    // Mirrors SqlDestinationSchemaService.SplitTableName's "dbo" default so extraTables()/sqlTables()
+    // agree on the same key everywhere, or the new table's card resolves zero columns via
+    // columnsForTable() even though the create appears to have "succeeded" (columns silently invisible).
     const name = typed.includes('.') ? typed : `dbo.${typed}`;
     // targetFor(resource) may just be an unfulfilled guess (no card shown for it, see isPrimaryTargetValid)
     // — that's exactly the name this create is most likely trying to fulfill, not a real dupe.
@@ -513,73 +536,84 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     const connection = this.connectionInfo();
     if (!connection) return;
 
-    this.creatingTableSubmitting.set(true);
-    this.creatingTableError.set(null);
-    this.schemaSvc.createTable({
-      connection,
-      tableName: name,
-      columns: submission.columns,
-      parentTable: submission.parentTable,
-      parentColumn: submission.parentColumn,
-      foreignKeyColumnName: submission.foreignKeyColumnName,
-    }).subscribe({
-      next: result => {
-        this.creatingTableSubmitting.set(false);
-        if (result.success && result.table) {
-          // Use the backend's own fullName (authoritative), not the locally-guessed one, as the key
-          // added to extraTables()/targetByResource — they must be the exact same string for
-          // columnsForTable()/columnsForResourceTarget() to resolve.
-          this.tableCreated.emit(result.table);
-          if (this.creatingTableAsPrimary) {
-            this.onTargetChange(resource, result.table.fullName);
-          } else {
-            this.extraTablesChange.emit([...this.extraTables(), result.table.fullName]);
-          }
-          if (submission.parentTable) {
-            // Server-side defaults (see CreateTableRequest docs): parentColumn defaults to "Id",
-            // foreignKeyColumnName to "{parentTableName}Id" — replicated here since the response never
-            // echoes the relationship back onto DestinationTable.
-            const parentShortName = submission.parentTable.includes('.')
-              ? submission.parentTable.split('.').pop()!
-              : submission.parentTable;
-            this.childTableRelationAdded.emit({
-              tableName: result.table!.fullName,
-              relation: {
-                parentTable: submission.parentTable!,
-                parentColumn: submission.parentColumn || 'Id',
-                foreignKeyColumnName: submission.foreignKeyColumnName || `${parentShortName}Id`,
-              },
-            });
-          }
-          this.toast.success('Table created', `${result.table.fullName} was created and is ready to map.`);
-          this.closeCreateTableModal();
-          return;
-        }
-        if ((result.error ?? '').toLowerCase().includes('already exists')) {
-          if (this.creatingTableAsPrimary) {
-            this.onTargetChange(resource, name);
-          } else {
-            this.extraTablesChange.emit([...this.extraTables(), name]);
-          }
-          this.toast.info('Table added', `${name} already exists — added as a reference.`);
-          this.closeCreateTableModal();
-          return;
-        }
-        this.creatingTableError.set(result.error ?? 'Failed to create table.');
-      },
-      error: err => {
-        this.creatingTableSubmitting.set(false);
-        this.creatingTableError.set(err?.error?.error ?? err?.message ?? 'Failed to create table.');
+    const columns: DestinationColumn[] = submission.columns.map(c => ({
+      name: c.name,
+      dataType: c.dataType,
+      mappingValueType: this.mapSqlServerType(c.dataType),
+      isNullable: true,
+      maxLength: null,
+      origin: 'userCreated',
+    }));
+
+    let relation: ChildTableRelation | undefined;
+    if (submission.parentTable) {
+      // Mirrors CreateTableRequest's server-side defaults: parentColumn defaults to "Id",
+      // foreignKeyColumnName to "{parentTableName}Id" — the deferred flush's real response will overwrite
+      // this preview with whatever the backend actually used, in case these ever drift apart.
+      const parentShortName = submission.parentTable.includes('.')
+        ? submission.parentTable.split('.').pop()!
+        : submission.parentTable;
+      relation = {
+        parentTable: submission.parentTable,
+        parentColumn: submission.parentColumn || 'Id',
+        foreignKeyColumnName: submission.foreignKeyColumnName || `${parentShortName}Id`,
+      };
+      columns.push({
+        name: relation.foreignKeyColumnName,
+        dataType: 'bigint',
+        mappingValueType: 'Integer',
+        isNullable: false,
+        maxLength: null,
+        isForeignKey: true,
+        references: `${relation.parentTable}.${relation.parentColumn}`,
+        origin: 'userCreated',
+      });
+    }
+
+    const dot = name.indexOf('.');
+    const table: DestinationTable = {
+      schemaName: dot >= 0 ? name.slice(0, dot) : 'dbo',
+      tableName: dot >= 0 ? name.slice(dot + 1) : name,
+      fullName: name,
+      origin: 'userCreated',
+      columns: [
+        { name: 'Id', dataType: 'bigint', mappingValueType: 'Integer', isNullable: false, maxLength: null, isPrimaryKey: true, origin: 'userCreated' },
+        ...columns,
+      ],
+    };
+
+    this.tableCreated.emit(table);
+    if (this.creatingTableAsPrimary) {
+      this.onTargetChange(resource, name);
+    } else {
+      this.extraTablesChange.emit([...this.extraTables(), name]);
+    }
+    if (relation) {
+      this.childTableRelationAdded.emit({ tableName: name, relation });
+    }
+    this.schemaOpQueued.emit({
+      kind: 'createTable',
+      request: {
+        connection,
+        tableName: name,
+        columns: submission.columns,
+        parentTable: submission.parentTable,
+        parentColumn: submission.parentColumn,
+        foreignKeyColumnName: submission.foreignKeyColumnName,
       },
     });
+    this.toast.success('Table queued', `${name} will be created when you click "Add to Pipeline".`);
+    this.closeCreateTableModal();
   }
 
   // Removing a table drops any mappings already made onto it, so it's confirmed first rather than
-  // acting immediately on click — matching the wizard's own confirm-before-discarding pattern.
-  readonly pendingRemoveTable = signal<string | null>(null);
+  // acting immediately on click — matching the wizard's own confirm-before-discarding pattern. Covers
+  // both an extra table and the primary one (its own "✕" clears the resource's target instead of
+  // filtering extraTables, since the primary slot isn't a member of that list).
+  readonly pendingRemoveTable = signal<{ resource: string; tableName: string; isExtra: boolean } | null>(null);
 
-  onRemoveExtraTable(tableName: string): void {
-    this.pendingRemoveTable.set(tableName);
+  onRemoveTable(resource: string, tableName: string, isExtra: boolean): void {
+    this.pendingRemoveTable.set({ resource, tableName, isExtra });
   }
 
   cancelRemoveTable(): void {
@@ -587,9 +621,24 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   confirmRemoveTable(): void {
-    const tableName = this.pendingRemoveTable();
-    if (!tableName) return;
-    this.extraTablesChange.emit(this.extraTables().filter(t => t !== tableName));
+    const pending = this.pendingRemoveTable();
+    if (!pending) return;
+    const { resource, tableName, isExtra } = pending;
+
+    if (isExtra) {
+      // The parent (DestinationWizardComponent.onExtraTablesChange) discards mappings onto the removed
+      // table itself once it sees it drop out of the list — no need to also filter mappingRows here.
+      this.extraTablesChange.emit(this.extraTables().filter(t => t !== tableName));
+    } else {
+      // Unlike extraTablesChange, the parent's targetByResourceChange handler is a bare signal.set() with
+      // no cleanup of its own, so this table's mappings are discarded here before clearing the target —
+      // otherwise they'd silently survive, orphaned against a target the resource no longer points at.
+      this.mappingRowsChange.emit(
+        this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName)),
+      );
+      this.targetByResourceChange.emit({ ...this.targetByResource(), [resource]: '' });
+    }
+
     this.pendingRemoveTable.set(null);
   }
 
@@ -620,26 +669,29 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     const connection = this.connectionInfo();
     if (!target || !connection) return;
 
-    this.dropColumnSubmitting.set(true);
-    this.schemaSvc.dropColumn({ connection, tableName: target.tableName, columnName: target.column }).subscribe({
-      next: result => {
-        this.dropColumnSubmitting.set(false);
-        if (result.success) {
-          this.columnDropped.emit({ tableName: target.tableName, column: target.column });
-          this.removeRow(target.resource, target.tableName, target.column);
-          this.toast.success('Column dropped', `${target.column} was permanently removed from ${target.tableName}.`);
-          this.pendingDropColumn.set(null);
-          return;
-        }
-        this.toast.error('Could not drop column', result.error ?? 'Unknown error.');
-        this.pendingDropColumn.set(null);
-      },
-      error: err => {
-        this.dropColumnSubmitting.set(false);
-        this.toast.error('Could not drop column', err?.error?.error ?? err?.message ?? 'Unknown error.');
-        this.pendingDropColumn.set(null);
-      },
+    this.columnDropped.emit({ tableName: target.tableName, column: target.column });
+    this.removeRow(target.resource, target.tableName, target.column);
+    this.schemaOpQueued.emit({
+      kind: 'dropColumn',
+      request: { connection, tableName: target.tableName, columnName: target.column },
     });
+    this.toast.success('Column queued for removal', `${target.column} will be dropped from ${target.tableName} when you click "Add to Pipeline".`);
+    this.pendingDropColumn.set(null);
+  }
+
+  /** Mirrors SqlDestinationSchemaService.MapSqlServerType — used only to render an accurate local preview
+   *  of a column's mappingValueType before the real DDL runs (see schemaOpQueued); the deferred flush
+   *  later overwrites this with whatever the backend's own response says once it actually executes. */
+  private mapSqlServerType(dataType: string): string {
+    const family = dataType.trim().toLowerCase().split('(')[0];
+    switch (family) {
+      case 'bit': return 'Boolean';
+      case 'tinyint': case 'smallint': case 'int': case 'bigint': return 'Integer';
+      case 'decimal': case 'numeric': case 'money': case 'smallmoney': case 'float': case 'real': return 'Decimal';
+      case 'date': return 'Date';
+      case 'datetime': case 'datetime2': case 'datetimeoffset': case 'smalldatetime': return 'DateTime';
+      default: return 'String';
+    }
   }
 
   private unregisterPendingColumn(resource: string, tableName: string, column: string): void {
@@ -668,33 +720,41 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     const connection = this.connectionInfo();
     if (!target || !connection) return;
 
-    this.addColumnSubmitting.set(true);
-    this.addColumnError.set(null);
-    this.schemaSvc.addColumn({
-      connection,
-      tableName: target.tableName,
-      columnName: submission.columnName,
+    const column: DestinationColumn = {
+      name: submission.columnName,
       dataType: submission.dataType,
-    }).subscribe({
-      next: result => {
-        this.addColumnSubmitting.set(false);
-        if (result.success && result.column) {
-          // hasSqlTables() true: the wizard's sqlTables() update (from this event) drives the card's
-          // real-schema display. hasSqlTables() false: no live schema is consulted for display at all,
-          // so track it locally the same way the free-text fallback already does.
-          this.columnAdded.emit({ tableName: target.tableName, column: result.column, table: result.table ?? undefined });
-          if (!this.hasSqlTables()) this.registerPendingColumn(target.resource, target.tableName, submission.columnName);
-          this.toast.success('Column added', `${submission.columnName} added to ${target.tableName}.`);
-          this.addColumnTarget.set(null);
-          return;
-        }
-        this.addColumnError.set(result.error ?? 'Failed to add column.');
-      },
-      error: err => {
-        this.addColumnSubmitting.set(false);
-        this.addColumnError.set(err?.error?.error ?? err?.message ?? 'Failed to add column.');
-      },
+      mappingValueType: this.mapSqlServerType(submission.dataType),
+      isNullable: true,
+      maxLength: null,
+      origin: 'userCreated',
+    };
+    // Mirrors AddColumnAsync's own "auto-create the table if it doesn't exist yet" behavior — if this
+    // target table isn't already known, the real call will bring it into existence too, so the local
+    // preview needs to register a bare (Id + this column) table, not just append to one that isn't there.
+    const tableAlreadyKnown = this.sqlTableOptions().includes(target.tableName);
+    let table: DestinationTable | undefined;
+    if (!tableAlreadyKnown) {
+      const dot = target.tableName.indexOf('.');
+      table = {
+        schemaName: dot >= 0 ? target.tableName.slice(0, dot) : 'dbo',
+        tableName: dot >= 0 ? target.tableName.slice(dot + 1) : target.tableName,
+        fullName: target.tableName,
+        origin: 'userCreated',
+        columns: [
+          { name: 'Id', dataType: 'bigint', mappingValueType: 'Integer', isNullable: false, maxLength: null, isPrimaryKey: true, origin: 'userCreated' },
+          column,
+        ],
+      };
+    }
+
+    this.columnAdded.emit({ tableName: target.tableName, column, table });
+    if (!this.hasSqlTables()) this.registerPendingColumn(target.resource, target.tableName, submission.columnName);
+    this.schemaOpQueued.emit({
+      kind: 'addColumn',
+      request: { connection, tableName: target.tableName, columnName: submission.columnName, dataType: submission.dataType },
     });
+    this.toast.success('Column queued', `${submission.columnName} will be added to ${target.tableName} when you click "Add to Pipeline".`);
+    this.addColumnTarget.set(null);
   }
 
   // ── edit column (real ALTER TABLE ... ALTER COLUMN, + sp_rename if the name changes) ───────────
@@ -718,30 +778,34 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     const connection = this.connectionInfo();
     if (!target || !connection) return;
 
-    this.editColumnSubmitting.set(true);
-    this.editColumnError.set(null);
-    this.schemaSvc.alterColumn({
-      connection,
-      tableName: target.tableName,
-      columnName: target.columnName,
-      newColumnName: submission.newColumnName,
-      newDataType: submission.newDataType,
-    }).subscribe({
-      next: result => {
-        this.editColumnSubmitting.set(false);
-        if (result.success && result.column) {
-          this.columnAltered.emit({ tableName: target.tableName, oldColumnName: target.columnName, column: result.column });
-          this.toast.success('Column updated', `${target.columnName} → ${result.column.name} on ${target.tableName}.`);
-          this.editColumnTarget.set(null);
-          return;
-        }
-        this.editColumnError.set(result.error ?? 'Failed to update column.');
-      },
-      error: err => {
-        this.editColumnSubmitting.set(false);
-        this.editColumnError.set(err?.error?.error ?? err?.message ?? 'Failed to update column.');
+    // ALTER COLUMN always preserves the existing NULL/NOT NULL constraint server-side (see
+    // AlterColumnRequest's doc comment) — carry over whatever's already known locally (PK/FK/nullable)
+    // for the same reason, rather than guessing new values the real flush would just overwrite anyway.
+    const existing = this.keyInfoForTable()(target.tableName, target.columnName);
+    const column: DestinationColumn = {
+      name: submission.newColumnName || target.columnName,
+      dataType: submission.newDataType,
+      mappingValueType: this.mapSqlServerType(submission.newDataType),
+      isNullable: existing?.isNullable ?? true,
+      maxLength: null,
+      isPrimaryKey: existing?.isPrimaryKey,
+      isForeignKey: existing?.isForeignKey,
+      references: existing?.references,
+      origin: existing?.origin ?? 'userCreated',
+    };
+    this.columnAltered.emit({ tableName: target.tableName, oldColumnName: target.columnName, column });
+    this.schemaOpQueued.emit({
+      kind: 'alterColumn',
+      request: {
+        connection,
+        tableName: target.tableName,
+        columnName: target.columnName,
+        newColumnName: submission.newColumnName,
+        newDataType: submission.newDataType,
       },
     });
+    this.toast.success('Column update queued', `${target.columnName} → ${column.name} on ${target.tableName} applies when you click "Add to Pipeline".`);
+    this.editColumnTarget.set(null);
   }
 
   // ── load source payload (paste real FHIR JSON, rebuild the source tree from its actual shape) ──
