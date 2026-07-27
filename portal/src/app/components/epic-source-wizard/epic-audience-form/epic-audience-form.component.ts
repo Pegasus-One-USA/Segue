@@ -14,6 +14,7 @@ import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../mod
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 
 export type { EpicAudience };
 
@@ -36,14 +37,6 @@ const FHIR_RESOURCES = [
   'Patient', 'Encounter', 'Observation', 'Condition', 'MedicationRequest',
   'AllergyIntolerance', 'Immunization', 'Procedure', 'DiagnosticReport',
   'DocumentReference', 'Practitioner', 'PractitionerRole',
-];
-
-/** Resource types actually supported end-to-end today (mapping catalog, pipeline steps, destination
- *  writers) — of whatever an endpoint's CapabilityStatement discovers, only these are selectable; the
- *  rest still show (for transparency about what the endpoint itself supports) but render disabled. */
-const SUPPORTED_RESOURCE_TYPES = [
-  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation', 'Condition',
-  'Procedure', 'ServiceRequest', 'DiagnosticReport', 'MedicationRequest', 'MedicationAdministration',
 ];
 
 function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
