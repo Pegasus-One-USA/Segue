@@ -1,0 +1,164 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_53e23ba7967cdf::t_a8af2b5b1cb2c8 910
+  s_53e23ba7967cdf::t_53efb62c0899a9 702
+  s_53e23ba7967cdf::t_814c645b0c13bc 1244
+  s_53e23ba7967cdf::t_fd22ee2bed83c8 986
+  s_53e23ba7967cdf::t_86c0635e517c79 738
+  s_53e23ba7967cdf::t_4f10e0a77bfb6e 1047
+  s_53e23ba7967cdf::t_9ead9ccacb16a3 149
+  s_53e23ba7967cdf::t_d959aefb6b92fe 246-251
+  s_53e23ba7967cdf::t_ed997192981db7 779
+  s_53e23ba7967cdf::t_5884be7066840b 1085
+  s_53e23ba7967cdf::t_f7e197e2f4d0ce 430
+  s_53e23ba7967cdf::t_f0dcb4cc6efb54 1060
+  s_53e23ba7967cdf::t_872e593b7c6f25 1156
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_6eccc62eb7f747::t_f6022d86a54c8b 114-118,122,141-142,146-148,162-192,194-196,198-230
+  s_6eccc62eb7f747::t_d68d4527b3a0f0 44,53-54,58-63
+  s_6eccc62eb7f747::t_e2358699b06f9f 7,12-14,143-145,193,197,231-232
+  s_6eccc62eb7f747::t_bac2e876ef79e3 86-90
+  s_6eccc62eb7f747::t_721a594509f760 1
+Demo_TestApp/backend/PatientDataSourceReaders.cs
+  s_53e23ba7967cdf::t_7210d60122a00e 1-15,17-32,34-41,43-65,67-121,123-230,232-311
+  s_53e23ba7967cdf::t_17b4233982c50b 16,33,42,66,122,231
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_53e23ba7967cdf::t_4a5da687c614a4 229,235-253
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IWorkflowRunTracker.cs
+  s_6eccc62eb7f747::t_8d05b601944602 1-19
+portal/src/app/core/api-endpoints.ts
+  s_6eccc62eb7f747::t_a5e24e132f32e7 222
+  s_53e23ba7967cdf::t_892cdf60806846 9-22
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_53e23ba7967cdf::t_a09d51461c6ab3 157
+  s_53e23ba7967cdf::t_1344f7bc0d9674 333,340
+  s_53e23ba7967cdf::t_2b0458231e948e 4
+  s_53e23ba7967cdf::t_67d502eb15f539 406,410-419
+  s_53e23ba7967cdf::t_d0db695350c11b 302-304,306,310
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_53e23ba7967cdf::t_3031d5603abcb6 346,348
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_53e23ba7967cdf::t_d4147b8d7692f2 33
+Demo_TestApp/backend/BackendSystemEndpoints.cs
+  s_53e23ba7967cdf::t_e323fc84cb7965 17-21,28,32,39-40
+  s_53e23ba7967cdf::t_de1600a18f78cb 363-368
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_53e23ba7967cdf::t_01722adcae7b98 433
+  s_53e23ba7967cdf::t_7e54245de44ebf 343-348
+  s_53e23ba7967cdf::t_1c8f1bc64772ca 429
+  s_53e23ba7967cdf::t_6138bc04270180 684
+  s_53e23ba7967cdf::t_425d6d9c3fba3a 18
+src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs
+  s_a5fcd0f359e190::t_80b3c6f00c83fc 164-176
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_53e23ba7967cdf::t_d7667d075fb32c 253
+  s_53e23ba7967cdf::t_b3b025aee9e94c 166
+  s_53e23ba7967cdf::t_52a10f2412cc17 342-344
+  s_53e23ba7967cdf::t_f29208c7e6cd2b 393
+  s_53e23ba7967cdf::t_1730b8d54b2382 149
+  s_53e23ba7967cdf::t_4db309054f93fc 358-361
+  s_53e23ba7967cdf::t_1f586d6c2176b6 180
+  s_53e23ba7967cdf::t_0370a0ce41be44 406-407
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.html
+  s_53e23ba7967cdf::t_6cacbdbcc01676 19,28-42
+  s_53e23ba7967cdf::t_7b1ac3c4bfd538 43
+docker-compose.yml
+  s_53e23ba7967cdf::t_ea07484750d676 180-198
+  s_53e23ba7967cdf::t_4ff2adc2b90d53 234
+Demo_TestApp/frontend/src/app/demo-types/backend-system/patient-details/patient-details.ts
+  s_53e23ba7967cdf::t_5d4d1b1a5d4a80 7
+  s_53e23ba7967cdf::t_90328a84f1abec 20-22
+  s_53e23ba7967cdf::t_50ad111fc1c3f0 85
+Demo_TestApp/backend/Program.cs
+  s_53e23ba7967cdf::t_38c7da66868f27 35-43
+Demo_TestApp/frontend/src/app/demo-types/backend-system/core/services/backend-system.service.ts
+  s_53e23ba7967cdf::t_5db1c10ab73101 1,10-15,20,23,27,30,39-40,42-46,48
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.ts
+  s_53e23ba7967cdf::t_01cfe36aa4fb01 8
+  s_53e23ba7967cdf::t_5b65f006ebb77b 28-36
+  s_53e23ba7967cdf::t_516e5792e4a905 53,63-68
+  s_53e23ba7967cdf::t_99e30a96bb4543 69-70
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_53e23ba7967cdf::t_467e00064aa18c 43-45
+  s_53e23ba7967cdf::t_bbc5d137872cbd 198
+  s_53e23ba7967cdf::t_3c3e79bbcfb751 213
+  s_53e23ba7967cdf::t_ddef4257c6615b 228
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowServiceCollectionExtensions.cs
+  s_6eccc62eb7f747::t_dcf09d8435fc0c 20
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_6eccc62eb7f747::t_995305b5d3fc03 581-583,592,594,601-634,639-666
+  s_6eccc62eb7f747::t_9901982f85c19a 18-19
+portal/src/app/services/phase-config.service.ts
+  s_53e23ba7967cdf::t_31d7e530bfcb3e 28
+  s_53e23ba7967cdf::t_c334ee92f16108 40,43
+portal/src/app/components/epic-source-wizard/steps/epic-step-connect/epic-step-connect.component.ts
+  s_53e23ba7967cdf::t_e32f3fd9db30de 9
+  s_53e23ba7967cdf::t_7cfd4f5b040c1b 38-39
+  s_53e23ba7967cdf::t_c33563fc73f63f 175-176
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.scss
+  s_53e23ba7967cdf::t_082bd84e929130 77-104
+Demo_TestApp/backend/appsettings.json
+  s_53e23ba7967cdf::t_df3f80a14ae0bd 12
+  s_53e23ba7967cdf::t_29f9aea18d11a8 10-11,13-16
+portal/src/app/services/wizard.service.ts
+  s_53e23ba7967cdf::t_a52d436490adbc 203-204
+  s_53e23ba7967cdf::t_c758543a0f414e 244-245
+  s_53e23ba7967cdf::t_e3a48446b7ed5f 16
+  s_53e23ba7967cdf::t_671fc374c80099 145-146
+Demo_TestApp/backend/HealthAppBackend.csproj
+  s_53e23ba7967cdf::t_8a44f1ff368ff1 11-12
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_6eccc62eb7f747::t_6b0a12c171221d 237,242-272
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_53e23ba7967cdf::t_21c15605c93b2f 427
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/InMemoryWorkflowRunTracker.cs
+  s_6eccc62eb7f747::t_30756f1b43bfb9 1-14
+portal/src/app/services/workflow-api.service.ts
+  s_6eccc62eb7f747::t_b5ec966aac8ef0 106-111
+  s_6eccc62eb7f747::t_7d63d012be1006 326-339
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_6eccc62eb7f747::t_c53361512e325d 53-60
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_6eccc62eb7f747::t_e795412b3de1f6 107-144,146
+Demo_TestApp/backend/Properties/launchSettings.json
+  s_13d9134ea298b2::t_630707b23bd696 5-9,11-14,21-29,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "5cb378e0e78c3196b332ed9a967cbc3b758b7107",
+  "prompts": {},
+  "sessions": {
+    "s_13d9134ea298b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c51d72fe-b529-4aa3-a4f3-fdcdf07e9a0c",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_53e23ba7967cdf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7be27372-081d-4225-898f-041c07e75a0e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6eccc62eb7f747": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f52b7110-a713-44f4-9e14-c38d3eb4658d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a5fcd0f359e190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69d7b858-5290-4282-aeda-ff2bd1655728",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
