@@ -88,11 +88,15 @@
         [disabled]="loading()"
       >
         @if (loading()) {
-          <mat-spinner diameter="18" color="accent"></mat-spinner>
-          Sending...
+          <span class="btn-submit__content">
+            <mat-spinner diameter="18" color="accent"></mat-spinner>
+            <span>Sending...</span>
+          </span>
         } @else {
-          <mat-icon>send</mat-icon>
-          Send Invitation
+          <span class="btn-submit__content">
+            <mat-icon>send</mat-icon>
+            <span>Send Invitation</span>
+          </span>
         }
       </button>
     </div>

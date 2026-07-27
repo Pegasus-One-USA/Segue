@@ -22,5 +22,13 @@ public enum ArrayPolicy
     StoreJson = 4,
 
     /// <summary>Strict: fail validation if more than one value is present.</summary>
-    RejectIfMultiple = 5
+    RejectIfMultiple = 5,
+
+    /// <summary>
+    /// Pick the array item whose sibling code element (mapping field's <c>CorrelationCodeJsonPath</c>) matches the
+    /// field's <c>CorrelationCodeValue</c>, instead of taking items by position. Needed for multi-component
+    /// elements like <c>Observation.component[]</c> (blood-pressure systolic/diastolic), where the component
+    /// carrying a given value isn't reliably at the same array index across resources.
+    /// </summary>
+    CorrelateByCode = 6
 }

@@ -33,12 +33,20 @@
   &__text {
     flex: 1;
 
-    h2 {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--color-ink);
-      margin: 0 0 2px;
-      padding: 0;
+    // mat-dialog-title's own class carries a tall default box (built for a
+    // standalone headline, not one paired with a subtitle right underneath) —
+    // collapse it down to just the text instead of guessing at a
+    // compensating margin.
+    ::ng-deep h2.mat-mdc-dialog-title {
+      display: block !important;
+      height: auto !important;
+      min-height: 0 !important;
+      padding: 0 !important;
+      margin: 0 0 2px !important;
+      font-size: 18px !important;
+      font-weight: 700 !important;
+      color: var(--color-ink) !important;
+      line-height: 1.2 !important;
     }
   }
 }
@@ -84,22 +92,12 @@ mat-dialog-content {
 
   &--full { grid-column: 1 / -1; }
 
+  // Outline border/label colors, icon-prefix centering/padding, the resting
+  // label's vertical position, and the raw-input border/shadow reset are all
+  // handled sitewide now via MDC token overrides + global rules in
+  // styles.scss — nothing left to override locally.
   ::ng-deep {
-    .mat-mdc-form-field-infix {
-      min-height: 44px;
-      padding-top: 10px !important;
-      padding-bottom: 10px !important;
-    }
-
     .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
-
-    .mat-mdc-form-field-icon-prefix mat-icon {
-      color: var(--color-muted);
-      font-size: 18px;
-      height: 18px;
-      width: 18px;
-      margin-right: 6px;
-    }
   }
 }
 
@@ -173,7 +171,7 @@ mat-dialog-actions {
 
 .btn-submit {
   background: var(--color-primary) !important;
-  color: #fff !important;
+  color: var(--color-on-primary) !important;
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;

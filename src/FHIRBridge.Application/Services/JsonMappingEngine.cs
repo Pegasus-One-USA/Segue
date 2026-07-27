@@ -106,6 +106,10 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                     parent[field.TargetField] = values[0];
                     break;
 
+                case ArrayPolicy.CorrelateByCode:
+                    parent[field.TargetField] = ResolveCorrelatedValue(root, field, matches, values, errors);
+                    break;
+
                 case ArrayPolicy.Scalar:
                 case ArrayPolicy.FirstItem:
                 default:
@@ -120,6 +124,50 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             .ToList();
 
         return new MappingTestResultDto(rowsList[0], errors, rowsList, childTableDtos);
+    }
+
+    /// <summary>
+    /// Selects the value among <paramref name="matches"/>/<paramref name="values"/> (same order, one per array item)
+    /// whose sibling code element — resolved via <see cref="MappingFieldDto.CorrelationCodeJsonPath"/>, sharing the
+    /// same outermost array index as <paramref name="matches"/> — equals <see cref="MappingFieldDto.CorrelationCodeValue"/>.
+    /// This is how e.g. a blood-pressure Observation's systolic/diastolic <c>component[]</c> entries are told apart:
+    /// position alone isn't reliable, but each component carries a LOINC code identifying which reading it is.
+    /// </summary>
+    private static object? ResolveCorrelatedValue(
+        JsonElement root,
+        MappingFieldDto field,
+        List<(JsonElement Element, IReadOnlyList<int> Indices)> matches,
+        List<object?> values,
+        List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(field.CorrelationCodeJsonPath) || string.IsNullOrWhiteSpace(field.CorrelationCodeValue))
+        {
+            errors.Add($"Field '{field.TargetField}' uses CorrelateByCode but is missing CorrelationCodeJsonPath/CorrelationCodeValue.");
+            return null;
+        }
+
+        var codeMatches = ResolveAll(root, field.CorrelationCodeJsonPath);
+        var matchingOuterIndices = codeMatches
+            .Where(m => m.Element.ValueKind == JsonValueKind.String &&
+                        string.Equals(m.Element.GetString(), field.CorrelationCodeValue, StringComparison.OrdinalIgnoreCase))
+            .Where(m => m.Indices.Count > 0)
+            .Select(m => m.Indices[0])
+            .ToHashSet();
+
+        if (matchingOuterIndices.Count == 0)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < matches.Count; i++)
+        {
+            if (matches[i].Indices.Count > 0 && matchingOuterIndices.Contains(matches[i].Indices[0]))
+            {
+                return values[i];
+            }
+        }
+
+        return null;
     }
 
     private static List<IReadOnlyDictionary<string, object?>> BuildParentRows(

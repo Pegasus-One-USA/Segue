@@ -227,29 +227,10 @@
             <p class="eaf-hint">Pull from <code>/.well-known/smart-configuration</code>; same discovery source.</p>
           </div>
 
-          <!-- SMART on FHIR version — fixed to R4 -->
-          <div class="eaf-field">
-            <label class="eaf-label" for="eaf-smartVersion">SMART on FHIR Version <span class="eaf-tag-auto">auto</span></label>
-            <input id="eaf-smartVersion" class="eaf-input eaf-input--readonly" type="text" readonly
-                   value="SMART App Launch 2.0 — R4" />
-            <p class="eaf-hint">Fixed to R4 — not configurable.</p>
-          </div>
+          <!-- SMART on FHIR version — fixed to R4. Hidden from the wizard (still fixed value, nothing to show). -->
 
-          <!-- SMART scope version — v1 (coarse) vs v2 (granular) -->
-          <div class="eaf-field">
-            <label class="eaf-label" for="eaf-scopeVersion">
-              SMART Scope Version <span class="eaf-req">*</span>
-              @if (scopeVersionAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
-              @else if (discStatus() === 'done') { <span class="eaf-tag-fixed">default</span> }
-            </label>
-            <div class="eaf-select-wrap">
-              <select id="eaf-scopeVersion" class="eaf-select" formControlName="scopeVersion">
-                <option value="v1">v1 — coarse scopes</option>
-                <option value="v2">v2 — granular scopes</option>
-              </select>
-            </div>
-            <p class="eaf-hint">Auto-detected from the source's advertised SMART capabilities (permission-v1 / permission-v2); override if needed. Granular (v2) requests per-resource access; coarse (v1) requests broader category access.</p>
-          </div>
+          <!-- SMART scope version — v1 (coarse) vs v2 (granular). Hidden from the wizard; scopeVersion control
+               stays in the form (default 'v2', still auto-detected/submitted) — see epic-audience-form.component.ts. -->
         </div>
       </div>
 

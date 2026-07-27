@@ -48,6 +48,8 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
             field.Property(x => x.Cardinality).HasMaxLength(100);
             field.Property(x => x.ArrayAncestors).HasMaxLength(2000);
             field.Property(x => x.IsUpsertKey).IsRequired().HasDefaultValue(false);
+            field.Property(x => x.CorrelationCodeJsonPath).HasMaxLength(500);
+            field.Property(x => x.CorrelationCodeValue).HasMaxLength(100);
         });
 
         builder.Navigation(x => x.Fields)

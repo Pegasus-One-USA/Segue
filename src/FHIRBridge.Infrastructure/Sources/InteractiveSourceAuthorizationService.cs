@@ -357,6 +357,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         var trustedIssuers = sourceConnection.Interactive?.TrustedIssuers ?? [];
         if (trustedIssuers.Length == 0 || !trustedIssuers.Any(trusted => IssuersMatch(trusted, issuer)))
         {
+            _logger.LogWarning(
+                "EHR launch rejected: issuer not in trusted-issuer allow-list. sourceConnectionId={SourceConnectionId} " +
+                "sourceName={SourceName} incomingIssuer={IncomingIssuer} trustedIssuers=[{TrustedIssuers}]",
+                sourceConnection.Id, sourceConnection.Name, issuer, string.Join(", ", trustedIssuers));
+
             throw new InvalidOperationException("The launch issuer (iss) is not in the source's trusted-issuer allow-list.");
         }
 

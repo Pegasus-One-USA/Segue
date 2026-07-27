@@ -7,6 +7,7 @@ import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-pr
 import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
 import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
 import { AdminSettingsComponent } from './demo-types/admin-settings/admin-settings';
+import { BackendSystemComponent } from './demo-types/backend-system/backend-system';
 import { environment } from '../environments/environment';
 import { PATIENT_STANDALONE_PATH } from './core/routes';
 
@@ -34,6 +35,11 @@ const PROVIDER_IN_APP_PATH = '/launchproviderinapp';
 // component.
 const PROVIDER_STANDALONE_PATH = '/launchinstandaloneprovider';
 
+// BackendSystem-role login target — mirrors PROVIDER_IN_APP_PATH/PROVIDER_STANDALONE_PATH's "send this role to
+// its own screen after login" redirect below. Unlike those two, there's no external EHR-launch entry point to
+// also detect pre-login; this role only ever reaches its screen via the redirect in login().
+const BACKEND_SYSTEM_PATH = '/backend-system';
+
 // Patient login does NOT redirect to PATIENT_STANDALONE_PATH the way the two roles above redirect — it lands on
 // the demo-type-1 dashboard mockup like Admin does, and only reaches this path (and therefore
 // LaunchStandalonePatientComponent's real hospital-picker/OAuth flow) via that dashboard's own "Connect Get Data"
@@ -48,6 +54,7 @@ const ROLE_DISPLAY_NAMES: Record<string, string> = {
   Patient: 'Patient_Standalone',
   ProviderStandalone: 'Provider_Standalone',
   ProviderInApp: 'Provider_InApp',
+  BackendSystem: 'Backend_System',
 };
 
 // The backend seeds four roles (Admin, Patient, ProviderStandalone, ProviderInApp — see HealthAppDbContext.cs) —
@@ -67,6 +74,7 @@ interface LoginResponse {
     LaunchStandaloneProviderComponent,
     LaunchStandalonePatientComponent,
     AdminSettingsComponent,
+    BackendSystemComponent,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
@@ -153,6 +161,12 @@ export class App implements OnInit {
       // can show the hospital list (or, on the way back from Epic, the Fetch Patient List button).
       if (response.role === 'ProviderStandalone' && window.location.pathname.toLowerCase() !== PROVIDER_STANDALONE_PATH) {
         window.location.href = PROVIDER_STANDALONE_PATH + window.location.search;
+      }
+
+      // BackendSystem never lands on the default application (demo-type-1 dashboard) — it always redirects to
+      // its own module, same full-page-navigation approach as the two redirects above.
+      if (response.role === 'BackendSystem' && window.location.pathname.toLowerCase() !== BACKEND_SYSTEM_PATH) {
+        window.location.href = BACKEND_SYSTEM_PATH + window.location.search;
       }
 
       // Patient and Admin deliberately do NOT redirect here — see the comment above PATIENT_STANDALONE_PATH.

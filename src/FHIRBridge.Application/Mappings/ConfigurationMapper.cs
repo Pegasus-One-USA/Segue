@@ -156,7 +156,9 @@ public static class ConfigurationMapper
             string.IsNullOrWhiteSpace(field.ArrayAncestors)
                 ? null
                 : field.ArrayAncestors.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            field.IsUpsertKey);
+            field.IsUpsertKey,
+            field.CorrelationCodeJsonPath,
+            field.CorrelationCodeValue);
     }
 
     public static ResourcePipelineRouteDto ToDto(ResourcePipelineRoute route)
@@ -208,7 +210,9 @@ public static class ConfigurationMapper
             ArrayPolicy: dto.ArrayPolicy,
             Cardinality: dto.Cardinality,
             ArrayAncestors: dto.ArrayAncestors is { Count: > 0 } ? string.Join('|', dto.ArrayAncestors) : null,
-            IsUpsertKey: dto.IsUpsertKey);
+            IsUpsertKey: dto.IsUpsertKey,
+            CorrelationCodeJsonPath: dto.CorrelationCodeJsonPath,
+            CorrelationCodeValue: dto.CorrelationCodeValue);
     }
 
     public static SourceAuthenticationConfiguration ToDomain(SourceAuthenticationDto dto)

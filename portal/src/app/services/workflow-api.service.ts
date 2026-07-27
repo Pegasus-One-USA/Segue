@@ -172,9 +172,15 @@ export interface MappingFieldRequest {
   isRequired: boolean;
   defaultValue?: string | null;
   format?: string | null;
-  arrayPolicy?: string;                        // Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson | RejectIfMultiple
+  arrayPolicy?: string;                        // Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson | RejectIfMultiple | CorrelateByCode
   arrayAncestors?: string[] | null;            // array-ancestor fhir paths (child-table alignment)
   isUpsertKey?: boolean;                       // marks the column an Upsert write matches an existing row on
+  // Required when arrayPolicy is CorrelateByCode: picks the array item whose sibling code element (an absolute
+  // JsonPath sharing this field's array ancestor, e.g. "$.component[*].code.coding[*].code") equals
+  // correlationCodeValue (e.g. "8480-6" for a blood-pressure Observation's systolic component), instead of taking
+  // items by position. Ignored for every other arrayPolicy.
+  correlationCodeJsonPath?: string | null;
+  correlationCodeValue?: string | null;
 }
 
 // existingId: when the node already carries an id from a prior create-on-save (round-tripped through node.fields on

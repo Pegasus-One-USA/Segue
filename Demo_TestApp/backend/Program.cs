@@ -446,6 +446,8 @@ app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, Epi
     return Results.Ok();
 });
 
+app.MapBackendSystemEndpoints();
+
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback
 // endpoints are always lowest-priority, so this can't shadow the /api/* routes above regardless of

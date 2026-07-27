@@ -375,8 +375,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         return await _dbContext.ArchiveManifestEntries.AsNoTracking()
             .GroupBy(x => x.DataClass)
             .Select(g => g.OrderByDescending(x => x.CreatedOnUtc).First())
-            .Select(x => new ArchiveManifestDto(x.DataClass, x.ArchivedThroughUtc, x.FileLocation, x.RecordCount, x.CreatedOnUtc))
             .OrderBy(x => x.DataClass)
+            .Select(x => new ArchiveManifestDto(x.DataClass, x.ArchivedThroughUtc, x.FileLocation, x.RecordCount, x.CreatedOnUtc))
             .ToListAsync(cancellationToken);
     }
 
