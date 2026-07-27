@@ -81,14 +81,16 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var practitionerIds = await db.Encounters
-                .Where(e => e.PatientId == patientId && e.PractitionerId != null)
+                .Where(e => (e.PatientId == patientId || e.PatientId == patientReference) && e.PractitionerId != null)
                 .Select(e => e.PractitionerId!)
                 .Distinct()
                 .ToListAsync();
 
+            var barePractitionerIds = practitionerIds.Select(StripReferencePrefix).ToList();
             var practitioners = await db.Practitioners
-                .Where(p => practitionerIds.Contains(p.PractitionerId))
+                .Where(p => barePractitionerIds.Contains(p.PractitionerId))
                 .OrderBy(p => p.FamilyName)
                 .Select(p => new PractitionerDto(
                     p.PractitionerId,
@@ -111,25 +113,27 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var encounters = await db.Encounters
-                .Where(e => e.PatientId == patientId)
+                .Where(e => e.PatientId == patientId || e.PatientId == patientReference)
                 .OrderByDescending(e => e.StartDateTime)
-                .Select(e => new EncounterDto(
-                    e.EncounterId,
-                    e.PatientId,
-                    e.PractitionerId,
-                    e.Identifier,
-                    e.Status,
-                    e.Class,
-                    e.Type,
-                    e.Priority,
-                    e.StartDateTime,
-                    e.EndDateTime,
-                    e.ServiceProvider,
-                    e.ReasonCode))
                 .ToListAsync();
 
-            return Results.Ok(encounters);
+            var result = encounters.Select(e => new EncounterDto(
+                e.EncounterId,
+                StripReferencePrefix(e.PatientId),
+                StripReferencePrefix(e.PractitionerId),
+                e.Identifier,
+                e.Status,
+                e.Class,
+                e.Type,
+                e.Priority,
+                e.StartDateTime,
+                e.EndDateTime,
+                e.ServiceProvider,
+                e.ReasonCode));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/allergy-intolerances", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -139,27 +143,29 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var allergies = await db.AllergyIntolerances
-                .Where(a => a.PatientId == patientId)
+                .Where(a => a.PatientId == patientId || a.PatientId == patientReference)
                 .OrderByDescending(a => a.RecordedDate)
-                .Select(a => new AllergyIntoleranceDto(
-                    a.AllergyIntoleranceId,
-                    a.PatientId,
-                    a.EncounterId,
-                    a.Identifier,
-                    a.ClinicalStatus,
-                    a.VerificationStatus,
-                    a.Category,
-                    a.Criticality,
-                    a.Code,
-                    a.Substance,
-                    a.Reaction,
-                    a.Severity,
-                    a.OnsetDateTime,
-                    a.RecordedDate))
                 .ToListAsync();
 
-            return Results.Ok(allergies);
+            var result = allergies.Select(a => new AllergyIntoleranceDto(
+                a.AllergyIntoleranceId,
+                StripReferencePrefix(a.PatientId),
+                StripReferencePrefix(a.EncounterId),
+                a.Identifier,
+                a.ClinicalStatus,
+                a.VerificationStatus,
+                a.Category,
+                a.Criticality,
+                a.Code,
+                a.Substance,
+                a.Reaction,
+                a.Severity,
+                a.OnsetDateTime,
+                a.RecordedDate));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/observations", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -169,25 +175,27 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var observations = await db.Observations
-                .Where(o => o.PatientId == patientId)
+                .Where(o => o.PatientId == patientId || o.PatientId == patientReference)
                 .OrderByDescending(o => o.EffectiveDateTime)
-                .Select(o => new ObservationDto(
-                    o.ObservationId,
-                    o.PatientId,
-                    o.EncounterId,
-                    o.Identifier,
-                    o.Status,
-                    o.Category,
-                    o.Code,
-                    o.Value,
-                    o.Unit,
-                    o.Interpretation,
-                    o.EffectiveDateTime,
-                    o.IssuedDateTime))
                 .ToListAsync();
 
-            return Results.Ok(observations);
+            var result = observations.Select(o => new ObservationDto(
+                o.ObservationId,
+                StripReferencePrefix(o.PatientId),
+                StripReferencePrefix(o.EncounterId),
+                o.Identifier,
+                o.Status,
+                o.Category,
+                o.Code,
+                o.Value,
+                o.Unit,
+                o.Interpretation,
+                o.EffectiveDateTime,
+                o.IssuedDateTime));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/conditions", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -197,26 +205,28 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var conditions = await db.Conditions
-                .Where(c => c.PatientId == patientId)
+                .Where(c => c.PatientId == patientId || c.PatientId == patientReference)
                 .OrderByDescending(c => c.RecordedDate)
-                .Select(c => new ConditionDto(
-                    c.ConditionId,
-                    c.PatientId,
-                    c.EncounterId,
-                    c.Identifier,
-                    c.ClinicalStatus,
-                    c.VerificationStatus,
-                    c.Category,
-                    c.Severity,
-                    c.Code,
-                    c.BodySite,
-                    c.OnsetDateTime,
-                    c.AbatementDateTime,
-                    c.RecordedDate))
                 .ToListAsync();
 
-            return Results.Ok(conditions);
+            var result = conditions.Select(c => new ConditionDto(
+                c.ConditionId,
+                StripReferencePrefix(c.PatientId),
+                StripReferencePrefix(c.EncounterId),
+                c.Identifier,
+                c.ClinicalStatus,
+                c.VerificationStatus,
+                c.Category,
+                c.Severity,
+                c.Code,
+                c.BodySite,
+                c.OnsetDateTime,
+                c.AbatementDateTime,
+                c.RecordedDate));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/procedures", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -226,25 +236,27 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var procedures = await db.Procedures
-                .Where(p => p.PatientId == patientId)
+                .Where(p => p.PatientId == patientId || p.PatientId == patientReference)
                 .OrderByDescending(p => p.PerformedStartDateTime)
-                .Select(p => new ProcedureDto(
-                    p.ProcedureId,
-                    p.PatientId,
-                    p.EncounterId,
-                    p.PractitionerId,
-                    p.Identifier,
-                    p.Status,
-                    p.Category,
-                    p.Code,
-                    p.BodySite,
-                    p.Outcome,
-                    p.PerformedStartDateTime,
-                    p.PerformedEndDateTime))
                 .ToListAsync();
 
-            return Results.Ok(procedures);
+            var result = procedures.Select(p => new ProcedureDto(
+                p.ProcedureId,
+                StripReferencePrefix(p.PatientId),
+                StripReferencePrefix(p.EncounterId),
+                StripReferencePrefix(p.PractitionerId),
+                p.Identifier,
+                p.Status,
+                p.Category,
+                p.Code,
+                p.BodySite,
+                p.Outcome,
+                p.PerformedStartDateTime,
+                p.PerformedEndDateTime));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/service-requests", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -254,26 +266,28 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var serviceRequests = await db.ServiceRequests
-                .Where(s => s.PatientId == patientId)
+                .Where(s => s.PatientId == patientId || s.PatientId == patientReference)
                 .OrderByDescending(s => s.AuthoredOn)
-                .Select(s => new ServiceRequestDto(
-                    s.ServiceRequestId,
-                    s.PatientId,
-                    s.EncounterId,
-                    s.PractitionerId,
-                    s.Identifier,
-                    s.Status,
-                    s.Intent,
-                    s.Priority,
-                    s.Category,
-                    s.Code,
-                    s.AuthoredOn,
-                    s.OccurrenceDateTime,
-                    s.ReasonCode))
                 .ToListAsync();
 
-            return Results.Ok(serviceRequests);
+            var result = serviceRequests.Select(s => new ServiceRequestDto(
+                s.ServiceRequestId,
+                StripReferencePrefix(s.PatientId),
+                StripReferencePrefix(s.EncounterId),
+                StripReferencePrefix(s.PractitionerId),
+                s.Identifier,
+                s.Status,
+                s.Intent,
+                s.Priority,
+                s.Category,
+                s.Code,
+                s.AuthoredOn,
+                s.OccurrenceDateTime,
+                s.ReasonCode));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/diagnostic-reports", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -283,23 +297,25 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var diagnosticReports = await db.DiagnosticReports
-                .Where(d => d.PatientId == patientId)
+                .Where(d => d.PatientId == patientId || d.PatientId == patientReference)
                 .OrderByDescending(d => d.IssuedDateTime)
-                .Select(d => new DiagnosticReportDto(
-                    d.DiagnosticReportId,
-                    d.PatientId,
-                    d.EncounterId,
-                    d.Identifier,
-                    d.Status,
-                    d.Category,
-                    d.Code,
-                    d.EffectiveDateTime,
-                    d.IssuedDateTime,
-                    d.Conclusion))
                 .ToListAsync();
 
-            return Results.Ok(diagnosticReports);
+            var result = diagnosticReports.Select(d => new DiagnosticReportDto(
+                d.DiagnosticReportId,
+                StripReferencePrefix(d.PatientId),
+                StripReferencePrefix(d.EncounterId),
+                d.Identifier,
+                d.Status,
+                d.Category,
+                d.Code,
+                d.EffectiveDateTime,
+                d.IssuedDateTime,
+                d.Conclusion));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/medication-requests", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -309,24 +325,26 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var medicationRequests = await db.MedicationRequests
-                .Where(m => m.PatientId == patientId)
+                .Where(m => m.PatientId == patientId || m.PatientId == patientReference)
                 .OrderByDescending(m => m.AuthoredOn)
-                .Select(m => new MedicationRequestDto(
-                    m.MedicationRequestId,
-                    m.PatientId,
-                    m.EncounterId,
-                    m.PractitionerId,
-                    m.Identifier,
-                    m.Status,
-                    m.Intent,
-                    m.Priority,
-                    m.MedicationCode,
-                    m.DosageInstruction,
-                    m.AuthoredOn))
                 .ToListAsync();
 
-            return Results.Ok(medicationRequests);
+            var result = medicationRequests.Select(m => new MedicationRequestDto(
+                m.MedicationRequestId,
+                StripReferencePrefix(m.PatientId),
+                StripReferencePrefix(m.EncounterId),
+                StripReferencePrefix(m.PractitionerId),
+                m.Identifier,
+                m.Status,
+                m.Intent,
+                m.Priority,
+                m.MedicationCode,
+                m.DosageInstruction,
+                m.AuthoredOn));
+
+            return Results.Ok(result);
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/medication-administrations", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -336,30 +354,42 @@ public static class BackendSystemEndpoints
                 return Results.Unauthorized();
             }
 
+            var patientReference = $"Patient/{patientId}";
             var medicationAdministrations = await db.MedicationAdministrations
-                .Where(m => m.PatientId == patientId)
+                .Where(m => m.PatientId == patientId || m.PatientId == patientReference)
                 .OrderByDescending(m => m.EffectiveDateTime)
-                .Select(m => new MedicationAdministrationDto(
-                    m.MedicationAdministrationId,
-                    m.PatientId,
-                    m.EncounterId,
-                    m.MedicationRequestId,
-                    m.Identifier,
-                    m.Status,
-                    m.MedicationCode,
-                    m.Dosage,
-                    m.Route,
-                    m.EffectiveDateTime,
-                    m.Note))
                 .ToListAsync();
 
-            return Results.Ok(medicationAdministrations);
+            var result = medicationAdministrations.Select(m => new MedicationAdministrationDto(
+                m.MedicationAdministrationId,
+                StripReferencePrefix(m.PatientId),
+                StripReferencePrefix(m.EncounterId),
+                StripReferencePrefix(m.MedicationRequestId),
+                m.Identifier,
+                m.Status,
+                m.MedicationCode,
+                m.Dosage,
+                m.Route,
+                m.EffectiveDateTime,
+                m.Note));
+
+            return Results.Ok(result);
         });
     }
 
     private static bool TryGetSession(HttpContext http, SessionStore sessions) =>
         http.Request.Cookies.TryGetValue(SessionCookieName, out var sessionId)
             && sessions.TryGet(sessionId, out _, out _, out _);
+
+    // Upstream FHIR-mapping pipelines write reference-typed columns (PatientId, EncounterId, PractitionerId,
+    // MedicationRequestId) as raw FHIR references (e.g. "Patient/e0w0LEDCYtfckT6N.CkJKCw3") rather than the bare id
+    // stored on the referenced row's own primary key — the mapping engine has no reference-parsing step. Strip the
+    // "Type/" segment here, at the read boundary, so every id this API returns is bare and consistent regardless of
+    // whether the underlying pipeline run happened to record it with or without the prefix.
+    private static string? StripReferencePrefix(string? reference) =>
+        reference is not null && reference.IndexOf('/') is var slash && slash >= 0
+            ? reference[(slash + 1)..]
+            : reference;
 
     private static string? BuildFullName(string? givenName, string? middleName, string? familyName)
     {

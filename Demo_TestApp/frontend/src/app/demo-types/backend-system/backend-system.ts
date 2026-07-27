@@ -19,7 +19,7 @@ export class BackendSystemComponent implements OnInit {
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
 
-  readonly displayedColumns = ['fullName', 'mrn', 'identifier', 'gender', 'birthDate'];
+  readonly displayedColumns = ['patientId', 'fullName', 'mrn', 'identifier', 'gender', 'birthDate'];
 
   readonly isLoading = signal(true);
   readonly loadError = signal<string | null>(null);
