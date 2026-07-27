@@ -49,15 +49,10 @@ public sealed class PipelineRunCommandProcessor : BackgroundService
         {
             // Centralized capture for the Worker host — rethrow so the transport's own
             // retry/dead-letter behavior (see MessageRetry / IMessageConsumer) is unaffected.
-            var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
-            await governanceLogger.LogErrorAsync(
-                new ErrorEntry(
-                    "Error",
-                    exception.GetType().Name,
-                    exception.Message,
-                    exception.StackTrace,
-                    "Worker",
-                    command.CorrelationId),
+            var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+            await exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(Module: "Pipeline Run", CorrelationId: command.CorrelationId),
                 CancellationToken.None);
             throw;
         }

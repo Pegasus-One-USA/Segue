@@ -46,7 +46,9 @@ public sealed class SourceDiscoveryController : ControllerBase
         }
         catch (Exception ex)
         {
-            smartConfigurationError = ex.Message;
+            // Probing an arbitrary external URL — never echo the raw exception/upstream body back to the client.
+            smartConfigurationError = FHIRBridge.Governance.SafeErrorText.SanitizeOr(
+                ex.Message, "Could not read the endpoint's SMART configuration.");
         }
 
         IReadOnlyList<string> resourceTypes = [];
@@ -57,7 +59,8 @@ public sealed class SourceDiscoveryController : ControllerBase
         }
         catch (Exception ex)
         {
-            resourceTypesError = ex.Message;
+            resourceTypesError = FHIRBridge.Governance.SafeErrorText.SanitizeOr(
+                ex.Message, "Could not read the endpoint's supported resource types.");
         }
 
         return Ok(new SourceDiscoveryProbeResult(smart, resourceTypes, resourceTypesError, smartConfigurationError));

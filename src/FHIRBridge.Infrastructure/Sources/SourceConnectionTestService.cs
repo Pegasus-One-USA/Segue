@@ -79,12 +79,14 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
                 "Source connection test failed for source {SourceConnectionId}.",
                 sourceConnectionId);
 
+            // Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §6: this previously returned exception.Message
+            // raw, unlike every other error path in the app — the exact class of leak SafeErrorText exists to stop.
             return new SourceConnectionTestResultDto(
                 sourceConnectionId,
                 sourceConnection.SourceSystemType.ToString(),
                 false,
                 "Failed",
-                exception.Message,
+                FHIRBridge.Governance.SafeErrorText.SanitizeOr(exception.Message, "The connection test failed."),
                 DateTime.UtcNow);
         }
     }

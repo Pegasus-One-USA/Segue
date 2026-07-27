@@ -1,24 +1,37 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { ToastService } from '../../../services/toast.service';
 import { OperationsApiService } from '../../services/operations-api.service';
-import { ErrorLogEntry, ErrorLogSearch } from '../../models/operations.model';
+import { ErrorLogEntry, ErrorLogSearch, PagedResult } from '../../models/operations.model';
+
+/** Fallback only, for rows captured before the backend started computing `diagnosisAction`
+ *  (docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §8) — categories a customer can typically resolve themselves.
+ *  Once every row carries a real diagnosisAction this fallback stops mattering; kept only so historical rows
+ *  still render something reasonable instead of blank. */
+const SELF_FIXABLE_CATEGORIES = new Set([
+  'Network', 'Database', 'ExternalSystem', 'Authentication', 'Authorization', 'Validation',
+]);
 
 @Component({
   selector: 'app-errors',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule],
+  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule, RouterLink],
   templateUrl: './errors.component.html',
   styleUrl: './errors.component.scss',
 })
 export class ErrorsComponent implements OnInit {
   private readonly api = inject(OperationsApiService);
   private readonly route = inject(ActivatedRoute);
+  private readonly toast = inject(ToastService);
 
   readonly loading = signal(false);
-  readonly entries = signal<ErrorLogEntry[]>([]);
+  readonly result = signal<PagedResult<ErrorLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly expandedId = signal<string | null>(null);
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(25);
 
   // Phase 6A – Monitoring → Errors search criteria.
   readonly errorReferenceId = signal('');
@@ -34,7 +47,7 @@ export class ErrorsComponent implements OnInit {
   readonly statuses = ['Open', 'Resolved'];
 
   readonly displayedCols = [
-    'occurredOnUtc', 'errorReferenceId', 'severity', 'category', 'status', 'module', 'exceptionType', 'message', 'correlationId', 'actions',
+    'occurredOnUtc', 'errorReferenceId', 'module', 'message', 'whatToDo', 'status', 'correlationId', 'actions',
   ];
 
   ngOnInit(): void {
@@ -56,11 +69,19 @@ export class ErrorsComponent implements OnInit {
       severity: this.severity() || undefined,
       category: this.category() || undefined,
       status: this.status() || undefined,
+      page: this.pageIndex() + 1,
+      pageSize: this.pageSize(),
     };
     this.api.searchErrors(search).subscribe({
-      next: entries => { this.entries.set(entries); this.loading.set(false); },
+      next: result => { this.result.set(result); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+  }
+
+  onPageChange(e: PageEvent): void {
+    this.pageIndex.set(e.pageIndex);
+    this.pageSize.set(e.pageSize);
+    this.load();
   }
 
   reset(): void {
@@ -71,6 +92,7 @@ export class ErrorsComponent implements OnInit {
     this.severity.set('');
     this.category.set('');
     this.status.set('');
+    this.pageIndex.set(0);
     this.load();
   }
 
@@ -90,5 +112,31 @@ export class ErrorsComponent implements OnInit {
 
   severityClass(severity: string): string {
     return 'severity-' + severity.toLowerCase();
+  }
+
+  /** Backend-computed diagnosis wins when present; category-shape guessing is only a fallback for rows that
+   *  predate the diagnosisAction field. */
+  isSelfFixable(entry: Pick<ErrorLogEntry, 'diagnosisAction' | 'category'>): boolean {
+    if (entry.diagnosisAction) {
+      return entry.diagnosisAction === 'SelfFix';
+    }
+    return !!entry.category && SELF_FIXABLE_CATEGORIES.has(entry.category);
+  }
+
+  actionLabel(entry: Pick<ErrorLogEntry, 'diagnosisAction' | 'category'>): string {
+    return this.isSelfFixable(entry) ? 'Check your configuration' : 'Contact support';
+  }
+
+  copyForSupport(entry: ErrorLogEntry): void {
+    const lines = [
+      entry.errorReferenceId ? `Reference ID: ${entry.errorReferenceId}` : null,
+      entry.correlationId ? `Correlation ID: ${entry.correlationId}` : null,
+      `Occurred: ${entry.occurredOnUtc}`,
+    ].filter((line): line is string => !!line);
+
+    navigator.clipboard.writeText(lines.join('\n')).then(
+      () => this.toast.show('Copied', 'Reference details copied — paste them into your support ticket.'),
+      () => this.toast.show('Copy failed', 'Select the text manually.'),
+    );
   }
 }

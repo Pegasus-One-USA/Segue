@@ -4,6 +4,20 @@
     <p class="page-sub">Paste a Correlation ID to see everything that happened during that execution, across every governance and operations table in one place.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">This isn't its own log — it's a <strong>cross-reference lookup</strong>. Every screen in Operations and Governance stamps its rows with a shared Correlation ID whenever they're part of the same event. Paste that ID here and this screen pulls the matching rows from every one of those tables into a single timeline, so you don't have to check each screen separately.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Where do I get a Correlation ID?</h4>
+        <p>Copy it from any row in Pipeline Executions, Scheduler History, Errors, API Requests, or most other log screens — they all have a Correlation ID column.</p>
+      </section>
+
+      <p class="info-note">A "Raw" toggle on some entries shows the full underlying record — useful for deep technical troubleshooting, not needed for everyday use.</p>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"

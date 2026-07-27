@@ -47,6 +47,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IPipelineMetrics? _pipelineMetrics;
     private readonly IncrementalSyncOptions _incrementalSyncOptions;
     private readonly ILogger<ConfiguredPipelineService> _logger;
+    private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
 
     public ConfiguredPipelineService(
         IConfigurationRepository configurationRepository,
@@ -66,7 +67,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IPipelineMetrics? pipelineMetrics = null,
         IncrementalSyncOptions? incrementalSyncOptions = null,
         IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
-        IGovernanceLogger? governanceLogger = null)
+        IGovernanceLogger? governanceLogger = null,
+        IFailureDiagnosisClassifier? diagnosisClassifier = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -86,6 +88,22 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _incrementalSyncOptions = incrementalSyncOptions ?? IncrementalSyncOptions.Default;
         _dataSetDeIdentificationService = dataSetDeIdentificationService;
         _logger = logger;
+        _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
+    }
+
+    /// <summary>
+    /// Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §7-8: this pipeline's per-resource/per-route failure
+    /// path previously passed <c>exception.Message</c> straight through — raw driver/HTTP text, uncategorized,
+    /// unsanitized. This runs the same failure-diagnosis rules the Global Exception Manager uses (so a SQL login
+    /// failure or an Epic invalid_client response gets the same plain-language cause either way) and sanitizes
+    /// the technical detail before either reaches <c>errors</c>/<c>RecordFailedAsync</c>/the route's stored note.
+    /// </summary>
+    private string DescribeFailure(Exception exception)
+    {
+        var diagnosis = _diagnosisClassifier.Diagnose(exception, FHIRBridge.Governance.ErrorCategory.Unknown);
+        var technicalDetail = FHIRBridge.Governance.SafeErrorText.SanitizeOr(
+            exception.Message, "No further technical detail is available.");
+        return $"{diagnosis.Cause} ({technicalDetail})";
     }
 
     public Task<IReadOnlyList<ConfiguredPipelineRunDto>> GetRecentAsync(
@@ -275,7 +293,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         resourceType,
                         routeGroup.Key.SourceConnectionId);
 
-                    errors.Add($"{resourceType}/{routeGroup.Key.SourceConnectionId}: {exception.Message}");
+                    errors.Add($"{resourceType}/{routeGroup.Key.SourceConnectionId}: {DescribeFailure(exception)}");
 
                     continue;
                 }
@@ -594,7 +612,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 resourceType,
                 route.Route.Id);
 
-            errors.Add($"{resourceType}/route/{route.Route.Id}: {exception.Message}");
+            var failureDescription = DescribeFailure(exception);
+            errors.Add($"{resourceType}/route/{route.Route.Id}: {failureDescription}");
 
             await _routeExecutionRepository.CompleteAsync(
                 routeExecutionId,
@@ -602,7 +621,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 resources.Count,
                 0,
                 0,
-                exception.Message,
+                failureDescription,
                 DateTime.UtcNow,
                 cancellationToken);
 

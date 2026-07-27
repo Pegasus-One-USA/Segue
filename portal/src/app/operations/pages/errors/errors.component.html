@@ -1,8 +1,31 @@
 <div class="list-page">
   <div class="page-header">
     <h1>Errors</h1>
-    <p class="page-sub">Unhandled exceptions captured centrally across the API, Worker, and workflow engine. Search by Error Reference ID to locate a specific incident.</p>
+    <p class="page-sub">Problems that happened while running your pipelines or connecting to FHIRBridge. Some you can fix yourself (like an expired connection); others need our support team — the "What to do" column tells you which.</p>
   </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one problem that happened somewhere in FHIRBridge</strong> — while running a pipeline, dispatching a schedule, or handling a webhook. Routine, expected outcomes (a wrong password, a duplicate name) are handled elsewhere and never show up here — everything on this screen is a genuine, unexpected failure.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">What to do <span class="info-heading-hint">— shown in the "What to do" column</span></h4>
+        <dl class="info-defs">
+          <div class="info-def">
+            <dt><span class="info-tag">Check your configuration</span></dt>
+            <dd>Something in your own environment likely needs attention — an expired connection, an unreachable destination, a bad mapping. Worth investigating yourself first.</dd>
+          </div>
+          <div class="info-def">
+            <dt><span class="info-tag">Contact support</span></dt>
+            <dd>Not something you can fix from here. Click the row, use <strong>"Copy for support"</strong>, and send the reference ID to your support team.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <p class="info-note">Click a row to see the full technical detail (exception type, message, stack trace) — collapsed by default to keep the list readable. The <strong>Correlation ID</strong> links to Correlation Search, showing everything else that happened around the same event.</p>
+    </div>
+  </details>
 
   <div class="filter-bar">
     <input
@@ -59,7 +82,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
@@ -71,33 +94,13 @@
           <td mat-cell *matCellDef="let r"><code class="mono">{{ r.errorReferenceId || '—' }}</code></td>
         </ng-container>
 
-        <ng-container matColumnDef="severity">
-          <th mat-header-cell *matHeaderCellDef>Severity</th>
-          <td mat-cell *matCellDef="let r"><span class="severity-badge" [class]="severityClass(r.severity)">{{ r.severity }}</span></td>
-        </ng-container>
-
-        <ng-container matColumnDef="category">
-          <th mat-header-cell *matHeaderCellDef>Category</th>
-          <td mat-cell *matCellDef="let r">{{ r.category || '—' }}</td>
-        </ng-container>
-
-        <ng-container matColumnDef="status">
-          <th mat-header-cell *matHeaderCellDef>Status</th>
-          <td mat-cell *matCellDef="let r"><span class="status-badge" [class]="'status-' + (r.status || 'open').toLowerCase()">{{ r.status || 'Open' }}</span></td>
-        </ng-container>
-
         <ng-container matColumnDef="module">
-          <th mat-header-cell *matHeaderCellDef>Module</th>
+          <th mat-header-cell *matHeaderCellDef>Where</th>
           <td mat-cell *matCellDef="let r">{{ r.module || '—' }}</td>
         </ng-container>
 
-        <ng-container matColumnDef="exceptionType">
-          <th mat-header-cell *matHeaderCellDef>Exception</th>
-          <td mat-cell *matCellDef="let r"><span class="mono">{{ r.exceptionType }}</span></td>
-        </ng-container>
-
         <ng-container matColumnDef="message">
-          <th mat-header-cell *matHeaderCellDef>Message</th>
+          <th mat-header-cell *matHeaderCellDef>What happened</th>
           <td mat-cell *matCellDef="let r">
             <span
               class="clickable"
@@ -107,11 +110,13 @@
               (click)="toggleStackTrace(r.id)"
               (keydown.enter)="toggleStackTrace(r.id)"
               (keydown.space)="toggleStackTrace(r.id); $event.preventDefault()"
-            >{{ r.message }}</span>
+            >{{ r.userFriendlyMessage || r.message }}</span>
             @if (expandedId() === r.id) {
               <div class="detail-panel">
-                @if (r.userFriendlyMessage) { <p><strong>User message:</strong> {{ r.userFriendlyMessage }}</p> }
                 <p class="detail-context">
+                  @if (r.severity) { <span>Severity: <code>{{ r.severity }}</code></span> }
+                  @if (r.category) { <span>Category: <code>{{ r.category }}</code></span> }
+                  @if (r.diagnosisAction) { <span>Diagnosis: <code>{{ r.diagnosisAction }}</code></span> }
                   @if (r.executionId) { <span>Execution: <code>{{ r.executionId }}</code></span> }
                   @if (r.workflowId) { <span>Workflow: <code>{{ r.workflowId }}</code></span> }
                   @if (r.endpointId) { <span>Endpoint: <code>{{ r.endpointId }}</code></span> }
@@ -119,15 +124,38 @@
                   @if (r.spanId) { <span>Span: <code>{{ r.spanId }}</code></span> }
                 </p>
                 @if (r.resolvedBy) { <p><strong>Resolved by:</strong> {{ r.resolvedBy }} ({{ r.resolvedOnUtc | date:'medium' }})</p> }
+                <button class="btn btn-ghost btn-sm" type="button" (click)="copyForSupport(r); $event.stopPropagation()">Copy for support</button>
+                <p class="detail-heading">Technical details</p>
+                <p class="mono">{{ r.exceptionType }}: {{ r.message }}</p>
                 @if (r.stackTrace) { <pre class="stack-trace">{{ r.stackTrace }}</pre> }
               </div>
             }
           </td>
         </ng-container>
 
+        <ng-container matColumnDef="whatToDo">
+          <th mat-header-cell *matHeaderCellDef>What to do</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="action-badge" [class.action-self]="isSelfFixable(r)" [class.action-support]="!isSelfFixable(r)">
+              {{ actionLabel(r) }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r"><span class="status-badge" [class]="'status-' + (r.status || 'open').toLowerCase()">{{ r.status || 'Open' }}</span></td>
+        </ng-container>
+
         <ng-container matColumnDef="correlationId">
           <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
-          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.correlationId || '—' }}</code></td>
+          <td mat-cell *matCellDef="let r">
+            @if (r.correlationId) {
+              <a class="mono link" [routerLink]="['/governance/correlation-search']" [queryParams]="{ correlationId: r.correlationId }">{{ r.correlationId }}</a>
+            } @else {
+              <code class="mono">—</code>
+            }
+          </td>
         </ng-container>
 
         <ng-container matColumnDef="actions">
@@ -148,11 +176,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
-      <div class="empty-state">No errors found.</div>
+    @if (result().items.length === 0 && !loading()) {
+      <div class="empty-state">No errors — everything's running smoothly.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

@@ -1,8 +1,22 @@
 <div class="list-page">
   <div class="page-header">
     <h1>Endpoint Health</h1>
-    <p class="page-sub">Periodic connectivity checks against enabled source connections. Destination connectivity isn't covered yet — there's no generic per-destination-type test today.</p>
+    <p class="page-sub">Periodic connectivity checks against enabled source connections and most file/cloud-storage destinations. SQL Server/database destinations and SFTP aren't monitored yet.</p>
   </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one periodic connectivity check</strong> — a lightweight "can we still reach it" ping, not an actual data sync.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">What's covered</h4>
+        <p><strong>Every enabled source connection</strong>, plus most file-export and cloud-storage destinations (S3, Blob Storage, Snowflake, CSV/Excel exports, and similar). <strong>SQL Server/database destinations and SFTP aren't monitored yet.</strong></p>
+      </section>
+
+      <p class="info-note">This screen shows nothing until an administrator turns on connectivity monitoring — an empty table usually means it isn't enabled yet, not that everything is offline.</p>
+    </div>
+  </details>
 
   <div class="filter-bar">
     <button class="btn" type="button" (click)="load()">Refresh</button>
@@ -10,7 +24,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Checked At</th>
@@ -47,11 +61,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No health checks recorded yet. Ask an administrator to enable endpoint health checks.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>
