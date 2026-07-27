@@ -1110,6 +1110,19 @@ export class DestinationWizardComponent implements OnInit {
   toggleResource(r: string): void {
     if (this.isResourceSelected(r)) {
       this.selectedResources.update(list => list.filter(x => x !== r));
+      // Deselecting here only ever shrank dest_resources — mappingRows/targetByResource/extraTablesByGroup/
+      // payloadFieldsByResource kept every row this resource ever had, so buildMappingSummaryDocument (which
+      // derives its resource list from mappingRows, not selectedResources) and the mapping-profile import it
+      // feeds kept saving this resource's mapping to the DB even after unselecting it here. Prune all of it.
+      this.mappingRows.update(rows => rows.filter(row => row.resource !== r));
+      const drop = <T>(m: Record<string, T>): Record<string, T> => {
+        const rest = { ...m };
+        delete rest[r];
+        return rest;
+      };
+      this.targetByResource.update(drop);
+      this.extraTablesByGroup.update(drop);
+      this.payloadFieldsByResource.update(drop);
       return;
     }
     this.selectedResources.update(list => [...list, r]);
@@ -1533,8 +1546,12 @@ export class DestinationWizardComponent implements OnInit {
     // full rich shape (joins, instance selection) so re-opening the wizard restores them exactly.
     config['dest_mappingCount'] = String(this.mappingRows().length);
     config['dest_targets']      = JSON.stringify(this.targetByResource());
-    config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
-    config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
+    // Disabled for now (not removed — re-enable if needed later): dest_extraTables is fully superseded by
+    // dest_mapping_summary_v1 (loadMappingSummary restores extraTablesByGroup on its own); dest_sourcePayloadFields
+    // is the only thing that restores payloadFieldsByResource on reopen, so re-enable that one first if this
+    // ever needs to come back.
+    // config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
+    // config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
     config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource()));
     config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
