@@ -134,10 +134,13 @@
           <p class="eaf-hint">Decides which Client ID set applies. Epic issues separate IDs per environment.</p>
         </div>
 
-        <div class="eaf-field eaf-field--full">
+        <div class="eaf-field eaf-field--full" [class.eaf-field--error]="saveErrorMessage()">
           <label class="eaf-label" for="eaf-appName">App Name</label>
           <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
                  placeholder="e.g. FHIRBridge Provider Launch" />
+          @if (saveErrorMessage()) {
+            <p class="eaf-error-msg">{{ saveErrorMessage() }}</p>
+          }
         </div>
       </div>
     </div>

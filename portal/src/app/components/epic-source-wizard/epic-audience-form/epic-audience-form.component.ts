@@ -2,6 +2,7 @@ import {
   Component, output, inject, signal, computed, OnInit, DestroyRef, ElementRef, ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { take } from 'rxjs/operators';
 import { ReactiveFormsModule, FormBuilder, Validators, ValidatorFn, AbstractControl, ValidationErrors } from '@angular/forms';
 import { WizardService, APPLICATION_TYPE_TO_AUDIENCE, AUTHENTICATION_TYPE_TO_AUTH_METHOD } from '../../../services/wizard.service';
 import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
@@ -312,6 +313,12 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
 export class EpicAudienceFormComponent implements OnInit {
   readonly cancelled = output<void>();
   readonly saved     = output<void>();
+
+  /** Set when the backend rejects a save (e.g. "A source connection named 'X' already exists.") — shown
+   *  inline under App Name (the field the user actually needs to change to retry) instead of only as a
+   *  toast, and clears itself the moment the user edits the name again. The dialog stays open on failure —
+   *  `saved` only fires once WizardService.save() actually confirms success (see save() below). */
+  protected readonly saveErrorMessage = signal<string | null>(null);
 
   @ViewChild('formRoot') private readonly formRoot?: ElementRef<HTMLElement>;
 
@@ -672,6 +679,17 @@ export class EpicAudienceFormComponent implements OnInit {
     this.form.controls.authMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncValidators());
+
+    // Clear a previous save failure (e.g. "name already exists") the moment the user edits the name
+    // again — it was already surfaced and shouldn't linger once they've acted on it.
+    this.form.controls.appName.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        if (this.saveErrorMessage()) {
+          this.saveErrorMessage.set(null);
+          this.form.controls.appName.setErrors(null);
+        }
+      });
 
     // Switching the base URL to/from a loopback address flips whether the OAuth/credential fields are required.
     this.form.controls.epicBaseUrl.valueChanges
@@ -1319,7 +1337,18 @@ export class EpicAudienceFormComponent implements OnInit {
     }
     // Backend System has no shared Resource Type picker — fall back to whichever
     // retrieval method's own Resource Type list is currently set.
-    this.wiz.resources.set(cfg.showResourcePicker ? (v.resources ?? []) : this.activeRetrievalResourceTypes());
+    //
+    // Provider Standalone's retrieval method is always search-rest (a forced one-shot fetch —
+    // see lockRetrievalMethodIfOneShot), and ConfigurationService.ValidateRetrievalConfiguration
+    // rejects search-rest with zero resourceTypes. Standalone has no dedicated retrieval Resource
+    // Type picker of its own (see the field registry's comment on searchRestResourceType above) —
+    // by design it was meant to reuse the shared `resources` control fixed to the full supported
+    // set. `resources` now defaults to empty (a brand-new source starts with no resource-derived
+    // scopes — see the form builder), which silently broke that reuse for Standalone specifically:
+    // there's no UI left to populate it, so every Standalone save failed backend validation with
+    // "At least one resource type is required for Search (REST) retrieval." Default it here instead.
+    const standaloneResources = cfg.retrievalScope === 'oneshot' ? [...SUPPORTED_RESOURCE_TYPES] : (v.resources ?? []);
+    this.wiz.resources.set(cfg.showResourcePicker ? standaloneResources : this.activeRetrievalResourceTypes());
 
     const formValuesToSave = {
       stepName:    resolvedName,
@@ -1402,8 +1431,25 @@ export class EpicAudienceFormComponent implements OnInit {
     console.log('formValues (connection basics):', formValuesToSave);
     console.log('fields (everything else stored on the node):', fieldsToSave);
 
+    // Subscribe BEFORE calling save() — it fires synchronously on success/failure once the HTTP call
+    // settles, and save() itself doesn't return anything to await. Only close the dialog (via `saved`)
+    // once the backend actually confirms success; on failure, surface the real error under App Name
+    // (the field the user needs to change to retry) and keep everything else exactly as they left it.
+    this.wiz.saveOutcome$.pipe(take(1)).subscribe(outcome => {
+      if (outcome.success) {
+        this.saved.emit();
+        return;
+      }
+      this.saveErrorMessage.set(outcome.error ?? 'Save failed.');
+      this.form.controls.appName.setErrors({ server: true });
+      this.form.controls.appName.markAsTouched();
+      queueMicrotask(() => {
+        const el = this.formRoot?.nativeElement.querySelector<HTMLInputElement>('#eaf-appName');
+        el?.focus();
+        el?.select();
+      });
+    });
     this.wiz.save(formValuesToSave, fieldsToSave);
-    this.saved.emit();
   }
 
   protected cancel(): void { this.cancelled.emit(); }

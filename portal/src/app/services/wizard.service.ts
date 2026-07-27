@@ -1,4 +1,5 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
+import { Subject } from 'rxjs';
 import { PipelineStore } from './pipeline.store';
 import { ScopeBuilderService } from './scope-builder.service';
 import { ToastService } from './toast.service';
@@ -91,6 +92,11 @@ export class WizardService {
   readonly entityId     = signal<string | null>(null);
   /** Bumped after every successful entity-mode save so list pages can react via an effect() without a dialog. */
   readonly saved        = signal(0);
+  /** Emits once per save() call, after the create/update HTTP call actually settles — save() itself is
+   *  fire-and-forget (subscribes internally and returns immediately), so a caller that needs to know the
+   *  real outcome (e.g. keep a dialog open and let the user fix a validation error, rather than assuming
+   *  success the instant save() is invoked) should subscribe to this first. */
+  readonly saveOutcome$ = new Subject<{ success: boolean; error?: string }>();
 
   // ── step ──────────────────────────────────────────────────────────────────
   readonly step = signal<WizardStep>(1);
@@ -445,6 +451,7 @@ export class WizardService {
             this.store.addNode(newNode);
             this.toast.show('Epic added', `${fields['__name']} added to the canvas.`);
           }
+          this.saveOutcome$.next({ success: true });
           this.close();
           return;
         }
@@ -455,11 +462,16 @@ export class WizardService {
           id ? 'Source Connection updated successfully.' : 'Source Connection created successfully.'
         );
         this.saved.update(n => n + 1);
+        this.saveOutcome$.next({ success: true });
         this.close();
       },
       error: (err) => {
-        const msg = err?.error?.title ?? err?.error?.message ?? err?.message ?? 'Failed to save the Source Connection.';
-        this.toast.show('Save failed', typeof msg === 'string' ? msg : 'Failed to save the Source Connection.', 'error');
+        // `.error.error` first — ConfigurationService's validation failures (InvalidOperationException,
+        // caught by the global handler) come back as { error: "<message>" }, not .title/.message.
+        const msg = err?.error?.error ?? err?.error?.title ?? err?.error?.message ?? err?.message ?? 'Failed to save the Source Connection.';
+        const errorText = typeof msg === 'string' ? msg : 'Failed to save the Source Connection.';
+        this.toast.show('Save failed', errorText, 'error');
+        this.saveOutcome$.next({ success: false, error: errorText });
       },
     });
   }
