@@ -1,0 +1,81 @@
+portal/src/app/settings/pages/branding/branding-settings.component.scss
+  s_d68f9144c308b2::t_03526ed6bd7549 102-107
+portal/public/mock/branding/contoso.json
+  s_d68f9144c308b2::t_2ca3b3235e45a1 15
+portal/src/app/models/brand-configuration.model.ts
+  s_d68f9144c308b2::t_f9bd7867241c35 3,8
+  s_d68f9144c308b2::t_ce2e29fa84327b 54
+  s_d68f9144c308b2::t_dbf39332929b11 4-7
+  s_d68f9144c308b2::t_f2fe856bae39bd 35
+portal/src/app/services/loading.service.ts
+  s_d68f9144c308b2::t_316b9774ee0f53 1,4-5,17-29,40-41
+  s_d68f9144c308b2::t_cc6290265dcb88 6
+  s_d68f9144c308b2::t_024f3e4f4c830d 2-3,7-16,30-39
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  s_d68f9144c308b2::t_504b8ffa7934da 199
+  s_d68f9144c308b2::t_603233d799b86a 49
+  s_d68f9144c308b2::t_ca600d98004933 73
+  s_d68f9144c308b2::t_9d9dd6dfde796f 11
+  s_d68f9144c308b2::t_acd0d44ec05abe 46-48,50-52
+  s_d68f9144c308b2::t_e90c415706bc8d 173
+portal/src/app/components/shared/global-loader/global-loader.component.html
+  s_d68f9144c308b2::t_421ec1041c6149 2-35
+  s_d68f9144c308b2::t_a184faf3efabce 1,36-37
+portal/src/app/auth/services/invitation.service.ts
+  s_d68f9144c308b2::t_a17cc4d2d6e233 58
+  s_d68f9144c308b2::t_7ae798c16266b6 165
+  s_d68f9144c308b2::t_e9eb9890152eca 8
+  s_d68f9144c308b2::t_5d2a272bfe6bff 132
+  s_d68f9144c308b2::t_87ee488c0491d8 24
+  s_d68f9144c308b2::t_9394b3ab49570b 232
+  s_d68f9144c308b2::t_be81c62b551614 159
+  s_d68f9144c308b2::t_0f7055a363dccf 226
+  s_d68f9144c308b2::t_08bacfc7952dd1 138
+  s_d68f9144c308b2::t_6a1d54d2b67f39 257
+portal/public/mock/branding/acme.json
+  s_d68f9144c308b2::t_f378e3669f67e2 15
+portal/src/app/components/shared/global-loader/global-loader.component.scss
+  s_d68f9144c308b2::t_18e0aacf37f131 40,43-45,52-54
+  s_d68f9144c308b2::t_439cd6eaeee9fb 1-39,41-42,46-51,55-64,139-140,144-147,149
+  s_d68f9144c308b2::t_fe56bbff1a40ce 78,84-87,90-91,103-104,106,114-115
+  s_d68f9144c308b2::t_68a2128f0358ed 123,126
+  s_d68f9144c308b2::t_b58483c1c13ca3 65-77,79-83,88-89,92-102,105,107-113,116-122,124-125,127-138,141-143,148
+portal/public/mock/branding/default.json
+  s_d68f9144c308b2::t_34288dc3132d7d 15
+portal/public/mock/branding/northwind.json
+  s_d68f9144c308b2::t_875ff1b79a5fd9 15
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  s_d68f9144c308b2::t_6ef1c864b176b8 187-200
+portal/src/app/app.component.ts
+  s_d68f9144c308b2::t_283acc39d22c3c 7,13-15,18
+  s_d68f9144c308b2::t_b5d23288982efd 34-35,42-43
+  s_d68f9144c308b2::t_42b8fe3a669a87 8,16-17,29-33,36-41,44-48
+  s_d68f9144c308b2::t_1239c6e6dfb8c4 2
+portal/src/app/services/branding.service.ts
+  s_d68f9144c308b2::t_3047485e51d617 93-100
+  s_d68f9144c308b2::t_ca2f43b8089027 24-27
+  s_d68f9144c308b2::t_9c58096e435a74 6
+portal/src/app/app.config.ts
+  s_d68f9144c308b2::t_0eb00e26648578 13
+  s_d68f9144c308b2::t_4fe01c0ac55196 61-63
+portal/src/app/core/loading.interceptor.ts
+  s_d68f9144c308b2::t_c7df134b224222 1-17
+portal/src/app/components/shared/global-loader/global-loader.component.ts
+  s_d68f9144c308b2::t_4919abe358dd90 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "1f42d577cc5f45210d853e656b43c00c724d5ca2",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
