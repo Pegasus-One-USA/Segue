@@ -267,20 +267,31 @@ function Test-Health {
     )
 
     Write-Host "Health-checking $Name at $Url..."
-    for ($i = 1; $i -le $HealthCheckRetries; $i++) {
-        try {
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
-            if ($response.StatusCode -eq 200) {
-                Write-Host "$Name is healthy."
-                return
+    # Gateway/DemoApp's cert is issued for the public hostname (e.g. segue.pegasusone.com), not
+    # "localhost" -- this internal-only probe intentionally skips certificate validation since it's
+    # just confirming the process is up and responding, not verifying the public TLS chain. Windows
+    # PowerShell 5.1's Invoke-WebRequest has no -SkipCertificateCheck flag, so this goes through
+    # ServicePointManager instead, scoped to this function and restored afterward either way.
+    $originalCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    try {
+        for ($i = 1; $i -le $HealthCheckRetries; $i++) {
+            try {
+                $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
+                if ($response.StatusCode -eq 200) {
+                    Write-Host "$Name is healthy."
+                    return
+                }
+            } catch {
+                Write-Host "Attempt $i/$HealthCheckRetries not healthy yet: $($_.Exception.Message)"
             }
-        } catch {
-            Write-Host "Attempt $i/$HealthCheckRetries not healthy yet: $($_.Exception.Message)"
+            Start-Sleep -Seconds $HealthCheckDelaySeconds
         }
-        Start-Sleep -Seconds $HealthCheckDelaySeconds
-    }
 
-    throw "$Name did not become healthy at $Url after $HealthCheckRetries attempts."
+        throw "$Name did not become healthy at $Url after $HealthCheckRetries attempts."
+    } finally {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $originalCallback
+    }
 }
 
 # --- Static frontends first (no service -- served by Gateway / DemoApi respectively). These must
@@ -311,13 +322,13 @@ $services = @(
        DisplayName = "FHIRBridge API"; HealthCheckUrl = "http://127.0.0.1:$ApiPort/health";
        EnvironmentVariables = @("ASPNETCORE_URLS=http://127.0.0.1:$ApiPort") }
     @{ Name = "FHIRBridge.Gateway"; Folder = "Gateway"; DestDir = "fhirbridge-gateway"; Exe = "FHIRBridge.Gateway.exe";
-       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "http://localhost:$GatewayPort/";
-       EnvironmentVariables = @("ASPNETCORE_URLS=http://+:$GatewayPort") }
+       DisplayName = "FHIRBridge Gateway"; HealthCheckUrl = "https://localhost:$GatewayPort/";
+       EnvironmentVariables = @("ASPNETCORE_URLS=https://+:$GatewayPort") }
     @{ Name = "FHIRBridge.Worker"; Folder = "Worker"; DestDir = "fhirbridge-worker"; Exe = "FHIRBridge.Worker.exe";
        DisplayName = "FHIRBridge Worker"; HealthCheckUrl = $null; EnvironmentVariables = @() }
     @{ Name = "FHIRBridge.DemoApp"; Folder = "DemoApi"; DestDir = "demoapp-api"; Exe = "HealthAppBackend.exe";
-       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "http://localhost:$DemoApiPort/";
-       EnvironmentVariables = @("ASPNETCORE_URLS=http://+:$DemoApiPort", "DEMOAPP_PORTAL_PATH=$demoappPortalDir") }
+       DisplayName = "FHIRBridge Demo App"; HealthCheckUrl = "https://localhost:$DemoApiPort/";
+       EnvironmentVariables = @("ASPNETCORE_URLS=https://+:$DemoApiPort", "DEMOAPP_PORTAL_PATH=$demoappPortalDir") }
 )
 
 foreach ($svc in $services) {

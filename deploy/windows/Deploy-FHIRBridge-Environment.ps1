@@ -272,20 +272,31 @@ function Test-Health {
     param([string]$Name, [string]$Url)
 
     Write-Host "Health-checking $Name at $Url..."
-    for ($i = 1; $i -le $HealthCheckRetries; $i++) {
-        try {
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
-            if ($response.StatusCode -eq 200) {
-                Write-Host "$Name is healthy."
-                return
+    # Gateway/DemoApi's cert is issued for the public hostname (e.g. segue.pegasusone.com), not
+    # "localhost" -- this internal-only probe intentionally skips certificate validation since it's
+    # just confirming the process is up and responding, not verifying the public TLS chain. Windows
+    # PowerShell 5.1's Invoke-WebRequest has no -SkipCertificateCheck flag, so this goes through
+    # ServicePointManager instead, scoped to this function and restored afterward either way.
+    $originalCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    try {
+        for ($i = 1; $i -le $HealthCheckRetries; $i++) {
+            try {
+                $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
+                if ($response.StatusCode -eq 200) {
+                    Write-Host "$Name is healthy."
+                    return
+                }
+            } catch {
+                Write-Host "Attempt $i/$HealthCheckRetries not healthy yet: $($_.Exception.Message)"
             }
-        } catch {
-            Write-Host "Attempt $i/$HealthCheckRetries not healthy yet: $($_.Exception.Message)"
+            Start-Sleep -Seconds $HealthCheckDelaySeconds
         }
-        Start-Sleep -Seconds $HealthCheckDelaySeconds
-    }
 
-    throw "$Name did not become healthy at $Url after $HealthCheckRetries attempts."
+        throw "$Name did not become healthy at $Url after $HealthCheckRetries attempts."
+    } finally {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $originalCallback
+    }
 }
 
 $prefix = $envInfo.Prefix
@@ -320,8 +331,8 @@ $healthChecks += @{ Name = "fhirbridge-$prefix-api"; Url = "http://127.0.0.1:$($
 Deploy-Service -Name "fhirbridge-$prefix-gateway" `
     -SourceDir (Join-Path $ArtifactPath "Gateway") -DestDir (Join-Path $envDeployRoot "fhirbridge-gateway") `
     -ConfigSourceDir (Join-Path $envConfigRoot "fhirbridge-gateway") -ExeName "FHIRBridge.Gateway.exe" `
-    -DisplayName "FHIRBridge $Environment Gateway" -EnvironmentVariables @("ASPNETCORE_URLS=http://+:$($ports.Gateway)")
-$healthChecks += @{ Name = "fhirbridge-$prefix-gateway"; Url = "http://localhost:$($ports.Gateway)/" }
+    -DisplayName "FHIRBridge $Environment Gateway" -EnvironmentVariables @("ASPNETCORE_URLS=https://+:$($ports.Gateway)")
+$healthChecks += @{ Name = "fhirbridge-$prefix-gateway"; Url = "https://localhost:$($ports.Gateway)/" }
 
 # 3. demoapp-api -- serves its own demo portal (via DEMOAPP_PORTAL_PATH, set here automatically to
 # $demoappPortalDir) AND its own API, on the SAME port -- same-origin, exactly like production.
@@ -329,8 +340,8 @@ Deploy-Service -Name "fhirbridge-$prefix-demoapp-api" `
     -SourceDir (Join-Path $ArtifactPath "DemoApi") -DestDir (Join-Path $envDeployRoot "demoapp-api") `
     -ConfigSourceDir (Join-Path $envConfigRoot "demoapp-api") -ExeName "HealthAppBackend.exe" `
     -DisplayName "FHIRBridge $Environment Demo App API" `
-    -EnvironmentVariables @("ASPNETCORE_URLS=http://+:$($ports.DemoApi)", "DEMOAPP_PORTAL_PATH=$demoappPortalDir")
-$healthChecks += @{ Name = "fhirbridge-$prefix-demoapp-api"; Url = "http://localhost:$($ports.DemoApi)/" }
+    -EnvironmentVariables @("ASPNETCORE_URLS=https://+:$($ports.DemoApi)", "DEMOAPP_PORTAL_PATH=$demoappPortalDir")
+$healthChecks += @{ Name = "fhirbridge-$prefix-demoapp-api"; Url = "https://localhost:$($ports.DemoApi)/" }
 
 # 4. fhirbridge-worker -- Host.CreateApplicationBuilder, no Kestrel/HTTP endpoint at all (see
 # src/Worker/FHIRBridge.Worker/Program.cs). ASPNETCORE_URLS would be inert here, so none is set, and
