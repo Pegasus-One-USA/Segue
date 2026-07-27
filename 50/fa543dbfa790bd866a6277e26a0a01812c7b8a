@@ -1,0 +1,188 @@
+src/FHIRBridge.Infrastructure/Health/SqlServerTdeHealthCheck.cs
+  s_37a277480b1ea1::t_5c5c146300b61c 18,20,23
+  s_37a277480b1ea1::t_3733235024ace6 36-37
+  s_37a277480b1ea1::t_baba3017cfeca6 1
+src/FHIRBridge.Application/Services/RunAnomalyDetectionService.cs
+  s_37a277480b1ea1::t_1d027b6338817b 58,64,76,94,98,105,115,117,130-131
+  s_37a277480b1ea1::t_335bc9f551c811 1
+  s_37a277480b1ea1::t_84423bbdf089b2 152-175
+  s_37a277480b1ea1::t_726d0cdef10959 17,21,25,33
+  s_37a277480b1ea1::t_434e880d71f6a1 176
+tests/FHIRBridge.UnitTests/Destinations/GeneratedFileDownloadLinkServiceTests.cs
+  s_37a277480b1ea1::t_db240ff7f6eff1 1,7,25-29,34
+src/Api/FHIRBridge.Api/Controllers/V1/WebhookIngestionController.cs
+  s_37a277480b1ea1::t_cd81975374b836 4,24-26,28,33,38-39,42,44
+  s_37a277480b1ea1::t_b32cdf43590c1d 87-88
+  s_37a277480b1ea1::t_2a6ab06cc7fecc 63-68
+  s_37a277480b1ea1::t_cf950bab943bce 120,122,133
+src/FHIRBridge.Application/Abstractions/Persistence/ISystemSettingsSeeder.cs
+  s_37a277480b1ea1::t_a8121292084a5e 1-5
+  s_37a277480b1ea1::t_f8af9b6acecb27 6-8
+  s_37a277480b1ea1::t_e669d7e587a84b 9-12
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_37a277480b1ea1::t_f6c5a7e609abeb 73-74
+  s_37a277480b1ea1::t_eccb18e4db264b 868-871
+  s_37a277480b1ea1::t_a0c90bfeb590ee 1,92
+  s_37a277480b1ea1::t_c4814deec98811 50
+  s_37a277480b1ea1::t_9fd3bcba6db690 840-844
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_37a277480b1ea1::t_0bcb7be2e5daf2 1-9,17-100
+  s_37a277480b1ea1::t_9d8728f54df980 10-12,14-16
+  s_37a277480b1ea1::t_167a2faaa3e097 101
+  s_37a277480b1ea1::t_a781d4152291a0 13
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_37a277480b1ea1::t_f4224c583f6fea 1
+  s_37a277480b1ea1::t_fa344605299d7d 21,27,32,38,40-46,49-52
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_a5fcd0f359e190::t_c2fc895e5ed868 50
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_37a277480b1ea1::t_3f3b51b16bd044 344
+  s_37a277480b1ea1::t_6973fd4f225607 109-112
+  s_37a277480b1ea1::t_7fc82d20ebb64a 352
+  s_37a277480b1ea1::t_a81b8274ee0f3c 181
+  s_37a277480b1ea1::t_0a5f481c1a77f7 126
+  s_37a277480b1ea1::t_8634fe5d4d6db3 182
+  s_a5fcd0f359e190::t_1d8f201b566a17 299
+  s_37a277480b1ea1::t_15b60b00e3e9e3 113
+src/FHIRBridge.Infrastructure/Persistence/EfSystemSettingRepository.cs
+  s_37a277480b1ea1::t_50e6328b7d0ed7 1-51
+src/FHIRBridge.Application/Abstractions/Caching/ISystemSettingsCache.cs
+  s_37a277480b1ea1::t_f330fbbc5d3c1b 1-20
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  s_37a277480b1ea1::t_24345137a4d052 38-44
+  s_37a277480b1ea1::t_85a9eea06611cb 5,17,19-20,24
+  s_37a277480b1ea1::t_4c9b559fc3fd2d 105,109-111
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_a5fcd0f359e190::t_90ad9bd34f38ee 122-128
+  s_a5fcd0f359e190::t_4613c359e29502 531
+  s_a5fcd0f359e190::t_398ce50336af89 605,617
+  s_a5fcd0f359e190::t_3e67570add2e60 129-131
+  s_a5fcd0f359e190::t_14d70584842e2f 582
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_a5fcd0f359e190::t_f0c2dbc17e4879 33
+src/FHIRBridge.Application/Services/MfaService.cs
+  s_37a277480b1ea1::t_de1dec8d3fabc8 76-78
+  s_37a277480b1ea1::t_a74abcb133b765 54-55
+  s_37a277480b1ea1::t_f834486cc515db 1,16,24,31
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_a5fcd0f359e190::t_acf3a8e3eecdac 200
+  s_a5fcd0f359e190::t_3aa8112dbf6e15 44-45
+  s_a5fcd0f359e190::t_3198aa9611be83 216
+  s_a5fcd0f359e190::t_53745c5b722060 232
+src/Worker/FHIRBridge.Worker/EndpointHealthCheckWorker.cs
+  s_37a277480b1ea1::t_03462b0d30ef75 2
+  s_37a277480b1ea1::t_81a7b842aacb75 22,28,33,39,41-49,52-55
+src/FHIRBridge.Application/Services/ISystemSettingsService.cs
+  s_37a277480b1ea1::t_f05bea91e9d795 1-14
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SystemSettingConfiguration.cs
+  s_37a277480b1ea1::t_368eadd662bc7d 1-20
+  s_37a277480b1ea1::t_6aec085f5ecdb4 21
+src/FHIRBridge.Infrastructure/Caching/InProcessSystemSettingsCache.cs
+  s_37a277480b1ea1::t_efc028c9d1ea27 2-66,81-85
+  s_37a277480b1ea1::t_f465475d3bd725 67,69-79
+  s_37a277480b1ea1::t_81ec35e124984a 1
+  s_37a277480b1ea1::t_9bb990dba35328 68
+  s_37a277480b1ea1::t_3667ffcc483d16 80
+src/FHIRBridge.Application/Mappings/SystemSettingMapper.cs
+  s_37a277480b1ea1::t_6ea043ba5d7195 1-16
+src/Worker/FHIRBridge.Worker/ScheduleDispatcherWorker.cs
+  s_37a277480b1ea1::t_9b2f87c1623276 24,30,35,41,43-51,54-57
+  s_37a277480b1ea1::t_7aacc8e233f932 1
+src/Api/FHIRBridge.Api/Controllers/V1/SystemSettingsController.cs
+  s_37a277480b1ea1::t_ac08a9767a0493 1-49
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_37a277480b1ea1::t_271c47704b1d10 52,68-69,85
+  s_37a277480b1ea1::t_2941d11c5c2235 3
+  s_37a277480b1ea1::t_02deb263ff506f 614-620,623-624
+tests/FHIRBridge.UnitTests/Auth/LocalAuthServiceMfaTests.cs
+  s_37a277480b1ea1::t_cadfb5cbc77037 1,25,28-39,48
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_a5fcd0f359e190::t_408c7268276afb 62-63
+src/Api/FHIRBridge.Api/Program.cs
+  s_37a277480b1ea1::t_b2749766a7119a 501-505
+  s_37a277480b1ea1::t_1cb938789ef336 266
+  s_37a277480b1ea1::t_e37bad28dba89e 208-212,214-231
+  s_37a277480b1ea1::t_bdf81256eaba69 451-462
+  s_37a277480b1ea1::t_e4822cad6403b8 267
+  s_37a277480b1ea1::t_a3a7916e5a9b46 500
+src/Worker/FHIRBridge.Worker/AlertEvaluationWorker.cs
+  s_37a277480b1ea1::t_873d73dfc94344 1
+  s_37a277480b1ea1::t_8366022de5029e 12,18,23,29,31-38,41-44
+src/FHIRBridge.Application/Services/SystemSettingsService.cs
+  s_37a277480b1ea1::t_0bc0831e76a9c9 1-44
+src/FHIRBridge.Infrastructure/Destinations/MappedMongoDestinationWriter.cs
+  s_a5fcd0f359e190::t_1fbecf8556ecf0 1-95,100-156
+  s_a5fcd0f359e190::t_0120789588871c 96-99
+  s_a5fcd0f359e190::t_82503e4a471987 157
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_37a277480b1ea1::t_527ceaa3f2d508 38
+src/FHIRBridge.Infrastructure/Destinations/GeneratedFileDownloadLinkService.cs
+  s_37a277480b1ea1::t_e62d4cae97513f 4
+  s_37a277480b1ea1::t_587a640b685904 23,26-29,33
+  s_37a277480b1ea1::t_4c7fb723dd5844 56-59
+src/FHIRBridge.Domain/Enums/DestinationType.cs
+  s_a5fcd0f359e190::t_42eb418288d609 25-26
+src/Worker/FHIRBridge.Worker/AuditChainVerificationWorker.cs
+  s_37a277480b1ea1::t_76969c0fb73ff5 23,28,34,36-43,46-49
+  s_37a277480b1ea1::t_04ed420eaa74ab 1
+  s_37a277480b1ea1::t_4fb6ad3297f2c5 17
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260727172454_AddSystemSettings.cs
+  s_37a277480b1ea1::t_a62d2d442125fe 1-51
+src/FHIRBridge.Application/DTOs/SystemSettingDto.cs
+  s_37a277480b1ea1::t_ea150a62e82116 1-11
+src/FHIRBridge.Infrastructure/Terminology/CachingTerminologyLookupService.cs
+  s_37a277480b1ea1::t_0ba92289036ff6 21-22,27,32-33,49-55
+  s_37a277480b1ea1::t_20f3b80e5738aa 2
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_37a277480b1ea1::t_88200467ba2b16 2,23,34,44,48-56
+  s_37a277480b1ea1::t_190f74a2a38854 86-87,94
+  s_37a277480b1ea1::t_9793c4e34870d0 154-155
+  s_37a277480b1ea1::t_48e72ea17ace75 57
+src/FHIRBridge.Domain/Entities/SystemSetting.cs
+  s_37a277480b1ea1::t_77e01a173cfbab 1-40
+src/FHIRBridge.Infrastructure/Persistence/InMemorySystemSettingRepository.cs
+  s_37a277480b1ea1::t_25e4e9580e33e1 1-41
+src/FHIRBridge.Application/Abstractions/Persistence/ISystemSettingRepository.cs
+  s_37a277480b1ea1::t_d90387f01432e8 1-14
+src/FHIRBridge.Infrastructure/Terminology/CachingTerminologyTranslationService.cs
+  s_37a277480b1ea1::t_0b563d07b00e96 20-21,26,31-32,52-58
+  s_37a277480b1ea1::t_2f1b33fbc1e1c6 2
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_a5fcd0f359e190::t_b15bfa5645a23c 43
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260727172454_AddSystemSettings.Designer.cs
+  s_37a277480b1ea1::t_bb8a4305965907 1-3223
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_2b3e33386ac39d::t_a5bd5100f95838 2014-2069
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "50fa543dbfa790bd866a6277e26a0a01812c7b8a",
+  "prompts": {},
+  "sessions": {
+    "s_2b3e33386ac39d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8eada359-cff2-4dd8-a061-e81bee93373b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_37a277480b1ea1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2af7fe59-d20a-4318-82a5-82618fa80564",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a5fcd0f359e190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69d7b858-5290-4282-aeda-ff2bd1655728",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
