@@ -317,10 +317,6 @@
     border-color: var(--color-primary);
     background: var(--color-primary-soft);
   }
-  &.locked {
-    border-style: dashed;
-    cursor: not-allowed;
-  }
 }
 
 .dw-rc-check {
@@ -365,21 +361,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.dw-rc-hint {
-  display: block;
-  font-size: 10.5px;
-  font-style: italic;
-  color: var(--color-info-strong);
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &--locked {
-    color: var(--color-muted-2);
-  }
 }
 
 /* ── Dev/demo: load a previously saved mapping snapshot (independent of any node/workflow) ──── */

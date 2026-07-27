@@ -1098,10 +1098,6 @@ export class DestinationWizardComponent implements OnInit {
   // Each resource is selected independently — no required/recommended auto-selection or locking.
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
 
-  isResourceLocked(_r: string): boolean { return false; }
-
-  resourceHintFor(_r: string): string | null { return null; }
-
   toggleResource(r: string): void {
     if (this.isResourceSelected(r)) {
       this.selectedResources.update(list => list.filter(x => x !== r));
