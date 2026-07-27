@@ -72,6 +72,12 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Workflow pending a copy — the modal's name field always starts empty. */
   readonly copyModal = signal<CopyModal | null>(null);
 
+  readonly sortColumn = signal<SortColumn>('name');
+  readonly sortDirection = signal<SortDirection>('asc');
+  readonly pageSizeOptions = [10, 20, 50];
+  readonly pageSize = signal(20);
+  readonly pageIndex = signal(0);
+
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
     if (!q) return this.summaries();
@@ -132,6 +138,19 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       this.sortColumn.set(column);
       this.sortDirection.set('asc');
     }
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.pageIndex.set(0);
+  }
+
+  prevPage(): void {
+    this.pageIndex.update(i => Math.max(0, i - 1));
+  }
+
+  nextPage(): void {
+    this.pageIndex.update(i => Math.min(this.totalPages() - 1, i + 1));
   }
 
   ngOnDestroy(): void {
