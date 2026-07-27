@@ -89,8 +89,13 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         if (response.StatusCode != HttpStatusCode.Accepted)
         {
             var body = await SafeReadAsync(response, cancellationToken);
+            // Keep only a short snippet of the response body — some servers (e.g. Epic) return a full HTML error
+            // page, which is noise in logs and must never reach the UI. The status + reason are what matter.
+            var snippet = string.IsNullOrWhiteSpace(body)
+                ? string.Empty
+                : $" {(body.Length > 300 ? body[..300] + "…" : body)}";
             throw new InvalidOperationException(
-                $"Bulk export kick-off returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {kickOffUrl}. {body}");
+                $"Bulk export kick-off returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {kickOffUrl}.{snippet}");
         }
 
         var statusUrl = response.Headers.Location?.ToString()

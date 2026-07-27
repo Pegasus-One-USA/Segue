@@ -12,6 +12,7 @@
   "website": "https://fhirbridge.com",
   "emailFooterText": "Segue Healthcare Integration Platform",
   "defaultThemeMode": "light",
+  "loaderStyle": "list",
   "assets": {
     "logoUrl": "",
     "darkLogoUrl": "",

@@ -1,8 +1,22 @@
 <div class="list-page">
   <div class="page-header">
     <h1>API Requests</h1>
-    <p class="page-sub">Every outbound call to a source/destination/terminology endpoint — method, URL, status, and duration only.</p>
+    <p class="page-sub">Every outbound call to a source/destination/terminology endpoint — method, URL, status, and duration. Click a failed status to see why it failed.</p>
   </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one outbound call FHIRBridge made</strong> to one of your own configured connections — an EHR source (like Epic), a destination, or a terminology service. Only the method, URL, status, and how long it took are recorded — <strong>never the actual health data</strong> being moved.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Reading the Status column</h4>
+        <p><span class="info-tag">2xx</span> means the call succeeded. Anything else — a timeout, a connection refusal, an authentication rejection — usually means the endpoint you configured isn't reachable or your credentials need attention. Click a failed status to see the specific reason.</p>
+      </section>
+
+      <p class="info-note">A slow or frequently-failing endpoint here is a good early signal to check that connection's health before it shows up as a bigger problem in Pipeline Executions.</p>
+    </div>
+  </details>
 
   <div class="filter-bar">
     <input
@@ -19,7 +33,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
@@ -33,13 +47,29 @@
 
         <ng-container matColumnDef="url">
           <th mat-header-cell *matHeaderCellDef>URL</th>
-          <td mat-cell *matCellDef="let r"><span class="mono url-cell">{{ r.url }}</span></td>
+          <td mat-cell *matCellDef="let r"><span class="mono url-cell" [attr.title]="r.url">{{ r.url }}</span></td>
         </ng-container>
 
         <ng-container matColumnDef="statusCode">
           <th mat-header-cell *matHeaderCellDef>Status</th>
           <td mat-cell *matCellDef="let r">
-            <span class="status-badge" [class]="statusClass(r.statusCode)">{{ r.statusCode ?? 'No response' }}</span>
+            @if (r.error) {
+              <span
+                class="status-badge clickable"
+                role="button"
+                tabindex="0"
+                [class]="statusClass(r.statusCode)"
+                [attr.aria-expanded]="expandedId() === r.id"
+                (click)="toggleExpanded(r.id)"
+                (keydown.enter)="toggleExpanded(r.id)"
+                (keydown.space)="toggleExpanded(r.id); $event.preventDefault()"
+              >{{ r.statusCode ?? 'No response' }}</span>
+              @if (expandedId() === r.id) {
+                <div class="detail-panel">{{ r.error }}</div>
+              }
+            } @else {
+              <span class="status-badge" [class]="statusClass(r.statusCode)">{{ r.statusCode ?? 'No response' }}</span>
+            }
           </td>
         </ng-container>
 
@@ -58,11 +88,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No API request entries found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

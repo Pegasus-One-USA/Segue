@@ -10,6 +10,7 @@ import { tap } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { httpErrorSanitizerInterceptor } from './core/http-error-sanitizer.interceptor';
+import { loadingInterceptor } from './core/loading.interceptor';
 import { IAuthService } from './auth/services/i-auth.service';
 import { IUserService } from './auth/services/i-user.service';
 import { AuthApiService } from './auth/services/auth-api.service';
@@ -57,7 +58,9 @@ export const appConfig: ApplicationConfig = {
     // here — it popped a blocking modal on every backend error, which interrupted workflow testing.
     // The backend still captures every exception with a reference id (Monitoring → Errors). Re-add it
     // gated to 5xx only if a global dialog is wanted.
-    provideHttpClient(withInterceptors([authInterceptor, httpErrorSanitizerInterceptor])),
+    // loadingInterceptor runs outermost so it wraps every request/response as early/late as
+    // possible, covering the full round-trip including auth's own refresh-and-retry calls.
+    provideHttpClient(withInterceptors([loadingInterceptor, authInterceptor, httpErrorSanitizerInterceptor])),
 
     // ── Real backend wiring (environment.apiBase) ────────────────────────────
     { provide: IAuthService, useClass: AuthApiService },

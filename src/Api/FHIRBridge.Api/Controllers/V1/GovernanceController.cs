@@ -1,5 +1,6 @@
 using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -26,55 +27,56 @@ public sealed class GovernanceController : ControllerBase
 
     [HttpGet("audit-logs")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View the audit trail.")]
-    [ProducesResponseType(typeof(IReadOnlyList<AuditLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<AuditLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAuditLogs(
         [FromQuery] string? correlationId,
         [FromQuery] string? entityType,
         [FromQuery] string? entityId,
+        [FromQuery] int skip,
         [FromQuery] int take,
         CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetAuditLogsAsync(correlationId, entityType, entityId, take, cancellationToken);
+        var results = await _governanceQueryService.GetAuditLogsAsync(correlationId, entityType, entityId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("authentication-logs")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View authentication logs.")]
-    [ProducesResponseType(typeof(IReadOnlyList<AuthenticationLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<AuthenticationLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAuthenticationLogs(
-        [FromQuery] string? correlationId, [FromQuery] int take, [FromQuery] string? authenticationType, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, [FromQuery] string? authenticationType, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetAuthenticationLogsAsync(correlationId, take, cancellationToken, authenticationType);
+        var results = await _governanceQueryService.GetAuthenticationLogsAsync(correlationId, skip, take, cancellationToken, authenticationType);
         return Ok(results);
     }
 
     [HttpGet("data-access-logs")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View patient/resource data access logs.")]
-    [ProducesResponseType(typeof(IReadOnlyList<DataAccessLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<DataAccessLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDataAccessLogs(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetDataAccessLogsAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetDataAccessLogsAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("security-events")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View security events.")]
-    [ProducesResponseType(typeof(IReadOnlyList<SecurityEventDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<SecurityEventDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSecurityEvents(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetSecurityEventsAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetSecurityEventsAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("authorization-logs")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View authorization (permission-denial) logs.")]
-    [ProducesResponseType(typeof(IReadOnlyList<AuthorizationLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<AuthorizationLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAuthorizationLogs(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetAuthorizationLogsAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetAuthorizationLogsAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 

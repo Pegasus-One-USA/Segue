@@ -428,6 +428,17 @@ export class WizardService {
             resourceTypes:          retrievalResourceTypes,
             searchCriteria:         fields['Search criteria'] || null,
             incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
+            // Bulk Export fields — EpicAudienceFormComponent.save() has always written these into `fields`
+            // ('Export scope' / 'Group ID' / 'Patient ID / list' / 'FHIR output format'), but this builder never
+            // read them back out, so every Bulk Export connection silently saved with a null scope/group/patient
+            // list/output format regardless of what the form showed. Patient ID / list is comma-separated in the
+            // form, same split-and-trim pattern as Retrieval resource type above.
+            exportScope:            fields['Export scope'] || null,
+            groupId:                fields['Group ID'] || null,
+            patientIds:             fields['Patient ID / list']
+              ? fields['Patient ID / list'].split(',').map(s => s.trim()).filter(Boolean)
+              : [],
+            outputFormat:           fields['FHIR output format'] || null,
           }
         : null,
     };

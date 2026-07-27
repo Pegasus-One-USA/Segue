@@ -37,6 +37,11 @@
     [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-launch-standalone-patient>
+} @else if (role() === 'BackendSystem') {
+  <app-backend-system
+    [loginTypeLabel]="loginTypeLabel()"
+    (logout)="logout()"
+  ></app-backend-system>
 } @else if (role() === 'Admin') {
   <app-admin-settings
     [loginTypeLabel]="loginTypeLabel()"

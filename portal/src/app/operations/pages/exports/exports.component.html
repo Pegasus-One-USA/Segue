@@ -4,6 +4,20 @@
     <p class="page-sub">Every destination write ("export") completing — CSV, SQL, S3, SFTP, and every other destination type.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one destination write finishing</strong> — a CSV file generated, a SQL table updated, an SFTP upload completed. Think of it as a delivery receipt: did the data actually land where it was supposed to go.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Reading the Status column</h4>
+        <p><span class="info-tag">Succeeded</span> means the write completed and records landed. <span class="info-tag">NoData</span> means the write ran but there was nothing to write — usually normal (no new/changed records that cycle), not a failure.</p>
+      </section>
+
+      <p class="info-note">Row count and file size are shown per export, so you can spot an unexpectedly empty or unusually small delivery at a glance.</p>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"
@@ -19,7 +33,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
@@ -65,11 +79,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No export entries found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

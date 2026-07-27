@@ -761,6 +761,14 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("DiagnosisAction")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("DiagnosisCause")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("EndpointId")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");

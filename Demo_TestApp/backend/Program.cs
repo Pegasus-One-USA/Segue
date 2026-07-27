@@ -276,7 +276,8 @@ app.MapGet("/api/provider-in-app-launch-context", async (HealthAppDbContext db) 
     var settings = await db.WorkflowSettings.FindAsync(1);
     return Results.Ok(new
     {
-        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty
+        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty,
+        standaloneBaseUrl = settings?.StandaloneBaseUrl ?? string.Empty
     });
 });
 
@@ -445,6 +446,8 @@ app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, Epi
     epicSessions.Remove(userId);
     return Results.Ok();
 });
+
+app.MapBackendSystemEndpoints();
 
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback

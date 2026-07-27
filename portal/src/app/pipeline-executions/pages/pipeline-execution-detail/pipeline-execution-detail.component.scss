@@ -5,6 +5,21 @@
   padding: 24px;
 }
 
+.back-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
 .page-header h1 {
   margin: 0 0 4px;
   font-size: 20px;
@@ -97,6 +112,20 @@
 
 .status-success { background: var(--color-success-soft); color: var(--color-success-strong); }
 .status-fail { background: var(--color-error-soft); color: var(--color-error-strong); }
+
+.dq-badge {
+  display: inline-block;
+  min-width: 28px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dq-high { background: var(--color-success-soft); color: var(--color-success-strong); }
+.dq-mid { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+.dq-low { background: var(--color-error-soft); color: var(--color-error-strong); }
 
 .empty-state {
   padding: 32px;

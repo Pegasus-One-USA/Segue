@@ -207,6 +207,8 @@ public sealed class EfExecutionResourceHistoryRecorder : IExecutionResourceHisto
 
     private PipelineRunResourceHistoryDto ToDto(PipelineRunResourceRecord record)
     {
+        // PHI-safe by construction: the raw fetched/normalized/mapped JSON is never decrypted or returned here.
+        // Field-level decrypted values are only available through the gated + audited Data Lineage reveal.
         return new PipelineRunResourceHistoryDto(
             record.Id,
             record.RouteExecutionId,
@@ -214,15 +216,12 @@ public sealed class EfExecutionResourceHistoryRecorder : IExecutionResourceHisto
             record.SourceResourceId,
             record.Stage,
             record.ErrorMessage,
-            _encryptor.Decrypt(record.FetchedJson),
             record.FetchedAtUtc,
-            record.NormalizedJson is null ? null : _encryptor.Decrypt(record.NormalizedJson),
             record.AppliedProfiles is null ? [] : JsonSerializer.Deserialize<IReadOnlyList<string>>(record.AppliedProfiles) ?? [],
             record.Warnings is null ? [] : JsonSerializer.Deserialize<IReadOnlyList<string>>(record.Warnings) ?? [],
             record.DataQualityScore,
             record.MasterPatientId,
             record.NormalizedAtUtc,
-            record.MappedValuesJson is null ? null : _encryptor.Decrypt(record.MappedValuesJson),
             record.MappedAtUtc,
             record.StoredAtUtc,
             record.WriteStatus);

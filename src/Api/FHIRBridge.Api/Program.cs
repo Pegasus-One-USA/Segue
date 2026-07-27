@@ -277,35 +277,59 @@ app.UseExceptionHandler(errorApp =>
             .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
         if (feature?.Error is null) return;
 
+        var (status, message, trusted) = MapException(feature.Error);
+
+        // A non-5xx message is shown to the client only if it's trusted (author-written UserMessage) or passes the
+        // client-safe filter. Otherwise it's null and the manager emits a generic category message. This is the
+        // choke point that stops raw/HTML/technical exception text from ever leaking, no matter what was thrown.
+        var clientMessage = status >= 500
+            ? null
+            : (trusted ? message : ClientSafeMessage(message));
+
+        context.Response.StatusCode  = status;
+        context.Response.ContentType = "application/json";
+
+        // Below 500, MapException/FHIRBridgeException/NotFoundException already represent an expected, routine
+        // domain outcome (wrong password, duplicate name, stale reference, expired token, RBAC-adjacent auth
+        // rejection) — not an unexpected system fault. These are everyday user behavior, not incidents: many are
+        // already recorded in their own dedicated audit trail (AuthenticationLog, SecurityEvent) by the caller
+        // before it threw. Routing them into ErrorLogs too would flood Operations → Errors with non-actionable
+        // noise and mislabel routine outcomes (e.g. "wrong password") as something needing vendor support. Mirrors
+        // the pattern already used by WorkflowEndpoints.cs's inline FHIRBridgeException catch — skip the Global
+        // Exception Manager (no ErrorLogs row, no reference id) and return the safe message directly.
+        if (status < 500)
+        {
+            app.Logger.LogWarning(feature.Error, "Expected domain failure on {Path}.", context.Request.Path);
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = clientMessage ?? "The request could not be processed.",
+                message = clientMessage ?? "The request could not be processed.",
+            });
+            return;
+        }
+
         app.Logger.LogError(feature.Error, "Unhandled exception on {Path}.", context.Request.Path);
 
-        var (status, message) = MapException(feature.Error);
-
-        // Phase 6A – Enterprise Global Exception Management: every unhandled exception is funneled through the
-        // Global Exception Manager, which assigns a unique ErrorReferenceId, classifies it, persists the full
-        // technical detail (via IGovernanceLogger → ErrorLogs), and returns a safe, user-friendly report. No
-        // stack trace or internal message is ever written to the response.
+        // Phase 6A – Enterprise Global Exception Management: genuine (5xx) unexpected failures are funneled through
+        // the Global Exception Manager, which assigns a unique ErrorReferenceId, classifies it, persists the full
+        // technical detail (via IGovernanceLogger → ErrorLogs), and returns a safe, user-friendly report. No stack
+        // trace or internal message is ever written to the response.
         var exceptionManager = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGlobalExceptionManager>();
         var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
         var activity = System.Diagnostics.Activity.Current;
 
-        // For expected (non-5xx) domain failures MapException already produced a safe, helpful message — keep it
-        // as the user-facing text. For genuine 5xx errors, let the manager emit a generic category message so no
-        // internal detail leaks.
         var report = await exceptionManager.CaptureAsync(
             feature.Error,
             new FHIRBridge.Governance.ExceptionContext(
                 Module: "Api",
-                Severity: status >= 500 ? "Error" : "Warning",
+                Severity: "Error",
                 CorrelationId: correlationId,
                 EndpointId: $"{context.Request.Method} {context.Request.Path}",
                 RequestId: context.TraceIdentifier,
                 TraceId: activity?.TraceId.ToString(),
                 SpanId: activity?.SpanId.ToString(),
-                UserFriendlyMessageOverride: status >= 500 ? null : message));
+                UserFriendlyMessageOverride: clientMessage));
 
-        context.Response.StatusCode  = status;
-        context.Response.ContentType = "application/json";
         context.Response.Headers["X-Error-Reference-Id"] = report.ErrorReferenceId;
         // `error`/`message` keep the existing client contract (the Angular sanitizer reads them); the new
         // `errorReferenceId`/`correlationId`/`category` fields drive the Phase 6A friendly-error dialog.
@@ -595,40 +619,48 @@ static async Task SyncDiscoveredPermissionsAsync(
     }
 }
 
-static (int status, string message) MapException(Exception ex)
+// Returns the HTTP status, a candidate client message, and whether that message is TRUSTED (author-written and
+// safe to show verbatim). Only FHIRBridgeException.UserMessage is trusted; every other message is derived from a
+// raw exception and MUST pass ClientSafeMessage before it can reach a client (see the exception handler).
+static (int status, string message, bool trusted) MapException(Exception ex)
 {
-    // NotFoundException (and other FHIRBridgeException subtypes) are expected domain-level failures — e.g. a
-    // launch/checkpoint URL whose referenced WorkflowDefinition/SourceConnection/Route no longer exists — and must
-    // reach the message-based classification below rather than falling into the generic 500 bucket.
-    // UserMessage (not Message) goes to the client — Message keeps the entity name + raw id for logs only.
+    // FHIRBridgeException subtypes are deliberate, client-safe domain failures. UserMessage (not Message) is the
+    // author-written text intended for end users — Message keeps the entity name + raw id for logs only.
     if (ex is NotFoundException nfe)
-        return (StatusCodes.Status404NotFound, nfe.UserMessage);
+        return (StatusCodes.Status404NotFound, nfe.UserMessage, true);
+    if (ex is FHIRBridgeException fbe)
+        return (StatusCodes.Status400BadRequest, fbe.UserMessage, true);
 
-    if (ex is not InvalidOperationException and not UnauthorizedAccessException
-                                             and not ArgumentException
-                                             and not FHIRBridgeException)
-        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
+    if (ex is not InvalidOperationException and not UnauthorizedAccessException and not ArgumentException)
+        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", true);
 
     if (ex is UnauthorizedAccessException || ex is ArgumentException a && a.Message.Contains("unauthorized"))
-        return (StatusCodes.Status401Unauthorized, ex.Message);
+        return (StatusCodes.Status401Unauthorized, ex.Message, false);
 
     var msg = ex.Message;
 
-    // 404 – resource not found
+    // The status classification below still inspects the message, but the message itself is returned UNTRUSTED —
+    // the handler runs it through ClientSafeMessage, so a raw/technical/HTML payload never reaches the client even
+    // if its text happens to contain one of these substrings (e.g. an upstream HTML 404 page contains "not found").
     if (msg.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("does not exist", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status404NotFound, msg);
+        return (StatusCodes.Status404NotFound, msg, false);
 
-    // 409 – resource conflict
     if (msg.Contains("already exists", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status409Conflict, msg);
+        return (StatusCodes.Status409Conflict, msg, false);
 
-    // 401 – authentication / token failures
     if (msg.Contains("invalid or expired", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("email or password", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("Current password is invalid", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status401Unauthorized, msg);
+        return (StatusCodes.Status401Unauthorized, msg, false);
 
-    // 400 – all other domain / validation errors
-    return (StatusCodes.Status400BadRequest, msg);
+    return (StatusCodes.Status400BadRequest, msg, false);
 }
+
+// The single guardrail that makes raw exception text safe-by-construction — see FHIRBridge.Governance.SafeErrorText.
+// An untrusted message reaches a client only if it looks like a short, human-written sentence; markup, stack traces,
+// multi-line, and oversized payloads are rejected (null → the caller substitutes a generic message). Reused by the
+// bypassing controllers too, so NO future `throw new SomeException(rawBody)` can leak through any path. Lives in the
+// Governance building block (not Api-only) so Infrastructure call sites (ConfiguredPipelineService,
+// SourceConnectionTestService) can sanitize the same way without a layering violation.
+static string? ClientSafeMessage(string? raw) => FHIRBridge.Governance.SafeErrorText.Sanitize(raw);
