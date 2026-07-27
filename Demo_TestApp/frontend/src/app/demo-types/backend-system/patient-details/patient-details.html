@@ -1,0 +1,59 @@
+<div class="patient-details">
+  <header class="patient-details__header">
+    <button type="button" class="icon-btn" (click)="back.emit()" aria-label="Back to patient list">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <div>
+      <h2>{{ patientName() ?? patientId() }}</h2>
+      <span class="patient-details__subtitle">Patient ID: {{ patientId() }}</span>
+    </div>
+  </header>
+
+  <div class="patient-details__body">
+    <nav class="resource-nav" aria-label="Resource menu">
+      @for (item of menu; track item.key) {
+        <button
+          type="button"
+          class="resource-nav__item"
+          [class.resource-nav__item--active]="item.key === selectedMenuKey()"
+          (click)="selectMenu(item.key)"
+        >
+          {{ item.label }}
+        </button>
+      }
+    </nav>
+
+    <section class="resource-content">
+      @if (isLoading()) {
+        <div class="loading-container">
+          <mat-spinner diameter="36"></mat-spinner>
+        </div>
+      } @else if (loadError()) {
+        <p class="error-banner">{{ loadError() }}</p>
+      } @else if (rows().length === 0) {
+        <p class="empty-state">No {{ selectedMenu()?.label }} records found for this patient.</p>
+      } @else {
+        <div class="table-scroll">
+          <table mat-table [dataSource]="rows()" class="resource-table">
+            @for (column of selectedMenu()?.columns; track column.key) {
+              <ng-container [matColumnDef]="column.key">
+                <th mat-header-cell *matHeaderCellDef>{{ column.label }}</th>
+                <td mat-cell *matCellDef="let row">
+                  @if (column.type === 'date') {
+                    {{ dateCellValue(row, column.key) ? (dateCellValue(row, column.key) | date: 'medium') : '-' }}
+                  } @else if (column.type === 'boolean') {
+                    {{ booleanCellValue(row, column.key) === null ? '-' : (booleanCellValue(row, column.key) ? 'Yes' : 'No') }}
+                  } @else {
+                    {{ cellValue(row, column.key) ?? '-' }}
+                  }
+                </td>
+              </ng-container>
+            }
+            <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns()"></tr>
+          </table>
+        </div>
+      }
+    </section>
+  </div>
+</div>
