@@ -276,7 +276,8 @@ app.MapGet("/api/provider-in-app-launch-context", async (HealthAppDbContext db) 
     var settings = await db.WorkflowSettings.FindAsync(1);
     return Results.Ok(new
     {
-        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty
+        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty,
+        standaloneBaseUrl = settings?.StandaloneBaseUrl ?? string.Empty
     });
 });
 

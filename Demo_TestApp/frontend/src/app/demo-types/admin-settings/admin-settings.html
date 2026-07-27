@@ -74,6 +74,7 @@
 
       <section class="settings-section">
         <h2>Provider_InApp (Role: ProviderInApp)</h2>
+        <p class="subtitle">Uses the Provider Standalone Base URL above for its FHIRBridge connection.</p>
         <label class="field">
           FHIRBridge Launch Context
           <input type="text" [ngModel]="providerLaunchContext()" (ngModelChange)="providerLaunchContext.set($event)" placeholder="e.g. CfDJ8C8zJPdjrFdGuvd4Vp7F2S5qoGg-Usw... (opaque, minted via GET /api/v1/workflows/{id}/launch-url)" />

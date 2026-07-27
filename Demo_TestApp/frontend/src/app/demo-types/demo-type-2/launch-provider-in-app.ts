@@ -11,15 +11,25 @@ import { PatientService } from './core/services/patient.service';
 import { FHIRBRIDGE_BASE_URL, PROVIDER_LAUNCH_CONTEXT } from './core/config/launch.config';
 import { environment } from '../../../environments/environment';
 
-/** Matches Demo_TestApp's GET /api/provider-in-app-launch-context response. */
+/** Matches Demo_TestApp's GET /api/provider-in-app-launch-context response. standaloneBaseUrl is
+ *  WorkflowSettingsEntity.StandaloneBaseUrl — deliberately reused rather than a dedicated field, since
+ *  Provider_InApp and Provider_Standalone both launch against the same FHIRBridge deployment. */
 interface ProviderInAppLaunchContext {
   providerLaunchContext: string;
+  standaloneBaseUrl: string;
 }
 
 // A blank/placeholder token is indistinguishable from a real one syntactically — FHIRBridge's own launch
 // endpoint would 404 on either, so both are treated as "ask an admin to set one" rather than attempted.
 function isConfiguredValue(value: string | null | undefined): boolean {
   return !!value && value.trim().length > 0 && !value.includes('REPLACE_WITH_REAL');
+}
+
+// Same "not configured" shape as isConfiguredValue above, but for StandaloneBaseUrl — guards against both an
+// empty value and the literal placeholder left in appsettings.json's DefaultWorkflowSettings:StandaloneBaseUrl
+// (REPLACE_WITH_PUBLIC_URL) for any environment that hasn't set a real one yet.
+function isConfiguredBaseUrl(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0 && value !== 'http://REPLACE_WITH_PUBLIC_URL';
 }
 
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge.
@@ -45,6 +55,11 @@ export class LaunchProviderInAppComponent implements OnInit {
   // Falls back to whatever's in launch.config.ts (the pre-existing, gitignored, compile-time mechanism) until
   // an admin sets this through the UI, so a repo that already filled in that file keeps working unchanged.
   private providerLaunchContext = PROVIDER_LAUNCH_CONTEXT;
+  // Same admin-editable/fallback story as providerLaunchContext above — falls back to the build-time
+  // FHIRBRIDGE_BASE_URL constant (only ever correct when the browser and FHIRBridge Api share a host, e.g. local
+  // dev) until loadLaunchContext() resolves the admin-configured WorkflowSettingsEntity.StandaloneBaseUrl
+  // (reused from Provider_Standalone rather than a dedicated field — see ProviderInAppLaunchContext).
+  private baseUrl = FHIRBRIDGE_BASE_URL;
   private launchContextLoadPromise: Promise<void> | null = null;
 
   readonly age = computed(() => {
@@ -78,6 +93,9 @@ export class LaunchProviderInAppComponent implements OnInit {
       if (isConfiguredValue(current.providerLaunchContext)) {
         this.providerLaunchContext = current.providerLaunchContext;
       }
+      if (isConfiguredBaseUrl(current.standaloneBaseUrl)) {
+        this.baseUrl = current.standaloneBaseUrl;
+      }
     } catch {
       // Non-fatal — falls back to whatever's in launch.config.ts (possibly still the placeholder, which every
       // caller below already guards against via isConfiguredValue).
@@ -106,7 +124,7 @@ export class LaunchProviderInAppComponent implements OnInit {
       // static providerLaunchContext token can't otherwise reflect that per-environment. See OAuthController.LaunchPipeline.
       const callerId = `${window.location.origin}/launchproviderinapp`;
       const launchUrl =
-        `${FHIRBRIDGE_BASE_URL}/api/v1/oauth/launch/${this.providerLaunchContext}` +
+        `${this.baseUrl}/api/v1/oauth/launch/${this.providerLaunchContext}` +
         `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}` +
         `&callerId=${encodeURIComponent(callerId)}`;
       window.location.href = launchUrl;

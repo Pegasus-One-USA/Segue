@@ -113,7 +113,9 @@ public sealed class WorkflowSettingsEntity
     // (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts); moved here so it's admin-configurable
     // through its own Settings gear (see launch-provider-in-app.ts) with no frontend rebuild needed to change it.
     // Unlike Provider_Standalone, this demo type needs only one token: it drives a single EHR-launch exchange
-    // (FHIRBridge's /api/v1/oauth/launch/{context}), not a separate list/detail workflow pair.
+    // (FHIRBridge's /api/v1/oauth/launch/{context}), not a separate list/detail workflow pair. Provider_InApp's
+    // FHIRBridge base URL deliberately reuses StandaloneBaseUrl above rather than getting its own field — both
+    // demo types are Provider-role launches against the same FHIRBridge deployment.
     public string ProviderLaunchContext { get; set; } = string.Empty;
 }
 
