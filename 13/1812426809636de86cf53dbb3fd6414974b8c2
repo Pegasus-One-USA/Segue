@@ -1,0 +1,14 @@
+Demo_TestApp/frontend/src/environments/environment.prod.ts
+  h_44b3eb0c92b6da 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "131812426809636de86cf53dbb3fd6414974b8c2",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
