@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
@@ -46,6 +47,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IFhirBulkExportClient? _bulkExportClient;
     private readonly IPipelineMetrics? _pipelineMetrics;
     private readonly IncrementalSyncOptions _incrementalSyncOptions;
+    private readonly ISystemSettingsCache? _settingsCache;
     private readonly ILogger<ConfiguredPipelineService> _logger;
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
 
@@ -68,7 +70,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IncrementalSyncOptions? incrementalSyncOptions = null,
         IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
         IGovernanceLogger? governanceLogger = null,
-        IFailureDiagnosisClassifier? diagnosisClassifier = null)
+        IFailureDiagnosisClassifier? diagnosisClassifier = null,
+        ISystemSettingsCache? settingsCache = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -86,6 +89,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _bulkExportClient = bulkExportClient;
         _pipelineMetrics = pipelineMetrics;
         _incrementalSyncOptions = incrementalSyncOptions ?? IncrementalSyncOptions.Default;
+        _settingsCache = settingsCache;
         _dataSetDeIdentificationService = dataSetDeIdentificationService;
         _logger = logger;
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
@@ -833,7 +837,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         string? searchParameters,
         CancellationToken cancellationToken)
     {
-        if (!_incrementalSyncOptions.Enabled)
+        var incrementalSyncEnabled = _settingsCache is null
+            ? _incrementalSyncOptions.Enabled
+            : await _settingsCache.GetBoolAsync("IncrementalSync:Enabled", _incrementalSyncOptions.Enabled, cancellationToken);
+
+        if (!incrementalSyncEnabled)
         {
             return searchParameters;
         }
@@ -857,7 +865,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             return searchParameters;
         }
 
-        var since = watermark.Value.AddSeconds(-Math.Max(0, _incrementalSyncOptions.OverlapSeconds));
+        var overlapSeconds = _settingsCache is null
+            ? _incrementalSyncOptions.OverlapSeconds
+            : await _settingsCache.GetIntAsync("IncrementalSync:OverlapSeconds", _incrementalSyncOptions.OverlapSeconds, cancellationToken);
+        var since = watermark.Value.AddSeconds(-Math.Max(0, overlapSeconds));
         var filter = $"_lastUpdated=gt{since.ToUniversalTime():yyyy-MM-ddTHH:mm:ss}Z";
 
         return string.IsNullOrWhiteSpace(searchParameters)

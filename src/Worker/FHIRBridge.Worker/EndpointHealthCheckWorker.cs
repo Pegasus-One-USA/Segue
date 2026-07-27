@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -18,34 +19,41 @@ public sealed class EndpointHealthCheckWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IOptions<EndpointHealthCheckOptions> _options;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly ILogger<EndpointHealthCheckWorker> _logger;
 
     public EndpointHealthCheckWorker(
         IServiceScopeFactory serviceScopeFactory,
         IOptions<EndpointHealthCheckOptions> options,
+        ISystemSettingsCache settingsCache,
         ILogger<EndpointHealthCheckWorker> logger)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _options = options;
+        _settingsCache = settingsCache;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Value.Enabled)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation(
-                "Endpoint health check worker is disabled. Set EndpointHealthCheck:Enabled=true to periodically test source connectivity.");
-            return;
-        }
+            var enabled = await _settingsCache.GetBoolAsync(
+                "EndpointHealthCheck:Enabled", _options.Value.Enabled, stoppingToken);
+            if (!enabled)
+            {
+                _logger.LogInformation(
+                    "Endpoint health check worker is disabled. Set EndpointHealthCheck:Enabled=true to periodically test source connectivity.");
+                await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+                continue;
+            }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(60, _options.Value.IntervalSeconds)));
-
-        do
-        {
             await CheckAllAsync(stoppingToken);
+
+            var intervalSeconds = await _settingsCache.GetIntAsync(
+                "EndpointHealthCheck:IntervalSeconds", _options.Value.IntervalSeconds, stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(Math.Max(60, intervalSeconds)), stoppingToken);
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     private async Task CheckAllAsync(CancellationToken cancellationToken)

@@ -106,6 +106,11 @@ public static class DependencyInjection
         // IAllowedCorsOriginRepository lazily through a scope, so it works against either repository.
         services.AddSingleton<IAllowedCorsOriginsCache, InProcessAllowedCorsOriginsCache>();
 
+        // Same reasoning as above — DB-backed overrides for appsettings-derived runtime knobs (worker
+        // cadence, thresholds, feature toggles). Registered unconditionally, works against either repository.
+        services.AddSingleton<ISystemSettingsCache, InProcessSystemSettingsCache>();
+        services.AddScoped<ISystemSettingsService, SystemSettingsService>();
+
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -118,6 +123,7 @@ public static class DependencyInjection
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
+            services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
@@ -172,6 +178,8 @@ public static class DependencyInjection
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
             services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
+            services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
+            services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
@@ -288,6 +296,7 @@ public static class DependencyInjection
         services.AddScoped<MappedProtobufDestinationWriter>();
         services.AddHttpClient(nameof(MappedDatabricksDestinationWriter));
         services.AddScoped<MappedDatabricksDestinationWriter>();
+        services.AddScoped<MappedMongoDestinationWriter>();
         foreach (var registration in ConfiguredDestinationWriterFactory.DefaultRegistrations)
         {
             services.AddSingleton(registration);
@@ -332,6 +341,7 @@ public static class DependencyInjection
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(
             sp.GetRequiredService<CompositeTerminologyLookupService>(),
             sp.GetRequiredService<IDistributedCache>(),
+            sp.GetRequiredService<ISystemSettingsCache>(),
             terminologyCacheTtl));
         services.AddSingleton<LocalTerminologyTranslationService>();
         services.AddScoped<FhirTerminologyTranslationService>();
@@ -339,6 +349,7 @@ public static class DependencyInjection
         services.AddScoped<ITerminologyTranslationService>(sp => new CachingTerminologyTranslationService(
             sp.GetRequiredService<CompositeTerminologyTranslationService>(),
             sp.GetRequiredService<IDistributedCache>(),
+            sp.GetRequiredService<ISystemSettingsCache>(),
             terminologyCacheTtl));
 
         // ValueSet/$validate-code (US Core required-binding validation) and ValueSet/$expand, Local -> FHIR.

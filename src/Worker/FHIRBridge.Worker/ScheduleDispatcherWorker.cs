@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Scheduling;
 using Microsoft.Extensions.Options;
 
@@ -20,34 +21,41 @@ public sealed class ScheduleDispatcherWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IOptions<ScheduleDispatcherOptions> _options;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly ILogger<ScheduleDispatcherWorker> _logger;
 
     public ScheduleDispatcherWorker(
         IServiceScopeFactory serviceScopeFactory,
         IOptions<ScheduleDispatcherOptions> options,
+        ISystemSettingsCache settingsCache,
         ILogger<ScheduleDispatcherWorker> logger)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _options = options;
+        _settingsCache = settingsCache;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Value.Enabled)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation(
-                "Schedule dispatcher is disabled. Set ScheduleDispatcher:Enabled=true to enqueue due scheduled runs.");
-            return;
-        }
+            var enabled = await _settingsCache.GetBoolAsync(
+                "ScheduleDispatcher:Enabled", _options.Value.Enabled, stoppingToken);
+            if (!enabled)
+            {
+                _logger.LogInformation(
+                    "Schedule dispatcher is disabled. Set ScheduleDispatcher:Enabled=true to enqueue due scheduled runs.");
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                continue;
+            }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(15, _options.Value.IntervalSeconds)));
-
-        do
-        {
             await DispatchAsync(stoppingToken);
+
+            var intervalSeconds = await _settingsCache.GetIntAsync(
+                "ScheduleDispatcher:IntervalSeconds", _options.Value.IntervalSeconds, stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(Math.Max(15, intervalSeconds)), stoppingToken);
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     private async Task DispatchAsync(CancellationToken cancellationToken)

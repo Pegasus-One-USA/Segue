@@ -205,17 +205,31 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 // Rate limiting (HIPAA/SOC2 CC6.2): throttle unauthenticated credential + ingestion endpoints
 // to blunt brute-force and abuse. Partitioned per client IP; sensitive endpoints opt in via
-// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*".
-builder.Services.AddRateLimiter(options =>
+// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*",
+// with a SystemSettings DB row (same key) overriding the appsettings value if present. The .NET rate
+// limiter builds its partitioned limiters once at startup, so a DB override here takes effect on the
+// next process restart, not live — see ISystemSettingsCache for knobs that apply without a restart.
+using (var settingsBootstrapScope = builder.Services.BuildServiceProvider().CreateScope())
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    var settingsCache = settingsBootstrapScope.ServiceProvider
+        .GetRequiredService<FHIRBridge.Application.Abstractions.Caching.ISystemSettingsCache>();
 
-    var authPermit = builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10;
-    var authWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5;
-    var oauthPermit = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:PermitPerWindow") ?? 30;
-    var oauthWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:WindowMinutes") ?? 5;
-    var webhookPermit = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120;
-    var webhookWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1;
+    var authPermit = settingsCache.GetIntAsync(
+        "RateLimiting:Auth:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10, default).GetAwaiter().GetResult();
+    var authWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:Auth:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5, default).GetAwaiter().GetResult();
+    var oauthPermit = settingsCache.GetIntAsync(
+        "RateLimiting:OAuth:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:OAuth:PermitPerWindow") ?? 30, default).GetAwaiter().GetResult();
+    var oauthWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:OAuth:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:OAuth:WindowMinutes") ?? 5, default).GetAwaiter().GetResult();
+    var webhookPermit = settingsCache.GetIntAsync(
+        "RateLimiting:Webhook:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120, default).GetAwaiter().GetResult();
+    var webhookWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:Webhook:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1, default).GetAwaiter().GetResult();
+
+    builder.Services.AddRateLimiter(options =>
+    {
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("auth", context =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -249,7 +263,8 @@ builder.Services.AddRateLimiter(options =>
 
     static string ClientPartitionKey(HttpContext context) =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-});
+    });
+}
 
 var app = builder.Build();
 
@@ -433,7 +448,18 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 // Enabled by default; can be turned off for hermetic tests or single-tenant deployments that
 // throttle upstream. Policies are always registered so [EnableRateLimiting] metadata resolves.
-if (app.Configuration.GetValue("RateLimiting:Enabled", true))
+// SystemSettings DB override (same key) takes effect on the next restart, same as the permit/window
+// values configured above.
+bool rateLimitingEnabled;
+using (var rateLimitingSettingsScope = app.Services.CreateScope())
+{
+    var settingsCache = rateLimitingSettingsScope.ServiceProvider
+        .GetRequiredService<FHIRBridge.Application.Abstractions.Caching.ISystemSettingsCache>();
+    rateLimitingEnabled = settingsCache.GetBoolAsync(
+        "RateLimiting:Enabled", app.Configuration.GetValue("RateLimiting:Enabled", true), default).GetAwaiter().GetResult();
+}
+
+if (rateLimitingEnabled)
 {
     app.UseRateLimiter();
 }
@@ -471,6 +497,12 @@ static void BootstrapDatabase(WebApplication app)
     {
         seeder.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
+
+    // One-time: populate SystemSettings with the value each DB-backed config key is already effectively
+    // using (appsettings/code default) — so shipping this feature changes zero behavior until an admin
+    // edits a row. Insert-only; never overwrites a row an admin has since customized.
+    var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
+    systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Generates and persists the JWT signing key / download-link signing secret the first time an install has

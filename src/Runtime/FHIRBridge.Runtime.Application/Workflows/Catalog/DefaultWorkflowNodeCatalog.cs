@@ -41,7 +41,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.SqlServerDestination),
         Destination(WorkflowNodeTypes.CsvDestination),
         Destination(WorkflowNodeTypes.MySqlDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql destinations are exposed in the palette. The writers
+        Destination(WorkflowNodeTypes.MongoDestination),
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo destinations are exposed in the palette. The writers
         // below remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
         // Destination(WorkflowNodeTypes.PostgreSqlDestination),
@@ -196,6 +197,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.SqlServerDestination => "dest-sqlserver",
             WorkflowNodeTypes.CsvDestination => "dest-csv",
             WorkflowNodeTypes.MySqlDestination => "dest-mysql",
+            WorkflowNodeTypes.MongoDestination => "dest-mongo",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -211,6 +213,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.SqlServerDestination => "SQL Server",
             WorkflowNodeTypes.CsvDestination => "CSV",
             WorkflowNodeTypes.MySqlDestination => "MySQL",
+            WorkflowNodeTypes.MongoDestination => "MongoDB",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -226,6 +229,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.SqlServerDestination => "Write mapped records to Microsoft SQL Server.",
             WorkflowNodeTypes.CsvDestination => "Emit mapped records as CSV files.",
             WorkflowNodeTypes.MySqlDestination => "Write mapped records to MySQL.",
+            WorkflowNodeTypes.MongoDestination => "Write mapped records to MongoDB.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

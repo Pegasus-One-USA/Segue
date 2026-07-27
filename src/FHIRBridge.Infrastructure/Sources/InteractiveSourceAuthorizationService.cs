@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.Abstractions.Security;
@@ -48,6 +49,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     private readonly ILaunchWorkflowResolver? _launchWorkflowResolver;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly WorkflowGraphExecutionOptions _graphExecutionOptions;
+    private readonly ISystemSettingsCache? _settingsCache;
 
     public InteractiveSourceAuthorizationService(
         IConfigurationRepository configurationRepository,
@@ -63,7 +65,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         IRankedWorkflowOrchestrator? workflowOrchestrator = null,
         ILaunchWorkflowResolver? launchWorkflowResolver = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        IOptions<WorkflowGraphExecutionOptions>? graphExecutionOptions = null)
+        IOptions<WorkflowGraphExecutionOptions>? graphExecutionOptions = null,
+        ISystemSettingsCache? settingsCache = null)
     {
         _configurationRepository = configurationRepository;
         _discoveryService = discoveryService;
@@ -79,6 +82,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _launchWorkflowResolver = launchWorkflowResolver;
         _workflowDefinitionStore = workflowDefinitionStore;
         _graphExecutionOptions = graphExecutionOptions?.Value ?? new WorkflowGraphExecutionOptions();
+        _settingsCache = settingsCache;
     }
 
     public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null) =>
@@ -607,9 +611,17 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     // sign-in still succeeds since the token is already stored.
     private async Task<bool> TryTriggerGraphRunAsync(Guid sourceConnectionId, CancellationToken cancellationToken, string? callerId = null)
     {
+        var graphExecutionEnabled = _settingsCache is null
+            ? _graphExecutionOptions.Enabled
+            : await _settingsCache.GetBoolAsync(
+                "Workflow:GraphExecution:Enabled", _graphExecutionOptions.Enabled, cancellationToken);
+        var sourceAllowed = _graphExecutionOptions.SourceConnectionIds.Length == 0
+            || Array.IndexOf(_graphExecutionOptions.SourceConnectionIds, sourceConnectionId) >= 0;
+
         if (_workflowOrchestrator is null
             || _launchWorkflowResolver is null
-            || !_graphExecutionOptions.IsEnabledForSource(sourceConnectionId))
+            || !graphExecutionEnabled
+            || !sourceAllowed)
         {
             return false;
         }
