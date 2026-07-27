@@ -1,0 +1,27 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_d68f9144c308b2::t_a0c0d2031c7e33 570
+  s_d68f9144c308b2::t_3a45b5800323b6 597-599,607
+  s_d68f9144c308b2::t_c28e866bf2b41b 626
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_d68f9144c308b2::t_7a1be4824adbf9 75-76,78-80
+  s_d68f9144c308b2::t_4a04b7bb6a28c4 77
+  s_d68f9144c308b2::t_4726a1877eb837 143-155
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d68f9144c308b2::t_3239ae1d268b4b 637
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "264442ce7eb12f28c8d20eeb9b9caf41c1e9d279",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
