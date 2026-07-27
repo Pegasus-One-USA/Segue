@@ -1,0 +1,33 @@
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_d68f9144c308b2::t_8e2342eca8db93 114-118
+  s_d68f9144c308b2::t_72cdb7c227d629 167
+  s_d68f9144c308b2::t_a74df5ba8d0b33 52-59
+  s_d68f9144c308b2::t_7e910523938eba 82-105,110-113,119-120,125-148
+  s_d68f9144c308b2::t_0e35c00c9f309e 33-35,149-150
+  s_d68f9144c308b2::t_1ccc3308442d29 106-109
+portal/src/app/settings/pages/email-settings/email-settings.component.scss
+  s_d68f9144c308b2::t_6417efbccd5b52 7
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_d68f9144c308b2::t_8c37af474d6724 142-161,163-166,168-176,182-183,191-192,197-200,202,204,206-210,220-221,227,230-233,250,263-264,274
+  s_d68f9144c308b2::t_59edaf03909d2b 162,167,177-181,184-190,193-196,201,203,205,211-219,222-226,228-229,234-249,251-262,265-273
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_d68f9144c308b2::t_b92dc30e42ba12 220-222,238,242,246,250-251
+  s_d68f9144c308b2::t_9f47b8daac75c9 223-237,239-241,243-245,247-249
+  s_d68f9144c308b2::t_13510c56ce2756 55-78,81-86,91,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "85203f2e30f563eee0b79781b75ffddbfde34e7e",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
