@@ -30,6 +30,9 @@ interface CopyModal {
   busy: boolean;
 }
 
+type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun';
+type SortDirection = 'asc' | 'desc';
+
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
@@ -45,6 +48,14 @@ export class WorkflowListComponent implements OnInit {
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
   readonly searchQuery = signal('');
+
+  /** Sort state — clicking the same column again flips direction, a new column starts ascending. */
+  readonly sortColumn = signal<SortColumn>('name');
+  readonly sortDirection = signal<SortDirection>('asc');
+
+  readonly pageSizeOptions = [10, 20, 50] as const;
+  readonly pageSize = signal<number>(this.pageSizeOptions[0]);
+  readonly pageIndex = signal(0);
 
   /** Workflow id currently running/launching — disables its action button. */
   readonly busyId = signal<string | null>(null);
@@ -68,8 +79,73 @@ export class WorkflowListComponent implements OnInit {
     );
   });
 
+  readonly sorted = computed(() => {
+    const col = this.sortColumn();
+    const dir = this.sortDirection() === 'asc' ? 1 : -1;
+    const key = (w: WorkflowSummary): string | number => {
+      switch (col) {
+        case 'name':     return w.name.toLowerCase();
+        case 'source':   return (w.sourceSystemType ?? '').toLowerCase();
+        case 'audience': return this.audienceLabel(w.applicationType).toLowerCase();
+        case 'status':   return w.status;
+        case 'lastRun':  return w.lastRunAt ? new Date(w.lastRunAt).getTime() : -1;
+      }
+    };
+    return [...this.filtered()].sort((a, b) => {
+      const ka = key(a);
+      const kb = key(b);
+      if (ka < kb) return -1 * dir;
+      if (ka > kb) return 1 * dir;
+      return 0;
+    });
+  });
+
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.sorted().length / this.pageSize())));
+
+  readonly paged = computed(() => {
+    // Clamp defensively — a delete/copy can shrink the list out from under a page index
+    // that pointed at the last page.
+    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
+    const start = clampedIndex * this.pageSize();
+    return this.sorted().slice(start, start + this.pageSize());
+  });
+
+  /** First/last row numbers shown for the current page, for "Showing X–Y of Z". */
+  readonly rangeStart = computed(() => {
+    if (this.sorted().length === 0) return 0;
+    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
+    return clampedIndex * this.pageSize() + 1;
+  });
+  readonly rangeEnd = computed(() => Math.min(this.sorted().length, this.rangeStart() + this.pageSize() - 1));
+
   ngOnInit(): void {
     this.reload();
+  }
+
+  onSort(column: SortColumn): void {
+    if (this.sortColumn() === column) {
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortColumn.set(column);
+      this.sortDirection.set('asc');
+    }
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.pageIndex.set(0);
+  }
+
+  goToPage(index: number): void {
+    this.pageIndex.set(Math.min(Math.max(0, index), this.totalPages() - 1));
+  }
+
+  prevPage(): void {
+    this.goToPage(this.pageIndex() - 1);
+  }
+
+  nextPage(): void {
+    this.goToPage(this.pageIndex() + 1);
   }
 
   reload(): void {
@@ -88,6 +164,7 @@ export class WorkflowListComponent implements OnInit {
 
   onSearch(value: string): void {
     this.searchQuery.set(value);
+    this.pageIndex.set(0);
   }
 
   /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
