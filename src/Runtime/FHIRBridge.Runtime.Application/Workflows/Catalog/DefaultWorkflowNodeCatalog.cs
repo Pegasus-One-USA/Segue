@@ -40,11 +40,11 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Transform(WorkflowNodeTypes.RepeatingArrayMapping, "repeating-array-mapping", "Repeating Array Mapping", "Expand repeating mapped values.", 61, WorkflowDataContract.MappedRecordBatch, WorkflowDataContract.MappedRecordBatch),
         Destination(WorkflowNodeTypes.SqlServerDestination),
         Destination(WorkflowNodeTypes.CsvDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV destinations are exposed in the palette. The writers below
-        // remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
+        Destination(WorkflowNodeTypes.MySqlDestination),
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql destinations are exposed in the palette. The writers
+        // below remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
         // Destination(WorkflowNodeTypes.PostgreSqlDestination),
-        // Destination(WorkflowNodeTypes.MySqlDestination),
         // Destination(WorkflowNodeTypes.SnowflakeDestination),
         // Destination(WorkflowNodeTypes.PowerBiDestination),
         // Destination(WorkflowNodeTypes.TableauDestination),
@@ -195,6 +195,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.SampleSource => "sample",
             WorkflowNodeTypes.SqlServerDestination => "dest-sqlserver",
             WorkflowNodeTypes.CsvDestination => "dest-csv",
+            WorkflowNodeTypes.MySqlDestination => "dest-mysql",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -209,6 +210,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.SampleSource => "Sample FHIR",
             WorkflowNodeTypes.SqlServerDestination => "SQL Server",
             WorkflowNodeTypes.CsvDestination => "CSV",
+            WorkflowNodeTypes.MySqlDestination => "MySQL",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -223,6 +225,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.SampleSource => "Use bundled sample FHIR resources.",
             WorkflowNodeTypes.SqlServerDestination => "Write mapped records to Microsoft SQL Server.",
             WorkflowNodeTypes.CsvDestination => "Emit mapped records as CSV files.",
+            WorkflowNodeTypes.MySqlDestination => "Write mapped records to MySQL.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

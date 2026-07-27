@@ -32,6 +32,15 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? "Server=localhost,1433;Database=HealthAppDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True";
 
 builder.Services.AddDbContext<HealthAppDbContext>(options => options.UseSqlServer(connectionString));
+
+// BackendSystem Patient List / Patient Details data-source switch (SQL Server / MySQL / NoSQL) — see
+// PatientDataSourceReaders.cs. Scoped (not Singleton) because SqlPatientDataSourceReader depends on the scoped
+// HealthAppDbContext; the MySQL/Mongo readers open their own connection per call, so scope has no real effect on
+// them beyond matching the others.
+builder.Services.AddScoped<SqlPatientDataSourceReader>();
+builder.Services.AddScoped<MySqlPatientDataSourceReader>();
+builder.Services.AddScoped<MongoPatientDataSourceReader>();
+builder.Services.AddScoped<PatientDataSourceResolver>();
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<EpicSessionStore>();
 builder.Services.AddHttpClient("Workflow");

@@ -13,6 +13,7 @@ import { AUDIENCE_FIELD_CONFIG, EpicAudience } from '../components/epic-source-w
 import { EhrVendor } from '../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel, SourceConnectionRequest, AuthenticationTypeModel } from '../source-connections/models/source-connection.model';
+import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
 
 export type WizardMode = 'canvas' | 'entity';
 
@@ -141,8 +142,8 @@ export class WizardService {
   readonly clientId     = signal('');
   readonly authMethod   = signal<'public' | 'secret' | 'jwt'>('secret');
   readonly epicAudience = signal('provider-ehr-launch');
-  readonly redirectUri  = signal('http://localhost:5000/api/v1/oauth/callback');
-  readonly launchUrlWiz = signal('https://fhirbridge.com/launch');
+  readonly redirectUri  = signal(OAUTH_DEFAULT_URLS.redirectUri);
+  readonly launchUrlWiz = signal(OAUTH_DEFAULT_URLS.launchUrl);
   readonly isEditing    = computed(() => !!this.store.editingNodeId() || !!this.entityId());
 
   /** Raw field bag of the node being edited (or null when creating new) — the source of truth for every persisted
@@ -199,8 +200,8 @@ export class WizardService {
     this.clientId.set(f['Client ID'] ?? '');
     this.authMethod.set(((f['Auth method'] as string) || 'secret') as 'public' | 'secret' | 'jwt');
     this.epicAudience.set(f['Epic audience'] || f['App key'] || 'provider-ehr-launch');
-    this.redirectUri.set(f['Redirect URI'] ?? 'http://localhost:5000/api/v1/oauth/callback');
-    this.launchUrlWiz.set(f['Launch URL'] ?? 'https://fhirbridge.com/launch');
+    this.redirectUri.set(f['Redirect URI'] ?? OAUTH_DEFAULT_URLS.redirectUri);
+    this.launchUrlWiz.set(f['Launch URL'] ?? OAUTH_DEFAULT_URLS.launchUrl);
     this.trustedIssuers.set(f['Trusted issuers'] ?? '');
 
     this.store.editingNodeId.set(existingNodeId ?? null);
@@ -240,8 +241,8 @@ export class WizardService {
     this.epicAudience.set(
       (dto?.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType]) || 'provider-ehr-launch'
     );
-    this.redirectUri.set(dto?.interactive?.redirectUris?.[0] ?? 'http://localhost:5000/api/v1/oauth/callback');
-    this.launchUrlWiz.set(dto?.interactive?.launchUrl ?? 'https://fhirbridge.com/launch');
+    this.redirectUri.set(dto?.interactive?.redirectUris?.[0] ?? OAUTH_DEFAULT_URLS.redirectUri);
+    this.launchUrlWiz.set(dto?.interactive?.launchUrl ?? OAUTH_DEFAULT_URLS.launchUrl);
     this.trustedIssuers.set(dto?.interactive?.trustedIssuers?.join(', ') ?? '');
 
     this.store.editingNodeId.set(null);

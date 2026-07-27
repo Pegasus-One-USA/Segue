@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { PipelineStore } from './pipeline.store';
 import { WorkflowGraphMapperService } from './workflow-graph-mapper.service';
+import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
 import {
   CreateDestinationConfigurationRequest,
   CreateSourceConnectionRequest,
@@ -153,7 +154,7 @@ export class WorkflowBuildAssemblerService {
         : {
             redirectUris: [
               fields['Redirect URI'] ||
-                'http://localhost:5000/api/v1/oauth/callback',
+                OAUTH_DEFAULT_URLS.redirectUri,
             ],
             launchUrl: fields['Launch URL'] || null,
             trustedIssuers: (fields['Trusted issuers'] ?? '')
@@ -298,11 +299,15 @@ export class WorkflowBuildAssemblerService {
     fields: Record<string, string>,
     node: WorkflowNodeRequest,
   ): CreateDestinationConfigurationRequest {
+    const isMySql =
+      node.nodeType.includes('MySql') ||
+      (fields['__transformId'] ?? '') === 'dest-mysql';
     const isSql =
+      isMySql ||
       node.nodeType.includes('SqlServer') ||
       (fields['__transformId'] ?? '') === 'dest-sqlserver';
     const name =
-      fields['dest_name'] || (isSql ? 'SQL Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isSql ? 'SQL Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -325,14 +330,14 @@ export class WorkflowBuildAssemblerService {
     if (isSql) {
       return {
         name,
-        destinationType: 'SqlServer',
+        destinationType: isMySql ? 'MySql' : 'SqlServer',
         keyVaultName,
         secretName,
         target: null,
         inlineSecret:
           hasExistingSecret && !fields['dest_password']
             ? null
-            : this.buildSqlConnectionString(fields),
+            : this.buildSqlConnectionString(fields, isMySql),
         connectionMetadataJson: this.buildConnectionMetadata(fields, true),
       };
     }
@@ -398,10 +403,20 @@ export class WorkflowBuildAssemblerService {
     return JSON.stringify(metadata);
   }
 
-  private buildSqlConnectionString(f: Record<string, string>): string {
+  private buildSqlConnectionString(f: Record<string, string>, isMySql = false): string {
     const server = f['dest_server'] ?? '';
     const database = f['dest_database'] ?? '';
     const parts = [`Server=${server}`, `Database=${database}`];
+    if (isMySql) {
+      // MySqlConnector's connection string builder rejects SQL-Server-only keywords
+      // (TrustServerCertificate/Encrypt/Authentication=Active Directory Default), so MySQL always
+      // authenticates with the username/password entered in the (shared) SQL-family wizard form.
+      parts.push(
+        `User Id=${f['dest_username'] ?? ''}`,
+        `Password=${f['dest_password'] ?? ''}`,
+      );
+      return parts.join(';');
+    }
     if ((f['dest_auth'] ?? 'sql-auth') === 'sql-auth') {
       parts.push(
         `User Id=${f['dest_username'] ?? ''}`,

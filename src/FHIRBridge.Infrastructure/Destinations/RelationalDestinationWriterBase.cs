@@ -161,9 +161,19 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         command.Parameters.Add(parameter);
     }
 
-    // The portable relational writer stores every value as text so inserts never fail on cross-dialect type coercion.
-    private static object Stringify(object? value)
-        => value is null ? DBNull.Value : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+    // The portable relational writer stores every value as text so inserts never fail on cross-dialect type
+    // coercion — but .NET's default ToString() for DateTime/DateOnly ("MM/dd/yyyy HH:mm:ss") isn't a date literal
+    // any SQL dialect accepts, so date/time and boolean values need their own explicit, dialect-portable format
+    // (ISO 8601 date/time; "0"/"1" for boolean) rather than falling through to Convert.ToString.
+    private static object Stringify(object? value) => value switch
+    {
+        null => DBNull.Value,
+        DateTime dateTime => dateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        DateTimeOffset dateTimeOffset => dateTimeOffset.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        DateOnly dateOnly => dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        bool boolean => boolean ? "1" : "0",
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+    };
 
     private static bool TryGetKeyValue(MappedDestinationRecord record, string keyColumn, out object? keyValue)
         => record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;

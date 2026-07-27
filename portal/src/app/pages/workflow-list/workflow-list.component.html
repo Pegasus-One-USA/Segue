@@ -104,20 +104,46 @@
               </td>
               <td class="col-actions">
                 <div class="row-actions">
-                  <button
-                    class="btn-primary"
-                    type="button"
-                    [class.is-launch]="w.action === 'Launch'"
-                    [disabled]="busyId() === w.workflowId"
-                    (click)="onAction(w)"
-                  >
-                    @if (busyId() === w.workflowId) {
-                      <span class="spinner-sm"></span>
-                    } @else {
-                      <span class="btn-ico">{{ w.action === 'Launch' ? '🔗' : '▶' }}</span>
+                  <div class="split-btn" (click)="$event.stopPropagation()">
+                    <button
+                      class="btn-primary"
+                      type="button"
+                      [class.is-launch]="w.action === 'Launch'"
+                      [class.has-caret]="w.action === 'Run'"
+                      [disabled]="busyId() === w.workflowId"
+                      (click)="onAction(w)"
+                    >
+                      @if (busyId() === w.workflowId) {
+                        <span class="spinner-sm"></span>
+                      } @else {
+                        <span class="btn-ico">{{ w.action === 'Launch' ? '🔗' : '▶' }}</span>
+                      }
+                      {{ w.action === 'Launch' ? 'Get Launch URL' : 'Run' }}
+                    </button>
+
+                    @if (w.action === 'Run') {
+                      <button
+                        class="btn-primary btn-primary--caret"
+                        type="button"
+                        title="Run options"
+                        [disabled]="busyId() === w.workflowId"
+                        (click)="toggleRunMenu(w, $event)"
+                      >&#9662;</button>
+
+                      @if (runMenuOpenId() === w.workflowId) {
+                        <div class="run-menu">
+                          <button type="button" (click)="onAction(w, 'sync')">
+                            <span class="run-menu-title">Run (wait here)</span>
+                            <span class="run-menu-sub">Blocks this screen until the run finishes.</span>
+                          </button>
+                          <button type="button" (click)="onAction(w, 'async')">
+                            <span class="run-menu-title">Run in background</span>
+                            <span class="run-menu-sub">Returns immediately — keeps running if you navigate away.</span>
+                          </button>
+                        </div>
+                      }
                     }
-                    {{ w.action === 'Launch' ? 'Get Launch URL' : 'Run' }}
-                  </button>
+                  </div>
 
                   <button
                     class="btn-ghost"

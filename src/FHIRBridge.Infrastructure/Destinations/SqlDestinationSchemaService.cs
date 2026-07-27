@@ -226,9 +226,29 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         return request.DestinationType switch
         {
             DestinationType.SqlServer or DestinationType.AzureSql => BuildSqlServerConnectionString(request),
+            DestinationType.MySql => BuildMySqlConnectionString(request),
             _ => throw new InvalidOperationException(
                 $"Provide a ConnectionString to probe destination type '{request.DestinationType}'."),
         };
+    }
+
+    private static string BuildMySqlConnectionString(DestinationConnectionProbeRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Server) || string.IsNullOrWhiteSpace(request.Database))
+        {
+            throw new InvalidOperationException("Server and Database are required to test a MySQL connection.");
+        }
+
+        var builder = new MySqlConnectionStringBuilder
+        {
+            Server = request.Server,
+            Database = request.Database,
+            UserID = request.Username ?? string.Empty,
+            Password = request.Password ?? string.Empty,
+            ConnectionTimeout = 10,
+        };
+
+        return builder.ConnectionString;
     }
 
     private static string BuildSqlServerConnectionString(DestinationConnectionProbeRequest request)

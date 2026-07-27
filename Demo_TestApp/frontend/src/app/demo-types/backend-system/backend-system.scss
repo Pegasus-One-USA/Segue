@@ -74,6 +74,34 @@
   }
 }
 
+.data-source-toggle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  &__label {
+    font-weight: 600;
+    color: #37474f;
+  }
+
+  &__option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    color: #37474f;
+
+    input[type='radio'] {
+      cursor: pointer;
+    }
+  }
+}
+
 .loading-container {
   display: flex;
   justify-content: center;

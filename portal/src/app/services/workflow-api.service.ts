@@ -103,6 +103,12 @@ export interface WorkflowRunResultDto {
   run?: WorkflowRunDto;
 }
 
+/** Response for both the async /run's 202 Accepted and GET /workflow-runs/{runId}/status. */
+export interface WorkflowRunStatus {
+  workflowRunId: string;
+  status: 'Running' | 'Succeeded' | 'Failed' | string;
+}
+
 // ── Option B create-on-save (POST /workflows/build) ────────────────────────────
 // Enum-valued fields are sent as backend enum NAMES (the API accepts names or numbers).
 export interface SourceAuthenticationRequest {
@@ -317,8 +323,20 @@ export class WorkflowApiService {
     return this.http.get<WorkflowSummary[]>(WORKFLOW_ENDPOINTS.summary);
   }
 
-  run(workflowId: string): Observable<WorkflowRunResultDto> {
-    return this.http.post<WorkflowRunResultDto>(WORKFLOW_ENDPOINTS.run(workflowId), {});
+  /**
+   * `async: true` returns as soon as the run is accepted (202, with the run id) instead of blocking until the
+   * whole DAG finishes — use with pollRunStatus so a long run survives navigating away from this screen.
+   */
+  run(workflowId: string, async = false): Observable<WorkflowRunResultDto | WorkflowRunStatus> {
+    return this.http.post<WorkflowRunResultDto | WorkflowRunStatus>(
+      WORKFLOW_ENDPOINTS.run(workflowId),
+      async ? { async: true } : {},
+    );
+  }
+
+  /** Poll target for an async run: 'Running' until the orchestrator persists a terminal status. */
+  runStatus(workflowRunId: string): Observable<WorkflowRunStatus> {
+    return this.http.get<WorkflowRunStatus>(WORKFLOW_ENDPOINTS.runStatus(workflowRunId));
   }
 
   /** Interactive (EHR launch / standalone / patient) workflows: the opaque launch URL to register with the EHR. */

@@ -4,7 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
-import { BackendSystemService } from '../core/services/backend-system.service';
+import { BackendSystemService, PatientDataSource } from '../core/services/backend-system.service';
 import { BACKEND_SYSTEM_MENU, ResourceMenuItem } from '../core/config/backend-system-menu.config';
 
 @Component({
@@ -17,6 +17,9 @@ import { BACKEND_SYSTEM_MENU, ResourceMenuItem } from '../core/config/backend-sy
 export class PatientDetailsComponent {
   readonly patientId = input.required<string>();
   readonly patientName = input<string | null>(null);
+  // Only the "Patient" menu item's own detail fetch honors this — every other tab (Encounters, Observations, ...)
+  // always reads SQL Server, unaffected by the Patient List page's Data Source radio group.
+  readonly dataSource = input<PatientDataSource>('sql');
   readonly back = output<void>();
 
   // Not hardcoded into the template — this list drives the left nav and, per menu item, which columns the table
@@ -79,7 +82,7 @@ export class PatientDetailsComponent {
     this.loadError.set(null);
 
     try {
-      const rows = await firstValueFrom(this.backendSystem.getResourceRows(patientId, menuItem));
+      const rows = await firstValueFrom(this.backendSystem.getResourceRows(patientId, menuItem, this.dataSource()));
       this.rows.set(rows ?? []);
     } catch {
       this.loadError.set(`Could not load ${menuItem.label} for this patient.`);

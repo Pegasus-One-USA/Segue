@@ -14,61 +14,30 @@ public static class BackendSystemEndpoints
 
     public static void MapBackendSystemEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/backend-system/patients", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+        // "source" selects which store answers the request — sql (default) / mysql / nosql, driven by the
+        // BackendSystem Patient List page's data-source radio group (see backend-system.ts). Every other route in
+        // this file deliberately keeps reading HealthAppDbContext/SQL Server unconditionally — only the list and
+        // single-patient detail were asked to switch stores.
+        app.MapGet("/api/backend-system/patients", async (string? source, HttpContext http, SessionStore sessions, PatientDataSourceResolver dataSources, CancellationToken cancellationToken) =>
         {
             if (!TryGetSession(http, sessions))
             {
                 return Results.Unauthorized();
             }
 
-            var patients = await db.BackendSystemPatients
-                .OrderBy(p => p.FamilyName)
-                .ThenBy(p => p.GivenName)
-                .Select(p => new PatientListItemDto(
-                    p.PatientId,
-                    BuildFullName(p.GivenName, p.MiddleName, p.FamilyName),
-                    p.MRN,
-                    p.Identifier,
-                    p.Gender,
-                    p.BirthDate))
-                .ToListAsync();
-
+            var patients = await dataSources.Resolve(source).GetPatientsAsync(cancellationToken);
             return Results.Ok(patients);
         });
 
-        app.MapGet("/api/backend-system/patient/{patientId}", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+        app.MapGet("/api/backend-system/patient/{patientId}", async (string patientId, string? source, HttpContext http, SessionStore sessions, PatientDataSourceResolver dataSources, CancellationToken cancellationToken) =>
         {
             if (!TryGetSession(http, sessions))
             {
                 return Results.Unauthorized();
             }
 
-            var patient = await db.BackendSystemPatients.FirstOrDefaultAsync(p => p.PatientId == patientId);
-            if (patient is null)
-            {
-                return Results.NotFound();
-            }
-
-            return Results.Ok(new PatientDetailDto(
-                patient.PatientId,
-                patient.Identifier,
-                patient.MRN,
-                patient.FamilyName,
-                patient.GivenName,
-                patient.MiddleName,
-                BuildFullName(patient.GivenName, patient.MiddleName, patient.FamilyName),
-                patient.Gender,
-                patient.BirthDate,
-                patient.Deceased,
-                patient.MaritalStatus,
-                patient.Phone,
-                patient.Email,
-                patient.AddressLine1,
-                patient.AddressLine2,
-                patient.City,
-                patient.State,
-                patient.PostalCode,
-                patient.Country));
+            var patient = await dataSources.Resolve(source).GetPatientAsync(patientId, cancellationToken);
+            return patient is null ? Results.NotFound() : Results.Ok(patient);
         });
 
         // Practitioner has no PatientId of its own — the only link to a patient is via the Encounters the
@@ -391,7 +360,12 @@ public static class BackendSystemEndpoints
             ? reference[(slash + 1)..]
             : reference;
 
-    private static string? BuildFullName(string? givenName, string? middleName, string? familyName)
+    private static string? BuildFullName(string? givenName, string? middleName, string? familyName) =>
+        BuildFullNamePublic(givenName, middleName, familyName);
+
+    // Shared with the MySQL/Mongo readers (PatientDataSourceReaders.cs) so all three data sources build a
+    // patient's display name the exact same way, regardless of which store answered the request.
+    public static string? BuildFullNamePublic(string? givenName, string? middleName, string? familyName)
     {
         var parts = new[] { givenName, middleName, familyName }
             .Where(part => !string.IsNullOrWhiteSpace(part));

@@ -6,6 +6,20 @@ import { environment } from '../../environments/environment';
 
 export const API_V1_BASE = `${environment.apiBase}/api/v1`;
 
+// The scheme+host+port the FHIRBridge API actually answers on — what an EHR needs registered as the
+// redirect/launch URI. environment.apiBase is empty in production (the portal is served same-origin by
+// FHIRBridge.Gateway, see environment.prod.ts), so window.location.origin is the correct fallback there;
+// in dev, apiBase already carries the API's own separate host:port (e.g. http://localhost:5000), which is
+// NOT the same as the portal's own origin (e.g. http://localhost:4200).
+export const APP_ORIGIN = environment.apiBase || (typeof window !== 'undefined' ? window.location.origin : '');
+
+/** Default values for the Epic app-registration fields an admin would otherwise have to type in by hand —
+ *  always resolved from the actual deployment host, never a hardcoded placeholder domain. */
+export const OAUTH_DEFAULT_URLS = {
+  redirectUri: `${APP_ORIGIN}/api/v1/oauth/callback`,
+  launchUrl:   `${APP_ORIGIN}/api/v1/oauth/launch`,
+};
+
 // ─── Auth (AuthController — api/v1/auth) ────────────────────────────────────────
 export const AUTH_ENDPOINTS = {
   login:          `${API_V1_BASE}/auth/internal/login`,
@@ -205,4 +219,5 @@ export const WORKFLOW_ENDPOINTS = {
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
+  runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,
 };

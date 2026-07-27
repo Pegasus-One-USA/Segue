@@ -15,6 +15,7 @@ import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 import { environment } from '../../../../environments/environment';
+import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
 
 export type { EpicAudience };
 
@@ -339,6 +340,12 @@ export class EpicAudienceFormComponent implements OnInit {
   readonly cancelled = output<void>();
   readonly saved     = output<void>();
 
+  // The "Application URLs" section (Launch URL / Redirect URI) is hidden — both fields are now always
+  // resolved from the actual deployment host (see OAUTH_DEFAULT_URLS) rather than admin-entered, so there's
+  // nothing left here for an admin to read or edit. The form controls (and their validators/defaults) stay
+  // exactly as they were; only the visible section is suppressed.
+  protected readonly showApplicationUrlsSection = false;
+
   @ViewChild('formRoot') private readonly formRoot?: ElementRef<HTMLElement>;
 
   protected readonly wiz       = inject(WizardService);
@@ -419,11 +426,11 @@ export class EpicAudienceFormComponent implements OnInit {
     // 'gen'/'import' hand key provisioning to SigningKeyGenerationService instead — see generateKeyPair()/
     // importPrivateKey() below.
     keySource:           ['manual' as 'manual' | 'gen' | 'import'],
-    launchUrl:         ['https://fhirbridge.com/launch', urlValidator],
+    launchUrl:         [OAUTH_DEFAULT_URLS.launchUrl, urlValidator],
     // How the app is registered to open within the EHR (EHR-launch audience only) — mirrors Epic's own Hyperspace/
     // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
     launchDisplayMode: ['Embedded'],
-    callbackUrl:       ['http://localhost:5000/api/v1/oauth/callback', [Validators.required, urlValidator]],
+    callbackUrl:       [OAUTH_DEFAULT_URLS.redirectUri, [Validators.required, urlValidator]],
     resources:         [[] as string[], Validators.required],
     scopeVersion:      ['v2'],
     appName:           ['Segue Epic'],
@@ -674,7 +681,7 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly sectionNumbers = computed(() => {
     const cfg = this.audienceConfig();
     let n = 4; // 1 Audience/Env · 2 FHIR Base URL · 3 OAuth Endpoints · 4 Credentials
-    const urls              = (cfg.showLaunchUrl || cfg.showRedirect) ? ++n : null;
+    const urls              = (this.showApplicationUrlsSection && (cfg.showLaunchUrl || cfg.showRedirect)) ? ++n : null;
     const cds                = cfg.showCdsHooks ? ++n : null;
     const test                = ++n;
     const retrievalMethod    = cfg.showRetrieval ? ++n : null;

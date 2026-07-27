@@ -50,6 +50,13 @@ public sealed record WorkflowRunRequest(
     // session reuse the one interactive OAuth token their authorization already covers, instead of each
     // SourceConnection needing its own separate MyChart consent — see FhirSourceConfiguration.CallerId. Omit for
     // every other ApplicationType, or when this run should keep using the pre-existing per-SourceConnection session.
-    string? CallerId = null);
+    string? CallerId = null,
+    // When true, the run is dispatched to a background task and the endpoint returns 202 Accepted with the
+    // run id immediately instead of blocking until the whole DAG finishes — see IWorkflowRunTracker. Poll
+    // GET /workflow-runs/{runId}/status (or the existing /workflow-runs/{runId} once terminal) for progress.
+    // Omit/false keeps the pre-existing blocking behavior.
+    bool Async = false);
+
+public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status);
 
 public sealed record CopyWorkflowRequest(string Name);
