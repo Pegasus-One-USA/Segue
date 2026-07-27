@@ -10,5 +10,5 @@ export const environment = {
   // (launch-provider-in-app.ts) has no runtime override for this value, unlike Patient/Provider
   // Standalone. The FHIRBridge API's Portal:AllowedOrigins must also include this Demo app's own
   // origin for these calls to succeed (CORS).
-  fhirbridgeBase: 'http://172.184.140.105:6003',
+  fhirbridgeBase: 'https://segue.pegasusone.com:60031',
 };
