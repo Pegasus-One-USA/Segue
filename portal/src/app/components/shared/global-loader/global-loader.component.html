@@ -1,0 +1,37 @@
+@if (loading.isLoading() && branding.current().loaderStyle !== 'none') {
+  @switch (branding.current().loaderStyle) {
+    @case ('spinner') {
+      <div class="global-loader global-loader--spinner" role="status" aria-live="polite" aria-label="Loading">
+        <span class="global-loader__spinner"></span>
+      </div>
+    }
+    @case ('list') {
+      <div class="global-loader global-loader--list" role="status" aria-live="polite" aria-label="Loading">
+        <div class="global-loader__list">
+          <div class="global-loader__list-row">
+            <span class="global-loader__list-dot"></span>
+            <span class="global-loader__list-dot global-loader__list-dot--ghost"></span>
+            <span class="global-loader__list-bar"></span>
+          </div>
+          <div class="global-loader__list-row">
+            <span class="global-loader__list-dot"></span>
+            <span class="global-loader__list-dot global-loader__list-dot--ghost"></span>
+            <span class="global-loader__list-bar"></span>
+          </div>
+          <div class="global-loader__list-row">
+            <span class="global-loader__list-dot"></span>
+            <span class="global-loader__list-dot global-loader__list-dot--ghost"></span>
+            <span class="global-loader__list-bar"></span>
+          </div>
+        </div>
+      </div>
+    }
+    @default {
+      <div class="global-loader global-loader--bar" role="status" aria-live="polite" aria-label="Loading">
+        <span class="global-loader__bar-track">
+          <span class="global-loader__bar-fill"></span>
+        </span>
+      </div>
+    }
+  }
+}

@@ -1,5 +1,11 @@
 export type BrandThemeMode = 'light' | 'dark' | 'system';
 
+/** How the global "an API call is in flight" indicator renders — 'bar' (default, a slim
+ *  animated bar at the top of the viewport), 'spinner' (a centered spinner), 'list' (a
+ *  stack of card rows with a teal scan effect sweeping down them), or 'none' (disabled
+ *  entirely). Always uses the tenant's own brand colors, whichever style is picked. */
+export type LoaderStyle = 'bar' | 'spinner' | 'list' | 'none';
+
 /** Uploaded/linked image assets. Empty string = fall back to the built-in default look. */
 export interface BrandAssets {
   logoUrl:              string;
@@ -26,6 +32,7 @@ export interface BrandConfiguration {
   website:          string;
   emailFooterText:  string;
   defaultThemeMode: BrandThemeMode;
+  loaderStyle:      LoaderStyle;
   assets:           BrandAssets;
   updatedAt:        string;
 }
@@ -44,6 +51,7 @@ export const DEFAULT_BRANDING: BrandConfiguration = {
   website:          'https://fhirbridge.com',
   emailFooterText:  'Segue Healthcare Integration Platform',
   defaultThemeMode: 'light',
+  loaderStyle:      'list',
   assets: {
     logoUrl:             '',
     darkLogoUrl:          '',

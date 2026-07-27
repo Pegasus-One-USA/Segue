@@ -8,7 +8,7 @@ import { BrandAssetFieldComponent } from '../../components/brand-asset-field/bra
 import { BrandingService } from '../../../services/branding.service';
 import { ThemeService } from '../../../services/theme.service';
 import { ToastService } from '../../../services/toast.service';
-import { BrandConfiguration, BrandThemeMode } from '../../../models/brand-configuration.model';
+import { BrandConfiguration, BrandThemeMode, LoaderStyle } from '../../../models/brand-configuration.model';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
@@ -43,6 +43,13 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     { id: 'system', label: 'System' },
   ];
 
+  protected readonly loaderStyleOptions: { id: LoaderStyle; label: string }[] = [
+    { id: 'bar',     label: 'Top bar' },
+    { id: 'spinner', label: 'Spinner' },
+    { id: 'list',    label: 'List scan' },
+    { id: 'none',    label: 'None' },
+  ];
+
   protected readonly fontOptions = [
     { value: '',                       label: 'Platform default (Inter)' },
     { value: "'Roboto', sans-serif",   label: 'Roboto' },
@@ -63,6 +70,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     website:          [''],
     emailFooterText:  [''],
     defaultThemeMode: ['light' as BrandThemeMode],
+    loaderStyle:      ['bar' as LoaderStyle],
     logoUrl:              [''],
     darkLogoUrl:          [''],
     faviconUrl:           [''],
@@ -162,6 +170,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
       website:          cfg.website,
       emailFooterText:  cfg.emailFooterText,
       defaultThemeMode: cfg.defaultThemeMode,
+      loaderStyle:      cfg.loaderStyle,
       logoUrl:              cfg.assets.logoUrl,
       darkLogoUrl:          cfg.assets.darkLogoUrl,
       faviconUrl:           cfg.assets.faviconUrl,
@@ -187,6 +196,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
       website:          v.website,
       emailFooterText:  v.emailFooterText,
       defaultThemeMode: v.defaultThemeMode,
+      loaderStyle:      v.loaderStyle,
       assets: {
         logoUrl:              v.logoUrl,
         darkLogoUrl:          v.darkLogoUrl,

@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of, delay, tap, catchError } from 'rxjs';
 import { AuthStore } from '../auth/store/auth.store';
 import { ThemeService } from './theme.service';
+import { LoadingService } from './loading.service';
 import { BrandConfiguration, DEFAULT_BRANDING } from '../models/brand-configuration.model';
 
 const STORAGE_PREFIX = 'fhirbridge.branding.';
@@ -20,9 +21,10 @@ const STORAGE_PREFIX = 'fhirbridge.branding.';
  */
 @Injectable({ providedIn: 'root' })
 export class BrandingService {
-  private readonly http  = inject(HttpClient);
-  private readonly auth  = inject(AuthStore);
-  private readonly theme = inject(ThemeService);
+  private readonly http    = inject(HttpClient);
+  private readonly auth    = inject(AuthStore);
+  private readonly theme   = inject(ThemeService);
+  private readonly loading = inject(LoadingService);
 
   readonly current   = signal<BrandConfiguration>(DEFAULT_BRANDING);
   readonly isDefault = computed(() => this.current().tenantId === 'default');
@@ -88,12 +90,14 @@ export class BrandingService {
   /** Mock persistence: keeps the edit in localStorage per-tenant so it survives a reload. */
   save(config: BrandConfiguration): Observable<BrandConfiguration> {
     const saved: BrandConfiguration = { ...config, updatedAt: new Date().toISOString() };
-    return of(saved).pipe(
-      delay(400),
-      tap(v => {
-        this.applyToDocument(v);
-        this.persistLocal(v);
-      }),
+    return this.loading.track(
+      of(saved).pipe(
+        delay(400),
+        tap(v => {
+          this.applyToDocument(v);
+          this.persistLocal(v);
+        }),
+      ),
     );
   }
 
