@@ -10,23 +10,249 @@
 // ── Pipeline sub-header ────────────────────────────────────────────────────────
 .builder-subheader {
   display:     flex;
+  align-items: flex-start;
+  padding:     var(--space-6) var(--space-9) 0;
+  flex-shrink: 0;
+  // .builder-canvas-area is a later, non-positioned flex sibling — without its own stacking
+  // order, it paints over the name field's absolutely-positioned error message wherever that
+  // message visually overflows past this header's own box (e.g. on hover, when nothing else
+  // about the layout changes but paint order still favors the later sibling).
+  position:    relative;
+  z-index:     1;
+}
+
+// The toolbar floats above the canvas as a single elevated "dock" card — the
+// same card-hover-lift language the app already uses for dashboard cards,
+// applied here instead of a new bespoke pattern. A hairline brand gradient
+// along the top edge slowly drifts (paint-only background-position, the same
+// technique the skeleton-shimmer utility already uses) as a quiet "flow" cue.
+.dock {
+  position:      relative;
+  display:       flex;
+  align-items:   center;
+  gap:           var(--space-6);
+  flex:          1 1 auto;
+  flex-wrap:     wrap;
+  padding:       var(--space-6) var(--space-8);
+  background:    var(--color-surface);
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow:    var(--shadow-xs);
+  // Card hover-lift per the design spec's §22 Micro Animations table (translateY(-2px), 200ms ease) —
+  // not the button-hover-lift values (-1px, 150ms) this was drafted with initially.
+  transition:    box-shadow var(--transition-slow), transform var(--transition-slow);
+
+  &::before {
+    content:         '';
+    position:        absolute;
+    inset:           0 0 auto 0;
+    height:          var(--space-1);
+    // Matches .dock's own top corners directly rather than relying on overflow:hidden on .dock, which
+    // would otherwise also clip the name field's below-the-field validation message.
+    border-radius:   var(--radius-card) var(--radius-card) 0 0;
+    background:      linear-gradient(
+                        90deg,
+                        var(--color-primary),
+                        var(--color-secondary),
+                        var(--color-gold),
+                        var(--color-primary)
+                      );
+    background-size: 200% 100%;
+    animation:       dock-flow 8s linear infinite;
+  }
+
+  &:hover {
+    box-shadow: var(--shadow-sm);
+    transform:  translateY(-2px);
+  }
+
+  &:focus-within {
+    box-shadow: var(--shadow-sm), 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+  }
+}
+
+@keyframes dock-flow {
+  0%   { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+
+// ── Name field: hero control — gradient node badge + borderless pill input ─────
+.dock__namefield {
+  position:      relative;
+  display:       flex;
+  align-items:   center;
+  gap:           var(--space-4);
+  flex:          1 1 240px;
+  max-width:     420px;
+  padding:       var(--space-2) var(--space-6) var(--space-2) var(--space-2);
+  background:    var(--color-side);
+  border:        1.5px solid var(--color-border-input);
+  border-radius: var(--radius-pill);
+  transition:    border-color var(--transition-base), box-shadow var(--transition-base),
+                 background var(--transition-base);
+
+  &:hover {
+    border-color: var(--color-muted-2);
+  }
+
+  &:focus-within {
+    background:   var(--color-surface);
+    border-color: var(--color-primary);
+    box-shadow:   0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+
+  &:focus-within .dock__badge {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+
+  // Required-field validation (design spec §8.1 Text Input — Error state), triggered on blur or a
+  // failed save attempt — takes priority over the default hover/focus-within teal styling.
+  &--invalid,
+  &--invalid:hover,
+  &--invalid:focus-within {
+    border-color: var(--color-error);
+    box-shadow:   0 0 0 3px color-mix(in srgb, var(--color-error) 10%, transparent);
+  }
+}
+
+.dock__name-error {
+  position:       absolute;
+  z-index:        2;
+  pointer-events: none;
+  left:           var(--space-2);
+  top:            100%;
+  margin-top:     var(--space-2);
+  padding:        var(--space-2) var(--space-6);
+  background:     var(--color-error-soft);
+  color:          var(--color-error-strong);
+  font-size:      11.5px;
+  font-weight:    600;
+  white-space:    nowrap;
+  border-radius:  var(--radius-sm);
+  box-shadow:     var(--shadow-sm);
+}
+
+.dock__badge {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  flex-shrink:     0;
+  width:           var(--space-11);
+  height:          var(--space-11);
+  border-radius:   50%;
+  background:      linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color:           var(--color-on-primary);
+  transition:      box-shadow var(--transition-base);
+}
+
+.dock__name-input.builder-input--name {
+  min-width:   0;
+  flex:        1 1 auto;
+  height:      auto;
+  padding:     var(--space-2) 0;
+  border:      none;
+  background:  transparent;
+  color:       var(--color-ink);
+  font-size:   14px;
+  font-weight: 600;
+
+  &::placeholder {
+    color:       var(--color-muted-2);
+    font-weight: 500;
+  }
+
+  &:focus {
+    border-color: transparent;
+    box-shadow:   none;
+  }
+}
+
+.dock__name-clear {
+  flex-shrink:     0;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  width:           18px;
+  height:          18px;
+  border:          none;
+  border-radius:   50%;
+  background:      transparent;
+  color:           var(--color-muted-2);
+  font-size:       11px;
+  line-height:     1;
+  cursor:          pointer;
+  transition:      background var(--transition-fast), color var(--transition-fast);
+
+  &:hover {
+    background: var(--color-border);
+    color:      var(--color-ink-2);
+  }
+
+  &:focus-visible {
+    outline:    none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+}
+
+.dock__name-underline {
+  position:         absolute;
+  left:             10%;
+  right:            10%;
+  bottom:           var(--space-1);
+  height:           var(--space-1);
+  border-radius:    var(--radius-pill);
+  background:       linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  transform:        scaleX(0);
+  transform-origin: center;
+  transition:       transform var(--transition-base);
+  pointer-events:   none;
+}
+
+.dock__namefield:focus-within .dock__name-underline {
+  transform: scaleX(1);
+}
+
+// ── Divider between the name field and the trigger/status cluster ──────────────
+.dock__divider {
+  align-self: stretch;
+  width:      1px;
+  min-height: var(--space-9);
+  background: linear-gradient(to bottom, transparent, var(--color-border), transparent);
+}
+
+.dock__triggers {
+  display:     flex;
   align-items: center;
   gap:         8px;
-  padding:     12px 20px 0;
   flex-shrink: 0;
   flex-wrap:   wrap;
 }
 
+// Pushes the action buttons to the dock's far right edge — without this the group just sits
+// wherever it lands after the name field/divider/triggers, with a large dead gap to the right
+// whenever .dock__triggers is empty (no source node configured yet).
+.dock__actions {
+  display:      flex;
+  align-items:  center;
+  gap:          10px;
+  margin-left:  auto;
+  flex-shrink:  0;
+}
+
 .builder-btn {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           6px;
   background:    var(--color-side);
   border:        1px solid var(--color-border);
   color:         var(--color-ink-2);
   font-size:     12.5px;
+  font-weight:   600;
   font-family:   inherit;
   padding:       5px 14px;
   border-radius: 7px;
   cursor:        pointer;
-  transition:    background var(--transition-base), border-color var(--transition-base);
+  transition:    background var(--transition-base), border-color var(--transition-base), color var(--transition-base);
 
   &:hover {
     background:   var(--color-primary-soft);
@@ -51,10 +277,22 @@
     }
   }
 
+  // Danger (design spec §7.2 Danger variant) — bg/border/text all tinted, not just the text,
+  // so it actually reads as a distinct button rather than plain colored text on the dock card.
   &--danger {
-    margin-left: auto;
-    color:       var(--color-error);
+    background:   var(--color-error-soft);
+    border-color: var(--color-error);
+    color:        var(--color-error);
+
+    &:hover {
+      filter: brightness(0.97);
+    }
   }
+}
+
+.builder-btn__icon {
+  flex-shrink: 0;
+  display:     block;
 }
 
 .builder-input {

@@ -304,21 +304,14 @@
             type="button"
             class="dw-resource-card"
             [class.selected]="isResourceSelected(r)"
-            [class.locked]="isResourceLocked(r)"
-            [title]="resourceHintFor(r) ?? ''"
             (click)="toggleResource(r)"
           >
             <div class="dw-rc-check">
-              @if (isResourceSelected(r)) {
-                @if (isResourceLocked(r)) { 🔒 } @else { ✓ }
-              }
+              @if (isResourceSelected(r)) { ✓ }
             </div>
             <div class="dw-rc-body">
               <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
               <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
-              @if (resourceHintFor(r); as hint) {
-                <span class="dw-rc-hint" [class.dw-rc-hint--locked]="isResourceLocked(r)">{{ hint }}</span>
-              }
             </div>
           </button>
         }

@@ -24,8 +24,9 @@ import {
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
-import { requiredClosureFor, recommendedFor, lockingDependentsOf, sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
+import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { PipelineStore } from '../../../services/pipeline.store';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
@@ -242,12 +243,11 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   // ── data groups ───────────────────────────────────────────────────────────
-  // The groups offered come from the upstream source's selected resource types when available; otherwise the
-  // built-in catalog is the fallback (e.g. a destination added before any source is configured).
-  readonly availableGroups = computed(() => {
-    const src = this.sourceResources();
-    return src.length ? src : Object.keys(DEST_RESOURCE_DEFS);
-  });
+  // Always the full curated FHIR resource list — not derived from the upstream source's own
+  // selection, since the destination's resource picks are independent of whatever the source
+  // happened to have selected (and a destination added before any source is configured still
+  // needs the full list to choose from).
+  readonly availableGroups = computed(() => SUPPORTED_RESOURCE_TYPES);
   readonly selectedResources = signal<string[]>([]);
 
   // ── mapping rows ──────────────────────────────────────────────────────────
@@ -1104,58 +1104,15 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── data groups ───────────────────────────────────────────────────────────
+  // Each resource is selected independently — no required/recommended auto-selection or locking.
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
-
-  /** Currently-selected resources that transitively require `r` — non-empty means `r` can't be
-   *  deselected right now (see resource-dependency.config.ts). */
-  lockingDependentsFor(r: string): string[] { return lockingDependentsOf(r, this.selectedResources()); }
-
-  isResourceLocked(r: string): boolean {
-    return this.isResourceSelected(r) && this.lockingDependentsFor(r).length > 0;
-  }
-
-  /** Currently-selected resources that recommend (but don't require) `r` — only meaningful while `r`
-   *  itself isn't selected yet, since a selected resource has nothing left to be recommended for. */
-  private recommendedByFor(r: string): string[] {
-    if (this.isResourceSelected(r)) return [];
-    return this.selectedResources().filter(sel => recommendedFor(sel).includes(r));
-  }
-
-  /** Small explanatory line rendered under a resource card: why it was auto-selected (required by …),
-   *  or why it's suggested (recommended alongside …). Null when neither applies. */
-  resourceHintFor(r: string): string | null {
-    if (this.isResourceSelected(r)) {
-      const dependents = this.lockingDependentsFor(r);
-      return dependents.length ? `Required by ${dependents.join(', ')}` : null;
-    }
-    const suggestedBy = this.recommendedByFor(r);
-    return suggestedBy.length ? `Recommended alongside ${suggestedBy.join(', ')}` : null;
-  }
 
   toggleResource(r: string): void {
     if (this.isResourceSelected(r)) {
-      const dependents = this.lockingDependentsFor(r);
-      if (dependents.length) {
-        this.toast.warning(
-          'Required resource',
-          `${r} is required by ${dependents.join(', ')} — remove ${dependents.length > 1 ? 'them' : 'it'} first.`,
-        );
-        return;
-      }
       this.selectedResources.update(list => list.filter(x => x !== r));
       return;
     }
-
-    // Auto-select this resource's required dependencies too (transitively) — but only ones actually
-    // offered as a card here; a dependency the current catalog doesn't offer has nowhere to render.
-    const available = this.availableGroups();
-    const current = this.selectedResources();
-    const autoAdded = requiredClosureFor(r).filter(dep => available.includes(dep) && !current.includes(dep));
-    this.selectedResources.update(list => [...list, r, ...autoAdded]);
-
-    if (autoAdded.length) {
-      this.toast.info('Required resources added', `${autoAdded.join(', ')} added automatically — required by ${r}.`);
-    }
+    this.selectedResources.update(list => [...list, r]);
   }
 
   // ── drag-to-reorder the Step 3 data-group rows ──────────────────────────────
