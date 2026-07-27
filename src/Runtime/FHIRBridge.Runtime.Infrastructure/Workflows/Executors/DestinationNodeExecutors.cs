@@ -567,6 +567,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
         int written;
         string? downloadUrl;
+        GeneratedFile? inlineDownload;
         var explicitProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile");
 
         if (explicitProfile is null && MultiTableRelationalDestinationTypes.Contains(_destinationType))
@@ -593,6 +594,9 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
             written = totalWritten;
             downloadUrl = firstDownloadUrl;
+            // Inline (in-response) bytes are never produced for a multi-table write — AllowInlineDelivery is always
+            // false on this engine (see the comment above writeContext), so there is nothing to attribute here.
+            inlineDownload = null;
         }
         else
         {
@@ -600,6 +604,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
             written = writeResult.Count;
             downloadUrl = writeResult.DownloadUrl;
+            inlineDownload = writeResult.InlineDownload;
         }
 
         var result = new RuntimeDestinationWriteResult(
@@ -618,7 +623,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                     _destinationType.ToString(),
                     written,
                     written > 0 ? "Succeeded" : "NoData",
-                    writeResult.InlineDownload?.Content.Length,
+                    inlineDownload?.Content.Length,
                     context.WorkflowRunId,
                     context.CorrelationId),
                 cancellationToken);

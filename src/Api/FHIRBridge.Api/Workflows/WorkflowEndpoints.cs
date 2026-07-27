@@ -634,18 +634,7 @@ public static class WorkflowEndpoints
             }
 
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
-
-                return Results.Json(
-                    new
-                    {
-                        error = report.UserFriendlyMessage,
-                        message = report.UserFriendlyMessage,
-                        errorReferenceId = report.ErrorReferenceId,
-                        correlationId = report.CorrelationId,
-                        category = report.Category.ToString(),
-                    },
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
+            return Results.Ok(result);
         });
 
         // Lightweight poll target for an async /run — cheap enough to hit every second or two without pulling the
