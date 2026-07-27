@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 
 namespace FHIRBridge.Infrastructure.Governance;
@@ -6,49 +7,49 @@ namespace FHIRBridge.Infrastructure.Governance;
 /// <summary>No-op query service for the in-memory (no-database) dev configuration — there is no store to read.</summary>
 public sealed class EmptyGovernanceQueryService : IGovernanceQueryService
 {
-    public Task<IReadOnlyList<AuditLogDto>> GetAuditLogsAsync(
-        string? correlationId, string? entityType, string? entityId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<AuditLogDto>>([]);
+    public Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
+        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<AuditLogDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<DataAccessLogDto>> GetDataAccessLogsAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<DataAccessLogDto>>([]);
+    public Task<PagedResult<DataAccessLogDto>> GetDataAccessLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<DataAccessLogDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<AuthenticationLogDto>> GetAuthenticationLogsAsync(
-        string? correlationId, int take, CancellationToken cancellationToken, string? authenticationTypePrefix = null)
-        => Task.FromResult<IReadOnlyList<AuthenticationLogDto>>([]);
+    public Task<PagedResult<AuthenticationLogDto>> GetAuthenticationLogsAsync(
+        string? correlationId, int skip, int take, CancellationToken cancellationToken, string? authenticationTypePrefix = null)
+        => Task.FromResult(new PagedResult<AuthenticationLogDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<SecurityEventDto>> GetSecurityEventsAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<SecurityEventDto>>([]);
+    public Task<PagedResult<SecurityEventDto>> GetSecurityEventsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<SecurityEventDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<AuthorizationLogDto>> GetAuthorizationLogsAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<AuthorizationLogDto>>([]);
+    public Task<PagedResult<AuthorizationLogDto>> GetAuthorizationLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<AuthorizationLogDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<SchedulerHistoryDto>> GetSchedulerHistoryAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<SchedulerHistoryDto>>([]);
+    public Task<PagedResult<SchedulerHistoryDto>> GetSchedulerHistoryAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<SchedulerHistoryDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<RetryHistoryDto>> GetRetryHistoryAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<RetryHistoryDto>>([]);
+    public Task<PagedResult<RetryHistoryDto>> GetRetryHistoryAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<RetryHistoryDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<ErrorLogDto>> GetErrorLogsAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<ErrorLogDto>>([]);
+    public Task<PagedResult<ErrorLogDto>> GetErrorLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<ErrorLogDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<ErrorLogDto>> SearchErrorLogsAsync(ErrorLogSearch search, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<ErrorLogDto>>([]);
+    public Task<PagedResult<ErrorLogDto>> SearchErrorLogsAsync(ErrorLogSearch search, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<ErrorLogDto>([], 0, 1, search.Take));
 
-    public Task<IReadOnlyList<ApiRequestLogDto>> GetApiRequestLogsAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<ApiRequestLogDto>>([]);
+    public Task<PagedResult<ApiRequestLogDto>> GetApiRequestLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<ApiRequestLogDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<ExportHistoryDto>> GetExportHistoryAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<ExportHistoryDto>>([]);
+    public Task<PagedResult<ExportHistoryDto>> GetExportHistoryAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<ExportHistoryDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<NotificationHistoryDto>> GetNotificationHistoryAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<NotificationHistoryDto>>([]);
+    public Task<PagedResult<NotificationHistoryDto>> GetNotificationHistoryAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<NotificationHistoryDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<ValidationFailureDto>> GetValidationFailuresAsync(string? correlationId, int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<ValidationFailureDto>>([]);
+    public Task<PagedResult<ValidationFailureDto>> GetValidationFailuresAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<ValidationFailureDto>([], 0, 1, take));
 
-    public Task<IReadOnlyList<EndpointHealthCheckDto>> GetEndpointHealthChecksAsync(int take, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<EndpointHealthCheckDto>>([]);
+    public Task<PagedResult<EndpointHealthCheckDto>> GetEndpointHealthChecksAsync(int skip, int take, CancellationToken cancellationToken)
+        => Task.FromResult(new PagedResult<EndpointHealthCheckDto>([], 0, 1, take));
 
     public Task<IReadOnlyList<SmartLaunchLogDto>> GetSmartLaunchLogsAsync(int take, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<SmartLaunchLogDto>>([]);

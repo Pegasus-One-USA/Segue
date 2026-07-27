@@ -14,14 +14,17 @@ import {
   DataLineage,
   LineageFieldValue,
   LogSettings,
+  PagedResult,
   RetentionPolicyEntry,
   SecurityEventEntry,
   SmartLaunchLogEntry,
 } from '../models/governance.model';
 import { CorrelationSearchResult } from '../models/correlation-search.model';
 
-function buildParams(correlationId: string | undefined, take: number): HttpParams {
-  let params = new HttpParams().set('take', take);
+function buildParams(correlationId: string | undefined, page: number, pageSize: number): HttpParams {
+  let params = new HttpParams()
+    .set('skip', (Math.max(page, 1) - 1) * pageSize)
+    .set('take', pageSize);
   if (correlationId) {
     params = params.set('correlationId', correlationId);
   }
@@ -32,29 +35,33 @@ function buildParams(correlationId: string | undefined, take: number): HttpParam
 export class GovernanceApiService {
   private readonly http = inject(HttpClient);
 
-  auditLogs(correlationId?: string, take = 200, entityType?: string, entityId?: string): Observable<AuditLogEntry[]> {
-    let params = buildParams(correlationId, take);
+  auditLogs(
+    correlationId: string | undefined, page: number, pageSize: number, entityType?: string, entityId?: string,
+  ): Observable<PagedResult<AuditLogEntry>> {
+    let params = buildParams(correlationId, page, pageSize);
     if (entityType) params = params.set('entityType', entityType);
     if (entityId) params = params.set('entityId', entityId);
-    return this.http.get<AuditLogEntry[]>(GOVERNANCE_ENDPOINTS.auditLogs, { params });
+    return this.http.get<PagedResult<AuditLogEntry>>(GOVERNANCE_ENDPOINTS.auditLogs, { params });
   }
 
-  authenticationLogs(correlationId?: string, take = 200, authenticationType?: string): Observable<AuthenticationLogEntry[]> {
-    let params = buildParams(correlationId, take);
+  authenticationLogs(
+    correlationId: string | undefined, page: number, pageSize: number, authenticationType?: string,
+  ): Observable<PagedResult<AuthenticationLogEntry>> {
+    let params = buildParams(correlationId, page, pageSize);
     if (authenticationType) params = params.set('authenticationType', authenticationType);
-    return this.http.get<AuthenticationLogEntry[]>(GOVERNANCE_ENDPOINTS.authenticationLogs, { params });
+    return this.http.get<PagedResult<AuthenticationLogEntry>>(GOVERNANCE_ENDPOINTS.authenticationLogs, { params });
   }
 
-  dataAccessLogs(correlationId?: string, take = 200): Observable<DataAccessLogEntry[]> {
-    return this.http.get<DataAccessLogEntry[]>(GOVERNANCE_ENDPOINTS.dataAccessLogs, { params: buildParams(correlationId, take) });
+  dataAccessLogs(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<DataAccessLogEntry>> {
+    return this.http.get<PagedResult<DataAccessLogEntry>>(GOVERNANCE_ENDPOINTS.dataAccessLogs, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  securityEvents(correlationId?: string, take = 200): Observable<SecurityEventEntry[]> {
-    return this.http.get<SecurityEventEntry[]>(GOVERNANCE_ENDPOINTS.securityEvents, { params: buildParams(correlationId, take) });
+  securityEvents(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<SecurityEventEntry>> {
+    return this.http.get<PagedResult<SecurityEventEntry>>(GOVERNANCE_ENDPOINTS.securityEvents, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  authorizationLogs(correlationId?: string, take = 200): Observable<AuthorizationLogEntry[]> {
-    return this.http.get<AuthorizationLogEntry[]>(GOVERNANCE_ENDPOINTS.authorizationLogs, { params: buildParams(correlationId, take) });
+  authorizationLogs(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<AuthorizationLogEntry>> {
+    return this.http.get<PagedResult<AuthorizationLogEntry>>(GOVERNANCE_ENDPOINTS.authorizationLogs, { params: buildParams(correlationId, page, pageSize) });
   }
 
   smartLaunchLogs(take = 200): Observable<SmartLaunchLogEntry[]> {

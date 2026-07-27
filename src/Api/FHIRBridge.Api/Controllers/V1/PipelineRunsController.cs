@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Application.Security;
@@ -19,6 +20,7 @@ public sealed class PipelineRunsController : ControllerBase
     private readonly IPipelineRunDispatcher _pipelineRunDispatcher;
     private readonly IPipelineRunRouteExecutionRepository _routeExecutionRepository;
     private readonly IExecutionResourceHistoryRecorder _resourceHistoryRecorder;
+    private readonly ICurrentUserService _currentUserService;
     private readonly bool _hasSharedTransport;
 
     public PipelineRunsController(
@@ -26,12 +28,14 @@ public sealed class PipelineRunsController : ControllerBase
         IPipelineRunDispatcher pipelineRunDispatcher,
         IPipelineRunRouteExecutionRepository routeExecutionRepository,
         IExecutionResourceHistoryRecorder resourceHistoryRecorder,
+        ICurrentUserService currentUserService,
         IConfiguration configuration)
     {
         _configuredPipelineService = configuredPipelineService;
         _pipelineRunDispatcher = pipelineRunDispatcher;
         _routeExecutionRepository = routeExecutionRepository;
         _resourceHistoryRecorder = resourceHistoryRecorder;
+        _currentUserService = currentUserService;
 
         // A shared transport (RabbitMQ / Azure Service Bus) lets the Worker pick up long-running jobs; InMemory cannot
         // cross the API→Worker process boundary, so those fall back to synchronous execution.
@@ -47,6 +51,16 @@ public sealed class PipelineRunsController : ControllerBase
         [FromBody] StartConfiguredPipelineRunRequest request,
         CancellationToken cancellationToken)
     {
+        // Reuse the ambient request's correlation id (the same one ApiRequestLoggingHandler already stamps on
+        // every outbound HTTP call this run triggers) when the caller didn't supply one explicitly — otherwise
+        // every log row this run produces (ValidationFailureLogs, ApiRequestLogs, ExportHistory, ...) carries no
+        // correlation id at all, making it untraceable. Same fix as WorkflowEndpoints.cs's /run endpoint.
+        var correlationId = request.CorrelationId ?? _currentUserService.CurrentUser.CorrelationId;
+        if (correlationId != request.CorrelationId)
+        {
+            request = request with { CorrelationId = correlationId };
+        }
+
         // Bulk export ($export) can be long-running. When a shared transport is available, hand it to the Worker and
         // return immediately — the run is tracked via its PipelineRun record (visible in Runs) rather than blocking
         // the request. Without a shared transport, run synchronously so local/dev still works.
@@ -145,9 +159,11 @@ public sealed class PipelineRunsController : ControllerBase
     }
 
     /// <summary>
-    /// Drill-down into a route execution's per-resource fetch/normalize/map/store history. Returns decrypted PHI
-    /// payloads — the same kind of detail exposed by the Runtime plane's equivalent endpoint
-    /// (WorkflowEndpoints' /workflow-runs/{runId}/resources).
+    /// Drill-down into a route execution's per-resource fetch/normalize/map/store history. PHI-free: returns only
+    /// per-stage status, timing, warnings, data-quality score, and the master patient id — never the raw
+    /// fetched/normalized/mapped payloads. To view an individual decrypted field value, use the gated + audited
+    /// reveal on the Data Lineage screen (DataLineageController.RevealFieldValue), which requires the stricter
+    /// Payload/View permission and writes a DataAccessLog per reveal.
     /// </summary>
     [HttpGet("route-executions/{routeExecutionId:guid}/resources")]
     [ProducesResponseType(typeof(PagedResult<PipelineRunResourceHistoryDto>), StatusCodes.Status200OK)]

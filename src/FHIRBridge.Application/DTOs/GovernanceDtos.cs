@@ -95,7 +95,9 @@ public sealed record ErrorLogDto(
     string? SpanId = null,
     string? Status = null,
     string? ResolvedBy = null,
-    DateTime? ResolvedOnUtc = null);
+    DateTime? ResolvedOnUtc = null,
+    string? DiagnosisAction = null,
+    string? DiagnosisCause = null);
 
 /// <summary>Search filter for the Monitoring → Errors screen (Phase 6A). All criteria optional and AND-combined.</summary>
 public sealed record ErrorLogSearch(
@@ -109,6 +111,7 @@ public sealed record ErrorLogSearch(
     string? Status = null,
     DateTime? FromUtc = null,
     DateTime? ToUtc = null,
+    int Skip = 0,
     int Take = 200);
 
 public sealed record ApiRequestLogDto(

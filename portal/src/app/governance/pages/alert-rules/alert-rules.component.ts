@@ -2,6 +2,8 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { AlertRule, CreateAlertRuleRequest } from '../../models/governance.model';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
@@ -11,10 +13,20 @@ function emptyForm(): CreateAlertRuleRequest {
   return { name: '', eventTypeFilter: '', thresholdCount: 3, windowMinutes: 15, severity: 'Medium', recipients: '' };
 }
 
+/** The only Security Event types the backend can ever raise — see LocalAuthService,
+ *  AppSecretsAdminService, and AuditChainVerificationWorker. Not user-extensible, so this is
+ *  a fixed list rather than a lookup call. */
+export const SECURITY_EVENT_TYPES: { value: string; label: string }[] = [
+  { value: 'LoginAttemptWhileLocked', label: 'Login attempt while locked' },
+  { value: 'AccountLockedThresholdReached', label: 'Account locked (threshold reached)' },
+  { value: 'AppSecretRegenerated', label: 'App secret regenerated' },
+  { value: 'AuditChainBroken', label: 'Audit chain broken' },
+];
+
 @Component({
   selector: 'app-alert-rules',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatTableModule],
+  imports: [CommonModule, FormsModule, MatTableModule, MatSlideToggleModule, MatTooltipModule],
   templateUrl: './alert-rules.component.html',
   styleUrl: './alert-rules.component.scss',
 })
@@ -34,6 +46,7 @@ export class AlertRulesComponent implements OnInit, HasUnsavedChanges {
   readonly errorMessage = signal<string | null>(null);
 
   readonly displayedCols = ['name', 'eventTypeFilter', 'threshold', 'severity', 'recipients', 'isEnabled'];
+  readonly eventTypes = SECURITY_EVENT_TYPES;
 
   ngOnInit(): void {
     this.load();

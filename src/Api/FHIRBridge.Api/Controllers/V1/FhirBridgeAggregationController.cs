@@ -50,7 +50,8 @@ public sealed class FhirBridgeAggregationController : ControllerBase
         }
         catch (UnsupportedResourceTypeException ex)
         {
-            return FhirError(HttpStatusCode.BadRequest, "not-supported", ex.Message);
+            return FhirError(HttpStatusCode.BadRequest, "not-supported",
+                FHIRBridge.Governance.SafeErrorText.SanitizeOr(ex.Message, "One or more requested resource types are not supported."));
         }
 
         PatientAggregationResult result;
@@ -64,18 +65,22 @@ public sealed class FhirBridgeAggregationController : ControllerBase
         }
         catch (NotFoundException ex)
         {
-            return FhirError(HttpStatusCode.NotFound, "not-found", ex.Message);
+            // UserMessage is the client-safe text; Message keeps the raw entity/id for logs only.
+            return FhirError(HttpStatusCode.NotFound, "not-found", ex.UserMessage);
         }
         catch (SourceConnectionUnavailableException ex)
         {
-            return FhirError(HttpStatusCode.Conflict, "conflict", ex.Message);
+            return FhirError(HttpStatusCode.Conflict, "conflict",
+                FHIRBridge.Governance.SafeErrorText.SanitizeOr(ex.Message, "The source connection is currently unavailable."));
         }
 
         // Total upstream failure: every query (Patient root + each compartment type) failed.
         var totalQueries = resourceTypes.Count + 1;
         if (result.Resources.Count == 0 && result.Failures.Count >= totalQueries)
         {
-            var diagnostics = string.Join("; ", result.Failures.Select(f => $"{f.ResourceType}: {f.Message}"));
+            // Per-resource upstream failure messages are untrusted (can carry raw HTTP bodies) — sanitize each.
+            var diagnostics = string.Join("; ", result.Failures.Select(f =>
+                $"{f.ResourceType}: {FHIRBridge.Governance.SafeErrorText.SanitizeOr(f.Message, "retrieval failed")}"));
             return FhirError(HttpStatusCode.BadGateway, "exception", $"Failed to retrieve any resources from the source. {diagnostics}");
         }
 
@@ -87,7 +92,12 @@ public sealed class FhirBridgeAggregationController : ControllerBase
             return FhirError(HttpStatusCode.NotFound, "not-found", $"Patient '{id}' was not found.");
         }
 
-        var bundleJson = FhirBundleBuilder.Build(result.Resources, result.Failures);
+        // Sanitize per-resource failure messages at the API boundary before they reach the OperationOutcome — the
+        // builder is a building block and must not embed untrusted upstream text (HTML/PHI) into a FHIR response.
+        var safeFailures = result.Failures
+            .Select(f => f with { Message = FHIRBridge.Governance.SafeErrorText.SanitizeOr(f.Message, "retrieval failed") })
+            .ToList();
+        var bundleJson = FhirBundleBuilder.Build(result.Resources, safeFailures);
         return Content(bundleJson, FhirJsonContentType);
     }
 

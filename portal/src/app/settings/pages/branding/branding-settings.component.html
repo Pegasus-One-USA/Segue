@@ -184,6 +184,20 @@
               }
             </div>
           </div>
+          <div class="form-field">
+            <span class="field-heading" id="bs-loaderStyle">Loading Indicator</span>
+            <div class="mode-pills" role="group" aria-labelledby="bs-loaderStyle">
+              @for (opt of loaderStyleOptions; track opt.id) {
+                <button
+                  type="button"
+                  class="mode-pill"
+                  [class.active]="form.value.loaderStyle === opt.id"
+                  (click)="form.controls.loaderStyle.setValue(opt.id)"
+                >{{ opt.label }}</button>
+              }
+            </div>
+            <p class="field-hint">Shown automatically while any API call is in progress, anywhere in the app.</p>
+          </div>
         </div>
       </section>
 

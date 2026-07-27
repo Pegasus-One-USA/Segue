@@ -4,6 +4,20 @@
     <p class="page-sub">Every retry attempt against a transient pipeline or webhook failure.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one automatic retry attempt</strong> — the system hit a brief, transient problem (a short network blip, a momentarily unreachable destination) and tried the same operation again with a short delay, instead of giving up immediately.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Is this something to worry about?</h4>
+        <p>A retry succeeding on a later attempt is normal and healthy — it means FHIRBridge absorbed a brief hiccup so you didn't have to. <strong>Repeated retries against the same destination or connection</strong> are the pattern worth watching — that usually points to a persistent issue (an unstable connection, a destination that's frequently unavailable) rather than one-off noise.</p>
+      </section>
+
+      <p class="info-note">If retries are exhausted and the operation still fails, it shows up separately in the <strong>Errors</strong> tab — this screen only records the retry attempts themselves.</p>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"
@@ -19,7 +33,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
@@ -56,11 +70,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No retry entries found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

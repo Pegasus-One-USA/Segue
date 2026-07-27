@@ -14,6 +14,7 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -634,7 +635,17 @@ public static class WorkflowEndpoints
 
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
-            return Results.Ok(result);
+                return Results.Json(
+                    new
+                    {
+                        error = report.UserFriendlyMessage,
+                        message = report.UserFriendlyMessage,
+                        errorReferenceId = report.ErrorReferenceId,
+                        correlationId = report.CorrelationId,
+                        category = report.Category.ToString(),
+                    },
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
         });
 
         // Lightweight poll target for an async /run — cheap enough to hit every second or two without pulling the
@@ -798,6 +809,7 @@ public static class WorkflowEndpoints
             ILaunchTokenProtector tokenProtector,
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
+            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var launchContext = tokenProtector.UnprotectContext(token);
@@ -813,9 +825,11 @@ public static class WorkflowEndpoints
                 return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
             }
 
+            // See the /run endpoint's matching comment: reuse the ambient correlation id so this run's ErrorLogs
+            // (if any) can be found via the same id as its outbound API Requests.
             var context = new WorkflowExecutionContext(
                 Guid.NewGuid(),
-                Guid.NewGuid().ToString("N"),
+                currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: "checkpoint-url",
                 triggerType: "Checkpoint");
             var result = await orchestrator.ExecuteAsync(workflow, context, targetNodeId, cancellationToken);

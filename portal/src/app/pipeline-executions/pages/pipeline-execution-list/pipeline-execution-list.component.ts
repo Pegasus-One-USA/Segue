@@ -2,13 +2,14 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { PipelineExecutionApiService } from '../../services/pipeline-execution-api.service';
 import { PipelineExecutionEntry } from '../../models/pipeline-execution.model';
 
 @Component({
   selector: 'app-pipeline-execution-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule],
+  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule],
   templateUrl: './pipeline-execution-list.component.html',
   styleUrl: './pipeline-execution-list.component.scss',
 })
@@ -16,13 +17,11 @@ export class PipelineExecutionListComponent implements OnInit {
   private readonly api = inject(PipelineExecutionApiService);
   private readonly router = inject(Router);
 
-  protected readonly Math = Math;
-
   readonly loading = signal(false);
   readonly entries = signal<PipelineExecutionEntry[]>([]);
   readonly totalCount = signal(0);
   readonly page = signal(1);
-  readonly pageSize = 25;
+  readonly perPage = signal(25);
 
   readonly search = signal('');
   readonly status = signal('');
@@ -35,7 +34,7 @@ export class PipelineExecutionListComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.api.list(this.page(), this.pageSize, this.status() || undefined, undefined, undefined, this.search() || undefined).subscribe({
+    this.api.list(this.page(), this.perPage(), this.status() || undefined, undefined, undefined, this.search() || undefined).subscribe({
       next: result => {
         this.entries.set(result.items);
         this.totalCount.set(result.totalCount);
@@ -65,18 +64,10 @@ export class PipelineExecutionListComponent implements OnInit {
     this.load();
   }
 
-  nextPage(): void {
-    if (this.page() * this.pageSize < this.totalCount()) {
-      this.page.set(this.page() + 1);
-      this.load();
-    }
-  }
-
-  previousPage(): void {
-    if (this.page() > 1) {
-      this.page.set(this.page() - 1);
-      this.load();
-    }
+  onPageChange(e: PageEvent): void {
+    this.page.set(e.pageIndex + 1);
+    this.perPage.set(e.pageSize);
+    this.load();
   }
 
   openDetail(entry: PipelineExecutionEntry): void {

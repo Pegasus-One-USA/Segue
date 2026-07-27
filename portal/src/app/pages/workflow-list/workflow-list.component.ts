@@ -34,6 +34,9 @@ interface CopyModal {
   busy: boolean;
 }
 
+type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun';
+type SortDirection = 'asc' | 'desc';
+
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
@@ -79,8 +82,56 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     );
   });
 
+  readonly sorted = computed(() => {
+    const col = this.sortColumn();
+    const dir = this.sortDirection() === 'asc' ? 1 : -1;
+    const key = (w: WorkflowSummary): string | number => {
+      switch (col) {
+        case 'name':     return w.name.toLowerCase();
+        case 'source':   return (w.sourceSystemType ?? '').toLowerCase();
+        case 'audience': return this.audienceLabel(w.applicationType).toLowerCase();
+        case 'status':   return w.status;
+        case 'lastRun':  return w.lastRunAt ? new Date(w.lastRunAt).getTime() : -1;
+      }
+    };
+    return [...this.filtered()].sort((a, b) => {
+      const ka = key(a);
+      const kb = key(b);
+      if (ka < kb) return -1 * dir;
+      if (ka > kb) return 1 * dir;
+      return 0;
+    });
+  });
+
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.sorted().length / this.pageSize())));
+
+  readonly paged = computed(() => {
+    // Clamp defensively — a delete/copy can shrink the list out from under a page index
+    // that pointed at the last page.
+    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
+    const start = clampedIndex * this.pageSize();
+    return this.sorted().slice(start, start + this.pageSize());
+  });
+
+  /** First/last row numbers shown for the current page, for "Showing X–Y of Z". */
+  readonly rangeStart = computed(() => {
+    if (this.sorted().length === 0) return 0;
+    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
+    return clampedIndex * this.pageSize() + 1;
+  });
+  readonly rangeEnd = computed(() => Math.min(this.sorted().length, this.rangeStart() + this.pageSize() - 1));
+
   ngOnInit(): void {
     this.reload();
+  }
+
+  onSort(column: SortColumn): void {
+    if (this.sortColumn() === column) {
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortColumn.set(column);
+      this.sortDirection.set('asc');
+    }
   }
 
   ngOnDestroy(): void {
@@ -97,13 +148,14 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       },
       error: err => {
         this.loading.set(false);
-        this.toast.error('Failed to load workflows.', this.messageOf(err, ''));
+        this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
       },
     });
   }
 
   onSearch(value: string): void {
     this.searchQuery.set(value);
+    this.pageIndex.set(0);
   }
 
   /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
@@ -132,7 +184,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         },
         error: err => {
           this.busyId.set(null);
-          this.toast.error('Launch URL', this.messageOf(err, 'Could not generate a launch URL.'));
+          this.toast.error(this.messageOf(err, 'Could not generate a launch URL.'));
         },
       });
       return;
@@ -154,7 +206,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       },
       error: err => {
         this.busyId.set(null);
-        this.toast.error('Workflow run', this.messageOf(err, 'The run could not be started.'));
+        this.toast.error(this.runFailureMessage(err));
       },
     });
   }
@@ -274,7 +326,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       },
       error: err => {
         this.rowBusyId.set(null);
-        this.toast.error('Update failed', this.messageOf(err, 'Could not change the workflow state.'));
+        this.toast.error(this.messageOf(err, 'Could not change the workflow state.'));
       },
     });
   }
@@ -304,7 +356,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       },
       error: err => {
         this.rowBusyId.set(null);
-        this.toast.error('Update failed', this.messageOf(err, 'Could not change the public-launch state.'));
+        this.toast.error(this.messageOf(err, 'Could not change the public-launch state.'));
       },
     });
   }
@@ -331,7 +383,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       error: err => {
         this.rowBusyId.set(null);
         this.confirmDelete.set(null);
-        this.toast.error('Delete failed', this.messageOf(err, 'Could not delete the workflow.'));
+        this.toast.error(this.messageOf(err, 'Could not delete the workflow.'));
       },
     });
   }
@@ -365,7 +417,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       },
       error: err => {
         this.copyModal.update(current => (current ? { ...current, busy: false } : current));
-        this.toast.error('Copy failed', this.messageOf(err, 'Could not copy the workflow.'));
+        this.toast.error(this.messageOf(err, 'Could not copy the workflow.'));
       },
     });
   }
@@ -392,7 +444,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   copy(text: string): void {
     navigator.clipboard?.writeText(text).then(
       () => this.toast.success('Copied', 'Launch URL copied to clipboard.'),
-      () => this.toast.error('Copy failed', 'Could not copy to the clipboard.'),
+      () => this.toast.error('Could not copy to the clipboard.'),
     );
   }
 
@@ -412,5 +464,20 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       return body.error_description || body.title || e?.message || fallback;
     }
     return e?.message || fallback;
+  }
+
+  /** The backend's Error Reference ID (ERR-…) when a run failed technically — quotable to support. */
+  private refOf(err: unknown): string | null {
+    const body = (err as { error?: { errorReferenceId?: string } })?.error;
+    return body && typeof body === 'object' ? body.errorReferenceId ?? null : null;
+  }
+
+  /** A generic, PHI-safe failure message for a run — with the reference id appended when present so it can be
+   *  looked up in Operations → Errors. Never surfaces the raw exception text. */
+  private runFailureMessage(err: unknown): string {
+    const ref = this.refOf(err);
+    return ref
+      ? `The run could not be started. Reference: ${ref}`
+      : this.messageOf(err, 'The run could not be started.');
   }
 }
