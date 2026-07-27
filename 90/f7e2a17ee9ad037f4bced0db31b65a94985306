@@ -1,0 +1,35 @@
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.html
+  s_a5fcd0f359e190::t_82ac83d1d24826 38-41
+Demo_TestApp/backend/BackendSystemEndpoints.cs
+  s_a5fcd0f359e190::t_5e1ae097d855f0 116,118
+  s_a5fcd0f359e190::t_d62fd1e8fc0da6 178,180,184-198
+  s_a5fcd0f359e190::t_c1f60c812a0da9 300,302,306-318
+  s_a5fcd0f359e190::t_fc0e56d4ff9b44 357,359,363-376
+  s_a5fcd0f359e190::t_14c4f2d763af57 269,271,275-290
+  s_a5fcd0f359e190::t_e3cf2d701aec2d 91,93
+  s_a5fcd0f359e190::t_e45f3e8976b08e 384-393
+  s_a5fcd0f359e190::t_53373ef43b7ab9 122-136
+  s_a5fcd0f359e190::t_6b22617fe7e5c1 239,241,245-259
+  s_a5fcd0f359e190::t_b927f87abc2bfc 84,86
+  s_a5fcd0f359e190::t_7cb86d0276527b 146,148,152-168
+  s_a5fcd0f359e190::t_92bc52e9ac9068 208,210,214-229
+  s_a5fcd0f359e190::t_09b43cda664abc 328,330,334-347
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.ts
+  s_a5fcd0f359e190::t_92a17863420bf7 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "90f7e2a17ee9ad037f4bced0db31b65a94985306",
+  "prompts": {},
+  "sessions": {
+    "s_a5fcd0f359e190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69d7b858-5290-4282-aeda-ff2bd1655728",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
