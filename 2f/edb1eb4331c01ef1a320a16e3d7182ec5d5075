@@ -1,0 +1,31 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_d68f9144c308b2::t_adc64d1113c011 137,141-143
+portal/src/app/services/wizard.service.ts
+  s_d68f9144c308b2::t_93bca8dd1ded0e 2
+  s_d68f9144c308b2::t_8167d17b14cf88 95-99
+  s_d68f9144c308b2::t_7610b7a89dc7d8 469-471
+  s_d68f9144c308b2::t_d8783f746ce14e 472-474
+  s_d68f9144c308b2::t_532e2fe49f350e 454,465
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_d68f9144c308b2::t_b4f92d0b590fa8 317-322
+  s_d68f9144c308b2::t_eab15d34c79a7d 1340-1351
+  s_d68f9144c308b2::t_49c4337e5e4dd4 5
+  s_d68f9144c308b2::t_7c1cce0bdd57f8 1434-1451
+  s_d68f9144c308b2::t_ae6a17252e699f 683-693
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "2fedb1eb4331c01ef1a320a16e3d7182ec5d5075",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
