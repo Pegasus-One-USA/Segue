@@ -1,6 +1,6 @@
 /** Must match the backend's DestinationType enum member names (serialized as strings). This screen only
- * exposes Sql/CSV creation (matching the workflow wizard), but Type filtering accepts any of the 21 values
- * an existing row could have been created as (e.g. by a future wizard extension). */
+ * exposes Sql/CSV/Mongo creation (matching the workflow wizard), but Type filtering accepts any of the 22
+ * values an existing row could have been created as (e.g. by a future wizard extension). */
 export type DestinationType =
   | 'InMemory'
   | 'SqlServer'
@@ -22,7 +22,8 @@ export type DestinationType =
   | 'Pdf'
   | 'Avro'
   | 'Protobuf'
-  | 'Databricks';
+  | 'Databricks'
+  | 'Mongo';
 
 /** Must match the backend's ArtifactDeliveryMode enum member names. Stored as `dest_deliveryMode` in
  *  ConnectionMetadataJson for Csv destinations — replaces the old `dest_storageType` field. */

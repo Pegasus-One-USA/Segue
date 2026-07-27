@@ -124,6 +124,7 @@ public static class DependencyInjection
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
+            services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
@@ -180,6 +181,7 @@ public static class DependencyInjection
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
+            services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
@@ -253,7 +255,6 @@ public static class DependencyInjection
 
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
-        services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
         services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));

@@ -123,6 +123,15 @@ export const CORS_ORIGINS_ENDPOINTS = {
   byId: (id: string) => `${API_V1_BASE}/system/allowed-origins/${id}`,
 };
 
+// ─── System Settings (SystemSettingsController — api/v1/system/settings) ───────
+// SuperAdmin-only: runtime-editable config values that override their appsettings.json default
+// (e.g. worker cadence, rate limits, MFA issuer) without a redeploy. Keyed by the same dotted
+// section name as the appsettings key it overrides.
+export const SYSTEM_SETTINGS_ENDPOINTS = {
+  list: `${API_V1_BASE}/system/settings`,
+  byKey: (key: string) => `${API_V1_BASE}/system/settings/${encodeURIComponent(key)}`,
+};
+
 // ─── App-level signing secrets (AppSecretsController — api/v1/system/app-secrets) ──
 // SuperAdmin-only: JWT signing key / download-link signing secret, auto-generated on first boot —
 // this surface only exposes metadata + on-demand regeneration, never the value itself.

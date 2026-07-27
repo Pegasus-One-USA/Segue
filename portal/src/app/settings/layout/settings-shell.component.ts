@@ -22,6 +22,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { label: 'Destination Connections', route: 'destination-connections', icon: 'output', permissions: ['configuration.write'] },
   { label: 'Allowed Origins', route: 'allowed-origins', icon: 'public', superAdminOnly: true },
   { label: 'System Security', route: 'system-security', icon: 'security', superAdminOnly: true },
+  { label: 'System Settings', route: 'system-settings', icon: 'tune', superAdminOnly: true },
 ];
 
 @Component({

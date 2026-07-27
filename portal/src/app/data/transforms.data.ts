@@ -13,6 +13,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-azuresql',    rank: 7, category: 'Relational',   name: 'Azure SQL',          sub: 'Write to Azure SQL Database.' },
   { id: 'dest-postgres',    rank: 7, category: 'Relational',   name: 'PostgreSQL',         sub: 'Write to PostgreSQL.' },
   { id: 'dest-mysql',       rank: 7, category: 'Relational',   name: 'MySQL',              sub: 'Write to MySQL.' },
+  { id: 'dest-mongo',       rank: 7, category: 'NoSQL',        name: 'MongoDB',            sub: 'Write to a MongoDB collection.' },
   { id: 'dest-snowflake',   rank: 7, category: 'Analytics',    name: 'Snowflake',          sub: 'Load into Snowflake.' },
   { id: 'dest-powerbi',     rank: 7, category: 'Analytics',    name: 'Power BI',           sub: 'Push to a Power BI dataset.' },
   { id: 'dest-tableau',     rank: 7, category: 'Analytics',    name: 'Tableau',            sub: 'Publish to Tableau.' },

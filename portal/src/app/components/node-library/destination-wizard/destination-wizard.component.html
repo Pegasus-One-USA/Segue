@@ -150,6 +150,47 @@
         @if (probeState() === 'ok') {
           <div class="dw-callout dw-callout--info">Connected — {{ sqlTables().length }} table(s) loaded. Choose tables &amp; columns in Map fields.</div>
         }
+      } @else if (isMongo()) {
+        <form [formGroup]="mongoForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched">
+              <label class="dw-label" for="dw-mongo-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-mongo-name" class="dw-input" formControlName="name" placeholder="e.g. MongoDB Production" />
+              @if (mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched">
+              <label class="dw-label" for="dw-mongo-conn">Connection string <span class="dw-req">*</span></label>
+              <input id="dw-mongo-conn" type="password" class="dw-input" formControlName="connectionString"
+                placeholder="mongodb://user:pass@host:27017/dbname?authSource=admin" autocomplete="new-password" />
+              @if (mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched) {
+                <span class="dw-error">Connection string is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched">
+              <label class="dw-label" for="dw-mongo-collection">Collection <span class="dw-req">*</span></label>
+              <input id="dw-mongo-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients" />
+              @if (mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched) {
+                <span class="dw-error">Collection name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-mongo-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-mongo-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="upsert">Upsert by source id</option>
+                  <option value="insert">Insert only</option>
+                </select>
+              </div>
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -326,7 +367,7 @@
         <span class="dw-section-num">3</span>
         <span class="dw-section-title">Map fields</span>
         <span class="dw-section-hint">
-          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : 'Map FHIR paths to CSV file columns.' }}
+          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
         </span>
       </div>
 
@@ -335,7 +376,7 @@
           <div class="dw-mapping-group-head">
             <strong>{{ r }}</strong>
             <span class="dw-mapping-target-inline">
-              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : 'File name' }}</label>
+              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : 'File name' }}</label>
               @if (hasSqlTables()) {
                 <div class="dw-select-wrap">
                   <select class="dw-select dw-target-select"
@@ -352,7 +393,7 @@
                   [attr.id]="'dw-target-' + r"
                   [value]="targetFor(r)"
                   (input)="updateTarget(r, $any($event.target).value)"
-                  [placeholder]="isSql() ? 'dbo.Patient' : 'patients.csv'"
+                  [placeholder]="isSql() ? 'dbo.Patient' : isMongo() ? 'patients' : 'patients.csv'"
                 />
               }
             </span>
@@ -388,7 +429,7 @@
               <tr>
                 <th>Business field</th>
                 <th>FHIR path</th>
-                <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
+                <th>{{ isSql() ? 'Column' : isMongo() ? 'Field' : 'CSV column' }}</th>
                 <th class="dw-map-key-col" title="Upsert key — the column an Upsert write matches an existing row on">Key</th>
                 <th class="dw-map-actions" aria-label="Actions"></th>
               </tr>
@@ -496,6 +537,19 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ sqlForm.value.writeMode }}</span>
+          </div>
+        } @else if (isMongo()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ mongoForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Collection</span>
+            <span class="dw-review-val dw-mono">{{ mongoForm.value.collection || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
           </div>
         } @else {
           <div class="dw-review-card">

@@ -146,7 +146,7 @@ export class DestinationWizardComponent implements OnInit {
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
   private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
-  readonly destType   = input.required<'sql' | 'csv' | 'mysql'>();
+  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -179,6 +179,17 @@ export class DestinationWizardComponent implements OnInit {
     password:  [''],
     schema:    ['dbo', []],
     writeMode: ['upsert', []],
+  });
+
+  readonly mongoForm = this.fb.group({
+    name:             ['MongoDB Production', [Validators.required]],
+    // Single URI (database embedded, e.g. mongodb://user:pass@host:27017/dbname?authSource=admin) — matches
+    // what MappedMongoDestinationWriter expects. Treated as a whole as a secret (see SECRET_FIELD_KEYS): there's
+    // no live probe to validate a split server/database/credentials form against, so one opaque field is
+    // simplest and avoids a redundant connection-string-assembly step this wizard would otherwise need.
+    connectionString: ['', [Validators.required]],
+    collection:       ['', [Validators.required]],
+    writeMode:        ['upsert', []],
   });
 
   readonly csvForm = this.fb.group({
@@ -241,14 +252,21 @@ export class DestinationWizardComponent implements OnInit {
 
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
+  private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL reuses the SQL family's form/steps (server/database/auth + live table/column introspection) —
-  // only the probed destinationType and saved transformId differ from SQL Server.
+  // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
+  // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
   readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql');
   readonly isMySql      = computed(() => this.destType() === 'mysql');
+  readonly isMongo      = computed(() => this.destType() === 'mongo');
+  readonly isCsv        = computed(() => this.destType() === 'csv');
   readonly destLabel    = computed(() =>
-    this.destType() === 'sql' ? 'SQL Server' : this.destType() === 'mysql' ? 'MySQL' : 'CSV');
+    this.destType() === 'sql' ? 'SQL Server'
+      : this.destType() === 'mysql' ? 'MySQL'
+      : this.destType() === 'mongo' ? 'MongoDB'
+      : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
   /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
@@ -257,7 +275,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
     const rows = this.mappingRows();
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -389,7 +407,7 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.csvForm.invalid;
+      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
     if (s >= 3) return this._hasUnverifiedColumns();
@@ -462,7 +480,7 @@ export class DestinationWizardComponent implements OnInit {
     if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
       this._loadExistingOptions();
     }
-    if (!this.isSql()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
+    if (this.isCsv()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   private _loadExistingOptions(): void {
@@ -471,7 +489,11 @@ export class DestinationWizardComponent implements OnInit {
       .getPaged({ isEnabled: true, page: 1, pageSize: 100 })
       .pipe(
         map(page => {
-          const wantedTypes = this.isSql() ? DestinationWizardComponent.SQL_TYPES : DestinationWizardComponent.CSV_TYPES;
+          const wantedTypes = this.isSql()
+            ? DestinationWizardComponent.SQL_TYPES
+            : this.isMongo()
+              ? DestinationWizardComponent.MONGO_TYPES
+              : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -521,6 +543,14 @@ export class DestinationWizardComponent implements OnInit {
         writeMode: metadata['dest_writeMode'] || 'upsert',
       });
       this._existingBaseline = this.sqlForm.getRawValue();
+    } else if (this.isMongo()) {
+      this.mongoForm.patchValue({
+        name:             metadata['dest_name']       || selected.name,
+        connectionString: '',
+        collection:       metadata['dest_collection']  || selected.target || '',
+        writeMode:        metadata['dest_writeMode']    || 'upsert',
+      });
+      this._existingBaseline = this.mongoForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -565,10 +595,10 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -1057,7 +1087,7 @@ export class DestinationWizardComponent implements OnInit {
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
-  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql'): void {
+  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql' | 'mongo'): void {
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
       if (targets[r]) continue;
@@ -1092,6 +1122,13 @@ export class DestinationWizardComponent implements OnInit {
         password:  f['dest_password']  || '',
         schema:    f['dest_schema']    || 'dbo',
         writeMode: f['dest_writeMode'] || 'upsert',
+      });
+    } else if (this.isMongo()) {
+      this.mongoForm.patchValue({
+        name:             f['dest_name']       || 'MongoDB Production',
+        connectionString: '',
+        collection:       f['dest_collection']  || '',
+        writeMode:        f['dest_writeMode']    || 'upsert',
       });
     } else {
       this.csvForm.patchValue({
@@ -1167,6 +1204,12 @@ export class DestinationWizardComponent implements OnInit {
         config['dest_username'] = v.username ?? '';
         config['dest_password'] = v.password ?? '';
       }
+    } else if (type === 'mongo') {
+      const v = this.mongoForm.value;
+      config['dest_name']             = v.name             ?? '';
+      config['dest_connectionString'] = v.connectionString ?? '';
+      config['dest_collection']       = v.collection       ?? '';
+      config['dest_writeMode']        = v.writeMode        ?? 'upsert';
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -1241,7 +1284,7 @@ export class DestinationWizardComponent implements OnInit {
 
     this.saved.emit({
       attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : 'dest-csv',
+      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
       status:      'enabled',
       config,
     });

@@ -306,8 +306,11 @@ export class WorkflowBuildAssemblerService {
       isMySql ||
       node.nodeType.includes('SqlServer') ||
       (fields['__transformId'] ?? '') === 'dest-sqlserver';
+    const isMongo =
+      node.nodeType.includes('Mongo') ||
+      (fields['__transformId'] ?? '') === 'dest-mongo';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isSql ? 'SQL Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -338,7 +341,26 @@ export class WorkflowBuildAssemblerService {
           hasExistingSecret && !fields['dest_password']
             ? null
             : this.buildSqlConnectionString(fields, isMySql),
-        connectionMetadataJson: this.buildConnectionMetadata(fields, true),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'sql'),
+      };
+    }
+
+    if (isMongo) {
+      return {
+        name,
+        destinationType: 'Mongo',
+        keyVaultName,
+        secretName,
+        target: fields['dest_collection'] || null,
+        // The whole connection string is treated as secret (see destination-wizard.component.ts's mongoForm
+        // comment) — there's no split server/database/credentials form to assemble from, so this is a direct
+        // pass-through of whatever the wizard collected, same "don't touch an already-provisioned secret unless
+        // the user actually typed a new one" guard the SQL/SFTP branches use.
+        inlineSecret:
+          hasExistingSecret && !fields['dest_connectionString']
+            ? null
+            : fields['dest_connectionString'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'mongo'),
       };
     }
 
@@ -357,45 +379,49 @@ export class WorkflowBuildAssemblerService {
         : hasExistingSecret && !fields['dest_sftpPassword']
           ? null
           : this.buildSftpUri(fields),
-      connectionMetadataJson: this.buildConnectionMetadata(fields, false),
+      connectionMetadataJson: this.buildConnectionMetadata(fields, 'csv'),
     };
   }
 
-  /** Non-secret dest_* fields as a flat JSON object — everything above EXCEPT dest_password/dest_sftpPassword,
-   *  which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri), never here. Mirrors
-   *  destination-connection-secret.util.ts's buildConnectionMetadata — duplicated rather than imported for the
-   *  same reason buildSqlConnectionString/buildSftpUri are (see that file's own header comment). */
+  /** Non-secret dest_* fields as a flat JSON object — everything above EXCEPT dest_password/dest_sftpPassword/
+   *  dest_connectionString, which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri/
+   *  the Mongo pass-through), never here. Mirrors destination-connection-secret.util.ts's buildConnectionMetadata
+   *  — duplicated rather than imported for the same reason buildSqlConnectionString/buildSftpUri are (see that
+   *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    isSql: boolean,
+    kind: 'sql' | 'mongo' | 'csv',
   ): string {
-    const keys = isSql
-      ? [
-          'dest_name',
-          'dest_server',
-          'dest_database',
-          'dest_auth',
-          'dest_username',
-          'dest_schema',
-          'dest_writeMode',
-        ]
-      : [
-          'dest_name',
-          'dest_deliveryMode',
-          'dest_filePattern',
-          'dest_delimiter',
-          'dest_encoding',
-          'dest_sftpHost',
-          'dest_sftpPort',
-          'dest_sftpUsername',
-          'dest_sftpAuthType',
-          'dest_sftpRemoteFolder',
-          'dest_emailTo',
-          'dest_emailCc',
-          'dest_emailSubjectTemplate',
-          'dest_emailBodyTemplate',
-          'dest_downloadLinkExpiryMinutes',
-        ];
+    const keys =
+      kind === 'sql'
+        ? [
+            'dest_name',
+            'dest_server',
+            'dest_database',
+            'dest_auth',
+            'dest_username',
+            'dest_schema',
+            'dest_writeMode',
+          ]
+        : kind === 'mongo'
+          ? ['dest_name', 'dest_collection', 'dest_writeMode']
+          : [
+              'dest_name',
+              'dest_deliveryMode',
+              'dest_filePattern',
+              'dest_delimiter',
+              'dest_encoding',
+              'dest_sftpHost',
+              'dest_sftpPort',
+              'dest_sftpUsername',
+              'dest_sftpAuthType',
+              'dest_sftpRemoteFolder',
+              'dest_emailTo',
+              'dest_emailCc',
+              'dest_emailSubjectTemplate',
+              'dest_emailBodyTemplate',
+              'dest_downloadLinkExpiryMinutes',
+            ];
     const metadata: Record<string, string> = {};
     for (const key of keys) {
       if (f[key] !== undefined) metadata[key] = f[key];
