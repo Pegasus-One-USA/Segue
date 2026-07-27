@@ -9,6 +9,7 @@ public static class UserRoles
     public const string Patient = "Patient";
     public const string ProviderStandalone = "ProviderStandalone";
     public const string ProviderInApp = "ProviderInApp";
+    public const string BackendSystem = "BackendSystem";
 }
 
 // Passwords are stored in plain text — this is dummy demo data, not a real account store.
@@ -136,8 +137,92 @@ public sealed class HealthAppDbContext : DbContext
 
     public DbSet<WorkflowSettingsEntity> WorkflowSettings => Set<WorkflowSettingsEntity>();
 
+    // BackendSystem role's read-only clinical tables — pre-existing HealthAppDb tables (already populated
+    // outside this app's own ingestion path), mapped here purely for querying. See BackendSystemEndpoints.cs.
+    public DbSet<PatientNewMappedEntity> BackendSystemPatients => Set<PatientNewMappedEntity>();
+
+    public DbSet<PractitionerEntity> Practitioners => Set<PractitionerEntity>();
+
+    public DbSet<EncounterEntity> Encounters => Set<EncounterEntity>();
+
+    public DbSet<AllergyIntoleranceEntity> AllergyIntolerances => Set<AllergyIntoleranceEntity>();
+
+    public DbSet<ObservationEntity> Observations => Set<ObservationEntity>();
+
+    public DbSet<ConditionEntity> Conditions => Set<ConditionEntity>();
+
+    public DbSet<ProcedureEntity> Procedures => Set<ProcedureEntity>();
+
+    public DbSet<ServiceRequestEntity> ServiceRequests => Set<ServiceRequestEntity>();
+
+    public DbSet<DiagnosticReportEntity> DiagnosticReports => Set<DiagnosticReportEntity>();
+
+    public DbSet<MedicationRequestEntity> MedicationRequests => Set<MedicationRequestEntity>();
+
+    public DbSet<MedicationAdministrationEntity> MedicationAdministrations => Set<MedicationAdministrationEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Table/key mapping only — these 11 tables already exist in HealthAppDb (created outside EnsureCreated,
+        // which never alters an already-existing database; see the comment on db.Database.EnsureCreated() in
+        // Program.cs), so there is no HasData seeding here, just enough Fluent config for EF to read/write the
+        // exact existing table names and string primary keys.
+        modelBuilder.Entity<PatientNewMappedEntity>(e =>
+        {
+            e.ToTable("Patient_NewMapped");
+            e.HasKey(x => x.PatientId);
+        });
+        modelBuilder.Entity<PractitionerEntity>(e =>
+        {
+            e.ToTable("Practitioner");
+            e.HasKey(x => x.PractitionerId);
+        });
+        modelBuilder.Entity<EncounterEntity>(e =>
+        {
+            e.ToTable("Encounter");
+            e.HasKey(x => x.EncounterId);
+        });
+        modelBuilder.Entity<AllergyIntoleranceEntity>(e =>
+        {
+            e.ToTable("AllergyIntolerance");
+            e.HasKey(x => x.AllergyIntoleranceId);
+        });
+        modelBuilder.Entity<ObservationEntity>(e =>
+        {
+            e.ToTable("Observation_NewMapped");
+            e.HasKey(x => x.ObservationId);
+        });
+        modelBuilder.Entity<ConditionEntity>(e =>
+        {
+            e.ToTable("Condition_NewMapped");
+            e.HasKey(x => x.ConditionId);
+        });
+        modelBuilder.Entity<ProcedureEntity>(e =>
+        {
+            e.ToTable("Procedure_NewMapped");
+            e.HasKey(x => x.ProcedureId);
+        });
+        modelBuilder.Entity<ServiceRequestEntity>(e =>
+        {
+            e.ToTable("ServiceRequest");
+            e.HasKey(x => x.ServiceRequestId);
+        });
+        modelBuilder.Entity<DiagnosticReportEntity>(e =>
+        {
+            e.ToTable("DiagnosticReport");
+            e.HasKey(x => x.DiagnosticReportId);
+        });
+        modelBuilder.Entity<MedicationRequestEntity>(e =>
+        {
+            e.ToTable("MedicationRequest");
+            e.HasKey(x => x.MedicationRequestId);
+        });
+        modelBuilder.Entity<MedicationAdministrationEntity>(e =>
+        {
+            e.ToTable("MedicationAdministration");
+            e.HasKey(x => x.MedicationAdministrationId);
+        });
+
         // DB-level default so RecordCreatedOn is populated even for rows a real destination writer inserts
         // directly (bypassing this app's own /api/workflow/run, which sets it explicitly on insert).
         modelBuilder.Entity<PatientEntity>()
@@ -172,6 +257,13 @@ public sealed class HealthAppDbContext : DbContext
                 Email = "providerInApp@healthapp.local",
                 Password = "Provider@123",
                 Role = UserRoles.ProviderInApp
+            },
+            new UserEntity
+            {
+                Id = 6,
+                Email = "backendsystem@healthapp.local",
+                Password = "Backend@123",
+                Role = UserRoles.BackendSystem
             });
 
         modelBuilder.Entity<HospitalEntity>().HasData(
