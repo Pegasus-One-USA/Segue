@@ -343,9 +343,9 @@
            (keydown.escape)="cancelDestSwitch()">
         <div class="nld-confirm-dialog">
           <div class="nld-confirm-icon">⚠</div>
-          <h3 class="nld-confirm-title">Switch to {{ switchType === 'sql' ? 'SQL Server' : 'CSV' }}?</h3>
+          <h3 class="nld-confirm-title">Switch to {{ destTypeLabel(switchType) }}?</h3>
           <p class="nld-confirm-body">
-            Your {{ destWizardType() === 'sql' ? 'SQL Server' : 'CSV' }} configuration hasn't been saved yet.
+            Your {{ destTypeLabel(destWizardType()) }} configuration hasn't been saved yet.
             Switching destination type now will discard it.
           </p>
           <div class="nld-confirm-actions">

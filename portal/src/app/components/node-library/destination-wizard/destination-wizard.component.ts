@@ -146,7 +146,7 @@ export class DestinationWizardComponent implements OnInit {
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
   private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
-  readonly destType   = input.required<'sql' | 'csv'>();
+  readonly destType   = input.required<'sql' | 'csv' | 'mysql'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -243,8 +243,12 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
-  readonly isSql        = computed(() => this.destType() === 'sql');
-  readonly destLabel    = computed(() => this.destType() === 'sql' ? 'SQL Server' : 'CSV');
+  // MySQL reuses the SQL family's form/steps (server/database/auth + live table/column introspection) —
+  // only the probed destinationType and saved transformId differ from SQL Server.
+  readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql');
+  readonly isMySql      = computed(() => this.destType() === 'mysql');
+  readonly destLabel    = computed(() =>
+    this.destType() === 'sql' ? 'SQL Server' : this.destType() === 'mysql' ? 'MySQL' : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
   /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
@@ -423,7 +427,7 @@ export class DestinationWizardComponent implements OnInit {
     this.probeState.set('testing');
     this.probeError.set(null);
     this.schemaSvc.probe({
-      destinationType: 'SqlServer',
+      destinationType: this.isMySql() ? 'MySql' : 'SqlServer',
       server:   v.server   ?? '',
       database: v.database ?? '',
       authentication: v.auth ?? 'sql-auth',
@@ -695,7 +699,7 @@ export class DestinationWizardComponent implements OnInit {
       resource,
       fieldLabel: next.label,
       fhirPath:   next.path,
-      targetName: this.destType() === 'sql' ? next.sqlColumn : next.csvColumn,
+      targetName: this.isSql() ? next.sqlColumn : next.csvColumn,
       tableName:  this.targetFor(resource),
       jsonPath:   next.jsonPath,
       valueType:  next.valueType,
@@ -731,7 +735,7 @@ export class DestinationWizardComponent implements OnInit {
       // No live schema loaded (CSV, or SQL not yet probed) — fall back to the built-in naming convention,
       // same guess addRow() uses for a single field.
       for (const f of remaining) {
-        newRows.push(this._buildRow(resource, f, this.destType() === 'sql' ? f.sqlColumn : f.csvColumn));
+        newRows.push(this._buildRow(resource, f, this.isSql() ? f.sqlColumn : f.csvColumn));
       }
     } else {
       const candidates = remaining.flatMap(f =>
@@ -772,7 +776,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   private _matchScore(field: ResourceFieldDef, column: DestinationColumn): number {
-    const suggested = this.destType() === 'sql' ? field.sqlColumn : field.csvColumn;
+    const suggested = this.isSql() ? field.sqlColumn : field.csvColumn;
     const nameScore = this._nameSimilarity(this._normalize(suggested), this._normalize(column.name))
       || this._nameSimilarity(this._normalize(field.label), this._normalize(column.name));
     const typeScore = field.valueType && field.valueType.toLowerCase() === column.mappingValueType.toLowerCase() ? 1 : 0;
@@ -903,7 +907,7 @@ export class DestinationWizardComponent implements OnInit {
       const idx = next.findIndex(row => row.resource === r && this.isIdRow(row));
 
       if (idx === -1) {
-        const initialColumn = autoColumn ?? (this.destType() === 'sql' ? idField.sqlColumn : idField.csvColumn);
+        const initialColumn = autoColumn ?? (this.isSql() ? idField.sqlColumn : idField.csvColumn);
         next = [{ ...this._buildRow(r, idField, initialColumn), isUpsertKey: true }, ...next];
         changed = true;
       } else {
@@ -979,7 +983,7 @@ export class DestinationWizardComponent implements OnInit {
 
         if (idx === -1) {
           const columnName = matchingFieldDef
-            ? (this.destType() === 'sql' ? matchingFieldDef.sqlColumn : matchingFieldDef.csvColumn)
+            ? (this.isSql() ? matchingFieldDef.sqlColumn : matchingFieldDef.csvColumn)
             : requiredField.label;
           const fieldDef: ResourceFieldDef = matchingFieldDef ?? {
             label: requiredField.label,
@@ -1040,7 +1044,7 @@ export class DestinationWizardComponent implements OnInit {
         ...row,
         fieldLabel: label,
         fhirPath:   f?.path ?? row.fhirPath,
-        targetName: f ? (this.destType() === 'sql' ? f.sqlColumn : f.csvColumn) : row.targetName,
+        targetName: f ? (this.isSql() ? f.sqlColumn : f.csvColumn) : row.targetName,
         jsonPath:   f?.jsonPath,
         valueType:  f?.valueType,
         arrays:     f?.arrays,
@@ -1053,7 +1057,7 @@ export class DestinationWizardComponent implements OnInit {
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
-  private _rebuildRows(resources: string[], type: 'sql' | 'csv'): void {
+  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql'): void {
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
       if (targets[r]) continue;
@@ -1078,7 +1082,7 @@ export class DestinationWizardComponent implements OnInit {
 
   private _populateFromNode(node: CanvasNode): void {
     const f = node.fields ?? {};
-    if (this.destType() === 'sql') {
+    if (this.isSql()) {
       this.sqlForm.patchValue({
         name:      f['dest_name']      || 'SQL Production',
         server:    f['dest_server']    || '',
@@ -1149,7 +1153,7 @@ export class DestinationWizardComponent implements OnInit {
       dest_resources: this.selectedResources().join(','),
     };
 
-    if (type === 'sql') {
+    if (type === 'sql' || type === 'mysql') {
       const v = this.sqlForm.value;
       config['dest_name']      = v.name      ?? '';
       config['dest_server']    = v.server    ?? '';
@@ -1237,7 +1241,7 @@ export class DestinationWizardComponent implements OnInit {
 
     this.saved.emit({
       attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : 'dest-csv',
+      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : 'dest-csv',
       status:      'enabled',
       config,
     });

@@ -30,6 +30,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'deid-kanon': 'DeIdentificationNode',
   'field-mapping': 'MappingNode',
   'dest-sqlserver': 'SqlServerDestinationNode',
+  'dest-mysql': 'MySqlDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',
   hedis: 'HedisMeasureReportNode',

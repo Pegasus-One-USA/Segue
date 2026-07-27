@@ -28,6 +28,8 @@ public sealed class ErrorLogConfiguration : IEntityTypeConfiguration<ErrorLog>
         builder.Property(x => x.RequestId).HasMaxLength(100);
         builder.Property(x => x.TraceId).HasMaxLength(64);
         builder.Property(x => x.SpanId).HasMaxLength(32);
+        builder.Property(x => x.DiagnosisAction).HasMaxLength(20);
+        builder.Property(x => x.DiagnosisCause).HasMaxLength(500);
 
         builder.HasIndex(x => x.OccurredOnUtc);
         builder.HasIndex(x => x.CorrelationId);

@@ -5,6 +5,7 @@ import { Invitation, InvitationStatus, InvitationValidationResult, SendInvitatio
 import { PasswordPolicyService } from './password-policy.service';
 import { EmailNotificationService } from './email-notification.service';
 import { AccountSecurityService } from './account-security.service';
+import { LoadingService } from '../../services/loading.service';
 import { MOCK_USERS, ALL_ROLES } from '../mock/mock-db';
 import { User } from '../models/user.model';
 import { MessageResponse } from '../models/user.model';
@@ -20,6 +21,7 @@ export class InvitationService {
   private readonly policysSvc  = inject(PasswordPolicyService);
   private readonly emailSvc    = inject(EmailNotificationService);
   private readonly securitySvc = inject(AccountSecurityService);
+  private readonly loading     = inject(LoadingService);
 
   private readonly _invitations    = signal<Invitation[]>(this.loadFromStorage());
   private readonly passwordHistory = new Map<string, string[]>(); // userId -> last 20 passwords
@@ -53,7 +55,7 @@ export class InvitationService {
   // ── Send invitation ────────────────────────────────────────────────────────
 
   sendInvitation(req: SendInvitationRequest): Observable<Invitation> {
-    return of(null).pipe(
+    return this.loading.track(of(null).pipe(
       delay(900),
       switchMap(() => {
         const exists = MOCK_USERS.find(u => u.email.toLowerCase() === req.email.toLowerCase());
@@ -127,13 +129,13 @@ export class InvitationService {
 
         return of(invitation);
       })
-    );
+    ));
   }
 
   // ── Validate token ─────────────────────────────────────────────────────────
 
   validateToken(token: string): Observable<InvitationValidationResult> {
-    return of(null).pipe(
+    return this.loading.track(of(null).pipe(
       delay(600),
       switchMap(() => {
         const inv = this._invitations().find(i => i.token === token);
@@ -154,13 +156,13 @@ export class InvitationService {
 
         return of<InvitationValidationResult>({ valid: true, invitation: inv });
       })
-    );
+    ));
   }
 
   // ── Accept invitation (set password + activate) ────────────────────────────
 
   acceptInvitation(token: string, password: string): Observable<MessageResponse> {
-    return of(null).pipe(
+    return this.loading.track(of(null).pipe(
       delay(1000),
       switchMap(() => {
         const inv = this._invitations().find(i => i.token === token);
@@ -221,13 +223,13 @@ export class InvitationService {
 
         return of<MessageResponse>({ success: true, message: 'Account activated successfully.' });
       })
-    );
+    ));
   }
 
   // ── Resend invitation ──────────────────────────────────────────────────────
 
   resendInvitation(email: string, invitedBy: string): Observable<Invitation> {
-    return of(null).pipe(
+    return this.loading.track(of(null).pipe(
       delay(700),
       switchMap(() => {
         const existing = this._invitations().find(
@@ -252,7 +254,7 @@ export class InvitationService {
           invitedBy,
         });
       })
-    );
+    ));
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

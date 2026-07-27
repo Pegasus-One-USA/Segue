@@ -424,7 +424,7 @@
       </div>
 
 
-      @if (audienceConfig().showLaunchUrl || audienceConfig().showRedirect) {
+      @if (showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) {
         <!-- ═══════════ SECTION: Application URLs ═══════════════════════════════ -->
         <div class="eaf-section">
           <div class="eaf-section-head">

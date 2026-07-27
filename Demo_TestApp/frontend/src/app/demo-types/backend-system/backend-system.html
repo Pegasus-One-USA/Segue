@@ -16,6 +16,7 @@
       <app-patient-details
         [patientId]="patient.patientId"
         [patientName]="patient.fullName"
+        [dataSource]="dataSource()"
         (back)="backToList()"
       ></app-patient-details>
     } @else {
@@ -23,6 +24,22 @@
         <h1>Patient List</h1>
         <p class="subtitle">Patient-centric data already mapped into HealthDB. Select a row to view full patient details.</p>
       </header>
+
+      <div class="data-source-toggle" role="radiogroup" aria-label="Data source">
+        <span class="data-source-toggle__label">Data Source:</span>
+        @for (option of dataSourceOptions; track option.value) {
+          <label class="data-source-toggle__option">
+            <input
+              type="radio"
+              name="dataSource"
+              [value]="option.value"
+              [checked]="dataSource() === option.value"
+              (change)="selectDataSource(option.value)"
+            />
+            {{ option.label }}
+          </label>
+        }
+      </div>
 
       @if (isLoading()) {
         <div class="loading-container">

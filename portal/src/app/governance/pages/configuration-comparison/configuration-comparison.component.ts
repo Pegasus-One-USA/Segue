@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { AuditLogEntry } from '../../models/governance.model';
 
@@ -39,6 +39,7 @@ function tryParse(json: string | null): Record<string, unknown> {
 export class ConfigurationComparisonComponent implements OnInit {
   private readonly api = inject(GovernanceApiService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   readonly loading = signal(false);
   readonly entityType = signal('');
@@ -79,10 +80,10 @@ export class ConfigurationComparisonComponent implements OnInit {
     }
 
     this.loading.set(true);
-    this.api.auditLogs(undefined, 200, this.entityType(), this.entityId()).subscribe({
-      next: entries => {
+    this.api.auditLogs(undefined, 1, 200, this.entityType(), this.entityId()).subscribe({
+      next: result => {
         // entries are newest-first (SequenceNumber descending) — oldest is v1.
-        const oldestFirst = [...entries].reverse();
+        const oldestFirst = [...result.items].reverse();
         const versioned = oldestFirst.map((entry, index) => ({ entry, version: index + 1 }));
         this.versions.set(versioned);
 
@@ -102,5 +103,9 @@ export class ConfigurationComparisonComponent implements OnInit {
 
   onRightChange(value: string): void {
     this.rightVersion.set(Number(value));
+  }
+
+  back(): void {
+    this.router.navigate(['/governance/audit-logs']);
   }
 }

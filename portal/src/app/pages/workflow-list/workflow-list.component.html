@@ -52,20 +52,45 @@
         <thead>
           <tr>
             <th class="col-index">#</th>
-            <th>Workflow</th>
-            <th>Source</th>
-            <th>Audience</th>
-            <th>Status</th>
+            <th class="col-sortable" (click)="onSort('name')">
+              Workflow
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
+                {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th class="col-sortable" (click)="onSort('source')">
+              Source
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'source'">
+                {{ sortColumn() === 'source' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th class="col-sortable" (click)="onSort('audience')">
+              Audience
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'audience'">
+                {{ sortColumn() === 'audience' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th class="col-sortable" (click)="onSort('status')">
+              Status
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'status'">
+                {{ sortColumn() === 'status' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <!-- <th class="col-num">Nodes</th> -->
             <!-- <th class="col-num">Edges</th> -->
-            <th>Last Run</th>
+            <th class="col-sortable" (click)="onSort('lastRun')">
+              Last Run
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'lastRun'">
+                {{ sortColumn() === 'lastRun' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <th class="col-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (w of filtered(); track w.workflowId; let i = $index) {
+          @for (w of paged(); track w.workflowId; let i = $index) {
             <tr class="data-row">
-              <td class="col-index">{{ i + 1 }}</td>
+              <td class="col-index">{{ rangeStart() + i }}</td>
               <td>
                 <div class="cell-name">
                   <div class="pipe-avatar" [class.launch]="w.action === 'Launch'">
@@ -104,20 +129,46 @@
               </td>
               <td class="col-actions">
                 <div class="row-actions">
-                  <button
-                    class="btn-primary"
-                    type="button"
-                    [class.is-launch]="w.action === 'Launch'"
-                    [disabled]="busyId() === w.workflowId"
-                    (click)="onAction(w)"
-                  >
-                    @if (busyId() === w.workflowId) {
-                      <span class="spinner-sm"></span>
-                    } @else {
-                      <span class="btn-ico">{{ w.action === 'Launch' ? '🔗' : '▶' }}</span>
+                  <div class="split-btn" (click)="$event.stopPropagation()">
+                    <button
+                      class="btn-primary"
+                      type="button"
+                      [class.is-launch]="w.action === 'Launch'"
+                      [class.has-caret]="w.action === 'Run'"
+                      [disabled]="busyId() === w.workflowId"
+                      (click)="onAction(w)"
+                    >
+                      @if (busyId() === w.workflowId) {
+                        <span class="spinner-sm"></span>
+                      } @else {
+                        <span class="btn-ico">{{ w.action === 'Launch' ? '🔗' : '▶' }}</span>
+                      }
+                      {{ w.action === 'Launch' ? 'Get Launch URL' : 'Run' }}
+                    </button>
+
+                    @if (w.action === 'Run') {
+                      <button
+                        class="btn-primary btn-primary--caret"
+                        type="button"
+                        title="Run options"
+                        [disabled]="busyId() === w.workflowId"
+                        (click)="toggleRunMenu(w, $event)"
+                      >&#9662;</button>
+
+                      @if (runMenuOpenId() === w.workflowId) {
+                        <div class="run-menu">
+                          <button type="button" (click)="onAction(w, 'sync')">
+                            <span class="run-menu-title">Run (wait here)</span>
+                            <span class="run-menu-sub">Blocks this screen until the run finishes.</span>
+                          </button>
+                          <button type="button" (click)="onAction(w, 'async')">
+                            <span class="run-menu-title">Run in background</span>
+                            <span class="run-menu-sub">Returns immediately — keeps running if you navigate away.</span>
+                          </button>
+                        </div>
+                      }
                     }
-                    {{ w.action === 'Launch' ? 'Get Launch URL' : 'Run' }}
-                  </button>
+                  </div>
 
                   <button
                     class="btn-ghost"
@@ -191,6 +242,38 @@
             New Workflow
           </button>
         }
+      </div>
+    } @else {
+      <div class="pagination-bar">
+        <div class="page-size-select">
+          <span class="page-size-label">Rows per page</span>
+          <div class="select-wrap">
+            <select
+              aria-label="Rows per page"
+              [value]="pageSize()"
+              (change)="onPageSizeChange(+$any($event.target).value)"
+            >
+              @for (size of pageSizeOptions; track size) {
+                <option [value]="size">{{ size }}</option>
+              }
+            </select>
+            <svg class="select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <span class="range-info">Showing <strong>{{ rangeStart() }}–{{ rangeEnd() }}</strong> of <strong>{{ sorted().length }}</strong></span>
+
+        <div class="page-nav">
+          <button class="page-nav-btn" type="button" [disabled]="pageIndex() === 0" (click)="prevPage()" aria-label="Previous page">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12 6 8l4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <span class="page-of">Page {{ pageIndex() + 1 }} of {{ totalPages() }}</span>
+          <button class="page-nav-btn" type="button" [disabled]="pageIndex() >= totalPages() - 1" (click)="nextPage()" aria-label="Next page">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
       </div>
     }
   </div>

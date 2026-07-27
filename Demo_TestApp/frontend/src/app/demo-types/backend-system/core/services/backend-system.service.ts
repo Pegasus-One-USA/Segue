@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
@@ -7,20 +7,27 @@ import { ResourceMenuItem } from '../config/backend-system-menu.config';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
 
+/** The three stores the BackendSystem Patient List / Patient Details screens can read from — see the
+ *  "Data Source" radio group in backend-system.html and PatientDataSourceReaders.cs on the backend. Every other
+ *  resource tab on the Patient Details screen (Encounters, Observations, ...) is unaffected and always reads
+ *  SQL Server, so this type only ever needs to travel to the two endpoints below. */
+export type PatientDataSource = 'sql' | 'mysql' | 'nosql';
+
 @Injectable({ providedIn: 'root' })
 export class BackendSystemService {
   private readonly http = inject(HttpClient);
 
-  getPatients(): Observable<PatientListItem[]> {
+  getPatients(dataSource: PatientDataSource): Observable<PatientListItem[]> {
     return this.http.get<PatientListItem[]>(`${BACKEND_BASE_URL}/api/backend-system/patients`, {
       withCredentials: true,
+      params: new HttpParams().set('source', dataSource),
     });
   }
 
-  getPatient(patientId: string): Observable<PatientDetail> {
+  getPatient(patientId: string, dataSource: PatientDataSource): Observable<PatientDetail> {
     return this.http.get<PatientDetail>(
       `${BACKEND_BASE_URL}/api/backend-system/patient/${encodeURIComponent(patientId)}`,
-      { withCredentials: true },
+      { withCredentials: true, params: new HttpParams().set('source', dataSource) },
     );
   }
 
@@ -29,10 +36,16 @@ export class BackendSystemService {
    * that already returns an array; "Patient" itself (apiSegment === '') backs onto the single-object detail
    * endpoint instead, so its result is wrapped in a one-element array here — that lets PatientDetailsComponent's
    * table render every menu item, including Patient, through one shared code path instead of a special case.
+   * dataSource only applies to that "Patient" branch — every other menu item's own sub-resource route always
+   * reads SQL Server, unaffected by the radio group.
    */
-  getResourceRows(patientId: string, menuItem: ResourceMenuItem): Observable<Record<string, unknown>[]> {
+  getResourceRows(
+    patientId: string,
+    menuItem: ResourceMenuItem,
+    dataSource: PatientDataSource,
+  ): Observable<Record<string, unknown>[]> {
     if (!menuItem.apiSegment) {
-      return this.getPatient(patientId).pipe(
+      return this.getPatient(patientId, dataSource).pipe(
         map((patient) => [patient as unknown as Record<string, unknown>]),
       );
     }

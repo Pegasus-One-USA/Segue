@@ -73,8 +73,12 @@ export class ExecutionHistoryDetailComponent implements OnInit {
     return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
   }
 
+  /** This is the workflow run's own id, NOT the ErrorLogs ErrorReferenceId (the "ERR-YYYYMMDD-NNNNNN" a support
+   *  engineer looks up in Operations → Errors) — labeled "Execution ID" rather than "Reference" so it's not
+   *  mistaken for that different, unrelated identifier. Searchable in Operations → Errors via its "Execution ID"
+   *  filter, which resolves to the matching ErrorLogs row and its real ErrorReferenceId. */
   errorDisplayMessage(): string {
-    return `Something went wrong while running this workflow. Please contact your admin. (Reference: ${this.runId})`;
+    return `Something went wrong while running this workflow. Please contact your admin. (Execution ID: ${this.runId})`;
   }
 
   formatJson(value: string | null): string {

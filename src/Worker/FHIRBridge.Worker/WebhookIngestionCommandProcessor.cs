@@ -51,15 +51,10 @@ public sealed class WebhookIngestionCommandProcessor : BackgroundService
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
-            await governanceLogger.LogErrorAsync(
-                new ErrorEntry(
-                    "Error",
-                    exception.GetType().Name,
-                    exception.Message,
-                    exception.StackTrace,
-                    "Worker",
-                    command.CorrelationId),
+            var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+            await exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(Module: "Webhook Ingestion", CorrelationId: command.CorrelationId),
                 CancellationToken.None);
             throw;
         }

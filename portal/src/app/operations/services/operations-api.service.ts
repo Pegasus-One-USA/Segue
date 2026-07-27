@@ -10,6 +10,7 @@ import {
   ErrorLogSearch,
   ExportHistoryEntry,
   NotificationHistoryEntry,
+  PagedResult,
   QueueDepthEntry,
   RetryHistoryEntry,
   SchedulerHistoryEntry,
@@ -18,8 +19,10 @@ import {
   ValidationFailureEntry,
 } from '../models/operations.model';
 
-function buildParams(correlationId: string | undefined, take: number): HttpParams {
-  let params = new HttpParams().set('take', take);
+function buildParams(correlationId: string | undefined, page: number, pageSize: number): HttpParams {
+  let params = new HttpParams()
+    .set('skip', (Math.max(page, 1) - 1) * pageSize)
+    .set('take', pageSize);
   if (correlationId) {
     params = params.set('correlationId', correlationId);
   }
@@ -30,21 +33,25 @@ function buildParams(correlationId: string | undefined, take: number): HttpParam
 export class OperationsApiService {
   private readonly http = inject(HttpClient);
 
-  schedulerHistory(correlationId?: string, take = 200): Observable<SchedulerHistoryEntry[]> {
-    return this.http.get<SchedulerHistoryEntry[]>(OPERATIONS_ENDPOINTS.schedulerHistory, { params: buildParams(correlationId, take) });
+  schedulerHistory(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<SchedulerHistoryEntry>> {
+    return this.http.get<PagedResult<SchedulerHistoryEntry>>(OPERATIONS_ENDPOINTS.schedulerHistory, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  retryHistory(correlationId?: string, take = 200): Observable<RetryHistoryEntry[]> {
-    return this.http.get<RetryHistoryEntry[]>(OPERATIONS_ENDPOINTS.retryHistory, { params: buildParams(correlationId, take) });
+  retryHistory(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<RetryHistoryEntry>> {
+    return this.http.get<PagedResult<RetryHistoryEntry>>(OPERATIONS_ENDPOINTS.retryHistory, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  errors(correlationId?: string, take = 200): Observable<ErrorLogEntry[]> {
-    return this.http.get<ErrorLogEntry[]>(OPERATIONS_ENDPOINTS.errors, { params: buildParams(correlationId, take) });
+  errors(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<ErrorLogEntry>> {
+    return this.http.get<PagedResult<ErrorLogEntry>>(OPERATIONS_ENDPOINTS.errors, { params: buildParams(correlationId, page, pageSize) });
   }
 
   /** Phase 6A – multi-criteria error search (Monitoring → Errors). */
-  searchErrors(search: ErrorLogSearch): Observable<ErrorLogEntry[]> {
-    let params = new HttpParams().set('take', search.take ?? 200);
+  searchErrors(search: ErrorLogSearch): Observable<PagedResult<ErrorLogEntry>> {
+    const page = search.page ?? 1;
+    const pageSize = search.pageSize ?? 25;
+    let params = new HttpParams()
+      .set('skip', (Math.max(page, 1) - 1) * pageSize)
+      .set('take', pageSize);
     const set = (key: string, value: string | undefined) => {
       if (value) { params = params.set(key, value); }
     };
@@ -58,7 +65,7 @@ export class OperationsApiService {
     set('status', search.status);
     set('fromUtc', search.fromUtc);
     set('toUtc', search.toUtc);
-    return this.http.get<ErrorLogEntry[]>(OPERATIONS_ENDPOINTS.errors, { params });
+    return this.http.get<PagedResult<ErrorLogEntry>>(OPERATIONS_ENDPOINTS.errors, { params });
   }
 
   /** Phase 6A – mark a captured error Resolved. */
@@ -71,24 +78,27 @@ export class OperationsApiService {
     return this.http.post<void>(`${OPERATIONS_ENDPOINTS.errors}/${encodeURIComponent(errorReferenceId)}/reopen`, {});
   }
 
-  apiRequests(correlationId?: string, take = 200): Observable<ApiRequestLogEntry[]> {
-    return this.http.get<ApiRequestLogEntry[]>(OPERATIONS_ENDPOINTS.apiRequests, { params: buildParams(correlationId, take) });
+  apiRequests(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<ApiRequestLogEntry>> {
+    return this.http.get<PagedResult<ApiRequestLogEntry>>(OPERATIONS_ENDPOINTS.apiRequests, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  exports(correlationId?: string, take = 200): Observable<ExportHistoryEntry[]> {
-    return this.http.get<ExportHistoryEntry[]>(OPERATIONS_ENDPOINTS.exports, { params: buildParams(correlationId, take) });
+  exports(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<ExportHistoryEntry>> {
+    return this.http.get<PagedResult<ExportHistoryEntry>>(OPERATIONS_ENDPOINTS.exports, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  notifications(correlationId?: string, take = 200): Observable<NotificationHistoryEntry[]> {
-    return this.http.get<NotificationHistoryEntry[]>(OPERATIONS_ENDPOINTS.notifications, { params: buildParams(correlationId, take) });
+  notifications(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<NotificationHistoryEntry>> {
+    return this.http.get<PagedResult<NotificationHistoryEntry>>(OPERATIONS_ENDPOINTS.notifications, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  validationFailures(correlationId?: string, take = 200): Observable<ValidationFailureEntry[]> {
-    return this.http.get<ValidationFailureEntry[]>(OPERATIONS_ENDPOINTS.validationFailures, { params: buildParams(correlationId, take) });
+  validationFailures(correlationId: string | undefined, page: number, pageSize: number): Observable<PagedResult<ValidationFailureEntry>> {
+    return this.http.get<PagedResult<ValidationFailureEntry>>(OPERATIONS_ENDPOINTS.validationFailures, { params: buildParams(correlationId, page, pageSize) });
   }
 
-  endpointHealth(take = 200): Observable<EndpointHealthCheckEntry[]> {
-    return this.http.get<EndpointHealthCheckEntry[]>(OPERATIONS_ENDPOINTS.endpointHealth, { params: new HttpParams().set('take', take) });
+  endpointHealth(page: number, pageSize: number): Observable<PagedResult<EndpointHealthCheckEntry>> {
+    const params = new HttpParams()
+      .set('skip', (Math.max(page, 1) - 1) * pageSize)
+      .set('take', pageSize);
+    return this.http.get<PagedResult<EndpointHealthCheckEntry>>(OPERATIONS_ENDPOINTS.endpointHealth, { params });
   }
 
   queueMonitor(): Observable<QueueDepthEntry[]> {

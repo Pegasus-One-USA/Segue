@@ -14,7 +14,10 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Enums;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Api.Workflows;
 
@@ -576,6 +579,9 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
             ICurrentUserService currentUserService,
+            IWorkflowRunTracker runTracker,
+            IServiceScopeFactory scopeFactory,
+            ILoggerFactory loggerFactory,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -584,17 +590,79 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            var workflowRunId = Guid.NewGuid();
             var context = new WorkflowExecutionContext(
-                Guid.NewGuid(),
+                workflowRunId,
                 request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
                 targetPatientId: request?.PatientId,
                 patientSearchCriteria: request?.PatientSearchCriteria,
                 callerId: request?.CallerId);
-            var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
 
+            if (request?.Async == true)
+            {
+                runTracker.MarkRunning(workflowRunId);
+
+                // Fire-and-forget on purpose: the caller gets the run id back now and polls for status, so this
+                // must survive the HTTP request (and its scoped DbContext) ending. Resolve a fresh scope rather
+                // than closing over the request-scoped orchestrator/store.
+                _ = Task.Run(async () =>
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<IRankedWorkflowOrchestrator>();
+                    try
+                    {
+                        await scopedOrchestrator.ExecuteAsync(workflow, context, CancellationToken.None);
+                    }
+                    catch (Exception exception)
+                    {
+                        // The orchestrator already persists the failed run with its error message; this is just
+                        // so a background failure isn't silently swallowed from an ops/logging perspective.
+                        loggerFactory.CreateLogger("WorkflowEndpoints")
+                            .LogError(exception, "Background run {WorkflowRunId} for workflow {WorkflowId} failed.", workflowRunId, workflowId);
+                    }
+                    finally
+                    {
+                        runTracker.MarkComplete(workflowRunId);
+                    }
+                });
+
+                return Results.Accepted(
+                    $"/api/v1/workflow-runs/{workflowRunId}/status",
+                    new WorkflowRunStatusResponse(workflowRunId, "Running"));
+            }
+
+            var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
             return Results.Ok(result);
+        });
+
+        // Lightweight poll target for an async /run — cheap enough to hit every second or two without pulling the
+        // full node timeline. "Running" comes from IWorkflowRunTracker (the run hasn't reached a terminal state
+        // and been persisted yet); once persisted, this reflects the same status /workflow-runs/{runId} would.
+        group.MapGet("/workflow-runs/{runId:guid}/status", (
+            Guid runId,
+            IWorkflowRunTracker runTracker,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            if (runTracker.IsRunning(runId))
+            {
+                return Task.FromResult(Results.Ok(new WorkflowRunStatusResponse(runId, "Running")));
+            }
+
+            return ResolveTerminalStatusAsync(runId, runStore, cancellationToken);
+
+            static async Task<IResult> ResolveTerminalStatusAsync(
+                Guid runId,
+                IWorkflowRunStore runStore,
+                CancellationToken cancellationToken)
+            {
+                var run = await runStore.GetAsync(runId, cancellationToken);
+                return run is null
+                    ? Results.NotFound()
+                    : Results.Ok(new WorkflowRunStatusResponse(run.Id, run.Status.ToString()));
+            }
         });
 
         // Discards FHIRBridge's cached token for this workflow's source connection (both the given patientId's slot,
@@ -730,6 +798,7 @@ public static class WorkflowEndpoints
             ILaunchTokenProtector tokenProtector,
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
+            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var launchContext = tokenProtector.UnprotectContext(token);
@@ -745,9 +814,11 @@ public static class WorkflowEndpoints
                 return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
             }
 
+            // See the /run endpoint's matching comment: reuse the ambient correlation id so this run's ErrorLogs
+            // (if any) can be found via the same id as its outbound API Requests.
             var context = new WorkflowExecutionContext(
                 Guid.NewGuid(),
-                Guid.NewGuid().ToString("N"),
+                currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: "checkpoint-url",
                 triggerType: "Checkpoint");
             var result = await orchestrator.ExecuteAsync(workflow, context, targetNodeId, cancellationToken);

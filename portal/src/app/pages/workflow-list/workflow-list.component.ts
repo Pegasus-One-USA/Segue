@@ -1,12 +1,16 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, inject, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import {
   WorkflowApiService,
   WorkflowSummary,
+  WorkflowRunStatus,
   DestinationData,
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
+
+/** Polling cadence for an async run's status while this screen stays open (see pollRunStatus). */
+const RUN_STATUS_POLL_MS = 3000;
 
 interface LaunchModal {
   name: string;
@@ -30,6 +34,9 @@ interface CopyModal {
   busy: boolean;
 }
 
+type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun';
+type SortDirection = 'asc' | 'desc';
+
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
@@ -37,7 +44,7 @@ interface CopyModal {
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
-export class WorkflowListComponent implements OnInit {
+export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly api = inject(WorkflowApiService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -46,10 +53,17 @@ export class WorkflowListComponent implements OnInit {
   readonly loading = signal(true);
   readonly searchQuery = signal('');
 
-  /** Workflow id currently running/launching — disables its action button. */
+  /** Workflow id currently running/launching — disables its action button. Not set for an async ("background") run,
+   *  which returns immediately so the row stays interactive; see runAsync. */
   readonly busyId = signal<string | null>(null);
   /** Workflow id whose enable/disable or delete call is in flight — disables its row controls. */
   readonly rowBusyId = signal<string | null>(null);
+  /** Workflow id whose "Run (sync) / Run in background" menu is open — see toggleRunMenu. */
+  readonly runMenuOpenId = signal<string | null>(null);
+
+  /** Active status-poll intervals for in-flight async runs, keyed by workflow id — cleared on completion or
+   *  when this screen is torn down (navigating away does NOT stop the run itself, only this UI's polling). */
+  private readonly pollHandles = new Map<string, ReturnType<typeof setInterval>>();
 
   readonly launchModal = signal<LaunchModal | null>(null);
   readonly dataModal = signal<DataModal | null>(null);
@@ -57,6 +71,12 @@ export class WorkflowListComponent implements OnInit {
   readonly confirmDelete = signal<WorkflowSummary | null>(null);
   /** Workflow pending a copy — the modal's name field always starts empty. */
   readonly copyModal = signal<CopyModal | null>(null);
+
+  readonly sortColumn = signal<SortColumn>('name');
+  readonly sortDirection = signal<SortDirection>('asc');
+  readonly pageSizeOptions = [10, 20, 50];
+  readonly pageSize = signal(20);
+  readonly pageIndex = signal(0);
 
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
@@ -68,8 +88,74 @@ export class WorkflowListComponent implements OnInit {
     );
   });
 
+  readonly sorted = computed(() => {
+    const col = this.sortColumn();
+    const dir = this.sortDirection() === 'asc' ? 1 : -1;
+    const key = (w: WorkflowSummary): string | number => {
+      switch (col) {
+        case 'name':     return w.name.toLowerCase();
+        case 'source':   return (w.sourceSystemType ?? '').toLowerCase();
+        case 'audience': return this.audienceLabel(w.applicationType).toLowerCase();
+        case 'status':   return w.status;
+        case 'lastRun':  return w.lastRunAt ? new Date(w.lastRunAt).getTime() : -1;
+      }
+    };
+    return [...this.filtered()].sort((a, b) => {
+      const ka = key(a);
+      const kb = key(b);
+      if (ka < kb) return -1 * dir;
+      if (ka > kb) return 1 * dir;
+      return 0;
+    });
+  });
+
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.sorted().length / this.pageSize())));
+
+  readonly paged = computed(() => {
+    // Clamp defensively — a delete/copy can shrink the list out from under a page index
+    // that pointed at the last page.
+    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
+    const start = clampedIndex * this.pageSize();
+    return this.sorted().slice(start, start + this.pageSize());
+  });
+
+  /** First/last row numbers shown for the current page, for "Showing X–Y of Z". */
+  readonly rangeStart = computed(() => {
+    if (this.sorted().length === 0) return 0;
+    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
+    return clampedIndex * this.pageSize() + 1;
+  });
+  readonly rangeEnd = computed(() => Math.min(this.sorted().length, this.rangeStart() + this.pageSize() - 1));
+
   ngOnInit(): void {
     this.reload();
+  }
+
+  onSort(column: SortColumn): void {
+    if (this.sortColumn() === column) {
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortColumn.set(column);
+      this.sortDirection.set('asc');
+    }
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.pageIndex.set(0);
+  }
+
+  prevPage(): void {
+    this.pageIndex.update(i => Math.max(0, i - 1));
+  }
+
+  nextPage(): void {
+    this.pageIndex.update(i => Math.min(this.totalPages() - 1, i + 1));
+  }
+
+  ngOnDestroy(): void {
+    this.pollHandles.forEach(handle => clearInterval(handle));
+    this.pollHandles.clear();
   }
 
   reload(): void {
@@ -81,13 +167,14 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.loading.set(false);
-        this.toast.error('Failed to load workflows.', this.messageOf(err, ''));
+        this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
       },
     });
   }
 
   onSearch(value: string): void {
     this.searchQuery.set(value);
+    this.pageIndex.set(0);
   }
 
   /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
@@ -95,11 +182,15 @@ export class WorkflowListComponent implements OnInit {
     this.router.navigate(['/workflow-builder']);
   }
 
-  onAction(row: WorkflowSummary): void {
+  /** Default click on the primary button: sync for Launch (unaffected) and, for backwards compatibility, sync for
+   *  Run too — the button waits here and shows a spinner, same as before this screen offered a choice. Pass
+   *  mode: 'async' (from the split-button's dropdown, see toggleRunMenu) to dispatch a background run instead. */
+  onAction(row: WorkflowSummary, mode: 'sync' | 'async' = 'sync'): void {
+    this.runMenuOpenId.set(null);
     if (this.busyId()) return;
-    this.busyId.set(row.workflowId);
 
     if (row.action === 'Launch') {
+      this.busyId.set(row.workflowId);
       this.api.launchUrl(row.workflowId).subscribe({
         next: result => {
           this.busyId.set(null);
@@ -112,13 +203,20 @@ export class WorkflowListComponent implements OnInit {
         },
         error: err => {
           this.busyId.set(null);
-          this.toast.error('Launch URL', this.messageOf(err, 'Could not generate a launch URL.'));
+          this.toast.error(this.messageOf(err, 'Could not generate a launch URL.'));
         },
       });
       return;
     }
 
-    // Backend / non-interactive: trigger a run.
+    if (mode === 'async') {
+      this.runAsync(row);
+      return;
+    }
+
+    // Backend / non-interactive, synchronous: blocks here until the whole run finishes (or the request is
+    // aborted by navigating away) — same behavior as before "Run in background" existed.
+    this.busyId.set(row.workflowId);
     this.api.run(row.workflowId).subscribe({
       next: () => {
         this.busyId.set(null);
@@ -127,9 +225,80 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.busyId.set(null);
-        this.toast.error('Workflow run', this.messageOf(err, 'The run could not be started.'));
+        this.toast.error(this.runFailureMessage(err));
       },
     });
+  }
+
+  /** Shows/hides the "Run (wait here) / Run in background" menu for one row. Ignored for Launch rows — the launch
+   *  action never executes the pipeline itself, so there's nothing to choose sync/async for (see analysis). */
+  toggleRunMenu(row: WorkflowSummary, event: Event): void {
+    event.stopPropagation();
+    if (row.action !== 'Run') return;
+    this.runMenuOpenId.set(this.runMenuOpenId() === row.workflowId ? null : row.workflowId);
+  }
+
+  @HostListener('document:click')
+  closeRunMenu(): void {
+    this.runMenuOpenId.set(null);
+  }
+
+  /** Dispatches the run to a background task and returns immediately (202 Accepted) — the row stays interactive
+   *  and the run survives navigating to another screen; poll the returned run id for completion. */
+  private runAsync(row: WorkflowSummary): void {
+    this.api.run(row.workflowId, true).subscribe({
+      next: result => {
+        const runId = (result as WorkflowRunStatus).workflowRunId;
+        this.toast.success(
+          'Running in background',
+          `"${row.name}" is running — you can navigate away, it keeps running on the server.`,
+        );
+        this.summaries.update(rows =>
+          rows.map(w =>
+            w.workflowId === row.workflowId
+              ? { ...w, lastRun: 'Running', lastRunAt: new Date().toISOString() }
+              : w,
+          ),
+        );
+        this.pollRunStatus(row, runId);
+      },
+      error: err => {
+        this.toast.error('Workflow run', this.messageOf(err, 'The background run could not be started.'));
+      },
+    });
+  }
+
+  /** Polls GET /workflow-runs/{runId}/status until it leaves "Running", then reloads the row from /summary so
+   *  Last Run reflects the persisted terminal result. Stops (without affecting the server-side run) if this
+   *  component is destroyed first — see ngOnDestroy. */
+  private pollRunStatus(row: WorkflowSummary, runId: string): void {
+    const existing = this.pollHandles.get(row.workflowId);
+    if (existing) {
+      clearInterval(existing);
+    }
+
+    const handle = setInterval(() => {
+      this.api.runStatus(runId).subscribe({
+        next: status => {
+          if (status.status === 'Running') return;
+
+          clearInterval(handle);
+          this.pollHandles.delete(row.workflowId);
+          const failed = status.status === 'Failed';
+          this.toast[failed ? 'error' : 'success'](
+            'Workflow run',
+            `"${row.name}" ${failed ? 'failed' : 'completed'}.`,
+          );
+          this.reload();
+        },
+        error: () => {
+          clearInterval(handle);
+          this.pollHandles.delete(row.workflowId);
+        },
+      });
+    }, RUN_STATUS_POLL_MS);
+
+    this.pollHandles.set(row.workflowId, handle);
   }
 
   onViewData(row: WorkflowSummary): void {
@@ -176,7 +345,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.rowBusyId.set(null);
-        this.toast.error('Update failed', this.messageOf(err, 'Could not change the workflow state.'));
+        this.toast.error(this.messageOf(err, 'Could not change the workflow state.'));
       },
     });
   }
@@ -206,7 +375,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.rowBusyId.set(null);
-        this.toast.error('Update failed', this.messageOf(err, 'Could not change the public-launch state.'));
+        this.toast.error(this.messageOf(err, 'Could not change the public-launch state.'));
       },
     });
   }
@@ -233,7 +402,7 @@ export class WorkflowListComponent implements OnInit {
       error: err => {
         this.rowBusyId.set(null);
         this.confirmDelete.set(null);
-        this.toast.error('Delete failed', this.messageOf(err, 'Could not delete the workflow.'));
+        this.toast.error(this.messageOf(err, 'Could not delete the workflow.'));
       },
     });
   }
@@ -267,7 +436,7 @@ export class WorkflowListComponent implements OnInit {
       },
       error: err => {
         this.copyModal.update(current => (current ? { ...current, busy: false } : current));
-        this.toast.error('Copy failed', this.messageOf(err, 'Could not copy the workflow.'));
+        this.toast.error(this.messageOf(err, 'Could not copy the workflow.'));
       },
     });
   }
@@ -294,7 +463,7 @@ export class WorkflowListComponent implements OnInit {
   copy(text: string): void {
     navigator.clipboard?.writeText(text).then(
       () => this.toast.success('Copied', 'Launch URL copied to clipboard.'),
-      () => this.toast.error('Copy failed', 'Could not copy to the clipboard.'),
+      () => this.toast.error('Could not copy to the clipboard.'),
     );
   }
 
@@ -314,5 +483,20 @@ export class WorkflowListComponent implements OnInit {
       return body.error_description || body.title || e?.message || fallback;
     }
     return e?.message || fallback;
+  }
+
+  /** The backend's Error Reference ID (ERR-…) when a run failed technically — quotable to support. */
+  private refOf(err: unknown): string | null {
+    const body = (err as { error?: { errorReferenceId?: string } })?.error;
+    return body && typeof body === 'object' ? body.errorReferenceId ?? null : null;
+  }
+
+  /** A generic, PHI-safe failure message for a run — with the reference id appended when present so it can be
+   *  looked up in Operations → Errors. Never surfaces the raw exception text. */
+  private runFailureMessage(err: unknown): string {
+    const ref = this.refOf(err);
+    return ref
+      ? `The run could not be started. Reference: ${ref}`
+      : this.messageOf(err, 'The run could not be started.');
   }
 }

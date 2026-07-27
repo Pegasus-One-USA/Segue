@@ -9,6 +9,7 @@ using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
@@ -21,8 +22,9 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 public sealed class SqlServerDestinationNodeExecutor : DestinationNodeExecutor
 {
     public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -30,8 +32,9 @@ public sealed class SqlServerDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class AzureSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
     public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -39,8 +42,9 @@ public sealed class AzureSqlDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class BlobDestinationNodeExecutor : DestinationNodeExecutor
 {
     public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -48,8 +52,9 @@ public sealed class BlobDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class PowerBiDestinationNodeExecutor : DestinationNodeExecutor
 {
     public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -57,8 +62,9 @@ public sealed class PowerBiDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class PostgreSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
     public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -66,8 +72,9 @@ public sealed class PostgreSqlDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class MySqlDestinationNodeExecutor : DestinationNodeExecutor
 {
     public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -75,8 +82,9 @@ public sealed class MySqlDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class SnowflakeDestinationNodeExecutor : DestinationNodeExecutor
 {
     public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -84,8 +92,9 @@ public sealed class SnowflakeDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class TableauDestinationNodeExecutor : DestinationNodeExecutor
 {
     public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -93,8 +102,9 @@ public sealed class TableauDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class DatabricksDestinationNodeExecutor : DestinationNodeExecutor
 {
     public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -102,8 +112,9 @@ public sealed class DatabricksDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class S3DestinationNodeExecutor : DestinationNodeExecutor
 {
     public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -111,8 +122,9 @@ public sealed class S3DestinationNodeExecutor : DestinationNodeExecutor
 public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecutor
 {
     public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -120,8 +132,9 @@ public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecu
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
     public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -129,8 +142,9 @@ public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class ExcelDestinationNodeExecutor : DestinationNodeExecutor
 {
     public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -138,8 +152,9 @@ public sealed class ExcelDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class NdjsonDestinationNodeExecutor : DestinationNodeExecutor
 {
     public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -147,8 +162,9 @@ public sealed class NdjsonDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class ParquetDestinationNodeExecutor : DestinationNodeExecutor
 {
     public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -156,8 +172,9 @@ public sealed class ParquetDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class AvroDestinationNodeExecutor : DestinationNodeExecutor
 {
     public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -165,8 +182,9 @@ public sealed class AvroDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class ProtobufDestinationNodeExecutor : DestinationNodeExecutor
 {
     public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -174,8 +192,9 @@ public sealed class ProtobufDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class PdfDestinationNodeExecutor : DestinationNodeExecutor
 {
     public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -183,8 +202,9 @@ public sealed class PdfDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class SftpDestinationNodeExecutor : DestinationNodeExecutor
 {
     public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -192,8 +212,9 @@ public sealed class SftpDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class RestApiDestinationNodeExecutor : DestinationNodeExecutor
 {
     public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -201,8 +222,9 @@ public sealed class RestApiDestinationNodeExecutor : DestinationNodeExecutor
 public sealed class InMemoryDestinationNodeExecutor : DestinationNodeExecutor
 {
     public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -501,17 +523,20 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     private readonly DestinationType _destinationType;
     private readonly IConfiguredDestinationWriterFactory? _writerFactory;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
+    private readonly IGovernanceLogger? _governanceLogger;
 
     protected DestinationNodeExecutor(
         string nodeType,
         DestinationType destinationType,
         IConfiguredDestinationWriterFactory? writerFactory,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
         : base(nodeType, WorkflowDataContract.DestinationWriteResult)
     {
         _destinationType = destinationType;
         _writerFactory = writerFactory;
         _workflowDefinitionStore = workflowDefinitionStore;
+        _governanceLogger = governanceLogger;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -542,6 +567,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
         int written;
         string? downloadUrl;
+        GeneratedFile? inlineDownload;
         var explicitProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile");
 
         if (explicitProfile is null && MultiTableRelationalDestinationTypes.Contains(_destinationType))
@@ -568,6 +594,9 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
             written = totalWritten;
             downloadUrl = firstDownloadUrl;
+            // Inline (in-response) bytes are never produced for a multi-table write — AllowInlineDelivery is always
+            // false on this engine (see the comment above writeContext), so there is nothing to attribute here.
+            inlineDownload = null;
         }
         else
         {
@@ -575,10 +604,30 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
             written = writeResult.Count;
             downloadUrl = writeResult.DownloadUrl;
+            inlineDownload = writeResult.InlineDownload;
         }
 
         var result = new RuntimeDestinationWriteResult(
             destination.Id.ToString("N"), written, DateTimeOffset.UtcNow);
+
+        // Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md discussion: Operations → Exports previously only ever
+        // reflected the Configured Pipeline plane (ConfiguredPipelineService's own LogExportAsync call) — a
+        // destination write completed by this engine (the only one with an authoring UI) was invisible there no
+        // matter how many workflows successfully wrote data out. Logging here too means "Exports" reflects every
+        // engine's destination writes consistently, not just one of them.
+        if (_governanceLogger is not null)
+        {
+            await _governanceLogger.LogExportAsync(
+                new ExportEntry(
+                    destination.Name,
+                    _destinationType.ToString(),
+                    written,
+                    written > 0 ? "Succeeded" : "NoData",
+                    inlineDownload?.Content.Length,
+                    context.WorkflowRunId,
+                    context.CorrelationId),
+                cancellationToken);
+        }
 
         return new WorkflowNodeOutput(
             node.Id,

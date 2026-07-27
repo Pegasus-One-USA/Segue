@@ -1,6 +1,7 @@
 using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Messaging;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.SharedKernel.Observability;
@@ -92,21 +93,21 @@ public sealed class OperationsController : ControllerBase
 
     [HttpGet("scheduler-history")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View scheduler dispatch history.")]
-    [ProducesResponseType(typeof(IReadOnlyList<SchedulerHistoryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<SchedulerHistoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSchedulerHistory(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetSchedulerHistoryAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetSchedulerHistoryAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("retry-history")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View retry history.")]
-    [ProducesResponseType(typeof(IReadOnlyList<RetryHistoryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<RetryHistoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRetryHistory(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetRetryHistoryAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetRetryHistoryAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
@@ -115,9 +116,10 @@ public sealed class OperationsController : ControllerBase
     /// a date range.</summary>
     [HttpGet("errors")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View error logs.")]
-    [ProducesResponseType(typeof(IReadOnlyList<ErrorLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ErrorLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetErrorLogs(
         [FromQuery] string? correlationId,
+        [FromQuery] int skip,
         [FromQuery] int take,
         [FromQuery] string? errorReferenceId,
         [FromQuery] string? executionId,
@@ -132,7 +134,7 @@ public sealed class OperationsController : ControllerBase
     {
         var search = new ErrorLogSearch(
             errorReferenceId, correlationId, executionId, workflowId, endpointId,
-            severity, category, status, fromUtc, toUtc, take);
+            severity, category, status, fromUtc, toUtc, skip, take);
         var results = await _governanceQueryService.SearchErrorLogsAsync(search, cancellationToken);
         return Ok(results);
     }
@@ -166,51 +168,51 @@ public sealed class OperationsController : ControllerBase
 
     [HttpGet("api-requests")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View outbound API request logs.")]
-    [ProducesResponseType(typeof(IReadOnlyList<ApiRequestLogDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ApiRequestLogDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetApiRequestLogs(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetApiRequestLogsAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetApiRequestLogsAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("exports")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View export history.")]
-    [ProducesResponseType(typeof(IReadOnlyList<ExportHistoryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ExportHistoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetExportHistory(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetExportHistoryAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetExportHistoryAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("notifications")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View notification history.")]
-    [ProducesResponseType(typeof(IReadOnlyList<NotificationHistoryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<NotificationHistoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNotificationHistory(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetNotificationHistoryAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetNotificationHistoryAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("validation-failures")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View data-quality validation failures.")]
-    [ProducesResponseType(typeof(IReadOnlyList<ValidationFailureDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<ValidationFailureDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetValidationFailures(
-        [FromQuery] string? correlationId, [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] string? correlationId, [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetValidationFailuresAsync(correlationId, take, cancellationToken);
+        var results = await _governanceQueryService.GetValidationFailuresAsync(correlationId, skip, take, cancellationToken);
         return Ok(results);
     }
 
     [HttpGet("endpoint-health")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View endpoint health check history.")]
-    [ProducesResponseType(typeof(IReadOnlyList<EndpointHealthCheckDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<EndpointHealthCheckDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetEndpointHealthChecks(
-        [FromQuery] int take, CancellationToken cancellationToken)
+        [FromQuery] int skip, [FromQuery] int take, CancellationToken cancellationToken)
     {
-        var results = await _governanceQueryService.GetEndpointHealthChecksAsync(take, cancellationToken);
+        var results = await _governanceQueryService.GetEndpointHealthChecksAsync(skip, take, cancellationToken);
         return Ok(results);
     }
 }

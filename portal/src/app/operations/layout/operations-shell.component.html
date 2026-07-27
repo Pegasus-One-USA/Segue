@@ -1,6 +1,9 @@
-<nav class="settings-tabs">
+<nav class="shell-tabs">
   @for (tab of tabs(); track tab.route) {
-    <a class="settings-tab" [routerLink]="tab.route" routerLinkActive="active">{{ tab.label }}</a>
+    <a class="shell-tab" [routerLink]="tab.route" routerLinkActive="active">
+      <mat-icon>{{ tab.icon }}</mat-icon>
+      {{ tab.label }}
+    </a>
   }
 </nav>
 

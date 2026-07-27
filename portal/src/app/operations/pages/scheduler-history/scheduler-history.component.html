@@ -4,6 +4,20 @@
     <p class="page-sub">Every time the scheduler recognized due routes and dispatched them for execution.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one moment the scheduler woke up, found due routes, and queued them to run</strong> — not the outcome of the run itself. It's written the instant the route is queued, before the pipeline has actually started.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">What "Dispatched" does and doesn't mean</h4>
+        <p>It only confirms the scheduler successfully handed the route off to be run. It does <strong>not</strong> mean the run succeeded — or even that it started. If the queue or a worker process has a problem after this point, the run can be lost with no further trace here.</p>
+      </section>
+
+      <p class="info-note">To see whether a scheduled run actually completed, look up the same <strong>Correlation ID</strong> in Pipeline Executions. A "Route(s)" value showing a raw ID instead of a name means that route has no resolvable label — a configuration gap worth fixing, not an error.</p>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"
@@ -19,7 +33,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="runTimeUtc">
           <th mat-header-cell *matHeaderCellDef>Run Time</th>
@@ -51,11 +65,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No scheduler dispatch entries found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

@@ -436,7 +436,12 @@ export const routes: Routes = [
                 m => m.EndpointHealthComponent
               ),
           },
-          { path: '', redirectTo: 'system-health', pathMatch: 'full' },
+          // System Health and Pipeline Executions are no longer the default landing tab — both are
+          // hidden from the menu (see operations-shell.component.ts): System Health only reports one
+          // arbitrary container's health under multi-replica deployment, and Pipeline Executions has no
+          // authoring UI anywhere in the portal. Errors is the best at-a-glance triage tab, so it leads
+          // instead. Routes stay intact, just not the default.
+          { path: '', redirectTo: 'errors', pathMatch: 'full' },
         ],
       },
 
