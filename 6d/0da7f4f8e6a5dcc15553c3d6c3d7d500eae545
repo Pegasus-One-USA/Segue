@@ -1,0 +1,89 @@
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_f2c84423ce0bfa::t_66a03825992f62 1052-1056,1067-1068
+src/FHIRBridge.Application/DTOs/MappingTestResultDto.cs
+  s_f2c84423ce0bfa::t_98ad51be36f44d 12-15,20-31
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_f2c84423ce0bfa::t_0a46180b58ef11 158-162,177
+  s_f2c84423ce0bfa::t_02955ef660584c 70-87,89-98,100-104,106-115,118-119,126,128-137,141,143-145,149-157,163-176,178
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_f2c84423ce0bfa::t_f79d7ef8165daa 215-217
+  s_f2c84423ce0bfa::t_e8bc49fd421297 162-164
+src/FHIRBridge.Domain/ValueObjects/MappingField.cs
+  s_f2c84423ce0bfa::t_520965527dd9f5 23-31
+tests/FHIRBridge.UnitTests/Configuration/JsonMappingEngineTests.cs
+  s_f2c84423ce0bfa::t_b7b544d924a389 148-202
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_f2c84423ce0bfa::t_76d8abfe26f204 91-92,98,102-103,113-114,118
+  s_f2c84423ce0bfa::t_134d5fd2af009c 122,125
+  s_f2c84423ce0bfa::t_7f4a4f578fcc4a 257-259,264-305
+  s_f2c84423ce0bfa::t_904e85cc6b43c5 260-263
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_f2c84423ce0bfa::t_bd77bb4fcafd42 317-346
+  s_f2c84423ce0bfa::t_bba65aa9035da4 184-282
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_f2c84423ce0bfa::t_01b5788e3b2aac 468,473-474,479,504-506,517-521,524-526,529-532,549,553-590
+  s_f2c84423ce0bfa::t_1a3bf5de2d35af 507-516,527-528
+  s_f2c84423ce0bfa::t_3148413124db88 593-620
+  s_f2c84423ce0bfa::t_1b4aa1acb660e0 6,591-592
+  s_f2c84423ce0bfa::t_f527a4d3ed152a 621-675
+  s_f2c84423ce0bfa::t_a28a7f2e7a1d09 23,31,39,47,55,63,71,79,87,95,103,111,119,127,135,143,151,159,167,175,183,522-523
+  s_f2c84423ce0bfa::t_c20efaf896bda1 24
+  s_f2c84423ce0bfa::t_cc2aa7a58eea64 32
+  s_f2c84423ce0bfa::t_264fce45b691e2 40
+  s_f2c84423ce0bfa::t_0567a2809d32e1 48
+  s_f2c84423ce0bfa::t_427ec34d0dc655 56
+  s_f2c84423ce0bfa::t_16b50574bee6e2 64
+  s_f2c84423ce0bfa::t_c72d319f35f498 72
+  s_f2c84423ce0bfa::t_d87b13d17b73cf 80
+  s_f2c84423ce0bfa::t_79fcf9eaea5d8a 88
+  s_f2c84423ce0bfa::t_4c2b435196e20b 96
+  s_f2c84423ce0bfa::t_21b1348dc0de77 104
+  s_f2c84423ce0bfa::t_342c52da6157fe 112
+  s_f2c84423ce0bfa::t_2611e18ad8447c 120
+  s_f2c84423ce0bfa::t_b1e29ae50f4a18 128
+  s_f2c84423ce0bfa::t_335823263b0019 136
+  s_f2c84423ce0bfa::t_a3482832c02cb8 144
+  s_f2c84423ce0bfa::t_fd98de5ea2b65b 152
+  s_f2c84423ce0bfa::t_d6d1f036799672 160
+  s_f2c84423ce0bfa::t_583e93052beff5 168
+  s_f2c84423ce0bfa::t_4bd8a1f46034cb 176
+  s_f2c84423ce0bfa::t_61cde4274115f8 184
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_f2c84423ce0bfa::t_5b6924782f2790 21,152
+  s_f2c84423ce0bfa::t_aaa8146d425dcf 111-129,137-151,153-154
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_f2c84423ce0bfa::t_bc5b60f50ede14 22-24
+src/FHIRBridge.Infrastructure/Normalization/TerminologyMappedRecordNormalizationService.cs
+  s_f2c84423ce0bfa::t_bc83e5d20c142d 85
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260724172146_AddMappingFieldReferenceLookupMetadata.Designer.cs
+  s_f2c84423ce0bfa::t_83807ab3cc0e64 1-2133
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_f2c84423ce0bfa::t_bf1fc60b4ebb92 54-55
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f2c84423ce0bfa::t_83807ab3cc0e64 1647-1654
+tests/FHIRBridge.Runtime.UnitTests/Workflows/DestinationNodeExecutorTests.cs
+  s_f2c84423ce0bfa::t_d93e16409b8b41 1-14,16-53,55-85,97,143-148,153-163
+  s_f2c84423ce0bfa::t_424ff51c7931b0 54
+  s_f2c84423ce0bfa::t_2607759ca627b4 15
+  s_f2c84423ce0bfa::t_36c03ac516eb05 86-96,98-142,149-152
+src/FHIRBridge.Application/DTOs/MappedDestinationRecord.cs
+  s_f2c84423ce0bfa::t_4d2cda9c0a4a6b 19-33
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260724172146_AddMappingFieldReferenceLookupMetadata.cs
+  s_f2c84423ce0bfa::t_83807ab3cc0e64 1-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "6d0da7f4f8e6a5dcc15553c3d6c3d7d500eae545",
+  "prompts": {},
+  "sessions": {
+    "s_f2c84423ce0bfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c970d4-a48d-47fd-a18b-d7240753202d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

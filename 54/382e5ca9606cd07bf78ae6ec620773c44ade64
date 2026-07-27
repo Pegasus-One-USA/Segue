@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_8555c8e59e1b63::t_bc7abaca9b8453 379
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "54382e5ca9606cd07bf78ae6ec620773c44ade64",
+  "prompts": {},
+  "sessions": {
+    "s_8555c8e59e1b63": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26213573-211e-44f6-8f9f-4e65b104b74c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

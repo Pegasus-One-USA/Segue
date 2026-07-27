@@ -1,0 +1,66 @@
+Demo_TestApp/frontend/src/app/demo-types/backend-system/patient-details/patient-details.scss
+  s_53a3c05f231b59::t_61776315de69eb 1-103
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.html
+  s_53a3c05f231b59::t_704832a6fbf1ba 1-66
+Demo_TestApp/backend/BackendSystemEntities.cs
+  s_53a3c05f231b59::t_a34b07de6a114f 1-186
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_62bc5df4df5639::t_58b16e662d61d1 360-364
+Demo_TestApp/frontend/src/app/demo-types/backend-system/core/models/backend-system.model.ts
+  s_53a3c05f231b59::t_1e34a7bed4202c 1-181
+Demo_TestApp/frontend/src/app/demo-types/backend-system/core/config/backend-system-menu.config.ts
+  s_53a3c05f231b59::t_21b8b12189666d 1-193
+Demo_TestApp/frontend/src/app/app.html
+  s_53a3c05f231b59::t_e460f41e431dfe 40-44
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.ts
+  s_53a3c05f231b59::t_8e46c614d487c1 1-61
+Demo_TestApp/frontend/src/app/app.ts
+  s_53a3c05f231b59::t_a24b73a7bb6745 57
+  s_53a3c05f231b59::t_9962de797588ff 10
+  s_53a3c05f231b59::t_d33c388e427664 38-42
+  s_53a3c05f231b59::t_637c62a4b11771 77
+  s_53a3c05f231b59::t_fa0e658c3a146e 166-171
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.scss
+  s_53a3c05f231b59::t_b05ea999a6080a 1-108
+Demo_TestApp/backend/BackendSystemEndpoints.cs
+  s_53a3c05f231b59::t_0474219c3f4b54 1-536
+Demo_TestApp/backend/Program.cs
+  s_53a3c05f231b59::t_e3dd44fd49beef 449-450
+Demo_TestApp/frontend/src/app/demo-types/backend-system/patient-details/patient-details.ts
+  s_53a3c05f231b59::t_300395ddbf7c21 1-59,72-91
+  s_53a3c05f231b59::t_95adc061de61f2 60-71
+Demo_TestApp/frontend/src/app/demo-types/backend-system/patient-details/patient-details.html
+  s_53a3c05f231b59::t_8331f06e341679 1-42,44,46-59
+  s_53a3c05f231b59::t_dfbc489bf0a83c 43,45
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_53a3c05f231b59::t_c59a7b65c3090a 260-266
+  s_53a3c05f231b59::t_67f53e36fa1b6d 12
+  s_53a3c05f231b59::t_9a5d040d68bda1 140-163,166-225
+Demo_TestApp/frontend/src/app/demo-types/backend-system/core/services/backend-system.service.ts
+  s_53a3c05f231b59::t_c2f187a0979262 1-3,5-45
+  s_53a3c05f231b59::t_4c7b8b28d496f2 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "88c062850171340ddbc04d56d1e35340576ef99e",
+  "prompts": {},
+  "sessions": {
+    "s_53a3c05f231b59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5c61a06a-ec97-462e-b925-c6285f20f959",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_62bc5df4df5639": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50047051-88d9-4da3-8bb0-9c6274abbf7b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
