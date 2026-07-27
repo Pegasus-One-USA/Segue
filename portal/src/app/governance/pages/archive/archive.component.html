@@ -4,6 +4,15 @@
     <p class="page-sub">Every retention purge archives expiring rows to a durable NDJSON file before deleting them. This lists the most recent archive run per log type.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Before the retention job permanently deletes old log rows, it saves them to a durable file first. This screen shows, per log type, when that last happened and how many rows were saved — so purged data isn't truly gone, just moved out of the live database.</p>
+
+      <p class="info-note">"Restore range…" isn't wired up yet — the archived file is retrievable at the shown location, but there's no one-click way to load it back into the live database today.</p>
+    </div>
+  </details>
+
   @if (restoreMessage()) {
     <p class="info-message">{{ restoreMessage() }}</p>
   }

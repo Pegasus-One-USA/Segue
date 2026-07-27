@@ -105,3 +105,34 @@
   font-size: 13px;
 }
 
+.event-type-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+  }
+
+  th {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted);
+  }
+
+  td:first-child {
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--color-ink-2);
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+}
+

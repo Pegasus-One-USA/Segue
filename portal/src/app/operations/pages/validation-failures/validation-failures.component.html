@@ -4,6 +4,19 @@
     <p class="page-sub">Resources that produced US-Core / data-quality warnings during normalization — structural, never clinical content.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row means: <strong>a resource came back from the source EHR itself missing something required</strong> — before your field mapping ever touches it. This is not about your mapping configuration being wrong; it's the raw data the EHR sent us. Example: Epic returns a Patient with no <code>gender</code> populated — that shows up here as a warning, with a Data Quality Score reflecting how incomplete the record is.</p>
+
+      <p class="info-lead">Why it matters: without this, the only way you'd learn about incomplete source data is a customer noticing missing fields downstream, weeks later, with no way to trace when it started or whether it's your issue or the EHR's. This screen is the paper trail — when someone later asks "why is this patient's data incomplete," you can point to the exact resource, the exact missing field, and the exact time it happened.</p>
+
+      <p class="info-note">This screen being empty is a good sign — it means your source data is passing all quality checks, not that nothing was checked. A Data Quality Score is included per resource when available, so you can spot resources that are borderline even without an outright warning.</p>
+
+      <p class="info-note">Only <strong>structural</strong> details (which field, which resource type) are shown — never the actual clinical content of the record.</p>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"
@@ -19,7 +32,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
@@ -57,11 +70,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No validation failures found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

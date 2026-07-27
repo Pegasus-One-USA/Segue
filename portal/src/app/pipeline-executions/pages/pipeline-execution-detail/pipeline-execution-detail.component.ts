@@ -43,7 +43,7 @@ export class PipelineExecutionDetailComponent implements OnInit {
   readonly page = signal(1);
   readonly pageSize = 25;
 
-  readonly displayedCols = ['resourceType', 'sourceResourceId', 'stage', 'status', 'processingTimeMs', 'note', 'lineage'];
+  readonly displayedCols = ['resourceType', 'sourceResourceId', 'stage', 'status', 'processingTimeMs', 'dataQuality', 'patientMatch', 'note', 'lineage'];
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -80,6 +80,10 @@ export class PipelineExecutionDetailComponent implements OnInit {
       this.page.set(this.page() - 1);
       this.loadResources(id);
     }
+  }
+
+  goBack(): void {
+    this.router.navigate(['/operations/pipeline-executions']);
   }
 
   viewCorrelation(): void {

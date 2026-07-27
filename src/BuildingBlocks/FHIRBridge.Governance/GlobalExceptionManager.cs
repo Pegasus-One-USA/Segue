@@ -10,11 +10,16 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
 {
     private readonly IGovernanceLogger _governanceLogger;
     private readonly IExceptionClassifier _classifier;
+    private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
 
-    public GlobalExceptionManager(IGovernanceLogger governanceLogger, IExceptionClassifier classifier)
+    public GlobalExceptionManager(
+        IGovernanceLogger governanceLogger,
+        IExceptionClassifier classifier,
+        IFailureDiagnosisClassifier? diagnosisClassifier = null)
     {
         _governanceLogger = governanceLogger;
         _classifier = classifier;
+        _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
     }
 
     public async Task<ErrorReport> CaptureAsync(
@@ -22,8 +27,9 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
     {
         var referenceId = ErrorReference.New();
         var category = _classifier.Classify(exception);
+        var diagnosis = _diagnosisClassifier.Diagnose(exception, category);
         var friendlyMessage = string.IsNullOrWhiteSpace(context.UserFriendlyMessageOverride)
-            ? DefaultMessageFor(category)
+            ? DefaultMessageFor(category, diagnosis)
             : context.UserFriendlyMessageOverride!;
 
         // Capturing an error must never itself throw — a failure here (e.g. DB unreachable) must not mask the
@@ -46,7 +52,9 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
                     context.EndpointId,
                     context.RequestId,
                     context.TraceId,
-                    context.SpanId),
+                    context.SpanId,
+                    diagnosis.Action,
+                    diagnosis.Cause),
                 cancellationToken);
         }
         catch
@@ -54,22 +62,40 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
             // Intentionally swallowed: see remarks above.
         }
 
-        return new ErrorReport(referenceId, category, friendlyMessage, context.CorrelationId);
+        return new ErrorReport(referenceId, category, friendlyMessage, context.CorrelationId, diagnosis.Action);
     }
 
     /// <summary>Category-specific, PHI/PII-free text safe to show any end user. The reference id is returned
-    /// as a separate field on <see cref="ErrorReport"/> so the UI can present it on its own line.</summary>
-    private static string DefaultMessageFor(ErrorCategory category) => category switch
+    /// as a separate field on <see cref="ErrorReport"/> so the UI can present it on its own line.
+    /// <para>The closing clause is driven by <paramref name="diagnosis"/>'s <see cref="DiagnosisAction"/> — not
+    /// hardcoded to "contact your system administrator" for every category as before — so this message and any
+    /// UI badge sourced from the same <see cref="Diagnosis"/> can never disagree
+    /// (docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §1, §8).</para></summary>
+    private static string DefaultMessageFor(ErrorCategory category, Diagnosis diagnosis)
     {
-        ErrorCategory.Validation =>
-            "The request could not be processed because some information was invalid. Please contact your system administrator and provide the reference ID below.",
-        ErrorCategory.Authentication =>
-            "We could not verify your identity for this request. Please contact your system administrator and provide the reference ID below.",
-        ErrorCategory.Authorization =>
-            "You do not have permission to perform this action. Please contact your system administrator and provide the reference ID below.",
-        ErrorCategory.Network or ErrorCategory.ExternalSystem =>
-            "A connected system did not respond as expected while processing your request. Please contact your system administrator and provide the reference ID below.",
-        _ =>
-            "An unexpected error occurred while processing your request. Please contact your system administrator and provide the reference ID below.",
-    };
+        var lead = category switch
+        {
+            ErrorCategory.Validation =>
+                "The request could not be processed because some information was invalid.",
+            ErrorCategory.Authentication =>
+                "We could not verify your identity for this request.",
+            ErrorCategory.Authorization =>
+                "You do not have permission to perform this action.",
+            ErrorCategory.Network or ErrorCategory.ExternalSystem =>
+                "A connected system did not respond as expected while processing your request.",
+            _ =>
+                "An unexpected error occurred while processing your request.",
+        };
+
+        var closing = diagnosis.Action switch
+        {
+            DiagnosisAction.SelfFix => diagnosis.Cause,
+            DiagnosisAction.ContactSupport =>
+                "Please contact your system administrator and provide the reference ID below.",
+            _ =>
+                "Please contact your system administrator and provide the reference ID below.",
+        };
+
+        return $"{lead} {closing}";
+    }
 }

@@ -1,3 +1,11 @@
+/** Matches the backend's PagedResult<T> (page is 1-based). */
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 /** Matches the backend's AuditLogDto (GovernanceController — api/v1/governance/audit-logs). */
 export interface AuditLogEntry {
   id: string;

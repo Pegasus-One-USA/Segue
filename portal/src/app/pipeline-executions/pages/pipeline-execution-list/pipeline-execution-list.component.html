@@ -1,14 +1,65 @@
 <div class="list-page">
   <div class="page-header">
     <h1>Pipeline Executions</h1>
-    <p class="page-sub">Configured Pipeline plane runs — scheduler/webhook-triggered route executions against Resource Pipeline Routes. Click a row for the per-resource-type breakdown.</p>
+    <p class="page-sub">History of data-sync runs. Each row is one run of a configured job that moves records from an <strong>input</strong> to a <strong>target</strong>. Click a row to see the breakdown by data type (Patients, Observations, …).</p>
   </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one execution of a configured pipeline route</strong> — a saved rule that reads records from an <strong>input</strong> (Epic, Healow, a FHIR server, a file…) and writes them to a <strong>target</strong> (a database, CSV, SFTP…).</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">How a run gets here <span class="info-heading-hint">— shown in the Triggered By column</span></h4>
+        <dl class="info-defs">
+          <div class="info-def">
+            <dt><span class="info-tag">Scheduled</span></dt>
+            <dd>Ran automatically on its schedule — unattended, system-to-system inputs.</dd>
+          </div>
+          <div class="info-def">
+            <dt><span class="info-tag">Webhook</span></dt>
+            <dd>Started because an external system pushed data in.</dd>
+          </div>
+          <div class="info-def">
+            <dt><span class="info-tag">Manual / Bulk</span></dt>
+            <dd>Started by an admin, or a large bulk export.</dd>
+          </div>
+          <div class="info-def">
+            <dt><span class="info-tag">Interactive launch</span></dt>
+            <dd>A user launched the app from the EHR (e.g. <code>epic-ehr-launch</code>); the resulting sync lands here too.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="info-section">
+        <h4 class="info-heading">What the numbers mean</h4>
+        <div class="info-metrics">
+          <div class="info-metric"><span class="info-metric-key">Read</span> records pulled from the input</div>
+          <div class="info-metric"><span class="info-metric-key">Written</span> records delivered to the target</div>
+          <div class="info-metric"><span class="info-metric-key">Run Errors</span> failures recorded for this run</div>
+        </div>
+      </section>
+
+      <section class="info-section">
+        <h4 class="info-heading">Statuses</h4>
+        <div class="info-statuses">
+          <span class="info-status"><span class="status-badge status-success">Completed</span> all good</span>
+          <span class="info-status"><span class="status-badge status-warn">Completed with errors</span> some records failed</span>
+          <span class="info-status"><span class="status-badge status-fail">Failed</span> nothing written</span>
+          <span class="info-status"><span class="status-badge status-neutral">Skipped</span> dependencies disabled</span>
+          <span class="info-status"><span class="status-badge status-neutral">Running</span> in progress</span>
+        </div>
+      </section>
+
+      <p class="info-note">This is the config-driven engine. Visual "Run"-button and workflow-graph launches instead appear under <strong>Execution History</strong>.</p>
+    </div>
+  </details>
 
   <div class="filter-bar">
     <input
       type="search"
       class="search-input"
-      placeholder="Search pipeline or source…"
+      placeholder="Search pipeline or input…"
       [value]="search()"
       (input)="onSearchChange($any($event.target).value)"
       (keyup.enter)="applyFilters()"
@@ -35,7 +86,7 @@
         </ng-container>
 
         <ng-container matColumnDef="sourceName">
-          <th mat-header-cell *matHeaderCellDef>Source</th>
+          <th mat-header-cell *matHeaderCellDef>Input</th>
           <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.sourceName }}</td>
         </ng-container>
 
@@ -63,22 +114,28 @@
         </ng-container>
 
         <ng-container matColumnDef="triggeredBy">
-          <th mat-header-cell *matHeaderCellDef>Triggered By</th>
+          <th mat-header-cell *matHeaderCellDef title="Who or what started this run: Scheduled, Webhook, Manual, Bulk, or an interactive launch (e.g. epic-ehr-launch).">Triggered By</th>
           <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.triggeredBy || '—' }} <span class="mono" *ngIf="r.triggerType">({{ r.triggerType }})</span></td>
         </ng-container>
 
         <ng-container matColumnDef="counts">
-          <th mat-header-cell *matHeaderCellDef>Read / Written / Errors</th>
-          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">
-            {{ r.extractedCount }} / {{ r.writtenCount }} / <span [class.error-count]="r.errorCount > 0">{{ r.errorCount }}</span>
+          <th mat-header-cell *matHeaderCellDef title="Read = records pulled from the input. Written = records delivered to the target. Run Errors = failures recorded for the whole run.">Read / Written / Run Errors</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)"
+              title="Read = pulled from input · Written = delivered to target · Run Errors = failures for this run">
+            {{ r.extractedCount }} / {{ r.writtenCount }} /
+            @if (r.errorCount > 0 && r.correlationId) {
+              <button class="btn-link error-count" type="button" (click)="viewCorrelation(r, $event)" title="View these errors in Correlation Search">{{ r.errorCount }}</button>
+            } @else {
+              <span [class.error-count]="r.errorCount > 0">{{ r.errorCount }}</span>
+            }
           </td>
         </ng-container>
 
         <ng-container matColumnDef="correlationId">
           <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
-          <td mat-cell *matCellDef="let r">
+          <td mat-cell *matCellDef="let r" class="corr-cell">
             @if (r.correlationId) {
-              <button class="btn-link" type="button" (click)="viewCorrelation(r, $event)"><code class="mono">{{ r.correlationId }}</code></button>
+              <button class="btn-link corr-link" type="button" (click)="viewCorrelation(r, $event)" [title]="r.correlationId"><code class="mono">{{ r.correlationId }}</code></button>
             } @else {
               —
             }
@@ -97,12 +154,16 @@
       <div class="empty-state">Loading…</div>
     }
 
-    @if (totalCount() > pageSize) {
-      <div class="pagination-bar">
-        <button class="btn-ghost" type="button" [disabled]="page() === 1" (click)="previousPage()">Previous</button>
-        <span>Page {{ page() }} of {{ Math.ceil(totalCount() / pageSize) }} ({{ totalCount() }} total)</span>
-        <button class="btn-ghost" type="button" [disabled]="page() * pageSize >= totalCount()" (click)="nextPage()">Next</button>
-      </div>
+    @if (totalCount() > 0) {
+      <mat-paginator
+        [length]="totalCount()"
+        [pageSize]="perPage()"
+        [pageIndex]="page() - 1"
+        [pageSizeOptions]="[5, 10, 25, 50]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+        class="table-paginator"
+      ></mat-paginator>
     }
   </div>
 </div>

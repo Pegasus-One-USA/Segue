@@ -1,0 +1,85 @@
+.diff-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  min-width: 480px;
+  max-width: 900px;
+}
+
+.diff-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+}
+
+.btn-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--color-side);
+    color: var(--color-ink);
+  }
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
+}
+
+.diff-dialog-body {
+  padding: 16px 20px 20px;
+  overflow: auto;
+}
+
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.diff-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.diff-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+.diff-added td:last-child { color: var(--color-success-strong); }
+.diff-removed td:nth-child(2) { color: var(--color-error-strong); text-decoration: line-through; }
+.diff-changed td:last-child { color: var(--color-warning-strong); font-weight: 600; }

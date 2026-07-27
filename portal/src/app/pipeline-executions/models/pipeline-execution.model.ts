@@ -28,7 +28,9 @@ export interface PipelineExecutionPagedResult {
   pageSize: number;
 }
 
-/** Matches the backend's PipelineRunResourceHistoryDto — per-FHIR-resource-type drill-down, decrypted. */
+/** Matches the backend's PipelineRunResourceHistoryDto — per-FHIR-resource-type drill-down. PHI-free: the raw
+ *  fetched/normalized/mapped JSON payloads are intentionally not returned. To see an individual decrypted field
+ *  value, use the gated + audited reveal on the Data Lineage screen. */
 export interface PipelineResourceHistoryEntry {
   id: string;
   routeExecutionId: string;
@@ -36,15 +38,12 @@ export interface PipelineResourceHistoryEntry {
   sourceResourceId: string | null;
   stage: string;
   errorMessage: string | null;
-  fetchedJson: string;
   fetchedAtUtc: string;
-  normalizedJson: string | null;
   appliedProfiles: string[];
   warnings: string[];
   dataQualityScore: number | null;
   masterPatientId: string | null;
   normalizedAtUtc: string | null;
-  mappedValuesJson: string | null;
   mappedAtUtc: string | null;
   storedAtUtc: string | null;
   writeStatus: string | null;

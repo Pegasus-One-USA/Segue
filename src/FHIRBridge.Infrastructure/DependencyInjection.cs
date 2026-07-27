@@ -217,6 +217,14 @@ public static class DependencyInjection
         // (depends only on IGovernanceLogger, which each branch registers, and the classifier). Scoped so it
         // composes with the scoped EfGovernanceLogger; the classifier is stateless and shared.
         services.AddSingleton<IExceptionClassifier>(_ => new DefaultExceptionClassifier());
+
+        // Docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §8 — one rule per known failure signature, registered
+        // like any other strategy in this project (EHR vendor connectors, auth strategies) rather than grown as
+        // a single central switch. Add a new destination/source failure signature by adding a rule here, not by
+        // editing DefaultFailureDiagnosisClassifier.
+        services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.SqlDestinationFailureDiagnosisRule>();
+        services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.EpicTokenFailureDiagnosisRule>();
+        services.AddSingleton<IFailureDiagnosisClassifier, DefaultFailureDiagnosisClassifier>();
         services.AddScoped<IGlobalExceptionManager, GlobalExceptionManager>();
 
         services.AddRuntimeInfrastructure(configuration);

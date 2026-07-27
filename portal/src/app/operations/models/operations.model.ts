@@ -1,3 +1,11 @@
+/** Matches the backend's PagedResult<T> (page is 1-based). */
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 /** Matches the backend's SchedulerHistoryDto (api/v1/operations/scheduler-history). */
 export interface SchedulerHistoryEntry {
   id: string;
@@ -42,6 +50,12 @@ export interface ErrorLogEntry {
   status: string | null;
   resolvedBy: string | null;
   resolvedOnUtc: string | null;
+  /** 'SelfFix' | 'ContactSupport' | 'Unknown' — computed once on the backend by IFailureDiagnosisClassifier, so
+   *  the "What to do" badge and the message text can't disagree (docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md
+   *  §8). Null on rows captured before this field existed — falls back to the old category-based guess. */
+  diagnosisAction: string | null;
+  /** Plain-language cause paired with diagnosisAction — sourced from the same computation as userFriendlyMessage. */
+  diagnosisCause: string | null;
 }
 
 /** Multi-criteria filter for the Monitoring → Errors search (Phase 6A). All fields optional. */
@@ -56,7 +70,8 @@ export interface ErrorLogSearch {
   status?: string;
   fromUtc?: string;
   toUtc?: string;
-  take?: number;
+  page?: number;
+  pageSize?: number;
 }
 
 /** The standardized error envelope returned by the backend's Global Exception Manager (Phase 6A). */

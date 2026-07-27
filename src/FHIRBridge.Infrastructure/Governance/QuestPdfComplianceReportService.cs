@@ -16,6 +16,12 @@ namespace FHIRBridge.Infrastructure.Governance;
 /// </summary>
 public sealed class QuestPdfComplianceReportService : IComplianceReportService
 {
+    private static readonly Color BrandTeal = Color.FromHex("#00A89D");
+    private static readonly Color BrandTealDark = Color.FromHex("#00786F");
+    private static readonly Color AlertRed = Color.FromHex("#C0392B");
+    private static readonly Color AlertAmber = Color.FromHex("#B8860B");
+    private static readonly Color RowStripe = Color.FromHex("#F4FBFA");
+
     static QuestPdfComplianceReportService()
     {
         QuestPDF.Settings.License = LicenseType.Community;
@@ -52,6 +58,7 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
         var authSuccess = authInPeriod.Count(x => x.Success);
         var authFailed = authTotal - authSuccess;
         var authDistinctUsers = authInPeriod.Select(x => x.UserEmail).Where(e => e is not null).Distinct().Count();
+        var authSuccessRate = authTotal == 0 ? (double?)null : authSuccess * 100.0 / authTotal;
 
         var dataAccessInPeriod = await _dbContext.DataAccessLogs.AsNoTracking()
             .Where(x => x.OccurredOnUtc >= fromUtc && x.OccurredOnUtc <= toUtc)
@@ -79,6 +86,7 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
         var errorsTotal = errorsInPeriod.Sum(x => x.Count);
 
         var generatedOnUtc = DateTime.UtcNow;
+        var reportId = $"HIPAA-{fromUtc:yyyyMMdd}-{toUtc:yyyyMMdd}-{generatedOnUtc:HHmmss}";
 
         var document = Document.Create(container =>
         {
@@ -88,72 +96,74 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
                 page.Margin(36);
                 page.DefaultTextStyle(x => x.FontSize(10));
 
-                page.Header().Column(col =>
-                {
-                    col.Item().Text("Segue Compliance Report").FontSize(18).Bold();
-                    col.Item().Text("HIPAA §164.312(b) Audit Controls & SOC 2 Evidence").FontSize(11);
-                    col.Item().PaddingTop(4).Text($"Period: {fromUtc:yyyy-MM-dd} to {toUtc:yyyy-MM-dd} (UTC)  |  Generated: {generatedOnUtc:yyyy-MM-dd HH:mm} UTC");
-                });
+                page.Header().Element(c => RenderHeader(
+                    c, "Segue Compliance Report", "HIPAA §164.312(b) Audit Controls & SOC 2 Evidence",
+                    fromUtc, toUtc, generatedOnUtc, reportId, note: null));
 
-                page.Content().PaddingTop(10).Column(col =>
+                page.Content().PaddingTop(12).Column(col =>
                 {
-                    col.Spacing(14);
+                    col.Spacing(16);
+
+                    col.Item().Element(c => RenderMetricsSummary(c, new (string, string, bool)[]
+                    {
+                        ("Audit Chain", chainResult.IsValid ? "Verified" : "BROKEN", !chainResult.IsValid),
+                        ("Audit Entries (period)", auditEntriesInPeriod.ToString(), false),
+                        ("Login Success Rate", authSuccessRate is { } rate ? $"{rate:F0}%" : "N/A", authSuccessRate is { } r2 && r2 < 90),
+                        ("Unresolved Security Events", securityUnresolved.ToString(), securityUnresolved > 0),
+                        ("Errors (period)", errorsTotal.ToString(), errorsTotal > 0),
+                    }));
 
                     col.Item().Element(c => SectionHeader(c, "Audit Trail Integrity"));
-                    col.Item().Text($"Hash-chain verification: {(chainResult.IsValid ? "VERIFIED" : "BROKEN")}").Bold();
                     col.Item().Text($"Total audit log entries (all-time): {chainResult.TotalEntries}");
-                    col.Item().Text($"Entries in reporting period: {auditEntriesInPeriod}");
                     if (!chainResult.IsValid)
                     {
-                        col.Item().Text($"First inconsistency at SequenceNumber {chainResult.FirstBrokenSequenceNumber}.").FontColor(Colors.Red.Medium);
+                        col.Item().Text($"First inconsistency at SequenceNumber {chainResult.FirstBrokenSequenceNumber}.")
+                            .FontColor(AlertRed).Bold();
                     }
                     if (auditModuleCounts.Count > 0)
                     {
-                        col.Item().Table(table =>
-                        {
-                            table.ColumnsDefinition(d => { d.RelativeColumn(3); d.RelativeColumn(1); });
-                            table.Cell().Background(Colors.Grey.Lighten2).Padding(3).Text("Module").Bold();
-                            table.Cell().Background(Colors.Grey.Lighten2).Padding(3).Text("Changes").Bold();
-                            foreach (var row in auditModuleCounts)
-                            {
-                                table.Cell().Padding(3).Text(row.Module);
-                                table.Cell().Padding(3).Text(row.Count.ToString());
-                            }
-                        });
+                        col.Item().Element(c => RenderTable(
+                            c,
+                            ["Module", "Configuration Changes"],
+                            auditModuleCounts.Select(row => new[] { row.Module, row.Count.ToString() }),
+                            [3, 1]));
                     }
 
                     col.Item().Element(c => SectionHeader(c, "Authentication"));
-                    col.Item().Text($"Total attempts: {authTotal}  |  Successful: {authSuccess}  |  Failed: {authFailed}  |  Distinct users: {authDistinctUsers}");
+                    col.Item().Element(c => RenderTable(
+                        c,
+                        ["Total Attempts", "Successful", "Failed", "Distinct Users"],
+                        [[authTotal.ToString(), authSuccess.ToString(), authFailed.ToString(), authDistinctUsers.ToString()]]));
 
                     col.Item().Element(c => SectionHeader(c, "Patient / Resource Data Access"));
                     col.Item().Text($"Total access events: {dataAccessTotal}");
-                    foreach (var row in dataAccessInPeriod)
+                    if (dataAccessInPeriod.Count > 0)
                     {
-                        col.Item().Text($"  {row.Action}: {row.Count}");
+                        col.Item().Element(c => RenderTable(
+                            c,
+                            ["Action", "Count"],
+                            dataAccessInPeriod.Select(row => new[] { row.Action, row.Count.ToString() }),
+                            [3, 1]));
                     }
 
                     col.Item().Element(c => SectionHeader(c, "Security Events"));
                     col.Item().Text($"Total: {securityTotal}  |  Unresolved: {securityUnresolved}");
-                    foreach (var row in securityBySeverity)
+                    if (securityBySeverity.Count > 0)
                     {
-                        col.Item().Text($"  {row.Severity}: {row.Count}");
+                        col.Item().Element(c => RenderSeverityTable(c, securityBySeverity.Select(row => (row.Severity, row.Count))));
                     }
 
                     col.Item().Element(c => SectionHeader(c, "Errors"));
                     col.Item().Text($"Total: {errorsTotal}");
-                    foreach (var row in errorsInPeriod)
+                    if (errorsInPeriod.Count > 0)
                     {
-                        col.Item().Text($"  {row.Severity}: {row.Count}");
+                        col.Item().Element(c => RenderSeverityTable(c, errorsInPeriod.Select(row => (row.Severity, row.Count))));
                     }
+
+                    col.Item().Element(c => RenderGlossary(c, HipaaGlossary));
                 });
 
-                page.Footer().AlignCenter().Text(x =>
-                {
-                    x.Span("Page ");
-                    x.CurrentPageNumber();
-                    x.Span(" of ");
-                    x.TotalPages();
-                });
+                page.Footer().Element(c => RenderFooter(c, reportId));
             });
         });
 
@@ -189,6 +199,9 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
             .Select(g => new { EndpointName = g.Key, Total = g.Count(), Healthy = g.Count(x => x.Status == "Healthy") })
             .OrderBy(x => x.EndpointName)
             .ToList();
+        var overallUptimePercent = endpointChecksInPeriod.Count == 0
+            ? (double?)null
+            : endpointChecksInPeriod.Count(x => x.Status == "Healthy") * 100.0 / endpointChecksInPeriod.Count;
 
         var securityEventsInPeriod = await _dbContext.SecurityEvents.AsNoTracking()
             .Where(x => x.OccurredOnUtc >= fromUtc && x.OccurredOnUtc <= toUtc)
@@ -199,6 +212,7 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
         var securityEventsTotal = securityEventsInPeriod.Sum(x => x.Count);
 
         var generatedOnUtc = DateTime.UtcNow;
+        var reportId = $"SOC2-{fromUtc:yyyyMMdd}-{toUtc:yyyyMMdd}-{generatedOnUtc:HHmmss}";
 
         var document = Document.Create(container =>
         {
@@ -208,38 +222,52 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
                 page.Margin(36);
                 page.DefaultTextStyle(x => x.FontSize(10));
 
-                page.Header().Column(col =>
-                {
-                    col.Item().Text("Segue SOC 2 Evidence Export").FontSize(18).Bold();
-                    col.Item().Text("Trust Services Criteria: Security, Availability, Processing Integrity").FontSize(11);
-                    col.Item().PaddingTop(4).Text($"Period: {fromUtc:yyyy-MM-dd} to {toUtc:yyyy-MM-dd} (UTC)  |  Generated: {generatedOnUtc:yyyy-MM-dd HH:mm} UTC");
-                    col.Item().PaddingTop(2).Text("Manual-trigger export — no automated monthly schedule exists yet.").FontSize(8).Italic();
-                });
+                page.Header().Element(c => RenderHeader(
+                    c, "Segue SOC 2 Evidence Export", "Trust Services Criteria: Security, Availability, Processing Integrity",
+                    fromUtc, toUtc, generatedOnUtc, reportId,
+                    note: "Manual-trigger export — no automated monthly schedule exists yet."));
 
-                page.Content().PaddingTop(10).Column(col =>
+                page.Content().PaddingTop(12).Column(col =>
                 {
-                    col.Spacing(14);
+                    col.Spacing(16);
+
+                    col.Item().Element(c => RenderMetricsSummary(c, new (string, string, bool)[]
+                    {
+                        ("Audit Chain", chainResult.IsValid ? "Verified" : "BROKEN", !chainResult.IsValid),
+                        ("Config Changes (period)", changeManagementTotal.ToString(), false),
+                        ("Authorization Denials", authorizationDenialsTotal.ToString(), authorizationDenialsTotal > 0),
+                        ("Overall Uptime", overallUptimePercent is { } up ? $"{up:F1}%" : "N/A", overallUptimePercent is { } u2 && u2 < 99),
+                        ("Security Incidents", securityEventsTotal.ToString(), securityEventsTotal > 0),
+                    }));
 
                     col.Item().Element(c => SectionHeader(c, "Processing Integrity — Audit Trail"));
-                    col.Item().Text($"Hash-chain verification: {(chainResult.IsValid ? "VERIFIED" : "BROKEN")}").Bold();
                     col.Item().Text($"Total audit log entries (all-time): {chainResult.TotalEntries}");
                     if (!chainResult.IsValid)
                     {
-                        col.Item().Text($"First inconsistency at SequenceNumber {chainResult.FirstBrokenSequenceNumber}.").FontColor(Colors.Red.Medium);
+                        col.Item().Text($"First inconsistency at SequenceNumber {chainResult.FirstBrokenSequenceNumber}.")
+                            .FontColor(AlertRed).Bold();
                     }
 
                     col.Item().Element(c => SectionHeader(c, "Change Management"));
                     col.Item().Text($"Total configuration changes in period: {changeManagementTotal}");
-                    foreach (var row in changeManagementCounts)
+                    if (changeManagementCounts.Count > 0)
                     {
-                        col.Item().Text($"  {row.Action}: {row.Count}");
+                        col.Item().Element(c => RenderTable(
+                            c,
+                            ["Action", "Count"],
+                            changeManagementCounts.Select(row => new[] { row.Action, row.Count.ToString() }),
+                            [3, 1]));
                     }
 
                     col.Item().Element(c => SectionHeader(c, "Access Control — Authorization Denials"));
                     col.Item().Text($"Total denials in period: {authorizationDenialsTotal}");
-                    foreach (var row in authorizationDenials)
+                    if (authorizationDenials.Count > 0)
                     {
-                        col.Item().Text($"  {row.PermissionCode}: {row.Count}");
+                        col.Item().Element(c => RenderTable(
+                            c,
+                            ["Permission Code", "Denials"],
+                            authorizationDenials.Select(row => new[] { row.PermissionCode, row.Count.ToString() }),
+                            [3, 1]));
                     }
 
                     col.Item().Element(c => SectionHeader(c, "Availability — Endpoint Health Checks"));
@@ -247,36 +275,192 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
                     {
                         col.Item().Text("No endpoint health checks recorded in this period.");
                     }
-                    foreach (var row in availabilityByEndpoint)
+                    else
                     {
-                        var uptimePercent = row.Total == 0 ? 0 : row.Healthy * 100.0 / row.Total;
-                        col.Item().Text($"  {row.EndpointName}: {uptimePercent:F1}% uptime ({row.Healthy}/{row.Total} checks)");
+                        col.Item().Element(c => RenderTable(
+                            c,
+                            ["Endpoint", "Uptime", "Checks"],
+                            availabilityByEndpoint.Select(row =>
+                            {
+                                var uptimePercent = row.Total == 0 ? 0 : row.Healthy * 100.0 / row.Total;
+                                return new[] { row.EndpointName, $"{uptimePercent:F1}%", $"{row.Healthy}/{row.Total}" };
+                            }),
+                            [2, 1, 1]));
                     }
 
                     col.Item().Element(c => SectionHeader(c, "Security Incidents"));
                     col.Item().Text($"Total: {securityEventsTotal}");
-                    foreach (var row in securityEventsInPeriod)
+                    if (securityEventsInPeriod.Count > 0)
                     {
-                        col.Item().Text($"  {row.Severity}: {row.Count}");
+                        col.Item().Element(c => RenderSeverityTable(c, securityEventsInPeriod.Select(row => (row.Severity, row.Count))));
                     }
+
+                    col.Item().Element(c => RenderGlossary(c, Soc2Glossary));
                 });
 
-                page.Footer().AlignCenter().Text(x =>
-                {
-                    x.Span("Page ");
-                    x.CurrentPageNumber();
-                    x.Span(" of ");
-                    x.TotalPages();
-                });
+                page.Footer().Element(c => RenderFooter(c, reportId));
             });
         });
 
         return document.GeneratePdf();
     }
 
-    private static void SectionHeader(QuestPDF.Infrastructure.IContainer container, string title)
+    // ── Shared rendering helpers ──────────────────────────────────────────────
+
+    private static void RenderHeader(
+        IContainer container, string title, string subtitle,
+        DateTime fromUtc, DateTime toUtc, DateTime generatedOnUtc, string reportId, string? note)
     {
-        container.PaddingBottom(2).BorderBottom(1).BorderColor(Colors.Grey.Lighten1)
-            .Text(title).FontSize(13).Bold();
+        container.Background(BrandTealDark).Padding(16).Column(col =>
+        {
+            col.Item().Text(title).FontSize(18).Bold().FontColor(Colors.White);
+            col.Item().PaddingTop(2).Text(subtitle).FontSize(11).FontColor(Colors.White);
+            col.Item().PaddingTop(6).Text(
+                $"Period: {fromUtc:yyyy-MM-dd} to {toUtc:yyyy-MM-dd} (UTC)   |   Generated: {generatedOnUtc:yyyy-MM-dd HH:mm} UTC   |   Report ID: {reportId}")
+                .FontSize(8).FontColor(Colors.White);
+            if (note is not null)
+            {
+                col.Item().PaddingTop(2).Text(note).FontSize(8).Italic().FontColor(Colors.White);
+            }
+        });
     }
+
+    private static void RenderFooter(IContainer container, string reportId)
+    {
+        container.PaddingTop(6).BorderTop(1).BorderColor(Colors.Grey.Lighten2).Row(row =>
+        {
+            row.RelativeItem().Text("CONFIDENTIAL — HIPAA/SOC 2 Compliance Evidence. Contains no PHI.")
+                .FontSize(7).FontColor(Colors.Grey.Darken1);
+            row.RelativeItem().AlignRight().Text(x =>
+            {
+                x.DefaultTextStyle(t => t.FontSize(7).FontColor(Colors.Grey.Darken1));
+                x.Span($"{reportId}   |   Page ");
+                x.CurrentPageNumber();
+                x.Span(" of ");
+                x.TotalPages();
+            });
+        });
+    }
+
+    private static void SectionHeader(IContainer container, string title)
+    {
+        container.PaddingBottom(2).BorderBottom(2).BorderColor(BrandTeal)
+            .Text(title).FontSize(13).Bold().FontColor(BrandTealDark);
+    }
+
+    /// <summary>At-a-glance scorecard: each metric is its own bordered tile, colored red when flagged as an
+    /// alert condition (broken chain, unresolved incidents, elevated error/failure rates) so the single most
+    /// important signal in the report — is anything wrong — doesn't require reading every section to find.</summary>
+    private static void RenderMetricsSummary(IContainer container, IReadOnlyList<(string Label, string Value, bool Alert)> metrics)
+    {
+        container.Row(row =>
+        {
+            foreach (var metric in metrics)
+            {
+                row.RelativeItem().Padding(2).Border(1)
+                    .BorderColor(metric.Alert ? AlertRed : Colors.Grey.Lighten2)
+                    .Background(metric.Alert ? Color.FromHex("#FDECEA") : RowStripe)
+                    .Padding(8).Column(col =>
+                    {
+                        col.Item().Text(metric.Label).FontSize(7).FontColor(Colors.Grey.Darken2);
+                        col.Item().PaddingTop(2).Text(metric.Value).FontSize(14).Bold()
+                            .FontColor(metric.Alert ? AlertRed : BrandTealDark);
+                    });
+            }
+        });
+    }
+
+    /// <summary>Generic shaded-header, zebra-striped table — the same visual treatment for every section
+    /// instead of some sections being tables and others plain indented text lines.</summary>
+    private static void RenderTable(IContainer container, string[] headers, IEnumerable<string[]> rows, int[]? relativeWidths = null)
+    {
+        var rowList = rows.ToList();
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(d =>
+            {
+                for (var i = 0; i < headers.Length; i++)
+                {
+                    d.RelativeColumn(relativeWidths is not null && i < relativeWidths.Length ? relativeWidths[i] : 1);
+                }
+            });
+
+            foreach (var header in headers)
+            {
+                table.Cell().Background(BrandTeal).Padding(4).Text(header).Bold().FontColor(Colors.White).FontSize(9);
+            }
+
+            for (var i = 0; i < rowList.Count; i++)
+            {
+                var background = i % 2 == 0 ? Colors.White : RowStripe;
+                foreach (var cellText in rowList[i])
+                {
+                    table.Cell().Background(background).Padding(4).Text(cellText).FontSize(9);
+                }
+            }
+        });
+    }
+
+    /// <summary>Same table treatment as <see cref="RenderTable"/>, but the Severity column's text is
+    /// colored by severity level so Critical/High rows are visually distinct from Low/Medium at a glance.</summary>
+    private static void RenderSeverityTable(IContainer container, IEnumerable<(string Severity, int Count)> rows)
+    {
+        var rowList = rows.ToList();
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(d => { d.RelativeColumn(3); d.RelativeColumn(1); });
+
+            table.Cell().Background(BrandTeal).Padding(4).Text("Severity").Bold().FontColor(Colors.White).FontSize(9);
+            table.Cell().Background(BrandTeal).Padding(4).Text("Count").Bold().FontColor(Colors.White).FontSize(9);
+
+            for (var i = 0; i < rowList.Count; i++)
+            {
+                var (severity, count) = rowList[i];
+                var background = i % 2 == 0 ? Colors.White : RowStripe;
+                var severityColor = severity switch
+                {
+                    "Critical" => AlertRed,
+                    "High" => AlertRed,
+                    "Medium" or "Warning" => AlertAmber,
+                    _ => Colors.Black,
+                };
+
+                table.Cell().Background(background).Padding(4).Text(severity).FontSize(9).FontColor(severityColor).Bold();
+                table.Cell().Background(background).Padding(4).Text(count.ToString()).FontSize(9);
+            }
+        });
+    }
+
+    private static void RenderGlossary(IContainer container, (string Term, string Definition)[] items)
+    {
+        container.Background(RowStripe).Padding(10).Column(col =>
+        {
+            col.Item().Text("Glossary").FontSize(9).Bold().FontColor(BrandTealDark);
+            foreach (var (term, definition) in items)
+            {
+                col.Item().PaddingTop(3).Text(x =>
+                {
+                    x.DefaultTextStyle(t => t.FontSize(8).FontColor(Colors.Grey.Darken2));
+                    x.Span($"{term}: ").Bold();
+                    x.Span(definition);
+                });
+            }
+        });
+    }
+
+    private static readonly (string Term, string Definition)[] HipaaGlossary =
+    [
+        ("Hash-chain verification", "Each audit log entry cryptographically references the previous one; \"Verified\" means no entry has been altered or deleted outside the application since the chain began."),
+        ("Allowed / Denied", "The governance policy's access decision for a given resource access attempt, recorded regardless of outcome (HIPAA §164.312(b))."),
+        ("Revealed", "A specific encrypted field value was decrypted and displayed to an administrator via the Data Lineage screen — a separate, permission-gated action from ordinary resource access, individually audited."),
+        ("Distinct users", "The count of unique user accounts that attempted authentication in this period, not the count of attempts."),
+    ];
+
+    private static readonly (string Term, string Definition)[] Soc2Glossary =
+    [
+        ("Hash-chain verification", "Each audit log entry cryptographically references the previous one; \"Verified\" means no entry has been altered or deleted outside the application since the chain began."),
+        ("Change management", "Configuration entity changes (users, roles, permissions, connections, mappings) captured automatically on every save — not manually logged."),
+        ("Authorization denials", "Requests rejected by a role-based permission check (HTTP 403), grouped by the specific permission code that was missing."),
+        ("Uptime", "Percentage of scheduled connectivity checks against a source/destination endpoint that reported \"Healthy\" in this period."),
+    ];
 }

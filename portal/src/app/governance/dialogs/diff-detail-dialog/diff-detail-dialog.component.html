@@ -1,0 +1,29 @@
+<div class="diff-dialog">
+  <div class="diff-dialog-header">
+    <h3>Change detail — {{ data.module }} / {{ data.action }}</h3>
+    <button class="btn-close" type="button" (click)="dialogRef.close()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="diff-dialog-body">
+    @if (data.diffs.length === 0) {
+      <p class="empty-state">No field-level changes recorded for this entry.</p>
+    } @else {
+      <table class="diff-table">
+        <thead>
+          <tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>
+        </thead>
+        <tbody>
+          @for (diff of data.diffs; track diff.field) {
+            <tr [class]="'diff-' + diff.changeType">
+              <td>{{ diff.field }}</td>
+              <td>{{ diff.oldValue }}</td>
+              <td>{{ diff.newValue }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

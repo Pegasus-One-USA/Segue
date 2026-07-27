@@ -27,9 +27,10 @@ public sealed record ExceptionContext(
     string? UserFriendlyMessageOverride = null);
 
 /// <summary>The safe, user-facing result of capturing an exception. Contains no stack trace, technical
-/// message, or PHI/PII — only the reference id, category, and a friendly message.</summary>
+/// message, or PHI/PII — only the reference id, category, a friendly message, and who should act on it.</summary>
 public sealed record ErrorReport(
     string ErrorReferenceId,
     ErrorCategory Category,
     string UserFriendlyMessage,
-    string? CorrelationId);
+    string? CorrelationId,
+    DiagnosisAction DiagnosisAction = DiagnosisAction.Unknown);

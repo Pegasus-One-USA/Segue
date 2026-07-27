@@ -2,13 +2,14 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { GovernanceApiService } from '../../services/governance-api.service';
-import { SecurityEventEntry } from '../../models/governance.model';
+import { PagedResult, SecurityEventEntry } from '../../models/governance.model';
 
 @Component({
   selector: 'app-security-events',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule],
+  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule],
   templateUrl: './security-events.component.html',
   styleUrl: './security-events.component.scss',
 })
@@ -18,7 +19,9 @@ export class SecurityEventsComponent implements OnInit {
 
   readonly loading = signal(false);
   readonly correlationId = signal('');
-  readonly entries = signal<SecurityEventEntry[]>([]);
+  readonly result = signal<PagedResult<SecurityEventEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(25);
 
   readonly displayedCols = ['occurredOnUtc', 'severity', 'eventType', 'userEmail', 'ipAddress', 'resolved', 'correlationId'];
 
@@ -32,10 +35,16 @@ export class SecurityEventsComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.api.securityEvents(this.correlationId() || undefined).subscribe({
-      next: entries => { this.entries.set(entries); this.loading.set(false); },
+    this.api.securityEvents(this.correlationId() || undefined, this.pageIndex() + 1, this.pageSize()).subscribe({
+      next: result => { this.result.set(result); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+  }
+
+  onPageChange(e: PageEvent): void {
+    this.pageIndex.set(e.pageIndex);
+    this.pageSize.set(e.pageSize);
+    this.load();
   }
 
   onCorrelationIdChange(value: string): void {
@@ -44,6 +53,7 @@ export class SecurityEventsComponent implements OnInit {
 
   reset(): void {
     this.correlationId.set('');
+    this.pageIndex.set(0);
     this.load();
   }
 

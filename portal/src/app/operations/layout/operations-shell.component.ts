@@ -1,34 +1,44 @@
 import { Component, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../auth/store/auth.store';
 
 interface OperationsTab {
   label: string;
   route: string;
+  icon: string;
   permissions?: string[];
+  /** Hidden from the tab menu. System Health/Queue Monitor/API Analytics mislead under multi-replica/
+   *  container deployment (per-container-only data, resets on restart/scale) — see
+   *  docs/OPERATIONS_TABS_ANALYSIS.md §2. Pipeline Executions/Scheduler History/Retry History are hidden
+   *  per user direction: Pipeline Executions has no authoring UI anywhere in the portal (nothing creates
+   *  the ResourcePipelineRoute rows it displays), and Scheduler History/Retry History are narrow, mostly-
+   *  empty diagnostics with no failure state of their own. Endpoint Health is hidden per user direction
+   *  too. Routes and components are kept intact; only the menu entry is suppressed. */
+  hidden?: boolean;
 }
 
-// System Health leads as the at-a-glance overview tab, per user direction consolidating the
-// former 12-item sidebar section into this single tabbed menu.
+// Errors leads as the at-a-glance overview tab now that System Health and Pipeline Executions are
+// hidden (see the `hidden` doc comment above).
 const OPERATIONS_TABS: OperationsTab[] = [
-  { label: 'System Health', route: 'system-health', permissions: ['governance.read'] },
-  { label: 'Pipeline Executions', route: 'pipeline-executions', permissions: ['governance.read'] },
-  { label: 'Queue Monitor', route: 'queue-monitor', permissions: ['governance.read'] },
-  { label: 'API Analytics', route: 'api-analytics', permissions: ['governance.read'] },
-  { label: 'Scheduler History', route: 'scheduler-history', permissions: ['governance.read'] },
-  { label: 'Retry History', route: 'retry-history', permissions: ['governance.read'] },
-  { label: 'Errors', route: 'errors', permissions: ['governance.read'] },
-  { label: 'API Requests', route: 'api-requests', permissions: ['governance.read'] },
-  { label: 'Exports', route: 'exports', permissions: ['governance.read'] },
-  { label: 'Notifications', route: 'notifications', permissions: ['governance.read'] },
-  { label: 'Validation Failures', route: 'validation-failures', permissions: ['governance.read'] },
-  { label: 'Endpoint Health', route: 'endpoint-health', permissions: ['governance.read'] },
+  { label: 'System Health', route: 'system-health', icon: 'monitor_heart', permissions: ['governance.read'], hidden: true },
+  { label: 'Pipeline Executions', route: 'pipeline-executions', icon: 'bolt', permissions: ['governance.read'], hidden: true },
+  { label: 'Queue Monitor', route: 'queue-monitor', icon: 'inbox', permissions: ['governance.read'], hidden: true },
+  { label: 'API Analytics', route: 'api-analytics', icon: 'analytics', permissions: ['governance.read'], hidden: true },
+  { label: 'Scheduler History', route: 'scheduler-history', icon: 'schedule', permissions: ['governance.read'], hidden: true },
+  { label: 'Retry History', route: 'retry-history', icon: 'replay', permissions: ['governance.read'], hidden: true },
+  { label: 'Errors', route: 'errors', icon: 'error_outline', permissions: ['governance.read'] },
+  { label: 'API Requests', route: 'api-requests', icon: 'swap_horiz', permissions: ['governance.read'] },
+  { label: 'Exports', route: 'exports', icon: 'file_download', permissions: ['governance.read'] },
+  { label: 'Notifications', route: 'notifications', icon: 'notifications', permissions: ['governance.read'] },
+  { label: 'Validation Failures', route: 'validation-failures', icon: 'fact_check', permissions: ['governance.read'] },
+  { label: 'Endpoint Health', route: 'endpoint-health', icon: 'favorite', permissions: ['governance.read'], hidden: true },
 ];
 
 @Component({
   selector: 'app-operations-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, MatIconModule],
   templateUrl: './operations-shell.component.html',
   styleUrl: './operations-shell.component.scss',
 })
@@ -38,6 +48,7 @@ export class OperationsShellComponent {
   // Same visibility rule as the sidebar and the Settings shell.
   readonly tabs = computed<OperationsTab[]>(() =>
     OPERATIONS_TABS.filter(tab => {
+      if (tab.hidden) return false;
       if (!tab.permissions?.length) return true;
       if (this.store.isAdmin()) return true;
       return tab.permissions.some(p => this.store.hasPermission(p));

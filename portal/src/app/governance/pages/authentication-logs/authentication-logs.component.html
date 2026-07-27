@@ -4,6 +4,18 @@
     <p class="page-sub">Login, logout, MFA, and lockout events — required HIPAA §164.312(b) evidence.</p>
   </div>
 
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one sign-in related event</strong> — a successful login, a failed attempt, a logout, an MFA code check, a single sign-on attempt, or a lockout. This includes both portal user logins and the backend token exchanges FHIRBridge makes with EHR systems on your behalf.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Failed attempts</h4>
+        <p>A failed login is normal, everyday activity (a mistyped password) — not automatically something to investigate. Repeated failures against the same account in a short time is the pattern worth watching; that's exactly what triggers an account lockout, which shows up separately in Security Events.</p>
+      </section>
+    </div>
+  </details>
+
   <div class="filter-bar">
     <input
       type="search"
@@ -19,7 +31,7 @@
 
   <div class="table-card">
     <div class="table-wrapper">
-      <table mat-table [dataSource]="entries()" class="data-table">
+      <table mat-table [dataSource]="result().items" class="data-table">
 
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
@@ -65,11 +77,22 @@
       </table>
     </div>
 
-    @if (entries().length === 0 && !loading()) {
+    @if (result().items.length === 0 && !loading()) {
       <div class="empty-state">No authentication entries found.</div>
     }
     @if (loading()) {
       <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
     }
   </div>
 </div>

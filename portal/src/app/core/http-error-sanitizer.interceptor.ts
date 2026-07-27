@@ -15,7 +15,25 @@ function extractBackendMessage(body: unknown): string | undefined {
   }
   const b = body as Record<string, unknown>;
   const candidate = b['error'] ?? b['message'] ?? b['title'] ?? b['error_description'];
-  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : undefined;
+  if (typeof candidate !== 'string' || candidate.trim().length === 0) {
+    return undefined;
+  }
+  return isDisplaySafe(candidate) ? candidate : undefined;
+}
+
+/**
+ * Defense-in-depth guard: a backend message is shown verbatim only if it looks like a short, human-written
+ * sentence. Markup (an HTML/XML error page), multi-line/stack output, or an oversized payload is rejected so a
+ * leak from any endpoint that bypasses the global handler still can't render raw HTML/technical text in the UI —
+ * the caller falls back to a generic status message instead. Mirrors the backend's ClientSafeMessage guard.
+ */
+function isDisplaySafe(message: string): boolean {
+  if (message.length > 300) return false;
+  if (/[<>]/.test(message)) return false;
+  if (/[\r\n]/.test(message)) return false;
+  if (/exception/i.test(message)) return false;
+  if (message.includes('   at ')) return false;
+  return true;
 }
 
 /**
