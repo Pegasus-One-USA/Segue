@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -39,6 +40,8 @@ public sealed class DestinationExecutionHistoryGateTests
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<ISecretWriter>(),
             Mock.Of<IParentReferenceResolver>(),
+            new CreateMappingProfileRequestValidator(),
+            new CreateDestinationConfigurationRequestValidator(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 

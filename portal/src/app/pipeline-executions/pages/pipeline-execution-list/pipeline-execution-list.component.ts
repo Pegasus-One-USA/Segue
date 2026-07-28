@@ -21,7 +21,7 @@ export class PipelineExecutionListComponent implements OnInit {
   readonly entries = signal<PipelineExecutionEntry[]>([]);
   readonly totalCount = signal(0);
   readonly page = signal(1);
-  readonly perPage = signal(25);
+  readonly perPage = signal(10);
 
   readonly search = signal('');
   readonly status = signal('');

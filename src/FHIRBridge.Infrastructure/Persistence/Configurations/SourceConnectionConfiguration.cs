@@ -84,6 +84,10 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
                 .HasMaxLength(200)
                 .HasColumnName("KeyId");
 
+            authentication.Property(x => x.JwksUrl)
+                .HasMaxLength(500)
+                .HasColumnName("JwksUrl");
+
             // No HasMaxLength: a Backend System source's scope string carries one "system/{ResourceType}.rs" entry
             // per selected resource type, and that selection can be seeded from live SMART discovery against the
             // real source's CapabilityStatement — which for Epic routinely advertises 50-100+ resource types, not

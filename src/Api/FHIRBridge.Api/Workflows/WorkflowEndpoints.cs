@@ -26,6 +26,20 @@ public static class WorkflowEndpoints
     // Node executors read config with JsonSerializerDefaults.Web (camelCase); serialize embedded fields the same way.
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
 
+    // Standardizes every /workflows/build validation rejection to the same { error, message, fieldErrors } shape
+    // Program.cs's MapException already produces for RequestValidationException, instead of the bare strings this
+    // endpoint used to return — so the Angular error handler has one shape to read regardless of which check failed.
+    private static IResult ValidationBadRequest(string message) =>
+        Results.BadRequest(new { error = message, message, fieldErrors = (IReadOnlyDictionary<string, string[]>?)null });
+
+    private static IResult ValidationBadRequest(string field, string message) =>
+        Results.BadRequest(new
+        {
+            error = message,
+            message,
+            fieldErrors = (IReadOnlyDictionary<string, string[]>?)new Dictionary<string, string[]> { [field] = [message] },
+        });
+
     public static IEndpointRouteBuilder MapWorkflowEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints
@@ -62,7 +76,7 @@ public static class WorkflowEndpoints
             var parentReferenceError = ValidateMappingParentReferences(request.Mappings ?? [], parentReferenceResolver);
             if (parentReferenceError is not null)
             {
-                return Results.BadRequest(parentReferenceError);
+                return ValidationBadRequest(parentReferenceError);
             }
 
             // Destinations, Sources, Mappings, and the workflow-definition save below used to each commit
@@ -87,7 +101,7 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
                 }
 
                 var destination = spec.ExistingId is { } existingDestinationId
@@ -111,7 +125,7 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Source spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Source spec references unknown node '{spec.NodeId}'.");
                 }
 
                 var source = spec.ExistingId is { } existingSourceId
@@ -138,18 +152,18 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
                 }
 
                 if (!TryResolveEntityId(spec.SourceNodeId, sourceIds, nodes, "sourceConnectionId", out var sourceConnectionId))
                 {
-                    return Results.BadRequest(
+                    return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references source node '{spec.SourceNodeId}' with no created or referenced source connection.");
                 }
 
                 if (!TryResolveEntityId(spec.DestinationNodeId, destinationIds, nodes, "destinationId", out var destinationId))
                 {
-                    return Results.BadRequest(
+                    return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
                 }
 
@@ -164,7 +178,7 @@ public static class WorkflowEndpoints
                     spec, destinationId, destinationSchemaService, cancellationToken);
                 if (columnError is not null)
                 {
-                    return Results.BadRequest(columnError);
+                    return ValidationBadRequest(columnError);
                 }
 
                 var mappingRequest = new CreateMappingProfileRequest(
@@ -935,6 +949,8 @@ public static class WorkflowEndpoints
             string? search,
             int? page,
             int? pageSize,
+            string? sortColumn,
+            string? sortDirection,
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
@@ -1000,8 +1016,7 @@ public static class WorkflowEndpoints
             var effectivePage = page is > 0 ? page.Value : 1;
             var effectivePageSize = pageSize is > 0 ? pageSize.Value : 25;
             var totalCount = items.Count;
-            var paged = items
-                .OrderByDescending(x => x.StartedAt)
+            var paged = SortRuns(items, sortColumn, sortDirection)
                 .Skip((effectivePage - 1) * effectivePageSize)
                 .Take(effectivePageSize)
                 .ToList();
@@ -1421,6 +1436,29 @@ public static class WorkflowEndpoints
             "status"   => Order(summary => summary.Status),
             "lastRun"  => Order(summary => summary.LastRunAt?.UtcTicks ?? -1),
             _          => Order(summary => summary.Name.ToLowerInvariant()),
+        };
+    }
+
+    // Defaults to newest-first by start time — matches this endpoint's pre-sorting behavior before
+    // sortColumn/sortDirection existed, so an unsorted request (the initial page load) looks unchanged.
+    private static IEnumerable<WorkflowRunHistoryDto> SortRuns(
+        IEnumerable<WorkflowRunHistoryDto> runs, string? sortColumn, string? sortDirection)
+    {
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedEnumerable<WorkflowRunHistoryDto> Order<TKey>(Func<WorkflowRunHistoryDto, TKey> keySelector) =>
+            descending
+                ? runs.OrderByDescending(keySelector)
+                : runs.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "pipeline"    => Order(run => run.PipelineName.ToLowerInvariant()),
+            "source"      => Order(run => (run.SourceName ?? run.SourceSystemType ?? string.Empty).ToLowerInvariant()),
+            "status"      => Order(run => run.Status),
+            "duration"    => Order(run => run.DurationMs ?? -1),
+            "triggeredBy" => Order(run => (run.TriggeredBy ?? run.TriggerType ?? string.Empty).ToLowerInvariant()),
+            _             => Order(run => run.StartedAt),
         };
     }
 

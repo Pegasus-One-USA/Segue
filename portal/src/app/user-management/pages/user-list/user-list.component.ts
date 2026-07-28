@@ -8,7 +8,6 @@ import { FormsModule } from '@angular/forms';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 
 import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -34,6 +33,7 @@ import { DisableWithoutPermissionDirective } from '../../../auth/directives/disa
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 import { ToastService } from '../../../services/toast.service';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
   'SuperAdmin': { label: 'Super Admin', color: '#5B21B6', bg: '#EDE9FE' },
@@ -49,7 +49,7 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: s
     CommonModule,
     FormsModule,
     MatTableModule,
-    MatPaginatorModule,
+    PaginationBarComponent,
     MatSortModule,
     MatButtonModule,
     MatIconModule,
@@ -181,7 +181,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.loadUsers();
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.page.set(e.pageIndex + 1);
     this.perPage.set(e.pageSize);
     this.loadUsers();

@@ -36,12 +36,12 @@
 
     <div class="filters-row">
       @for (def of filterDefs; track def.category) {
-        <div class="filter-dropdown" (click)="$event.stopPropagation()">
+        <div class="filter-dropdown">
           <button
             type="button"
             class="filter-dropdown-btn"
             [class.filter-dropdown-btn--active]="selectedCountFor(def.category) > 0"
-            (click)="toggleFilterMenu(def.category, $event)"
+            (click)="toggleFilterMenu(def.category)"
           >
             {{ def.label }}
             @if (selectedCountFor(def.category) > 0) {
@@ -62,14 +62,14 @@
                     <input
                       type="checkbox"
                       [checked]="isFilterSelected(def.category, value)"
-                      (change)="toggleFilterValue(def.category, value, $event)"
+                      (change)="toggleFilterValue(def.category, value)"
                     />
                     <span>{{ displayLabelFor(def.category, value) }}</span>
                   </label>
                 }
               }
               @if (selectedCountFor(def.category) > 0) {
-                <button type="button" class="filter-clear-btn" (click)="clearFilter(def.category, $event)">Clear</button>
+                <button type="button" class="filter-clear-btn" (click)="clearFilter(def.category)">Clear</button>
               }
             </div>
           }
@@ -80,16 +80,6 @@
 
   <!-- Table -->
   <div class="table-card">
-    <div class="table-meta">
-      <span class="entries-info">
-        @if (totalCount() > 0) {
-          {{ totalCount() }} {{ totalCount() === 1 ? 'workflow' : 'workflows' }}
-        } @else {
-          No workflows
-        }
-      </span>
-    </div>
-
     <div class="table-wrapper">
       <table class="data-table">
         <thead>
@@ -136,9 +126,6 @@
               <td class="col-index">{{ rangeStart() + i }}</td>
               <td>
                 <div class="cell-name">
-                  <div class="pipe-avatar" [class.launch]="w.action === 'Launch'">
-                    <span>{{ w.action === 'Launch' ? '⚡' : '▶' }}</span>
-                  </div>
                   <div class="name-block">
                     <span class="cell-primary">{{ w.name }}</span>
                     <span class="cell-meta">{{ w.action === 'Launch' ? 'Interactive launch' : 'Backend / on-demand' }}</span>
@@ -173,21 +160,23 @@
               <td class="col-actions">
                 <div class="row-actions">
                   <div class="split-btn" (click)="$event.stopPropagation()">
-                    <button
-                      class="btn-primary"
-                      type="button"
-                      [class.is-launch]="w.action === 'Launch'"
-                      [class.has-caret]="w.action === 'Run'"
-                      [disabled]="busyId() === w.workflowId"
-                      (click)="onAction(w)"
-                    >
-                      @if (busyId() === w.workflowId) {
-                        <span class="spinner-sm"></span>
-                      } @else {
-                        <span class="btn-ico">{{ w.action === 'Launch' ? '🔗' : '▶' }}</span>
-                      }
-                      {{ w.action === 'Launch' ? 'Get Launch URL' : 'Run' }}
-                    </button>
+                    <!-- "Get Launch URL" hidden per request — only the Run button (backend workflows) still renders. -->
+                    @if (w.action === 'Run') {
+                      <button
+                        class="btn-primary"
+                        type="button"
+                        [class.has-caret]="true"
+                        [disabled]="busyId() === w.workflowId"
+                        (click)="onAction(w)"
+                      >
+                        @if (busyId() === w.workflowId) {
+                          <span class="spinner-sm"></span>
+                        } @else {
+                          <mat-icon class="btn-ico">play_arrow</mat-icon>
+                        }
+                        Run
+                      </button>
+                    }
 
                     @if (w.action === 'Run') {
                       <button
@@ -196,7 +185,7 @@
                         title="Run options"
                         [disabled]="busyId() === w.workflowId"
                         (click)="toggleRunMenu(w, $event)"
-                      >&#9662;</button>
+                      ><mat-icon>arrow_drop_down</mat-icon></button>
 
                       @if (runMenuOpenId() === w.workflowId) {
                         <div class="run-menu">
@@ -215,7 +204,7 @@
 
                   <span class="action-divider"></span>
 
-                  <button class="btn-icon" type="button" title="Edit in Pipeline Builder" (click)="onEdit(w)">&#9998;</button>
+                  <button class="btn-icon" type="button" title="Edit in Workflow Builder" (click)="onEdit(w)"><mat-icon>edit</mat-icon></button>
 
                   <button
                     class="btn-icon"
@@ -223,7 +212,7 @@
                     [disabled]="rowBusyId() === w.workflowId"
                     [title]="w.status === 'Enabled' ? 'Disable' : 'Enable'"
                     (click)="onToggleEnabled(w)"
-                  >{{ w.status === 'Enabled' ? '⏸' : '▶' }}</button>
+                  ><mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon></button>
 
                   <button
                     class="btn-icon"
@@ -234,7 +223,15 @@
                       ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously. Click to revoke.'
                       : 'Not publicly launchable. Click to let a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
                     (click)="onTogglePublicLaunch(w)"
-                  >{{ w.isPubliclyLaunchable ? '🌐' : '🔒' }}</button>
+                  ><mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon></button>
+
+                  <button
+                    class="btn-icon"
+                    type="button"
+                    [disabled]="rowBusyId() === w.workflowId"
+                    [title]="'Copy workflow ID - ' + w.workflowId"
+                    (click)="copyWorkflowId(w)"
+                  ><mat-icon>content_copy</mat-icon></button>
 
                   <button
                     class="btn-icon btn-icon--danger"
@@ -242,7 +239,7 @@
                     [disabled]="rowBusyId() === w.workflowId"
                     title="Delete workflow"
                     (click)="askDelete(w)"
-                  >&#128465;</button>
+                  ><mat-icon>delete</mat-icon></button>
                 </div>
               </td>
             </tr>
@@ -253,10 +250,7 @@
 
     <!-- States -->
     @if (loading()) {
-      <div class="state-block">
-        <span class="spinner"></span>
-        <p>Loading workflows…</p>
-      </div>
+      <!-- The global loader (top bar / spinner / list-scan) already shows this page is busy — no local spinner here. -->
     } @else if (totalCount() === 0) {
       <div class="state-block">
         <div class="empty-icon">&#9889;</div>
@@ -330,7 +324,7 @@
           <code>{{ m.url }}</code>
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" type="button" (click)="copy(m.url)">Copy URL</button>
+          <button class="btn-secondary" type="button" (click)="copy(m.url, 'Launch URL')">Copy URL</button>
           @if (m.opensDirectly) {
             <a class="btn-primary is-launch" [href]="m.url" target="_blank" rel="noopener">Open</a>
           }
@@ -357,45 +351,6 @@
           <button class="btn-secondary" type="button" (click)="cancelDelete()">Cancel</button>
           <button class="btn-danger" type="button" [disabled]="rowBusyId() === w.workflowId" (click)="confirmDeleteWorkflow()">
             Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-}
-
-<!-- ── Copy workflow modal ──────────────────────────────────────────────────── -->
-@if (copyModal(); as m) {
-  <div class="modal-overlay" tabindex="0" (click)="cancelCopy()" (keydown.escape)="cancelCopy()">
-    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
-      <div class="modal-head">
-        <h2>Copy workflow</h2>
-        <button class="modal-close" type="button" [disabled]="m.busy" (click)="cancelCopy()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-sub">
-          Create an exact copy of <strong>{{ m.sourceName }}</strong> — same nodes, connections, and configuration.
-          The copy is created disabled so it won't run until you review it.
-        </p>
-        <label class="modal-label" for="copy-workflow-name">New workflow name</label>
-        <input
-          id="copy-workflow-name"
-          type="text"
-          class="modal-input"
-          placeholder="Enter a name for the copy"
-          [value]="m.name"
-          [disabled]="m.busy"
-          (input)="onCopyNameInput($any($event.target).value)"
-          (keydown.enter)="confirmCopy()"
-        />
-        <div class="modal-actions">
-          <button class="btn-secondary" type="button" [disabled]="m.busy" (click)="cancelCopy()">Cancel</button>
-          <button class="btn-primary" type="button" [disabled]="!m.name.trim() || m.busy" (click)="confirmCopy()">
-            @if (m.busy) {
-              <span class="spinner-sm"></span>
-            } @else {
-              Copy
-            }
           </button>
         </div>
       </div>

@@ -2,14 +2,14 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { PagedResult, SecurityEventEntry } from '../../models/governance.model';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 @Component({
   selector: 'app-security-events',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule],
+  imports: [CommonModule, DatePipe, MatTableModule, PaginationBarComponent],
   templateUrl: './security-events.component.html',
   styleUrl: './security-events.component.scss',
 })
@@ -21,7 +21,7 @@ export class SecurityEventsComponent implements OnInit {
   readonly correlationId = signal('');
   readonly result = signal<PagedResult<SecurityEventEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   readonly displayedCols = ['occurredOnUtc', 'severity', 'eventType', 'userEmail', 'ipAddress', 'resolved', 'correlationId'];
 
@@ -41,7 +41,7 @@ export class SecurityEventsComponent implements OnInit {
     });
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
     this.load();

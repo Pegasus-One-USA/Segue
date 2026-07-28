@@ -142,26 +142,6 @@
   overflow: hidden;
 }
 
-.table-meta {
-  display: flex;
-  align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-side);
-}
-
-.entries-info {
-  font-size: 13px;
-  color: var(--color-muted);
-}
-
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 72px 0;
-}
-
 .table-wrapper {
   overflow-x: auto;
 }
@@ -372,14 +352,3 @@
 }
 
 // ─── Paginator ────────────────────────────────────────────────────────────────
-.table-paginator {
-  border-top: 1px solid var(--color-border);
-  background: var(--color-side);
-
-  ::ng-deep {
-    .mat-mdc-paginator-container { padding: 8px 16px; }
-    .mat-mdc-paginator-range-label { color: var(--color-muted); font-size: 13px; }
-    .mat-mdc-icon-button { color: var(--color-ink-2) !important; }
-    .mat-mdc-icon-button[disabled] { color: var(--color-border) !important; }
-  }
-}

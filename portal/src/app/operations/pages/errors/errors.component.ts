@@ -31,7 +31,7 @@ export class ErrorsComponent implements OnInit {
   readonly result = signal<PagedResult<ErrorLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly expandedId = signal<string | null>(null);
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   // Phase 6A – Monitoring → Errors search criteria.
   readonly errorReferenceId = signal('');

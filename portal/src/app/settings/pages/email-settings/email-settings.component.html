@@ -1,7 +1,7 @@
 <div class="dash-content">
   <div class="page-header">
     <h1 class="page-title">Email Settings</h1>
-    <p class="page-sub">Configure the outbound SMTP server FHIRBridge uses to send notification emails.</p>
+    <p class="page-sub">Configure the outbound SMTP server Segue uses to send notification emails.</p>
   </div>
 
   @if (loading()) {
@@ -14,7 +14,7 @@
         <div class="card-row">
           <div>
             <h2 class="card-title">SMTP Server</h2>
-            <p class="card-sub">Enable email and configure the server FHIRBridge connects to for sending it.</p>
+            <p class="card-sub">Enable email and configure the server Segue connects to for sending it.</p>
           </div>
           <label class="toggle-field">
             <input type="checkbox" formControlName="isEnabled" />
@@ -65,7 +65,7 @@
 
           <div class="form-field">
             <label for="es-fromName">From Name <span class="req">*</span></label>
-            <input id="es-fromName" type="text" formControlName="fromName" placeholder="FHIRBridge" />
+            <input id="es-fromName" type="text" formControlName="fromName" placeholder="Segue" />
           </div>
         </div>
 

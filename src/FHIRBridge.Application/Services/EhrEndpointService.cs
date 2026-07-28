@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Application.Services;
@@ -22,9 +23,9 @@ public sealed class EhrEndpointService : IEhrEndpointService
     }
 
     public async Task<IReadOnlyList<PublicEhrEndpointDto>> GetPublicEndpointsAsync(
-        string? search, CancellationToken cancellationToken)
+        EhrEndpointType endpointType, string? search, CancellationToken cancellationToken)
     {
-        var endpoints = await _repository.GetPublicAsync(search, cancellationToken);
+        var endpoints = await _repository.GetPublicAsync(endpointType, search, cancellationToken);
         return endpoints
             .Take(PublicEndpointsResultCap)
             .Select(x => new PublicEhrEndpointDto(x.Id, x.Name, x.FhirBaseUrl, x.Status))
@@ -32,7 +33,7 @@ public sealed class EhrEndpointService : IEhrEndpointService
     }
 
     // The directory can be in the hundreds of rows (e.g. the MyChart set alone) — cap the response rather than
-    // assume "small" stays true now that this lists every EndpointType together.
+    // assume "small" stays true.
     private const int PublicEndpointsResultCap = 50;
 
     public async Task<EhrEndpointDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
@@ -41,10 +42,10 @@ public sealed class EhrEndpointService : IEhrEndpointService
         return endpoint is null ? null : EhrEndpointMapper.ToDto(endpoint);
     }
 
-    public async Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, CancellationToken cancellationToken)
+    public async Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, EhrEndpointType endpointType, CancellationToken cancellationToken)
     {
         var endpoint = await _repository.GetByIdAsync(ehrEndpointId, cancellationToken);
-        return endpoint is not null;
+        return endpoint is not null && endpoint.EndpointType == endpointType;
     }
 
     public async Task<EhrEndpointDto> AddAsync(CreateEhrEndpointRequest request, CancellationToken cancellationToken)

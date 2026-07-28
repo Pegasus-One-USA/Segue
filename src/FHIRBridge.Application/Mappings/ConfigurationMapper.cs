@@ -27,7 +27,8 @@ public static class ConfigurationMapper
                 sourceConnection.Authentication.ClientSecret?.SecretName,
                 sourceConnection.Authentication.PrivateKey?.KeyVaultName,
                 sourceConnection.Authentication.PrivateKey?.SecretName,
-                sourceConnection.Authentication.KeyId),
+                sourceConnection.Authentication.KeyId,
+                sourceConnection.Authentication.JwksUrl),
             sourceConnection.IsEnabled,
             sourceConnection.ApplicationType,
             ToDto(sourceConnection.Interactive),
@@ -98,6 +99,16 @@ public static class ConfigurationMapper
                 dto.PatientIds,
                 dto.OutputFormat);
 
+    public static SourceConfigurationDto ToDto(SourceConfiguration sourceConfiguration)
+    {
+        return new SourceConfigurationDto(
+            sourceConfiguration.Id,
+            sourceConfiguration.ConnectionId,
+            sourceConfiguration.Name,
+            sourceConfiguration.Scopes,
+            ToDto(sourceConfiguration.Retrieval));
+    }
+
     public static WebhookConfigurationDto ToDto(WebhookConfiguration webhookConfiguration)
     {
         return new WebhookConfigurationDto(
@@ -134,7 +145,8 @@ public static class ConfigurationMapper
             mappingProfile.Fields
                 .Select(ToDto)
                 .ToList(),
-            mappingProfile.IsEnabled);
+            mappingProfile.IsEnabled,
+            mappingProfile.SourceConfigurationId);
     }
 
     public static MappingFieldDto ToDto(MappingField field)
@@ -224,7 +236,8 @@ public static class ConfigurationMapper
             dto.Scopes ?? [],
             CreateSecretReference(dto.ClientSecretKeyVaultName, dto.ClientSecretName),
             CreateSecretReference(dto.PrivateKeyKeyVaultName, dto.PrivateKeySecretName),
-            dto.KeyId);
+            dto.KeyId,
+            dto.JwksUrl);
     }
 
     private static SecretReference? CreateSecretReference(string? keyVaultName, string? secretName)

@@ -34,7 +34,7 @@ export class HelpComponent {
     { action: 'Reset Canvas',         keys: ['Ctrl', 'R'] },
     { action: 'Toggle Sidebar',       keys: ['Ctrl', 'B'] },
     { action: 'Go to Dashboard',      keys: ['G', 'D'] },
-    { action: 'Go to Pipeline Builder', keys: ['G', 'P'] },
+    { action: 'Go to Workflow Builder', keys: ['G', 'P'] },
   ];
 
   navigate(path: string): void { this.router.navigate([path]); }

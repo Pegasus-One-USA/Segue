@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, inject, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
 import {
   WorkflowApiService,
   WorkflowSummary,
@@ -29,13 +30,6 @@ interface DataModal {
   error: string | null;
 }
 
-interface CopyModal {
-  workflowId: string;
-  sourceName: string;
-  name: string;
-  busy: boolean;
-}
-
 type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun';
 type SortDirection = 'asc' | 'desc';
 /** Multi-select filter categories shown in the filter bar — see filterDefs/signalFor. */
@@ -44,7 +38,7 @@ type FilterCategory = 'status' | 'audience' | 'source';
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe],
+  imports: [CommonModule, DatePipe, MatIconModule],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -73,13 +67,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly dataModal = signal<DataModal | null>(null);
   /** Workflow pending delete confirmation. */
   readonly confirmDelete = signal<WorkflowSummary | null>(null);
-  /** Workflow pending a copy — the modal's name field always starts empty. */
-  readonly copyModal = signal<CopyModal | null>(null);
-
   readonly sortColumn = signal<SortColumn>('name');
   readonly sortDirection = signal<SortDirection>('asc');
   readonly pageSizeOptions = [10, 20, 50];
-  readonly pageSize = signal(20);
+  readonly pageSize = signal(10);
   readonly pageIndex = signal(0);
   /** Total rows matching the current search, across every page — from the server, not summaries().length. */
   readonly totalCount = signal(0);
@@ -159,18 +150,22 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     return this.selectedSetFor(category).has(value);
   }
 
-  toggleFilterMenu(category: FilterCategory, event: Event): void {
-    event.stopPropagation();
+  toggleFilterMenu(category: FilterCategory): void {
     this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
   }
 
-  @HostListener('document:click')
-  closeFilterMenus(): void {
-    this.openFilterMenu.set(null);
+  // Centralized "click outside closes it" check — reads the click's actual target instead of relying
+  // on stopPropagation() scattered across the template. A click still inside any .filter-dropdown
+  // (its trigger button or, since the open panel is its DOM descendant, its checkbox panel) is left
+  // alone. Called from the single onDocumentClick listener below, not its own @HostListener — see
+  // that method for why.
+  private closeFilterMenuIfOutside(event: MouseEvent): void {
+    if (!(event.target as HTMLElement).closest('.filter-dropdown')) {
+      this.openFilterMenu.set(null);
+    }
   }
 
-  toggleFilterValue(category: FilterCategory, value: string, event: Event): void {
-    event.stopPropagation();
+  toggleFilterValue(category: FilterCategory, value: string): void {
     this.signalForCategory(category).update(current => {
       const next = new Set(current);
       if (next.has(value)) next.delete(value); else next.add(value);
@@ -180,8 +175,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.reload();
   }
 
-  clearFilter(category: FilterCategory, event: Event): void {
-    event.stopPropagation();
+  clearFilter(category: FilterCategory): void {
     this.signalForCategory(category).set(new Set());
     this.pageIndex.set(0);
     this.reload();
@@ -330,8 +324,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.runMenuOpenId.set(this.runMenuOpenId() === row.workflowId ? null : row.workflowId);
   }
 
-  @HostListener('document:click')
-  closeRunMenu(): void {
+  // Single document:click listener for the whole component — see closeFilterMenuIfOutside above for
+  // why this must not be split across multiple @HostListener('document:click') decorators.
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    this.closeFilterMenuIfOutside(event);
     this.runMenuOpenId.set(null);
   }
 
@@ -499,38 +496,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Opens the copy modal with an empty name field — the workflow isn't duplicated until a name is confirmed. */
-  askCopy(row: WorkflowSummary): void {
-    this.copyModal.set({ workflowId: row.workflowId, sourceName: row.name, name: '', busy: false });
-  }
-
-  onCopyNameInput(value: string): void {
-    this.copyModal.update(m => (m ? { ...m, name: value } : m));
-  }
-
-  cancelCopy(): void {
-    if (this.copyModal()?.busy) return;
-    this.copyModal.set(null);
-  }
-
-  /** Confirms the copy — blocked while the name is empty/whitespace-only or a copy call is already in flight. */
-  confirmCopy(): void {
-    const m = this.copyModal();
-    const name = m?.name.trim();
-    if (!m || !name || m.busy) return;
-
-    this.copyModal.set({ ...m, busy: true });
-    this.api.copy(m.workflowId, name).subscribe({
-      next: () => {
-        this.copyModal.set(null);
-        this.toast.success('Workflow copied', `"${name}" was created from "${m.sourceName}".`);
-        this.reload();
-      },
-      error: err => {
-        this.copyModal.update(current => (current ? { ...current, busy: false } : current));
-        this.toast.error(this.messageOf(err, 'Could not copy the workflow.'));
-      },
-    });
+  /** Copies this workflow's raw id straight to the clipboard — no modal, just the id + a toast confirmation. */
+  copyWorkflowId(row: WorkflowSummary): void {
+    this.copy(row.workflowId, 'Workflow ID');
   }
 
   /** Friendly SMART application-type label for the Audience column. */
@@ -552,9 +520,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.dataModal.set(null);
   }
 
-  copy(text: string): void {
+  copy(text: string, label = 'Link'): void {
     navigator.clipboard?.writeText(text).then(
-      () => this.toast.success('Copied', 'Launch URL copied to clipboard.'),
+      () => this.toast.success('Copied', `${label} copied to clipboard.`),
       () => this.toast.error('Could not copy to the clipboard.'),
     );
   }

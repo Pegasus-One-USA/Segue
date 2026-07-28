@@ -34,9 +34,12 @@ public sealed class GovernanceController : ControllerBase
         [FromQuery] string? entityId,
         [FromQuery] int skip,
         [FromQuery] int take,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] string? sortColumn = null,
+        [FromQuery] string? sortDirection = null)
     {
-        var results = await _governanceQueryService.GetAuditLogsAsync(correlationId, entityType, entityId, skip, take, cancellationToken);
+        var results = await _governanceQueryService.GetAuditLogsAsync(
+            correlationId, entityType, entityId, skip, take, cancellationToken, sortColumn, sortDirection);
         return Ok(results);
     }
 

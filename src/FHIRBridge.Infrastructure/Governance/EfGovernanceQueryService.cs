@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
@@ -30,7 +31,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
     }
 
     public async Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
-        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken)
+        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
+        string? sortColumn = null, string? sortDirection = null)
     {
         var query = _dbContext.AuditLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -48,8 +50,7 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
 
         var normalizedTake = NormalizeTake(take);
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(x => x.SequenceNumber)
+        var items = await ApplyAuditLogSort(query, sortColumn, sortDirection)
             .Skip(NormalizeSkip(skip))
             .Take(normalizedTake)
             .Select(x => new AuditLogDto(
@@ -58,6 +59,31 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .ToListAsync(cancellationToken);
 
         return ToPaged(items, totalCount, skip, normalizedTake);
+    }
+
+    // A null/unrecognized sortColumn always falls back to the original hardcoded ordering (newest-first
+    // by the hash-chain's own sequence) regardless of sortDirection — version-history mode (see
+    // AuditLogsComponent.historyMode/versionByEntryId on the frontend) depends on that exact default and
+    // never sends a sortColumn itself, so this stays correct even if a stale sort param somehow arrives.
+    private static IOrderedQueryable<AuditLog> ApplyAuditLogSort(
+        IQueryable<AuditLog> query, string? sortColumn, string? sortDirection)
+    {
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedQueryable<AuditLog> Order<TKey>(Expression<Func<AuditLog, TKey>> keySelector) =>
+            descending ? query.OrderByDescending(keySelector) : query.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "occurredOnUtc" => Order(x => x.OccurredOnUtc),
+            "actor"         => Order(x => x.Actor),
+            "module"        => Order(x => x.Module),
+            "action"        => Order(x => x.Action),
+            "entity"        => Order(x => x.EntityName ?? x.EntityId ?? string.Empty),
+            "status"        => Order(x => x.Status),
+            "correlationId" => Order(x => x.CorrelationId ?? string.Empty),
+            _               => query.OrderByDescending(x => x.SequenceNumber),
+        };
     }
 
     public async Task<PagedResult<DataAccessLogDto>> GetDataAccessLogsAsync(
@@ -396,7 +422,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .OrderByDescending(x => x.OccurredOnUtc)
             .Take(NormalizeTake(take))
             .Select(x => new SmartLaunchLogDto(
-                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason))
+                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason,
+                x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash))
             .ToListAsync(cancellationToken);
     }
 

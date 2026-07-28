@@ -35,13 +35,6 @@
           </div>
         }
 
-        @if (loading()) {
-          <div class="panel-loading">
-            <mat-spinner diameter="32" color="primary"></mat-spinner>
-            <span>Loading roles...</span>
-          </div>
-        }
-
         @if (!loading()) {
           <div class="roles-list">
             @for (role of allRoles(); track role.id) {

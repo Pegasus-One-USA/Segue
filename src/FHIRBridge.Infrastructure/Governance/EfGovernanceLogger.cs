@@ -271,7 +271,10 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.SourceName,
             entry.LaunchType,
             entry.Success,
-            Truncate(entry.FailureReason, 1000)));
+            Truncate(entry.FailureReason, 1000),
+            Truncate(entry.GrantedScope, 500),
+            entry.PatientContextGranted,
+            entry.TokenCacheKeyHash));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

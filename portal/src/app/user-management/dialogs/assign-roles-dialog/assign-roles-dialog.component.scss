@@ -112,19 +112,6 @@ mat-dialog-content {
   mat-icon { font-size: 16px; height: 16px; width: 16px; flex-shrink: 0; color: var(--color-warning); }
 }
 
-.panel-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 40px 20px;
-  color: var(--color-muted);
-  font-size: 13px;
-
-  ::ng-deep .mat-mdc-progress-spinner circle { stroke: var(--color-primary); }
-}
-
 .roles-list {
   display: flex;
   flex-direction: column;

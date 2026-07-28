@@ -2,6 +2,7 @@ using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -53,6 +54,49 @@ public sealed class OAuthController : ControllerBase
             sourceConnectionId, BuildCallbackUri(), cancellationToken);
 
         return Redirect(authorizationUrl.ToString());
+    }
+
+    /// <summary>
+    /// Anonymous counterpart to <see cref="GetWorkflowLaunchUrl"/>, for a third-party app's own EHR-launch entry
+    /// point (e.g. Demo_TestApp's Provider_InApp) that has no FHIRBridge session to call the authenticated endpoint
+    /// with. Mirrors <see cref="GetPublicWorkflowStandaloneUrl"/>'s trust model: minting needs no PHI/session, and
+    /// <see cref="WorkflowDefinition.IsPubliclyLaunchable"/> is the only gate between "any caller who knows this
+    /// workflowId" and a working EHR-launch context for it. Only valid for EHR-launch workflows — a Standalone or
+    /// Patient workflow id is rejected, since those launch through <c>/oauth/authorize</c>, not <c>/oauth/launch</c>.
+    /// </summary>
+    [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
+    [HttpGet("workflows/{workflowId:guid}/public-launch-context")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPublicWorkflowLaunchContext(
+        Guid workflowId, [FromQuery] string? callerId, CancellationToken cancellationToken)
+    {
+        var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
+        if (workflow is null || !workflow.IsPubliclyLaunchable)
+        {
+            return NotFound();
+        }
+
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
+        {
+            return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
+        }
+
+        var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
+        if (applicationType is ApplicationType.Standalone or ApplicationType.Patient)
+        {
+            return BadRequest(new
+            {
+                error = "invalid_request",
+                error_description = "This workflow launches via /oauth/authorize, not /oauth/launch. Use public-standalone-url instead."
+            });
+        }
+
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId: null, callerId);
+        return Ok(new { context });
     }
 
     /// <summary>
@@ -122,8 +166,8 @@ public sealed class OAuthController : ControllerBase
     /// <c>POST /workflows/{workflowId}/enable-public-launch</c> — <see cref="WorkflowDefinition.IsPubliclyLaunchable"/>
     /// is the only gate standing between "any caller who knows this workflowId" and a working login link for it,
     /// since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must resolve to
-    /// any known EhrEndpoint row, regardless of EndpointType — the same unfiltered set the public picker listing
-    /// exposes.
+    /// a known EhrEndpoint row of type <see cref="EhrEndpointType.Epic"/> — the vendor sandbox rows the Provider
+    /// Standalone picker lists, never a customer's own MyChart row.
     /// </summary>
     [AllowAnonymous]
     [EnableRateLimiting("oauth")]
@@ -148,7 +192,7 @@ public sealed class OAuthController : ControllerBase
             return NotFound();
         }
 
-        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, cancellationToken))
+        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.Epic, cancellationToken))
         {
             _logger.LogWarning(
                 "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known endpoint",

@@ -496,9 +496,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var launchType = DetermineLaunchType(pending);
 
+        SmartAuthorizationCodeExchangeResult exchangeResult;
         try
         {
-            await _authorizationFlow.ExchangeAuthorizationCodeAsync(
+            exchangeResult = await _authorizationFlow.ExchangeAuthorizationCodeAsync(
                 source, authorizationCode, pending.CodeVerifier, pending.RedirectUri, cancellationToken);
         }
         catch (Exception exception)
@@ -518,7 +519,10 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         await _governanceLogger.LogSmartLaunchAsync(
             new SmartLaunchEntry(
-                pending.SourceConnectionId, pending.SourceName, launchType, Success: true, DescribeTokenKey(pending.SessionId)),
+                pending.SourceConnectionId, pending.SourceName, launchType, Success: true, DescribeTokenKey(pending.SessionId),
+                GrantedScope: exchangeResult.GrantedScope,
+                PatientContextGranted: exchangeResult.PatientContextGranted,
+                TokenCacheKeyHash: exchangeResult.TokenCacheKeyHash),
             CancellationToken.None);
 
         Guid? workflowRunId = null;

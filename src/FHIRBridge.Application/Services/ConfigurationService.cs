@@ -3,12 +3,14 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
+using FluentValidation;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Application.Services;
@@ -25,6 +27,8 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly ISecretWriter _secretWriter;
     private readonly IParentReferenceResolver _parentReferenceResolver;
+    private readonly IValidator<CreateMappingProfileRequest> _mappingProfileValidator;
+    private readonly IValidator<CreateDestinationConfigurationRequest> _destinationConfigurationValidator;
     private readonly ILogger<ConfigurationService> _logger;
 
     public ConfigurationService(
@@ -33,6 +37,8 @@ public sealed class ConfigurationService : IConfigurationService
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
         ISecretWriter secretWriter,
         IParentReferenceResolver parentReferenceResolver,
+        IValidator<CreateMappingProfileRequest> mappingProfileValidator,
+        IValidator<CreateDestinationConfigurationRequest> destinationConfigurationValidator,
         ILogger<ConfigurationService> logger)
     {
         _repository = repository;
@@ -40,7 +46,18 @@ public sealed class ConfigurationService : IConfigurationService
         _capabilityDiscoveryService = capabilityDiscoveryService;
         _secretWriter = secretWriter;
         _parentReferenceResolver = parentReferenceResolver;
+        _mappingProfileValidator = mappingProfileValidator;
+        _destinationConfigurationValidator = destinationConfigurationValidator;
         _logger = logger;
+    }
+
+    private async Task ValidateRequestAsync<T>(IValidator<T> validator, T request, CancellationToken cancellationToken)
+    {
+        var result = await validator.ValidateAsync(request, cancellationToken);
+        if (!result.IsValid)
+        {
+            throw new RequestValidationException(new Dictionary<string, string[]>(result.ToDictionary()));
+        }
     }
 
     public async Task<SourceConnectionDto> AddSourceConnectionAsync(
@@ -118,6 +135,155 @@ public sealed class ConfigurationService : IConfigurationService
         await _repository.DeleteSourceConnectionAsync(sourceConnection, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<SourceConfigurationDto>> GetSourceConfigurationsAsync(CancellationToken cancellationToken)
+    {
+        var configurations = await _repository.GetSourceConfigurationsAsync(cancellationToken);
+        return configurations.Select(ConfigurationMapper.ToDto).ToList();
+    }
+
+    public async Task<SourceConfigurationDto> AddSourceConfigurationAsync(
+        CreateSourceConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        await EnsureConnectionExistsAsync(request.ConnectionId, cancellationToken);
+
+        var sourceConfiguration = new SourceConfiguration(
+            request.ConnectionId,
+            request.Name,
+            request.Scopes,
+            ConfigurationMapper.ToDomain(request.Retrieval));
+
+        await _repository.AddSourceConfigurationAsync(sourceConfiguration, cancellationToken);
+
+        return ConfigurationMapper.ToDto(sourceConfiguration);
+    }
+
+    public async Task<SourceConfigurationDto?> GetSourceConfigurationByIdAsync(
+        Guid sourceConfigurationId,
+        CancellationToken cancellationToken)
+    {
+        var sourceConfiguration = await _repository.GetSourceConfigurationAsync(sourceConfigurationId, cancellationToken);
+        return sourceConfiguration is null ? null : ConfigurationMapper.ToDto(sourceConfiguration);
+    }
+
+    public async Task<SourceConfigurationDto> UpdateSourceConfigurationAsync(
+        Guid sourceConfigurationId,
+        CreateSourceConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        await EnsureConnectionExistsAsync(request.ConnectionId, cancellationToken);
+        var sourceConfiguration = await GetSourceConfigurationRequiredAsync(sourceConfigurationId, cancellationToken);
+
+        if (sourceConfiguration.ConnectionId != request.ConnectionId)
+        {
+            throw new InvalidOperationException(
+                "A source configuration's connection cannot be changed after creation. Create a new configuration instead.");
+        }
+
+        sourceConfiguration.Update(
+            request.Name,
+            request.Scopes,
+            ConfigurationMapper.ToDomain(request.Retrieval));
+
+        // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
+        // UpdateSourceConnectionAsync: Update() reassigns a brand-new owned Retrieval instance, and EF Core's
+        // post-save fixup for a replaced owned reference can leave that navigation null on this in-memory instance
+        // afterward (the database write itself is unaffected).
+        var updatedDto = ConfigurationMapper.ToDto(sourceConfiguration);
+
+        await _repository.UpdateSourceConfigurationAsync(sourceConfiguration, cancellationToken);
+
+        return updatedDto;
+    }
+
+    public async Task DeleteSourceConfigurationAsync(Guid sourceConfigurationId, CancellationToken cancellationToken)
+    {
+        var sourceConfiguration = await GetSourceConfigurationRequiredAsync(sourceConfigurationId, cancellationToken);
+        await _repository.DeleteSourceConfigurationAsync(sourceConfiguration, cancellationToken);
+    }
+
+    private async Task EnsureConnectionExistsAsync(Guid connectionId, CancellationToken cancellationToken)
+    {
+        var connection = await _repository.GetSourceConnectionAsync(connectionId, cancellationToken);
+        if (connection is null)
+        {
+            throw new NotFoundException("SourceConnection", connectionId);
+        }
+    }
+
+    private async Task<SourceConfiguration> GetSourceConfigurationRequiredAsync(Guid id, CancellationToken cancellationToken) =>
+        await _repository.GetSourceConfigurationAsync(id, cancellationToken)
+        ?? throw new NotFoundException("SourceConfiguration", id);
+
+    /// <summary>
+    /// Resolves which <see cref="SourceConfiguration"/> a newly-created mapping profile uses. When the caller
+    /// explicitly picked an existing configuration (a portal that knows about reusable connections), it's reused
+    /// as-is — no new row, no duplicated scopes/retrieval. When the caller doesn't supply one (today's portal,
+    /// unaware of this concept), a new configuration is auto-provisioned from the connection's current
+    /// Authentication.Scopes/Retrieval, mirroring the Slice 1 migration backfill so behavior is unchanged for
+    /// callers that haven't adopted the new concept yet.
+    /// </summary>
+    private async Task<Guid> ResolveSourceConfigurationForCreateAsync(
+        Guid sourceConnectionId,
+        Guid? requestedSourceConfigurationId,
+        CancellationToken cancellationToken)
+    {
+        if (requestedSourceConfigurationId is { } requestedId)
+        {
+            var requested = await GetSourceConfigurationRequiredAsync(requestedId, cancellationToken);
+            if (requested.ConnectionId != sourceConnectionId)
+            {
+                throw new InvalidOperationException(
+                    "The selected source configuration does not belong to the selected source connection.");
+            }
+
+            return requested.Id;
+        }
+
+        return await AutoProvisionSourceConfigurationAsync(sourceConnectionId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Same resolution as <see cref="ResolveSourceConfigurationForCreateAsync"/>, except that when the caller
+    /// doesn't supply a configuration and the connection hasn't changed, the mapping's existing configuration is
+    /// kept unchanged rather than auto-provisioning a fresh one on every save (which would otherwise strand a new,
+    /// unused row per edit).
+    /// </summary>
+    private async Task<Guid> ResolveSourceConfigurationForUpdateAsync(
+        MappingProfile mappingProfile,
+        Guid sourceConnectionId,
+        Guid? requestedSourceConfigurationId,
+        CancellationToken cancellationToken)
+    {
+        if (requestedSourceConfigurationId is not null)
+        {
+            return await ResolveSourceConfigurationForCreateAsync(sourceConnectionId, requestedSourceConfigurationId, cancellationToken);
+        }
+
+        if (mappingProfile.SourceConfigurationId is { } existingId && mappingProfile.SourceConnectionId == sourceConnectionId)
+        {
+            return existingId;
+        }
+
+        // The connection changed (or this profile predates the split and somehow has no configuration yet) —
+        // provision a fresh configuration under the new connection rather than reusing one tied to a different
+        // connection.
+        return await AutoProvisionSourceConfigurationAsync(sourceConnectionId, cancellationToken);
+    }
+
+    private async Task<Guid> AutoProvisionSourceConfigurationAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+    {
+        var connection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        var configuration = new SourceConfiguration(
+            connection.Id,
+            connection.Name,
+            connection.Authentication.Scopes,
+            connection.Retrieval);
+
+        await _repository.AddSourceConfigurationAsync(configuration, cancellationToken);
+        return configuration.Id;
+    }
+
     public async Task<WebhookConfigurationDto> AddWebhookConfigurationAsync(
         CreateWebhookConfigurationRequest request,
         CancellationToken cancellationToken)
@@ -151,6 +317,8 @@ public sealed class ConfigurationService : IConfigurationService
         CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
+
         var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
         if (!string.IsNullOrWhiteSpace(request.InlineSecret))
         {
@@ -188,6 +356,8 @@ public sealed class ConfigurationService : IConfigurationService
         CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
+
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
         var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
         if (!string.IsNullOrWhiteSpace(request.InlineSecret))
@@ -253,14 +423,18 @@ public sealed class ConfigurationService : IConfigurationService
         CreateMappingProfileRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_mappingProfileValidator, request, cancellationToken);
         await EnsureSourceSupportsResourceTypeAsync(request.SourceConnectionId, request.ResourceType, cancellationToken);
+        var sourceConfigurationId = await ResolveSourceConfigurationForCreateAsync(
+            request.SourceConnectionId, request.SourceConfigurationId, cancellationToken);
         var mappingProfile = new MappingProfile(
             request.Name,
             request.ResourceType,
             request.SourceConnectionId,
             request.DestinationId,
             request.DestinationObject,
-            request.Fields.Select(ConfigurationMapper.ToDomain));
+            request.Fields.Select(ConfigurationMapper.ToDomain),
+            sourceConfigurationId);
 
         await _repository.AddMappingProfileAsync(mappingProfile, cancellationToken);
 
@@ -272,15 +446,19 @@ public sealed class ConfigurationService : IConfigurationService
         CreateMappingProfileRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_mappingProfileValidator, request, cancellationToken);
         await EnsureSourceSupportsResourceTypeAsync(request.SourceConnectionId, request.ResourceType, cancellationToken);
         var mappingProfile = await GetMappingProfileRequiredAsync(mappingProfileId, cancellationToken);
+        var sourceConfigurationId = await ResolveSourceConfigurationForUpdateAsync(
+            mappingProfile, request.SourceConnectionId, request.SourceConfigurationId, cancellationToken);
         mappingProfile.Update(
             request.Name,
             request.ResourceType,
             request.SourceConnectionId,
             request.DestinationId,
             request.DestinationObject,
-            request.Fields.Select(ConfigurationMapper.ToDomain));
+            request.Fields.Select(ConfigurationMapper.ToDomain),
+            sourceConfigurationId);
 
         // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
         // UpdateSourceConnectionAsync: Update() replaces the entire owned Fields collection, and EF Core's

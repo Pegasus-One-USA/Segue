@@ -24,7 +24,7 @@ export class ExecutionHistoryDetailComponent implements OnInit {
   readonly loading      = signal(false);
   readonly expandedId   = signal<string | null>(null);
   readonly pageIndex    = signal(0);
-  readonly pageSize     = signal(25);
+  readonly pageSize     = signal(10);
 
   private runId = '';
 

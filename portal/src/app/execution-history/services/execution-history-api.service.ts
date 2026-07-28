@@ -22,6 +22,8 @@ export class ExecutionHistoryApiService {
     if (filter.source) params = params.set('source', filter.source);
     if (filter.triggeredBy) params = params.set('triggeredBy', filter.triggeredBy);
     if (filter.search) params = params.set('search', filter.search);
+    if (filter.sortColumn) params = params.set('sortColumn', filter.sortColumn);
+    if (filter.sortDirection) params = params.set('sortDirection', filter.sortDirection);
 
     return this.http.get<PagedResult<RouteExecution>>(EXECUTION_HISTORY_ENDPOINTS.list, { params });
   }

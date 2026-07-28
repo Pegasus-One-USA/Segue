@@ -215,21 +215,6 @@
   overflow-y: hidden;
 }
 
-// ─── Loading overlay ──────────────────────────────────────────────────────────
-.loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-
-  ::ng-deep .mat-mdc-progress-spinner circle {
-    stroke: var(--color-primary);
-  }
-}
-
 // ─── Material table overrides ────────────────────────────────────────────────
 .users-table {
   width: 100%;
@@ -502,14 +487,3 @@
 }
 
 // ─── Paginator ────────────────────────────────────────────────────────────────
-.table-paginator {
-  border-top: 1px solid var(--color-border);
-  background: var(--color-side);
-
-  ::ng-deep {
-    .mat-mdc-paginator-container { padding: 8px 16px; }
-    .mat-mdc-paginator-range-label { color: var(--color-muted); font-size: 13px; }
-    .mat-mdc-icon-button { color: var(--color-ink-2) !important; }
-    .mat-mdc-icon-button[disabled] { color: var(--color-border) !important; }
-  }
-}

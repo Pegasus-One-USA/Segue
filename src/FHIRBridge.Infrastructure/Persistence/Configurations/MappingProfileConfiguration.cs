@@ -14,16 +14,23 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.ResourceType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.SourceConnectionId).IsRequired();
+        builder.Property(x => x.SourceConfigurationId);
         builder.Property(x => x.DestinationId).IsRequired();
         builder.Property(x => x.DestinationObject).HasMaxLength(300).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
 
         builder.HasIndex(x => x.SourceConnectionId);
+        builder.HasIndex(x => x.SourceConfigurationId);
         builder.HasIndex(x => x.DestinationId);
 
         builder.HasOne<SourceConnection>()
             .WithMany()
             .HasForeignKey(x => x.SourceConnectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<SourceConfiguration>()
+            .WithMany()
+            .HasForeignKey(x => x.SourceConfigurationId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.OwnsMany(x => x.Fields, field =>

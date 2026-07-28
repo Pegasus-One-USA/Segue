@@ -131,10 +131,17 @@ public sealed record EndpointHealthEntry(
     string? Message = null);
 
 /// <summary>A SMART on FHIR launch completing (or failing) — no FHIRBridge portal user is involved, this is
-/// the EHR/patient authorizing a source connection's data access.</summary>
+/// the EHR/patient authorizing a source connection's data access. <see cref="GrantedScope"/>/
+/// <see cref="PatientContextGranted"/>/<see cref="TokenCacheKeyHash"/> are populated for interactive
+/// (EHR-launch/standalone) sign-ins only — they diagnose whether this launch actually established the patient
+/// context a later unscoped Patient search depends on, and let a save-time key be compared against a later
+/// lookup-time key without ever printing the underlying CallerId/session identifier.</summary>
 public sealed record SmartLaunchEntry(
     Guid SourceConnectionId,
     string SourceName,
     string LaunchType,
     bool Success,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    string? GrantedScope = null,
+    bool? PatientContextGranted = null,
+    string? TokenCacheKeyHash = null);
