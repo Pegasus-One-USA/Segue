@@ -330,7 +330,7 @@
                       <option value="import">Import Existing Private Key</option>
                     </select>
                   </div>
-                  <p class="eaf-hint">"Generate"/"Import" have FHIRBridge provision and store the private key for you — no need to type Key ID/Key Vault Name/Secret Name by hand.</p>
+                  <p class="eaf-hint">"Generate"/"Import" have Segue provision and store the private key for you — no need to type Key ID/Key Vault Name/Secret Name by hand.</p>
                 </div>
 
                 @if (replacingKey()) {
@@ -374,7 +374,7 @@
                         <span class="eaf-tag-auto">&#10003; key imported</span>
                       }
                     </div>
-                    <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). FHIRBridge validates it and signs with it as-is — no new key is generated.</p>
+                    <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). Segue validates it and signs with it as-is — no new key is generated.</p>
                   </div>
                 }
 
@@ -592,7 +592,7 @@
           <span class="eaf-section-title">Data Retrieval Method</span>
         </div>
         @if (audienceConfig().retrievalScope === 'automated') {
-          <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this Backend System connection.</p>
+          <p class="eaf-section-sub">Choose how Segue receives resource updates from this Backend System connection.</p>
 
           <div class="eaf-grid">
             <div class="eaf-field eaf-field--full"
@@ -793,7 +793,7 @@
   <div class="eaf-footer">
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
-      <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
+      <button class="eaf-btn eaf-btn--primary" type="button" [disabled]="form.invalid" (click)="save()">
         {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Pipeline') }}
       </button>
     }

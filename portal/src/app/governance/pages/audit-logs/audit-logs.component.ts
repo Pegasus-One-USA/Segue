@@ -34,7 +34,7 @@ export class AuditLogsComponent implements OnInit {
   readonly entityId = signal('');
   readonly result = signal<PagedResult<AuditLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   /** Only meaningful once scoped to one entity via viewEntityHistory() — result().items is newest-first
    *  (SequenceNumber descending), so the oldest entry is v1. */

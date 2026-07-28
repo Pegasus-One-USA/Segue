@@ -121,11 +121,7 @@
 
   <!-- ─── Table Card ───────────────────────────────────────────────────── -->
   <div class="table-card">
-    @if (loading()) {
-      <div class="loading-overlay">
-        <mat-spinner diameter="40" color="primary"></mat-spinner>
-      </div>
-    }
+    <!-- The global loader already shows this page is busy — no local overlay/spinner here. -->
 
     <div class="table-wrapper">
       <table

@@ -215,21 +215,6 @@
   overflow-y: hidden;
 }
 
-// ─── Loading overlay ──────────────────────────────────────────────────────────
-.loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-
-  ::ng-deep .mat-mdc-progress-spinner circle {
-    stroke: var(--color-primary);
-  }
-}
-
 // ─── Material table overrides ────────────────────────────────────────────────
 .users-table {
   width: 100%;

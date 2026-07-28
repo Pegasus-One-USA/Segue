@@ -21,7 +21,7 @@ export class DataAccessLogsComponent implements OnInit {
   readonly correlationId = signal('');
   readonly result = signal<PagedResult<DataAccessLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   readonly displayedCols = ['occurredOnUtc', 'actor', 'patientId', 'resourceType', 'action', 'purpose', 'correlationId'];
 

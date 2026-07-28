@@ -21,7 +21,7 @@ export class SecurityEventsComponent implements OnInit {
   readonly correlationId = signal('');
   readonly result = signal<PagedResult<SecurityEventEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   readonly displayedCols = ['occurredOnUtc', 'severity', 'eventType', 'userEmail', 'ipAddress', 'resolved', 'correlationId'];
 

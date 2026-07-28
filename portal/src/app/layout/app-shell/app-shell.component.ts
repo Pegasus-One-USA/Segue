@@ -8,7 +8,7 @@ import { UnsavedChangesRegistryService } from '../../core/services/unsaved-chang
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':                    'Dashboard',
-  '/workflow-builder':             'Pipeline Builder',
+  '/workflow-builder':             'Workflow Builder',
   '/user-management':              'User Management',
   '/user-management/tenants':      'Tenant',
   '/user-management/roles':        'Role',

@@ -1,5 +1,5 @@
 import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStore } from '../../services/pipeline.store';
@@ -46,6 +46,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly graphMapper = inject(WorkflowGraphMapperService);
   private readonly buildAssembler = inject(WorkflowBuildAssemblerService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   constructor() {
@@ -301,7 +302,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
-        this.reconcileGeneratedJwksUrls(result.workflowId, request.name, result.sourceConnectionIds);
+        this.reconcileGeneratedJwksUrls(result.workflowId, request.name, result.sourceConnectionIds, isUpdate);
       },
       error: err => {
         const msg = typeof err?.error?.error === 'string'
@@ -351,6 +352,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     workflowId: string,
     workflowName: string,
     sourceConnectionIds: Record<string, string>,
+    wasUpdate: boolean,
   ): void {
     let anyCorrected = false;
 
@@ -382,7 +384,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
     if (!anyCorrected) {
       this.workflowBusy.set(false);
-      this.resetCanvasAndWorkflowState();
+      this.finishSave(wasUpdate);
       return;
     }
 
@@ -390,13 +392,13 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     this.workflowApi.save(definitionRequest, workflowId).subscribe({
       next: () => {
         this.workflowBusy.set(false);
-        this.resetCanvasAndWorkflowState();
+        this.finishSave(wasUpdate);
       },
       error: () => {
         // Best-effort: the original build already succeeded and is fully durable — only this cosmetic
         // JWKS-URL correction failed to re-save. Not worth blocking or re-prompting the user over.
         this.workflowBusy.set(false);
-        this.resetCanvasAndWorkflowState();
+        this.finishSave(wasUpdate);
       },
     });
   }
@@ -652,6 +654,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       return;
     }
 
+    const wasUpdate = !!workflowId;
     const request = this.graphMapper.toRequest(name, this.buildTrigger());
     this.workflowBusy.set(true);
     this.workflowStatus.set('Validating workflow...');
@@ -674,7 +677,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
               this.workflowStatus.set(`Saved ${saved.name}.`);
               this.toast.success('Workflow saved', `"${saved.name}" was saved.`);
               this.workflowBusy.set(false);
-              this.resetCanvasAndWorkflowState();
+              this.finishSave(wasUpdate);
               return;
             }
 
@@ -683,7 +686,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
                 this.workflowStatus.set(`Saved and activated ${active.name}.`);
                 this.toast.success('Workflow saved', `"${active.name}" was saved and activated.`);
                 this.workflowBusy.set(false);
-                this.resetCanvasAndWorkflowState();
+                this.finishSave(wasUpdate);
               },
               error: () => {
                 this.workflowStatus.set('Saved workflow, but activation failed.');
@@ -715,6 +718,17 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   }
 
   /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */
+  /** Post-save wrap-up: editing an existing workflow returns to the Workflows list (where the save is now
+   *  visible) instead of leaving you staring at a blanked-out canvas; a brand-new workflow still resets to a
+   *  blank canvas so you can keep building another one right away. */
+  private finishSave(wasUpdate: boolean): void {
+    if (wasUpdate) {
+      this.router.navigate(['/workflows']);
+      return;
+    }
+    this.resetCanvasAndWorkflowState();
+  }
+
   private resetCanvasAndWorkflowState(): void {
     this.store.reset();
     this.currentWorkflowId.set(null);

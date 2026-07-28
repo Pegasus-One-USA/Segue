@@ -20,13 +20,6 @@
   &:active { background: var(--color-primary-dark); }
 }
 
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 72px 0;
-}
-
 // ─── Column widths ────────────────────────────────────────────────────────────
 .col-actions {
   width: 100px;

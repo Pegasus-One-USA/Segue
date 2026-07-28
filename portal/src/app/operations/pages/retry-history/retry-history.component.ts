@@ -21,7 +21,7 @@ export class RetryHistoryComponent implements OnInit {
   readonly correlationId = signal('');
   readonly result = signal<PagedResult<RetryHistoryEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   readonly displayedCols = ['occurredOnUtc', 'context', 'retryNumber', 'delayMilliseconds', 'reason', 'correlationId'];
 

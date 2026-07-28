@@ -41,7 +41,7 @@ export class PipelineExecutionDetailComponent implements OnInit {
   readonly rows = signal<ResourceRow[]>([]);
   readonly totalCount = signal(0);
   readonly page = signal(1);
-  readonly pageSize = 25;
+  readonly pageSize = 10;
 
   readonly displayedCols = ['resourceType', 'sourceResourceId', 'stage', 'status', 'processingTimeMs', 'dataQuality', 'patientMatch', 'note', 'lineage'];
 

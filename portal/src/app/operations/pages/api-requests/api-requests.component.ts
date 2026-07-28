@@ -22,7 +22,7 @@ export class ApiRequestsComponent implements OnInit {
   readonly result = signal<PagedResult<ApiRequestLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly expandedId = signal<string | null>(null);
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   readonly displayedCols = ['occurredOnUtc', 'method', 'url', 'statusCode', 'durationMs', 'correlationId'];
 
