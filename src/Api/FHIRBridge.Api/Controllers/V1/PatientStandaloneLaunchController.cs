@@ -2,6 +2,7 @@ using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -16,8 +17,9 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// branch on OAuthController) so the two flows stay fully independent from here down. Only mints a context for a
 /// workflow the admin has explicitly opted in via <c>POST /workflows/{workflowId}/enable-public-launch</c> (the
 /// same, unmodified mechanism Provider Standalone already uses) whose source resolves to
-/// <see cref="ApplicationType.Patient"/>, and only for an <paramref name="ehrEndpointId"/> that resolves to any
-/// known EhrEndpoint row, regardless of EndpointType.
+/// <see cref="ApplicationType.Patient"/>, and only for an <paramref name="ehrEndpointId"/> that resolves to a known
+/// EhrEndpoint row of type <see cref="EhrEndpointType.MyChart"/> — a real customer's own branded instance, never
+/// the shared Epic sandbox.
 /// </summary>
 [ApiController]
 [AllowAnonymous]
@@ -56,7 +58,7 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             return NotFound();
         }
 
-        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, cancellationToken))
+        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.MyChart, cancellationToken))
         {
             return NotFound();
         }

@@ -1,4 +1,5 @@
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Abstractions.Persistence;
 
@@ -12,10 +13,12 @@ public interface IEhrEndpointRepository
     Task<IReadOnlyList<EhrEndpoint>> GetAllAsync(CancellationToken cancellationToken);
 
     /// <summary>Filtered at the query level (not GetAllAsync + in-memory filter) — the directory can be in the
-    /// hundreds of rows, so the anonymous public listing (all EndpointTypes — see EhrPublicEndpointsController)
-    /// still needs a query-level search rather than fetching everything and filtering in memory.
-    /// <paramref name="search"/>, when given, is a case-insensitive contains-match on Name.</summary>
-    Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(string? search, CancellationToken cancellationToken);
+    /// hundreds of rows. <paramref name="endpointType"/> scopes the anonymous public listing to one audience (Epic
+    /// sandbox rows for Provider Standalone, MyChart rows for Patient Standalone — see EhrPublicEndpointsController)
+    /// so the two flows can never surface each other's rows. <paramref name="search"/>, when given, is a
+    /// case-insensitive contains-match on Name.</summary>
+    Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
+        EhrEndpointType endpointType, string? search, CancellationToken cancellationToken);
 
     Task<EhrEndpoint?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

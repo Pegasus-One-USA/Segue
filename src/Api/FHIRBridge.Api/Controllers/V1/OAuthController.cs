@@ -2,6 +2,7 @@ using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -122,8 +123,8 @@ public sealed class OAuthController : ControllerBase
     /// <c>POST /workflows/{workflowId}/enable-public-launch</c> — <see cref="WorkflowDefinition.IsPubliclyLaunchable"/>
     /// is the only gate standing between "any caller who knows this workflowId" and a working login link for it,
     /// since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must resolve to
-    /// any known EhrEndpoint row, regardless of EndpointType — the same unfiltered set the public picker listing
-    /// exposes.
+    /// a known EhrEndpoint row of type <see cref="EhrEndpointType.Epic"/> — the vendor sandbox rows the Provider
+    /// Standalone picker lists, never a customer's own MyChart row.
     /// </summary>
     [AllowAnonymous]
     [EnableRateLimiting("oauth")]
@@ -148,7 +149,7 @@ public sealed class OAuthController : ControllerBase
             return NotFound();
         }
 
-        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, cancellationToken))
+        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.Epic, cancellationToken))
         {
             _logger.LogWarning(
                 "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known endpoint",

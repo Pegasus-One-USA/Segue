@@ -30,6 +30,13 @@ public interface IConfigurationRepository
     /// doesn't collide with itself.</summary>
     Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
 
+    // ── Source configurations (workflow-specific retrieval/scopes for a reusable SourceConnection) ────────────
+    Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct);
+    Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct);
+    Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct);
+    Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct);
+    Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken);
+
     // ── Destinations ──────────────────────────────────────────────────────────
     Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct);
     Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken ct);
