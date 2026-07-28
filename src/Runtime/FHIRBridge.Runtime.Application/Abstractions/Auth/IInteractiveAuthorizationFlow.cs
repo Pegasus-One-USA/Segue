@@ -22,7 +22,7 @@ public interface IInteractiveAuthorizationFlow
         string? launch = null);
 
     /// <summary>Exchanges the authorization code (with the retained PKCE verifier) for a token and persists it.</summary>
-    Task<string> ExchangeAuthorizationCodeAsync(
+    Task<SmartAuthorizationCodeExchangeResult> ExchangeAuthorizationCodeAsync(
         FhirSourceConfiguration source,
         string authorizationCode,
         string codeVerifier,

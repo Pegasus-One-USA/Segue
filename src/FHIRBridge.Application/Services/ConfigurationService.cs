@@ -3,12 +3,14 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
+using FluentValidation;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Application.Services;
@@ -25,6 +27,8 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly ISecretWriter _secretWriter;
     private readonly IParentReferenceResolver _parentReferenceResolver;
+    private readonly IValidator<CreateMappingProfileRequest> _mappingProfileValidator;
+    private readonly IValidator<CreateDestinationConfigurationRequest> _destinationConfigurationValidator;
     private readonly ILogger<ConfigurationService> _logger;
 
     public ConfigurationService(
@@ -33,6 +37,8 @@ public sealed class ConfigurationService : IConfigurationService
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
         ISecretWriter secretWriter,
         IParentReferenceResolver parentReferenceResolver,
+        IValidator<CreateMappingProfileRequest> mappingProfileValidator,
+        IValidator<CreateDestinationConfigurationRequest> destinationConfigurationValidator,
         ILogger<ConfigurationService> logger)
     {
         _repository = repository;
@@ -40,7 +46,18 @@ public sealed class ConfigurationService : IConfigurationService
         _capabilityDiscoveryService = capabilityDiscoveryService;
         _secretWriter = secretWriter;
         _parentReferenceResolver = parentReferenceResolver;
+        _mappingProfileValidator = mappingProfileValidator;
+        _destinationConfigurationValidator = destinationConfigurationValidator;
         _logger = logger;
+    }
+
+    private async Task ValidateRequestAsync<T>(IValidator<T> validator, T request, CancellationToken cancellationToken)
+    {
+        var result = await validator.ValidateAsync(request, cancellationToken);
+        if (!result.IsValid)
+        {
+            throw new RequestValidationException(new Dictionary<string, string[]>(result.ToDictionary()));
+        }
     }
 
     public async Task<SourceConnectionDto> AddSourceConnectionAsync(
@@ -151,6 +168,8 @@ public sealed class ConfigurationService : IConfigurationService
         CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
+
         var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
         if (!string.IsNullOrWhiteSpace(request.InlineSecret))
         {
@@ -188,6 +207,8 @@ public sealed class ConfigurationService : IConfigurationService
         CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
+
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
         var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
         if (!string.IsNullOrWhiteSpace(request.InlineSecret))
@@ -253,6 +274,7 @@ public sealed class ConfigurationService : IConfigurationService
         CreateMappingProfileRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_mappingProfileValidator, request, cancellationToken);
         await EnsureSourceSupportsResourceTypeAsync(request.SourceConnectionId, request.ResourceType, cancellationToken);
         var mappingProfile = new MappingProfile(
             request.Name,
@@ -272,6 +294,7 @@ public sealed class ConfigurationService : IConfigurationService
         CreateMappingProfileRequest request,
         CancellationToken cancellationToken)
     {
+        await ValidateRequestAsync(_mappingProfileValidator, request, cancellationToken);
         await EnsureSourceSupportsResourceTypeAsync(request.SourceConnectionId, request.ResourceType, cancellationToken);
         var mappingProfile = await GetMappingProfileRequiredAsync(mappingProfileId, cancellationToken);
         mappingProfile.Update(

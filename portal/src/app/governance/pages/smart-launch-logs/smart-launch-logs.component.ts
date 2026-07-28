@@ -17,7 +17,10 @@ export class SmartLaunchLogsComponent implements OnInit {
   readonly loading = signal(false);
   readonly entries = signal<SmartLaunchLogEntry[]>([]);
 
-  readonly displayedCols = ['occurredOnUtc', 'sourceName', 'launchType', 'success', 'failureReason'];
+  readonly displayedCols = [
+    'occurredOnUtc', 'sourceName', 'launchType', 'success', 'patientContextGranted', 'grantedScope',
+    'tokenCacheKeyHash', 'failureReason',
+  ];
 
   ngOnInit(): void {
     this.load();

@@ -13,6 +13,11 @@
         <h4 class="info-heading">A failed row here</h4>
         <p>Usually means something on the EHR side rejected the connection — an expired or mismatched signing key, an unregistered app, or a misconfigured client ID. The Failure Reason column shows the actual rejection message from the EHR.</p>
       </section>
+
+      <section class="info-section">
+        <h4 class="info-heading">Patient Context, Granted Scope, Token Cache Key</h4>
+        <p>Populated for interactive (EHR-launch / standalone) sign-ins only. <strong>Patient Context</strong> shows whether Epic actually returned a <code>patient</code> claim on this sign-in — if a workflow's Patient search later fails with "requires demographics or _id", check this column first: <em>No</em> means the search never had a launched patient to scope to. <strong>Token Cache Key</strong> is a one-way hash of the session this token was saved under; compare it across rows for the same source connection to confirm a later run reused the same login session instead of a different (or missing) one.</p>
+      </section>
     </div>
   </details>
 
@@ -46,6 +51,29 @@
               {{ r.success ? 'Success' : 'Failed' }}
             </span>
           </td>
+        </ng-container>
+
+        <ng-container matColumnDef="patientContextGranted">
+          <th mat-header-cell *matHeaderCellDef>Patient Context</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.patientContextGranted === null) {
+              <span>—</span>
+            } @else {
+              <span class="status-badge" [class.status-success]="r.patientContextGranted" [class.status-fail]="!r.patientContextGranted">
+                {{ r.patientContextGranted ? 'Yes' : 'No' }}
+              </span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="grantedScope">
+          <th mat-header-cell *matHeaderCellDef>Granted Scope</th>
+          <td mat-cell *matCellDef="let r" class="mono">{{ r.grantedScope || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="tokenCacheKeyHash">
+          <th mat-header-cell *matHeaderCellDef>Token Cache Key</th>
+          <td mat-cell *matCellDef="let r" class="mono">{{ r.tokenCacheKeyHash || '—' }}</td>
         </ng-container>
 
         <ng-container matColumnDef="failureReason">

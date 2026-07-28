@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Services;
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Application;
@@ -10,6 +11,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddFHIRBridgeApplication(this IServiceCollection services)
     {
+        services.AddValidatorsFromAssemblyContaining<ConfigurationService>();
         services.AddScoped<IJsonMappingEngine, JsonMappingEngine>();
         services.AddSingleton<IFhirElementCatalog, EmbeddedFhirElementCatalog>();
         services.AddSingleton<IParentReferenceResolver, ParentReferenceResolver>();

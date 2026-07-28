@@ -396,7 +396,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .OrderByDescending(x => x.OccurredOnUtc)
             .Take(NormalizeTake(take))
             .Select(x => new SmartLaunchLogDto(
-                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason))
+                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason,
+                x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash))
             .ToListAsync(cancellationToken);
     }
 
