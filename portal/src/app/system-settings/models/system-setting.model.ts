@@ -12,3 +12,8 @@ export interface SetSystemSettingRequest {
   value: string;
   description: string | null;
 }
+
+/** Matches the API's DecryptProvisionedSecretResponse shape exactly. */
+export interface DecryptProvisionedSecretResponse {
+  plaintextValue: string;
+}

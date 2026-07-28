@@ -130,6 +130,7 @@ export const CORS_ORIGINS_ENDPOINTS = {
 export const SYSTEM_SETTINGS_ENDPOINTS = {
   list: `${API_V1_BASE}/system/settings`,
   byKey: (key: string) => `${API_V1_BASE}/system/settings/${encodeURIComponent(key)}`,
+  decryptProvisionedSecret: `${API_V1_BASE}/system/settings/decrypt-provisioned-secret`,
 };
 
 // ─── App-level signing secrets (AppSecretsController — api/v1/system/app-secrets) ──

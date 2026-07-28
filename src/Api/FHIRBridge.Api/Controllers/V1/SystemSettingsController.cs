@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -16,10 +18,12 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class SystemSettingsController : ControllerBase
 {
     private readonly ISystemSettingsService _service;
+    private readonly IProvisionedSecretDecryptor _secretDecryptor;
 
-    public SystemSettingsController(ISystemSettingsService service)
+    public SystemSettingsController(ISystemSettingsService service, IProvisionedSecretDecryptor secretDecryptor)
     {
         _service = service;
+        _secretDecryptor = secretDecryptor;
     }
 
     [HttpGet]
@@ -45,5 +49,38 @@ public sealed class SystemSettingsController : ControllerBase
     {
         await _service.DeleteAsync(key, cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Recovery tool: decrypts a raw <c>ProvisionedSecrets.ProtectedValue</c> blob (e.g. copied from this same
+    /// instance's database) back to its plaintext — typically a private key PEM. Only ever works for a value
+    /// encrypted by <em>this instance's own</em> Data Protection key ring; a value copied from a different
+    /// FHIRBridge deployment will fail here (see <see cref="IProvisionedSecretDecryptor"/>'s remarks) — decrypt it
+    /// on/with that deployment's own key ring instead.
+    /// </summary>
+    [HttpPost("decrypt-provisioned-secret")]
+    [ProducesResponseType(typeof(DecryptProvisionedSecretResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public IActionResult DecryptProvisionedSecret([FromBody] DecryptProvisionedSecretRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProtectedValue))
+        {
+            return BadRequest(new { error = "invalid_request", error_description = "protectedValue is required." });
+        }
+
+        try
+        {
+            var plaintext = _secretDecryptor.Decrypt(request.ProtectedValue);
+            return Ok(new DecryptProvisionedSecretResponse(plaintext));
+        }
+        catch (CryptographicException)
+        {
+            return BadRequest(new
+            {
+                error = "decryption_failed",
+                error_description = "Could not decrypt this value with this instance's own Data Protection key " +
+                    "ring. A ProtectedValue copied from a different FHIRBridge deployment cannot be decrypted here.",
+            });
+        }
     }
 }

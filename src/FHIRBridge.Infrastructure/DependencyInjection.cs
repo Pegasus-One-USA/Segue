@@ -438,6 +438,9 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IAppSecretsAdminService, AppSecretsAdminService>();
+        // Needs only IDataProtectionProvider (registered app-wide in Program.cs), not FHIRBridgeDbContext — works
+        // the same on both the SQL-backed and InMemory paths above.
+        services.AddSingleton<IProvisionedSecretDecryptor, ProvisionedSecretDecryptor>();
 
         services.AddScoped<IConfiguredPipelineService, ConfiguredPipelineService>();
 

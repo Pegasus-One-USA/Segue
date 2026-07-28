@@ -178,7 +178,7 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
-        providerLaunchContext = settings.ProviderLaunchContext
+        providerInAppWorkflowId = settings.ProviderInAppWorkflowId
     });
 });
 
@@ -237,7 +237,7 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneBaseUrl = request.StandaloneBaseUrl?.Trim() ?? string.Empty;
-    settings.ProviderLaunchContext = request.ProviderLaunchContext?.Trim() ?? string.Empty;
+    settings.ProviderInAppWorkflowId = request.ProviderInAppWorkflowId?.Trim() ?? string.Empty;
     await db.SaveChangesAsync();
 
     return Results.Ok(new
@@ -251,7 +251,7 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
-        providerLaunchContext = settings.ProviderLaunchContext
+        providerInAppWorkflowId = settings.ProviderInAppWorkflowId
     });
 });
 
@@ -276,18 +276,55 @@ app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, Ses
 // Anonymous by design (no session-cookie check): launch-provider-in-app.ts calls this from inside Epic's
 // embedded ("Embedded" launch display mode) iframe, where the browser treats it as a third-party/cross-site
 // request and won't attach the hb_session cookie (SameSite=Lax) — a session check here would silently 401 on
-// every embedded EHR launch and fall back to the compiled-in placeholder token. The value it returns is an
-// opaque launch-context token, not PHI or a secret; the actual security boundary is FHIRBridge's own
-// ILaunchTokenProtector validation when this token is redeemed against the iss/launch exchange. Must be
+// every embedded EHR launch and fall back to an empty context. ProviderInAppWorkflowId is a raw workflow id (not
+// a secret), so it's minted into a real, opaque launch-context token on every call via FHIRBridge's anonymous
+// GET /api/v1/workflows/{id}/public-launch-context — this app never stores a pre-minted token itself, which is
+// what used to let an admin accidentally paste the raw workflow id in its place (see
+// HealthAppDbContext.ProviderInAppWorkflowId). The actual security boundary is still FHIRBridge's own
+// ILaunchTokenProtector validation when the minted token is redeemed against the iss/launch exchange, plus the
+// workflow having been opted into public launch via POST /api/v1/workflows/{id}/enable-public-launch. Must be
 // awaited BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
-app.MapGet("/api/provider-in-app-launch-context", async (HealthAppDbContext db) =>
+app.MapGet("/api/provider-in-app-launch-context", async (
+    HealthAppDbContext db,
+    IHttpClientFactory httpClientFactory,
+    ILogger<Program> logger) =>
 {
     var settings = await db.WorkflowSettings.FindAsync(1);
-    return Results.Ok(new
+    var workflowId = settings?.ProviderInAppWorkflowId;
+    var baseUrl = settings?.StandaloneBaseUrl ?? string.Empty;
+
+    if (string.IsNullOrWhiteSpace(workflowId) || string.IsNullOrWhiteSpace(baseUrl))
     {
-        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty,
-        standaloneBaseUrl = settings?.StandaloneBaseUrl ?? string.Empty
-    });
+        return Results.Ok(new { providerLaunchContext = string.Empty, standaloneBaseUrl = baseUrl });
+    }
+
+    var client = httpClientFactory.CreateClient("Workflow");
+    var mintUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/public-launch-context";
+
+    try
+    {
+        var response = await client.GetAsync(mintUrl);
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "Could not mint a launch context for ProviderInAppWorkflowId={WorkflowId}: FHIRBridge returned {StatusCode}.",
+                workflowId, (int)response.StatusCode);
+            return Results.Ok(new { providerLaunchContext = string.Empty, standaloneBaseUrl = baseUrl });
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        var minted = JsonSerializer.Deserialize<MintedLaunchContext>(body, jsonOptions);
+        return Results.Ok(new
+        {
+            providerLaunchContext = minted?.Context ?? string.Empty,
+            standaloneBaseUrl = baseUrl
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Could not reach FHIRBridge to mint a launch context for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
+        return Results.Ok(new { providerLaunchContext = string.Empty, standaloneBaseUrl = baseUrl });
+    }
 });
 
 // Calls the admin-configured workflow URL, expects a { "Resources": [{ "ResourceType", "ResourceId",
@@ -541,7 +578,9 @@ record SaveSettingsRequest(
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
     string StandaloneBaseUrl,
-    string ProviderLaunchContext);
+    string ProviderInAppWorkflowId);
+// Matches FHIRBridge's GET /api/v1/workflows/{id}/public-launch-context response shape.
+record MintedLaunchContext(string Context);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.

@@ -274,7 +274,14 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       this.toast.show('Cannot save workflow', msg);
       return;
     }
-    const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
+    // Mappings must count too: a workflow wired entirely to already-provisioned source/destination
+    // connections (sourceConnectionResolved/destinationResolved both "true") has zero source/destination
+    // specs to create, but can still carry new/changed mapping rows that need a MappingProfile created and
+    // stamped onto the Field Mapping node — skipping the build call in that case silently left the mapping
+    // node's config empty (no mappingProfileId), so every run mapped zero records despite "succeeding".
+    const hasSpecs = (request.sources?.length ?? 0) > 0
+      || (request.destinations?.length ?? 0) > 0
+      || (request.mappings?.length ?? 0) > 0;
     if (hasSpecs) {
       this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
       return;

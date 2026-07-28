@@ -1,5 +1,45 @@
 <div class="list-page">
 
+  <!-- Decrypt Provisioned Secret tool -->
+  <div class="filter-card">
+    <div class="filter-header-text">
+      <h3>Decrypt Provisioned Secret</h3>
+      <p>
+        Paste a raw <code>ProvisionedSecrets.ProtectedValue</code> blob to recover its plaintext (e.g. a private
+        key PEM) — only works for a value encrypted by <strong>this instance's own</strong> Data Protection key
+        ring. A value copied from a different FHIRBridge deployment cannot be decrypted here.
+      </p>
+    </div>
+
+    <textarea
+      class="search-input"
+      style="width: 100%; min-height: 90px; font-family: monospace; resize: vertical;"
+      placeholder="Paste the ProtectedValue here…"
+      [value]="protectedValueInput()"
+      (input)="protectedValueInput.set($any($event.target).value)"
+    ></textarea>
+
+    <div class="filter-actions" style="margin-top: 8px;">
+      <button class="btn-add" type="button" [disabled]="decrypting()" (click)="decryptProvisionedSecret()">
+        {{ decrypting() ? 'Decrypting…' : 'Decrypt' }}
+      </button>
+      @if (decryptedPlaintext() || decryptError()) {
+        <button class="btn-add" type="button" (click)="clearDecryptTool()">Clear</button>
+      }
+    </div>
+
+    @if (decryptError()) {
+      <p style="color: #c0392b; margin-top: 8px;">{{ decryptError() }}</p>
+    }
+
+    @if (decryptedPlaintext()) {
+      <div style="margin-top: 12px;">
+        <pre style="white-space: pre-wrap; word-break: break-all; background: rgba(127,127,127,0.08); padding: 12px; border-radius: 6px; font-family: monospace;">{{ decryptedPlaintext() }}</pre>
+        <button class="btn-add" type="button" (click)="downloadDecryptedPem()">Download as .pem</button>
+      </div>
+    }
+  </div>
+
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-row">

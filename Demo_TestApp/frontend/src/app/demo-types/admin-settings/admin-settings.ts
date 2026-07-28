@@ -1,16 +1,10 @@
-import { Component, OnInit, computed, input, output, signal } from '@angular/core';
+import { Component, OnInit, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
-
-// A bare GUID (with or without hyphens) is never a valid FHIRBridge launch-context token — real tokens are Data
-// Protection-encrypted, URL-safe base64 (100+ chars, no fixed hyphen pattern). This exists purely to catch the
-// easy mistake of pasting a workflow id where a minted launch-context token belongs (see GET
-// /api/v1/workflows/{id}/launch-url) — it does not attempt to validate that a non-GUID-shaped value is real.
-const GUID_PATTERN = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 /** Matches Demo_TestApp's GET/POST /api/settings response — the single, unified settings surface for every demo
  *  type's FHIRBridge connection points. Only the Admin role can read or write this. */
@@ -24,7 +18,7 @@ interface AdminSettings {
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
-  providerLaunchContext: string;
+  providerInAppWorkflowId: string;
 }
 
 @Component({
@@ -52,15 +46,7 @@ export class AdminSettingsComponent implements OnInit {
   readonly standaloneWorkflowId = signal('');
   readonly standaloneDetailWorkflowId = signal('');
   readonly standaloneBaseUrl = signal('');
-  readonly providerLaunchContext = signal('');
-
-  // Drives a warning under the Launch Context field — this exact mistake (an admin pasting the "Provider InApp"
-  // workflow's own id here instead of a real minted token) is what caused a full "invalid or has been tampered
-  // with" investigation; see fhirbridge-demo-testapp-workflow-ids memory. GET /api/v1/workflows/{id}/launch-url
-  // (SuperAdmin bearer token) mints the real value.
-  readonly providerLaunchContextLooksLikeWorkflowId = computed(() =>
-    GUID_PATTERN.test(this.providerLaunchContext().trim())
-  );
+  readonly providerInAppWorkflowId = signal('');
 
   constructor(private readonly http: HttpClient) {}
 
@@ -85,7 +71,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneWorkflowId.set(current.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(current.standaloneBaseUrl);
-      this.providerLaunchContext.set(current.providerLaunchContext);
+      this.providerInAppWorkflowId.set(current.providerInAppWorkflowId);
     } catch {
       this.loadError.set('Could not load settings.');
     } finally {
@@ -111,7 +97,7 @@ export class AdminSettingsComponent implements OnInit {
             standaloneWorkflowId: this.standaloneWorkflowId(),
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             standaloneBaseUrl: this.standaloneBaseUrl(),
-            providerLaunchContext: this.providerLaunchContext(),
+            providerInAppWorkflowId: this.providerInAppWorkflowId(),
           },
           { withCredentials: true }
         )
@@ -125,7 +111,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneWorkflowId.set(result.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(result.standaloneBaseUrl);
-      this.providerLaunchContext.set(result.providerLaunchContext);
+      this.providerInAppWorkflowId.set(result.providerInAppWorkflowId);
       this.saved.set(true);
     } catch {
       this.saveError.set('Could not save settings.');
