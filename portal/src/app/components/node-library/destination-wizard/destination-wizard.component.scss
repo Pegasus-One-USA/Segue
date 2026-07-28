@@ -587,6 +587,10 @@
   font-weight: 600;
   line-height: 1.5;
 
+  &.dw-parent-refs-warn {
+    margin: 10px 14px;
+  }
+
   &--info {
     background: var(--color-info-soft);
     border: 1px solid color-mix(in srgb, var(--color-info) 35%, white);

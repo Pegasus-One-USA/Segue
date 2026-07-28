@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
-using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Infrastructure.Persistence;
 
@@ -17,11 +16,10 @@ public sealed class InMemoryEhrEndpointRepository : IEhrEndpointRepository
         Task.FromResult<IReadOnlyList<EhrEndpoint>>(
             _store.Values.Where(x => !x.IsDeleted).OrderBy(x => x.Name).ToArray());
 
-    public Task<IReadOnlyList<EhrEndpoint>> GetByEndpointTypeAsync(
-        EhrEndpointType endpointType, string? search, CancellationToken cancellationToken) =>
+    public Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(string? search, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<EhrEndpoint>>(
             _store.Values
-                .Where(x => !x.IsDeleted && x.EndpointType == endpointType)
+                .Where(x => !x.IsDeleted)
                 .Where(x => string.IsNullOrWhiteSpace(search) || x.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(x => x.Name)
                 .ToArray());

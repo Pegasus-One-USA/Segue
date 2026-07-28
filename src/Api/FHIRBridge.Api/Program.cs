@@ -133,7 +133,6 @@ builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.A
 
 builder.Services
     .AddFHIRBridgeApplication()
-    .AddPatientStandaloneApplicationServices()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
     .AddWorkflowCore()
     .AddWorkflowInfrastructure();

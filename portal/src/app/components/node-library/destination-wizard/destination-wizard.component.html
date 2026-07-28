@@ -422,6 +422,11 @@
                 </button>
               }
             </div>
+            @if (selectedParentsOf(r).length === 0) {
+              <div class="dw-callout dw-callout--warn dw-parent-refs-warn">
+                Select at least one parent for {{ r }} — otherwise this record will save with no link back to its parent resource.
+              </div>
+            }
           }
 
           <table class="dw-map-table">
@@ -577,6 +582,12 @@
 
       <div class="dw-callout dw-callout--info">
         After adding to the pipeline, the {{ destLabel() }} node will be connected automatically to the selected source.
+      </div>
+    }
+
+    @if ((isStepActive(3) || isStepActive(4)) && resourcesMissingParentSelection().length > 0) {
+      <div class="dw-callout dw-callout--warn">
+        Select a parent for: {{ resourcesMissingParentSelection().join(', ') }} before continuing.
       </div>
     }
 
