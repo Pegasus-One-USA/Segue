@@ -1461,14 +1461,9 @@ export class EpicAudienceFormComponent implements OnInit {
     });
   }
 
-  /** Name + Base URL alone can collide (e.g. two connections both literally named "Epic" against the same
-   *  sandbox URL, one EHR Launch and one Standalone) — append audience + a Client ID suffix so the dropdown
-   *  always has something to visually tell them apart by. */
+  /** Just the connection name — base URL/audience/client-id details are shown once selected, not in the picker. */
   protected existingConnectionLabel(conn: SourceConnectionModel): string {
-    const audience = (conn.applicationType && APPLICATION_TYPE_TO_AUDIENCE[conn.applicationType]) || null;
-    const audienceLabel = audience ? ` · ${audience}` : '';
-    const clientIdSuffix = conn.authentication?.clientId ? ` · …${conn.authentication.clientId.slice(-6)}` : '';
-    return `${conn.name} — ${conn.baseUrl}${audienceLabel}${clientIdSuffix}`;
+    return conn.name;
   }
 
   /**
