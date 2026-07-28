@@ -1,0 +1,112 @@
+portal/src/app/governance/pages/data-access-logs/data-access-logs.component.ts
+  s_d68f9144c308b2::t_d02ecd64b071a6 7,12
+  s_d68f9144c308b2::t_6b1526915adc48 44
+portal/src/app/governance/pages/audit-logs/audit-logs.component.ts
+  s_d68f9144c308b2::t_65b871780f38b4 24
+  s_d68f9144c308b2::t_27b632dacf4ded 87
+  s_d68f9144c308b2::t_3339cba852505e 12,102-104
+  s_d68f9144c308b2::t_f62f428365dfa2 18-20
+  s_d68f9144c308b2::t_dfe4116e8c2309 41-42
+  s_d68f9144c308b2::t_312203ce911cda 71-72,79-80,93-101
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_d68f9144c308b2::t_c38ccc6d77b83d 726-728,730
+  s_d68f9144c308b2::t_3a5ec3cde82145 305
+  s_d68f9144c308b2::t_9dc54b2e8690f5 393,401,407,685,694
+  s_d68f9144c308b2::t_87175465275d7c 725,729,731,734-735
+portal/src/app/governance/pages/security-events/security-events.component.html
+  s_d68f9144c308b2::t_6674c2ba1800e4 92,94-95,97-98
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_d68f9144c308b2::t_3c8426ff8c6463 12-13
+  s_d68f9144c308b2::t_4630c4ce93c0bc 92
+  s_d68f9144c308b2::t_5bba3b8e87e51a 10-11,24
+  s_d68f9144c308b2::t_a71587448101e3 98-108
+  s_d68f9144c308b2::t_80e0dd7e52eff2 68-69
+  s_d68f9144c308b2::t_fc7c29f13187ba 39-40
+src/FHIRBridge.Application/Abstractions/Governance/IGovernanceQueryService.cs
+  s_d68f9144c308b2::t_793d96572f10df 15-16
+portal/src/app/governance/services/governance-api.service.ts
+  s_d68f9144c308b2::t_6f3dbbca7bcb3d 40,45-46
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_d68f9144c308b2::t_65c71df545cd01 35-36
+portal/src/app/governance/pages/oauth-logs/oauth-logs.component.ts
+  s_d68f9144c308b2::t_5f79a0ac81afc7 6,11
+  s_d68f9144c308b2::t_c2500bf53d51c1 37
+portal/src/app/governance/pages/audit-logs/audit-logs.component.scss
+  s_d68f9144c308b2::t_5f4d783c980680 65-84
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_d68f9144c308b2::t_e646058342493b 52
+  s_d68f9144c308b2::t_d285eed63c70e2 184
+  s_d68f9144c308b2::t_0f3a74360f1377 36
+portal/src/app/components/shared/pagination-bar/pagination-bar.component.scss
+  s_d68f9144c308b2::t_be248849b864f6 1-117
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_d68f9144c308b2::t_23927474842d33 34-35,53,64-86
+  s_d68f9144c308b2::t_3cc0f785348e80 1,87-88
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_d68f9144c308b2::t_106b9cc8aab622 138-140
+  s_d68f9144c308b2::t_4ce9cfe5f3cdb6 141,143-144,146-147
+portal/src/app/governance/pages/data-access-logs/data-access-logs.component.html
+  s_d68f9144c308b2::t_7e143685113709 88,90-91,93-94
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_d68f9144c308b2::t_a71024ff188151 186-187,189-190,192-193
+  s_d68f9144c308b2::t_0e6c2cd38fb318 80-85,97-102,109-114,123-128,135-140,147-152
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_d68f9144c308b2::t_481ca9fc55c0ba 25-26
+portal/src/app/_list-page.scss
+  s_d68f9144c308b2::t_3812f6d37ce15a 124-143
+portal/src/app/governance/pages/authorization-logs/authorization-logs.component.ts
+  s_d68f9144c308b2::t_bc8b1e536f96e5 7,12
+  s_d68f9144c308b2::t_49865f7fc9d0a1 44
+portal/src/app/governance/pages/security-events/security-events.component.ts
+  s_d68f9144c308b2::t_ac0a84d47ffccf 44
+  s_d68f9144c308b2::t_8100dd2f121cda 7,12
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_d68f9144c308b2::t_8d39e6076d3418 17,30
+  s_d68f9144c308b2::t_8be5022320f19c 91
+src/Api/FHIRBridge.Api/Controllers/V1/GovernanceController.cs
+  s_d68f9144c308b2::t_604838c7bed972 37-39,41-42
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_d68f9144c308b2::t_3e3e3c0b453e78 286,288-289,291-292
+portal/src/app/governance/pages/oauth-logs/oauth-logs.component.html
+  s_d68f9144c308b2::t_138e47fab4aaa8 58,60-61,63-64
+portal/src/app/governance/pages/audit-logs/audit-logs.component.html
+  s_d68f9144c308b2::t_232be73a821169 158,160-161,163-164
+  s_d68f9144c308b2::t_a32a485e933569 52-57,62-67,72-77,82-87,92-97,102-107,116-121
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  s_d68f9144c308b2::t_3660a1c6ef7db6 193,196-218
+portal/src/app/components/shared/pagination-bar/pagination-bar.component.html
+  s_d68f9144c308b2::t_809329ddbd154e 1-30
+portal/src/app/governance/pages/authentication-logs/authentication-logs.component.html
+  s_d68f9144c308b2::t_f172fc3eea4720 88,90-91,93-94
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d68f9144c308b2::t_0ab7d7490a2787 1019
+  s_d68f9144c308b2::t_5a225fe8c77b7c 952-953
+  s_d68f9144c308b2::t_d69348ad193bc2 1442-1464
+portal/src/app/governance/pages/authorization-logs/authorization-logs.component.html
+  s_d68f9144c308b2::t_1a09878ace3b69 86,88-89,91-92
+portal/src/app/settings/pages/branding/branding-settings.component.scss
+  s_d68f9144c308b2::t_27a5675efd7821 206-299
+portal/src/app/components/shared/pagination-bar/pagination-bar.component.ts
+  s_d68f9144c308b2::t_ccc99645d25d83 1-44
+portal/src/app/governance/pages/authentication-logs/authentication-logs.component.ts
+  s_d68f9144c308b2::t_dfb3f63ea9e89d 7,12
+  s_d68f9144c308b2::t_7c03c4460026ad 44
+src/FHIRBridge.Infrastructure/Governance/EmptyGovernanceQueryService.cs
+  s_d68f9144c308b2::t_0ed764be274dc3 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "1bfc1da766230eb3fd8542852f2ef866c3b4a191",
+  "prompts": {},
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
