@@ -307,8 +307,15 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         const msg = typeof err?.error?.error === 'string'
           ? err.error.error
           : 'Something went wrong while saving this workflow. Please contact your admin.';
-        this.workflowStatus.set(msg);
-        this.toast.show('Create-on-save failed', typeof msg === 'string' ? msg : 'See status for details.');
+        // A structured validation rejection (RequestValidationException / WorkflowEndpoints' ValidationBadRequest
+        // helper) carries per-field messages alongside the flat `error` string — surface all of them rather than
+        // just the generic top-level message, since `msg` alone ("Validation failed.") isn't actionable on its own.
+        const fieldErrors = err?.error?.fieldErrors as Record<string, string[]> | null | undefined;
+        const detail = fieldErrors && Object.keys(fieldErrors).length
+          ? Object.values(fieldErrors).flat().join(' ')
+          : msg;
+        this.workflowStatus.set(detail);
+        this.toast.show('Create-on-save failed', detail);
         this.workflowBusy.set(false);
       },
     });

@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.SharedKernel.Enums;
@@ -43,6 +44,8 @@ public sealed class ParentReferenceValidationTests
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<ISecretWriter>(),
             _resolver.Object,
+            new CreateMappingProfileRequestValidator(),
+            new CreateDestinationConfigurationRequestValidator(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 
