@@ -1,0 +1,68 @@
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  s_406c1571f7ddf4::t_c00b0e6448ab47 1-94
+tests/FHIRBridge.UnitTests/Configuration/ParentReferenceValidationTests.cs
+  s_406c1571f7ddf4::t_80b372adaa4772 6
+  s_406c1571f7ddf4::t_8363ba7b5d4b40 47-48
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_406c1571f7ddf4::t_bd9a94ac91ae7e 1-136
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_406c1571f7ddf4::t_63ea8484e985d2 181
+  s_406c1571f7ddf4::t_da65b9fa1681fc 79
+  s_406c1571f7ddf4::t_194b25e2ba8b76 29-42
+  s_406c1571f7ddf4::t_5dc9e328f9ac97 155,160,166
+  s_406c1571f7ddf4::t_c68e86933a89f8 128
+  s_406c1571f7ddf4::t_bfaa10f39026cc 104
+src/FHIRBridge.Application/Exceptions/RequestValidationException.cs
+  s_406c1571f7ddf4::t_b8ac609e3ad5d2 1-23
+tests/FHIRBridge.Api.IntegrationTests/Tests/MappingProfileValidationTests.cs
+  s_406c1571f7ddf4::t_961d018430f780 1-68
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  s_406c1571f7ddf4::t_0da80545e918d1 34-35
+  s_406c1571f7ddf4::t_b319cfbb64d143 6
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_406c1571f7ddf4::t_5efe43608c9030 1-43
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_406c1571f7ddf4::t_a23d33bf60316e 6,13,61-62
+  s_406c1571f7ddf4::t_5639a383442048 30-31,40-41,49-50,54-58,60
+  s_406c1571f7ddf4::t_467d21cdaeea22 59
+  s_406c1571f7ddf4::t_59fa12bfb70fba 171-172
+  s_406c1571f7ddf4::t_19297dcc9ff82e 210-211
+  s_406c1571f7ddf4::t_103fe8baeddc88 277
+  s_406c1571f7ddf4::t_75edb6f6ec3fbf 297
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  s_406c1571f7ddf4::t_4bacec1a83f339 34-35
+  s_406c1571f7ddf4::t_139311f26297bc 6
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_406c1571f7ddf4::t_5958d1a63cf319 310-318
+src/Api/FHIRBridge.Api/Program.cs
+  s_406c1571f7ddf4::t_eed2c80545904a 295
+  s_406c1571f7ddf4::t_5c71a123da001b 11
+  s_406c1571f7ddf4::t_b1c3ba50c41f95 655-659,661-665,669,671,674,677,686,689,694,696
+  s_406c1571f7ddf4::t_5fda3769ca8ab8 322
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  s_406c1571f7ddf4::t_c85ded6d1a4ce0 43-44
+  s_406c1571f7ddf4::t_5cd35a2d6c9947 7
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_406c1571f7ddf4::t_d0c85d2cfaac0b 5
+  s_406c1571f7ddf4::t_4c147ec6cd2241 14
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_406c1571f7ddf4::t_98529a8287daa8 27
+  s_406c1571f7ddf4::t_6fc49b3a97e249 1-26,28-33,38-186
+  s_406c1571f7ddf4::t_63a3f8de818838 34-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a0045d5926313c234effb3d568835b7b0e001a3a",
+  "prompts": {},
+  "sessions": {
+    "s_406c1571f7ddf4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09113d4a-15f1-43e2-8ea5-4bf49ea476b0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
