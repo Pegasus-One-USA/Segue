@@ -172,7 +172,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
                 usedVerifier = verifier;
                 usedRedirect = redirect;
             })
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         var result = await Service().CompleteAsync(state, "auth-code", CancellationToken.None);
 
@@ -209,7 +209,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Callback((FhirSourceConfiguration s, string _, string _, string _, CancellationToken _) => exchanged = s)
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
 
@@ -229,7 +229,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         StartConfiguredPipelineRunRequest? runRequest = null;
         _pipeline.Setup(x => x.StartAsync(It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
@@ -283,7 +283,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         StartConfiguredPipelineRunRequest? runRequest = null;
         _pipeline.Setup(x => x.StartAsync(It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
@@ -458,7 +458,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         var result = await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
 
@@ -478,7 +478,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         var result = await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
 

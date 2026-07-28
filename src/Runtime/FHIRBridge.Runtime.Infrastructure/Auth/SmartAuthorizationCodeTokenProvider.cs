@@ -228,7 +228,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     /// Completes the authorization-code grant from the OAuth callback and persists the resulting token. Returns the
     /// freshly minted access token.
     /// </summary>
-    public async Task<string> ExchangeAuthorizationCodeAsync(
+    public async Task<SmartAuthorizationCodeExchangeResult> ExchangeAuthorizationCodeAsync(
         FhirSourceConfiguration source,
         string authorizationCode,
         string codeVerifier,
@@ -266,10 +266,11 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         };
 
         // A rotated refresh token replaces the old one; if the endpoint omits one, keep the existing token.
-        return await RequestAndStoreAsync(source, form, $"{ProviderName}TokenRefresh", cancellationToken, refreshToken);
+        var result = await RequestAndStoreAsync(source, form, $"{ProviderName}TokenRefresh", cancellationToken, refreshToken);
+        return result.AccessToken;
     }
 
-    private async Task<string> RequestAndStoreAsync(
+    private async Task<SmartAuthorizationCodeExchangeResult> RequestAndStoreAsync(
         FhirSourceConfiguration source,
         Dictionary<string, string> form,
         string action,
@@ -352,7 +353,11 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             }
 
             await _auditSink.RecordAsync(source, $"{action}Succeeded", "Completed", $"{ProviderName} access token acquired.", cancellationToken);
-            return token.AccessToken!;
+            return new SmartAuthorizationCodeExchangeResult(
+                token.AccessToken!,
+                token.Scope,
+                !string.IsNullOrWhiteSpace(token.Patient),
+                HashKey(BuildStoreKey(source, null)));
         }
     }
 

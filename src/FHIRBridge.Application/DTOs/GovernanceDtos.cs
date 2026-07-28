@@ -171,7 +171,10 @@ public sealed record SmartLaunchLogDto(
     string SourceName,
     string LaunchType,
     bool Success,
-    string? FailureReason);
+    string? FailureReason,
+    string? GrantedScope,
+    bool? PatientContextGranted,
+    string? TokenCacheKeyHash);
 
 /// <summary>The currently-effective retention policy for one governance/operations data class.</summary>
 public sealed record RetentionPolicyDto(
