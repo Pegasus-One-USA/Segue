@@ -8,7 +8,8 @@ namespace FHIRBridge.Infrastructure.Governance;
 public sealed class EmptyGovernanceQueryService : IGovernanceQueryService
 {
     public Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
-        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken)
+        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
+        string? sortColumn = null, string? sortDirection = null)
         => Task.FromResult(new PagedResult<AuditLogDto>([], 0, 1, take));
 
     public Task<PagedResult<DataAccessLogDto>> GetDataAccessLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)

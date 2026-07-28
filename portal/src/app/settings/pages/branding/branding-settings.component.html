@@ -190,10 +190,32 @@
               @for (opt of loaderStyleOptions; track opt.id) {
                 <button
                   type="button"
-                  class="mode-pill"
+                  class="mode-pill mode-pill--loader"
                   [class.active]="form.value.loaderStyle === opt.id"
                   (click)="form.controls.loaderStyle.setValue(opt.id)"
-                >{{ opt.label }}</button>
+                >
+                  <span class="loader-preview" aria-hidden="true">
+                    @switch (opt.id) {
+                      @case ('bar') {
+                        <span class="loader-preview__bar-track"><span class="loader-preview__bar-fill"></span></span>
+                      }
+                      @case ('spinner') {
+                        <span class="loader-preview__spinner"></span>
+                      }
+                      @case ('list') {
+                        <span class="loader-preview__list">
+                          <span class="loader-preview__list-row"></span>
+                          <span class="loader-preview__list-row"></span>
+                          <span class="loader-preview__list-row"></span>
+                        </span>
+                      }
+                      @case ('none') {
+                        <span class="loader-preview__none">&mdash;</span>
+                      }
+                    }
+                  </span>
+                  {{ opt.label }}
+                </button>
               }
             </div>
             <p class="field-hint">Shown automatically while any API call is in progress, anywhere in the app.</p>

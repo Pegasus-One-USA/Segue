@@ -487,14 +487,3 @@
 }
 
 // ─── Paginator ────────────────────────────────────────────────────────────────
-.table-paginator {
-  border-top: 1px solid var(--color-border);
-  background: var(--color-side);
-
-  ::ng-deep {
-    .mat-mdc-paginator-container { padding: 8px 16px; }
-    .mat-mdc-paginator-range-label { color: var(--color-muted); font-size: 13px; }
-    .mat-mdc-icon-button { color: var(--color-ink-2) !important; }
-    .mat-mdc-icon-button[disabled] { color: var(--color-border) !important; }
-  }
-}

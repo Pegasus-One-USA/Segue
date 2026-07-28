@@ -949,6 +949,8 @@ public static class WorkflowEndpoints
             string? search,
             int? page,
             int? pageSize,
+            string? sortColumn,
+            string? sortDirection,
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
@@ -1014,8 +1016,7 @@ public static class WorkflowEndpoints
             var effectivePage = page is > 0 ? page.Value : 1;
             var effectivePageSize = pageSize is > 0 ? pageSize.Value : 25;
             var totalCount = items.Count;
-            var paged = items
-                .OrderByDescending(x => x.StartedAt)
+            var paged = SortRuns(items, sortColumn, sortDirection)
                 .Skip((effectivePage - 1) * effectivePageSize)
                 .Take(effectivePageSize)
                 .ToList();
@@ -1435,6 +1436,29 @@ public static class WorkflowEndpoints
             "status"   => Order(summary => summary.Status),
             "lastRun"  => Order(summary => summary.LastRunAt?.UtcTicks ?? -1),
             _          => Order(summary => summary.Name.ToLowerInvariant()),
+        };
+    }
+
+    // Defaults to newest-first by start time — matches this endpoint's pre-sorting behavior before
+    // sortColumn/sortDirection existed, so an unsorted request (the initial page load) looks unchanged.
+    private static IEnumerable<WorkflowRunHistoryDto> SortRuns(
+        IEnumerable<WorkflowRunHistoryDto> runs, string? sortColumn, string? sortDirection)
+    {
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedEnumerable<WorkflowRunHistoryDto> Order<TKey>(Func<WorkflowRunHistoryDto, TKey> keySelector) =>
+            descending
+                ? runs.OrderByDescending(keySelector)
+                : runs.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "pipeline"    => Order(run => run.PipelineName.ToLowerInvariant()),
+            "source"      => Order(run => (run.SourceName ?? run.SourceSystemType ?? string.Empty).ToLowerInvariant()),
+            "status"      => Order(run => run.Status),
+            "duration"    => Order(run => run.DurationMs ?? -1),
+            "triggeredBy" => Order(run => (run.TriggeredBy ?? run.TriggerType ?? string.Empty).ToLowerInvariant()),
+            _             => Order(run => run.StartedAt),
         };
     }
 

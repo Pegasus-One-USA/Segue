@@ -37,10 +37,13 @@ export class GovernanceApiService {
 
   auditLogs(
     correlationId: string | undefined, page: number, pageSize: number, entityType?: string, entityId?: string,
+    sortColumn?: string, sortDirection?: 'asc' | 'desc',
   ): Observable<PagedResult<AuditLogEntry>> {
     let params = buildParams(correlationId, page, pageSize);
     if (entityType) params = params.set('entityType', entityType);
     if (entityId) params = params.set('entityId', entityId);
+    if (sortColumn) params = params.set('sortColumn', sortColumn);
+    if (sortDirection) params = params.set('sortDirection', sortDirection);
     return this.http.get<PagedResult<AuditLogEntry>>(GOVERNANCE_ENDPOINTS.auditLogs, { params });
   }
 

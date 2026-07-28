@@ -283,15 +283,13 @@
 
     <!-- Paginator -->
     @if (total() > 0) {
-      <mat-paginator
-        [length]="total()"
-        [pageSize]="perPage()"
+      <app-pagination-bar
         [pageIndex]="page() - 1"
+        [pageSize]="perPage()"
+        [totalCount]="total()"
         [pageSizeOptions]="[5, 10, 25, 50]"
-        showFirstLastButtons
-        (page)="onPageChange($event)"
-        class="table-paginator"
-      ></mat-paginator>
+        (pageChange)="onPageChange($event)"
+      />
     }
   </div>
 

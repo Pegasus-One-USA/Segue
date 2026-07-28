@@ -7,7 +7,6 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { IRoleService } from '../../services/i-role.service';
@@ -15,6 +14,7 @@ import { Role } from '../../../auth/models/user.model';
 import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 @Component({
   selector: 'app-role-list',
@@ -25,9 +25,9 @@ import { ToastService } from '../../../services/toast.service';
     MatTableModule,
     MatButtonModule,
     MatIconModule,
-    MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    PaginationBarComponent,
   ],
   templateUrl: './role-list.component.html',
   styleUrls: ['./role-list.component.scss'],
@@ -60,14 +60,6 @@ export class RoleListComponent implements OnInit {
     return this.filtered().slice(start, start + this.pageSize());
   });
 
-  readonly showingFrom = computed(() =>
-    this.filtered().length === 0 ? 0 : this.pageIndex() * this.pageSize() + 1
-  );
-
-  readonly showingTo = computed(() =>
-    Math.min((this.pageIndex() + 1) * this.pageSize(), this.filtered().length)
-  );
-
   ngOnInit(): void {
     this.loadRoles();
   }
@@ -96,7 +88,7 @@ export class RoleListComponent implements OnInit {
     this.pageIndex.set(0);
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
   }

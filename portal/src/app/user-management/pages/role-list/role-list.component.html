@@ -45,18 +45,6 @@
       <!-- The global loader already shows this page is busy — no local spinner here. -->
     } @else {
 
-      <!-- Table meta row -->
-      <div class="table-meta">
-        <span class="entries-info">
-          @if (filtered().length > 0) {
-            Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
-            {{ filtered().length === 1 ? 'entry' : 'entries' }}
-          } @else {
-            No entries found
-          }
-        </span>
-      </div>
-
       <div class="table-wrapper">
         <table mat-table [dataSource]="paginated()" class="data-table">
 
@@ -147,17 +135,16 @@
         </div>
       }
 
-      <!-- Paginator -->
-      @if (filtered().length > pageSize()) {
-        <mat-paginator
-          [length]="filtered().length"
-          [pageSize]="pageSize()"
+      <!-- Paginator — always shown when there are any results (matching the Workflows list), not just
+           once results overflow one page, so "Showing X-Y of Z" stays visible either way. -->
+      @if (filtered().length > 0) {
+        <app-pagination-bar
           [pageIndex]="pageIndex()"
+          [pageSize]="pageSize()"
+          [totalCount]="filtered().length"
           [pageSizeOptions]="[5, 10, 25, 50]"
-          showFirstLastButtons
-          (page)="onPageChange($event)"
-          class="table-paginator"
-        ></mat-paginator>
+          (pageChange)="onPageChange($event)"
+        />
       }
 
     }

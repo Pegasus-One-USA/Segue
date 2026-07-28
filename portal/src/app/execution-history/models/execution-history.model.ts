@@ -32,6 +32,8 @@ export interface RouteExecutionFilter {
   search?: string;
   page: number;
   pageSize: number;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
 }
 
 /** Matches the backend's WorkflowNodeRunPayloadDto — what a single node fetched/transformed/wrote. */
