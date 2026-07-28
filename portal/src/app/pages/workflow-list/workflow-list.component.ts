@@ -11,6 +11,8 @@ import { ToastService } from '../../services/toast.service';
 
 /** Polling cadence for an async run's status while this screen stays open (see pollRunStatus). */
 const RUN_STATUS_POLL_MS = 3000;
+/** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface LaunchModal {
   name: string;
@@ -36,6 +38,8 @@ interface CopyModal {
 
 type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun';
 type SortDirection = 'asc' | 'desc';
+/** Multi-select filter categories shown in the filter bar — see filterDefs/signalFor. */
+type FilterCategory = 'status' | 'audience' | 'source';
 
 @Component({
   selector: 'app-workflow-list',
@@ -77,57 +81,109 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly pageSizeOptions = [10, 20, 50];
   readonly pageSize = signal(20);
   readonly pageIndex = signal(0);
+  /** Total rows matching the current search, across every page — from the server, not summaries().length. */
+  readonly totalCount = signal(0);
 
-  readonly filtered = computed(() => {
-    const q = this.searchQuery().toLowerCase().trim();
-    if (!q) return this.summaries();
-    return this.summaries().filter(
-      w =>
-        w.name.toLowerCase().includes(q) ||
-        (w.applicationType?.toLowerCase().includes(q) ?? false),
-    );
-  });
+  /** The current page's rows, as returned by the server — kept as an alias so the template's existing
+   *  `paged()` calls don't need to change even though pagination moved server-side. */
+  readonly paged = computed(() => this.summaries());
 
-  readonly sorted = computed(() => {
-    const col = this.sortColumn();
-    const dir = this.sortDirection() === 'asc' ? 1 : -1;
-    const key = (w: WorkflowSummary): string | number => {
-      switch (col) {
-        case 'name':     return w.name.toLowerCase();
-        case 'source':   return (w.sourceSystemType ?? '').toLowerCase();
-        case 'audience': return this.audienceLabel(w.applicationType).toLowerCase();
-        case 'status':   return w.status;
-        case 'lastRun':  return w.lastRunAt ? new Date(w.lastRunAt).getTime() : -1;
-      }
-    };
-    return [...this.filtered()].sort((a, b) => {
-      const ka = key(a);
-      const kb = key(b);
-      if (ka < kb) return -1 * dir;
-      if (ka > kb) return 1 * dir;
-      return 0;
-    });
-  });
-
-  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.sorted().length / this.pageSize())));
-
-  readonly paged = computed(() => {
-    // Clamp defensively — a delete/copy can shrink the list out from under a page index
-    // that pointed at the last page.
-    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
-    const start = clampedIndex * this.pageSize();
-    return this.sorted().slice(start, start + this.pageSize());
-  });
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalCount() / this.pageSize())));
 
   /** First/last row numbers shown for the current page, for "Showing X–Y of Z". */
-  readonly rangeStart = computed(() => {
-    if (this.sorted().length === 0) return 0;
-    const clampedIndex = Math.min(this.pageIndex(), this.totalPages() - 1);
-    return clampedIndex * this.pageSize() + 1;
-  });
-  readonly rangeEnd = computed(() => Math.min(this.sorted().length, this.rangeStart() + this.pageSize() - 1));
+  readonly rangeStart = computed(() => (this.totalCount() === 0 ? 0 : this.pageIndex() * this.pageSize() + 1));
+  readonly rangeEnd = computed(() => Math.min(this.totalCount(), this.rangeStart() + this.pageSize() - 1));
+
+  private searchDebounceHandle: ReturnType<typeof setTimeout> | undefined;
+
+  // ── Status/Audience/Source multi-select filters ─────────────────────────────
+  /** Distinct option lists for each filter category, from the server's last response — the full set across every
+   *  workflow (not just what's currently matching), so unchecking every box in one category doesn't make another
+   *  category's checkboxes disappear. */
+  readonly availableStatuses = signal<string[]>([]);
+  readonly availableAudiences = signal<string[]>([]);
+  readonly availableSources = signal<string[]>([]);
+
+  readonly selectedStatuses = signal<Set<string>>(new Set());
+  readonly selectedAudiences = signal<Set<string>>(new Set());
+  readonly selectedSources = signal<Set<string>>(new Set());
+
+  /** Which filter dropdown panel is open, if any — see toggleFilterMenu/closeFilterMenus. */
+  readonly openFilterMenu = signal<FilterCategory | null>(null);
+
+  readonly filterDefs: { category: FilterCategory; label: string }[] = [
+    { category: 'status', label: 'Status' },
+    { category: 'audience', label: 'Audience' },
+    { category: 'source', label: 'Source' },
+  ];
 
   ngOnInit(): void {
+    this.reload();
+  }
+
+  optionsFor(category: FilterCategory): string[] {
+    switch (category) {
+      case 'status':   return this.availableStatuses();
+      case 'audience': return this.availableAudiences();
+      case 'source':   return this.availableSources();
+    }
+  }
+
+  /** Audience options are the raw ApplicationType enum names (EhrLaunch/Standalone/...) — display the same
+   *  friendly label the Audience column already uses; every other category displays its raw value as-is. */
+  displayLabelFor(category: FilterCategory, value: string): string {
+    return category === 'audience' ? this.audienceLabel(value) : value;
+  }
+
+  selectedSetFor(category: FilterCategory): Set<string> {
+    switch (category) {
+      case 'status':   return this.selectedStatuses();
+      case 'audience': return this.selectedAudiences();
+      case 'source':   return this.selectedSources();
+    }
+  }
+
+  private signalForCategory(category: FilterCategory) {
+    switch (category) {
+      case 'status':   return this.selectedStatuses;
+      case 'audience': return this.selectedAudiences;
+      case 'source':   return this.selectedSources;
+    }
+  }
+
+  selectedCountFor(category: FilterCategory): number {
+    return this.selectedSetFor(category).size;
+  }
+
+  isFilterSelected(category: FilterCategory, value: string): boolean {
+    return this.selectedSetFor(category).has(value);
+  }
+
+  toggleFilterMenu(category: FilterCategory, event: Event): void {
+    event.stopPropagation();
+    this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
+  }
+
+  @HostListener('document:click')
+  closeFilterMenus(): void {
+    this.openFilterMenu.set(null);
+  }
+
+  toggleFilterValue(category: FilterCategory, value: string, event: Event): void {
+    event.stopPropagation();
+    this.signalForCategory(category).update(current => {
+      const next = new Set(current);
+      if (next.has(value)) next.delete(value); else next.add(value);
+      return next;
+    });
+    this.pageIndex.set(0);
+    this.reload();
+  }
+
+  clearFilter(category: FilterCategory, event: Event): void {
+    event.stopPropagation();
+    this.signalForCategory(category).set(new Set());
+    this.pageIndex.set(0);
     this.reload();
   }
 
@@ -138,43 +194,79 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       this.sortColumn.set(column);
       this.sortDirection.set('asc');
     }
+    this.pageIndex.set(0);
+    this.reload();
   }
 
   onPageSizeChange(size: number): void {
     this.pageSize.set(size);
     this.pageIndex.set(0);
+    this.reload();
   }
 
   prevPage(): void {
-    this.pageIndex.update(i => Math.max(0, i - 1));
+    if (this.pageIndex() === 0) return;
+    this.pageIndex.update(i => i - 1);
+    this.reload();
   }
 
   nextPage(): void {
-    this.pageIndex.update(i => Math.min(this.totalPages() - 1, i + 1));
+    if (this.pageIndex() >= this.totalPages() - 1) return;
+    this.pageIndex.update(i => i + 1);
+    this.reload();
   }
 
   ngOnDestroy(): void {
     this.pollHandles.forEach(handle => clearInterval(handle));
     this.pollHandles.clear();
+    if (this.searchDebounceHandle) {
+      clearTimeout(this.searchDebounceHandle);
+    }
   }
 
   reload(): void {
     this.loading.set(true);
-    this.api.summary().subscribe({
-      next: rows => {
-        this.summaries.set(rows);
-        this.loading.set(false);
-      },
-      error: err => {
-        this.loading.set(false);
-        this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
-      },
-    });
+    this.api
+      .summary({
+        page: this.pageIndex() + 1,
+        pageSize: this.pageSize(),
+        search: this.searchQuery().trim() || undefined,
+        sortColumn: this.sortColumn(),
+        sortDirection: this.sortDirection(),
+        statuses: [...this.selectedStatuses()],
+        applicationTypes: [...this.selectedAudiences()],
+        sourceSystemTypes: [...this.selectedSources()],
+      })
+      .subscribe({
+        next: result => {
+          this.summaries.set(result.items);
+          this.totalCount.set(result.totalCount);
+          this.availableStatuses.set(result.availableStatuses);
+          this.availableAudiences.set(result.availableApplicationTypes);
+          this.availableSources.set(result.availableSourceSystemTypes);
+          this.loading.set(false);
+          // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index
+          // that pointed past the new last page — snap back and refetch rather than showing an empty page.
+          const lastPageIndex = Math.max(0, Math.ceil(result.totalCount / this.pageSize()) - 1);
+          if (this.pageIndex() > lastPageIndex) {
+            this.pageIndex.set(lastPageIndex);
+            this.reload();
+          }
+        },
+        error: err => {
+          this.loading.set(false);
+          this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
+        },
+      });
   }
 
   onSearch(value: string): void {
     this.searchQuery.set(value);
     this.pageIndex.set(0);
+    if (this.searchDebounceHandle) {
+      clearTimeout(this.searchDebounceHandle);
+    }
+    this.searchDebounceHandle = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
   }
 
   /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
@@ -396,7 +488,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       next: () => {
         this.rowBusyId.set(null);
         this.confirmDelete.set(null);
-        this.summaries.update(rows => rows.filter(w => w.workflowId !== row.workflowId));
+        this.reload();
         this.toast.success('Deleted', `"${row.name}" was deleted.`);
       },
       error: err => {

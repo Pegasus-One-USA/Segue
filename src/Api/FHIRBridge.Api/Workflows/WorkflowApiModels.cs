@@ -8,7 +8,7 @@ public sealed record WorkflowDefinitionRequest(
     IReadOnlyCollection<WorkflowNodeRequest> Nodes,
     IReadOnlyCollection<WorkflowEdgeRequest> Edges,
     WorkflowTriggerRequest? Trigger = null,
-    bool IsPubliclyLaunchable = false);
+    bool IsPubliclyLaunchable = true);
 
 /// <summary>Optional workflow-level scheduling metadata (Backend-Systems workflows). Omit / Manual = run on demand.</summary>
 public sealed record WorkflowTriggerRequest(

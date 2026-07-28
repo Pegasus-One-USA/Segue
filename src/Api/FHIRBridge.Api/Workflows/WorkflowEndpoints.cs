@@ -284,12 +284,22 @@ public static class WorkflowEndpoints
 
         // Workflow-list screen: one summary row per workflow — shape, enabled state, last run, and the derived
         // action. The source node's referenced connection decides Launch (interactive SMART) vs Run (backend), so the
-        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration).
+        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration). Paging/search/sort
+        // are applied server-side (see WorkflowSummaryPageDto) — the portal's workflow-list screen no longer slices
+        // the full set client-side.
         group.MapGet("/workflows/summary", async (
             IWorkflowDefinitionStore store,
             IWorkflowRunStore runStore,
             IConfigurationRepository configurationRepository,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            int page = 1,
+            int pageSize = 20,
+            string? search = null,
+            string? sortColumn = null,
+            string? sortDirection = null,
+            string[]? statuses = null,
+            string[]? applicationTypes = null,
+            string[]? sourceSystemTypes = null) =>
         {
             var workflows = await store.ListAsync(cancellationToken);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
@@ -354,9 +364,52 @@ public static class WorkflowEndpoints
                     workflow.IsPubliclyLaunchable));
             }
 
-            return Results.Ok(summaries
-                .OrderBy(summary => summary.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray());
+            // Facet option lists reflect the full unfiltered set (not `matching`) so unchecking every box in one
+            // category doesn't make the other categories' checkboxes disappear out from under the user.
+            var availableStatuses = summaries.Select(s => s.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableApplicationTypes = summaries.Select(s => s.ApplicationType).OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableSourceSystemTypes = summaries.Select(s => s.SourceSystemType).OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+
+            IEnumerable<WorkflowSummaryDto> matching = summaries;
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                matching = matching.Where(summary =>
+                    summary.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                    || (summary.ApplicationType?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+
+            if (statuses is { Length: > 0 })
+            {
+                var statusSet = new HashSet<string>(statuses, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => statusSet.Contains(summary.Status));
+            }
+
+            if (applicationTypes is { Length: > 0 })
+            {
+                var applicationTypeSet = new HashSet<string>(applicationTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => summary.ApplicationType is not null && applicationTypeSet.Contains(summary.ApplicationType));
+            }
+
+            if (sourceSystemTypes is { Length: > 0 })
+            {
+                var sourceSystemTypeSet = new HashSet<string>(sourceSystemTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => summary.SourceSystemType is not null && sourceSystemTypeSet.Contains(summary.SourceSystemType));
+            }
+
+            var sorted = SortSummaries(matching, sortColumn, sortDirection).ToArray();
+
+            var effectivePage = Math.Max(1, page);
+            var effectivePageSize = Math.Clamp(pageSize, 1, 200);
+            var pageItems = sorted
+                .Skip((effectivePage - 1) * effectivePageSize)
+                .Take(effectivePageSize)
+                .ToArray();
+
+            return Results.Ok(new WorkflowSummaryPageDto(
+                pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Source Connections page: which source-connection ids are referenced by at least one workflow's Source
@@ -1338,6 +1391,37 @@ public static class WorkflowEndpoints
             .FirstOrDefault() ?? string.Empty;
 
         return (destinationId, destinationObject);
+    }
+
+    /// <summary>Mirrors the portal's audienceLabel() so 'audience' sorts the same friendly grouping the column
+    /// displays, not the raw ApplicationType enum name.</summary>
+    private static string AudienceSortLabel(string? applicationType) => applicationType switch
+    {
+        "EhrLaunch"  => "EHR Launch (Provider)",
+        "Standalone" => "Provider Standalone",
+        "Patient"    => "Patient Standalone",
+        "Backend"    => "Backend Service",
+        _            => "—",
+    };
+
+    private static IEnumerable<WorkflowSummaryDto> SortSummaries(
+        IEnumerable<WorkflowSummaryDto> summaries, string? sortColumn, string? sortDirection)
+    {
+        var descending = string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedEnumerable<WorkflowSummaryDto> Order<TKey>(Func<WorkflowSummaryDto, TKey> keySelector) =>
+            descending
+                ? summaries.OrderByDescending(keySelector)
+                : summaries.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "source"   => Order(summary => (summary.SourceSystemType ?? string.Empty).ToLowerInvariant()),
+            "audience" => Order(summary => AudienceSortLabel(summary.ApplicationType).ToLowerInvariant()),
+            "status"   => Order(summary => summary.Status),
+            "lastRun"  => Order(summary => summary.LastRunAt?.UtcTicks ?? -1),
+            _          => Order(summary => summary.Name.ToLowerInvariant()),
+        };
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)

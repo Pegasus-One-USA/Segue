@@ -15,8 +15,8 @@ interface ProviderStandaloneWorkflowIds {
   standaloneBaseUrl: string;
 }
 
-/** Matches FHIRBridge's PublicEhrEpicEndpointDto (GET /api/v1/ehr-epic-endpoints) — anonymous, EndpointType=Epic
- *  rows only (the vendor's own shared sandbox, never a real customer's MyChart instance). */
+/** Matches FHIRBridge's PublicEhrEndpointDto (GET /api/v1/ehr-public-endpoints) — anonymous, every EhrEndpoint row
+ *  regardless of EndpointType (the vendor's own shared sandbox as well as any real customer's own instance). */
 interface EpicEndpoint {
   id: string;
   name: string;
@@ -767,15 +767,15 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   }
 
   // Anonymous — no FHIRBridge session exists yet at this point, so this reads straight from FHIRBridge's public
-  // ehr-epic-endpoints listing.
+  // ehr-public-endpoints listing.
   private async loadHospitals(): Promise<void> {
     this.isLoadingHospitals.set(true);
     try {
       await this.ensureWorkflowIdsLoaded();
       const query = this.hospitalSearchQuery().trim();
       const url = query
-        ? `${this.baseUrl}/api/v1/ehr-epic-endpoints?search=${encodeURIComponent(query)}`
-        : `${this.baseUrl}/api/v1/ehr-epic-endpoints`;
+        ? `${this.baseUrl}/api/v1/ehr-public-endpoints?search=${encodeURIComponent(query)}`
+        : `${this.baseUrl}/api/v1/ehr-public-endpoints`;
       const endpoints = await firstValueFrom(this.http.get<EpicEndpoint[]>(url));
       this.hospitals.set(endpoints);
     } catch {

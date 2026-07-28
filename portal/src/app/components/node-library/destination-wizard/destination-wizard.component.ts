@@ -410,7 +410,7 @@ export class DestinationWizardComponent implements OnInit {
       return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
-    if (s >= 3) return this._hasUnverifiedColumns();
+    if (s >= 3) return this._hasUnverifiedColumns() || this.resourcesMissingParentSelection().length > 0;
     return false;
   }
 
@@ -919,6 +919,15 @@ export class DestinationWizardComponent implements OnInit {
   private _hasUnverifiedColumns(): boolean {
     return this.mappingRows().some(row =>
       this.selectedResources().includes(row.resource) && this.isRowColumnUnverified(row));
+  }
+
+  // Resources offering at least one candidate parent (per candidateParentsFor) with none picked yet — an
+  // unselected chip means _reconcileParentRefRows never locks in that reference field, so the row saves with no
+  // link back to its actual parent. Blocks Next/Save until at least one parent is chosen per such resource (see
+  // isNextDisabled) rather than only warning after the fact.
+  resourcesMissingParentSelection(): string[] {
+    return this.resourceKeys().filter(r =>
+      this.candidateParentsFor(r).length > 0 && this.selectedParentsOf(r).length === 0);
   }
 
   // Keeps every selected resource's mandatory id row in sync with the live schema and the catalog: inserts it

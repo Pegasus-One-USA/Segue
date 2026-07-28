@@ -118,12 +118,12 @@ public sealed class OAuthController : ControllerBase
     /// <summary>
     /// Anonymous counterpart to <see cref="GetWorkflowLaunchUrl"/>, for a third-party app whose own end user picks a
     /// hospital before launching (e.g. Demo_TestApp's Provider_Standalone hospital picker, backed by the
-    /// ehr-epic-endpoints listing). Only mints a context for a workflow the admin has explicitly opted in via
+    /// ehr-public-endpoints listing). Only mints a context for a workflow the admin has explicitly opted in via
     /// <c>POST /workflows/{workflowId}/enable-public-launch</c> — <see cref="WorkflowDefinition.IsPubliclyLaunchable"/>
-    /// is the only gate standing between "any caller who knows this workflowId" and a working Epic-login link for
-    /// it, since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must
-    /// resolve to an EndpointType.Epic row — the same restricted set the public picker listing exposes, never a
-    /// specific customer's live MyChart production instance.
+    /// is the only gate standing between "any caller who knows this workflowId" and a working login link for it,
+    /// since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must resolve to
+    /// any known EhrEndpoint row, regardless of EndpointType — the same unfiltered set the public picker listing
+    /// exposes.
     /// </summary>
     [AllowAnonymous]
     [EnableRateLimiting("oauth")]
@@ -148,10 +148,10 @@ public sealed class OAuthController : ControllerBase
             return NotFound();
         }
 
-        if (!await _ehrEndpointService.IsEpicEndpointAsync(ehrEndpointId, cancellationToken))
+        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, cancellationToken))
         {
             _logger.LogWarning(
-                "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known Epic endpoint",
+                "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known endpoint",
                 ehrEndpointId);
             return NotFound();
         }
