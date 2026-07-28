@@ -1,0 +1,54 @@
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_4046853a430d5d::t_f0d8daf7c46946 175,212,232,286,461,481
+src/FHIRBridge.Application/DTOs/GovernanceDtos.cs
+  s_4046853a430d5d::t_95ceb2553be60c 174-177
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_4046853a430d5d::t_88f39ae98e954b 499,502,522-525
+src/FHIRBridge.Domain/Entities/Governance/SmartLaunchLog.cs
+  s_4046853a430d5d::t_bf1c419bd95771 23-26,35-37,46-57
+portal/src/app/governance/models/governance.model.ts
+  s_4046853a430d5d::t_3dc2fedadf8be0 166-173
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IInteractiveAuthorizationFlow.cs
+  s_4046853a430d5d::t_83f7d9c290578d 25
+portal/src/app/governance/pages/smart-launch-logs/smart-launch-logs.component.ts
+  s_4046853a430d5d::t_690c89b2bf8bd9 20-23
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_4046853a430d5d::t_99f7f549db1d4a 274-277
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_4046853a430d5d::t_db9fe07930e700 1109-1112,1121-1123,1135-1137
+  s_4046853a430d5d::t_fc16e3cab65c9f 1138
+src/BuildingBlocks/FHIRBridge.Governance/GovernanceEntries.cs
+  s_4046853a430d5d::t_ee95b5b174135b 134-138,144-147
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_4046853a430d5d::t_fa5f32957ed329 399-400
+portal/src/app/governance/pages/smart-launch-logs/smart-launch-logs.component.html
+  s_4046853a430d5d::t_931b8691876c93 16-20,56-77
+  s_4046853a430d5d::t_909db393ef87c4 78
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/SmartAuthorizationCodeExchangeResult.cs
+  s_4046853a430d5d::t_d617e6f38ac825 1-15
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/SmartLaunchLogConfiguration.cs
+  s_4046853a430d5d::t_386bed8fbbafa0 17-18
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260728083627_AddSmartLaunchContextDiagnostics.Designer.cs
+  s_4046853a430d5d::t_db9fe07930e700 1-3234
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_4046853a430d5d::t_8e865cf9d1490e 231,269-270,273
+  s_4046853a430d5d::t_256a193d981e30 356-360
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260728083627_AddSmartLaunchContextDiagnostics.cs
+  s_4046853a430d5d::t_db9fe07930e700 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a14763f05be69a0b02a6b27726f2d9557a3f5dbf",
+  "prompts": {},
+  "sessions": {
+    "s_4046853a430d5d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c5620e92-0cb7-45fe-8a37-8e275602e48c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
