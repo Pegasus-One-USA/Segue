@@ -549,14 +549,16 @@ export class WorkflowBuildAssemblerService {
       resourceRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, resource)) === '$.id');
 
     let destinationObject = baseDestinationObject;
-    if (destFields['dest_writeMode'] === 'upsert') {
+    const writeMode = destFields['dest_writeMode'];
+    if (writeMode === 'upsert' || writeMode === 'update') {
       if (!idRow) {
+        const modeLabel = writeMode === 'upsert' ? 'Upsert by source id' : 'Update only';
         throw new Error(
-          `"${resource}" destination is set to Upsert by source id, but no destination column is mapped from ` +
+          `"${resource}" destination is set to ${modeLabel}, but no destination column is mapped from ` +
             `${resource}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
         );
       }
-      destinationObject = `${baseDestinationObject};mode=upsert`;
+      destinationObject = `${baseDestinationObject};mode=${writeMode}`;
     }
 
     const fields: MappingFieldRequest[] = resourceRows.map((row) => {

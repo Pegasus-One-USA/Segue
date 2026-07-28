@@ -13,9 +13,10 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// <summary>
 /// Provider-agnostic relational destination writer built on ADO.NET (<see cref="DbConnection"/>). The customer owns
 /// the destination schema: the target table must already exist and every written column must be one the mapping
-/// profile explicitly maps. Writes mapped records in Insert or Upsert mode. Upsert requires one mapped field flagged
-/// <see cref="MappingField.IsUpsertKey"/>, and is implemented as a portable delete-by-key + insert within a
-/// transaction (last-write-wins) so it works on any dialect without requiring a pre-existing unique index. Concrete
+/// profile explicitly maps. Writes mapped records in Insert, Upsert, or Update mode. Upsert and Update both require
+/// one mapped field flagged <see cref="MappingField.IsUpsertKey"/>. Upsert is implemented as a portable
+/// delete-by-key + insert within a transaction (last-write-wins) so it works on any dialect without requiring a
+/// pre-existing unique index; Update issues a plain <c>UPDATE ... WHERE key = @key</c> and never inserts. Concrete
 /// subclasses supply the dialect (connection, identifier quoting, type mapping, table-existence check). Mirrors
 /// <see cref="MappedSqlServerDestinationWriter"/> for SQL Server / Azure SQL.
 /// </summary>
@@ -62,6 +63,18 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         foreach (var record in records)
         {
+            if (target.UpdateOnly)
+            {
+                // Update-only never inserts: a record with no key value has nothing to match, so it's skipped
+                // entirely rather than falling back to Insert.
+                if (TryGetKeyValue(record, target.KeyColumn!, out var updateKeyValue))
+                {
+                    await UpdateRecordAsync(connection, transaction, target, record, updateKeyValue, cancellationToken);
+                }
+
+                continue;
+            }
+
             if (target.Upsert && TryGetKeyValue(record, target.KeyColumn!, out var keyValue))
             {
                 await DeleteByKeyAsync(connection, transaction, target, keyValue, cancellationToken);
@@ -153,6 +166,44 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <summary>Updates the matching row by <see cref="RelationalTarget.KeyColumn"/> only — never inserts. Called
+    /// only when the record actually has a key value (see <see cref="WriteAsync"/>); a record with no matching row
+    /// is simply left unwritten, which is exactly what "Update only" means.</summary>
+    private async Task UpdateRecordAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        RelationalTarget target,
+        MappedDestinationRecord record,
+        object? keyValue,
+        CancellationToken cancellationToken)
+    {
+        var columns = record.Values.Keys
+            .Select(ValidateIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(column => !string.Equals(column, target.KeyColumn, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (columns.Count == 0)
+        {
+            return;
+        }
+
+        var setClause = string.Join(", ", columns.Select(column => $"{Quote(column)} = @{column}"));
+        var sql = $"UPDATE {QualifiedName(target.Schema, target.Table)} SET {setClause} " +
+                  $"WHERE {Quote(target.KeyColumn!)} = @KeyValue";
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        foreach (var column in columns)
+        {
+            AddParameter(command, column, Stringify(record.Values[column]));
+        }
+        AddParameter(command, "KeyValue", Stringify(keyValue));
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static void AddParameter(DbCommand command, string name, object value)
     {
         var parameter = command.CreateParameter();
@@ -180,7 +231,12 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
 
     private RelationalTarget ParseTarget(string destinationObject, MappingProfile mappingProfile)
     {
-        var name = destinationObject.Trim();
+        // A stored destination object may carry a ';mode=<writeMode>' (or legacy '?key=') suffix — neither is part
+        // of the table identifier, so both must be stripped before any '.'-split / identifier validation runs.
+        // Splitting on ';' first (mirroring MappedSqlServerDestinationWriter.ParseDestinationTarget) matters most
+        // for a schema-less dialect like MySQL, where a bare "Table;mode=update" has no '.' to isolate the suffix.
+        var objectAndOptions = destinationObject.Trim().Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var name = objectAndOptions.Length > 0 ? objectAndOptions[0] : string.Empty;
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var queryIndex = name.IndexOf('?', StringComparison.Ordinal);
@@ -188,14 +244,15 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         {
             foreach (var option in name[(queryIndex + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                var equalsIndex = option.IndexOf('=', StringComparison.Ordinal);
-                if (equalsIndex > 0)
-                {
-                    options[option[..equalsIndex].Trim()] = option[(equalsIndex + 1)..].Trim();
-                }
+                AddOption(options, option);
             }
 
             name = name[..queryIndex];
+        }
+
+        foreach (var option in objectAndOptions.Skip(1))
+        {
+            AddOption(options, option);
         }
 
         var parts = name.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -206,7 +263,9 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
             _ => throw new InvalidOperationException("Destination object must be 'Table' or 'Schema.Table'.")
         };
 
-        var upsert = options.TryGetValue("mode", out var mode) && string.Equals(mode, "upsert", StringComparison.OrdinalIgnoreCase);
+        var mode = options.TryGetValue("mode", out var configuredMode) ? configuredMode.Trim().ToLowerInvariant() : null;
+        var upsert = mode == "upsert";
+        var updateOnly = mode == "update";
 
         // Prefer the structured IsUpsertKey flag; fall back to the legacy '?key=' option so destinations configured
         // before the mapping UI grows an IsUpsertKey control (docs/backend/11-destination-schema-ownership-plan.md
@@ -221,7 +280,25 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
                 "as the upsert key. Mark one mapped field's IsUpsertKey in the mapping profile.");
         }
 
-        return new RelationalTarget(schema, table, upsert, keyColumn);
+        if (updateOnly && keyColumn is null)
+        {
+            throw new InvalidOperationException(
+                $"Destination '{schema}.{table}' is configured for Update mode but no mapped field is designated " +
+                "as the update key. Mark one mapped field's IsUpsertKey in the mapping profile.");
+        }
+
+        return new RelationalTarget(schema, table, upsert, updateOnly, keyColumn);
+    }
+
+    private static void AddOption(IDictionary<string, string> options, string option)
+    {
+        var equalsIndex = option.IndexOf('=', StringComparison.Ordinal);
+        if (equalsIndex <= 0)
+        {
+            return;
+        }
+
+        options[option[..equalsIndex].Trim()] = option[(equalsIndex + 1)..].Trim();
     }
 
     /// <summary>
@@ -258,5 +335,6 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         string Schema,
         string Table,
         bool Upsert,
+        bool UpdateOnly,
         string? KeyColumn);
 }
