@@ -1,0 +1,85 @@
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_a5fcd0f359e190::t_e371cfeae81b87 80-175
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_a5fcd0f359e190::t_c885aa0e937b7a 151,154
+  s_a5fcd0f359e190::t_0b7a464fa67638 121,123-126
+src/Api/FHIRBridge.Api/Controllers/V1/PatientStandaloneLaunchController.cs
+  s_a5fcd0f359e190::t_d0f3e13e2a3e49 14-20,30,36,41
+  s_a5fcd0f359e190::t_45107c2d71c274 59
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_a5fcd0f359e190::t_197108391a2d26 11
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_a5fcd0f359e190::t_81f47a027d723b 274-275
+  s_a5fcd0f359e190::t_47deeee60669ed 12-13
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_a5fcd0f359e190::t_249bc2953d1749 371-374
+  s_a5fcd0f359e190::t_c6f03c26673a55 376-381,400-410
+  s_a5fcd0f359e190::t_41d9002d2f5a30 1396-1426
+  s_a5fcd0f359e190::t_9b624dc76c6e3b 287-289,294-298
+  s_a5fcd0f359e190::t_0d7e75caa0aa46 367-370,375,382-399,411-412
+  s_a5fcd0f359e190::t_fc51a3c4181111 299-302
+src/FHIRBridge.Application/Abstractions/Persistence/IEhrEndpointRepository.cs
+  s_a5fcd0f359e190::t_2173781f9e6f8b 14-18
+src/FHIRBridge.Application/Services/IEhrEndpointService.cs
+  s_a5fcd0f359e190::t_63dce6a0ecc0d8 9-10,12,17-19
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_a5fcd0f359e190::t_84074766546ef9 590-593
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_a5fcd0f359e190::t_40580306294ec2 425-429,586-587
+  s_a5fcd0f359e190::t_0de96f7069f17b 588-591
+src/FHIRBridge.Infrastructure/Persistence/InMemoryEhrEndpointRepository.cs
+  s_a5fcd0f359e190::t_9771666cc64ff0 19,22
+src/FHIRBridge.Infrastructure/Persistence/EfEhrEndpointRepository.cs
+  s_a5fcd0f359e190::t_a1a6b4caa889ef 19
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_a5fcd0f359e190::t_383ce70de81a6a 24,27,29-30,34-36,44,47
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_a5fcd0f359e190::t_4500cd35eb1f3c 770,777-778
+  s_a5fcd0f359e190::t_4d48de0b144c87 18-19
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_a5fcd0f359e190::t_64cf374784646a 635
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_a5fcd0f359e190::t_0b9cfec5e87dbc 36-78
+  s_a5fcd0f359e190::t_bcef6e873cc977 260
+  s_a5fcd0f359e190::t_7aa251004350ee 291
+  s_a5fcd0f359e190::t_d244a435bd0519 282
+  s_a5fcd0f359e190::t_83ba6fc9f7e581 85-86
+src/FHIRBridge.Application/DTOs/PublicEhrEndpointDto.cs
+  s_a5fcd0f359e190::t_0c5591a7eb9201 1-10
+portal/src/app/services/workflow-api.service.ts
+  s_a5fcd0f359e190::t_45e9db3b35dbcf 262,266-268,272-279,283-284
+  s_a5fcd0f359e190::t_3716d98de9f14f 344-350,354
+  s_a5fcd0f359e190::t_aabcae8139dad4 351-353
+  s_a5fcd0f359e190::t_547be2a7400d22 263-265,269-271,280-282
+src/Api/FHIRBridge.Api/Workflows/WorkflowSummaryModels.cs
+  s_a5fcd0f359e190::t_0a4acf3c627849 24-25
+  s_a5fcd0f359e190::t_804df999411638 26-35
+src/Api/FHIRBridge.Api/Controllers/V1/EhrPublicEndpointsController.cs
+  s_a5fcd0f359e190::t_054bf7f204c568 1-35
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_a5fcd0f359e190::t_bdac8a3ada58cd 413
+  s_a5fcd0f359e190::t_b9af9b0e5dc1c6 924-932
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_a5fcd0f359e190::t_7fe37a5339ca5b 14-15,98,187-189
+  s_a5fcd0f359e190::t_e72cf748762a96 41-42
+  s_a5fcd0f359e190::t_e9d895432ae62a 236-238,244-246
+  s_a5fcd0f359e190::t_294c2e9d4978f2 99-118,124-186
+  s_a5fcd0f359e190::t_bfd87629251b85 84-85,87-89,91,94-97,197-198,204,208-210,214-216,222-224,229-235,239-243,247-260,266-269
+  s_a5fcd0f359e190::t_fa6c658ad5bc8a 491
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "dfad1f82ee5e577a229cdba7e13c348583c1d36e",
+  "prompts": {},
+  "sessions": {
+    "s_a5fcd0f359e190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69d7b858-5290-4282-aeda-ff2bd1655728",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
