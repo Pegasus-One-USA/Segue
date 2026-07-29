@@ -46,6 +46,20 @@ public sealed class WorkflowDefinition
     /// <summary>Last time the scheduler claimed this workflow for a run; null means never fired by the scheduler.</summary>
     public DateTime? LastTriggeredOnUtc { get; private set; }
 
+    /// <summary>Creation/modification provenance. Stamped explicitly by SqlWorkflowDefinitionStore.SaveAsync rather
+    /// than via the generic IAuditableEntity/AuditingSaveChangesInterceptor mechanism used elsewhere, because that
+    /// store deletes and re-adds the whole row graph on every save (never a true in-place update) — the interceptor
+    /// would otherwise see every save as "Added" and reset CreatedOnUtc each time.</summary>
+    public DateTime CreatedOnUtc { get; private set; }
+
+    public string? CreatedBy { get; private set; }
+
+    /// <summary>Null until this definition has been saved a second time — mirrors AuditableChildEntity's own
+    /// ModifiedOnUtc staying null until an actual update happens.</summary>
+    public DateTime? UpdatedOnUtc { get; private set; }
+
+    public string? UpdatedBy { get; private set; }
+
     public IReadOnlyCollection<WorkflowNode> Nodes => _nodes;
 
     public IReadOnlyCollection<WorkflowEdge> Edges => _edges;
@@ -118,4 +132,15 @@ public sealed class WorkflowDefinition
     public void EnablePublicLaunch() => IsPubliclyLaunchable = true;
 
     public void DisablePublicLaunch() => IsPubliclyLaunchable = false;
+
+    /// <summary>Sets creation/modification provenance — called by SqlWorkflowDefinitionStore.SaveAsync, which
+    /// resolves createdOnUtc/createdBy from the row being replaced (or "now"/the current user on a true first
+    /// save) since this store's delete-and-recreate save pattern can't rely on EF's Added/Modified state.</summary>
+    public void StampAudit(DateTime createdOnUtc, string? createdBy, DateTime? updatedOnUtc, string? updatedBy)
+    {
+        CreatedOnUtc = createdOnUtc;
+        CreatedBy = createdBy;
+        UpdatedOnUtc = updatedOnUtc;
+        UpdatedBy = updatedBy;
+    }
 }
