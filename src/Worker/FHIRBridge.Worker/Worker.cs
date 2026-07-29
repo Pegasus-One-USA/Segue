@@ -102,7 +102,7 @@ public sealed class Worker : BackgroundService
 
         try
         {
-            using var actorScope = ambientActorContext.BeginScope("Scheduler (Legacy Poll)");
+            using var actorScope = ambientActorContext.BeginScope("Scheduler (Legacy Poll)", correlationId);
 
             var pipelineRun = await pipelineService.StartAsync(
                 new StartConfiguredPipelineRunRequest(
@@ -165,7 +165,7 @@ public sealed class Worker : BackgroundService
 
             try
             {
-                using var actorScope = ambientActorContext.BeginScope($"Scheduler (Workflow: {workflow.Name})");
+                using var actorScope = ambientActorContext.BeginScope($"Scheduler (Workflow: {workflow.Name})", correlationId);
 
                 var context = new WorkflowExecutionContext(
                     Guid.NewGuid(),

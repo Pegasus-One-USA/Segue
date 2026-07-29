@@ -14,7 +14,8 @@ public sealed record AuditEntry(
     string? OldValueJson = null,
     string? NewValueJson = null,
     string Status = "Success",
-    string? Remarks = null);
+    string? Remarks = null,
+    string? CorrelationId = null);
 
 /// <summary>A patient/resource access event — recorded PHI-free (identifiers only, never clinical content).</summary>
 public sealed record DataAccessEntry(
@@ -31,7 +32,8 @@ public sealed record AuthenticationEntry(
     string AuthenticationType,
     bool Success,
     string? UserEmail = null,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    string? CorrelationId = null);
 
 /// <summary>An RBAC authorization decision — callers write this on denial, the compliance-relevant case.</summary>
 public sealed record AuthorizationEntry(
@@ -46,7 +48,8 @@ public sealed record SecurityEventEntry(
     string EventType,
     string Severity,
     string? UserEmail = null,
-    string? Details = null);
+    string? Details = null,
+    string? CorrelationId = null);
 
 /// <summary>A scheduler dispatch decision — the scheduler recognized due work and handed it off.</summary>
 public sealed record SchedulerRunEntry(

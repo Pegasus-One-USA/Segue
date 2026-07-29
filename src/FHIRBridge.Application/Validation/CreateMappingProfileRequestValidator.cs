@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
 using FluentValidation;
 
@@ -40,6 +41,20 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
         {
             field.RuleFor(f => f.TargetField).NotEmpty().MaximumLength(200);
             field.RuleFor(f => f.JsonPath).NotEmpty().MaximumLength(500);
+
+            // CorrelateByCode (e.g. picking an identifier[]/coding[] entry by its sibling "system" value, or an
+            // Observation.component[] by its LOINC code) is meaningless without both the sibling JsonPath and the
+            // value to match — JsonMappingEngine already rejects this at run time, but a save-time check surfaces
+            // the mistake immediately instead of only on the next pipeline run.
+            field.RuleFor(f => f.CorrelationCodeJsonPath)
+                .NotEmpty()
+                .WithMessage("CorrelateByCode requires correlationCodeJsonPath (the sibling element to match, e.g. the array's \"system\" or \"code\" field).")
+                .When(f => f.ArrayPolicy == ArrayPolicy.CorrelateByCode);
+
+            field.RuleFor(f => f.CorrelationCodeValue)
+                .NotEmpty()
+                .WithMessage("CorrelateByCode requires correlationCodeValue (the value the sibling element must equal to select this array item).")
+                .When(f => f.ArrayPolicy == ArrayPolicy.CorrelateByCode);
         });
 
         RuleFor(x => x.Fields)

@@ -2,6 +2,11 @@
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 
+.mono { font-family: monospace; font-size: 12px; }
+
+.link { color: var(--color-primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
 .pipe-avatar {
   width: 36px; height: 36px; border-radius: 8px;
   background: var(--color-success-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0;

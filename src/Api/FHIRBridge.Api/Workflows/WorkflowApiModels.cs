@@ -57,6 +57,6 @@ public sealed record WorkflowRunRequest(
     // Omit/false keeps the pre-existing blocking behavior.
     bool Async = false);
 
-public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status);
+public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status, string? CorrelationId = null);
 
 public sealed record CopyWorkflowRequest(string Name);

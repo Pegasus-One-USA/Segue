@@ -445,11 +445,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         var exports = await GetExportHistoryAsync(correlationId, 0, take, cancellationToken);
         var notifications = await GetNotificationHistoryAsync(correlationId, 0, take, cancellationToken);
         var validationFailures = await GetValidationFailuresAsync(correlationId, 0, take, cancellationToken);
+        var workflowRuns = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Where(run => run.CorrelationId == correlationId)
+            .OrderByDescending(run => run.StartedAt)
+            .Take(take)
+            .Select(run => new WorkflowRunSummaryDto(
+                run.Id, run.WorkflowDefinitionId, run.Status.ToString(), run.StartedAt, run.CompletedAt,
+                run.TriggeredBy, run.TriggerType, run.ErrorMessage))
+            .ToListAsync(cancellationToken);
 
         return new CorrelationSearchResultDto(
             correlationId, pipelineRun, auditLogs.Items, dataAccessLogs.Items, authenticationLogs.Items,
             securityEvents.Items, authorizationLogs.Items, schedulerHistory.Items, retryHistory.Items,
-            errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items);
+            errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items,
+            workflowRuns);
     }
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)

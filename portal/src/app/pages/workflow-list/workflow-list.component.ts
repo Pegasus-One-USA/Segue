@@ -338,9 +338,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.api.run(row.workflowId, true).subscribe({
       next: result => {
         const runId = (result as WorkflowRunStatus).workflowRunId;
+        const correlationId = (result as WorkflowRunStatus).correlationId;
         this.toast.success(
           'Running in background',
-          `"${row.name}" is running — you can navigate away, it keeps running on the server.`,
+          `"${row.name}" is running — you can navigate away, it keeps running on the server.`
+            + (correlationId ? ` Correlation ID: ${correlationId}` : ''),
         );
         this.summaries.update(rows =>
           rows.map(w =>

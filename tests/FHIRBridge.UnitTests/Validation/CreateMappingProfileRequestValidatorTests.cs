@@ -192,4 +192,36 @@ public sealed class CreateMappingProfileRequestValidatorTests
 
         (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task CorrelateByCode_without_correlation_fields_fails()
+    {
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto(
+                "PatientId", "$.identifier[*].value", MappingValueType.String, false, null, null,
+                ArrayPolicy: ArrayPolicy.CorrelateByCode),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Fields[0].CorrelationCodeJsonPath");
+        result.Errors.Should().Contain(e => e.PropertyName == "Fields[0].CorrelationCodeValue");
+    }
+
+    [Fact]
+    public async Task CorrelateByCode_selecting_an_identifier_by_system_passes()
+    {
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto(
+                "InternalId", "$.identifier[*].value", MappingValueType.String, false, null, null,
+                ArrayPolicy: ArrayPolicy.CorrelateByCode,
+                CorrelationCodeJsonPath: "$.identifier[*].system",
+                CorrelationCodeValue: "urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260"),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
 }
