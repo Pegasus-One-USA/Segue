@@ -437,10 +437,17 @@
 }
 
 .btn-more {
-  color:         var(--color-muted) !important;
+  // --mdc-icon-button-state-layer-size constrains Material's OWN internal ripple/focus circle to match
+  // this button's own 32px box — without it, the ripple keeps its default (larger) diameter regardless of
+  // the host's width/height, rendering an oversized, off-center circle around the icon on hover/focus. The
+  // host is circular (border-radius 50%, Material's own default for icon buttons) to match that ripple's
+  // shape exactly, instead of the previous square radius that fought it.
+  --mdc-icon-button-state-layer-size: 32px;
   width:         32px !important;
   height:        32px !important;
-  border-radius: var(--radius-base) !important;
+  padding:       4px !important;
+  border-radius: 50% !important;
+  color:         var(--color-muted) !important;
   transition:    background var(--transition-base), color var(--transition-base) !important;
 
   &:hover {

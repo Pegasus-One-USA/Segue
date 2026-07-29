@@ -500,7 +500,7 @@ public sealed class UserManagementService : IUserManagementService
             user.Id,
             user.ExternalUserId,
             user.Email,
-            user.DisplayName,
+            user.EffectiveDisplayName,
             user.Status,
             user.IsEnabled,
             user.IsLocalLoginEnabled,

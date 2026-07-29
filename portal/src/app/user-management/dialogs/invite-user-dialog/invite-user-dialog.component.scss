@@ -15,7 +15,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 24px 24px;
+  padding: 24px;
 
   &__icon {
     width: 44px;
@@ -32,6 +32,7 @@
 
   &__text {
     flex: 1;
+    min-width: 0;
 
     // mat-dialog-title's own class carries a tall default box (built for a
     // standalone headline, not one paired with a subtitle right underneath) —
@@ -44,9 +45,15 @@
       padding: 0 !important;
       margin: 0 0 2px !important;
       font-size: 18px !important;
-      font-weight: 700 !important;
+      font-weight: 800 !important;
       color: var(--color-ink) !important;
       line-height: 1.2 !important;
+
+      // Material's baseline-alignment hack: an invisible 40px-tall inline-block spacer that
+      // inflates the title's box independently of the height/padding/margin above, since it's a
+      // separate pseudo-element rule — left in place it throws the icon+title block off-center
+      // against the close button.
+      &::before { display: none !important; }
     }
 
     p {
@@ -54,13 +61,18 @@
       color: var(--color-muted);
       line-height: 1.3;
       margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 }
 
 .dialog-close {
-  align-self: center;
   flex-shrink: 0;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
   color: var(--color-muted) !important;
   &:hover { background: var(--color-bg) !important; }
 }
@@ -76,14 +88,14 @@ mat-dialog-content {
 .invite-form {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 16px;
 }
 
 .form-row {
   &--2col {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 16px;
 
     @media (max-width: 480px) { grid-template-columns: 1fr; }
   }
@@ -91,7 +103,6 @@ mat-dialog-content {
 
 .form-field {
   width: 100%;
-  margin-bottom: 4px;
 
   &--full { grid-column: 1 / -1; }
 
@@ -113,7 +124,6 @@ mat-dialog-content {
   background: var(--color-info-soft);
   border: 1px solid var(--color-info);
   border-radius: var(--radius-base);
-  margin-top: 4px;
   opacity: 0.85;
 
   mat-icon {
@@ -147,23 +157,40 @@ mat-dialog-actions {
   width: 100%;
 }
 
+.btn-cancel,
+.btn-submit {
+  box-sizing: border-box !important;
+  height: 40px !important;
+  line-height: 1 !important;
+  padding: 0 20px !important;
+  border-radius: var(--radius-base);
+
+  ::ng-deep .mdc-button__label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+}
+
 .btn-cancel {
+  background: var(--color-side) !important;
   border-color: var(--color-border) !important;
   color: var(--color-ink-2) !important;
-  border-radius: var(--radius-base);
   font-weight: 500;
-  height: 40px;
 
-  &:hover { background: var(--color-bg) !important; }
+  &:hover:not(:disabled) {
+    background: var(--color-primary-soft) !important;
+    border-color: var(--color-primary-mid) !important;
+    color: var(--color-primary-dark) !important;
+  }
   &:disabled { opacity: 0.5; }
 }
 
 .btn-submit {
   background: var(--color-primary) !important;
   color: var(--color-on-primary) !important;
-  border-radius: var(--radius-base);
   font-weight: 600;
-  height: 40px;
   min-width: 140px;
 
   &__content {
@@ -174,7 +201,16 @@ mat-dialog-actions {
     width: 100%;
   }
 
-  mat-icon { font-size: 18px; height: 18px; width: 18px; flex-shrink: 0; }
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    line-height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
   mat-spinner { flex-shrink: 0; }
 
   &:hover:not(:disabled) { background: var(--color-primary-dark) !important; }

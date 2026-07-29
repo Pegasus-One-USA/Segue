@@ -211,7 +211,8 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     const u = this.user();
     if (!u) return;
     const ref = this.dialog.open(AssignRolesDialogComponent, {
-      width: '680px',
+      width: '820px',
+      maxWidth: '95vw',
       disableClose: true,
       data: { user: u },
     });
@@ -265,7 +266,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     if (!u) return;
 
     const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '440px', restoreFocus: false,
+      width: '400px', restoreFocus: false,
       data: {
         title:        'Disable two-factor authentication',
         message:      `This removes 2FA from "${u.fullName}"'s account without requiring a code — ` +
