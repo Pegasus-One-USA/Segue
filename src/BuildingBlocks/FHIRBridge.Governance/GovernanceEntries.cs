@@ -147,4 +147,5 @@ public sealed record SmartLaunchEntry(
     string? FailureReason = null,
     string? GrantedScope = null,
     bool? PatientContextGranted = null,
-    string? TokenCacheKeyHash = null);
+    string? TokenCacheKeyHash = null,
+    string? CorrelationId = null);

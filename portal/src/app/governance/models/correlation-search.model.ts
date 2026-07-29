@@ -1,4 +1,4 @@
-import { AuditLogEntry, AuthenticationLogEntry, AuthorizationLogEntry, DataAccessLogEntry, SecurityEventEntry } from './governance.model';
+import { AuditLogEntry, AuthenticationLogEntry, AuthorizationLogEntry, DataAccessLogEntry, SecurityEventEntry, SmartLaunchLogEntry } from './governance.model';
 import {
   ApiRequestLogEntry,
   ErrorLogEntry,
@@ -51,5 +51,6 @@ export interface CorrelationSearchResult {
   notifications: NotificationHistoryEntry[];
   validationFailures: ValidationFailureEntry[];
   workflowRuns: WorkflowRunSummary[];
+  smartLaunchLogs: SmartLaunchLogEntry[];
   totalCount: number;
 }

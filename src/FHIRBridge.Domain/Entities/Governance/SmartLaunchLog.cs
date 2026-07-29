@@ -23,7 +23,8 @@ public sealed class SmartLaunchLog : Entity<Guid>, IAppendOnlyEntity
         string? failureReason,
         string? grantedScope = null,
         bool? patientContextGranted = null,
-        string? tokenCacheKeyHash = null)
+        string? tokenCacheKeyHash = null,
+        string? correlationId = null)
     {
         Id = id;
         OccurredOnUtc = occurredOnUtc;
@@ -35,6 +36,7 @@ public sealed class SmartLaunchLog : Entity<Guid>, IAppendOnlyEntity
         GrantedScope = grantedScope;
         PatientContextGranted = patientContextGranted;
         TokenCacheKeyHash = tokenCacheKeyHash;
+        CorrelationId = correlationId;
     }
 
     public DateTime OccurredOnUtc { get; private set; }
@@ -55,4 +57,8 @@ public sealed class SmartLaunchLog : Entity<Guid>, IAppendOnlyEntity
     /// hash be compared to confirm the same session was actually reused, without ever printing the CallerId/session
     /// identifier itself.</summary>
     public string? TokenCacheKeyHash { get; private set; }
+
+    /// <summary>The ambient request correlation id (see <c>ICurrentUserService.CurrentUser.CorrelationId</c>) so
+    /// this launch is findable by Correlation Search alongside every other governance/operations table.</summary>
+    public string? CorrelationId { get; private set; }
 }

@@ -83,7 +83,10 @@ public sealed class QuestPdfComplianceReportService : IComplianceReportService
             .GroupBy(x => x.Severity)
             .Select(g => new { Severity = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
-        var errorsTotal = errorsInPeriod.Sum(x => x.Count);
+        // Informational rows (routine sub-500 rejections) aren't incidents — exclude them from the headline
+        // total so they don't inflate a compliance report's "errors" count. Still counted in the per-severity
+        // breakdown above if present.
+        var errorsTotal = errorsInPeriod.Where(x => x.Severity != "Informational").Sum(x => x.Count);
 
         var generatedOnUtc = DateTime.UtcNow;
         var reportId = $"HIPAA-{fromUtc:yyyyMMdd}-{toUtc:yyyyMMdd}-{generatedOnUtc:HHmmss}";

@@ -16,8 +16,10 @@ public sealed class SmartLaunchLogConfiguration : IEntityTypeConfiguration<Smart
         builder.Property(x => x.FailureReason).HasMaxLength(1000);
         builder.Property(x => x.GrantedScope).HasMaxLength(500);
         builder.Property(x => x.TokenCacheKeyHash).HasMaxLength(20);
+        builder.Property(x => x.CorrelationId).HasMaxLength(100);
 
         builder.HasIndex(x => x.OccurredOnUtc);
         builder.HasIndex(x => x.SourceConnectionId);
+        builder.HasIndex(x => x.CorrelationId);
     }
 }

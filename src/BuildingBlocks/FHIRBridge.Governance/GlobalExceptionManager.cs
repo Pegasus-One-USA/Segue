@@ -65,6 +65,43 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
         return new ErrorReport(referenceId, category, friendlyMessage, context.CorrelationId, diagnosis.Action);
     }
 
+    public async Task<string> CaptureExpectedAsync(
+        ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
+    {
+        var referenceId = ErrorReference.New();
+
+        // Same never-throw guarantee as CaptureAsync: capturing must not itself fail the request.
+        try
+        {
+            await _governanceLogger.LogErrorAsync(
+                new ErrorEntry(
+                    "Informational",
+                    failure.ExceptionType,
+                    failure.Message,
+                    StackTrace: null,
+                    context.Module,
+                    context.CorrelationId,
+                    referenceId,
+                    Category: null,
+                    UserFriendlyMessage: null,
+                    context.ExecutionId,
+                    context.WorkflowId,
+                    context.EndpointId,
+                    context.RequestId,
+                    context.TraceId,
+                    context.SpanId,
+                    DiagnosisAction: null,
+                    DiagnosisCause: null),
+                cancellationToken);
+        }
+        catch
+        {
+            // Intentionally swallowed: see remarks above.
+        }
+
+        return referenceId;
+    }
+
     /// <summary>Category-specific, PHI/PII-free text safe to show any end user. The reference id is returned
     /// as a separate field on <see cref="ErrorReport"/> so the UI can present it on its own line.
     /// <para>The closing clause is driven by <paramref name="diagnosis"/>'s <see cref="DiagnosisAction"/> — not

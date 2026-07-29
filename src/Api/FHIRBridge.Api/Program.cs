@@ -277,6 +277,7 @@ app.UseForwardedHeaders();
 app.Use(async (context, next) =>
 {
     var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+    System.Diagnostics.Activity.Current?.SetTag("correlation_id", correlationId);
     using (Serilog.Context.LogContext.PushProperty("CorrelationId", correlationId))
     {
         await next();
@@ -328,6 +329,25 @@ app.UseExceptionHandler(errorApp =>
         if (status < 500)
         {
             app.Logger.LogWarning(feature.Error, "Expected domain failure on {Path}.", context.Request.Path);
+
+            // Not routed through CaptureAsync (no ErrorLogs row at ordinary severity — see comment above), but
+            // still recorded at Severity "Informational" via the lightweight CaptureExpectedAsync path so the
+            // rejection is findable by CorrelationId (e.g. Correlation Search) without appearing in the default
+            // Operations → Errors view. No reference id is surfaced to the client — this is a backend trail only.
+            var expectedExceptionManager = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGlobalExceptionManager>();
+            var expectedCorrelationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+            var expectedActivity = System.Diagnostics.Activity.Current;
+            _ = await expectedExceptionManager.CaptureExpectedAsync(
+                new FHIRBridge.Governance.ExpectedFailure(feature.Error.GetType().Name, feature.Error.Message),
+                new FHIRBridge.Governance.ExceptionContext(
+                    Module: "Api",
+                    Severity: "Informational",
+                    CorrelationId: expectedCorrelationId,
+                    EndpointId: $"{context.Request.Method} {context.Request.Path}",
+                    RequestId: context.TraceIdentifier,
+                    TraceId: expectedActivity?.TraceId.ToString(),
+                    SpanId: expectedActivity?.SpanId.ToString()));
+
             await context.Response.WriteAsJsonAsync(new
             {
                 error = clientMessage ?? "The request could not be processed.",

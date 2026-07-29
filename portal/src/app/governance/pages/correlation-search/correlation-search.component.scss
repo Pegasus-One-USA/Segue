@@ -186,3 +186,22 @@
 .link { color: var(--color-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
+.trace-cell { color: var(--color-muted); cursor: help; }
+
+.severity-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.severity-warning, .severity-informational, .severity-low {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+}
+
+.severity-error, .severity-high, .severity-critical {
+  background: var(--color-error-soft);
+  color: var(--color-error-strong);
+}
+

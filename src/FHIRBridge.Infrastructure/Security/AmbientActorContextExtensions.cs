@@ -18,6 +18,7 @@ public static class AmbientActorContextExtensions
     {
         var actorScope = ambientActorContext.BeginScope(actor, correlationId);
         var logContextScope = LogContext.PushProperty("CorrelationId", correlationId);
+        System.Diagnostics.Activity.Current?.SetTag("correlation_id", correlationId);
         return new CombinedScope(actorScope, logContextScope);
     }
 

@@ -266,6 +266,11 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.EndpointId == search.EndpointId);
         if (!string.IsNullOrWhiteSpace(search.Severity))
             query = query.Where(x => x.Severity == search.Severity);
+        else
+            // Informational rows (routine sub-500 rejections captured via CaptureExpectedAsync) are findable
+            // by CorrelationId/ExecutionId/etc. but must stay out of the default Operations → Errors view —
+            // that's the whole point of not routing them through the heavy 5xx CaptureAsync path.
+            query = query.Where(x => x.Severity != "Informational");
         if (!string.IsNullOrWhiteSpace(search.Category))
             query = query.Where(x => x.Category == search.Category);
         if (search.FromUtc.HasValue)
@@ -423,7 +428,7 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .Take(NormalizeTake(take))
             .Select(x => new SmartLaunchLogDto(
                 x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason,
-                x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash))
+                x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash, x.CorrelationId))
             .ToListAsync(cancellationToken);
     }
 
@@ -454,12 +459,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
                 run.Id, run.WorkflowDefinitionId, run.Status.ToString(), run.StartedAt, run.CompletedAt,
                 run.TriggeredBy, run.TriggerType, run.ErrorMessage))
             .ToListAsync(cancellationToken);
+        var smartLaunchLogs = await _dbContext.SmartLaunchLogs
+            .AsNoTracking()
+            .Where(x => x.CorrelationId == correlationId)
+            .OrderByDescending(x => x.OccurredOnUtc)
+            .Take(take)
+            .Select(x => new SmartLaunchLogDto(
+                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason,
+                x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash, x.CorrelationId))
+            .ToListAsync(cancellationToken);
 
         return new CorrelationSearchResultDto(
             correlationId, pipelineRun, auditLogs.Items, dataAccessLogs.Items, authenticationLogs.Items,
             securityEvents.Items, authorizationLogs.Items, schedulerHistory.Items, retryHistory.Items,
             errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items,
-            workflowRuns);
+            workflowRuns, smartLaunchLogs);
     }
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)

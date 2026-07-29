@@ -171,6 +171,7 @@ export interface SmartLaunchLogEntry {
   /** Non-reversible hash of the token-cache key this session was saved under — compare across rows to confirm a
    *  later run reused the same session instead of a different one. */
   tokenCacheKeyHash: string | null;
+  correlationId: string | null;
 }
 
 /** Matches the backend's SecurityEventDto (api/v1/governance/security-events). */

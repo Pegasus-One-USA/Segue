@@ -359,6 +359,12 @@ public sealed class RankedWorkflowOrchestratorTests
             CapturedContexts.Add(context);
             return Task.FromResult(new ErrorReport("ERR-TEST-000001", ErrorCategory.Unknown, "Something went wrong.", context.CorrelationId));
         }
+
+        public Task<string> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
+        {
+            CapturedContexts.Add(context);
+            return Task.FromResult("ERR-TEST-000002");
+        }
     }
 
     private sealed class PayloadExecutor : IWorkflowNodeExecutor

@@ -48,6 +48,7 @@
     <ProjectReference Include="..\Runtime\FHIRBridge.Runtime.Infrastructure\FHIRBridge.Runtime.Infrastructure.csproj" />
     <ProjectReference Include="..\BuildingBlocks\FHIRBridge.Integration\FHIRBridge.Integration.csproj" />
     <ProjectReference Include="..\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />
   </ItemGroup>
 
   <ItemGroup>

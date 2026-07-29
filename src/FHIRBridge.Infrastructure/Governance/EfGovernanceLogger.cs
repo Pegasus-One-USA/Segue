@@ -266,6 +266,8 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
 
     public async Task LogSmartLaunchAsync(SmartLaunchEntry entry, CancellationToken cancellationToken = default)
     {
+        var current = _currentUserService.CurrentUser;
+
         _dbContext.SmartLaunchLogs.Add(new SmartLaunchLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
@@ -276,7 +278,8 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             Truncate(entry.FailureReason, 1000),
             Truncate(entry.GrantedScope, 500),
             entry.PatientContextGranted,
-            entry.TokenCacheKeyHash));
+            entry.TokenCacheKeyHash,
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
