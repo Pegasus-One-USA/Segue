@@ -1,0 +1,72 @@
+src/BuildingBlocks/FHIRBridge.Observability/README.md
+  s_7dd4af41fc47fd::t_6e5f8e510e9b9c 36-39
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_7dd4af41fc47fd::t_2c11984c2b1268 269-273
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_7dd4af41fc47fd::t_b11446877ff225 193-195,199-200,204-205
+  s_7dd4af41fc47fd::t_30b6d5422badc1 189-192,196-198,201-203,206-207
+src/FHIRBridge.Infrastructure/Governance/QuestPdfComplianceReportService.cs
+  s_7dd4af41fc47fd::t_c6d779b7ddf740 86-89
+src/Api/FHIRBridge.Api/Program.cs
+  s_7dd4af41fc47fd::t_063cbc376c0758 332-350
+  s_7dd4af41fc47fd::t_7fce8d663c709b 280
+src/BuildingBlocks/FHIRBridge.Observability/FHIRBridge.Observability.csproj
+  s_7dd4af41fc47fd::t_165118e546f6e0 18
+src/FHIRBridge.Infrastructure/Messaging/PipelineRunCommandHandler.cs
+  s_7dd4af41fc47fd::t_fa180ebf4c9434 8,11
+  s_7dd4af41fc47fd::t_a62c674481508b 57-59
+tests/FHIRBridge.UnitTests/Governance/EfGovernanceQueryServiceSearchErrorLogsTests.cs
+  s_7dd4af41fc47fd::t_7209e0cd08f2d4 1-68
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_7dd4af41fc47fd::t_2e9fd38ba14b54 185,187-195
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_7dd4af41fc47fd::t_8a0942dae9b717 362-367
+src/BuildingBlocks/FHIRBridge.Observability/Logging/FhirBridgeLogging.cs
+  s_7dd4af41fc47fd::t_793b657571a11d 6
+  s_7dd4af41fc47fd::t_d278cc64c9a1b1 40
+src/FHIRBridge.Infrastructure/Messaging/WebhookIngestionCommandHandler.cs
+  s_7dd4af41fc47fd::t_24457d9b934e52 8,11
+  s_7dd4af41fc47fd::t_fc77d1ce8bbf98 54-56
+src/Runtime/FHIRBridge.Runtime.Application/FHIRBridge.Runtime.Application.csproj
+  s_7dd4af41fc47fd::t_c0e72b6f1306f2 22
+src/FHIRBridge.Infrastructure/Persistence/EfPipelineRunRouteExecutionRepository.cs
+  s_7dd4af41fc47fd::t_882cc1804ec21a 156-157
+src/BuildingBlocks/FHIRBridge.Observability/FhirBridgeActivitySource.cs
+  s_7dd4af41fc47fd::t_85580b3a34ef51 1-17
+tests/FHIRBridge.UnitTests/Governance/GlobalExceptionManagerCaptureExpectedTests.cs
+  s_7dd4af41fc47fd::t_291980d25ee276 1-50
+src/BuildingBlocks/FHIRBridge.Governance/IGlobalExceptionManager.cs
+  s_7dd4af41fc47fd::t_b77e2afc27648c 13-19,22-26
+src/FHIRBridge.Infrastructure/Security/AmbientActorContextExtensions.cs
+  s_7dd4af41fc47fd::t_c92709b9256b4c 21
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_7dd4af41fc47fd::t_3bba47e7c15e5d 51
+portal/src/app/operations/pages/errors/errors.component.ts
+  s_7dd4af41fc47fd::t_5f93e22ad0012d 46
+src/Runtime/FHIRBridge.Runtime.Application/Services/PipelineOrchestrator.cs
+  s_7dd4af41fc47fd::t_d24a6befd11655 13,15
+  s_7dd4af41fc47fd::t_bb818de01a4ef1 168-170
+  s_7dd4af41fc47fd::t_66d30c64ae0099 50-52
+src/BuildingBlocks/FHIRBridge.Observability/ObservabilityServiceCollectionExtensions.cs
+  s_7dd4af41fc47fd::t_64fda66092a778 64-70
+src/BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs
+  s_7dd4af41fc47fd::t_c9e7f728578d49 68-104
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_7dd4af41fc47fd::t_4ad3c187c24d50 56-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "906460aa9536c02c5950a30b971f66a047055734",
+  "prompts": {},
+  "sessions": {
+    "s_7dd4af41fc47fd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe41be14-1e2e-41c3-b427-851611f070eb",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
