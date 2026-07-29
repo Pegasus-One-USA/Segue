@@ -68,6 +68,9 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
   for (const x of result.securityEvents) {
     entries.push({ timeUtc: x.occurredOnUtc, category: 'Security Event', summary: `${x.severity} — ${x.eventType}`, raw: x });
   }
+  for (const x of result.smartLaunchLogs) {
+    entries.push({ timeUtc: x.occurredOnUtc, category: 'SMART Launch', summary: `${x.sourceName} (${x.launchType}) — ${x.success ? 'OK' : 'Failed: ' + (x.failureReason ?? '')}`, raw: x });
+  }
 
   return entries.sort((a, b) => new Date(a.timeUtc).getTime() - new Date(b.timeUtc).getTime());
 }

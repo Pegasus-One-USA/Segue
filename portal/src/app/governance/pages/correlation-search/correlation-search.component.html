@@ -242,6 +242,17 @@
         </section>
       }
 
+      @if (r.smartLaunchLogs.length > 0) {
+        <section class="result-section">
+          <h3>SMART Launch Logs ({{ r.smartLaunchLogs.length }})</h3>
+          <table class="mini-table"><tr><th>Time</th><th>Source</th><th>Launch Type</th><th>Result</th></tr>
+            @for (x of r.smartLaunchLogs; track x.id) {
+              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.sourceName }}</td><td>{{ x.launchType }}</td><td>{{ x.success ? 'Success' : 'Failed: ' + (x.failureReason || '—') }}</td></tr>
+            }
+          </table>
+        </section>
+      }
+
       } <!-- end viewMode() === 'sections' -->
     }
   }
