@@ -182,9 +182,17 @@
       @if (r.errors.length > 0) {
         <section class="result-section">
           <h3>Errors ({{ r.errors.length }})</h3>
-          <table class="mini-table"><tr><th>Time</th><th>Severity</th><th>Exception</th><th>Message</th></tr>
+          <table class="mini-table"><tr><th>Time</th><th>Severity</th><th>Exception</th><th>Message</th><th>Trace</th></tr>
             @for (x of r.errors; track x.id) {
-              <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.severity }}</td><td>{{ x.exceptionType }}</td><td>{{ x.message }}</td></tr>
+              <tr>
+                <td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td>
+                <td><span [class]="'severity-badge severity-' + x.severity.toLowerCase()">{{ x.severity }}</span></td>
+                <td>{{ x.exceptionType }}</td>
+                <td>{{ x.message }}</td>
+                <td class="mono trace-cell" [title]="'TraceId: ' + (x.traceId || '—') + '  SpanId: ' + (x.spanId || '—')">
+                  {{ x.traceId ? (x.traceId | slice:0:8) + '…' : '—' }}
+                </td>
+              </tr>
             }
           </table>
         </section>

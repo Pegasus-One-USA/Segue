@@ -10,7 +10,9 @@ using FHIRBridge.Runtime.Domain.Entities;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Domain.Fhir;
 using FHIRBridge.Runtime.Domain.ValueObjects;
+using FHIRBridge.Observability;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace FHIRBridge.Runtime.Application.Services;
 
@@ -45,6 +47,9 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         StartPipelineRunRequest request,
         CancellationToken cancellationToken)
     {
+        using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
+        activity?.SetTag("correlation_id", request.CorrelationId);
+
         var resourceTypes = request.ResourceTypes
             .Select(SupportedFhirResourceTypes.Normalize)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -160,6 +165,9 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         StartBulkExportRunRequest request,
         CancellationToken cancellationToken)
     {
+        using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
+        activity?.SetTag("correlation_id", request.CorrelationId);
+
         // Kick off + poll + download NDJSON via the bulk-export client, then run the same Govern→Transform→Output.
         var exportResources = await _bulkExportClient.ExportAsync(request.Export, request.Source, cancellationToken);
 

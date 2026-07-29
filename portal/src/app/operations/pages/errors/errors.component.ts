@@ -43,7 +43,7 @@ export class ErrorsComponent implements OnInit {
   readonly status = signal('');
 
   readonly categories = ['Business', 'Validation', 'Infrastructure', 'Authentication', 'Authorization', 'Database', 'Network', 'ExternalSystem', 'Unknown'];
-  readonly severities = ['Error', 'Warning'];
+  readonly severities = ['Error', 'Warning', 'Informational'];
   readonly statuses = ['Open', 'Resolved'];
 
   readonly displayedCols = [

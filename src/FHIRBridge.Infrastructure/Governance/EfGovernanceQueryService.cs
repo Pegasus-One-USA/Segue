@@ -266,6 +266,11 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.EndpointId == search.EndpointId);
         if (!string.IsNullOrWhiteSpace(search.Severity))
             query = query.Where(x => x.Severity == search.Severity);
+        else
+            // Informational rows (routine sub-500 rejections captured via CaptureExpectedAsync) are findable
+            // by CorrelationId/ExecutionId/etc. but must stay out of the default Operations → Errors view —
+            // that's the whole point of not routing them through the heavy 5xx CaptureAsync path.
+            query = query.Where(x => x.Severity != "Informational");
         if (!string.IsNullOrWhiteSpace(search.Category))
             query = query.Where(x => x.Category == search.Category);
         if (search.FromUtc.HasValue)

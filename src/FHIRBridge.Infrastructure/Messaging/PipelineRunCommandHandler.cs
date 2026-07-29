@@ -5,8 +5,10 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Security;
+using FHIRBridge.Observability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 namespace FHIRBridge.Infrastructure.Messaging;
 
@@ -52,6 +54,9 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
         var actorLabel = string.Equals(command.TriggeredBy, "scheduler", StringComparison.OrdinalIgnoreCase)
             ? "Scheduler (Automated Pipeline Run)"
             : $"Automated Pipeline Run ({command.TriggeredBy ?? "unknown trigger"})";
+        // Gives this Worker-side execution a real span (there is none today outside ASP.NET Core's own
+        // per-request Activity) — BeginCorrelatedScope below tags it with correlation_id.
+        using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
         using var actorScope = _ambientActorContext.BeginCorrelatedScope(actorLabel, command.CorrelationId);
 
         // Transient failures (e.g. source/DB unavailable) are retried with backoff.

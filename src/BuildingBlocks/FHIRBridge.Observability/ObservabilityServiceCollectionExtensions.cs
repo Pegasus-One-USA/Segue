@@ -61,7 +61,13 @@ public static class ObservabilityServiceCollectionExtensions
                 tracing
                     .SetResourceBuilder(resourceBuilder)
                     .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation();
+                    .AddHttpClientInstrumentation()
+                    .AddSource(FhirBridgeActivitySource.Name)
+                    // Best-effort: the Azure.Messaging.ServiceBus SDK has built-in Activity sources for
+                    // send/process that populate W3C trace headers on the wire once something is listening — a
+                    // no-op for hosts not using the Azure Service Bus transport. RabbitMQ / in-memory
+                    // IMessageConsumer implementations have no equivalent propagation today.
+                    .AddSource("Azure.*");
 
                 if (!string.IsNullOrWhiteSpace(options.OtlpEndpoint))
                 {
