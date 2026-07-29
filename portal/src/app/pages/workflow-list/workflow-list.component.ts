@@ -67,8 +67,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly dataModal = signal<DataModal | null>(null);
   /** Workflow pending delete confirmation. */
   readonly confirmDelete = signal<WorkflowSummary | null>(null);
-  readonly sortColumn = signal<SortColumn>('name');
-  readonly sortDirection = signal<SortDirection>('asc');
+  // Default sort surfaces the most recently run (created/updated activity proxy) workflows first —
+  // per user direction, so a newly built or just-triggered workflow is immediately visible without
+  // having to search/sort manually. Backend orders never-run workflows last (LastRunAt ?? -1).
+  readonly sortColumn = signal<SortColumn>('lastRun');
+  readonly sortDirection = signal<SortDirection>('desc');
   readonly pageSizeOptions = [10, 20, 50];
   readonly pageSize = signal(10);
   readonly pageIndex = signal(0);
