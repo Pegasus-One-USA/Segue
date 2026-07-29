@@ -11,7 +11,8 @@ public sealed class WorkflowRun
         string? triggeredBy = null,
         string? triggerType = null,
         Guid? targetNodeId = null,
-        int workflowDefinitionVersion = 1)
+        int workflowDefinitionVersion = 1,
+        string? correlationId = null)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -26,6 +27,7 @@ public sealed class WorkflowRun
         TriggeredBy = triggeredBy;
         TriggerType = triggerType;
         TargetNodeId = targetNodeId;
+        CorrelationId = correlationId;
     }
 
     public Guid Id { get; }
@@ -53,6 +55,10 @@ public sealed class WorkflowRun
     /// <summary>Set when this run is a checkpoint run (restricted to one node's ancestor closure) — null for a normal,
     /// full-graph run. Lets the checkpoint-result endpoint resolve which node to read back from just the run id.</summary>
     public Guid? TargetNodeId { get; }
+
+    /// <summary>Shared execution-tracking id for this run — the same value flows into audit records, captured
+    /// errors, and correlation search so every artifact of this run can be found from one id.</summary>
+    public string? CorrelationId { get; }
 
     public IReadOnlyCollection<WorkflowNodeRun> NodeRuns => _nodeRuns;
 

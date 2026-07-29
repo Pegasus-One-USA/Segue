@@ -12,6 +12,7 @@ namespace FHIRBridge.Infrastructure.Persistence;
 public sealed class InMemoryConfigurationRepository : IConfigurationRepository
 {
     private readonly ConcurrentDictionary<Guid, SourceConnection> _sources = new();
+    private readonly ConcurrentDictionary<Guid, SourceConfiguration> _sourceConfigurations = new();
     private readonly ConcurrentDictionary<Guid, DestinationConfiguration> _destinations = new();
     private readonly ConcurrentDictionary<Guid, MappingProfile> _mappingProfiles = new();
     private readonly ConcurrentDictionary<Guid, ResourcePipelineRoute> _routes = new();
@@ -66,6 +67,34 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
             string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) &&
             (excludeId is null || x.Id != excludeId));
         return Task.FromResult(exists);
+    }
+
+    // ── Source configurations ─────────────────────────────────────────────────
+    public Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<SourceConfiguration>>(_sourceConfigurations.Values.OrderBy(x => x.Name).ToList());
+
+    public Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct)
+    {
+        _sourceConfigurations.TryGetValue(id, out var e);
+        return Task.FromResult(e);
+    }
+
+    public Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        _sourceConfigurations[e.Id] = e;
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        _sourceConfigurations[e.Id] = e;
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken)
+    {
+        _sourceConfigurations.TryRemove(sourceConfiguration.Id, out _);
+        return Task.CompletedTask;
     }
 
     // ── Destinations ──────────────────────────────────────────────────────────

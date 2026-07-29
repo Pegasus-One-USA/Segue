@@ -15,8 +15,9 @@ interface ProviderStandaloneWorkflowIds {
   standaloneBaseUrl: string;
 }
 
-/** Matches FHIRBridge's PublicEhrEndpointDto (GET /api/v1/ehr-public-endpoints) — anonymous, every EhrEndpoint row
- *  regardless of EndpointType (the vendor's own shared sandbox as well as any real customer's own instance). */
+/** Matches FHIRBridge's PublicEhrEndpointDto (GET /api/v1/ehr-public-endpoints?endpointType=Epic) — anonymous,
+ *  scoped to EndpointType.Epic rows only (the vendor's own shared sandbox), never a real customer's own MyChart
+ *  instance. */
 interface EpicEndpoint {
   id: string;
   name: string;
@@ -774,8 +775,8 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       await this.ensureWorkflowIdsLoaded();
       const query = this.hospitalSearchQuery().trim();
       const url = query
-        ? `${this.baseUrl}/api/v1/ehr-public-endpoints?search=${encodeURIComponent(query)}`
-        : `${this.baseUrl}/api/v1/ehr-public-endpoints`;
+        ? `${this.baseUrl}/api/v1/ehr-public-endpoints?endpointType=Epic&search=${encodeURIComponent(query)}`
+        : `${this.baseUrl}/api/v1/ehr-public-endpoints?endpointType=Epic`;
       const endpoints = await firstValueFrom(this.http.get<EpicEndpoint[]>(url));
       this.hospitals.set(endpoints);
     } catch {

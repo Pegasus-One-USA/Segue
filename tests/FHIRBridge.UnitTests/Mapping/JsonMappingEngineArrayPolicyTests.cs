@@ -66,4 +66,75 @@ public sealed class JsonMappingEngineArrayPolicyTests
         var nameRow = rows.Single(r => r.ContainsKey("ContactName"));
         nameRow.GetValueOrDefault("RelationshipDisplay").Should().BeNull();
     }
+
+    /// <summary>
+    /// <c>Patient.identifier[]</c> typically carries several identifiers (MRN, CSN, an Epic-internal id, …), each
+    /// disambiguated only by its <c>system</c> — often an opaque, tenant-specific OID (e.g.
+    /// <c>urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260</c> for a given Epic install's internal id). Positional
+    /// array access can't reliably pick "the MRN" vs "the internal id" since order isn't guaranteed across records —
+    /// <see cref="ArrayPolicy.CorrelateByCode"/> (originally built for <c>Observation.component[]</c> LOINC codes)
+    /// is generic enough to reuse here: correlate on the sibling <c>system</c> element instead of a sibling code.
+    /// </summary>
+    [Fact]
+    public void CorrelateByCode_selects_identifier_value_by_sibling_system_oid()
+    {
+        const string patientJson = """
+            {
+              "resourceType": "Patient",
+              "id": "eTjDDWfopD0BnRlyEO2mGZQ3",
+              "identifier": [
+                { "system": "urn:oid:1.2.840.114350.1.13.0.1.7.3.688884.100", "value": "MRN-12345" },
+                { "system": "urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260", "value": "738U002" }
+              ]
+            }
+            """;
+
+        var field = new MappingFieldDto(
+            TargetField: "EpicInternalId",
+            JsonPath: "$.identifier[*].value",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: null,
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.identifier[*].system",
+            CorrelationCodeValue: "urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260");
+
+        var result = Sut.Map(patientJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Values.GetValueOrDefault("EpicInternalId").Should().Be("738U002");
+    }
+
+    [Fact]
+    public void CorrelateByCode_with_no_matching_system_yields_null_not_an_error()
+    {
+        const string patientJson = """
+            {
+              "resourceType": "Patient",
+              "id": "eTjDDWfopD0BnRlyEO2mGZQ3",
+              "identifier": [
+                { "system": "urn:oid:1.2.840.114350.1.13.0.1.7.3.688884.100", "value": "MRN-12345" }
+              ]
+            }
+            """;
+
+        var field = new MappingFieldDto(
+            TargetField: "EpicInternalId",
+            JsonPath: "$.identifier[*].value",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: null,
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.identifier[*].system",
+            CorrelationCodeValue: "urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260");
+
+        var result = Sut.Map(patientJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Values.GetValueOrDefault("EpicInternalId").Should().BeNull();
+    }
 }

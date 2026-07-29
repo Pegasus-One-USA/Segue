@@ -50,6 +50,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly ISystemSettingsCache? _settingsCache;
     private readonly ILogger<ConfiguredPipelineService> _logger;
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
+    private readonly IDestinationSchemaService? _destinationSchemaService;
 
     public ConfiguredPipelineService(
         IConfigurationRepository configurationRepository,
@@ -71,7 +72,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
         IGovernanceLogger? governanceLogger = null,
         IFailureDiagnosisClassifier? diagnosisClassifier = null,
-        ISystemSettingsCache? settingsCache = null)
+        ISystemSettingsCache? settingsCache = null,
+        IDestinationSchemaService? destinationSchemaService = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -93,6 +95,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _dataSetDeIdentificationService = dataSetDeIdentificationService;
         _logger = logger;
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
+        _destinationSchemaService = destinationSchemaService;
     }
 
     /// <summary>
@@ -209,12 +212,23 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         routeGroup.Key.SourceConnectionId,
                         "SourceConnection");
 
+                    // The workflow-specific configuration (retrieval settings, scopes) this mapping uses. Falls back
+                    // to reading straight off the SourceConnection (today's pre-Slice-2b behavior) for any mapping
+                    // profile that somehow still has no configuration — defensive, since AddMappingProfileAsync/
+                    // UpdateMappingProfileAsync always provision one going forward and the Slice 1 migration
+                    // backfilled every pre-existing profile.
+                    var workflowSourceConfiguration = routeGroup.Key.SourceConfigurationId is { } sourceConfigurationId
+                        ? config.SourceConfigurationsById.GetValueOrDefault(sourceConfigurationId)
+                        : null;
+                    var retrieval = workflowSourceConfiguration?.Retrieval ?? sourceConnection.Retrieval;
+                    var scopes = workflowSourceConfiguration?.Scopes ?? sourceConnection.Authentication.Scopes;
+
                     // Bulk export runs either when the caller explicitly requests it (legacy API flag) or when the
                     // source connection itself is configured for it (RetrievalMethod == "bulk-export") — so a
                     // bulk-configured source uses $export from any trigger (manual, scheduled, or dispatched) without
                     // the caller having to know.
                     var useBulkExport = request.UseBulkExport
-                        || string.Equals(sourceConnection.Retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+                        || string.Equals(retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
 
                     // For the search path, make the pull incremental ("since last run") unless bulk export is used
                     // (bulk $export uses _since, not _lastUpdated) or the route already pins _lastUpdated.
@@ -229,8 +243,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         ? cachedCohort
                         : null;
 
-                    var sourceConfiguration = await BuildSourceConfigurationAsync(
+                    var runtimeSourceConfiguration = await BuildSourceConfigurationAsync(
                         sourceConnection,
+                        scopes,
                         effectiveSearchParameters,
                         cancellationToken,
                         cohortPatientIds);
@@ -244,16 +259,16 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         }
 
                         resources = await _bulkExportClient.ExportAsync(
-                            BuildBulkExportRequest(sourceConnection.Retrieval, resourceType),
-                            sourceConfiguration,
+                            BuildBulkExportRequest(retrieval, resourceType),
+                            runtimeSourceConfiguration,
                             cancellationToken);
                     }
                     else
                     {
-                        var sourceClient = _sourceClientFactory.Create(sourceConfiguration.SourceType);
+                        var sourceClient = _sourceClientFactory.Create(runtimeSourceConfiguration.SourceType);
                         resources = await sourceClient.SearchAsync(
                             resourceType,
-                            sourceConfiguration,
+                            runtimeSourceConfiguration,
                             cancellationToken);
                     }
 
@@ -564,11 +579,22 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
             var writtenCount = writeResult.Count;
 
+            if (writeResult.RecordErrors is { Count: > 0 } writeRecordErrors)
+            {
+                errors.AddRange(writeRecordErrors);
+            }
+
             if (writtenCount > 0)
             {
+                // A writer that isolates per-record failures (see RecordErrors above) reports exactly which
+                // records landed via WrittenResourceIds — record history against that, not the whole attempted
+                // batch, so "stored" reflects reality even when some records in the batch failed. A writer that
+                // doesn't support per-record isolation leaves WrittenResourceIds null; Count then really does mean
+                // "the whole batch succeeded" (a partial write there throws and fails the whole route instead), so
+                // falling back to the full mappedRecords list is still correct.
                 await _resourceHistoryRecorder.RecordStoredAsync(
                     routeExecutionId,
-                    mappedRecords.Select(record => record.SourceResourceId).ToList(),
+                    writeResult.WrittenResourceIds ?? mappedRecords.Select(record => record.SourceResourceId).ToList(),
                     cancellationToken);
             }
 
@@ -927,11 +953,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         return new RouteSourceKey(
             route.MappingProfile.SourceConnectionId,
+            route.MappingProfile.SourceConfigurationId,
             route.SearchParameters);
     }
 
     private sealed record RouteSourceKey(
         Guid SourceConnectionId,
+        Guid? SourceConfigurationId,
         string? SearchParameters);
 
     private sealed record RouteMappingWorkItem(
@@ -1075,6 +1103,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
     private async Task<FhirSourceConfiguration> BuildSourceConfigurationAsync(
         SourceConnection sourceConnection,
+        IReadOnlyCollection<string> scopes,
         string? searchParameters,
         CancellationToken cancellationToken,
         IReadOnlyCollection<string>? patientIds = null)
@@ -1122,7 +1151,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             sourceConnection.Authentication.ClientId,
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
-            sourceConnection.Authentication.Scopes,
+            scopes,
             100,
             5,
             sourceConnection.Id,
@@ -1130,6 +1159,55 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             clientSecret,
             ApplicationType: isLoopback ? null : sourceConnection.ApplicationType,
             PatientIds: patientIds);
+    }
+
+    /// <summary>
+    /// Fills each field's <see cref="MappingFieldDto.MaxLength"/>/<see cref="MappingFieldDto.Precision"/>/
+    /// <see cref="MappingFieldDto.Scale"/> from the destination's live column metadata (the same introspection the
+    /// mapping-editor column picker already reads) so <see cref="JsonMappingEngine"/> can reject an
+    /// oversized/overflowing value before it's ever sent to the destination, instead of only finding out from a
+    /// truncation/overflow SqlException at write time. Fetched once per route execution, not per resource. Falls
+    /// back to the fields unchanged (no length/precision enforcement) when no schema service is wired up, the
+    /// destination isn't relational, or its schema can't be read right now — this is a belt-and-suspenders
+    /// improvement, not something that should itself fail a run.
+    /// </summary>
+    private async Task<List<MappingFieldDto>> EnrichWithDestinationSchemaAsync(
+        List<MappingFieldDto> mappingFields,
+        MappingProfile mappingProfile,
+        CancellationToken cancellationToken)
+    {
+        if (_destinationSchemaService is null)
+        {
+            return mappingFields;
+        }
+
+        DestinationSchemaDto schema;
+        try
+        {
+            schema = await _destinationSchemaService.GetSchemaAsync(mappingProfile.DestinationId, cancellationToken);
+        }
+        catch (Exception)
+        {
+            return mappingFields;
+        }
+
+        var tableName = DestinationObjectParser.ParseTableName(mappingProfile.DestinationObject);
+        var table = schema.Tables.FirstOrDefault(t =>
+            string.Equals(t.FullName, tableName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TableName, tableName, StringComparison.OrdinalIgnoreCase));
+
+        if (table is null)
+        {
+            return mappingFields;
+        }
+
+        var columnsByName = table.Columns.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+        return mappingFields
+            .Select(field => columnsByName.TryGetValue(field.TargetField, out var column)
+                ? field with { MaxLength = column.MaxLength, Precision = column.NumericPrecision, Scale = column.NumericScale }
+                : field)
+            .ToList();
     }
 
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(
@@ -1150,6 +1228,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 string.IsNullOrWhiteSpace(field.DestinationObject) ||
                 string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+        mappingFields = await EnrichWithDestinationSchemaAsync(mappingFields, mappingProfile, cancellationToken);
 
         foreach (var resource in resources)
         {
@@ -1192,12 +1272,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private async Task<ConfigurationSnapshot> LoadConfigurationAsync(CancellationToken cancellationToken)
     {
         var sources = await _configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+        var sourceConfigurations = await _configurationRepository.GetSourceConfigurationsAsync(cancellationToken);
         var destinations = await _configurationRepository.GetDestinationsAsync(cancellationToken);
         var mappings = await _configurationRepository.GetMappingProfilesAsync(cancellationToken);
         var routes = await _configurationRepository.GetRoutesAsync(cancellationToken);
         var webhooks = await _configurationRepository.GetWebhooksAsync(cancellationToken);
 
-        return new ConfigurationSnapshot(sources, destinations, mappings, routes, webhooks);
+        return new ConfigurationSnapshot(sources, sourceConfigurations, destinations, mappings, routes, webhooks);
     }
 
     private static T GetRequired<T>(IReadOnlyCollection<T> items, Guid id, string entityName)
@@ -1212,30 +1293,35 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         public ConfigurationSnapshot(
             IReadOnlyList<SourceConnection> sourceConnections,
+            IReadOnlyList<SourceConfiguration> sourceConfigurations,
             IReadOnlyList<DestinationConfiguration> destinationConfigurations,
             IReadOnlyList<MappingProfile> mappingProfiles,
             IReadOnlyList<ResourcePipelineRoute> routes,
             IReadOnlyList<WebhookConfiguration> webhookConfigurations)
         {
             SourceConnections = sourceConnections;
+            SourceConfigurations = sourceConfigurations;
             DestinationConfigurations = destinationConfigurations;
             MappingProfiles = mappingProfiles;
             Routes = routes;
             WebhookConfigurations = webhookConfigurations;
 
             SourceConnectionsById = sourceConnections.ToDictionary(x => x.Id);
+            SourceConfigurationsById = sourceConfigurations.ToDictionary(x => x.Id);
             DestinationsById = destinationConfigurations.ToDictionary(x => x.Id);
             MappingProfilesById = mappingProfiles.ToDictionary(x => x.Id);
             WebhooksById = webhookConfigurations.ToDictionary(x => x.Id);
         }
 
         public IReadOnlyList<SourceConnection> SourceConnections { get; }
+        public IReadOnlyList<SourceConfiguration> SourceConfigurations { get; }
         public IReadOnlyList<DestinationConfiguration> DestinationConfigurations { get; }
         public IReadOnlyList<MappingProfile> MappingProfiles { get; }
         public IReadOnlyList<ResourcePipelineRoute> Routes { get; }
         public IReadOnlyList<WebhookConfiguration> WebhookConfigurations { get; }
 
         public IReadOnlyDictionary<Guid, SourceConnection> SourceConnectionsById { get; }
+        public IReadOnlyDictionary<Guid, SourceConfiguration> SourceConfigurationsById { get; }
         public IReadOnlyDictionary<Guid, DestinationConfiguration> DestinationsById { get; }
         public IReadOnlyDictionary<Guid, MappingProfile> MappingProfilesById { get; }
         public IReadOnlyDictionary<Guid, WebhookConfiguration> WebhooksById { get; }

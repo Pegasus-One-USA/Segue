@@ -445,11 +445,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         var exports = await GetExportHistoryAsync(correlationId, 0, take, cancellationToken);
         var notifications = await GetNotificationHistoryAsync(correlationId, 0, take, cancellationToken);
         var validationFailures = await GetValidationFailuresAsync(correlationId, 0, take, cancellationToken);
+        var workflowRuns = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Where(run => run.CorrelationId == correlationId)
+            .OrderByDescending(run => run.StartedAt)
+            .Take(take)
+            .Select(run => new WorkflowRunSummaryDto(
+                run.Id, run.WorkflowDefinitionId, run.Status.ToString(), run.StartedAt, run.CompletedAt,
+                run.TriggeredBy, run.TriggerType, run.ErrorMessage))
+            .ToListAsync(cancellationToken);
 
         return new CorrelationSearchResultDto(
             correlationId, pipelineRun, auditLogs.Items, dataAccessLogs.Items, authenticationLogs.Items,
             securityEvents.Items, authorizationLogs.Items, schedulerHistory.Items, retryHistory.Items,
-            errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items);
+            errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items,
+            workflowRuns);
     }
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)
@@ -474,12 +484,15 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
 
     public async Task<IReadOnlyList<ArchiveManifestDto>> GetArchiveManifestsAsync(CancellationToken cancellationToken)
     {
-        return await _dbContext.ArchiveManifestEntries.AsNoTracking()
+        var latestPerDataClass = await _dbContext.ArchiveManifestEntries.AsNoTracking()
             .GroupBy(x => x.DataClass)
             .Select(g => g.OrderByDescending(x => x.CreatedOnUtc).First())
+            .ToListAsync(cancellationToken);
+
+        return latestPerDataClass
             .OrderBy(x => x.DataClass)
             .Select(x => new ArchiveManifestDto(x.DataClass, x.ArchivedThroughUtc, x.FileLocation, x.RecordCount, x.CreatedOnUtc))
-            .ToListAsync(cancellationToken);
+            .ToList();
     }
 
     private static PagedResult<T> ToPaged<T>(IReadOnlyList<T> items, int totalCount, int skip, int take) =>

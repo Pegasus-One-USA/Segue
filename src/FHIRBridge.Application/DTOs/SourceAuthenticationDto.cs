@@ -11,4 +11,5 @@ public sealed record SourceAuthenticationDto(
     string? ClientSecretName,
     string? PrivateKeyKeyVaultName,
     string? PrivateKeySecretName,
-    string? KeyId);
+    string? KeyId,
+    string? JwksUrl = null);

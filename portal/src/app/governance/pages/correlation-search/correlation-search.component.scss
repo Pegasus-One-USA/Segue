@@ -182,3 +182,7 @@
   vertical-align: bottom;
 }
 
+.mono { font-family: monospace; font-size: 12px; }
+.link { color: var(--color-primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+

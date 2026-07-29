@@ -107,6 +107,7 @@ export interface WorkflowRunResultDto {
 export interface WorkflowRunStatus {
   workflowRunId: string;
   status: 'Running' | 'Succeeded' | 'Failed' | string;
+  correlationId?: string | null;
 }
 
 // ── Option B create-on-save (POST /workflows/build) ────────────────────────────

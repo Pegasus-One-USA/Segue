@@ -109,14 +109,18 @@ public sealed class WorkflowSettingsEntity
     // as PatientBaseUrl above: this demo type is meant to be admin-configurable and rebuild-free per environment.
     public string StandaloneBaseUrl { get; set; } = string.Empty;
 
-    // Provider_InApp's single FHIRBridge launch-context token — previously a gitignored, per-developer local file
-    // (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts); moved here so it's admin-configurable
-    // through its own Settings gear (see launch-provider-in-app.ts) with no frontend rebuild needed to change it.
-    // Unlike Provider_Standalone, this demo type needs only one token: it drives a single EHR-launch exchange
-    // (FHIRBridge's /api/v1/oauth/launch/{context}), not a separate list/detail workflow pair. Provider_InApp's
-    // FHIRBridge base URL deliberately reuses StandaloneBaseUrl above rather than getting its own field — both
-    // demo types are Provider-role launches against the same FHIRBridge deployment.
-    public string ProviderLaunchContext { get; set; } = string.Empty;
+    // Provider_InApp's single FHIRBridge EHR-launch workflow id — previously a gitignored, per-developer local
+    // file (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts), then a hand-pasted, pre-minted
+    // launch-context token (a mistake-prone step: an admin pasting the raw workflow id here instead of a minted
+    // token was indistinguishable at a glance and caused a full "invalid or has been tampered with" investigation).
+    // Now a raw workflow id, same shape as StandaloneWorkflowId etc. above — the actual opaque launch-context token
+    // is minted on demand from this id via FHIRBridge's anonymous GET /api/v1/workflows/{id}/public-launch-context
+    // (see Program.cs's /api/provider-in-app-launch-context), which requires the workflow to be opted into public
+    // launch via POST /api/v1/workflows/{id}/enable-public-launch. Unlike Provider_Standalone, this demo type needs
+    // only one workflow: it drives a single EHR-launch exchange (FHIRBridge's /api/v1/oauth/launch/{context}), not a
+    // separate list/detail pair. Provider_InApp's FHIRBridge base URL deliberately reuses StandaloneBaseUrl above
+    // rather than getting its own field — both demo types are Provider-role launches against the same deployment.
+    public string ProviderInAppWorkflowId { get; set; } = string.Empty;
 }
 
 public sealed class HealthAppDbContext : DbContext

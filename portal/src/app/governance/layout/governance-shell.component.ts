@@ -12,8 +12,9 @@ interface GovernanceTab {
    *  AuthenticationType starting with "OAuth"), carrying no data the Authentication Logs tab doesn't
    *  already have. Archive is hidden per user direction — its restore action is a 501 stub, so surfacing
    *  the tab invites a "why doesn't restore work" support ticket before that's implemented. Retention
-   *  Policies and Log Settings are hidden per user direction too. Route and component are kept intact
-   *  for all of these; only the menu entry is suppressed. */
+   *  Policies and Log Settings are hidden per user direction too, as are Alerts, Alert Rules, and
+   *  Data Access Logs. Route and component are kept intact for all of these; only the menu entry is
+   *  suppressed. */
   hidden?: boolean;
 }
 
@@ -28,14 +29,14 @@ const GOVERNANCE_TABS: GovernanceTab[] = [
   { label: 'SMART Launch Logs', route: 'smart-launch-logs', icon: 'launch', permissions: ['governance.read'] },
   { label: 'OAuth', route: 'oauth-logs', icon: 'vpn_key', permissions: ['governance.read'], hidden: true },
   { label: 'Authorization Logs', route: 'authorization-logs', icon: 'block', permissions: ['governance.read'] },
-  { label: 'Data Access Logs', route: 'data-access-logs', icon: 'visibility', permissions: ['governance.read'] },
+  { label: 'Data Access Logs', route: 'data-access-logs', icon: 'visibility', permissions: ['governance.read'], hidden: true },
   { label: 'Security Events', route: 'security-events', icon: 'shield', permissions: ['governance.read'] },
   { label: 'Compliance Reports', route: 'compliance-reports', icon: 'description', permissions: ['governance.read'] },
   { label: 'Retention Policies', route: 'retention-policies', icon: 'event_repeat', permissions: ['governance.read'], hidden: true },
   { label: 'Archive', route: 'archive', icon: 'archive', permissions: ['governance.read'], hidden: true },
   { label: 'Log Settings', route: 'log-settings', icon: 'settings', permissions: ['governance.read'], hidden: true },
-  { label: 'Alerts', route: 'alerts', icon: 'notifications_active', permissions: ['governance.read'] },
-  { label: 'Alert Rules', route: 'alert-rules', icon: 'rule', permissions: ['governance.read'] },
+  { label: 'Alerts', route: 'alerts', icon: 'notifications_active', permissions: ['governance.read'], hidden: true },
+  { label: 'Alert Rules', route: 'alert-rules', icon: 'rule', permissions: ['governance.read'], hidden: true },
 ];
 
 @Component({

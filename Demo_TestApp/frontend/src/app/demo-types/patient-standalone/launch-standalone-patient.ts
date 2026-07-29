@@ -619,7 +619,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       this.patientError.set('Select a hospital above, then click Connect again to sign in.');
       return;
     }
-
+debugger;
     await this.redirectToMyChart(selectedHospital, workflowId);
   }
 

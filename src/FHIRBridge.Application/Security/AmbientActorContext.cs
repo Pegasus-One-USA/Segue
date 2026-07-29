@@ -5,24 +5,31 @@ namespace FHIRBridge.Application.Security;
 public sealed class AmbientActorContext : IAmbientActorContext
 {
     private static readonly AsyncLocal<string?> ActorLabel = new();
+    private static readonly AsyncLocal<string?> RunCorrelationId = new();
 
     public string? Current => ActorLabel.Value;
 
-    public IDisposable BeginScope(string actor)
+    public string? CorrelationId => RunCorrelationId.Value;
+
+    public IDisposable BeginScope(string actor, string? correlationId = null)
     {
-        var previous = ActorLabel.Value;
+        var previousActor = ActorLabel.Value;
+        var previousCorrelationId = RunCorrelationId.Value;
         ActorLabel.Value = actor;
-        return new ScopeHandle(previous);
+        RunCorrelationId.Value = correlationId;
+        return new ScopeHandle(previousActor, previousCorrelationId);
     }
 
     private sealed class ScopeHandle : IDisposable
     {
-        private readonly string? _previous;
+        private readonly string? _previousActor;
+        private readonly string? _previousCorrelationId;
         private bool _disposed;
 
-        public ScopeHandle(string? previous)
+        public ScopeHandle(string? previousActor, string? previousCorrelationId)
         {
-            _previous = previous;
+            _previousActor = previousActor;
+            _previousCorrelationId = previousCorrelationId;
         }
 
         public void Dispose()
@@ -33,7 +40,8 @@ public sealed class AmbientActorContext : IAmbientActorContext
             }
 
             _disposed = true;
-            ActorLabel.Value = _previous;
+            ActorLabel.Value = _previousActor;
+            RunCorrelationId.Value = _previousCorrelationId;
         }
     }
 }

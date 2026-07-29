@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,6 +18,7 @@ type SortDirection = 'asc' | 'desc';
   imports: [
     CommonModule,
     DatePipe,
+    RouterLink,
     MatTableModule,
     MatButtonModule,
     MatIconModule,
@@ -41,7 +42,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly loading       = signal(false);
   readonly result        = signal<PagedResult<RouteExecution>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
 
-  readonly displayedCols = ['index', 'name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy'];
+  readonly displayedCols = ['index', 'name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
 
   ngOnInit(): void {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {

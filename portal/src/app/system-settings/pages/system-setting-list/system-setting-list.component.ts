@@ -36,6 +36,62 @@ export class SystemSettingListComponent implements OnInit {
   readonly settings = signal<SystemSetting[]>([]);
   readonly search   = signal('');
 
+  // ── Decrypt Provisioned Secret tool ─────────────────────────────────────────
+  // Recovery tool for a private key PEM (or other app-provisioned secret) whose owning SourceConnection/row is
+  // gone, unreachable, or lives in a place the admin can't otherwise read it back from. Only ever decrypts a
+  // value encrypted by THIS instance's own Data Protection key ring — a ProtectedValue copied from a different
+  // FHIRBridge deployment will be rejected by the API (key rings are per-instance, not shared).
+  readonly protectedValueInput = signal('');
+  readonly decrypting = signal(false);
+  readonly decryptError = signal<string | null>(null);
+  readonly decryptedPlaintext = signal<string | null>(null);
+
+  decryptProvisionedSecret(): void {
+    const protectedValue = this.protectedValueInput().trim();
+    if (!protectedValue) {
+      this.decryptError.set('Paste a ProtectedValue first.');
+      return;
+    }
+
+    this.decrypting.set(true);
+    this.decryptError.set(null);
+    this.decryptedPlaintext.set(null);
+    this.svc.decryptProvisionedSecret(protectedValue).subscribe({
+      next: (result) => {
+        this.decrypting.set(false);
+        this.decryptedPlaintext.set(result.plaintextValue);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.decrypting.set(false);
+        this.decryptError.set(
+          err.error?.error_description ?? err.error?.title ?? 'Failed to decrypt this value.'
+        );
+      },
+    });
+  }
+
+  // Client-side-only download — the plaintext already reached the browser in decryptedPlaintext(); this just
+  // hands it back to the admin as a file instead of a copy/paste, matching how a real private key PEM is
+  // normally distributed (a .pem file, not a text blob left sitting in the page).
+  downloadDecryptedPem(): void {
+    const plaintext = this.decryptedPlaintext();
+    if (!plaintext) return;
+
+    const blob = new Blob([plaintext], { type: 'application/x-pem-file' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'decrypted-key.pem';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  clearDecryptTool(): void {
+    this.protectedValueInput.set('');
+    this.decryptError.set(null);
+    this.decryptedPlaintext.set(null);
+  }
+
   readonly filtered = computed(() => {
     const term = this.search().trim().toLowerCase();
     if (!term) return this.settings();

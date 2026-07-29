@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -51,7 +52,7 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
         var actorLabel = string.Equals(command.TriggeredBy, "scheduler", StringComparison.OrdinalIgnoreCase)
             ? "Scheduler (Automated Pipeline Run)"
             : $"Automated Pipeline Run ({command.TriggeredBy ?? "unknown trigger"})";
-        using var actorScope = _ambientActorContext.BeginScope(actorLabel);
+        using var actorScope = _ambientActorContext.BeginCorrelatedScope(actorLabel, command.CorrelationId);
 
         // Transient failures (e.g. source/DB unavailable) are retried with backoff.
         await MessageRetry.ExecuteAsync(

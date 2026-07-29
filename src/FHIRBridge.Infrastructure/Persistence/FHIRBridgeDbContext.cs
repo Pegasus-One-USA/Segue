@@ -15,6 +15,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     }
 
     public DbSet<SourceConnection> SourceConnections => Set<SourceConnection>();
+    public DbSet<SourceConfiguration> SourceConfigurations => Set<SourceConfiguration>();
     public DbSet<WebhookConfiguration> WebhookConfigurations => Set<WebhookConfiguration>();
     public DbSet<DestinationConfiguration> DestinationConfigurations => Set<DestinationConfiguration>();
     public DbSet<MappingProfile> MappingProfiles => Set<MappingProfile>();

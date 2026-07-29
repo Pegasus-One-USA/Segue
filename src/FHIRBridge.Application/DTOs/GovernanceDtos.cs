@@ -271,10 +271,23 @@ public sealed record CorrelationSearchResultDto(
     IReadOnlyList<ApiRequestLogDto> ApiRequests,
     IReadOnlyList<ExportHistoryDto> Exports,
     IReadOnlyList<NotificationHistoryDto> Notifications,
-    IReadOnlyList<ValidationFailureDto> ValidationFailures)
+    IReadOnlyList<ValidationFailureDto> ValidationFailures,
+    IReadOnlyList<WorkflowRunSummaryDto> WorkflowRuns)
 {
     public int TotalCount =>
         (PipelineRun is null ? 0 : 1) + AuditLogs.Count + DataAccessLogs.Count + AuthenticationLogs.Count +
         SecurityEvents.Count + AuthorizationLogs.Count + SchedulerHistory.Count + RetryHistory.Count + Errors.Count +
-        ApiRequests.Count + Exports.Count + Notifications.Count + ValidationFailures.Count;
+        ApiRequests.Count + Exports.Count + Notifications.Count + ValidationFailures.Count + WorkflowRuns.Count;
 }
+
+/// <summary>Runtime-plane (DAG) workflow run header, as surfaced by Correlation Search — a lighter shape than
+/// the portal's full Execution History row since this is a cross-reference, not the primary listing.</summary>
+public sealed record WorkflowRunSummaryDto(
+    Guid Id,
+    Guid WorkflowDefinitionId,
+    string Status,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? TriggeredBy,
+    string? TriggerType,
+    string? ErrorMessage);

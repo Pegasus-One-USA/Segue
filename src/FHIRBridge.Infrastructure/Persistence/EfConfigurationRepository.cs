@@ -88,6 +88,37 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         return await query.AnyAsync(cancellationToken);
     }
 
+    // ── Source configurations ─────────────────────────────────────────────────
+    public async Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct) =>
+        await _db.SourceConfigurations.OrderBy(x => x.Name).ToListAsync(ct);
+
+    public async Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct) =>
+        await _db.SourceConfigurations.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        await _db.SourceConfigurations.AddAsync(e, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        await _db.SaveChangesAsync(ct);
+
+        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() reassigns a
+        // brand-new owned Retrieval instance) — clear the tracker so a later Get*Async for this id within the same
+        // request's DbContext re-materializes cleanly instead of hitting the corrupted tracked entry/orphans.
+        _db.ChangeTracker.Clear();
+    }
+
+    public Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken)
+    {
+        // SourceConfiguration is ISoftDeletable: AuditingSaveChangesInterceptor converts this Remove into a soft
+        // delete rather than issuing a physical DELETE.
+        _db.SourceConfigurations.Remove(sourceConfiguration);
+        return _db.SaveChangesAsync(cancellationToken);
+    }
+
     // ── Destinations ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) =>
         await _db.DestinationConfigurations.OrderBy(x => x.Name).ToListAsync(ct);

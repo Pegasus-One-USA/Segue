@@ -1243,12 +1243,17 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<Guid?>("SourceConfigurationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("SourceConnectionId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
                     b.HasIndex("DestinationId");
+
+                    b.HasIndex("SourceConfigurationId");
 
                     b.HasIndex("SourceConnectionId");
 
@@ -1962,6 +1967,59 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("SourceCapabilityProfiles", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.SourceConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConnectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ModifiedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("Scopes");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectionId");
+
+                    b.ToTable("SourceConfigurations", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.SourceConnection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2555,6 +2613,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("nvarchar(max)");
 
@@ -2584,6 +2646,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
 
                     b.HasIndex("StartedAt");
 
@@ -2625,6 +2689,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.MappingProfile", b =>
                 {
+                    b.HasOne("FHIRBridge.Domain.Entities.SourceConfiguration", null)
+                        .WithMany()
+                        .HasForeignKey("SourceConfigurationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("FHIRBridge.Domain.Entities.SourceConnection", null)
                         .WithMany()
                         .HasForeignKey("SourceConnectionId")
@@ -2880,8 +2949,205 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Navigation("ResourceMappings");
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.SourceConfiguration", b =>
+                {
+                    b.HasOne("FHIRBridge.Domain.Entities.SourceConnection", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceRetrievalConfiguration", "Retrieval", b1 =>
+                        {
+                            b1.Property<Guid>("SourceConfigurationId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("ExportScope")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalExportScope");
+
+                            b1.Property<string>("GroupId")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)")
+                                .HasColumnName("RetrievalGroupId");
+
+                            b1.Property<string>("IncludeParameters")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("RetrievalIncludeParameters");
+
+                            b1.Property<bool>("IncrementalSyncEnabled")
+                                .HasColumnType("bit")
+                                .HasColumnName("RetrievalIncrementalSyncEnabled");
+
+                            b1.Property<DateTime?>("LastSuccessfulSyncUtc")
+                                .HasColumnType("datetime2")
+                                .HasColumnName("RetrievalLastSuccessfulSyncUtc");
+
+                            b1.Property<int?>("MaxRecordsPerRun")
+                                .HasColumnType("int")
+                                .HasColumnName("RetrievalMaxRecordsPerRun");
+
+                            b1.Property<string>("OutputFormat")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)")
+                                .HasColumnName("RetrievalOutputFormat");
+
+                            b1.Property<int?>("PageSize")
+                                .HasColumnType("int")
+                                .HasColumnName("RetrievalPageSize");
+
+                            b1.Property<string>("PatientIds")
+                                .IsRequired()
+                                .HasMaxLength(4000)
+                                .HasColumnType("nvarchar(4000)")
+                                .HasColumnName("RetrievalPatientIds");
+
+                            b1.Property<string>("ResourceTypes")
+                                .IsRequired()
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)")
+                                .HasColumnName("RetrievalResourceTypes");
+
+                            b1.Property<string>("RetrievalMethod")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalMethod");
+
+                            b1.Property<string>("RetryPolicy")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalRetryPolicy");
+
+                            b1.Property<string>("RevIncludeParameters")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("RetrievalRevIncludeParameters");
+
+                            b1.Property<string>("SearchCriteria")
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)")
+                                .HasColumnName("RetrievalSearchCriteria");
+
+                            b1.Property<string>("SortOrder")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalSortOrder");
+
+                            b1.Property<int?>("TimeoutSeconds")
+                                .HasColumnType("int")
+                                .HasColumnName("RetrievalTimeoutSeconds");
+
+                            b1.HasKey("SourceConfigurationId");
+
+                            b1.ToTable("SourceConfigurations");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SourceConfigurationId");
+                        });
+
+                    b.Navigation("Retrieval");
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.SourceConnection", b =>
                 {
+                    b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceRetrievalConfiguration", "Retrieval", b1 =>
+                        {
+                            b1.Property<Guid>("SourceConnectionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("ExportScope")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalExportScope");
+
+                            b1.Property<string>("GroupId")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)")
+                                .HasColumnName("RetrievalGroupId");
+
+                            b1.Property<string>("IncludeParameters")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("RetrievalIncludeParameters");
+
+                            b1.Property<bool>("IncrementalSyncEnabled")
+                                .HasColumnType("bit")
+                                .HasColumnName("RetrievalIncrementalSyncEnabled");
+
+                            b1.Property<DateTime?>("LastSuccessfulSyncUtc")
+                                .HasColumnType("datetime2")
+                                .HasColumnName("RetrievalLastSuccessfulSyncUtc");
+
+                            b1.Property<int?>("MaxRecordsPerRun")
+                                .HasColumnType("int")
+                                .HasColumnName("RetrievalMaxRecordsPerRun");
+
+                            b1.Property<string>("OutputFormat")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)")
+                                .HasColumnName("RetrievalOutputFormat");
+
+                            b1.Property<int?>("PageSize")
+                                .HasColumnType("int")
+                                .HasColumnName("RetrievalPageSize");
+
+                            b1.Property<string>("PatientIds")
+                                .IsRequired()
+                                .HasMaxLength(4000)
+                                .HasColumnType("nvarchar(4000)")
+                                .HasColumnName("RetrievalPatientIds");
+
+                            b1.Property<string>("ResourceTypes")
+                                .IsRequired()
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)")
+                                .HasColumnName("RetrievalResourceTypes");
+
+                            b1.Property<string>("RetrievalMethod")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalMethod");
+
+                            b1.Property<string>("RetryPolicy")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalRetryPolicy");
+
+                            b1.Property<string>("RevIncludeParameters")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("RetrievalRevIncludeParameters");
+
+                            b1.Property<string>("SearchCriteria")
+                                .HasMaxLength(1000)
+                                .HasColumnType("nvarchar(1000)")
+                                .HasColumnName("RetrievalSearchCriteria");
+
+                            b1.Property<string>("SortOrder")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("RetrievalSortOrder");
+
+                            b1.Property<int?>("TimeoutSeconds")
+                                .HasColumnType("int")
+                                .HasColumnName("RetrievalTimeoutSeconds");
+
+                            b1.HasKey("SourceConnectionId");
+
+                            b1.ToTable("SourceConnections");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SourceConnectionId");
+                        });
+
                     b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceAuthenticationConfiguration", "Authentication", b1 =>
                         {
                             b1.Property<Guid>("SourceConnectionId")
@@ -2897,6 +3163,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(300)
                                 .HasColumnType("nvarchar(300)")
                                 .HasColumnName("ClientId");
+
+                            b1.Property<string>("JwksUrl")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("JwksUrl");
 
                             b1.Property<string>("KeyId")
                                 .HasMaxLength(200)
@@ -3011,99 +3282,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(2000)
                                 .HasColumnType("nvarchar(2000)")
                                 .HasColumnName("TrustedIssuers");
-
-                            b1.HasKey("SourceConnectionId");
-
-                            b1.ToTable("SourceConnections");
-
-                            b1.WithOwner()
-                                .HasForeignKey("SourceConnectionId");
-                        });
-
-                    b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceRetrievalConfiguration", "Retrieval", b1 =>
-                        {
-                            b1.Property<Guid>("SourceConnectionId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<string>("ExportScope")
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("RetrievalExportScope");
-
-                            b1.Property<string>("GroupId")
-                                .HasMaxLength(200)
-                                .HasColumnType("nvarchar(200)")
-                                .HasColumnName("RetrievalGroupId");
-
-                            b1.Property<string>("IncludeParameters")
-                                .IsRequired()
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("RetrievalIncludeParameters");
-
-                            b1.Property<bool>("IncrementalSyncEnabled")
-                                .HasColumnType("bit")
-                                .HasColumnName("RetrievalIncrementalSyncEnabled");
-
-                            b1.Property<DateTime?>("LastSuccessfulSyncUtc")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("RetrievalLastSuccessfulSyncUtc");
-
-                            b1.Property<int?>("MaxRecordsPerRun")
-                                .HasColumnType("int")
-                                .HasColumnName("RetrievalMaxRecordsPerRun");
-
-                            b1.Property<string>("OutputFormat")
-                                .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)")
-                                .HasColumnName("RetrievalOutputFormat");
-
-                            b1.Property<int?>("PageSize")
-                                .HasColumnType("int")
-                                .HasColumnName("RetrievalPageSize");
-
-                            b1.Property<string>("PatientIds")
-                                .IsRequired()
-                                .HasMaxLength(4000)
-                                .HasColumnType("nvarchar(4000)")
-                                .HasColumnName("RetrievalPatientIds");
-
-                            b1.Property<string>("ResourceTypes")
-                                .IsRequired()
-                                .HasMaxLength(1000)
-                                .HasColumnType("nvarchar(1000)")
-                                .HasColumnName("RetrievalResourceTypes");
-
-                            b1.Property<string>("RetrievalMethod")
-                                .IsRequired()
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("RetrievalMethod");
-
-                            b1.Property<string>("RetryPolicy")
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("RetrievalRetryPolicy");
-
-                            b1.Property<string>("RevIncludeParameters")
-                                .IsRequired()
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("RetrievalRevIncludeParameters");
-
-                            b1.Property<string>("SearchCriteria")
-                                .HasMaxLength(1000)
-                                .HasColumnType("nvarchar(1000)")
-                                .HasColumnName("RetrievalSearchCriteria");
-
-                            b1.Property<string>("SortOrder")
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("RetrievalSortOrder");
-
-                            b1.Property<int?>("TimeoutSeconds")
-                                .HasColumnType("int")
-                                .HasColumnName("RetrievalTimeoutSeconds");
 
                             b1.HasKey("SourceConnectionId");
 

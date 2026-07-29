@@ -46,7 +46,9 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             {
                 if (!string.IsNullOrWhiteSpace(field.DefaultValue))
                 {
-                    parent[field.TargetField] = ConvertValue(field.DefaultValue, field.ValueType, field.Format, field.TargetField, errors);
+                    parent[field.TargetField] = ConvertValue(
+                        field.DefaultValue, field.ValueType, field.Format, field.TargetField, errors,
+                        field.MaxLength, field.Precision, field.Scale);
                     continue;
                 }
 
@@ -60,7 +62,9 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             }
 
             var values = matches
-                .Select(m => ConvertElement(m.Element, field.ValueType, field.Format, field.TargetField, errors))
+                .Select(m => ConvertElement(
+                    m.Element, field.ValueType, field.Format, field.TargetField, errors,
+                    field.MaxLength, field.Precision, field.Scale))
                 .ToList();
 
             switch (policy)
@@ -316,7 +320,10 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         MappingValueType valueType,
         string? format,
         string targetField,
-        List<string> errors)
+        List<string> errors,
+        int? maxLength = null,
+        int? precision = null,
+        int? scale = null)
     {
         if (element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
@@ -325,9 +332,11 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
         return valueType switch
         {
-            MappingValueType.String => element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString(),
+            MappingValueType.String => ValidateLength(
+                element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString(),
+                maxLength, targetField, errors),
             MappingValueType.Integer => ConvertInteger(element.ToString(), targetField, errors),
-            MappingValueType.Decimal => ConvertDecimal(element.ToString(), targetField, errors),
+            MappingValueType.Decimal => ConvertDecimal(element.ToString(), targetField, errors, precision, scale),
             MappingValueType.Boolean => ConvertBoolean(element.ToString(), targetField, errors),
             MappingValueType.Date => ConvertDate(element.ToString(), format, targetField, errors)?.Date,
             MappingValueType.DateTime => ConvertDate(element.ToString(), format, targetField, errors),
@@ -341,19 +350,38 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         MappingValueType valueType,
         string? format,
         string targetField,
-        List<string> errors)
+        List<string> errors,
+        int? maxLength = null,
+        int? precision = null,
+        int? scale = null)
     {
         return valueType switch
         {
-            MappingValueType.String => value,
+            MappingValueType.String => ValidateLength(value, maxLength, targetField, errors),
             MappingValueType.Integer => ConvertInteger(value, targetField, errors),
-            MappingValueType.Decimal => ConvertDecimal(value, targetField, errors),
+            MappingValueType.Decimal => ConvertDecimal(value, targetField, errors, precision, scale),
             MappingValueType.Boolean => ConvertBoolean(value, targetField, errors),
             MappingValueType.Date => ConvertDate(value, format, targetField, errors)?.Date,
             MappingValueType.DateTime => ConvertDate(value, format, targetField, errors),
             MappingValueType.Json => value,
             _ => value
         };
+    }
+
+    /// <summary>Rejects a string value that would exceed the destination column's max length (e.g. an
+    /// NVARCHAR(100) receiving a 500-character FHIR display/text value) rather than letting the database truncate
+    /// or reject it at write time. Null <paramref name="maxLength"/> (no destination schema known, or a
+    /// max-length-less column type) means no check is performed.</summary>
+    private static string? ValidateLength(string? value, int? maxLength, string targetField, List<string> errors)
+    {
+        if (value is not null && maxLength is { } max && value.Length > max)
+        {
+            errors.Add(
+                $"Field '{targetField}' value is {value.Length} characters but the destination column allows at most {max}.");
+            return null;
+        }
+
+        return value;
     }
 
     private static object? ConvertInteger(string? value, string targetField, List<string> errors)
@@ -367,15 +395,36 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         return null;
     }
 
-    private static object? ConvertDecimal(string? value, string targetField, List<string> errors)
+    private static object? ConvertDecimal(
+        string? value, string targetField, List<string> errors, int? precision = null, int? scale = null)
     {
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+        if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
         {
-            return parsed;
+            errors.Add($"Field '{targetField}' could not be converted.");
+            return null;
         }
 
-        errors.Add($"Field '{targetField}' could not be converted.");
-        return null;
+        // Total significant digits allowed by the destination column (e.g. DECIMAL(5,2) allows at most 5 digits
+        // total, 2 of them after the decimal point — so at most 3 integer digits). No precision known (non-numeric
+        // destination schema, or a type like float/money the driver doesn't report precision for) means no check.
+        if (precision is { } p)
+        {
+            var effectiveScale = scale ?? 0;
+            var maxIntegerDigits = Math.Max(p - effectiveScale, 0);
+            var rounded = Math.Round(parsed, effectiveScale, MidpointRounding.AwayFromZero);
+            var integerPart = Math.Truncate(Math.Abs(rounded));
+            var integerDigits = integerPart == 0 ? 1 : (int)Math.Floor(Math.Log10((double)integerPart)) + 1;
+
+            if (integerDigits > maxIntegerDigits)
+            {
+                errors.Add(
+                    $"Field '{targetField}' value {parsed.ToString(CultureInfo.InvariantCulture)} exceeds the " +
+                    $"destination column's numeric precision (at most {maxIntegerDigits} integer digit(s), {effectiveScale} decimal place(s)).");
+                return null;
+            }
+        }
+
+        return parsed;
     }
 
     private static object? ConvertBoolean(string? value, string targetField, List<string> errors)

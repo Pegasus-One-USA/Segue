@@ -9,6 +9,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
@@ -658,9 +659,12 @@ public static class WorkflowEndpoints
             }
 
             var workflowRunId = Guid.NewGuid();
+            // Reuse the ambient correlation id (same header/TraceIdentifier the API's global exception handler and
+            // ErrorLogs use) so this run's ErrorLogs, audit trail, and outbound API Requests can all be found via
+            // the same id — see the checkpoint endpoint below for the matching pattern.
             var context = new WorkflowExecutionContext(
                 workflowRunId,
-                request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
+                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
                 targetPatientId: request?.PatientId,
@@ -678,14 +682,20 @@ public static class WorkflowEndpoints
                 {
                     using var scope = scopeFactory.CreateScope();
                     var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<IRankedWorkflowOrchestrator>();
+                    // No HttpContext survives into this detached Task.Run, so HttpContextCurrentUserService would
+                    // otherwise stamp every AuditLog/AuthenticationLog/SecurityEvent this run produces with a null
+                    // CorrelationId — set the ambient scope explicitly so it falls back to this run's real id instead.
+                    var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
+                    using var actorScope = ambientActorContext.BeginCorrelatedScope("Background Workflow Run", context.CorrelationId);
                     try
                     {
                         await scopedOrchestrator.ExecuteAsync(workflow, context, CancellationToken.None);
                     }
                     catch (Exception exception)
                     {
-                        // The orchestrator already persists the failed run with its error message; this is just
-                        // so a background failure isn't silently swallowed from an ops/logging perspective.
+                        // The orchestrator already persists the failed run with its error message and captures it
+                        // via IGlobalExceptionManager (same CorrelationId) before rethrowing; this is just so a
+                        // background failure isn't silently swallowed from an ops/logging perspective.
                         loggerFactory.CreateLogger("WorkflowEndpoints")
                             .LogError(exception, "Background run {WorkflowRunId} for workflow {WorkflowId} failed.", workflowRunId, workflowId);
                     }
@@ -697,7 +707,7 @@ public static class WorkflowEndpoints
 
                 return Results.Accepted(
                     $"/api/v1/workflow-runs/{workflowRunId}/status",
-                    new WorkflowRunStatusResponse(workflowRunId, "Running"));
+                    new WorkflowRunStatusResponse(workflowRunId, "Running", context.CorrelationId));
             }
 
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
@@ -728,7 +738,7 @@ public static class WorkflowEndpoints
                 var run = await runStore.GetAsync(runId, cancellationToken);
                 return run is null
                     ? Results.NotFound()
-                    : Results.Ok(new WorkflowRunStatusResponse(run.Id, run.Status.ToString()));
+                    : Results.Ok(new WorkflowRunStatusResponse(run.Id, run.Status.ToString(), run.CorrelationId));
             }
         });
 
@@ -984,7 +994,8 @@ public static class WorkflowEndpoints
                     run.TriggerType,
                     run.NodeRuns.Count,
                     run.ErrorMessage,
-                    run.WorkflowDefinitionVersion));
+                    run.WorkflowDefinitionVersion,
+                    run.CorrelationId));
             }
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -1060,7 +1071,8 @@ public static class WorkflowEndpoints
                 run.TriggerType,
                 run.NodeRuns.Count,
                 run.ErrorMessage,
-                run.WorkflowDefinitionVersion));
+                run.WorkflowDefinitionVersion,
+                run.CorrelationId));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads.
