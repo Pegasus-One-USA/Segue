@@ -1,0 +1,108 @@
+portal/src/app/services/phase-config.service.ts
+  s_a5fcd0f359e190::t_e3686e91162a45 28
+  s_a5fcd0f359e190::t_680d1be28af345 41
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_a5fcd0f359e190::t_b9297490857e09 370
+  s_a5fcd0f359e190::t_a316180365f728 396
+  s_a5fcd0f359e190::t_e4cf0700766014 541-553
+  s_a5fcd0f359e190::t_8e47c008850101 153-193
+  s_a5fcd0f359e190::t_b938a9d115142a 379
+  s_a5fcd0f359e190::t_de099bfff0ad38 432
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_37a277480b1ea1::t_029db404fc7804 25
+src/FHIRBridge.Infrastructure/Persistence/InMemoryNotificationSettingsRepository.cs
+  s_37a277480b1ea1::t_5a741697a9ee91 1-19
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.scss
+  s_37a277480b1ea1::t_5390d949c25f3b 1-164
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_a5fcd0f359e190::t_1d804c023360b1 18
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.html
+  s_37a277480b1ea1::t_06bc1f0db482b6 1-103
+portal/src/app/system-settings/services/api-system-settings.service.ts
+  s_37a277480b1ea1::t_ccf37c1916466a 1-30
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_a5fcd0f359e190::t_be20af973626f3 149
+  s_a5fcd0f359e190::t_f908cebf43d7d2 1287
+  s_a5fcd0f359e190::t_29dd9b85f25483 184-194
+  s_a5fcd0f359e190::t_597300d89f5488 598,601
+  s_a5fcd0f359e190::t_73b6f986c6a1e1 410
+  s_a5fcd0f359e190::t_19bc86945f23fd 278
+  s_a5fcd0f359e190::t_89d56d04265088 546-553
+  s_a5fcd0f359e190::t_1a2569c38f57f3 483
+  s_a5fcd0f359e190::t_2ea950807980be 492-496
+  s_a5fcd0f359e190::t_358113ae846da4 1090
+  s_a5fcd0f359e190::t_074551e3fbe283 1207-1212
+  s_a5fcd0f359e190::t_28c606f049759f 255,259-260,263-264,266-269
+  s_a5fcd0f359e190::t_bd434f82c14611 1126-1132
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_37a277480b1ea1::t_1eba3b36cbecb6 1-9,15,18,21-121
+  s_37a277480b1ea1::t_984586b87cbfda 10-14,16-17,19-20
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_a5fcd0f359e190::t_2ca9274bf94ca6 597
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_37a277480b1ea1::t_561fdc550ae58e 127
+  s_37a277480b1ea1::t_80f5ae33d639ae 184
+portal/src/app/core/api-endpoints.ts
+  s_37a277480b1ea1::t_4d944f0d24b11d 126-134
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_a5fcd0f359e190::t_69e3560eaa194c 344-363
+  s_a5fcd0f359e190::t_7cbe2bdcea2460 382,386-390,393,395-424
+  s_a5fcd0f359e190::t_5808ac5956522a 309-311,313
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.scss
+  s_37a277480b1ea1::t_4de7bb9211d96e 1-120
+portal/src/app/app.config.ts
+  s_37a277480b1ea1::t_377bd2b3ee4689 74
+  s_37a277480b1ea1::t_ebe5fd65aa8503 28-29
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_a5fcd0f359e190::t_e658de9afc6031 34
+  s_a5fcd0f359e190::t_425029102b0280 45
+portal/src/app/system-settings/models/system-setting.model.ts
+  s_37a277480b1ea1::t_faf0ce1607bcf7 1-14
+portal/src/app/system-settings/services/i-system-settings.service.ts
+  s_37a277480b1ea1::t_079f2c2ecb839a 1-8
+portal/src/app/data/transforms.data.ts
+  s_a5fcd0f359e190::t_3b117b24b34251 16
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_37a277480b1ea1::t_5568c15d1498ee 1-128
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.ts
+  s_37a277480b1ea1::t_ac0a599eea7ee7 1-84
+portal/src/app/settings/settings.routes.ts
+  s_37a277480b1ea1::t_4fd5a42240fbc4 73-80
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_a5fcd0f359e190::t_21bfc33b2d1569 25-26
+  s_a5fcd0f359e190::t_6fa0c7e0af2c3d 2-3
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_a5fcd0f359e190::t_91a72d51c38fa1 254
+  s_a5fcd0f359e190::t_432c60961f0f89 167
+  s_a5fcd0f359e190::t_2bbfd9462824da 343-345
+  s_a5fcd0f359e190::t_0473062816c47f 359-360
+  s_a5fcd0f359e190::t_71c6082b7502fd 150
+  s_a5fcd0f359e190::t_9d7c626f2018ff 181
+  s_a5fcd0f359e190::t_df439a6365ca44 407-408
+  s_a5fcd0f359e190::t_18d608e5685697 68
+  s_a5fcd0f359e190::t_9e9069348ea1fc 394
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "dc8b2d70fec251fc1033f76f61e32cbe5d75bdb0",
+  "prompts": {},
+  "sessions": {
+    "s_37a277480b1ea1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2af7fe59-d20a-4318-82a5-82618fa80564",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a5fcd0f359e190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69d7b858-5290-4282-aeda-ff2bd1655728",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,156 @@
+portal/src/app/governance/pages/oauth-logs/oauth-logs.component.ts
+  s_37e45e8f10a841::t_65c53a98d9574c 21
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_37e45e8f10a841::t_c8ada49582fed7 377
+  s_37e45e8f10a841::t_3318d123dc2ef9 333
+  s_37e45e8f10a841::t_12a36d4508c771 595
+  s_37e45e8f10a841::t_5e2b1aaf908c22 796
+portal/src/app/system-security/pages/app-secret-list/app-secret-list.component.html
+  s_d68f9144c308b2::t_ff469d16f88d4d 16
+portal/src/app/user/pages/help/help.component.ts
+  s_37e45e8f10a841::t_85836b97e65a74 37
+portal/src/app/operations/pages/api-requests/api-requests.component.html
+  s_37e45e8f10a841::t_e45f23ff0277ba 10
+portal/src/app/governance/pages/data-access-logs/data-access-logs.component.ts
+  s_37e45e8f10a841::t_03ef2f5b146efc 24
+portal/src/app/operations/pages/api-requests/api-requests.component.ts
+  s_37e45e8f10a841::t_ec80db605136c8 25
+portal/src/app/operations/pages/notifications/notifications.component.ts
+  s_37e45e8f10a841::t_6bd936d5c7e9da 24
+portal/src/app/operations/pages/errors/errors.component.ts
+  s_37e45e8f10a841::t_5c164a41d4b9d0 34
+portal/src/app/operations/pages/notifications/notifications.component.html
+  s_37e45e8f10a841::t_da90eddce68fd0 10
+portal/src/app/operations/pages/errors/errors.component.html
+  s_37e45e8f10a841::t_077f3e2e76c5b0 4
+  s_37e45e8f10a841::t_30b09c2aa685aa 10
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_d68f9144c308b2::t_6d3e5c848063c4 45
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.ts
+  s_37e45e8f10a841::t_3433cf91587959 24
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_d68f9144c308b2::t_92d1f516652f15 54
+portal/src/app/operations/pages/scheduler-history/scheduler-history.component.ts
+  s_37e45e8f10a841::t_727647a40cd04d 24
+portal/public/mock/branding/default.json
+  s_37e45e8f10a841::t_1d588b37ced7cf 10,12
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_37e45e8f10a841::t_763e863d1e9656 11
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_d68f9144c308b2::t_c53ee4763ffa6c 153,157,164-165,168,178
+  s_d68f9144c308b2::t_e28b994d92eac9 162-163
+  s_d68f9144c308b2::t_35478cb635f415 41
+  s_d68f9144c308b2::t_0ead2663c55789 523,525
+  s_d68f9144c308b2::t_e8ea259a5bb80c 499-501
+  s_37e45e8f10a841::t_7f4ea25268f6c5 73
+  s_d68f9144c308b2::t_63cb4e4f7505c9 158-161
+  s_d68f9144c308b2::t_3f62bd163fbcd5 4
+  s_d68f9144c308b2::t_ae7eca836b5050 327-331
+portal/src/app/settings/pages/email-settings/email-settings.component.html
+  s_37e45e8f10a841::t_42948733504b35 68
+  s_37e45e8f10a841::t_36d7f723e62c78 17
+  s_37e45e8f10a841::t_f133c02890b8d1 4
+portal/src/app/models/brand-configuration.model.ts
+  s_37e45e8f10a841::t_9f39e14dc94e05 49,51
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.html
+  s_d68f9144c308b2::t_5897750a5a374b 26
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_d68f9144c308b2::t_db0b445880581f 39,44,65,72
+  s_d68f9144c308b2::t_976fdd53d4567f 215,226,242
+  s_d68f9144c308b2::t_1b493b7d4423e2 227-228,253
+  s_d68f9144c308b2::t_1c5a7227b2aed9 188
+  s_d68f9144c308b2::t_e345064cc3dbcc 229-231,234
+  s_d68f9144c308b2::t_8672f997da5f78 327
+  s_d68f9144c308b2::t_c49587eb930137 163-179
+  s_37e45e8f10a841::t_0e399d5b914505 207
+  s_d68f9144c308b2::t_d2e1290580d4e8 232-233
+portal/src/app/governance/pages/authentication-logs/authentication-logs.component.ts
+  s_37e45e8f10a841::t_f9dc7c8395935a 24
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_d68f9144c308b2::t_6b02d50ebc61ba 40
+portal/src/app/settings/pages/email-settings/email-settings.component.ts
+  s_37e45e8f10a841::t_37b44b219fc609 36
+portal/src/app/operations/pages/retry-history/retry-history.component.ts
+  s_37e45e8f10a841::t_7a4900759ea646 24
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_d68f9144c308b2::t_905f85a8f4b65c 680,689
+  s_d68f9144c308b2::t_60084d9cbe2df4 49
+  s_d68f9144c308b2::t_c29230806f5e92 355
+  s_d68f9144c308b2::t_3df3286249a140 2
+  s_d68f9144c308b2::t_61522ae1f04714 657
+  s_d68f9144c308b2::t_8737f84cd8bf1f 387,395,401
+  s_d68f9144c308b2::t_e3188de0834f0b 721-731
+  s_d68f9144c308b2::t_bd89fe66997672 305
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_d68f9144c308b2::t_0bc2c1b9de2e67 50
+portal/src/app/governance/pages/audit-logs/audit-logs.component.ts
+  s_37e45e8f10a841::t_2a49bf0ccfa0f8 37
+portal/src/app/operations/pages/retry-history/retry-history.component.html
+  s_37e45e8f10a841::t_c833e9d1edd7e4 14
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_d68f9144c308b2::t_fbb9c19a6d90bc 45
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  s_d68f9144c308b2::t_e41be24a44eb88 187
+portal/src/app/governance/pages/authorization-logs/authorization-logs.component.ts
+  s_37e45e8f10a841::t_b454304b1cc4cf 24
+portal/src/app/components/epic-source-wizard/steps/epic-step-authenticate/epic-step-authenticate.component.html
+  s_37e45e8f10a841::t_2282ca86c90826 132
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_37e45e8f10a841::t_402b8806f8c8f2 674-676
+portal/src/app/governance/pages/authentication-logs/authentication-logs.component.html
+  s_37e45e8f10a841::t_a5783555e7a37d 10
+portal/src/app/operations/pages/validation-failures/validation-failures.component.ts
+  s_37e45e8f10a841::t_72f77c4f38c733 24
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_d68f9144c308b2::t_84e783dc6c2e3f 124
+portal/src/app/operations/pages/exports/exports.component.ts
+  s_37e45e8f10a841::t_731e21311710dd 24
+portal/src/app/pipeline-executions/pages/pipeline-execution-detail/pipeline-execution-detail.component.ts
+  s_37e45e8f10a841::t_d6ffca4bc4b287 44
+portal/src/app/governance/pages/security-events/security-events.component.ts
+  s_37e45e8f10a841::t_5741fc301be791 24
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_37e45e8f10a841::t_a020be1c3407d5 40-43,52,432
+  s_d68f9144c308b2::t_cace2a703d4b07 541
+  s_d68f9144c308b2::t_61fa9bafea32b1 467-469
+  s_d68f9144c308b2::t_87a9b04e2bf7ac 29
+  h_ed4b8b661e4f7b 470
+  s_d68f9144c308b2::t_ff48f3f4d56f3a 421-424
+  s_d68f9144c308b2::t_704e3e0e46a8c3 411-414,416,420,425-426,428,431
+  s_d68f9144c308b2::t_5bb00b29f4f72f 473,476-477
+portal/src/app/operations/pages/endpoint-health/endpoint-health.component.ts
+  s_37e45e8f10a841::t_38db61ef1ee0fd 21
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_37e45e8f10a841::t_190d9be4442ba0 27
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_d68f9144c308b2::t_6546c9857c3b72 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "4ec4d9e597648a0205ee05485fc68c342781f61c",
+  "prompts": {},
+  "humans": {
+    "h_ed4b8b661e4f7b": {
+      "author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_37e45e8f10a841": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b30259a-0bc9-4b0f-bbb6-d06034ce4f47",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
