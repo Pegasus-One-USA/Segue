@@ -13,24 +13,26 @@ interface GovernanceTab {
    *  already have. Archive is hidden per user direction — its restore action is a 501 stub, so surfacing
    *  the tab invites a "why doesn't restore work" support ticket before that's implemented. Retention
    *  Policies and Log Settings are hidden per user direction too, as are Alerts, Alert Rules, and
-   *  Data Access Logs. Route and component are kept intact for all of these; only the menu entry is
-   *  suppressed. */
+   *  Data Access Logs. Audit Logs, Authentication Logs, SMART Launch Logs, Authorization Logs, and
+   *  Security Events are hidden per user direction as well, since every one of them is fully searchable
+   *  by Correlation ID via the Correlation Search tab — Compliance Reports stays visible because it's a
+   *  PDF export across a date range, not a per-row log, so Correlation Search has no equivalent for it.
+   *  Route and component are kept intact for all of these; only the menu entry is suppressed. */
   hidden?: boolean;
 }
 
-// Audit Logs leads as the at-a-glance overview tab, per user direction consolidating the former
-// 14-item sidebar section into this single tabbed menu. Configuration Comparison and Data Lineage
-// are reachable-by-drill-down-only pages (never had their own sidebar entry) so they stay nested
-// under this shell's routes without appearing in the tab strip itself.
+// Correlation Search and Compliance Reports lead as the two remaining at-a-glance tabs, per user
+// direction: every other per-row governance log is fully reachable by Correlation ID, so those tabs'
+// menu entries are suppressed (see the `hidden` doc comment above) even though their routes stay live.
 const GOVERNANCE_TABS: GovernanceTab[] = [
-  { label: 'Audit Logs', route: 'audit-logs', icon: 'history_edu', permissions: ['governance.read'] },
+  { label: 'Audit Logs', route: 'audit-logs', icon: 'history_edu', permissions: ['governance.read'], hidden: true },
   { label: 'Correlation Search', route: 'correlation-search', icon: 'search', permissions: ['governance.read'] },
-  { label: 'Authentication Logs', route: 'authentication-logs', icon: 'login', permissions: ['governance.read'] },
-  { label: 'SMART Launch Logs', route: 'smart-launch-logs', icon: 'launch', permissions: ['governance.read'] },
+  { label: 'Authentication Logs', route: 'authentication-logs', icon: 'login', permissions: ['governance.read'], hidden: true },
+  { label: 'SMART Launch Logs', route: 'smart-launch-logs', icon: 'launch', permissions: ['governance.read'], hidden: true },
   { label: 'OAuth', route: 'oauth-logs', icon: 'vpn_key', permissions: ['governance.read'], hidden: true },
-  { label: 'Authorization Logs', route: 'authorization-logs', icon: 'block', permissions: ['governance.read'] },
+  { label: 'Authorization Logs', route: 'authorization-logs', icon: 'block', permissions: ['governance.read'], hidden: true },
   { label: 'Data Access Logs', route: 'data-access-logs', icon: 'visibility', permissions: ['governance.read'], hidden: true },
-  { label: 'Security Events', route: 'security-events', icon: 'shield', permissions: ['governance.read'] },
+  { label: 'Security Events', route: 'security-events', icon: 'shield', permissions: ['governance.read'], hidden: true },
   { label: 'Compliance Reports', route: 'compliance-reports', icon: 'description', permissions: ['governance.read'] },
   { label: 'Retention Policies', route: 'retention-policies', icon: 'event_repeat', permissions: ['governance.read'], hidden: true },
   { label: 'Archive', route: 'archive', icon: 'archive', permissions: ['governance.read'], hidden: true },

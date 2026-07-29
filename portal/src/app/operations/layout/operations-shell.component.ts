@@ -14,12 +14,16 @@ interface OperationsTab {
    *  per user direction: Pipeline Executions has no authoring UI anywhere in the portal (nothing creates
    *  the ResourcePipelineRoute rows it displays), and Scheduler History/Retry History are narrow, mostly-
    *  empty diagnostics with no failure state of their own. Endpoint Health is hidden per user direction
-   *  too. Routes and components are kept intact; only the menu entry is suppressed. */
+   *  too. API Requests, Exports, Notifications, and Validation Failures are hidden per user direction as
+   *  well, since every one of them is fully searchable by Correlation ID via the Correlation Search tab
+   *  (in the Governance shell). Routes and components are kept intact; only the menu entry is
+   *  suppressed. */
   hidden?: boolean;
 }
 
-// Errors leads as the at-a-glance overview tab now that System Health and Pipeline Executions are
-// hidden (see the `hidden` doc comment above).
+// Errors leads as the sole remaining tab, per user direction: every other per-row operations log is
+// fully reachable by Correlation ID, so those tabs' menu entries are suppressed (see the `hidden` doc
+// comment above) even though their routes stay live.
 const OPERATIONS_TABS: OperationsTab[] = [
   { label: 'System Health', route: 'system-health', icon: 'monitor_heart', permissions: ['governance.read'], hidden: true },
   { label: 'Pipeline Executions', route: 'pipeline-executions', icon: 'bolt', permissions: ['governance.read'], hidden: true },
@@ -28,10 +32,10 @@ const OPERATIONS_TABS: OperationsTab[] = [
   { label: 'Scheduler History', route: 'scheduler-history', icon: 'schedule', permissions: ['governance.read'], hidden: true },
   { label: 'Retry History', route: 'retry-history', icon: 'replay', permissions: ['governance.read'], hidden: true },
   { label: 'Errors', route: 'errors', icon: 'error_outline', permissions: ['governance.read'] },
-  { label: 'API Requests', route: 'api-requests', icon: 'swap_horiz', permissions: ['governance.read'] },
-  { label: 'Exports', route: 'exports', icon: 'file_download', permissions: ['governance.read'] },
-  { label: 'Notifications', route: 'notifications', icon: 'notifications', permissions: ['governance.read'] },
-  { label: 'Validation Failures', route: 'validation-failures', icon: 'fact_check', permissions: ['governance.read'] },
+  { label: 'API Requests', route: 'api-requests', icon: 'swap_horiz', permissions: ['governance.read'], hidden: true },
+  { label: 'Exports', route: 'exports', icon: 'file_download', permissions: ['governance.read'], hidden: true },
+  { label: 'Notifications', route: 'notifications', icon: 'notifications', permissions: ['governance.read'], hidden: true },
+  { label: 'Validation Failures', route: 'validation-failures', icon: 'fact_check', permissions: ['governance.read'], hidden: true },
   { label: 'Endpoint Health', route: 'endpoint-health', icon: 'favorite', permissions: ['governance.read'], hidden: true },
 ];
 
