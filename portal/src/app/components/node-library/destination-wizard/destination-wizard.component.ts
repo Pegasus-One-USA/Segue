@@ -111,14 +111,6 @@ export interface MappingRow {
   // removable, never reassignable to another business field — same lock semantics as the id row.
   isRequiredParentRef?: boolean;
   parentResourceType?: string;
-  // Set when the user wants this array field's value picked by matching a sibling "system" element
-  // (e.g. Patient.identifier[] carries MRN/CSN/internal-id entries side by side, told apart only by an
-  // often tenant-specific OID like "urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260"). identifierSystem
-  // is the value to match; identifierSystemJsonPath is the sibling field's own jsonPath, resolved from the
-  // catalog when the user picks this option (see _siblingSystemField) so the build step never has to
-  // re-derive it. Both are undefined for every other row — see hasIdentifierSystemOption.
-  identifierSystem?: string;
-  identifierSystemJsonPath?: string;
 }
 
 /** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
@@ -741,40 +733,6 @@ export class DestinationWizardComponent implements OnInit {
     return !!row.isRequiredParentRef;
   }
 
-  // ── identifier/coding "system" filter (e.g. Patient.identifier[], code.coding[], telecom[]) ──────────
-  // Finds the sibling catalog field ending in ".system" that shares this row's array ancestor — the
-  // structural signal (any array-of-object with a ".system" element) rather than hardcoding "identifier",
-  // so this also works for Coding[] and ContactPoint[] arrays, not just Identifier[].
-  private _siblingSystemField(resource: string, row: MappingRow): ResourceFieldDef | undefined {
-    if (!row.arrays?.length) return undefined;
-    const arrayAncestor = row.arrays[row.arrays.length - 1];
-    return this.availableFields(resource).find(f =>
-      f.arrays?.length && f.arrays[f.arrays.length - 1] === arrayAncestor &&
-      (f.path.endsWith('.system') || f.jsonPath?.endsWith('.system')));
-  }
-
-  // Only enabled for a row whose array actually carries a sibling "system" element — never shown for
-  // plain arrays like name[]/address[] where there's nothing to filter by.
-  hasIdentifierSystemOption(row: MappingRow): boolean {
-    return !!this._siblingSystemField(row.resource, row);
-  }
-
-  updateIdentifierSystem(i: number, value: string): void {
-    this.mappingRows.update(rows => {
-      const row = rows[i];
-      if (!row) return rows;
-      const sibling = this._siblingSystemField(row.resource, row);
-      const trimmed = value.trim();
-      const next = [...rows];
-      next[i] = {
-        ...row,
-        identifierSystem: trimmed || undefined,
-        identifierSystemJsonPath: trimmed ? sibling?.jsonPath : undefined,
-      };
-      return next;
-    });
-  }
-
   // ── mapping rows ──────────────────────────────────────────────────────────
   rowsForResource(r: string): MappingRow[] {
     return this.mappingRows().filter(row => row.resource === r);
@@ -1285,7 +1243,6 @@ export class DestinationWizardComponent implements OnInit {
           resource: string; field: string; path: string; target: string; column: string;
           jsonPath?: string; valueType?: string; arrays?: string[]; isUpsertKey?: boolean;
           isRequiredParentRef?: boolean; parentResourceType?: string;
-          identifierSystem?: string; identifierSystemJsonPath?: string;
         }[];
         this.mappingRows.set(saved.map(m => ({
           resource:   m.resource,
@@ -1299,8 +1256,6 @@ export class DestinationWizardComponent implements OnInit {
           isUpsertKey: m.isUpsertKey ?? false,
           isRequiredParentRef: m.isRequiredParentRef ?? false,
           parentResourceType: m.parentResourceType,
-          identifierSystem: m.identifierSystem,
-          identifierSystemJsonPath: m.identifierSystemJsonPath,
         })));
       } catch { /* ignore malformed */ }
     }
@@ -1403,8 +1358,6 @@ export class DestinationWizardComponent implements OnInit {
         isUpsertKey: r.isUpsertKey,
         isRequiredParentRef: r.isRequiredParentRef,
         parentResourceType: r.parentResourceType,
-        identifierSystem: r.identifierSystem,
-        identifierSystemJsonPath: r.identifierSystemJsonPath,
       })),
     );
     config['dest_parentSelections'] = JSON.stringify(this.parentSelections());
