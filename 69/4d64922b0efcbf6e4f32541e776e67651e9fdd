@@ -1,0 +1,83 @@
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.html
+  s_37e45e8f10a841::t_b382ed190ef35c 26,33,53,64,78,84
+  s_37e45e8f10a841::t_4a7d74f33256dc 92
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.scss
+  s_37e45e8f10a841::t_5b6579956012ae 173-189
+  s_37e45e8f10a841::t_7baa34099f3528 210-219
+  s_37e45e8f10a841::t_fe203933c3fa78 51-56
+  s_37e45e8f10a841::t_c1b03802b7d17b 90
+  s_37e45e8f10a841::t_9126e7255fab47 71-74
+  s_37e45e8f10a841::t_3d06b3475b38e1 191,196-200
+  s_37e45e8f10a841::t_0f8aad7e7fdea1 18,35,48,65-67
+  s_37e45e8f10a841::t_0d15e35b003e4e 97
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_d68f9144c308b2::t_2cb7131abdfaf0 503
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_37e45e8f10a841::t_06738f93a5ee38 214-215
+  s_37e45e8f10a841::t_67816757dbe572 269
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.html
+  s_37e45e8f10a841::t_42c2fbcbd2390a 25,53
+  s_37e45e8f10a841::t_f568c537f3c347 41,46
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_37e45e8f10a841::t_03660fbea28c0f 229-239
+  s_37e45e8f10a841::t_e080978919c70f 138-144
+  s_37e45e8f10a841::t_d394e95065d699 100-102
+  s_37e45e8f10a841::t_70885cf6a74eed 247
+portal/src/app/user-management/pages/user-list/user-list.component.scss
+  s_d68f9144c308b2::t_7653b6822d1544 440-444,448-450
+  s_d68f9144c308b2::t_661986b0c74b09 445
+portal/src/app/user-management/dialogs/confirm-dialog/confirm-dialog.component.scss
+  s_37e45e8f10a841::t_9966e11ef87fcc 39
+  s_37e45e8f10a841::t_802cd0756bc5f9 60,69-71,87-88,90-95
+src/FHIRBridge.Domain/Entities/User.cs
+  s_d68f9144c308b2::t_feae584899018b 36-57
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.html
+  s_37e45e8f10a841::t_164bdf3bf90ff1 75-80
+  s_37e45e8f10a841::t_7ddeee71e9ab62 97
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_37e45e8f10a841::t_6d1bcbdef602d4 680-682,689
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_37e45e8f10a841::t_a02861ba535bc7 91-92
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.scss
+  s_37e45e8f10a841::t_de7c670e24d0d3 238,243-246,251
+  s_37e45e8f10a841::t_5dbf19a55b79c0 35,39,42-43,48,51-53
+  s_37e45e8f10a841::t_508e6631258578 103-104
+  s_37e45e8f10a841::t_5501d1af9fe5dc 83,94,101
+  s_37e45e8f10a841::t_942fe609db087b 135
+  s_37e45e8f10a841::t_114288de76053d 137,139,145-148
+  s_37e45e8f10a841::t_cdec83fe61fe21 211-227
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.scss
+  s_37e45e8f10a841::t_d90346cfcf707f 160-175,177,182-186,204-213
+  s_37e45e8f10a841::t_ebc5de08e0d043 91,98
+  s_37e45e8f10a841::t_b0092f9922c00a 18,35,48,51-56,64-66,73-75
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_37e45e8f10a841::t_4a0995398e3deb 243-244
+  s_37e45e8f10a841::t_8bb54c72bfef97 500
+  s_37e45e8f10a841::t_3a58b99aec3a89 556-562,564-577,579-582,584-586,588-590,592,594
+  s_37e45e8f10a841::t_746a5ecfc7561b 50-60,74-79,81,115-146,563
+  s_37e45e8f10a841::t_0f9c80e5df16c0 435-436
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "694d64922b0efcbf6e4f32541e776e67651e9fdd",
+  "prompts": {},
+  "sessions": {
+    "s_37e45e8f10a841": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b30259a-0bc9-4b0f-bbb6-d06034ce4f47",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
