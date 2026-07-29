@@ -88,8 +88,8 @@
             (change)="roleFilter.set($any($event.target).value); onFilterChange()"
           >
             <option value="">All Roles</option>
-            @for (role of roleOptions; track role) {
-              <option [value]="role">{{ roleConfig[role].label }}</option>
+            @for (role of roleOptions(); track role) {
+              <option [value]="role">{{ getRoleConfig(role).label }}</option>
             }
           </select>
           <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
