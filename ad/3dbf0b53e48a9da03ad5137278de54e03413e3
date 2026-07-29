@@ -1,0 +1,19 @@
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_c66272542e9fe3::t_973dc4b117384b 584,587-588
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "ad3dbf0b53e48a9da03ad5137278de54e03413e3",
+  "prompts": {},
+  "sessions": {
+    "s_c66272542e9fe3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "389f909f-8d07-413c-8ae7-70c7d6ec2d91",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
