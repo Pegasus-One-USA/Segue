@@ -702,6 +702,9 @@ export class EpicAudienceFormComponent implements OnInit {
     && this.retrievalMethod() === 'search-rest'
     && this.searchRestResourceTypeValue().includes('Patient'));
 
+  /** Connection Test is hidden for now — flip this back to re-enable it (see sectionNumbers/template). */
+  protected readonly showConnectionTest = false;
+
   /**
    * Data Retrieval Method / its config are workflow-specific (search criteria, resource types, scopes, pagination,
    * bulk-export settings) — they belong to a workflow's per-node override (see hasExistingChanged's
@@ -720,7 +723,7 @@ export class EpicAudienceFormComponent implements OnInit {
     let n = 4; // 1 Audience/Env · 2 FHIR Base URL · 3 OAuth Endpoints · 4 Credentials
     const urls              = (this.showApplicationUrlsSection && (cfg.showLaunchUrl || cfg.showRedirect)) ? ++n : null;
     const cds                = cfg.showCdsHooks ? ++n : null;
-    const test                = ++n;
+    const test                = this.showConnectionTest ? ++n : null;
     const retrievalMethod    = this.showRetrievalSection() ? ++n : null;
     const retrievalConfig    = this.showRetrievalSection() ? ++n : null;
     return { urls, cds, test, retrievalMethod, retrievalConfig };

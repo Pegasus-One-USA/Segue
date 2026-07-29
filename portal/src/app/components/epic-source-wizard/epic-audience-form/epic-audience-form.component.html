@@ -47,12 +47,17 @@
       </div>
     }
 
-    <!-- ═══════════ SECTION 0b: New Source / Existing Source ══════════════════ -->
-    <!-- Canvas-mode create only — editing an existing node already has its own data, and entity mode's Create
-         flow has no "clone from existing" need yet. -->
-    @if (showSourcePicker()) {
-      <div class="eaf-section">
-        <div class="eaf-grid">
+    <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
+    <div class="eaf-section">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">1</span>
+        <span class="eaf-section-title">Audience &amp; Environment</span>
+      </div>
+
+      <div class="eaf-grid">
+        <!-- Row 1: Source | App Name — canvas-mode create only (see showSourcePicker); editing an existing
+             node already has its own data, and entity mode's Create flow has no "clone from existing" need yet. -->
+        @if (showSourcePicker()) {
           <div class="eaf-field">
             <label class="eaf-label" for="eaf-sourceMode">Source</label>
             <div class="eaf-select-wrap">
@@ -66,41 +71,14 @@
             <p class="eaf-hint">Start from scratch, or copy the configuration of a source connection you've already set up.</p>
           </div>
 
-          @if (sourceMode() === 'existing') {
-            <div class="eaf-field">
-              <label class="eaf-label" for="eaf-existingConnection">Existing Epic Connection</label>
-              <div class="eaf-select-wrap">
-                <select id="eaf-existingConnection" class="eaf-select"
-                        [disabled]="loadingExisting()"
-                        [value]="selectedExistingId() ?? ''"
-                        (change)="onExistingConnectionSelected($any($event.target).value)">
-                  <option value="" disabled>
-                    {{ loadingExisting() ? 'Loading…' : '— Select a connection —' }}
-                  </option>
-                  @for (conn of existingConnections(); track conn.id) {
-                    <option [value]="conn.id">{{ existingConnectionLabel(conn) }}</option>
-                  }
-                </select>
-              </div>
-              @if (!loadingExisting() && existingConnections().length === 0) {
-                <p class="eaf-hint">No existing Epic source connections found.</p>
-              } @else {
-                <p class="eaf-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</p>
-              }
-            </div>
-          }
-        </div>
-      </div>
-    }
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-appName">App Name</label>
+            <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
+                   placeholder="e.g. Segue Provider Launch" />
+          </div>
+        }
 
-    <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
-    <div class="eaf-section">
-      <div class="eaf-section-head">
-        <span class="eaf-section-num">1</span>
-        <span class="eaf-section-title">Audience &amp; Environment</span>
-      </div>
-
-      <div class="eaf-grid">
+        <!-- Row 2 (or row 1 when the source picker above is hidden): Epic Audience | Environment -->
         <div class="eaf-field" [class.eaf-field--error]="form.controls.audience.touched && form.controls.audience.invalid">
           <label class="eaf-label" for="eaf-audience">Epic Audience <span class="eaf-req">*</span></label>
           <div class="eaf-select-wrap">
@@ -134,11 +112,38 @@
           <p class="eaf-hint">Decides which Client ID set applies. Epic issues separate IDs per environment.</p>
         </div>
 
-        <div class="eaf-field eaf-field--full">
-          <label class="eaf-label" for="eaf-appName">App Name</label>
-          <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
-                 placeholder="e.g. Segue Provider Launch" />
-        </div>
+        <!-- App Name falls back to its own full-width row when there's no Source picker to share a row with. -->
+        @if (!showSourcePicker()) {
+          <div class="eaf-field eaf-field--full">
+            <label class="eaf-label" for="eaf-appName">App Name</label>
+            <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
+                   placeholder="e.g. Segue Provider Launch" />
+          </div>
+        }
+
+        @if (showSourcePicker() && sourceMode() === 'existing') {
+          <div class="eaf-field eaf-field--full">
+            <label class="eaf-label" for="eaf-existingConnection">Existing Epic Connection</label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-existingConnection" class="eaf-select"
+                      [disabled]="loadingExisting()"
+                      [value]="selectedExistingId() ?? ''"
+                      (change)="onExistingConnectionSelected($any($event.target).value)">
+                <option value="" disabled>
+                  {{ loadingExisting() ? 'Loading…' : '— Select a connection —' }}
+                </option>
+                @for (conn of existingConnections(); track conn.id) {
+                  <option [value]="conn.id">{{ existingConnectionLabel(conn) }}</option>
+                }
+              </select>
+            </div>
+            @if (!loadingExisting() && existingConnections().length === 0) {
+              <p class="eaf-hint">No existing Epic source connections found.</p>
+            } @else {
+              <p class="eaf-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</p>
+            }
+          </div>
+        }
       </div>
     </div>
 
@@ -235,7 +240,8 @@
       </div>
 
       <!-- ═══════════ SECTION 4: Credentials ══════════════════════════════════ -->
-      <div class="eaf-section">
+      <div class="eaf-section"
+           [class.eaf-section--last]="!(showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) && !audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
         <div class="eaf-section-head">
           <span class="eaf-section-num">4</span>
           <span class="eaf-section-title">Credentials</span>
@@ -428,7 +434,8 @@
 
       @if (showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) {
         <!-- ═══════════ SECTION: Application URLs ═══════════════════════════════ -->
-        <div class="eaf-section">
+        <div class="eaf-section"
+             [class.eaf-section--last]="!audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().urls }}</span>
             <span class="eaf-section-title">Application URLs</span>
@@ -492,7 +499,7 @@
 
       @if (audienceConfig().showCdsHooks) {
         <!-- ═══════════ SECTION: CDS Hooks ═══════════════════════════════════════ -->
-        <div class="eaf-section">
+        <div class="eaf-section" [class.eaf-section--last]="!showConnectionTest && !showRetrievalSection()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().cds }}</span>
             <span class="eaf-section-title">CDS Hooks</span>
@@ -548,43 +555,45 @@
       }
 
       <!-- ═══════════ Connection Test ═══════════════════════════════════════════ -->
-      <div class="eaf-section" [class.eaf-section--last]="!showRetrievalSection()">
-        <div class="eaf-section-head">
-          <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
-          <span class="eaf-section-title">Connection Test</span>
-          <span class="eaf-hint-inline">n/a — action, not a field</span>
-        </div>
+      @if (showConnectionTest) {
+        <div class="eaf-section" [class.eaf-section--last]="!showRetrievalSection()">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
+            <span class="eaf-section-title">Connection Test</span>
+            <span class="eaf-hint-inline">n/a — action, not a field</span>
+          </div>
 
-        <div class="eaf-test-row">
-          <button class="eaf-test-btn" type="button"
-                  [disabled]="testStatus() === 'running' || isReadonly"
-                  (click)="runTestConnection()">
-            @if (testStatus() === 'running') {
-              <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
-            } @else if (testStatus() === 'ok') {
-              ✓ Test passed — run again
+          <div class="eaf-test-row">
+            <button class="eaf-test-btn" type="button"
+                    [disabled]="testStatus() === 'running' || isReadonly"
+                    (click)="runTestConnection()">
+              @if (testStatus() === 'running') {
+                <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
+              } @else if (testStatus() === 'ok') {
+                ✓ Test passed — run again
+              } @else if (testStatus() === 'fail') {
+                ✗ Test failed — retry
+              } @else {
+                ⚡ Test Connection
+              }
+            </button>
+
+            @if (testStatus() === 'ok') {
+              <span class="eaf-test-result eaf-test-result--ok">
+                Token endpoint reachable and responding.
+              </span>
             } @else if (testStatus() === 'fail') {
-              ✗ Test failed — retry
+              <span class="eaf-test-result eaf-test-result--fail">
+                Connection failed. Check the token endpoint URL and credentials.
+              </span>
             } @else {
-              ⚡ Test Connection
+              <span class="eaf-test-note">
+                Validates before save — checks token endpoint is reachable and credentials are accepted.
+              </span>
             }
-          </button>
-
-          @if (testStatus() === 'ok') {
-            <span class="eaf-test-result eaf-test-result--ok">
-              Token endpoint reachable and responding.
-            </span>
-          } @else if (testStatus() === 'fail') {
-            <span class="eaf-test-result eaf-test-result--fail">
-              Connection failed. Check the token endpoint URL and credentials.
-            </span>
-          } @else {
-            <span class="eaf-test-note">
-              Validates before save — checks token endpoint is reachable and credentials are accepted.
-            </span>
-          }
+          </div>
         </div>
-      </div>
+      }
 
     @if (showRetrievalSection()) {
       <!-- ═══════════ Data Retrieval Method ═══════════════════════════════════ -->

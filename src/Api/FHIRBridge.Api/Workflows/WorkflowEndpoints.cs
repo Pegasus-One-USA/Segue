@@ -9,6 +9,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
@@ -685,7 +686,7 @@ public static class WorkflowEndpoints
                     // otherwise stamp every AuditLog/AuthenticationLog/SecurityEvent this run produces with a null
                     // CorrelationId — set the ambient scope explicitly so it falls back to this run's real id instead.
                     var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
-                    using var actorScope = ambientActorContext.BeginScope("Background Workflow Run", context.CorrelationId);
+                    using var actorScope = ambientActorContext.BeginCorrelatedScope("Background Workflow Run", context.CorrelationId);
                     try
                     {
                         await scopedOrchestrator.ExecuteAsync(workflow, context, CancellationToken.None);

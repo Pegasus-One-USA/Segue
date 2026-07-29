@@ -33,6 +33,28 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public string? FirstName { get; private set; }
     public string? LastName { get; private set; }
 
+    /// <summary>Falls back to "FirstName LastName" (then Email) when no explicit DisplayName was ever set —
+    /// e.g. an SSO-provisioned user gets FirstName/LastName from the IdP's claims but DisplayName is never
+    /// populated by that path, unlike local invite/signup which always sets it.</summary>
+    public string EffectiveDisplayName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(DisplayName))
+            {
+                return DisplayName;
+            }
+
+            var composedName = $"{FirstName} {LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(composedName))
+            {
+                return composedName;
+            }
+
+            return Email ?? ExternalUserId;
+        }
+    }
+
     public string? PasswordHash { get; private set; }
     public bool IsLocalLoginEnabled { get; private set; }
     public bool MustChangePassword { get; private set; }

@@ -437,11 +437,13 @@
 }
 
 .btn-more {
-  color:         var(--color-muted) !important;
-  width:         32px !important;
-  height:        32px !important;
-  border-radius: var(--radius-base) !important;
-  transition:    background var(--transition-base), color var(--transition-base) !important;
+  // --mat-icon-button-state-layer-size drives Material's own width/height/padding/ripple-diameter
+  // calculations together (see .mat-mdc-icon-button in @angular/material/icon-button) — border-radius
+  // already defaults to 50% from the same token chain, so setting just this one custom property shrinks
+  // the whole button (including its ripple/focus circle) to match, with no per-property overrides needed.
+  --mat-icon-button-state-layer-size: 32px;
+  color:      var(--color-muted) !important;
+  transition: background var(--transition-base), color var(--transition-base) !important;
 
   &:hover {
     background: var(--color-side) !important;
