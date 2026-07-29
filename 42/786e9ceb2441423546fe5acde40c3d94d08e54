@@ -1,0 +1,38 @@
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_43a1e5fa590c3d::t_17b8251fe780b8 30-34
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_43a1e5fa590c3d::t_84a445ca2286cf 2396-2402,2419-2425
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowDefinitionStore.cs
+  s_43a1e5fa590c3d::t_54d8f779312a55 11-21
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260729123925_AddWorkflowDefinitionAuditFields.cs
+  s_43a1e5fa590c3d::t_84a445ca2286cf 1-62
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowDefinitionStore.cs
+  s_43a1e5fa590c3d::t_1da8d84352c1a9 1,21,23,26,54-66
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260729123925_AddWorkflowDefinitionAuditFields.Designer.cs
+  s_43a1e5fa590c3d::t_84a445ca2286cf 1-3432
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowDefinition.cs
+  s_43a1e5fa590c3d::t_e348b7f60f7005 49-62
+  s_43a1e5fa590c3d::t_3ecc8f6c2c61a0 135-145
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_43a1e5fa590c3d::t_62f2e369b7554d 96
+  s_43a1e5fa590c3d::t_bc9b88f09b4ff6 109-146
+  s_43a1e5fa590c3d::t_b8716046f0a7d8 51,56,80,91
+  s_43a1e5fa590c3d::t_23303d27d14a5d 1,8,35-38,108
+  s_43a1e5fa590c3d::t_672db46d41b123 29-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "42786e9ceb2441423546fe5acde40c3d94d08e54",
+  "prompts": {},
+  "sessions": {
+    "s_43a1e5fa590c3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8042e2b4-3b0e-422c-af76-269d56a47c51",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_43a1e5fa590c3d::t_fe4951dd1bd2ef 70-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "210756f2b53f6748885ba965adb2253589cb5e3e",
+  "prompts": {},
+  "sessions": {
+    "s_43a1e5fa590c3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8042e2b4-3b0e-422c-af76-269d56a47c51",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

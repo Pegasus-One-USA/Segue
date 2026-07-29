@@ -1,0 +1,52 @@
+tests/FHIRBridge.UnitTests/Governance/EfGovernanceQueryServiceCorrelationSearchSmartLaunchTests.cs
+  s_43a1e5fa590c3d::t_9b89ded98b248f 1-58
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_43a1e5fa590c3d::t_605229c6844ad8 71-73
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_43a1e5fa590c3d::t_1f2dffdc83fdb2 269-270,281-282
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_43a1e5fa590c3d::t_6d3d9ca309622f 1146
+  s_43a1e5fa590c3d::t_df0b301e3ec40f 1105-1108,1145
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260729104946_AddSmartLaunchLogCorrelationId.Designer.cs
+  s_43a1e5fa590c3d::t_df0b301e3ec40f 1-3418
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_43a1e5fa590c3d::t_8af2b759664da5 245-255
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_43a1e5fa590c3d::t_bba62afc0d083b 431
+  s_43a1e5fa590c3d::t_154a9760b0049f 462-470,476
+src/FHIRBridge.Domain/Entities/Governance/SmartLaunchLog.cs
+  s_43a1e5fa590c3d::t_f98e6db0fb73ae 60-63
+  s_43a1e5fa590c3d::t_4d9996a62acbe9 26-27,39
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/SmartLaunchLogConfiguration.cs
+  s_43a1e5fa590c3d::t_6492c8ec2d10ed 19,23
+portal/src/app/governance/models/correlation-search.model.ts
+  s_43a1e5fa590c3d::t_2561a590654a36 1
+  s_43a1e5fa590c3d::t_7495c7ce5d882a 54
+src/FHIRBridge.Application/DTOs/GovernanceDtos.cs
+  s_43a1e5fa590c3d::t_a6619558175e69 257-258,275-276,281-282
+  s_43a1e5fa590c3d::t_3600b9d327aa0c 177-178
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260729104946_AddSmartLaunchLogCorrelationId.cs
+  s_43a1e5fa590c3d::t_df0b301e3ec40f 1-38
+src/BuildingBlocks/FHIRBridge.Governance/GovernanceEntries.cs
+  s_43a1e5fa590c3d::t_67a00cbce5f3c0 150-151
+portal/src/app/governance/models/governance.model.ts
+  s_43a1e5fa590c3d::t_ef506bfd9725fc 174
+src/FHIRBridge.Infrastructure/Governance/EmptyGovernanceQueryService.cs
+  s_43a1e5fa590c3d::t_65f867a9aab379 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "97d3b3c0733cfe7bf1703c7768947530c2e40f44",
+  "prompts": {},
+  "sessions": {
+    "s_43a1e5fa590c3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8042e2b4-3b0e-422c-af76-269d56a47c51",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

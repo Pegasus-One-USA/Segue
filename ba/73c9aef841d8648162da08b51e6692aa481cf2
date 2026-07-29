@@ -1,0 +1,32 @@
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.scss
+  s_37e45e8f10a841::t_07e7c0c94ed383 42-43
+portal/src/app/user-management/pages/user-list/user-list.component.scss
+  s_37e45e8f10a841::t_5d6b7d9bfeff16 440-446
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.scss
+  s_37e45e8f10a841::t_e88d9a1034cbe4 37-55
+  s_37e45e8f10a841::t_96396cae2dfd31 70,72,75-76,80-81
+  s_37e45e8f10a841::t_79ee004777ac0b 146-148,159-167,178-181,185-187,192-194,218-219
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.scss
+  s_37e45e8f10a841::t_d8fd88ebe6b689 40
+  s_37e45e8f10a841::t_0c3318543b78cb 159-161,172,174-180,192-195,199-201,206-208,223-224
+  s_37e45e8f10a841::t_762446be6b8f78 37-39,41-55,69,71,74-75,79-80
+  s_37e45e8f10a841::t_e79a4ab8f696d1 173
+portal/src/app/user-management/dialogs/confirm-dialog/confirm-dialog.component.scss
+  s_37e45e8f10a841::t_11a8e4993c828b 59-65,72-74,78-80,88,93-95,97-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "ba73c9aef841d8648162da08b51e6692aa481cf2",
+  "prompts": {},
+  "sessions": {
+    "s_37e45e8f10a841": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b30259a-0bc9-4b0f-bbb6-d06034ce4f47",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}

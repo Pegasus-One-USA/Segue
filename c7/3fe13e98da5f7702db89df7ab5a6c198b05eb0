@@ -1,0 +1,19 @@
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_43a1e5fa590c3d::t_be9848aeb7dea9 21-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c73fe13e98da5f7702db89df7ab5a6c198b05eb0",
+  "prompts": {},
+  "sessions": {
+    "s_43a1e5fa590c3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8042e2b4-3b0e-422c-af76-269d56a47c51",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
