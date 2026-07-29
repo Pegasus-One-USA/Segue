@@ -37,6 +37,16 @@ export interface RouteExecutionFilter {
   sortDirection?: 'asc' | 'desc';
 }
 
+/** Matches the backend's WorkflowRunStatusCountsDto (GET /workflow-runs/stats) — an all-time count per
+ *  status across every workflow, backing the Dashboard's status stat tiles. */
+export interface WorkflowRunStatusCounts {
+  pending: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  cancelled: number;
+}
+
 /** Matches the backend's WorkflowNodeRunPayloadDto — what a single node fetched/transformed/wrote. */
 export interface ResourceHistoryEntry {
   id: string;
