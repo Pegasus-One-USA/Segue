@@ -1,5 +1,5 @@
 import { Component, HostBinding, computed, inject, input, output, signal } from '@angular/core';
-import { MappingRow, MappingInstanceSelection } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, isReferenceField } from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
 import { nearestArrayGroupId } from './field-mapping-summary.model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -48,7 +48,14 @@ export class FieldMappingListComponent {
   private readonly anchors = inject(FieldMappingAnchorService);
 
   readonly rows = input.required<MappingRow[]>();
+  /** Scoped to whichever single resource is currently being edited (see DestinationWizardComponent's
+   *  activeMappingGroup) — used for the "+ Add mapping" draft form's own resource picker. NOT what the
+   *  reference-lookup "Resolves to" picker should use; see allResources below. */
   readonly resources = input.required<string[]>();
+  /** Every resource selected for this destination, unscoped by which one is currently active — what the
+   *  "Resolves to" picker offers, so a reference field on (say) Encounter can still point at Patient even
+   *  while only Encounter is the resource being edited. */
+  readonly allResources = input<string[]>([]);
   readonly forest = input.required<FmTreeNode[]>();
   /** All tables (primary + extras) a resource currently targets — populates the draft's table picker. */
   readonly tablesForResource = input.required<(resource: string) => string[]>();
@@ -63,6 +70,9 @@ export class FieldMappingListComponent {
    *  reference mockup's bottom panel. */
   readonly delimiterChanged = output<{ resource: string; tableName: string; targetName: string; delimiter: string }>();
   readonly instanceChanged = output<{ resource: string; tableName: string; targetName: string; instance: MappingInstanceSelection }>();
+  /** Emitted when the user picks (or clears) which OTHER resource a reference field resolves against —
+   *  referencesResource is null to clear it back to "written verbatim". */
+  readonly referenceResourceChanged = output<{ resource: string; tableName: string; targetName: string; referencesResource: string | null }>();
 
   readonly collapsed = signal(false);
   readonly draft = signal<NewMappingDraft | null>(null);
@@ -179,6 +189,24 @@ export class FieldMappingListComponent {
     this.instanceChanged.emit({
       resource: row.resource, tableName: row.tableName, targetName: row.targetName,
       instance: { ...row.instance, type: 'all', aggregate: checked ? 'csv' : 'rows' },
+    });
+  }
+
+  // ── reference-lookup control — only meaningful for a FHIR reference field (path ends ".reference") ──
+  isReferenceField = isReferenceField;
+
+  /** Every mapped resource this row could resolve against — excludes its own resource (a reference never
+   *  points at its own resource type in these mappings). Drawn from allResources (every resource selected
+   *  for this destination), not the narrower `resources` input (just the one currently being edited) —
+   *  otherwise this list would always come back empty except while editing a resource alongside itself. */
+  otherResources(row: MappingRow): string[] {
+    return this.allResources().filter(r => r !== row.resource);
+  }
+
+  onReferenceResourceChange(row: MappingRow, value: string): void {
+    this.referenceResourceChanged.emit({
+      resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+      referencesResource: value || null,
     });
   }
 

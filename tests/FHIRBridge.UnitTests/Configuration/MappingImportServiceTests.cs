@@ -219,6 +219,62 @@ public sealed class MappingImportServiceTests
         profiles.Should().HaveCount(1, "re-importing must update the existing profile, not insert a duplicate");
     }
 
+    /// <summary>
+    /// Covers the wizard-authored "reference lookup" wiring: a column can now carry a "referenceLookup"
+    /// object (table + keyColumn) alongside its normal directField mapping, so a FHIR reference field (e.g.
+    /// "$.subject.reference") gets resolved against another mapped resource's own table/id column at write
+    /// time instead of being written verbatim (which a bigint FK column can never accept as-is). Without
+    /// this wiring, any such field previously had to be patched onto the profile by hand after every import,
+    /// and a later re-import (which fully replaces a profile's fields) would silently wipe it out again.
+    /// </summary>
+    [Fact]
+    public async Task Import_wires_a_columns_referenceLookup_onto_the_resulting_MappingField()
+    {
+        var (service, repository, _, destinationId, sourceConnectionId) =
+            CreateSut(existingDestinationTables: ["Observation"]);
+
+        var body = ReferenceLookupFixture(sourceConnectionId, destinationId);
+        var result = await service.ImportAsync(Parse(body), CancellationToken.None);
+
+        result.Profiles.Single().Warnings.Should().BeEmpty();
+        var profile = (await repository.GetMappingProfilesAsync(CancellationToken.None)).Single();
+        var patientIdField = profile.Fields.Single(f => f.TargetField == "PatientId");
+        patientIdField.JsonPath.Should().Be("$.subject.reference");
+        patientIdField.ReferenceLookupTable.Should().Be("Patient");
+        patientIdField.ReferenceLookupKeyColumn.Should().Be("PatientId");
+
+        // A column with no "referenceLookup" property at all must not spuriously pick one up.
+        var idField = profile.Fields.Single(f => f.TargetField == "Id");
+        idField.ReferenceLookupTable.Should().BeNull();
+        idField.ReferenceLookupKeyColumn.Should().BeNull();
+    }
+
+    private static string ReferenceLookupFixture(Guid sourceConnectionId, Guid destinationId) => $$"""
+        {
+          "source": "EPIC", "destination": "SQL",
+          "sourceConnectionId": "{{sourceConnectionId}}", "destinationId": "{{destinationId}}",
+          "mappings": [
+            {
+              "resourceType": "Observation", "rank": 1, "generatedAt": "2026-07-21T16:10:52.564Z",
+              "schemaChanges": { "tablesToCreate": [], "columnsToAdd": [], "summary": null },
+              "processingOrder": [
+                { "step": 1, "table": "Observation", "level": 1, "dependsOn": null, "note": null }
+              ],
+              "destination": "SQL",
+              "tables": [
+                { "name": "Observation", "isNew": false, "relation": null, "columns": [
+                  { "column": "Id", "mode": "directField", "sources": ["Observation.id"], "instance": null },
+                  {
+                    "column": "PatientId", "mode": "directField", "sources": ["Observation.subject.reference"],
+                    "instance": null, "referenceLookup": { "table": "Patient", "keyColumn": "PatientId" }
+                  }
+                ] }
+              ]
+            }
+          ]
+        }
+        """;
+
     [Fact]
     public async Task Falls_back_to_the_tables_real_foreign_key_when_the_payload_relation_is_null()
     {

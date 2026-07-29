@@ -154,6 +154,11 @@ public static class WorkflowEndpoints
                 // from its OWN node config rather than resolving the mapping by id, so mirror the mapping's target and
                 // fields onto the destination node — the same shape the route→graph projection embeds. Without this the
                 // writer defaults the target table to the resource type and creates no data columns.
+                // sourceConnectionId lets DestinationNodeExecutor re-resolve each resource type's real MappingProfile
+                // by the SAME natural key (ResourceType, SourceConnectionId, DestinationId) the mapping node above
+                // uses — without it, a destination with more than one MappingProfile sharing its DestinationId (a
+                // stale one left behind by an earlier save, say) has no way to pick the one this workflow's own
+                // source connection actually produced.
                 if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
                 {
                     nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
@@ -161,6 +166,7 @@ public static class WorkflowEndpoints
                         config["resourceType"] = spec.ResourceType;
                         config["destinationObject"] = spec.DestinationObject;
                         config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
+                        config["sourceConnectionId"] = sourceConnectionId.ToString();
                     });
                 }
             }

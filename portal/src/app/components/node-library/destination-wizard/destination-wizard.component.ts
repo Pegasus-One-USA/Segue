@@ -20,6 +20,7 @@ import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service
 import { MappingSnapshot, MappingSnapshotSummary } from './field-mapping/mapping-snapshot.model';
 import {
   MappingSummaryDocument, ChildTableRelation, buildMappingSummaryDocument, applyMappingSummaryDocument,
+  pruneOrphanedMappingRows,
 } from './field-mapping/field-mapping-summary.model';
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
@@ -313,6 +314,7 @@ export class DestinationWizardComponent implements OnInit {
       availableFields: this.availableFieldsFn,
       sourceConnectionId: this.sourceConnectionId(),
       destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+      targetByResource: this.targetByResource(),
     });
     this.lastMappingSummary.set(doc);
     this.mappingSummaryPreviewOpen.set(true);
@@ -811,6 +813,7 @@ export class DestinationWizardComponent implements OnInit {
           availableFields: this.availableFieldsFn,
           sourceConnectionId: this.sourceConnectionId(),
           destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+          targetByResource: this.targetByResource(),
         });
         console.log(JSON.stringify(doc, null, 2));
       }
@@ -1500,6 +1503,15 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   private _save(): void {
+    // Drop any mapping row left behind pointing at a column that's since been renamed/dropped directly in
+    // the database (rather than through this wizard) — without this, a save can silently persist (and a
+    // later workflow run can fail on) a column that no longer exists anywhere. Applied to the actual
+    // mappingRows signal, not just the outgoing payload, so the Mapping list UI stops showing the ghost row too.
+    const pruned = pruneOrphanedMappingRows(this.mappingRows(), this.sqlTables());
+    if (pruned.length !== this.mappingRows().length) {
+      this.mappingRows.set(pruned);
+    }
+
     const type = this.destType();
     const config: Record<string, string> = {
       dest_resources: this.selectedResources().join(','),
@@ -1568,6 +1580,7 @@ export class DestinationWizardComponent implements OnInit {
       availableFields: this.availableFieldsFn,
       sourceConnectionId: this.sourceConnectionId(),
       destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+      targetByResource: this.targetByResource(),
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
 

@@ -298,7 +298,9 @@ public sealed class MappingImportService : IMappingImportService
             ArrayAncestors: arrayAncestors,
             ParentTable: effectiveRelation?.ParentTable,
             ParentKeyColumn: effectiveRelation?.ParentColumn,
-            ForeignKeyColumn: effectiveRelation?.ChildColumn);
+            ForeignKeyColumn: effectiveRelation?.ChildColumn,
+            ReferenceLookupTable: column.ReferenceLookup?.Table,
+            ReferenceLookupKeyColumn: column.ReferenceLookup?.KeyColumn);
     }
 
     /// <summary>

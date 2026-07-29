@@ -554,12 +554,14 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     /// Resolves the real MappingProfile for one resource-type group of records within this destination write,
     /// preferring (in order): a profile object embedded directly on the node (only if it actually matches this
     /// group's resource type — a single embedded profile can't stand in for every resource type in a mixed
-    /// batch); the real MappingProfile persisted for this destination + resource type, looked up by DestinationId
-    /// (a destination node's own config carries no sourceConnectionId to key a natural-key lookup on, so this
-    /// matches on DestinationId + ResourceType alone — in practice unique, since a destination maps a given
-    /// resource type one way at a time); and finally the legacy synthetic profile built straight from whatever
-    /// "fields" happen to be embedded on the node (pre-existing fallback, kept for graphs/tests with neither of
-    /// the above).
+    /// batch); the real MappingProfile found by the exact natural key (ResourceType, SourceConnectionId,
+    /// DestinationId) — the SAME key MappingNodeExecutor and MappingImportService de-dup on, and the only
+    /// unambiguous way to identify "the mapping this workflow's own source connection actually produces"; a
+    /// DestinationId + ResourceType-only match for nodes saved before sourceConnectionId was stamped onto them
+    /// (older graphs — this can be ambiguous if more than one profile shares a destination + resource type, e.g.
+    /// a stale one left behind by an earlier/abandoned save, so ties break on whichever was modified most
+    /// recently rather than an arbitrary query order); and finally the legacy synthetic profile built straight
+    /// from whatever "fields" happen to be embedded on the node (kept for graphs/tests with none of the above).
     /// </summary>
     private async Task<MappingProfile> ResolveMappingProfileAsync(
         WorkflowExecutionContext context,
@@ -577,10 +579,28 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         if (_configurationRepository is not null
             && Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId))
         {
+            if (Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId))
+            {
+                var exactMatch = await _configurationRepository.FindMappingProfileAsync(
+                    resourceType, sourceConnectionId, destinationId, cancellationToken);
+                if (exactMatch is not null)
+                {
+                    return exactMatch;
+                }
+            }
+
             var profiles = await _configurationRepository.GetMappingProfilesAsync(cancellationToken);
-            var match = profiles.FirstOrDefault(profile =>
-                profile.DestinationId == destinationId
-                && string.Equals(profile.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase));
+            // DestinationId + ResourceType is usually unique, but isn't guaranteed to be — e.g. a stale profile
+            // left behind by an earlier/abandoned wizard save for the same destination and resource type (seen
+            // in production: one Patient profile with no resolvable "$.id" field at all, alongside the current
+            // correct one). Ambiguous matches pick whichever was touched most recently, not just the first one
+            // a non-deterministic query order happens to return — the profile the user actually last saved.
+            var match = profiles
+                .Where(profile =>
+                    profile.DestinationId == destinationId
+                    && string.Equals(profile.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(profile => profile.ModifiedOnUtc ?? profile.CreatedOnUtc)
+                .FirstOrDefault();
             if (match is not null)
             {
                 return match;

@@ -68,6 +68,10 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private viewportResizeObserver: ResizeObserver | null = null;
 
   readonly resources = input.required<string[]>();
+  /** Every resource selected for this destination, NOT scoped down to the currently active mapping group
+   *  (unlike `resources` above) — needed so a reference field's "Resolves to" picker can offer resources
+   *  other than whichever one is presently being edited. */
+  readonly allResources = input<string[]>([]);
   readonly destType = input.required<'sql' | 'csv'>();
   readonly mappingRows = input.required<MappingRow[]>();
   readonly targetByResource = input.required<Record<string, string>>();
@@ -1006,6 +1010,11 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   onListInstanceChange(e: { resource: string; tableName: string; targetName: string; instance: MappingInstanceSelection }): void {
     const row = this.rowForColumnFn(e.resource, e.tableName, e.targetName);
     if (row) this.updateRow({ ...row, instance: e.instance });
+  }
+
+  onListReferenceResourceChange(e: { resource: string; tableName: string; targetName: string; referencesResource: string | null }): void {
+    const row = this.rowForColumnFn(e.resource, e.tableName, e.targetName);
+    if (row) this.updateRow({ ...row, referencesResource: e.referencesResource ?? undefined });
   }
 
   closePopover(): void { this.popoverKey.set(null); }

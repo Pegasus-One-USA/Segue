@@ -70,6 +70,7 @@
     @if (popoverRow(); as row) {
       <app-field-mapping-join-popover
         [row]="row"
+        [allResources]="allResources()"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
         (closed)="closePopover()"
@@ -141,6 +142,7 @@
   <app-field-mapping-list
     [rows]="mappingRows()"
     [resources]="resources()"
+    [allResources]="allResources()"
     [forest]="forest()"
     [tablesForResource]="tablesForResourceFn"
     [columnsFor]="columnsForResourceTableFn"
@@ -151,6 +153,7 @@
     (editRow)="onEditRow($event)"
     (delimiterChanged)="onListDelimiterChange($event)"
     (instanceChanged)="onListInstanceChange($event)"
+    (referenceResourceChanged)="onListReferenceResourceChange($event)"
   />
 
   <app-field-mapping-preview-drawer

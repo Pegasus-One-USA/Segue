@@ -1,6 +1,6 @@
 import { Component, HostBinding, computed, input, output, signal, effect } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
-import { MappingRow, MappingInstanceSelection, resolveArrayPolicy } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceField } from './field-mapping-model';
 
 /**
  * Join order/delimiter + array instance-selection editor. Opens either from a wire click or from the
@@ -20,6 +20,9 @@ import { MappingRow, MappingInstanceSelection, resolveArrayPolicy } from './fiel
 })
 export class FieldMappingJoinPopoverComponent {
   readonly row = input.required<MappingRow>();
+  /** Every resource selected for this destination — populates the "Resolves to" picker for a reference
+   *  field, offering resources beyond whichever one this row itself belongs to. */
+  readonly allResources = input<string[]>([]);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
@@ -68,6 +71,12 @@ export class FieldMappingJoinPopoverComponent {
     return arrays?.length ? arrays[arrays.length - 1] : '';
   });
 
+  isReferenceField = isReferenceField;
+  otherResources = computed(() => {
+    const resource = this.draft()?.resource;
+    return this.allResources().filter(r => r !== resource);
+  });
+
   approximationNote = computed(() => {
     const d = this.draft();
     if (!d) return null;
@@ -106,6 +115,10 @@ export class FieldMappingJoinPopoverComponent {
 
   onInstanceField(patch: Partial<MappingInstanceSelection>): void {
     this.draft.update(d => (d ? { ...d, instance: { ...(d.instance ?? { type: 'first' }), ...patch } } : d));
+  }
+
+  onReferenceResourceChange(value: string): void {
+    this.draft.update(d => (d ? { ...d, referencesResource: value || undefined } : d));
   }
 
   onSave(): void {

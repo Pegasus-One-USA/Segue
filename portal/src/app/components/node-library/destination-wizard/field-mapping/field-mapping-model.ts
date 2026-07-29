@@ -57,6 +57,17 @@ export interface MappingRow {
   isRequired?: boolean;
   defaultValue?: string | null;
   format?: string | null;
+  /**
+   * Set when this field is a FHIR reference (its primary source's fhirPath ends in ".reference", e.g.
+   * "Observation.subject.reference") that should be resolved against another mapped RESOURCE's own
+   * table + id column at write time, instead of being written verbatim — a bigint FK column can never
+   * accept the raw "Patient/xyz" string. Value is the OTHER resource type (e.g. "Patient"); its actual
+   * target table and own "$.id"-mapped column name are derived automatically once every resource's
+   * mapping is known (see resolveReferenceLookup in field-mapping-summary.model.ts) — this keeps the
+   * control a simple "which resource does this point to?" picker rather than asking the user to know
+   * physical table/column names.
+   */
+  referencesResource?: string | null;
 }
 
 /** The legacy flat shape already round-tripped through node.fields['dest_mappings']. */
@@ -175,4 +186,10 @@ function applyInstance(
 
 export function isApproximated(row: MappingRow): boolean {
   return resolveArrayPolicy(row).approximated;
+}
+
+/** True when this row's primary source is a FHIR reference element (path ends in ".reference") — the
+ *  only shape "referencesResource" (resolve against another mapped resource's table) is meaningful for. */
+export function isReferenceField(row: MappingRow): boolean {
+  return row.mode === 'value' && !!row.sources[0]?.fhirPath?.endsWith('.reference');
 }

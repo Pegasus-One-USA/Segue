@@ -274,6 +274,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 ["executor"] = GetType().Name,
                 ["resourceType"] = string.Join(',', resourceTypes),
                 ["count"] = resources.Count,
+                // Per-type breakdown of the combined "count" above — without this, a multi-resource-type source
+                // node's execution history can only ever say "extracted 501 resources total", leaving no way to
+                // tell (short of decrypting the recorded payload) whether one specific resource type genuinely
+                // returned zero results from the EHR versus something downstream silently dropping its records.
+                ["resourceTypeCounts"] = resources
+                    .GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
                 // Reflects what actually ran (bulk client available and configured), not just what was configured —
                 // lets a caller (e.g. the /run endpoint's Activity Feed summary) label a run as a Bulk Export
                 // without duplicating this resolution logic.

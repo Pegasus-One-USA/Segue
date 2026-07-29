@@ -66,7 +66,16 @@ public sealed record ColumnMappingDto(
     IReadOnlyList<string>? Sources,
     string? SourceNode,
     string? Delimiter,
-    InstanceSelectorDto? Instance);
+    InstanceSelectorDto? Instance,
+    /// <summary>Non-null when this column is a FHIR reference (e.g. "$.subject.reference") that must be
+    /// resolved against another table's row at write time rather than written verbatim — see
+    /// <see cref="Domain.ValueObjects.MappingField.ReferenceLookupTable"/>.</summary>
+    ReferenceLookupDto? ReferenceLookup = null);
+
+/// <summary>Where to resolve a reference column's extracted id against: <see cref="Table"/> is the other
+/// mapped resource's own destination table, <see cref="KeyColumn"/> is the column there holding that
+/// resource's own FHIR id (its own "$.id"-mapped field).</summary>
+public sealed record ReferenceLookupDto(string Table, string KeyColumn);
 
 /// <summary><see cref="Type"/> is one of "all" | "first" | "nth" | "criteria".</summary>
 public sealed record InstanceSelectorDto(

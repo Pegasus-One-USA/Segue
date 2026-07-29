@@ -78,6 +78,9 @@ export interface MappingSummaryColumn {
   /** joinedFields only. */
   delimiter?: string;
   instance: MappingSummaryInstance | null;
+  /** Set when this column is a FHIR reference that must be resolved against another mapped resource's
+   *  own table + id column at write time — see MappingRow.referencesResource for how this is derived. */
+  referenceLookup?: { table: string; keyColumn: string };
 }
 
 export interface MappingSummaryTable {
@@ -161,16 +164,46 @@ function toSummaryInstance(row: MappingRow, arrayContext: string | null): Mappin
   return out;
 }
 
-function toSummaryColumn(row: MappingRow, forest: FmTreeNode[]): MappingSummaryColumn {
+/** A resource's own root table + the column its own "$.id" field targets — what a REFERENCE elsewhere
+ *  resolves against. Computed once across every mapped resource (not per-resource) since a reference on
+ *  one resource (e.g. Observation.subject.reference) points at ANOTHER resource (Patient) that may be
+ *  processed before or after it in the resources loop. */
+interface ResourceKeyInfo {
+  table: string;
+  keyColumn: string;
+}
+
+function computeResourceKeyInfo(mappingRows: MappingRow[]): Record<string, ResourceKeyInfo> {
+  const result: Record<string, ResourceKeyInfo> = {};
+  for (const resource of new Set(mappingRows.map(r => r.resource))) {
+    const idRow = mappingRows.find(r =>
+      r.resource === resource && r.mode === 'value' && r.sources.length === 1
+      && r.sources[0].fhirPath === `${resource}.id`);
+    if (idRow) {
+      result[resource] = { table: bareName(idRow.tableName), keyColumn: idRow.targetName };
+    }
+  }
+  return result;
+}
+
+function toSummaryColumn(
+  row: MappingRow, forest: FmTreeNode[], resourceKeyInfo: Record<string, ResourceKeyInfo>,
+): MappingSummaryColumn {
   const instance = toSummaryInstance(row, arrayContextFor(row, forest));
+  const keyInfo = row.referencesResource ? resourceKeyInfo[row.referencesResource] : undefined;
+  // Spread so a non-reference column's output has no "referenceLookup" key at all (not merely one set to
+  // undefined) — keeps the wire shape byte-for-byte identical to before this feature for every existing
+  // mapping, and sidesteps any ambiguity in how a test's equality check treats an undefined-valued key.
+  const referenceLookup = keyInfo ? { referenceLookup: { table: keyInfo.table, keyColumn: keyInfo.keyColumn } } : {};
+
   if (row.mode === 'childJson') {
-    return { column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '', instance };
+    return { column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '', instance, ...referenceLookup };
   }
   const sources = row.sources.map(s => s.fhirPath);
   if (sources.length > 1) {
-    return { column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance };
+    return { column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance, ...referenceLookup };
   }
-  return { column: row.targetName, mode: 'directField', sources, instance };
+  return { column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup };
 }
 
 // ── per-resource table set + schema-change/processing-order derivation ──────────────────────────────
@@ -188,13 +221,32 @@ function resolveTable(
   sqlTables: DestinationTable[],
   childTableRelationsByTable: Record<string, ChildTableRelation>,
   destType: 'sql' | 'csv',
+  resource: string,
+  rootTableToResource: Record<string, string>,
 ): ResolvedTable {
   const known = sqlTables.find(t => t.fullName === fullName);
+  const declaredRelation = childTableRelationsByTable[fullName];
+  // A genuine child-table relation only makes sense when its declared parent belongs to THIS SAME resource
+  // (e.g. PatientAddress's parent "Patient", alongside Patient's own root mapping) — that's what actually
+  // proves it's an intra-resource array fan-out, not a real SQL foreign key picked up from live-schema
+  // probing that happens to point at a completely different resource's own root table (e.g.
+  // Encounter.PatientId -> Patient.Id: Encounter is its own independent, top-level resource, not a child
+  // sub-table of Patient's mapping). A cross-resource reference like that belongs on the REFERENCING FIELD
+  // itself (see referencesResource/referenceLookup), never as a table-level relation — treating it as one
+  // here would make this table's OWN root/primary mapping unrecoverable (every root-table lookup in this
+  // file is literally "the one table with no relation"). Checked against rootTableToResource (derived from
+  // the caller's own targetByResource, the independently-maintained "which table is each resource's
+  // designated root" signal) rather than "does some row happen to target the parent table" — a resource
+  // can legitimately have its root table declared with zero directly-mapped fields on it.
+  const parentOwner = declaredRelation ? rootTableToResource[declaredRelation.parentTable] : undefined;
+  const relation = declaredRelation && (parentOwner === undefined || parentOwner === resource)
+    ? declaredRelation
+    : undefined;
   return {
     fullName,
     bare: bareName(fullName),
     isNew: known ? known.origin === 'userCreated' : true,
-    relation: childTableRelationsByTable[fullName],
+    relation,
     columns: known?.columns ?? [{
       name: 'Id',
       dataType: destType === 'sql' ? DEFAULT_ID_TYPE : DEFAULT_CSV_TYPE,
@@ -263,6 +315,23 @@ function computeProcessingOrder(tables: ResolvedTable[]): MappingProcessingStep[
     .map((o, i) => ({ step: i + 1, ...o }));
 }
 
+/**
+ * Drops any mapping row whose target column doesn't correspond to a real (or intentionally new-but-not-yet-
+ * created) column on its target table — e.g. a column renamed/dropped directly in the database after the
+ * row was created, left behind as a ghost mapping in the canvas. Without this, a save can silently persist
+ * (and a workflow run can fail on) a column that no longer exists anywhere. A table this session hasn't
+ * probed/created at all yet (no entry in sqlTables) is treated as fully new — every one of its rows is kept,
+ * since there's no existing schema yet to validate against. Deliberately NOT scoped to any one resource —
+ * called once, on every save, across every mapped resource.
+ */
+export function pruneOrphanedMappingRows(mappingRows: MappingRow[], sqlTables: DestinationTable[]): MappingRow[] {
+  const tablesByName = new Map(sqlTables.map(t => [t.fullName, t]));
+  return mappingRows.filter(row => {
+    const table = tablesByName.get(row.tableName);
+    return !table || table.columns.some(c => c.name === row.targetName);
+  });
+}
+
 // ── build ─────────────────────────────────────────────────────────────────────────────────────────
 
 export interface BuildMappingSummaryParams {
@@ -278,12 +347,18 @@ export interface BuildMappingSummaryParams {
   /** The already-saved destination configuration this mapping targets — null when building a brand-new
    *  destination in the same step rather than attaching to an existing one. */
   destinationId: string | null;
+  /** Which table each resource has designated as its own root/primary target — the ground truth resolveTable
+   *  uses to tell a genuine same-resource child-table relation (e.g. PatientName's parent "Patient") apart
+   *  from a live-schema FK that happens to point at a DIFFERENT resource's own root table (e.g. Encounter's
+   *  FK to Patient — a cross-resource reference, not a table-level relation). Optional and empty by default
+   *  so existing callers/tests that never dealt with cross-resource FKs are unaffected. */
+  targetByResource?: Record<string, string>;
 }
 
 export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): MappingSummaryDocument {
   const {
     sourceVendor, destType, destLabel, mappingRows, sqlTables, childTableRelationsByTable, availableFields,
-    sourceConnectionId, destinationId,
+    sourceConnectionId, destinationId, targetByResource = {},
   } = params;
   const generatedAt = new Date().toISOString();
 
@@ -292,10 +367,21 @@ export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): 
   const resources = Array.from(new Set(mappingRows.map(r => r.resource)))
     .sort((a, b) => dependencyRankFor(a) - dependencyRankFor(b));
 
+  // Computed once, across every mapped resource — a reference on one resource can point at another that's
+  // processed earlier OR later in the loop below, so this can't be derived per-resource.
+  const resourceKeyInfo = computeResourceKeyInfo(mappingRows);
+
+  // Inverted once: table fullName -> whichever resource has designated it as their own root. Powers
+  // resolveTable's cross-resource-relation guard below.
+  const rootTableToResource: Record<string, string> = {};
+  for (const [res, table] of Object.entries(targetByResource)) {
+    rootTableToResource[table] = res;
+  }
+
   const mappings: MappingResourceEntry[] = resources.map(resource => {
     const resourceRows = mappingRows.filter(r => r.resource === resource);
     const tableNames = Array.from(new Set(resourceRows.map(r => r.tableName)));
-    const resolved = tableNames.map(name => resolveTable(name, sqlTables, childTableRelationsByTable, destType));
+    const resolved = tableNames.map(name => resolveTable(name, sqlTables, childTableRelationsByTable, destType, resource, rootTableToResource));
     const forest = buildForest([resource], availableFields);
 
     const tables: MappingSummaryTable[] = resolved.map(t => ({
@@ -304,7 +390,7 @@ export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): 
       relation: t.relation
         ? { childColumn: t.relation.foreignKeyColumnName, parentTable: bareName(t.relation.parentTable), parentColumn: t.relation.parentColumn }
         : null,
-      columns: resourceRows.filter(r => r.tableName === t.fullName).map(r => toSummaryColumn(r, forest)),
+      columns: resourceRows.filter(r => r.tableName === t.fullName).map(r => toSummaryColumn(r, forest, resourceKeyInfo)),
     }));
 
     return {
@@ -331,6 +417,21 @@ export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): 
 // and the full array-ancestor chain aren't part of this schema, so a reloaded-only row only gets its
 // immediate arrayContext back, not the richer catalog metadata a live-mapped row would have — accepted,
 // since that data has no place in this contract. ──
+
+/**
+ * A saved document's table.relation should only be trusted as a genuine child-table relation if its
+ * declared parent is ALSO one of the SAME resource entry's own mapped tables — the load-time counterpart
+ * to resolveTable's identical build-time guard. Without this, loading a document saved before that guard
+ * existed (or saved by anything else that mis-derived a relation from a live-schema FK pointing at a
+ * completely different resource's own table) would transiently restore the bad relation for one more
+ * round-trip before the next save could clean it up.
+ */
+function isGenuineChildRelation(
+  relation: { parentTable: string } | null,
+  siblingTableNames: readonly string[],
+): relation is { parentTable: string; parentColumn: string; childColumn: string } {
+  return !!relation && siblingTableNames.includes(relation.parentTable);
+}
 
 export interface AppliedMappingSummary {
   mappingRows: MappingRow[];
@@ -359,20 +460,33 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
   const sqlTablesByName = new Map<string, DestinationTable>();
   const childTableRelationsByTable: Record<string, ChildTableRelation> = {};
 
+  // A column's referenceLookup only carries a bare table name (the wire shape's cross-resource contract —
+  // see computeResourceKeyInfo) — recovering which RESOURCE that table belongs to needs every entry's own
+  // root table known up front, hence this separate pass before the main one below.
+  const tableToResource: Record<string, string> = {};
+  for (const entry of doc.mappings) {
+    const siblingNames = entry.tables.map(t => t.name);
+    const rootTable = entry.tables.find(t => !isGenuineChildRelation(t.relation, siblingNames));
+    if (rootTable) {
+      tableToResource[rootTable.name] = entry.resourceType;
+    }
+  }
+
   for (const entry of doc.mappings) {
     const resource = entry.resourceType;
+    const siblingNames = entry.tables.map(t => t.name);
     const fullNames = entry.tables.map(t => qualify(t.name, destType));
-    const primaryIndex = Math.max(0, entry.tables.findIndex(t => !t.relation));
+    const primaryIndex = Math.max(0, entry.tables.findIndex(t => !isGenuineChildRelation(t.relation, siblingNames)));
     targetByResource[resource] = fullNames[primaryIndex] ?? fullNames[0] ?? '';
     extraTablesByGroup[resource] = fullNames.filter((_, i) => i !== primaryIndex);
 
     entry.tables.forEach((table, i) => {
       const fullName = fullNames[i];
-      if (table.relation) {
+      if (isGenuineChildRelation(table.relation, siblingNames)) {
         childTableRelationsByTable[fullName] = {
-          parentTable: qualify(table.relation.parentTable, destType),
-          parentColumn: table.relation.parentColumn,
-          foreignKeyColumnName: table.relation.childColumn,
+          parentTable: qualify(table.relation!.parentTable, destType),
+          parentColumn: table.relation!.parentColumn,
+          foreignKeyColumnName: table.relation!.childColumn,
         };
       }
 
@@ -413,6 +527,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
           continue;
         }
         const arrayContext = col.instance?.arrayContext;
+        const referencesResource = col.referenceLookup ? tableToResource[col.referenceLookup.table] : undefined;
         mappingRows.push({
           resource,
           sources: (col.sources ?? []).map(p => sourceRefFromPath(p, arrayContext, resource)),
@@ -420,6 +535,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
           delimiter: col.mode === 'joinedFields' ? col.delimiter : undefined,
           instance,
           targetName: col.column, tableName: fullName,
+          ...(referencesResource ? { referencesResource } : {}),
         });
       }
     });

@@ -75,6 +75,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         Guid.TryParse(ReadStringConfiguration(node, "mappingProfileId"), out var configuredMappingProfileId);
 
         var records = new List<MappedDestinationRecord>();
+        // Resource types with no resolvable MappingProfile — surfaced in the output metadata below so "why is
+        // my Encounter/Observation data missing" is answerable directly from execution history (this workflow's
+        // resource type genuinely has no mapping configured for this destination) instead of needing to check
+        // MappingProfiles by hand.
+        var skippedResourceTypes = new List<string>();
 
         // A single Field Mapping node can receive a heterogeneous batch — e.g. an EpicSource node configured
         // for both Patient and Observation scopes feeds one Mapping node before a single Destination node.
@@ -135,6 +140,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // No profile exists for this OTHER resource type — nothing tells us how to map it, so skip it
                 // rather than guess; guessing (reusing a different resource type's fields) is exactly the
                 // silent-corruption bug this method guards against.
+                skippedResourceTypes.Add(resourceType);
                 continue;
             }
 
@@ -188,7 +194,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             new Dictionary<string, object?>
             {
                 ["executor"] = GetType().Name,
-                ["count"] = records.Count
+                ["count"] = records.Count,
+                // Per-resource-type breakdown of "count" above (records this resource type actually contributed,
+                // including child-table carrier rows) — the mapping-side counterpart to EpicSourceNode's own
+                // "resourceTypeCounts", so a drop between the two is visible without decrypting anything.
+                ["resourceTypeCounts"] = records
+                    .GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
+                // Resource types present in the upstream batch that had no resolvable MappingProfile for this
+                // node's (sourceConnectionId, destinationId) — every one of their records was skipped entirely.
+                ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.Distinct().ToArray() : null
             });
     }
 

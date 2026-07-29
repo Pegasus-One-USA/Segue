@@ -46,6 +46,22 @@
           </div>
         }
 
+        @if (isReferenceField(d)) {
+          <div class="fm-popover-section">
+            <label class="fm-popover-section-title" for="fm-ref-resource">Resolves to</label>
+            <select
+              id="fm-ref-resource" class="fm-popover-select"
+              [value]="d.referencesResource ?? ''"
+              (change)="onReferenceResourceChange($any($event.target).value)"
+            >
+              <option value="" [selected]="!d.referencesResource">(write verbatim)</option>
+              @for (r of otherResources(); track r) {
+                <option [value]="r" [selected]="r === d.referencesResource">{{ r }}</option>
+              }
+            </select>
+          </div>
+        }
+
         @if (hasArrayAncestors()) {
           <div class="fm-popover-section">
             <label class="fm-popover-section-title" for="fm-inst-type">{{ arrayAncestorLabel() }} repeats — which instance?</label>
