@@ -255,6 +255,35 @@
   }
 }
 
+/* ── Existing connection row (select + clear button) ────────────────────────── */
+.eaf-existing-connection-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+
+  .eaf-select-wrap { flex: 1; }
+}
+
+.eaf-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-input);
+  border-radius: 9px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+
+  &:hover {
+    color: var(--color-ink);
+    border-color: var(--color-border);
+  }
+}
+
 /* ── Discover row ────────────────────────────────────────────────────────────── */
 .eaf-input-row {
   display: flex;
@@ -674,6 +703,10 @@
     &:hover:not(:disabled) { background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark)); transform: translateY(-1px); }
     &:active:not(:disabled) { transform: translateY(0); }
     &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Still clickable (unlike :disabled) — clicking while invalid runs save()'s own
+       markAllAsTouched()/focus-first-invalid path so the user sees which field is missing. */
+    &.eaf-btn--invalid { opacity: 0.5; }
   }
 }
 

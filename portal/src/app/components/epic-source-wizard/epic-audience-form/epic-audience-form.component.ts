@@ -360,17 +360,19 @@ export class EpicAudienceFormComponent implements OnInit {
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
   protected get isReadonly(): boolean { return this.wiz.readonlyMode(); }
 
-  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
+  // ── Existing Epic Connection picker (canvas-mode create only) ───────────────
+  /** No explicit New/Existing toggle — 'new' is the default until a connection is picked (onExistingConnectionSelected
+   *  flips it to 'existing'), and the "✕" clear button (clearExistingConnection) flips it back. Drives the
+   *  reuse-vs-fork decision in save() and resolvedSourceConnectionId. */
   protected readonly sourceMode = signal<'new' | 'existing'>('new');
   protected readonly existingConnections = signal<SourceConnectionModel[]>([]);
   protected readonly loadingExisting = signal(false);
   protected readonly selectedExistingId = signal<string | null>(null);
   /** Every saved source connection's name (all vendors, not just Epic — getAll() returns everything, this
    *  component just filters existingConnections down to Epic for the dropdown). Populated on ngOnInit for any
-   *  canvas-mode create (see loadAllConnectionNames) and refreshed by onSourceModeChange when the picker switches
-   *  to "Existing Source". save() dedupes against it in both branches — cloning an existing connection verbatim,
-   *  and leaving a brand-new node on its default/reused App Name — otherwise the create call collides with
-   *  "A source connection named '<name>' already exists." only at workflow-build time. */
+   *  canvas-mode create (see loadAllConnectionNames). save() dedupes against it in both branches — cloning an
+   *  existing connection verbatim, and leaving a brand-new node on its default/reused App Name — otherwise the
+   *  create call collides with "A source connection named '<name>' already exists." only at workflow-build time. */
   private _allConnectionNames = new Set<string>();
   /** Only offered when creating a brand-new canvas node — editing an existing node already has its own data, and
    *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
@@ -833,6 +835,7 @@ export class EpicAudienceFormComponent implements OnInit {
     // exact name, and the raw backend "already exists" error only surfaces later, at workflow build time.
     if (this.showSourcePicker()) {
       this.loadAllConnectionNames();
+      this.loadExistingConnections();
     }
 
     if (this.wiz.isEditing()) {
@@ -1302,27 +1305,30 @@ export class EpicAudienceFormComponent implements OnInit {
     return !!ctrl && ctrl.touched && ctrl.invalid;
   }
 
-  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
-  protected onSourceModeChange(mode: 'new' | 'existing'): void {
-    this.sourceMode.set(mode);
-    if (mode === 'new') {
-      this.resetToBlankNewSource();
-      return;
-    }
-    if (this.existingConnections().length === 0 && !this.loadingExisting()) {
-      this.loadingExisting.set(true);
-      this.sourceConnectionSvc.getAll().subscribe({
-        next: connections => {
-          this._allConnectionNames = new Set(connections.map(c => c.name));
-          this.existingConnections.set(connections.filter(c => c.sourceSystemType === 'Epic'));
-          this.loadingExisting.set(false);
-        },
-        error: () => {
-          this.loadingExisting.set(false);
-          this.toast.show('Failed to load', 'Could not load existing Epic source connections.', 'error');
-        },
-      });
-    }
+  // ── Existing Epic Connection picker (canvas-mode create only) ───────────────
+  /** Loaded unconditionally as soon as the picker is offered (see ngOnInit) — the dropdown has no separate
+   *  "switch to Existing" step to trigger it from, it's just always there. */
+  private loadExistingConnections(): void {
+    if (this.existingConnections().length > 0 || this.loadingExisting()) return;
+    this.loadingExisting.set(true);
+    this.sourceConnectionSvc.getAll().subscribe({
+      next: connections => {
+        this._allConnectionNames = new Set(connections.map(c => c.name));
+        this.existingConnections.set(connections.filter(c => c.sourceSystemType === 'Epic'));
+        this.loadingExisting.set(false);
+      },
+      error: () => {
+        this.loadingExisting.set(false);
+        this.toast.show('Failed to load', 'Could not load existing Epic source connections.', 'error');
+      },
+    });
+  }
+
+  /** The "✕" next to the dropdown — undoes a clone and returns the form to a blank "New Source" state. This is
+   *  the only way back to blank now that there's no explicit New/Existing toggle to switch away from. */
+  protected clearExistingConnection(): void {
+    this.sourceMode.set('new');
+    this.resetToBlankNewSource();
   }
 
   /** Best-effort load of every saved connection's name so save()'s "New Source" branch can dedupe against real
@@ -1353,8 +1359,8 @@ export class EpicAudienceFormComponent implements OnInit {
     return candidate;
   }
 
-  /** Switching back to "New Source" after a clone must undo it — otherwise the form silently keeps whatever
-   *  the last-selected existing connection populated, even though the picker now reads "New Source". */
+  /** Clearing the picker after a clone must undo it — otherwise the form silently keeps whatever the
+   *  last-selected existing connection populated, even though the dropdown now shows no selection. */
   private resetToBlankNewSource(): void {
     this.selectedExistingId.set(null);
     this._existingBaseline = null;
@@ -1376,6 +1382,7 @@ export class EpicAudienceFormComponent implements OnInit {
   }
 
   protected onExistingConnectionSelected(id: string): void {
+    this.sourceMode.set('existing');
     this.selectedExistingId.set(id);
     const dto = this.existingConnections().find(c => c.id === id);
     if (dto) this.populateFormFromSourceConnection(dto);

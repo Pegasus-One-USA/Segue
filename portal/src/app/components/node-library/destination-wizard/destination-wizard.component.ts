@@ -401,6 +401,11 @@ export class DestinationWizardComponent implements OnInit {
       this._populateFromNode(edit);
       return;
     }
+    // No explicit New/Existing toggle — the "Existing connection" dropdown is just always there, so load its
+    // options unconditionally instead of waiting for a "switch to Existing" step that no longer exists.
+    if (this.showConnectionModeToggle()) {
+      this._loadExistingOptions();
+    }
     // New destination: default the selected data groups to whatever the upstream source pulls, so the destination
     // mirrors the source's Resource Type selection instead of a hardcoded set.
     const src = this.sourceResources();
@@ -424,6 +429,14 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
+    // The button is only visually dimmed while invalid (see dw-btn--invalid), not hard-disabled — clicking it
+    // now reveals exactly which field is missing instead of just silently doing nothing.
+    if (this.isNextDisabled()) {
+      if (this.step() === 1) {
+        (this.isSql() ? this.sqlForm : this.isMongo() ? this.mongoForm : this.csvForm).markAllAsTouched();
+      }
+      return;
+    }
     // SQL: leaving Configure auto-tests the connection and loads tables before advancing.
     if (this.step() === 1 && this.isSql() && this.probeState() !== 'ok') {
       this.testConnection();
@@ -483,12 +496,22 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── select existing connection ───────────────────────────────────────────
-  setConnectionMode(mode: 'new' | 'existing'): void {
-    this.connectionMode.set(mode);
-    if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
-      this._loadExistingOptions();
+  /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
+   *  the only way back to blank now that there's no explicit New/Existing toggle to switch away from. */
+  clearExistingConnection(): void {
+    this.connectionMode.set('new');
+    this.selectedExistingId.set(null);
+    this._existingBaseline = null;
+    if (this.isSql()) {
+      this.sqlForm.reset();
+      this.probeState.set('idle');
+      this.sqlTables.set([]);
+    } else if (this.isMongo()) {
+      this.mongoForm.reset();
+    } else {
+      this.csvForm.reset();
+      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
     }
-    if (this.isCsv()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   private _loadExistingOptions(): void {
@@ -533,6 +556,7 @@ export class DestinationWizardComponent implements OnInit {
   private _existingBaseline: Record<string, unknown> | null = null;
 
   selectExisting(id: string): void {
+    this.connectionMode.set('existing');
     this.selectedExistingId.set(id);
     const selected = this.existingOptions().find(o => o.id === id);
     if (!selected) return;
@@ -582,6 +606,7 @@ export class DestinationWizardComponent implements OnInit {
           : 60,
       });
       this._existingBaseline = this.csvForm.getRawValue();
+      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
     }
   }
 
