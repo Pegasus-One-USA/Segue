@@ -1,0 +1,164 @@
+src/Runtime/FHIRBridge.Runtime.Application/FHIRBridge.Runtime.Application.csproj
+  s_4a6381e5723310::t_32c623a353a15a 21
+src/Api/FHIRBridge.Api/Security/HttpContextCurrentUserService.cs
+  s_4a6381e5723310::t_190c5d60d47675 9,11,14,26-29,33-34
+src/BuildingBlocks/FHIRBridge.Governance/GovernanceEntries.cs
+  s_4a6381e5723310::t_9146f9213fbc75 35-36
+  s_4a6381e5723310::t_4e8fc93b6f06ad 51-52
+  s_4a6381e5723310::t_950a2f4d8353ee 17-18
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_4a6381e5723310::t_7d6fe43697f992 91
+  s_4a6381e5723310::t_13ba81c5b0b241 52
+  s_4a6381e5723310::t_28bd89af6be4ec 187-188,197
+  s_4a6381e5723310::t_530ecfd92bbde9 108
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  s_cda5b37a89334d::t_ac935f7d0763e9 195-226
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_4a6381e5723310::t_918a7e0bcbead3 661-663,666
+  s_4a6381e5723310::t_72282fadec2d28 684-688
+  s_4a6381e5723310::t_69343236209175 709
+  s_4a6381e5723310::t_c214e20f1a7348 695-697
+  s_4a6381e5723310::t_1a6c8c620e8ffc 996-997
+  s_4a6381e5723310::t_196f8054291d04 1073-1074
+  s_4a6381e5723310::t_0e401f2a80e057 740
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_4a6381e5723310::t_0b5b0285b84c89 60
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineArrayPolicyTests.cs
+  s_cda5b37a89334d::t_b3f94666d7d9e9 107
+  s_cda5b37a89334d::t_f622cbb8e471ee 138
+  s_cda5b37a89334d::t_ec5a4bd913f52e 69-106,108-137,139
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_4a6381e5723310::t_8f951862946f4b 21-22
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_4a6381e5723310::t_d6a94838b36251 448-456,461-462
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_4a6381e5723310::t_01094433d75c77 2,16,23-24,31
+  s_4a6381e5723310::t_00ae1da5bf4ed7 74-75
+  s_4a6381e5723310::t_a7ba2bfff5f3de 204-216
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_4a6381e5723310::t_5d56806d43adb1 137,149
+portal/src/app/governance/models/correlation-search.model.ts
+  s_4a6381e5723310::t_237826198a3428 25-36,53
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260729060354_AddWorkflowRunCorrelationId.cs
+  s_4a6381e5723310::t_896e3cddd659dd 1-38
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_76176227216988::t_dc3c59fccede3f 471-472
+  s_76176227216988::t_fcfc2b090131dc 488-489
+  s_cda5b37a89334d::t_bf051daf67bde9 508-526
+  s_76176227216988::t_e4c07f376f0797 468-470
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_cda5b37a89334d::t_64b613c124f0c7 575-579,594,597-598
+  s_70c6e1ba60d3b6::t_32e1d1cbace902 584-589
+  s_4a6381e5723310::t_a6c02555722028 33-37
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_4a6381e5723310::t_65233b2672cbd7 19
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_4a6381e5723310::t_70cc97affa400f 3,7,14,22
+  s_4a6381e5723310::t_3cc037435c2fb8 98-107
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_4a6381e5723310::t_896e3cddd659dd 2616-2619,2650-2651
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_4a6381e5723310::t_66bf32eae9e157 5-9
+src/FHIRBridge.Application/Abstractions/Security/IAmbientActorContext.cs
+  s_4a6381e5723310::t_a75e2b79304f5d 15-26
+src/FHIRBridge.Application/Security/AmbientActorContext.cs
+  s_4a6381e5723310::t_b4fb779d00a71a 8,12-14,16-17,19-20,25-26,29,31-32,43-44
+portal/src/app/services/workflow-api.service.ts
+  s_4a6381e5723310::t_2d95492d74ba4f 110
+src/FHIRBridge.Infrastructure/Messaging/PipelineRunCommandHandler.cs
+  s_4a6381e5723310::t_35da491be33bd6 54
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_4a6381e5723310::t_2e536e9148c322 1,221-222
+  s_4a6381e5723310::t_a74a6cb3d824c9 166,196-220
+  s_4a6381e5723310::t_3e7480a142e560 353-363
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_4a6381e5723310::t_c95b8e77f13c79 168
+  s_4a6381e5723310::t_691d108581f3ab 105
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_4a6381e5723310::t_1db00ea722bb2c 59-62
+  s_4a6381e5723310::t_993878b4c12ef7 14-15,30
+src/FHIRBridge.Infrastructure/Messaging/WebhookIngestionCommandHandler.cs
+  s_4a6381e5723310::t_bfec40104ba08e 52
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_4a6381e5723310::t_7e5fb24fda3d9c 74-100
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_4a6381e5723310::t_bfb7fe7ad83757 77
+  s_4a6381e5723310::t_e929a6ce954e02 27-33
+  s_4a6381e5723310::t_4b6591f866658f 3
+src/FHIRBridge.Infrastructure/Security/SystemCurrentUserService.cs
+  s_4a6381e5723310::t_ec12884ae6c12b 32-33
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_4a6381e5723310::t_f23230b41b58d0 42-54
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_cda5b37a89334d::t_9f56a62c229163 4
+  s_cda5b37a89334d::t_d66edd0afa5885 44-57
+src/FHIRBridge.Application/DTOs/GovernanceDtos.cs
+  s_4a6381e5723310::t_3f18e843cb2a0c 274-275,280,282-293
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_4a6381e5723310::t_f0b28a8de01e3c 89-104
+src/FHIRBridge.Infrastructure/Governance/EmptyGovernanceQueryService.cs
+  s_4a6381e5723310::t_7f78bbe5864769 59
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_4a6381e5723310::t_ae2b0b6b43471a 3
+  s_4a6381e5723310::t_9851a50e152265 45
+  s_4a6381e5723310::t_b4929cef074bc0 21
+tests/FHIRBridge.UnitTests/Security/AmbientActorContextCorrelationIdTests.cs
+  s_4a6381e5723310::t_acb497fc9895d7 1-63
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_cda5b37a89334d::t_f9aaa80c567884 114-121
+  s_76176227216988::t_342bc4bb61f08d 421
+  s_76176227216988::t_97c1e2d22af7f7 1004-1011
+  s_76176227216988::t_7cbf837201848d 655-663
+  s_cda5b37a89334d::t_c61e35a47051e6 1263,1277-1278
+  s_76176227216988::t_aeefed316134a3 966-994
+  s_cda5b37a89334d::t_5b4f1136acce48 719-752
+  s_cda5b37a89334d::t_f84bd1696994eb 1381-1382
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_4a6381e5723310::t_26e47a31c472bd 185-188
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_4a6381e5723310::t_f7a6844aa67b39 158-173
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_4a6381e5723310::t_4ed49b65c6cdd2 341,344-345
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260729060354_AddWorkflowRunCorrelationId.Designer.cs
+  s_4a6381e5723310::t_896e3cddd659dd 1-3412
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "0fc849e32c6ca8e870f289d0f4c08e3c1d87006e",
+  "prompts": {},
+  "sessions": {
+    "s_4a6381e5723310": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ba51d4b0-f8d9-4a43-8e7c-ffcf0a5890e5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_70c6e1ba60d3b6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03dc96f7-9d68-44ef-ad3a-5424edc11b8b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_76176227216988": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49c7af60-b4e4-4965-b443-315737d1699c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_cda5b37a89334d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5eb3f615-96d8-4e5f-8adf-5a8e120e1bd9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
