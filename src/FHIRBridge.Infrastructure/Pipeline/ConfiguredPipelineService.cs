@@ -50,6 +50,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly ISystemSettingsCache? _settingsCache;
     private readonly ILogger<ConfiguredPipelineService> _logger;
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
+    private readonly IDestinationSchemaService? _destinationSchemaService;
 
     public ConfiguredPipelineService(
         IConfigurationRepository configurationRepository,
@@ -71,7 +72,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
         IGovernanceLogger? governanceLogger = null,
         IFailureDiagnosisClassifier? diagnosisClassifier = null,
-        ISystemSettingsCache? settingsCache = null)
+        ISystemSettingsCache? settingsCache = null,
+        IDestinationSchemaService? destinationSchemaService = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -93,6 +95,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _dataSetDeIdentificationService = dataSetDeIdentificationService;
         _logger = logger;
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
+        _destinationSchemaService = destinationSchemaService;
     }
 
     /// <summary>
@@ -576,11 +579,22 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
             var writtenCount = writeResult.Count;
 
+            if (writeResult.RecordErrors is { Count: > 0 } writeRecordErrors)
+            {
+                errors.AddRange(writeRecordErrors);
+            }
+
             if (writtenCount > 0)
             {
+                // A writer that isolates per-record failures (see RecordErrors above) reports exactly which
+                // records landed via WrittenResourceIds — record history against that, not the whole attempted
+                // batch, so "stored" reflects reality even when some records in the batch failed. A writer that
+                // doesn't support per-record isolation leaves WrittenResourceIds null; Count then really does mean
+                // "the whole batch succeeded" (a partial write there throws and fails the whole route instead), so
+                // falling back to the full mappedRecords list is still correct.
                 await _resourceHistoryRecorder.RecordStoredAsync(
                     routeExecutionId,
-                    mappedRecords.Select(record => record.SourceResourceId).ToList(),
+                    writeResult.WrittenResourceIds ?? mappedRecords.Select(record => record.SourceResourceId).ToList(),
                     cancellationToken);
             }
 
@@ -1147,6 +1161,55 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             PatientIds: patientIds);
     }
 
+    /// <summary>
+    /// Fills each field's <see cref="MappingFieldDto.MaxLength"/>/<see cref="MappingFieldDto.Precision"/>/
+    /// <see cref="MappingFieldDto.Scale"/> from the destination's live column metadata (the same introspection the
+    /// mapping-editor column picker already reads) so <see cref="JsonMappingEngine"/> can reject an
+    /// oversized/overflowing value before it's ever sent to the destination, instead of only finding out from a
+    /// truncation/overflow SqlException at write time. Fetched once per route execution, not per resource. Falls
+    /// back to the fields unchanged (no length/precision enforcement) when no schema service is wired up, the
+    /// destination isn't relational, or its schema can't be read right now — this is a belt-and-suspenders
+    /// improvement, not something that should itself fail a run.
+    /// </summary>
+    private async Task<List<MappingFieldDto>> EnrichWithDestinationSchemaAsync(
+        List<MappingFieldDto> mappingFields,
+        MappingProfile mappingProfile,
+        CancellationToken cancellationToken)
+    {
+        if (_destinationSchemaService is null)
+        {
+            return mappingFields;
+        }
+
+        DestinationSchemaDto schema;
+        try
+        {
+            schema = await _destinationSchemaService.GetSchemaAsync(mappingProfile.DestinationId, cancellationToken);
+        }
+        catch (Exception)
+        {
+            return mappingFields;
+        }
+
+        var tableName = DestinationObjectParser.ParseTableName(mappingProfile.DestinationObject);
+        var table = schema.Tables.FirstOrDefault(t =>
+            string.Equals(t.FullName, tableName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TableName, tableName, StringComparison.OrdinalIgnoreCase));
+
+        if (table is null)
+        {
+            return mappingFields;
+        }
+
+        var columnsByName = table.Columns.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+        return mappingFields
+            .Select(field => columnsByName.TryGetValue(field.TargetField, out var column)
+                ? field with { MaxLength = column.MaxLength, Precision = column.NumericPrecision, Scale = column.NumericScale }
+                : field)
+            .ToList();
+    }
+
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(
         Guid pipelineRunId,
         Guid routeExecutionId,
@@ -1165,6 +1228,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 string.IsNullOrWhiteSpace(field.DestinationObject) ||
                 string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+        mappingFields = await EnrichWithDestinationSchemaAsync(mappingFields, mappingProfile, cancellationToken);
 
         foreach (var resource in resources)
         {

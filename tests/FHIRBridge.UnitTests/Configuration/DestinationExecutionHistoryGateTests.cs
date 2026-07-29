@@ -40,7 +40,7 @@ public sealed class DestinationExecutionHistoryGateTests
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<ISecretWriter>(),
             Mock.Of<IParentReferenceResolver>(),
-            new CreateMappingProfileRequestValidator(),
+            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
             new CreateDestinationConfigurationRequestValidator(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
