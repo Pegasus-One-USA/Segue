@@ -1,0 +1,36 @@
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_4a6381e5723310::t_8d8093d374b62d 106
+  s_4a6381e5723310::t_1af7eed22ceed4 169
+  s_4a6381e5723310::t_60e4fe1545eecc 10
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_4a6381e5723310::t_046c7990f40b33 689
+  s_4a6381e5723310::t_3a06e7cf775da9 12
+src/FHIRBridge.Infrastructure/Security/AmbientActorContextExtensions.cs
+  s_4a6381e5723310::t_42a950ead7a4ea 1-48
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_4a6381e5723310::t_9b54dcabdcb8a5 39
+src/FHIRBridge.Infrastructure/Messaging/PipelineRunCommandHandler.cs
+  s_4a6381e5723310::t_6f749d01c4e394 7
+  s_4a6381e5723310::t_85cc9a9fd17081 55
+src/FHIRBridge.Infrastructure/Messaging/WebhookIngestionCommandHandler.cs
+  s_4a6381e5723310::t_0a438c503f02fc 52
+  s_4a6381e5723310::t_15dc7918c83c32 7
+src/Api/FHIRBridge.Api/Program.cs
+  s_4a6381e5723310::t_4efcca21e9e96c 273-285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "9f4fe31ce890a05dc9893005e1565584f7749a2d",
+  "prompts": {},
+  "sessions": {
+    "s_4a6381e5723310": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ba51d4b0-f8d9-4a43-8e7c-ffcf0a5890e5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
