@@ -1,0 +1,87 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_37e45e8f10a841::t_99eaad26a9764d 244
+  s_37e45e8f10a841::t_6ad9f720b172e6 502
+  s_37e45e8f10a841::t_f8bda235099f35 438
+  s_37e45e8f10a841::t_7f6a32e77101f8 559
+  s_37e45e8f10a841::t_177c38e0bb2f56 305-306,598
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_37e45e8f10a841::t_bbbeef697ec191 537-556,571,573-575,577-580,708-719,727-728,741-753,758-760,794-815,818-821,825-827,986-992,1076,1127-1135,1140,1222,1245-1249,1259,1269-1271,1467,1469,1491-1498,1511,1519,1522-1534,1548-1559,1568-1571,1592-1617,1620-1623,1805
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_d68f9144c308b2::t_41121db945cd9c 468-472,488-489,508-526
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_d68f9144c308b2::t_7794055683fdfb 114-121,421,655-663,719-752,966-994,1004-1011,1263,1277-1278,1381-1382
+portal/src/app/core/api-endpoints.ts
+  s_3679e3048431dc::t_cee4c6360714d5 133
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_d68f9144c308b2::t_4c4ce3477df7a9 19
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_37e45e8f10a841::t_67948cbe450562 3,7,14,22,98-107
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_d68f9144c308b2::t_1e948ecf90c70e 158-173
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_d68f9144c308b2::t_3e4394ee296b56 3,21,45
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_d68f9144c308b2::t_23cfc4a0058cf1 277-284
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_d68f9144c308b2::t_9485c0ac58cba8 341,344-345
+portal/src/app/services/wizard.service.ts
+  s_d68f9144c308b2::t_bf58ad754b7cb6 418-422,431-435
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_3679e3048431dc::t_d563179101a4cc 33-37,557-558,560,562,566,575-579,584-589,594,597-598
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_d68f9144c308b2::t_b1d9258b33cdaa 3-42
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d68f9144c308b2::t_64b8b45bc830c6 12,662-664,667,685-689,696-698,710,741,997-998,1074-1075
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_3679e3048431dc::t_3b336cc3731242 47-52
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_f2e735b2ad7f17::t_51447c2b54ea22 16-17,77-83,87-108,110-111,115-118,318-357,490-496,546,579-583
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_3679e3048431dc::t_247e5929a86c94 23-24,315-316,348-350,371-373
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_d68f9144c308b2::t_b2185fb1614bcc 448-456,461-462,487,490-492,495
+src/FHIRBridge.Infrastructure/Governance/EmptyGovernanceQueryService.cs
+  s_d68f9144c308b2::t_9fd037e3f53865 59
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  s_3679e3048431dc::t_d883a0d88789f9 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "b8af59df57188c8dac28cf0c7c7b7afa2f2f68d7",
+  "prompts": {},
+  "sessions": {
+    "s_3679e3048431dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1568ea7-c9f3-4703-ba4e-28032014b5af",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_37e45e8f10a841": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b30259a-0bc9-4b0f-bbb6-d06034ce4f47",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_f2e735b2ad7f17": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4add3300-65d3-4739-b657-bd4a95e31c89",
+        "model": "unknown"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
