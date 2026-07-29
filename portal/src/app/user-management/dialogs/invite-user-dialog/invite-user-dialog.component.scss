@@ -34,26 +34,25 @@
     flex: 1;
     min-width: 0;
 
-    // mat-dialog-title's own class carries a tall default box (built for a
-    // standalone headline, not one paired with a subtitle right underneath) —
-    // collapse it down to just the text instead of guessing at a
-    // compensating margin.
-    ::ng-deep h2.mat-mdc-dialog-title {
-      display: block !important;
-      height: auto !important;
-      min-height: 0 !important;
-      padding: 0 !important;
-      margin: 0 0 2px !important;
-      font-size: 18px !important;
-      font-weight: 800 !important;
-      color: var(--color-ink) !important;
-      line-height: 1.2 !important;
+    // mat-dialog-title's own class carries a tall default box (built for a standalone headline, not one paired
+    // with a subtitle right underneath) — collapse it down to just the text instead of guessing at a compensating
+    // margin. Doubled up with .dialog-container so this component's rule outranks Material's same-specificity
+    // .mat-mdc-dialog-title default on plain specificity alone (see docs/design-token-architecture.md §Invariants).
+    ::ng-deep .dialog-container & h2.mat-mdc-dialog-title {
+      display: block;
+      height: auto;
+      min-height: 0;
+      padding: 0;
+      margin: 0 0 2px;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--color-ink);
+      line-height: 1.2;
 
-      // Material's baseline-alignment hack: an invisible 40px-tall inline-block spacer that
-      // inflates the title's box independently of the height/padding/margin above, since it's a
-      // separate pseudo-element rule — left in place it throws the icon+title block off-center
-      // against the close button.
-      &::before { display: none !important; }
+      // Material's baseline-alignment hack: an invisible 40px-tall inline-block spacer that inflates the title's
+      // box independently of the height/padding/margin above, since it's a separate pseudo-element rule — left in
+      // place it throws the icon+title block off-center against the close button.
+      &::before { display: none; }
     }
 
     p {
@@ -68,18 +67,18 @@
   }
 }
 
-.dialog-close {
+.dialog-container .dialog-close {
   flex-shrink: 0;
-  display: flex !important;
+  display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-muted) !important;
-  &:hover { background: var(--color-bg) !important; }
+  color: var(--color-muted);
+  &:hover { background: var(--color-bg); }
 }
 
 // ─── Content / Form ───────────────────────────────────────────────────────────
-mat-dialog-content {
-  padding: 20px 24px !important;
+.dialog-container mat-dialog-content {
+  padding: 20px 24px;
   overflow-y: auto;
   flex: 1;
   max-height: calc(90vh - 180px);
@@ -144,9 +143,9 @@ mat-dialog-content {
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
-mat-dialog-actions {
-  padding: 16px 24px !important;
-  margin: 0 !important;
+.dialog-container mat-dialog-actions {
+  padding: 16px 24px;
+  margin: 0;
 }
 
 .dialog-actions {
@@ -157,12 +156,15 @@ mat-dialog-actions {
   width: 100%;
 }
 
-.btn-cancel,
-.btn-submit {
-  box-sizing: border-box !important;
-  height: 40px !important;
-  line-height: 1 !important;
-  padding: 0 20px !important;
+// .dialog-container prefix on every rule below beats Material's own same-specificity button-state
+// rules (e.g. .mat-mdc-outlined-button:not(:disabled)) deterministically, on plain specificity —
+// see docs/design-token-architecture.md §Invariants.
+.dialog-container .btn-cancel,
+.dialog-container .btn-submit {
+  box-sizing: border-box;
+  height: 40px;
+  line-height: 1;
+  padding: 0 20px;
   border-radius: var(--radius-base);
 
   ::ng-deep .mdc-button__label {
@@ -173,23 +175,23 @@ mat-dialog-actions {
   }
 }
 
-.btn-cancel {
-  background: var(--color-side) !important;
-  border-color: var(--color-border) !important;
-  color: var(--color-ink-2) !important;
+.dialog-container .btn-cancel {
+  background: var(--color-side);
+  border-color: var(--color-border);
+  color: var(--color-ink-2);
   font-weight: 500;
 
   &:hover:not(:disabled) {
-    background: var(--color-primary-soft) !important;
-    border-color: var(--color-primary-mid) !important;
-    color: var(--color-primary-dark) !important;
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary-mid);
+    color: var(--color-primary-dark);
   }
   &:disabled { opacity: 0.5; }
 }
 
-.btn-submit {
-  background: var(--color-primary) !important;
-  color: var(--color-on-primary) !important;
+.dialog-container .btn-submit {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-weight: 600;
   min-width: 140px;
 
@@ -213,6 +215,6 @@ mat-dialog-actions {
   }
   mat-spinner { flex-shrink: 0; }
 
-  &:hover:not(:disabled) { background: var(--color-primary-dark) !important; }
-  &:disabled { background: var(--color-muted) !important; opacity: 0.7; cursor: not-allowed; }
+  &:hover:not(:disabled) { background: var(--color-primary-dark); }
+  &:disabled { background: var(--color-muted); opacity: 0.7; cursor: not-allowed; }
 }

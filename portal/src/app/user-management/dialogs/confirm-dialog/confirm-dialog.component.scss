@@ -56,25 +56,28 @@
   gap: 12px;
 }
 
-.btn-cancel {
-  background: var(--color-side) !important;
-  border-color: var(--color-border) !important;
-  color: var(--color-ink-2) !important;
+// .confirm-container prefix on every rule below beats Material's own same-specificity button-state
+// rules (e.g. .mat-mdc-outlined-button:not(:disabled)) deterministically, on plain specificity —
+// see docs/design-token-architecture.md §Invariants.
+.confirm-container .btn-cancel {
+  background: var(--color-side);
+  border-color: var(--color-border);
+  color: var(--color-ink-2);
   border-radius: var(--radius-base);
   font-weight: 500;
   height: 40px;
   min-width: 100px;
 
   &:hover {
-    background: var(--color-primary-soft) !important;
-    border-color: var(--color-primary-mid) !important;
-    color: var(--color-primary-dark) !important;
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary-mid);
+    color: var(--color-primary-dark);
   }
 }
 
-.btn-action {
-  background: var(--color-primary) !important;
-  color: #fff !important;
+.confirm-container .btn-action {
+  background: var(--color-primary);
+  color: #fff;
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;
@@ -82,16 +85,16 @@
 
   --mat-flat-button-hover-state-layer-opacity: 0;
 
-  &:hover:not([disabled]) { background: var(--color-primary-dark) !important; }
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
 
   // Danger confirm (e.g. Delete) — same soft-red variant as the global .btn-danger utility
   // (styles.scss), not a solid fill, so it stays consistent with every other danger action.
   &--danger {
-    background: var(--color-error-soft) !important;
-    color: var(--color-error-strong) !important;
-    border: 1px solid #FECACA !important;
+    background: var(--color-error-soft);
+    color: var(--color-error-strong);
+    border: 1px solid #FECACA;
 
-    &:hover:not([disabled]) { background: #FEE2E2 !important; }
-    &:active:not([disabled]) { background: #FECACA !important; }
+    &:hover:not([disabled]) { background: #FEE2E2; }
+    &:active:not([disabled]) { background: #FECACA; }
   }
 }
