@@ -399,6 +399,13 @@
             </span>
             <button type="button" class="dw-btn" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
             <button type="button" class="dw-btn dw-add-field" (click)="addRow(r)">+ Add field</button>
+            <button
+              type="button"
+              class="dw-btn dw-reset-field"
+              [disabled]="!hasResetableRows(r)"
+              (click)="resetResourceMapping(r)"
+              title="Remove all optional field mappings for {{ r }} and start over (id and required parent-link rows stay)"
+            >↺ Reset</button>
           </div>
           <span class="dw-hint dw-mapping-key-hint">
             🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.

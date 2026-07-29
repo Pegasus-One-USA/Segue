@@ -595,42 +595,38 @@
         </div>
       }
 
-    @if (showRetrievalSection()) {
+    @if (showDataRetrievalMethodSection()) {
       <!-- ═══════════ Data Retrieval Method ═══════════════════════════════════ -->
       <div class="eaf-section" [class.eaf-section--last]="!retrievalConfig()">
         <div class="eaf-section-head">
           <span class="eaf-section-num">{{ sectionNumbers().retrievalMethod }}</span>
           <span class="eaf-section-title">Data Retrieval Method</span>
         </div>
-        @if (audienceConfig().retrievalScope === 'automated') {
-          <p class="eaf-section-sub">Choose how Segue receives resource updates from this Backend System connection.</p>
+        <!-- This section only ever shows for Backend System (see showDataRetrievalMethodSection), whose
+             audienceConfig().retrievalScope is always 'automated' — Standalone's one-shot Search REST auto-lock
+             (lockRetrievalMethodIfOneShot) needed no picker here, so that branch is gone with it. -->
+        <p class="eaf-section-sub">Choose how Segue receives resource updates from this Backend System connection.</p>
 
-          <div class="eaf-grid">
-            <div class="eaf-field eaf-field--full"
-                 [class.eaf-field--error]="form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid">
-              <label class="eaf-label" for="eaf-retrievalMethod">Data Retrieval Method <span class="eaf-req">*</span></label>
-              <div class="eaf-select-wrap">
-                <select id="eaf-retrievalMethod" class="eaf-select" formControlName="retrievalMethod">
-                  <option value="" disabled>— Select a method —</option>
-                  @for (m of retrievalMethodOptions(); track m.value) {
-                    <option [value]="m.value">{{ m.label }}</option>
-                  }
-                </select>
-              </div>
-              @if (form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid) {
-                <p class="eaf-error-msg">Select a data retrieval method.</p>
-              }
-              @if (retrievalConfig(); as method) {
-                <p class="eaf-hint">{{ method.description }}</p>
-              }
+        <div class="eaf-grid">
+          <div class="eaf-field eaf-field--full"
+               [class.eaf-field--error]="form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid">
+            <label class="eaf-label" for="eaf-retrievalMethod">Data Retrieval Method <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="eaf-retrievalMethod" class="eaf-select" formControlName="retrievalMethod">
+                <option value="" disabled>— Select a method —</option>
+                @for (m of retrievalMethodOptions(); track m.value) {
+                  <option [value]="m.value">{{ m.label }}</option>
+                }
+              </select>
             </div>
+            @if (form.controls.retrievalMethod.touched && form.controls.retrievalMethod.invalid) {
+              <p class="eaf-error-msg">Select a data retrieval method.</p>
+            }
+            @if (retrievalConfig(); as method) {
+              <p class="eaf-hint">{{ method.description }}</p>
+            }
           </div>
-        } @else {
-          <p class="eaf-section-sub">
-            This connection fetches FHIR resources with a one-time Search (REST) request when the user launches it —
-            no scheduler, since it's user-initiated rather than automated.
-          </p>
-        }
+        </div>
       </div>
 
       @if (retrievalConfig(); as method) {

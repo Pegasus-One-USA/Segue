@@ -895,6 +895,36 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  // True while a resource has anything at all configured — a target, a chosen parent, or any mapped row
+  // (including just the mandatory id row) — so "Reset" is disabled only when there's genuinely nothing to
+  // reset (e.g. landed on the screen and never touched this resource).
+  hasResetableRows(resource: string): boolean {
+    return !!this.targetFor(resource)
+      || this.selectedParentsOf(resource).length > 0
+      || this.rowsForResource(resource).length > 0;
+  }
+
+  // Fully unmaps a single resource, back to exactly the state it's in before it's ever touched: drops its
+  // target table/collection/file name, its "child of" parent selection, and every mapping row — mandatory
+  // id/parent-ref rows included. Nothing is reinserted here; clearing the target is itself what makes
+  // isIdRow's row disappear (see _reconcileIdRows, which only (re)inserts the id row once a target is
+  // chosen), and clearing the parent selection is what makes any required parent-ref row disappear (see
+  // _reconcileParentRefRows). Scoped strictly to `resource` — every other resource's target, parents, and
+  // rows are left untouched.
+  resetResourceMapping(resource: string): void {
+    this.mappingRows.update(rows => rows.filter(row => row.resource !== resource));
+    this.targetByResource.update(m => {
+      if (!(resource in m)) return m;
+      const { [resource]: _removed, ...rest } = m;
+      return rest;
+    });
+    this.parentSelections.update(m => {
+      if (!(resource in m)) return m;
+      const { [resource]: _removed, ...rest } = m;
+      return rest;
+    });
+  }
+
   // ── mandatory id / upsert-key row ─────────────────────────────────────────
   // Every resource's own `id` field (e.g. Patient.id) must always be mapped and must always be the Upsert
   // key, so two records can never collide/duplicate on write — this can't be turned off or reassigned.
@@ -1022,6 +1052,8 @@ export class DestinationWizardComponent implements OnInit {
   // if missing, forces isUpsertKey true, and upgrades its destination column to the schema-verified PK/unique
   // column once one is found (never overwrites a column that isn't schema-verified, so a value loaded from a
   // saved node — or typed in before the schema had a detectable key — is never silently clobbered by a guess).
+  // Held back entirely (row removed if present) until the resource has a target table/collection/file name —
+  // there's nothing real to map an id column onto before that.
   private _reconcileIdRows(): void {
     let changed = false;
     let next = [...this.mappingRows()];
@@ -1030,8 +1062,17 @@ export class DestinationWizardComponent implements OnInit {
       const idField = this.idFieldFor(r);
       if (!idField) continue;
 
-      const autoColumn = this._autoMatchIdColumn(r);
       const idx = next.findIndex(row => row.resource === r && this.isIdRow(row));
+
+      // Don't materialize (or keep) the mandatory id row until a destination target (table/collection/
+      // file name) is actually chosen for this resource — otherwise the wizard shows a mapped column
+      // guess against a target the admin hasn't picked yet.
+      if (!this.targetFor(r)) {
+        if (idx !== -1) { next = next.filter((_, i) => i !== idx); changed = true; }
+        continue;
+      }
+
+      const autoColumn = this._autoMatchIdColumn(r);
 
       if (idx === -1) {
         const initialColumn = autoColumn ?? (this.isSql() ? idField.sqlColumn : idField.csvColumn);

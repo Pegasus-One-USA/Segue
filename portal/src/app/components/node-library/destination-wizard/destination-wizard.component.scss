@@ -653,6 +653,12 @@
   }
 }
 
+.dw-reset-field {
+  margin-left: auto;
+
+  &:hover:not(:disabled) { background: var(--color-error-soft); border-color: var(--color-error); color: var(--color-error); }
+}
+
 .dw-conn-mode {
   display: flex;
   gap: 8px;

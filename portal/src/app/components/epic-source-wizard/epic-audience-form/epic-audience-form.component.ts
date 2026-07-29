@@ -231,7 +231,9 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     label: 'Subscription',
     description: 'Epic pushes change notifications through a FHIR Subscription.',
     fields: [
-      { key: 'subscriptionResourceType', label: 'Resource Type',        type: 'multiselect', required: true },
+      // Hidden for every audience — no in-section replacement yet (see webhookResourceType/searchRestResourceType/
+      // bulkExportResourceType below for the same treatment).
+      { key: 'subscriptionResourceType', label: 'Resource Type',        type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'eventType',              label: 'Event Type in Epic',      type: 'select',       required: true, options: EVENT_TYPE_OPTIONS },
       { key: 'notificationPayload',    label: 'Notification Payload',    type: 'select',       required: true, options: [
         { value: 'id-only', label: 'ID only' },
@@ -247,7 +249,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     label: 'Webhook',
     description: 'Epic (or a middleware relay) posts updates to a Segue callback endpoint.',
     fields: [
-      { key: 'webhookResourceType',    label: 'Resource Type',           type: 'multiselect', required: true },
+      // Hidden for every audience — see subscriptionResourceType above.
+      { key: 'webhookResourceType',    label: 'Resource Type',           type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'eventType',              label: 'Event Type',              type: 'select',       required: true, options: EVENT_TYPE_OPTIONS },
       { key: 'endpointType',           label: 'Endpoint Type',           type: 'select',       required: true, options: ENDPOINT_TYPE_OPTIONS },
       { key: 'payloadFormat',          label: 'Payload Format',          type: 'select',       required: true, options: [
@@ -266,10 +269,9 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
       // that only makes sense for Backend System's unattended, recurring execution.
       //
-      // For Standalone this field is hidden — it reuses the shared Resource Type & Scopes picker (Section 5)
-      // instead of a second, separate multiselect, since that picker already drives the SMART scopes this
-      // connection's one-shot fetch runs under.
-      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
+      // Hidden for every audience — was already hidden for Standalone (reuses the shared Resource Type & Scopes
+      // picker, Section 5); now hidden for Backend System too — see subscriptionResourceType above.
+      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'searchCriteria',        label: 'Search Criteria',                  type: 'text',         required: false, placeholder: 'status=active&category=vital-signs', hint: 'Optional FHIR search parameters appended to every request.' },
       { key: 'runMode',               label: 'Run Mode',                         type: 'select',       required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated', options: [
         { value: 'incremental', label: 'Incremental Sync' },
@@ -304,7 +306,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     label: 'Bulk Export',
     description: 'Kicks off a FHIR Bulk Data $export job and retrieves the resulting NDJSON files.',
     fields: [
-      { key: 'bulkExportResourceType', label: 'Resource Type',               type: 'multiselect', required: true },
+      // Hidden for every audience — see subscriptionResourceType above.
+      { key: 'bulkExportResourceType', label: 'Resource Type',               type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'exportScope',           label: 'Export Scope',                 type: 'select',       required: true, options: [
         { value: 'system',  label: 'System ($export)' },
         { value: 'group',   label: 'Group ($export)' },
@@ -717,6 +720,14 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly showRetrievalSection = computed(() =>
     this.audienceConfig().showRetrieval && this.wiz.wizardMode() === 'canvas');
 
+  /** The "Data Retrieval Method" picker + description (section 5) is only meaningful for Backend System — Provider
+   *  Standalone has exactly one method (Search REST), auto-locked by lockRetrievalMethodIfOneShot() regardless of
+   *  this section's visibility, so showing a picker there would just be a single, unchangeable option with
+   *  nothing to actually pick. Retrieval Configuration (section 6, gated by showRetrievalSection/retrievalConfig())
+   *  is unaffected — Standalone still gets it via that auto-locked value. */
+  protected readonly showDataRetrievalMethodSection = computed(() =>
+    this.audience() === 'backend-system' && this.wiz.wizardMode() === 'canvas');
+
   /** Section numbers shift depending on which optional sections the current audience shows. */
   protected readonly sectionNumbers = computed(() => {
     const cfg = this.audienceConfig();
@@ -724,7 +735,7 @@ export class EpicAudienceFormComponent implements OnInit {
     const urls              = (this.showApplicationUrlsSection && (cfg.showLaunchUrl || cfg.showRedirect)) ? ++n : null;
     const cds                = cfg.showCdsHooks ? ++n : null;
     const test                = this.showConnectionTest ? ++n : null;
-    const retrievalMethod    = this.showRetrievalSection() ? ++n : null;
+    const retrievalMethod    = this.showDataRetrievalMethodSection() ? ++n : null;
     const retrievalConfig    = this.showRetrievalSection() ? ++n : null;
     return { urls, cds, test, retrievalMethod, retrievalConfig };
   });
@@ -882,15 +893,10 @@ export class EpicAudienceFormComponent implements OnInit {
 
     this.prevAudience = this.audience();
 
-    // New (non-editing) connections whose audience uses the shared Resource Type picker (removed from the UI —
-    // see AUDIENCE_FIELD_CONFIG.showResourcePicker) always request every MVP1-supported resource type's scope
-    // up front, rather than asking the user to hand-pick a subset before a destination even exists. Editing an
-    // existing connection keeps whatever was actually saved (restored above), never overwritten here.
-    if (!this.wiz.isEditing()
-      && AUDIENCE_FIELD_CONFIG[this.audience()].showResourcePicker
-      && this.form.controls.resources.value.length === 0) {
-      this.form.controls.resources.setValue([...FHIR_RESOURCES]);
-    }
+    // Canvas mode has no visible picker for `resources` (removed from the UI — see AUDIENCE_FIELD_CONFIG.
+    // showResourcePicker) — a brand-new canvas connection starts with none selected (the form's own default)
+    // rather than silently requesting scopes for every MVP1 resource type on the admin's behalf. Entity mode is
+    // unaffected: WizardService.openEntity() seeds `resources` before this component even initializes.
 
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
@@ -1105,12 +1111,19 @@ export class EpicAudienceFormComponent implements OnInit {
     const prevCfg = AUDIENCE_FIELD_CONFIG[prev];
     const nextCfg = AUDIENCE_FIELD_CONFIG[next];
 
+    // Reset to the resolved deployment-host default rather than blanking to '': the "Application URLs" section
+    // that would let the admin re-enter these is permanently hidden (showApplicationUrlsSection), so a blank
+    // value here can never be refilled through the UI. Switching to an audience that hides the field, then back
+    // to one that requires it (e.g. Backend System → Provider EHR Launch) left callbackUrl/launchUrl empty-and-
+    // required with no visible control to fix it — form.invalid silently blocked Update/Next with every visible
+    // field filled. The default is always a valid, correct value regardless of audience, so restoring it here
+    // is exactly as safe as never having cleared it.
     if (prevCfg.showRedirect && !nextCfg.showRedirect) {
-      this.form.patchValue({ callbackUrl: '' });
+      this.form.patchValue({ callbackUrl: OAUTH_DEFAULT_URLS.redirectUri });
     }
 
     if (prevCfg.showLaunchUrl && !nextCfg.showLaunchUrl) {
-      this.form.patchValue({ launchUrl: '' });
+      this.form.patchValue({ launchUrl: OAUTH_DEFAULT_URLS.launchUrl });
     }
 
     if (prevCfg.showLaunchDisplayMode && !nextCfg.showLaunchDisplayMode) {
@@ -1135,11 +1148,10 @@ export class EpicAudienceFormComponent implements OnInit {
     if (prevShowsResources && !nextShowsResources) {
       this.form.patchValue({ resources: [] });
     }
-    // Switching the other way: default to every MVP1-supported resource type's scope, same as the initial
-    // load — there's no visible picker for the user to fill this in themselves anymore.
-    if (!prevShowsResources && nextShowsResources) {
-      this.form.patchValue({ resources: [...FHIR_RESOURCES] });
-    }
+    // Switching the other way (canvas mode only — see prevShowsResources/nextShowsResources above): leave it at
+    // [] rather than defaulting to every MVP1 resource type. There's no visible picker for the admin to narrow
+    // that back down, so silently requesting scopes for all of them isn't something canvas mode should do on
+    // its own.
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
       this.form.controls.incrementalCursor.enable({ emitEvent: false });
@@ -1219,7 +1231,10 @@ export class EpicAudienceFormComponent implements OnInit {
     apply('authzEndpoint', !isLoopback, true);
     apply('callbackUrl',   cfg.showRedirect, true);
     apply('launchUrl',     cfg.showLaunchUrl, true);
-    apply('resources',     this.showResourcePickerSection());
+    // Required only in entity mode — WizardService.openEntity() always seeds a real value there before this
+    // component initializes. Canvas mode has no visible picker for this control regardless of audience, so
+    // requiring it there would leave it required-and-invisible with nothing to satisfy it.
+    apply('resources',     this.wiz.wizardMode() === 'entity');
     apply('clientSecret',  method === 'secret');
     apply('jwksUrl',       method === 'jwt', true);
     // Epic Backend Services signs a JWT assertion with an RS384 private key referenced by (Key ID, Key Vault Name,
