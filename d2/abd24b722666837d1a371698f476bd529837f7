@@ -1,0 +1,26 @@
+portal/src/app/governance/layout/governance-shell.component.ts
+  s_43a1e5fa590c3d::t_4a622b0cb6f79d 5,30-34
+  s_43a1e5fa590c3d::t_3a855005d6b43f 7-18
+portal/src/app/core/logs-compliance-nav.ts
+  s_43a1e5fa590c3d::t_ca5adb4b626a81 1-24
+portal/src/app/operations/layout/operations-shell.component.ts
+  s_43a1e5fa590c3d::t_144e1dc4d4675c 5,7-19,31-35
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_43a1e5fa590c3d::t_3326b87acfd364 38-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "d2abd24b722666837d1a371698f476bd529837f7",
+  "prompts": {},
+  "sessions": {
+    "s_43a1e5fa590c3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8042e2b4-3b0e-422c-af76-269d56a47c51",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
