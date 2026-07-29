@@ -16,10 +16,10 @@ interface SettingsTab {
 
 const SETTINGS_TABS: SettingsTab[] = [
   { label: 'Branding', route: 'branding', icon: 'palette', permissions: ['configuration.write'] },
-  { label: 'Email Settings', route: 'email-settings', icon: 'mail', permissions: ['configuration.write'] },
-  { label: 'EHR Endpoints', route: 'ehr-endpoints', icon: 'hub', permissions: ['configuration.write'] },
   { label: 'Source Connections', route: 'source-connections', icon: 'input', permissions: ['sourceconnections.view'] },
   { label: 'Destination Connections', route: 'destination-connections', icon: 'output', permissions: ['configuration.write'] },
+  { label: 'Email Settings', route: 'email-settings', icon: 'mail', permissions: ['configuration.write'] },
+  { label: 'EHR Endpoints', route: 'ehr-endpoints', icon: 'hub', permissions: ['configuration.write'] },
   { label: 'Allowed Origins', route: 'allowed-origins', icon: 'public', superAdminOnly: true },
   { label: 'System Security', route: 'system-security', icon: 'security', superAdminOnly: true },
   { label: 'System Settings', route: 'system-settings', icon: 'tune', superAdminOnly: true },
