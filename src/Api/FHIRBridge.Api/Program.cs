@@ -270,6 +270,19 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
+// Pushes the same CorrelationId every downstream consumer (HttpContextCurrentUserService, the exception
+// handler below) resolves onto every Serilog line for this request — including routine sub-500 rejections,
+// which deliberately never reach a governance table (see the exception handler's comment) and would
+// otherwise be findable only by full-text-searching the exception message/path in Seq.
+app.Use(async (context, next) =>
+{
+    var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+    using (Serilog.Context.LogContext.PushProperty("CorrelationId", correlationId))
+    {
+        await next();
+    }
+});
+
 // A [StandardPermission(group, action)] whose derived code has no matching
 // RbacSeedData.Permissions entry still gets a policy (see PermissionCatalog.AllPermissionCodes
 // above), but it's almost always a sign the seed data is missing that permission — surface it

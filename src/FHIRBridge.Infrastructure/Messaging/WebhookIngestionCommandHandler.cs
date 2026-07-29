@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -48,7 +49,7 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
 
         ConfiguredPipelineRunDto? run = null;
 
-        using var actorScope = _ambientActorContext.BeginScope(
+        using var actorScope = _ambientActorContext.BeginCorrelatedScope(
             $"Webhook Ingestion (Automated, config {command.WebhookConfigurationId:N})", command.CorrelationId);
 
         await MessageRetry.ExecuteAsync(

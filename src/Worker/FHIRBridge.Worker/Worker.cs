@@ -7,6 +7,7 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Pipeline;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -102,7 +103,7 @@ public sealed class Worker : BackgroundService
 
         try
         {
-            using var actorScope = ambientActorContext.BeginScope("Scheduler (Legacy Poll)", correlationId);
+            using var actorScope = ambientActorContext.BeginCorrelatedScope("Scheduler (Legacy Poll)", correlationId);
 
             var pipelineRun = await pipelineService.StartAsync(
                 new StartConfiguredPipelineRunRequest(
@@ -165,7 +166,7 @@ public sealed class Worker : BackgroundService
 
             try
             {
-                using var actorScope = ambientActorContext.BeginScope($"Scheduler (Workflow: {workflow.Name})", correlationId);
+                using var actorScope = ambientActorContext.BeginCorrelatedScope($"Scheduler (Workflow: {workflow.Name})", correlationId);
 
                 var context = new WorkflowExecutionContext(
                     Guid.NewGuid(),
