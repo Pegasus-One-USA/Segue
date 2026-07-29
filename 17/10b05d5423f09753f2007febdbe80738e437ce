@@ -1,0 +1,31 @@
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_9645f109da98a3::t_e8aa0304dc4104 477,480-482,485
+portal/src/app/governance/layout/governance-shell.component.ts
+  s_4a6381e5723310::t_5cd351e2433b0b 32
+  s_4a6381e5723310::t_561060679da59a 38-39
+  s_4a6381e5723310::t_5beefc7c6f3b55 15-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "1710b05d5423f09753f2007febdbe80738e437ce",
+  "prompts": {},
+  "sessions": {
+    "s_4a6381e5723310": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ba51d4b0-f8d9-4a43-8e7c-ffcf0a5890e5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_9645f109da98a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "057aba63-3a71-4fc2-bcd0-6eaff9a19de8",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

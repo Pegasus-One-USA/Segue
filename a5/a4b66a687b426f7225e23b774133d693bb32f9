@@ -1,0 +1,84 @@
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_b205a84cf4dc01::t_0d4b5bba7550d7 100
+  s_b205a84cf4dc01::t_f75880500e667e 1,21
+  s_b205a84cf4dc01::t_985adc121ace48 114
+  s_b205a84cf4dc01::t_6d5312cb9ac566 49
+  s_b205a84cf4dc01::t_e2f59f164f49f0 74
+src/Api/FHIRBridge.Api/Controllers/V1/SystemSettingsController.cs
+  s_2d1789db2d47fd::t_e512c97e6f087a 1-2,21,23,26
+  s_2d1789db2d47fd::t_720fc7281bee04 53-85
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_b205a84cf4dc01::t_1287e055a18b0a 59-101
+portal/src/app/system-settings/models/system-setting.model.ts
+  s_2d1789db2d47fd::t_87add7b6f6a076 15-19
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_b205a84cf4dc01::t_061c54665c0358 112-123
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_2d1789db2d47fd::t_41e250cc4ea805 39-94
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_2d1789db2d47fd::t_25f53c69b24c40 3-42
+scripts/reset-workflow-data.ps1
+  s_b205a84cf4dc01::t_f3c642df7eda11 1-49
+portal/src/app/core/api-endpoints.ts
+  s_2d1789db2d47fd::t_ca19c58c9ccd85 133
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  s_2d1789db2d47fd::t_fcb57688282f3b 71-79
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_fd42d1d392b686::t_a75d4ed3d0ce32 277-284
+portal/src/app/system-settings/services/i-system-settings.service.ts
+  s_2d1789db2d47fd::t_970c27c2c2e9ce 2,8-11
+portal/src/app/system-settings/services/api-system-settings.service.ts
+  s_2d1789db2d47fd::t_02b86f51726061 7
+  s_2d1789db2d47fd::t_4992ae91d3e5c7 30-38
+scripts/reset-workflow-data.sql
+  s_b205a84cf4dc01::t_126e59b580ec67 1-24,28-136
+  s_b205a84cf4dc01::t_14e204fdba9242 25-27
+src/FHIRBridge.Application/Abstractions/Security/IProvisionedSecretDecryptor.cs
+  s_2d1789db2d47fd::t_ddf389477028c5 1-17
+src/FHIRBridge.Application/DTOs/DecryptProvisionedSecretDtos.cs
+  s_2d1789db2d47fd::t_9ebe80549abc29 1-5
+src/FHIRBridge.Infrastructure/Security/ProvisionedSecretDecryptor.cs
+  s_2d1789db2d47fd::t_32ddf9759ed0c3 1-22
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_b205a84cf4dc01::t_d6e25cd020ed12 77,79-80
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_2d1789db2d47fd::t_cd28e0763b7256 441-443
+Demo_TestApp/backend/Program.cs
+  s_b205a84cf4dc01::t_edcf9ac36b237f 240
+  s_b205a84cf4dc01::t_864cae404c6a02 279-285,287-290,293-296,298-327
+  s_b205a84cf4dc01::t_7cc3f550049423 181,254
+  s_b205a84cf4dc01::t_1af23c828ca1ec 582-583
+  s_b205a84cf4dc01::t_86e2cc6033ee3e 581
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a5a4b66a687b426f7225e23b774133d693bb32f9",
+  "prompts": {},
+  "sessions": {
+    "s_2d1789db2d47fd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c194deff-685d-4d67-94e3-07e009ea6f6b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_b205a84cf4dc01": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d503410c-ec6c-4c5b-aa36-726213bc8b40",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_fd42d1d392b686": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d0d2510-862b-4216-8454-e67f0aa280ac",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

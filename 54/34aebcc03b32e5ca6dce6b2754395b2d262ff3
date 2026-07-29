@@ -1,0 +1,19 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_b6f70af03826a4::t_4b4dfa714d4ca2 1464,1466
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "5434aebcc03b32e5ca6dce6b2754395b2d262ff3",
+  "prompts": {},
+  "sessions": {
+    "s_b6f70af03826a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39dd0ba3-0eec-4c66-bea0-f6d12d233b74",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
