@@ -39,23 +39,17 @@
         <span class="dw-section-title">Configure {{ destLabel() }}</span>
       </div>
 
+      <!-- No explicit New/Existing toggle — the dropdown is always offered (canvas create only, see
+           showConnectionModeToggle); leaving it unselected just means "New connection". -->
       @if (showConnectionModeToggle()) {
-        <div class="dw-conn-mode">
-          <button type="button" class="dw-btn" [class.dw-btn--primary]="connectionMode() === 'new'" (click)="setConnectionMode('new')">
-            Create new
-          </button>
-          <button type="button" class="dw-btn" [class.dw-btn--primary]="connectionMode() === 'existing'" (click)="setConnectionMode('existing')">
-            Select existing
-          </button>
-        </div>
-
-        @if (connectionMode() === 'existing') {
-          <div class="dw-field dw-field--full">
-            <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection <span class="dw-req">*</span></label>
+        <div class="dw-field dw-field--full">
+          <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection</label>
+          <div class="dw-existing-connection-row">
             <div class="dw-select-wrap">
               <select
                 id="dw-existing"
                 class="dw-select"
+                [disabled]="existingOptionsLoading()"
                 [value]="selectedExistingId() ?? ''"
                 (change)="selectExisting($any($event.target).value)"
               >
@@ -65,16 +59,22 @@
                 }
               </select>
             </div>
-            @if (!existingOptionsLoading() && existingOptions().length === 0) {
-              <span class="dw-error">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here).</span>
+            @if (selectedExistingId()) {
+              <button type="button" class="dw-clear-btn" title="Clear selected connection — start a new one instead"
+                      (click)="clearExistingConnection()">✕</button>
             }
           </div>
-        }
+          @if (!existingOptionsLoading() && existingOptions().length === 0) {
+            <span class="dw-hint">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here) — configure a new one below.</span>
+          } @else {
+            <span class="dw-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</span>
+          }
+        </div>
       }
 
       @if (isSql()) {
         <form [formGroup]="sqlForm" class="dw-form" autocomplete="off">
-          <div class="dw-grid-2">
+          <div class="dw-grid-3">
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched">
               <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
@@ -138,7 +138,7 @@
               </div>
             </div>
 
-          </div><!-- /dw-grid-2 -->
+          </div><!-- /dw-grid-3 -->
         </form>
 
         @if (probeState() === 'testing') {
@@ -628,7 +628,8 @@
       <button
         class="dw-btn dw-btn--primary"
         type="button"
-        [disabled]="isNextDisabled() || probeState() === 'testing'"
+        [class.dw-btn--invalid]="isNextDisabled()"
+        [disabled]="probeState() === 'testing'"
         (click)="next()"
       >
         @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }

@@ -180,6 +180,38 @@
   gap: 14px;
 }
 
+.dw-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* ── Existing connection row (select + clear button) ─────────────────────── */
+.dw-existing-connection-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+
+  .dw-select-wrap { flex: 1; }
+}
+
+.dw-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+
+  &:hover { color: var(--color-ink); border-color: var(--color-primary); }
+}
+
 .dw-field {
   display: flex;
   flex-direction: column;
@@ -650,11 +682,9 @@
     &:hover:not(:disabled) {
       background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark));
     }
-  }
-}
 
-.dw-conn-mode {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+    /* Still clickable (unlike :disabled) — clicking while invalid marks the active step's form touched so
+       the user sees exactly which field is missing, instead of the button just silently doing nothing. */
+    &.dw-btn--invalid { opacity: 0.5; }
+  }
 }
