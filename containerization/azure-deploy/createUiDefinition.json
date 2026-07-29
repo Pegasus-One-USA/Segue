@@ -1,0 +1,155 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "Deploys FHIRBridge (portal + API), the Demo app, and their supporting SQL Server Express, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.App",
+            "Microsoft.OperationalInsights",
+            "Microsoft.Storage"
+          ]
+        },
+        "location": {
+          "label": "Region",
+          "toolTip": "All resources in this deployment are created in this region."
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "namePrefix",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Deployment name prefix",
+        "defaultValue": "fhirbridge",
+        "toolTip": "Short name used to build every resource name in this deployment (e.g. <prefix>-app, <prefix>-sqlserver).",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z][a-z0-9-]{1,20}$",
+          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "fhirbridgeSettings",
+        "label": "FHIRBridge Settings",
+        "elements": [
+          {
+            "name": "sqlSaPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "SQL Server SA password",
+              "confirmPassword": "Confirm password"
+            },
+            "toolTip": "Password for the SQL Server Express container's sa account. Must satisfy SQL Server's complexity policy (8+ chars, upper/lower/digit/symbol).",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "jwtSigningKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "API signing key",
+              "confirmPassword": "Confirm signing key"
+            },
+            "toolTip": "FHIRBridge.Api's Authentication:SigningKey (HS256) — used to sign access/refresh tokens. At least 32 random characters; treat it like a secret.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{32,}$",
+              "validationMessage": "Must be at least 32 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          }
+        ]
+      },
+      {
+        "name": "imageSettings",
+        "label": "Container Images",
+        "elements": [
+          {
+            "name": "imageRegistryServer",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Image registry",
+            "toolTip": "The registry the 3 FHIRBridge images (fhirbridge-app, demo-app, fhirbridge-worker) were published to, e.g. myregistry.azurecr.io or ghcr.io/your-org.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-zA-Z0-9.-/]+$",
+              "validationMessage": "Enter a registry hostname (and optional path), no protocol prefix."
+            }
+          },
+          {
+            "name": "imageTag",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Image tag",
+            "defaultValue": "latest",
+            "toolTip": "The tag/version of the 3 images to deploy.",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "registryAuth",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Registry access",
+            "defaultValue": "Public / anonymous pull",
+            "toolTip": "Choose Private if the registry above requires credentials to pull images.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Public / anonymous pull", "value": "public" },
+                { "label": "Private (requires credentials)", "value": "private" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "registryCredentials",
+            "type": "Microsoft.Common.Section",
+            "label": "Registry credentials",
+            "elements": [
+              {
+                "name": "imageRegistryUsername",
+                "type": "Microsoft.Common.TextBox",
+                "label": "Registry username",
+                "constraints": { "required": false }
+              },
+              {
+                "name": "imageRegistryPassword",
+                "type": "Microsoft.Common.PasswordBox",
+                "label": {
+                  "password": "Registry password / token",
+                  "confirmPassword": "Confirm password"
+                },
+                "constraints": { "required": false },
+                "options": { "hideConfirmation": true }
+              }
+            ],
+            "visible": "[equals(steps('imageSettings').registryAuth, 'private')]"
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "namePrefix": "[basics('namePrefix')]",
+      "location": "[location()]",
+      "sqlSaPassword": "[steps('fhirbridgeSettings').sqlSaPassword]",
+      "jwtSigningKey": "[steps('fhirbridgeSettings').jwtSigningKey]",
+      "imageRegistryServer": "[steps('imageSettings').imageRegistryServer]",
+      "imageTag": "[steps('imageSettings').imageTag]",
+      "imageRegistryUsername": "[if(equals(steps('imageSettings').registryAuth, 'private'), steps('imageSettings').registryCredentials.imageRegistryUsername, '')]",
+      "imageRegistryPassword": "[if(equals(steps('imageSettings').registryAuth, 'private'), steps('imageSettings').registryCredentials.imageRegistryPassword, '')]"
+    }
+  }
+}

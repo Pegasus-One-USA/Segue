@@ -1,13 +1,13 @@
 variable "name_prefix" {
-  description = "Short name used to build resource names (resource group, ACR, storage account, Container Apps)."
+  description = "Short name used to build resource names (ACR, storage account, Key Vault, Container Apps)."
   type        = string
   default     = "fhirbridge"
 }
 
-variable "location" {
-  description = "Azure region."
+variable "resource_group_name" {
+  description = "Name of the EXISTING resource group every resource in this deployment is created into. This config never creates or destroys the resource group itself (see the data \"azurerm_resource_group\" \"main\" block in main.tf) — create it once yourself first if it doesn't already exist: az group create --name <this> --location <region>. The region for every resource here is inherited from this group, not set separately."
   type        = string
-  default     = "eastus"
+  default     = "rg-tusharpuri"
 }
 
 variable "image_tag" {
@@ -24,6 +24,36 @@ variable "sql_sa_password" {
 
 variable "jwt_signing_key" {
   description = "FHIRBridge.Api's Authentication:SigningKey (HS256). At least 32 random characters."
+  type        = string
+  sensitive   = true
+}
+
+# --- Client-configurable internal ports ---
+# fhirbridge-app and demo-app are NOT included here: Azure Container Apps external HTTP ingress
+# has no client-configurable port — it's always reached via its https://<app>.<domain> address on
+# the platform's standard 443, with no port number in the URL, regardless of target_port. That's a
+# genuine Container Apps platform constraint, not a Terraform limitation.
+#
+# sql_port/redis_port ARE meaningful to change: they're internal-only TCP ingress (reached by the
+# other Container Apps in this environment, never externally — see the sqlserver/redis
+# azurerm_container_app resources below), and main.tf passes each one through to the actual
+# process (MSSQL_TCP_PORT for SQL Server, a `redis-server --port` command override for Redis), not
+# just the ingress target_port.
+
+variable "sql_port" {
+  description = "Port SQL Server Express listens on (internal-only). Passed to the container as MSSQL_TCP_PORT."
+  type        = number
+  default     = 1433
+}
+
+variable "redis_port" {
+  description = "Port Redis listens on (internal-only). Passed to the container via a redis-server --port override."
+  type        = number
+  default     = 6379
+}
+
+variable "redis_password" {
+  description = "Password Redis requires (--requirepass) — defense-in-depth on top of network isolation. Note: since it's passed as a plain container command argument (Redis has no env-var equivalent), it's visible to anyone with read access to this Container App's configuration in the Azure Portal/CLI, same exposure level as any other container command argument."
   type        = string
   sensitive   = true
 }

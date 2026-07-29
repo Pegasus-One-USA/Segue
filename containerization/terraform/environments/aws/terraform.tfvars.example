@@ -1,9 +1,26 @@
 # Copy to terraform.tfvars (gitignored) and fill in real secrets before `terraform apply`.
 # See ../../../README.md for the bootstrap order (ECR repos must exist and have images pushed
 # before the ECS services that reference them can start).
+#
+# Cost note: this environment now runs its ECS tasks in private subnets and reaches the internet
+# (ECR pulls, CloudWatch, etc.) through a NAT Gateway, which has an hourly charge plus a per-GB
+# data-processing charge on top of what's in the containerization cost-inventory doc — see
+# Documents/Containerization-Multi-Cloud-Guide.html. A single NAT Gateway is used (not one per AZ),
+# which is cheaper but is a single point of failure for outbound traffic if that AZ has an issue.
 
 name_prefix     = "fhirbridge"
 aws_region      = "us-east-1"
 image_tag       = "v1"
 sql_sa_password = "Ch4ngeMe!Str0ng"
 jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"
+redis_password  = "replace-with-a-strong-redis-password"
+
+# Optional — public ports clients use to reach each app through the load balancer. Uncomment to
+# override; defaults shown below match the values baked into the container images.
+# fhirbridge_app_port = 80
+# demo_app_port       = 5500
+
+# Optional — internal-only ports for SQL Server / Redis (reached via Cloud Map, never by an
+# external client). Uncomment to override.
+# sql_port   = 1433
+# redis_port = 6379

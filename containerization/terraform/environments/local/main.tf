@@ -15,20 +15,64 @@ terraform {
 
 provider "docker" {}
 
+locals {
+  # Docker's equivalent of cloud resource tags. Applied to the network, volumes, and every
+  # container below via the repeated `dynamic "labels"` block — lets `docker ps/volume ls/network
+  # ls --filter label=...` (and the cleanup script) find everything this stack created.
+  common_labels = {
+    "com.fhirbridge.project"     = "FHIRBridge"
+    "com.fhirbridge.component"   = "containerization"
+    "com.fhirbridge.environment" = "local"
+    "com.fhirbridge.managed-by"  = "Terraform"
+  }
+}
+
 resource "docker_network" "fhirbridge" {
   name = "fhirbridge-containerized"
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
 }
 
 resource "docker_volume" "sqlserver_data" {
   name = "fhirbridge-ctr-sqlserver-data"
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
 }
 
 resource "docker_volume" "redis_data" {
   name = "fhirbridge-ctr-redis-data"
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
 }
 
 resource "docker_volume" "dataprotection_keys" {
   name = "fhirbridge-ctr-dataprotection-keys"
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
 }
 
 # --- SQL Server Express ---
@@ -69,6 +113,14 @@ resource "docker_container" "sqlserver" {
     retries  = 10
   }
 
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
+
   restart = "unless-stopped"
 }
 
@@ -81,6 +133,9 @@ resource "docker_image" "redis" {
 resource "docker_container" "redis" {
   name  = "fhirbridge-ctr-redis"
   image = docker_image.redis.image_id
+  # Relying solely on network isolation isn't defense-in-depth — requirepass means a compromised
+  # container elsewhere on this network still can't just connect to Redis without the password.
+  command = ["redis-server", "--requirepass", var.redis_password]
 
   networks_advanced {
     name    = docker_network.fhirbridge.name
@@ -98,10 +153,18 @@ resource "docker_container" "redis" {
   }
 
   healthcheck {
-    test     = ["CMD", "redis-cli", "ping"]
+    test     = ["CMD", "redis-cli", "-a", var.redis_password, "ping"]
     interval = "10s"
     timeout  = "5s"
     retries  = 10
+  }
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
   }
 
   restart = "unless-stopped"
@@ -122,8 +185,8 @@ resource "docker_container" "fhirbridge_app" {
 
   env = [
     "ASPNETCORE_ENVIRONMENT=Production",
-    "ConnectionStrings__FHIRBridgeDb=Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};TrustServerCertificate=True",
-    "ConnectionStrings__Redis=redis:6379",
+    "ConnectionStrings__FHIRBridgeDb=Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True",
+    "ConnectionStrings__Redis=redis:6379,password=${var.redis_password}",
     "Authentication__SigningKey=${var.jwt_signing_key}",
     "DataProtection__KeyRingPath=/app/keys",
     "Portal__AllowedOrigins__0=http://localhost:${var.demo_host_port}",
@@ -138,6 +201,14 @@ resource "docker_container" "fhirbridge_app" {
   volumes {
     volume_name    = docker_volume.dataprotection_keys.name
     container_path = "/app/keys"
+  }
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
   }
 
   restart = "unless-stopped"
@@ -158,13 +229,21 @@ resource "docker_container" "demo_app" {
 
   env = [
     "ASPNETCORE_ENVIRONMENT=Production",
-    "ConnectionStrings__Default=Server=sqlserver,1433;Database=HealthAppDb;User Id=sa;Password=${var.sql_sa_password};TrustServerCertificate=True",
+    "ConnectionStrings__Default=Server=sqlserver,1433;Database=HealthAppDb;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True",
     "AllowedFrontendOrigin=http://localhost:${var.demo_host_port}",
   ]
 
   ports {
     internal = 5500
     external = var.demo_host_port
+  }
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
   }
 
   restart = "unless-stopped"
@@ -188,11 +267,19 @@ resource "docker_container" "worker" {
 
   env = [
     "ASPNETCORE_ENVIRONMENT=Production",
-    "ConnectionStrings__FHIRBridgeDb=Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};TrustServerCertificate=True",
-    "ConnectionStrings__Redis=redis:6379",
+    "ConnectionStrings__FHIRBridgeDb=Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True",
+    "ConnectionStrings__Redis=redis:6379,password=${var.redis_password}",
     "RuntimeWorker__Enabled=true",
     "Messaging__Provider=InMemory",
   ]
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
 
   restart = "unless-stopped"
 }

@@ -1,6 +1,12 @@
-# One ALB, two listeners — 80 for fhirbridge-app, 5500 for demo-app (matches its established
-# convention from deploy/windows/README.md). worker/sqlserver/redis have no target group; they're
-# reached only via Cloud Map inside the VPC (see discovery.tf).
+# One ALB, two HTTPS listeners — var.fhirbridge_app_port (default 80) for fhirbridge-app,
+# var.demo_app_port (default 5500) for demo-app (that default matches its established convention
+# from deploy/windows/README.md — override to 443 for a more conventional HTTPS port). Listener
+# ports are client-configurable independently of the target group/container ports below, which
+# stay fixed at 80/5500 to match what's actually baked into the images. TLS terminates at the ALB
+# using the self-signed certificate from main.tf (aws_acm_certificate.alb) — traffic from the ALB
+# to the containers themselves stays plain HTTP, which is fine since it never leaves the private
+# subnets. worker/sqlserver/redis have no target group; they're reached only via Cloud Map inside
+# the VPC (see discovery.tf).
 
 resource "aws_lb" "main" {
   name               = "${var.name_prefix}-alb"
@@ -46,8 +52,10 @@ resource "aws_lb_target_group" "demo_app" {
 
 resource "aws_lb_listener" "fhirbridge_app" {
   load_balancer_arn = aws_lb.main.arn
-  port              = 80
-  protocol          = "HTTP"
+  port              = var.fhirbridge_app_port
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.alb.arn
 
   default_action {
     type             = "forward"
@@ -57,8 +65,10 @@ resource "aws_lb_listener" "fhirbridge_app" {
 
 resource "aws_lb_listener" "demo_app" {
   load_balancer_arn = aws_lb.main.arn
-  port              = 5500
-  protocol          = "HTTP"
+  port              = var.demo_app_port
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.alb.arn
 
   default_action {
     type             = "forward"

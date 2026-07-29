@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup &amp; Deployment Steps — FHIRBridge Containerization</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --docker: #1D63ED;
+    --docker-bg: #E0EAFE;
+    --azure: #0078D4;
+    --azure-bg: #DEEFFC;
+    --aws: #EC7211;
+    --aws-bg: #FFF1E0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1000px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 52px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2.section-divider {
+    margin-top: 68px;
+    padding: 20px 24px;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 24px;
+  }
+  h2.section-divider.docker-divider { background: linear-gradient(135deg, var(--docker) 0%, #1039A6 100%); }
+  h2.section-divider.azure-divider { background: linear-gradient(135deg, var(--azure) 0%, #003E73 100%); }
+  h2.section-divider.aws-divider { background: linear-gradient(135deg, var(--aws) 0%, #A85300 100%); }
+  h2.section-divider .os-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px;
+    flex-shrink: 0;
+  }
+  h3 { font-size: 16.5px; font-weight: 700; color: var(--ink); margin: 34px 0 10px; }
+  h4 { font-size: 13.5px; font-weight: 700; margin: 20px 0 6px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  p.file-summary { font-size: 14px; color: #475569; margin-bottom: 18px; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 14px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 8px 0 16px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  pre.output { background: #1E293B; color: #94A3B8; font-style: italic; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+  nav.toc li.toc-section-head { font-weight: 800; margin-top: 8px; list-style: none; margin-left: -22px; }
+  nav.toc li.toc-section-head a { color: var(--primary); }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0 20px;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.bad { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout.docker { border-left-color: var(--docker); background: var(--docker-bg); }
+  .callout.azure { border-left-color: var(--azure); background: var(--azure-bg); }
+  .callout.aws { border-left-color: var(--aws); background: var(--aws-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 0 0 14px;
+  }
+  .step .step-num {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+  .step .step-body { flex: 1; min-width: 0; }
+  .step .step-body strong { display: block; font-size: 14.5px; margin-bottom: 6px; color: var(--ink); }
+  .step .step-body pre { margin: 8px 0; }
+  .checkpoint {
+    font-size: 13px;
+    color: var(--new);
+    background: var(--new-bg);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+  }
+  .checkpoint strong { display: inline; color: var(--new); font-size: 13px; margin: 0; }
+
+  table.reqs {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 20px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.reqs th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.reqs td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.reqs tr:last-child td { border-bottom: none; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-docker { color: var(--docker); background: var(--docker-bg); }
+  .pill-azure  { color: var(--azure);  background: var(--azure-bg); }
+  .pill-aws    { color: #9A4A0A;       background: var(--aws-bg); }
+  .pill-warn   { color: var(--modified); background: var(--modified-bg); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    .step { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Setup &amp; Deployment Steps</h1>
+    <p class="subtitle">FHIRBridge Containerization — exact, copy-pasteable steps to stand up the product on your own computer, in Azure, or in AWS, from a completely clean start.</p>
+    <div class="meta">
+      <div><strong>Local</strong> ~10 minutes, $0 cost</div>
+      <div><strong>Azure</strong> ~20&ndash;30 minutes, real billing starts immediately</div>
+      <div><strong>AWS</strong> ~20&ndash;30 minutes, real billing starts immediately</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#before-you-start">Before You Start (all environments)</a></li>
+      <li class="toc-section-head"><a href="#local-section">&#9654; Local Setup</a></li>
+      <li><a href="#local-prereqs">Prerequisites</a></li>
+      <li><a href="#local-steps">Setup steps</a></li>
+      <li><a href="#local-troubleshooting">If something goes wrong</a></li>
+      <li><a href="#local-teardown">Tearing it down</a></li>
+      <li class="toc-section-head"><a href="#azure-section">&#9654; Azure Setup</a></li>
+      <li><a href="#azure-prereqs">Prerequisites</a></li>
+      <li><a href="#azure-tf-steps">Path A: Terraform (repeatable / dev)</a></li>
+      <li><a href="#azure-bicep-steps">Path B: Bicep (one-command / customer install)</a></li>
+      <li><a href="#azure-troubleshooting">If something goes wrong</a></li>
+      <li><a href="#azure-teardown">Tearing it down</a></li>
+      <li class="toc-section-head"><a href="#aws-section">&#9654; AWS Setup</a></li>
+      <li><a href="#aws-prereqs">Prerequisites</a></li>
+      <li><a href="#aws-steps">Setup steps</a></li>
+      <li><a href="#aws-troubleshooting">If something goes wrong</a></li>
+      <li><a href="#aws-teardown">Tearing it down</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="before-you-start">Before You Start (All Environments)</h2>
+  <p>
+    Every path below assumes you have a copy of the FHIRBridge repository on your computer already
+    (cloned from source control) and a terminal open <strong>in the repo's root folder</strong>. All
+    commands are shown for a bash-style terminal (Git Bash, macOS/Linux Terminal, or WSL) — a
+    PowerShell equivalent script exists for every <code>.sh</code> script mentioned (same name, ending
+    in <code>.ps1</code>, with equivalent flags spelled out in full, e.g. <code>-Yes</code> instead of
+    <code>-y</code>).
+  </p>
+  <div class="callout warn">
+    <strong>Azure and AWS cost real money the moment resources are created</strong>
+    The Local path is entirely free. The Azure and AWS paths both start billing your cloud account
+    as soon as <code>terraform apply</code> (or the Bicep deploy) finishes — not when someone visits
+    the site. Always finish with the teardown steps at the end of each section when you're done
+    testing. See <code>Containerization-Multi-Cloud-Guide.html</code> in this same folder for the
+    exact resource-by-resource cost breakdown.
+  </div>
+
+  <!-- ================= LOCAL SECTION ================= -->
+  <h2 id="local-section" class="section-divider docker-divider"><span class="os-icon">&#128051;</span>Local Setup</h2>
+  <p class="file-summary">Runs the whole product — all 5 pieces — on your own computer, for free, using Docker.</p>
+
+  <h3 id="local-prereqs">Prerequisites</h3>
+  <table class="reqs">
+    <tr><th>Needed</th><th>How to check / get it</th></tr>
+    <tr><td><strong>Docker Desktop</strong>, installed and running</td><td>Open a terminal and run <code>docker version</code> — if it prints version info for both a "Client" and a "Server," you're set. If not installed, download from <a href="https://www.docker.com/products/docker-desktop/">docker.com/products/docker-desktop</a>, install it, and make sure the whale icon in your system tray shows it's running before continuing.</td></tr>
+  </table>
+
+  <h3 id="local-steps">Setup Steps</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Build the 3 custom images</strong>
+      <p>This compiles the actual application code into runnable packages. The first run downloads
+      a fair amount (base images, dependencies) and can take 5&ndash;10 minutes; later runs are much
+      faster since most of it is cached.</p>
+      <pre><code>cd containerization/scripts
+./build-images.sh
+# Windows PowerShell:  ./build-images.ps1</code></pre>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if the last line printed is
+      <code>Done. Images tagged with prefix '' and tag 'local'.</code> with no red "error" text
+      above it.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Set up your secrets file</strong>
+      <p>This is a one-time step per computer. It creates a private settings file that never gets
+      shared or committed to source control.</p>
+      <pre><code>cd ../compose
+cp .env.example .env</code></pre>
+      <p>Now open <code>.env</code> in any text editor and change these three lines to real
+      values:</p>
+      <pre><code>SQL_SA_PASSWORD=Ch4ngeMe!Str0ng
+JWT_SIGNING_KEY=replace-with-a-long-random-string-at-least-32-chars
+REDIS_PASSWORD=replace-with-a-strong-redis-password</code></pre>
+      <p><code>SQL_SA_PASSWORD</code> needs at least 8 characters with a mix of upper case, lower
+      case, and a digit (SQL Server will refuse to start otherwise). <code>JWT_SIGNING_KEY</code>
+      and <code>REDIS_PASSWORD</code> just need to be reasonably long random strings — mash the
+      keyboard or use a password generator, they don't need to be memorable.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <strong>Start everything</strong>
+      <pre><code>docker compose up -d</code></pre>
+      <p>The <code>-d</code> means "run in the background" so you get your terminal prompt back
+      immediately. Docker will print a line for each of the 5 containers as it starts them.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <strong>Wait for it to finish starting up, then check on it</strong>
+      <p>The database takes the longest — give it about 20&ndash;30 seconds after the previous
+      command before checking.</p>
+      <pre><code>docker compose ps</code></pre>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if all 5 rows say "Up" in the
+      Status column, and <code>sqlserver</code> / <code>redis</code> specifically say "Up
+      (healthy)." If <code>fhirbridge-app</code> shows a very recent "Up" time (like 5&ndash;10
+      seconds ago) even though you started it a while back, that's fine — see the troubleshooting
+      note below about a harmless one-time restart.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <strong>Open it in a browser</strong>
+      <ul>
+        <li><a href="http://localhost:8080">http://localhost:8080</a> — the main FHIRBridge portal</li>
+        <li><a href="http://localhost:5500">http://localhost:5500</a> — the Demo app (log in with
+        <code>admin@healthapp.local</code> / <code>Admin@123</code>, or
+        <code>patient@healthapp.local</code> / <code>Patient@123</code>)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 id="local-troubleshooting">If Something Goes Wrong</h3>
+  <div class="callout docker">
+    <strong>The main app container restarted once, right after starting</strong>
+    This is expected and self-healing, not a real problem: on a brand-new database, the main app
+    and the background worker both try to set up the database's tables at the exact same moment,
+    and one of them loses that race and briefly restarts. It comes back up cleanly within a few
+    seconds and works correctly after that — you don't need to do anything.
+  </div>
+  <div class="callout warn">
+    <strong>"port is already allocated" error</strong>
+    Something else on your computer is already using port 8080, 5500, 1434, or 6380. Either stop
+    that other program, or open <code>.env</code> and change the corresponding
+    <code>*_HOST_PORT</code> value to a free port (e.g. <code>APP_HOST_PORT=8090</code>), then run
+    <code>docker compose up -d</code> again.
+  </div>
+  <p>To see what a specific container is actually doing or why it's failing, check its logs:</p>
+  <pre><code>docker compose logs -f fhirbridge-app
+# Ctrl+C to stop watching</code></pre>
+
+  <h3 id="local-teardown">Tearing It Down</h3>
+  <p>When you're done testing:</p>
+  <pre><code>cd ../scripts
+./cleanup-local.sh</code></pre>
+  <p>Answer <code>y</code> at the prompt. This removes all 5 containers, their shared network, and
+  their saved data (so the next run starts completely fresh). Since this is entirely local, there's
+  no cost urgency — running this is just good housekeeping.</p>
+
+  <!-- ================= AZURE SECTION ================= -->
+  <h2 id="azure-section" class="section-divider azure-divider"><span class="os-icon">&#9729;</span>Azure Setup</h2>
+  <p class="file-summary">Two different ways to get the same result in Azure — pick the one that
+  matches what you're doing.</p>
+  <div class="callout azure">
+    <strong>Which path should I use?</strong>
+    <strong>Path A (Terraform)</strong> if you're setting this up yourself, want it fully
+    scriptable/repeatable, or plan to tear it down and rebuild it often during testing.
+    <strong>Path B (Bicep)</strong> if the end goal is handing a customer a single command/button to
+    deploy it into <em>their own</em> Azure subscription.
+  </div>
+
+  <h3 id="azure-prereqs">Prerequisites (Both Paths)</h3>
+  <table class="reqs">
+    <tr><th>Needed</th><th>How to check / get it</th></tr>
+    <tr><td><strong>An Azure subscription</strong></td><td>Any existing one, or sign up for a free trial with $200 credit at <a href="https://azure.microsoft.com/free">azure.microsoft.com/free</a>.</td></tr>
+    <tr><td><strong>Azure CLI</strong></td><td>Check with <code>az version</code>. If missing: <code>winget install --id Microsoft.AzureCLI</code> (Windows), or see <a href="https://learn.microsoft.com/cli/azure/install-azure-cli">Microsoft's install guide</a> for Mac/Linux.</td></tr>
+    <tr><td><strong>Terraform</strong> (Path A only)</td><td>Check with <code>terraform version</code>. If missing: <code>winget install --id Hashicorp.Terraform</code> (Windows), or see <a href="https://developer.hashicorp.com/terraform/install">HashiCorp's install guide</a>.</td></tr>
+    <tr><td><strong>Bicep CLI</strong> (Path B only)</td><td>Comes bundled with a recent Azure CLI automatically the first time you run a <code>bicep</code>/<code>deployment</code> command; or install standalone with <code>winget install --id Microsoft.Bicep</code>.</td></tr>
+  </table>
+  <div class="step">
+    <div class="step-num">0</div>
+    <div class="step-body">
+      <strong>Sign in to Azure (do this once per terminal session, before either path)</strong>
+      <pre><code>az login</code></pre>
+      <p>This opens a browser window (or shows a device code — follow the on-screen instructions)
+      to sign into your Microsoft account. If you have access to more than one subscription,
+      confirm you're pointed at the right one:</p>
+      <pre><code>az account show
+# if it's the wrong one:
+az account set --subscription "&lt;name or id&gt;"</code></pre>
+    </div>
+  </div>
+
+  <h3 id="azure-tf-steps">Path A: Terraform</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Create the resource group this deployment goes into (one-time, if it doesn't exist yet)</strong>
+      <pre><code>az group create --name rg-tusharpuri --location eastus</code></pre>
+      <p>This Terraform config deploys <em>into</em> an existing resource group — it does not create
+      or delete the group itself, only what lives inside it. Skip this step if
+      <code>rg-tusharpuri</code> (or whatever name you're using) already exists.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Go to the Azure Terraform folder and set up your secrets</strong>
+      <pre><code>cd containerization/terraform/environments/azure
+cp terraform.tfvars.example terraform.tfvars</code></pre>
+      <p>Open <code>terraform.tfvars</code> and fill in real values (same password rules as the
+      Local section above):</p>
+      <pre><code>name_prefix         = "fhirbridge"
+resource_group_name = "rg-tusharpuri"
+image_tag           = "v1"
+sql_sa_password     = "&lt;a real password&gt;"
+jwt_signing_key     = "&lt;a real 32+ character random string&gt;"
+redis_password      = "&lt;a real strong password&gt;"</code></pre>
+      <p><code>resource_group_name</code> must match a resource group that already exists (step 1)
+      — every resource this config creates lands inside it, and its Azure region is inherited from
+      that group rather than set separately here. The three passwords are only <em>seed</em>
+      values — the first apply writes them into a Key Vault this config creates, and every
+      Container App reads them from the Vault after that (more on rotating them in the last step
+      below). Optional overrides <code>sql_port</code> and <code>redis_port</code> also exist in
+      the same file if you need non-default internal ports; the defaults work fine for almost
+      everyone, so leave them commented out unless you have a reason not to.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <strong>Initialize Terraform</strong>
+      <pre><code>terraform init</code></pre>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if the last line says
+      <code>Terraform has been successfully initialized!</code></div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <strong>Create just the image registry first</strong>
+      <p>The registry has to exist before anything can be uploaded to it — this creates only that
+      one piece.</p>
+      <pre><code>terraform apply -target=azurerm_container_registry.acr</code></pre>
+      <p>Terraform will show you a plan and ask <code>Do you want to perform these actions?</code> —
+      type <code>yes</code> and press Enter. When it finishes, note the
+      <code>acr_login_server</code> value it prints (looks like
+      <code>fhirbridgeacr1a2b3c.azurecr.io</code>) — you'll need it in the next two steps.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <strong>Log in to that registry, then build and upload the 3 images</strong>
+      <pre><code>az acr login --name fhirbridgeacr1a2b3c
+# (use just the part before ".azurecr.io" from the previous step's output)
+
+cd ../../../scripts
+./build-images.sh -r fhirbridgeacr1a2b3c.azurecr.io -t v1 -p</code></pre>
+      <p>The <code>-p</code> flag means "and upload it," on top of just building. This step can
+      take several minutes the first time.</p>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if you see
+      <code>Done. Images tagged with prefix '...' and tag 'v1'.</code> with no errors, and each
+      image showed a "Pushing" line before it.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <strong>Deploy everything else</strong>
+      <pre><code>cd ../terraform/environments/azure
+terraform apply</code></pre>
+      <p>Type <code>yes</code> when prompted. This is the step that actually creates the database,
+      cache, and all 5 running containers — it typically takes 2&ndash;5 minutes for Azure to
+      finish provisioning everything.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">7</div>
+    <div class="step-body">
+      <strong>Get the URLs and open them</strong>
+      <pre><code>terraform output</code></pre>
+      <p>Prints <code>fhirbridge_app_url</code>, <code>demo_app_url</code>, and now also
+      <code>key_vault_name</code> — open the first two in a browser. (You can also see everything
+      visually by searching for the resource group name in
+      <a href="https://portal.azure.com">portal.azure.com</a>.)</p>
+    </div>
+  </div>
+  <div class="callout azure">
+    <strong>Rotating a password later? Don't edit terraform.tfvars</strong>
+    <code>sql_sa_password</code>, <code>jwt_signing_key</code>, and <code>redis_password</code> are
+    only <em>seed</em> values used on the very first apply. To rotate one afterward, write the new
+    value straight into the Key Vault the deploy created (name from <code>key_vault_name</code>
+    above):
+    <pre><code>az keyvault secret set --vault-name &lt;key_vault_name output&gt; \
+  --name sql-sa-password --value "&lt;new value&gt;"
+# or: jwt-signing-key / redis-password</code></pre>
+    Then restart the affected Container App revision(s) (Portal, or
+    <code>az containerapp revision restart</code>) so they pick up the new value. Re-running
+    <code>terraform apply</code> with a changed <code>terraform.tfvars</code> value will
+    <strong>not</strong> overwrite an already-rotated secret — that's intentional, so a stale local
+    tfvars file can never silently undo a rotation.
+  </div>
+
+  <h3 id="azure-bicep-steps">Path B: Bicep (One-Command / Customer Install)</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Create a resource group to deploy into</strong>
+      <pre><code>az group create --name fhirbridge-rg --location eastus</code></pre>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Make sure the 3 images are already published somewhere reachable</strong>
+      <p>Unlike Path A, this template doesn't create its own registry — it expects the images to
+      already be built and uploaded (e.g. to an ACR you already have, or a public registry). If you
+      don't have one yet, the quickest option is creating one manually and pushing to it:</p>
+      <pre><code>az acr create --resource-group fhirbridge-rg --name fhirbridgeacrXXXX --sku Basic --admin-enabled true
+az acr login --name fhirbridgeacrXXXX
+cd containerization/scripts
+./build-images.sh -r fhirbridgeacrXXXX.azurecr.io -t v1 -p
+az acr credential show --name fhirbridgeacrXXXX
+# note the username and one of the two passwords shown — needed in the next step</code></pre>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <strong>Set up your parameters file and deploy</strong>
+      <pre><code>cd ../azure-deploy
+cp main.parameters.example.json main.parameters.json</code></pre>
+      <p>Edit <code>main.parameters.json</code> with your real values: <code>sqlSaPassword</code>,
+      <code>jwtSigningKey</code>, and <code>redisPassword</code> (all three are secure params, same
+      pattern), plus the registry name and — since the ACR above requires credentials — the
+      username/password from the previous step. <code>sqlPort</code> and <code>redisPort</code> are
+      also there if you need non-default internal ports, but the defaults are fine as-is.</p>
+      <pre><code>az deployment group create \
+  --resource-group fhirbridge-rg \
+  --template-file main.bicep \
+  --parameters main.parameters.json</code></pre>
+      <p>This single command creates literally everything — takes 2&ndash;5 minutes.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <strong>Get the URLs</strong>
+      <pre><code>az deployment group show --resource-group fhirbridge-rg --name main --query properties.outputs</code></pre>
+    </div>
+  </div>
+
+  <h3 id="azure-troubleshooting">If Something Goes Wrong</h3>
+  <div class="callout warn">
+    <strong>"The registry name ... is not available"</strong> when creating the ACR — registry
+    names must be globally unique across <em>all</em> of Azure, not just your subscription. Pick a
+    different, more unique name and try again.
+  </div>
+  <div class="callout warn">
+    <strong>A Container App shows "Failed" or won't start after the full apply</strong> — almost
+    always means the image wasn't actually pushed successfully in the earlier step, or the tag
+    doesn't match. Re-run the build/push step and confirm the tag in <code>terraform.tfvars</code>
+    (or <code>main.parameters.json</code>) matches exactly what you pushed.
+  </div>
+  <div class="callout warn">
+    <strong>SQL password rejected</strong> — SQL Server requires at least 8 characters with 3 of:
+    upper case, lower case, digit, symbol. Pick a stronger password and re-apply.
+  </div>
+  <div class="callout warn">
+    <strong>Key Vault secret write fails with a permission error, right after a brand-new
+    subscription/identity setup</strong> — Azure RBAC role assignments can take a minute or two to
+    propagate. If <code>terraform apply</code> fails writing the seed secrets on the very first run
+    after setting things up, just wait a minute and re-run <code>terraform apply</code> — it
+    resolves itself once the role assignment has propagated.
+  </div>
+
+  <h3 id="azure-teardown">Tearing It Down</h3>
+  <p><strong>Path A (Terraform):</strong></p>
+  <pre><code>cd containerization/scripts
+./cleanup-azure.sh</code></pre>
+  <div class="callout bad">
+    <strong>Don't skip this</strong>
+    Every Azure resource this Terraform config created keeps billing until it's deleted — there's
+    no "pause" button. This path deploys <em>into</em> an existing resource group
+    (<code>rg-tusharpuri</code> by default) rather than creating one, so <code>terraform destroy</code>
+    removes everything Terraform created but leaves the resource group itself in place — confirm
+    with <code>az resource list --resource-group rg-tusharpuri</code> (should come back empty once
+    destroy finishes). The Key Vault is deleted the same way, but Azure Key Vault has a 7-day
+    soft-delete retention period — if you try to recreate a vault with the exact same name right
+    away, you may need to purge the soft-deleted one first.
+  </div>
+  <p><strong>Path B (Bicep):</strong></p>
+  <pre><code>cd containerization/azure-deploy
+./cleanup.sh -g fhirbridge-rg</code></pre>
+  <div class="callout bad">
+    <strong>Don't skip this either</strong>
+    Unlike Path A, this deletes the <em>entire resource group</em> named here (<code>-g</code>) —
+    only use this against a resource group dedicated to this deployment, never a shared one.
+    Confirm it's actually gone afterward with <code>az group show --name fhirbridge-rg</code> (it
+    should return a "not found" error once deletion finishes).
+  </div>
+
+  <!-- ================= AWS SECTION ================= -->
+  <h2 id="aws-section" class="section-divider aws-divider"><span class="os-icon">&#9729;</span>AWS Setup</h2>
+  <p class="file-summary">One path here — Terraform, using AWS ECS Fargate.</p>
+
+  <h3 id="aws-prereqs">Prerequisites</h3>
+  <table class="reqs">
+    <tr><th>Needed</th><th>How to check / get it</th></tr>
+    <tr><td><strong>An AWS account</strong></td><td>Any existing one, or sign up at <a href="https://aws.amazon.com/">aws.amazon.com</a>.</td></tr>
+    <tr><td><strong>An AWS access key</strong></td><td>In the AWS Console: your account menu &rarr; <strong>Security credentials</strong> &rarr; <strong>Access keys</strong> &rarr; <strong>Create access key</strong>. Save both the Access Key ID and Secret Access Key it shows you — the secret is only ever shown once.</td></tr>
+    <tr><td><strong>AWS CLI</strong></td><td>Check with <code>aws --version</code>. If missing: <code>winget install --id Amazon.AWSCLI</code> (Windows), or see <a href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html">AWS's install guide</a>.</td></tr>
+    <tr><td><strong>Terraform</strong></td><td>Check with <code>terraform version</code>. If missing: <code>winget install --id Hashicorp.Terraform</code>.</td></tr>
+  </table>
+
+  <h3 id="aws-steps">Setup Steps</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Configure your AWS credentials</strong>
+      <pre><code>aws configure</code></pre>
+      <p>It will ask 4 questions in turn: your Access Key ID, your Secret Access Key, a default
+      region (e.g. <code>us-east-1</code>), and a default output format (press Enter to accept the
+      default, <code>json</code>).</p>
+      <pre><code>aws sts get-caller-identity</code></pre>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if this prints your Account
+      number and User/Role ARN back to you, instead of an error.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Go to the AWS Terraform folder and set up your secrets</strong>
+      <pre><code>cd containerization/terraform/environments/aws
+cp terraform.tfvars.example terraform.tfvars</code></pre>
+      <pre><code>name_prefix     = "fhirbridge"
+aws_region      = "us-east-1"
+image_tag       = "v1"
+sql_sa_password = "&lt;a real password&gt;"
+jwt_signing_key = "&lt;a real 32+ character random string&gt;"
+redis_password  = "&lt;a real strong password&gt;"</code></pre>
+      <p>Optional overrides also live in this file: <code>fhirbridge_app_port</code> and
+      <code>demo_app_port</code> (the public ports clients use through the load balancer), plus
+      <code>sql_port</code> and <code>redis_port</code> (internal-only). The defaults work fine for
+      almost everyone, so leave them commented out unless you have a reason not to.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <strong>Initialize Terraform</strong>
+      <pre><code>terraform init</code></pre>
+      <p>This one downloads the AWS provider, which is large — expect it to take a bit longer than
+      the Azure or Local equivalents.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <strong>Create just the 3 image registries first</strong>
+      <pre><code>terraform apply \
+  -target=aws_ecr_repository.fhirbridge_app \
+  -target=aws_ecr_repository.demo_app \
+  -target=aws_ecr_repository.worker</code></pre>
+      <p>Type <code>yes</code> when prompted.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <strong>Log in to those registries, then build and upload the 3 images</strong>
+      <pre><code>aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin &lt;your-account-id&gt;.dkr.ecr.us-east-1.amazonaws.com
+
+cd ../../../scripts
+./build-images.sh -r &lt;your-account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/fhirbridge -t v1 -p</code></pre>
+      <p>Find <code>&lt;your-account-id&gt;</code> from the <code>aws sts get-caller-identity</code>
+      output in step 1. This step can take several minutes the first time.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <strong>Deploy everything else</strong>
+      <pre><code>cd ../terraform/environments/aws
+terraform apply</code></pre>
+      <p>Type <code>yes</code> when prompted. This is the biggest step — it builds the network
+      (including private subnets and a NAT Gateway, so all 5 containers can run without public IPs),
+      the database and cache storage, the load balancer, and all 5 running containers. Expect this
+      to take 5&ndash;10 minutes, noticeably longer than Azure or Local — the NAT Gateway alone adds
+      a couple of minutes to provision.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">7</div>
+    <div class="step-body">
+      <strong>Get the URL and open it</strong>
+      <pre><code>terraform output</code></pre>
+      <p>Prints <code>fhirbridge_app_url</code> and <code>demo_app_url</code> (both point at the
+      same load balancer address, on different ports, both now <code>https://</code>) and
+      <code>ecr_repository_urls</code>. Give it another minute or two after the apply finishes
+      before it responds — the load balancer takes a short while to recognize the containers as
+      healthy.</p>
+      <div class="checkpoint"><strong>Expected:</strong> your browser will show a security warning
+      like "Your connection is not private" or <code>NET::ERR_CERT_AUTHORITY_INVALID</code> the
+      first time you open either URL. This is normal, not a broken deployment — the load balancer
+      uses a self-signed certificate until a real domain and a trusted certificate are wired up.
+      Click <strong>Advanced</strong> (Chrome/Edge) or <strong>Accept the Risk and Continue</strong>
+      (Firefox), then <strong>Proceed</strong>, to get through to the site.</div>
+    </div>
+  </div>
+
+  <h3 id="aws-troubleshooting">If Something Goes Wrong</h3>
+  <div class="callout warn">
+    <strong>The site doesn't load right after <code>terraform apply</code> finishes</strong> — this
+    is normal for the first minute or two; the load balancer needs a short warm-up period to start
+    routing traffic to newly-created containers. Wait a minute and refresh.
+  </div>
+  <div class="callout warn">
+    <strong>"no basic auth credentials" when pushing images</strong> — the
+    <code>aws ecr get-login-password | docker login</code> step in step 5 wasn't run (or expired —
+    those logins time out after several hours). Re-run it.
+  </div>
+  <div class="callout warn">
+    <strong>A service is stuck with 0 running tasks</strong> — usually means the image tag in
+    <code>terraform.tfvars</code> doesn't match what was actually pushed, or the push itself
+    failed. Check with <code>aws ecr list-images --repository-name fhirbridge/fhirbridge-app</code>
+    to confirm the tag actually exists in the registry.
+  </div>
+  <div class="callout warn">
+    <strong>A task can't pull its image or times out on startup, and the tag/push are confirmed
+    correct</strong> — rare, but tasks now run in private subnets and reach ECR through a NAT
+    Gateway, so if that Gateway isn't fully available yet the pull can stall. Check its state:
+    <pre><code>aws ec2 describe-nat-gateways --filter Name=state,Values=available</code></pre>
+    If your NAT Gateway doesn't show up as <code>available</code> (e.g. still <code>pending</code>),
+    give it a few more minutes and the stuck task should recover on its own.
+  </div>
+
+  <h3 id="aws-teardown">Tearing It Down</h3>
+  <pre><code>cd containerization/scripts
+./cleanup-aws.sh</code></pre>
+  <div class="callout bad">
+    <strong>Don't skip this</strong>
+    The load balancer and all 5 containers bill continuously for as long as they exist — there's
+    no "pause" button here either. Confirm everything is gone afterward by checking the ECS console
+    or running <code>terraform show</code> (it should report no resources).
+  </div>
+
+  <footer>
+    Companion to <code>Containerization-Multi-Cloud-Guide.html</code> (full technical reference and
+    cost breakdown) and <code>Containerization-Code-Walkthrough-Plain-English.html</code> (what the
+    code actually does) in this same folder.
+  </footer>
+
+</div>
+</body>
+</html>

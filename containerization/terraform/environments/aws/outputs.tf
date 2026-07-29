@@ -8,9 +8,11 @@ output "ecr_repository_urls" {
 }
 
 output "fhirbridge_app_url" {
-  value = "http://${aws_lb.main.dns_name}"
+  description = "Uses a self-signed certificate — expect a browser trust warning until this is swapped for a real ACM certificate (see main.tf)."
+  value       = "https://${aws_lb.main.dns_name}:${var.fhirbridge_app_port}"
 }
 
 output "demo_app_url" {
-  value = "http://${aws_lb.main.dns_name}:5500"
+  description = "Uses a self-signed certificate — expect a browser trust warning until this is swapped for a real ACM certificate (see main.tf)."
+  value       = "https://${aws_lb.main.dns_name}:${var.demo_app_port}"
 }

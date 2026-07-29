@@ -1,6 +1,8 @@
-# 5 ECS Fargate services. sqlserver/redis are pinned to desired_count = 1 (stateful, EFS-backed —
-# see storage.tf) and registered in Cloud Map instead of the ALB. fhirbridge-app/demo-app sit
-# behind the ALB; worker has neither.
+# 5 ECS Fargate services, all running in the private subnets with no public IP (only the ALB is
+# internet-facing — see main.tf for the NAT Gateway that lets them still reach ECR/CloudWatch/etc).
+# sqlserver/redis are pinned to desired_count = 1 (stateful, EFS-backed — see storage.tf) and
+# registered in Cloud Map instead of the ALB. fhirbridge-app/demo-app sit behind the ALB; worker has
+# neither.
 
 resource "aws_ecs_service" "sqlserver" {
   name            = "${var.name_prefix}-sqlserver"
@@ -10,9 +12,9 @@ resource "aws_ecs_service" "sqlserver" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   service_registries {
@@ -28,9 +30,9 @@ resource "aws_ecs_service" "redis" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   service_registries {
@@ -50,9 +52,9 @@ resource "aws_ecs_service" "fhirbridge_app" {
   depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_lb_listener.fhirbridge_app]
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   load_balancer {
@@ -72,9 +74,9 @@ resource "aws_ecs_service" "demo_app" {
   depends_on = [aws_ecs_service.sqlserver, aws_lb_listener.demo_app]
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   load_balancer {
@@ -98,8 +100,8 @@ resource "aws_ecs_service" "worker" {
   depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_ecs_service.fhirbridge_app]
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 }

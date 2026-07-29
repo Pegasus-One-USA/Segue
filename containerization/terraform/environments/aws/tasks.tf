@@ -22,12 +22,15 @@ resource "aws_ecs_task_definition" "sqlserver" {
 
   container_definitions = jsonencode([
     {
-      name  = "sqlserver"
-      image = "mcr.microsoft.com/mssql/server:2022-latest"
-      portMappings = [{ containerPort = 1433, protocol = "tcp" }]
+      name         = "sqlserver"
+      image        = "mcr.microsoft.com/mssql/server:2022-latest"
+      portMappings = [{ containerPort = var.sql_port, protocol = "tcp" }]
       environment = [
         { name = "ACCEPT_EULA", value = "Y" },
         { name = "MSSQL_PID", value = "Express" },
+        # Fargate's awsvpc networking has no host-level port remapping — SQL Server itself must be
+        # told to listen on var.sql_port, not just the portMappings entry above.
+        { name = "MSSQL_TCP_PORT", value = tostring(var.sql_port) },
       ]
       secrets = [
         { name = "MSSQL_SA_PASSWORD", valueFrom = aws_secretsmanager_secret.sql_sa_password.arn },
@@ -71,7 +74,19 @@ resource "aws_ecs_task_definition" "redis" {
     {
       name         = "redis"
       image        = "redis:7-alpine"
-      portMappings = [{ containerPort = 6379, protocol = "tcp" }]
+      portMappings = [{ containerPort = var.redis_port, protocol = "tcp" }]
+      # Redis has no env-var port/password setting — same awsvpc constraint as SQL Server above
+      # for the port. The password is deliberately resolved from $REDIS_PASSWORD inside a shell
+      # wrapper rather than passed as a plain --requirepass argument, so the actual value is never
+      # written into this task definition in plaintext (unlike the port, which isn't secret) —
+      # only the Secrets Manager ARN reference below is. Trade-off: this bypasses the image's
+      # entrypoint privilege-drop-to-non-root step, so redis-server runs as root inside its own
+      # isolated Fargate task; acceptable here since Fargate isolates at the task/microVM level
+      # regardless of in-container UID, and it keeps the secret out of the task definition.
+      command = ["sh", "-c", "redis-server --port ${var.redis_port} --requirepass \"$REDIS_PASSWORD\""]
+      secrets = [
+        { name = "REDIS_PASSWORD", valueFrom = aws_secretsmanager_secret.redis_password.arn },
+      ]
       mountPoints = [
         { sourceVolume = "redis-data", containerPath = "/data", readOnly = false },
       ]
@@ -102,12 +117,12 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
       portMappings = [{ containerPort = 80, protocol = "tcp" }]
       environment = [
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,1433;Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};TrustServerCertificate=True" },
-        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:6379" },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
+        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password}" },
         { name = "DataProtection__KeyRingPath", value = "/app/keys" },
         # The demo app is a separate origin whose frontend calls this API cross-origin — the ALB's
         # DNS name is known from this same apply (a different resource, not a self-reference).
-        { name = "Portal__AllowedOrigins__0", value = "http://${aws_lb.main.dns_name}:5500" },
+        { name = "Portal__AllowedOrigins__0", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
         { name = "AllowedHosts", value = "*" },
       ]
       secrets = [
@@ -140,8 +155,8 @@ resource "aws_ecs_task_definition" "demo_app" {
       portMappings = [{ containerPort = 5500, protocol = "tcp" }]
       environment = [
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__Default", value = "Server=sqlserver.${var.name_prefix}.internal,1433;Database=HealthAppDb;User Id=sa;Password=${var.sql_sa_password};TrustServerCertificate=True" },
-        { name = "AllowedFrontendOrigin", value = "http://${aws_lb.main.dns_name}:5500" },
+        { name = "ConnectionStrings__Default", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=HealthAppDb;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
+        { name = "AllowedFrontendOrigin", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -169,8 +184,8 @@ resource "aws_ecs_task_definition" "worker" {
       image = "${aws_ecr_repository.worker.repository_url}:${var.image_tag}"
       environment = [
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,1433;Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};TrustServerCertificate=True" },
-        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:6379" },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
+        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password}" },
         { name = "RuntimeWorker__Enabled", value = "true" },
         { name = "Messaging__Provider", value = "InMemory" },
       ]

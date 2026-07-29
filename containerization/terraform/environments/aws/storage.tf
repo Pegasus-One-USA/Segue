@@ -24,6 +24,9 @@ resource "aws_security_group" "efs" {
 
 resource "aws_efs_file_system" "main" {
   creation_token = "${var.name_prefix}-data"
+  # Encryption at rest — not on by default for EFS. This is PHI-bearing storage (SQL Server +
+  # Redis data), so it stays on regardless of environment.
+  encrypted = true
 
   tags = { Name = "${var.name_prefix}-data" }
 }
@@ -31,7 +34,7 @@ resource "aws_efs_file_system" "main" {
 resource "aws_efs_mount_target" "main" {
   count           = 2
   file_system_id  = aws_efs_file_system.main.id
-  subnet_id       = aws_subnet.public[count.index].id
+  subnet_id       = aws_subnet.private[count.index].id
   security_groups = [aws_security_group.efs.id]
 }
 

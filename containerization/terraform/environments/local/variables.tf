@@ -16,6 +16,12 @@ variable "jwt_signing_key" {
   sensitive   = true
 }
 
+variable "redis_password" {
+  description = "Password Redis requires (--requirepass) — defense-in-depth on top of network isolation."
+  type        = string
+  sensitive   = true
+}
+
 variable "portal_build_config" {
   description = "Angular build configuration baked into the fhirbridge-app image (informational only here — the image is already built by the time Terraform runs)."
   type        = string
