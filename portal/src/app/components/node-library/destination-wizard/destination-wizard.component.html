@@ -397,8 +397,9 @@
                 />
               }
             </span>
-            <button type="button" class="dw-btn" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
-            <button type="button" class="dw-btn dw-add-field" (click)="addRow(r)">+ Add field</button>
+            <button type="button" class="dw-btn" [disabled]="isSql() && !targetFor(r)" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
+            <button type="button" class="dw-btn dw-add-field" [disabled]="isSql() && !targetFor(r)" (click)="addRow(r)">+ Add field</button>
+            <button type="button" class="dw-btn dw-clear-fields" [disabled]="rowsForResource(r).length === 0" (click)="clearFields(r)" title="Remove every mapped field for this resource (except the mandatory id/key rows)">Clear Fields</button>
           </div>
           <span class="dw-hint dw-mapping-key-hint">
             🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.

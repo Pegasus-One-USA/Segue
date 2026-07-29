@@ -755,6 +755,7 @@ export class DestinationWizardComponent implements OnInit {
   // Adds one empty mapping row for the resource — defaults to the first field
   // not already mapped, so repeated clicks step through the catalog.
   addRow(resource: string): void {
+    if (this.isSql() && !this.targetFor(resource)) return; // no table chosen yet — nothing to map columns against
     const fields = this.availableFields(resource);
     if (!fields.length) return;
     const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
@@ -782,6 +783,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly AUTO_MATCH_THRESHOLD = 0.5;
 
   addFields(resource: string): void {
+    if (this.isSql() && !this.targetFor(resource)) return; // no table chosen yet — nothing to map columns against
     const idField = this.idFieldFor(resource);
     const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
     const remaining = this.availableFields(resource).filter(f =>
@@ -876,6 +878,13 @@ export class DestinationWizardComponent implements OnInit {
       if (i < 0) return rows;
       return [...rows.slice(0, i), ...rows.slice(i + 1)];
     });
+  }
+
+  // Clears every removable row for a resource in one click (mirrors removeRow's own exemptions — the id row and
+  // any locked parent-reference rows stay, since both are mandatory and neither has a manual remove control).
+  clearFields(resource: string): void {
+    this.mappingRows.update(rows =>
+      rows.filter(row => row.resource !== resource || this.isIdRow(row) || !!row.isRequiredParentRef));
   }
 
   // ── mandatory id / upsert-key row ─────────────────────────────────────────
@@ -1010,6 +1019,12 @@ export class DestinationWizardComponent implements OnInit {
     let next = [...this.mappingRows()];
 
     for (const r of this.selectedResources()) {
+      // SQL destinations pick a target table per resource (Step 3's "Select a table…" dropdown) — nothing should
+      // populate until the admin has actually chosen one, otherwise the mandatory id row (and any rows added via
+      // "+ Add field" / "Add Fields") shows up against no real table at all. CSV/Mongo have no comparable "not yet
+      // chosen" state (targetFor always holds a usable default), so they're unaffected.
+      if (this.isSql() && !this.targetFor(r)) continue;
+
       const idField = this.idFieldFor(r);
       if (!idField) continue;
 
