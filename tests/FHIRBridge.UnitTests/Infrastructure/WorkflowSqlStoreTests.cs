@@ -144,4 +144,39 @@ public sealed class WorkflowSqlStoreTests
             assertContext.WorkflowRuns.Count(persisted => persisted.Id == runId).Should().Be(1);
         }
     }
+
+    [Fact]
+    public async Task Run_store_status_counts_reflect_every_run_and_zero_fill_unrepresented_statuses()
+    {
+        var definitionId = Guid.NewGuid();
+
+        var succeeded1 = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+        succeeded1.Succeed(DateTimeOffset.UtcNow);
+        var succeeded2 = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+        succeeded2.Succeed(DateTimeOffset.UtcNow);
+        var failed = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+        failed.Fail("boom", DateTimeOffset.UtcNow);
+        var running = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(context);
+            await store.SaveAsync(succeeded1, CancellationToken.None);
+            await store.SaveAsync(succeeded2, CancellationToken.None);
+            await store.SaveAsync(failed, CancellationToken.None);
+            await store.SaveAsync(running, CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var counts = await new SqlWorkflowRunStore(assertContext).GetStatusCountsAsync(CancellationToken.None);
+
+            counts.Should().HaveCount(5);
+            counts[WorkflowRunStatus.Succeeded].Should().Be(2);
+            counts[WorkflowRunStatus.Failed].Should().Be(1);
+            counts[WorkflowRunStatus.Running].Should().Be(1);
+            counts[WorkflowRunStatus.Pending].Should().Be(0);
+            counts[WorkflowRunStatus.Cancelled].Should().Be(0);
+        }
+    }
 }

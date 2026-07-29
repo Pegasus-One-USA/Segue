@@ -66,4 +66,16 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
             .Take(Math.Clamp(count, 1, 1000))
             .ToArrayAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyDictionary<WorkflowRunStatus, int>> GetStatusCountsAsync(CancellationToken cancellationToken)
+    {
+        var counts = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .GroupBy(run => run.Status)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return Enum.GetValues<WorkflowRunStatus>()
+            .ToDictionary(status => status, status => counts.FirstOrDefault(c => c.Key == status)?.Count ?? 0);
+    }
 }

@@ -153,6 +153,7 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   list:      `${API_V1_BASE}/workflow-runs`,
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
+  statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 
 // ─── Pipeline Executions (PipelineRunsController — api/v1/pipeline-runs) ───────

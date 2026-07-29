@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -30,6 +30,7 @@ type SortDirection = 'asc' | 'desc';
 export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   private readonly api = inject(ExecutionHistoryApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly search$ = new Subject<string>();
 
   readonly searchQuery   = signal('');
@@ -50,6 +51,13 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       this.pageIndex.set(0);
       this.load();
     });
+
+    // A Dashboard stat tile links here with ?status=X (e.g. clicking "Failed") — pre-select that
+    // status filter before the first load so the tile's click-through actually lands pre-filtered.
+    const statusFromQuery = this.route.snapshot.queryParamMap.get('status');
+    if (statusFromQuery) {
+      this.statusFilter.set(statusFromQuery);
+    }
 
     this.load();
   }

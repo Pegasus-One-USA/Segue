@@ -7,6 +7,7 @@ import {
   ResourceHistoryEntry,
   RouteExecution,
   RouteExecutionFilter,
+  WorkflowRunStatusCounts,
 } from '../models/execution-history.model';
 
 @Injectable({ providedIn: 'root' })
@@ -35,5 +36,10 @@ export class ExecutionHistoryApiService {
   resources(id: string, page = 1, pageSize = 25): Observable<PagedResult<ResourceHistoryEntry>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<ResourceHistoryEntry>>(EXECUTION_HISTORY_ENDPOINTS.resources(id), { params });
+  }
+
+  /** All-time run count per status, across every workflow — backs the Dashboard's status stat tiles. */
+  statusCounts(): Observable<WorkflowRunStatusCounts> {
+    return this.http.get<WorkflowRunStatusCounts>(EXECUTION_HISTORY_ENDPOINTS.statusCounts);
   }
 }
