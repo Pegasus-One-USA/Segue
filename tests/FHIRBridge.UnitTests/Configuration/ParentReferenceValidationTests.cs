@@ -44,7 +44,7 @@ public sealed class ParentReferenceValidationTests
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<ISecretWriter>(),
             _resolver.Object,
-            new CreateMappingProfileRequestValidator(),
+            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
             new CreateDestinationConfigurationRequestValidator(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }

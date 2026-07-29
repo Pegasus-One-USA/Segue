@@ -86,6 +86,22 @@
         </section>
       }
 
+      @if (r.workflowRuns.length > 0) {
+        <section class="result-section">
+          <h3>Workflow Runs ({{ r.workflowRuns.length }})</h3>
+          <table class="mini-table"><tr><th>Started</th><th>Status</th><th>Triggered By</th><th>Completed</th></tr>
+            @for (x of r.workflowRuns; track x.id) {
+              <tr>
+                <td><a class="mono link" [routerLink]="['/execution-history', x.id]">{{ x.startedAt | date:'MMM d, h:mm:ss a' }}</a></td>
+                <td>{{ x.status }}</td>
+                <td>{{ x.triggeredBy || '—' }} ({{ x.triggerType || '—' }})</td>
+                <td>{{ x.completedAt ? (x.completedAt | date:'MMM d, h:mm:ss a') : '—' }}</td>
+              </tr>
+            }
+          </table>
+        </section>
+      }
+
       @if (r.auditLogs.length > 0) {
         <section class="result-section">
           <h3>Audit Logs ({{ r.auditLogs.length }})</h3>

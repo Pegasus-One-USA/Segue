@@ -12,9 +12,16 @@ public interface IAmbientActorContext
 {
     string? Current { get; }
 
-    /// <summary>Sets <see cref="Current"/> for the lifetime of the returned scope, restoring the previous
-    /// value on dispose. Flows with the current async call chain only — does not cross a message-queue
-    /// boundary, so it must be set inside the consumer that actually executes the work, not the dispatcher
-    /// that enqueues it.</summary>
-    IDisposable BeginScope(string actor);
+    /// <summary>The correlation id of whatever automated run is currently executing (set alongside
+    /// <see cref="Current"/> by the same <see cref="BeginScope"/> call), so a non-interactive
+    /// <see cref="ICurrentUserService"/> (e.g. the Worker's, or the Api host's when running outside an HTTP
+    /// request) can stamp AuditLog/AuthenticationLog/SecurityEvent/etc. with the run's real correlation id
+    /// instead of leaving it null.</summary>
+    string? CorrelationId { get; }
+
+    /// <summary>Sets <see cref="Current"/> (and optionally <see cref="CorrelationId"/>) for the lifetime of the
+    /// returned scope, restoring the previous values on dispose. Flows with the current async call chain only —
+    /// does not cross a message-queue boundary, so it must be set inside the consumer that actually executes the
+    /// work, not the dispatcher that enqueues it.</summary>
+    IDisposable BeginScope(string actor, string? correlationId = null);
 }

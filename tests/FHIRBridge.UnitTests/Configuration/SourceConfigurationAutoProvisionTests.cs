@@ -32,7 +32,7 @@ public sealed class SourceConfigurationAutoProvisionTests
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
             Mock.Of<IParentReferenceResolver>(),
-            new CreateMappingProfileRequestValidator(),
+            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
             new CreateDestinationConfigurationRequestValidator(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }

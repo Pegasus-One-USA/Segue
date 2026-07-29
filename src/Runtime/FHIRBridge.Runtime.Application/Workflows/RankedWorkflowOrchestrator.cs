@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -12,19 +13,22 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IWorkflowAuditRecorder _auditRecorder;
     private readonly IWorkflowRunStore? _runStore;
     private readonly IWorkflowNodeResourceHistoryRecorder? _resourceHistoryRecorder;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     public RankedWorkflowOrchestrator(
         IWorkflowGraphValidator graphValidator,
         IWorkflowNodeExecutorRegistry executorRegistry,
         IWorkflowAuditRecorder? auditRecorder = null,
         IWorkflowRunStore? runStore = null,
-        IWorkflowNodeResourceHistoryRecorder? resourceHistoryRecorder = null)
+        IWorkflowNodeResourceHistoryRecorder? resourceHistoryRecorder = null,
+        IGlobalExceptionManager? exceptionManager = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
         _auditRecorder = auditRecorder ?? new InMemoryWorkflowAuditRecorder();
         _runStore = runStore;
         _resourceHistoryRecorder = resourceHistoryRecorder;
+        _exceptionManager = exceptionManager;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -67,7 +71,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             context.TriggeredBy,
             context.TriggerType,
             targetNodeId,
-            workflowDefinitionVersion: workflowDefinition.Version);
+            workflowDefinitionVersion: workflowDefinition.Version,
+            correlationId: context.CorrelationId);
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
 
@@ -196,6 +201,19 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             // Persist the failed run with its partial node-run timeline. Use None so the history is captured
             // even when the caller's token is the reason the run aborted.
             await PersistRunAsync(workflowRun, CancellationToken.None);
+
+            if (_exceptionManager is not null)
+            {
+                await _exceptionManager.CaptureAsync(
+                    exception,
+                    new ExceptionContext(
+                        Module: "Workflow",
+                        CorrelationId: context.CorrelationId,
+                        WorkflowId: workflowDefinition.Id.ToString(),
+                        ExecutionId: workflowRun.Id.ToString()),
+                    CancellationToken.None);
+            }
+
             throw;
         }
 

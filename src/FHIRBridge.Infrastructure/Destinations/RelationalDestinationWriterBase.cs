@@ -60,31 +60,53 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
 
         await EnsureTableAsync(connection, target, mappingProfile, cancellationToken);
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        // Each record is written in its own transaction: a constraint violation (dup key, NOT NULL, truncation,
+        // conversion, ...) on one record's data must not discard every other record already validated and ready to
+        // write in the same batch. Only a DbException is caught here — anything else (e.g. the connection itself
+        // dying) can't be recovered from per-record and is left to propagate and fail the whole route, as before.
+        var recordErrors = new List<string>();
+        var writtenResourceIds = new List<string?>();
+
         foreach (var record in records)
         {
-            if (target.UpdateOnly)
+            try
             {
-                // Update-only never inserts: a record with no key value has nothing to match, so it's skipped
-                // entirely rather than falling back to Insert.
-                if (TryGetKeyValue(record, target.KeyColumn!, out var updateKeyValue))
+                await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+                if (target.UpdateOnly)
                 {
-                    await UpdateRecordAsync(connection, transaction, target, record, updateKeyValue, cancellationToken);
+                    // Update-only never inserts: a record with no key value has nothing to match, so it's skipped
+                    // entirely rather than falling back to Insert.
+                    if (TryGetKeyValue(record, target.KeyColumn!, out var updateKeyValue))
+                    {
+                        await UpdateRecordAsync(connection, transaction, target, record, updateKeyValue, cancellationToken);
+                        await transaction.CommitAsync(cancellationToken);
+                        writtenResourceIds.Add(record.SourceResourceId);
+                    }
+
+                    continue;
                 }
 
-                continue;
-            }
+                if (target.Upsert && TryGetKeyValue(record, target.KeyColumn!, out var keyValue))
+                {
+                    await DeleteByKeyAsync(connection, transaction, target, keyValue, cancellationToken);
+                }
 
-            if (target.Upsert && TryGetKeyValue(record, target.KeyColumn!, out var keyValue))
+                await InsertRecordAsync(connection, transaction, target, record, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                writtenResourceIds.Add(record.SourceResourceId);
+            }
+            catch (DbException exception)
             {
-                await DeleteByKeyAsync(connection, transaction, target, keyValue, cancellationToken);
+                recordErrors.Add(
+                    $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
             }
-
-            await InsertRecordAsync(connection, transaction, target, record, cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken);
-        return new DestinationWriteResult(records.Count);
+        return new DestinationWriteResult(
+            writtenResourceIds.Count,
+            RecordErrors: recordErrors.Count > 0 ? recordErrors : null,
+            WrittenResourceIds: writtenResourceIds);
     }
 
     private async Task EnsureTableAsync(

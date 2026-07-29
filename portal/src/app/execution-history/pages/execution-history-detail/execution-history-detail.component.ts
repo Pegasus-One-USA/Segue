@@ -1,16 +1,17 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { ToastService } from '../../../services/toast.service';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
 import { PagedResult, ResourceHistoryEntry, RouteExecution } from '../../models/execution-history.model';
 
 @Component({
   selector: 'app-execution-history-detail',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatIconModule, MatButtonModule, MatPaginatorModule],
+  imports: [CommonModule, DatePipe, RouterLink, MatIconModule, MatButtonModule, MatPaginatorModule],
   templateUrl: './execution-history-detail.component.html',
   styleUrls: ['./execution-history-detail.component.scss'],
 })
@@ -18,6 +19,7 @@ export class ExecutionHistoryDetailComponent implements OnInit {
   private readonly api = inject(ExecutionHistoryApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
 
   readonly execution   = signal<RouteExecution | null>(null);
   readonly resources   = signal<PagedResult<ResourceHistoryEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
@@ -92,5 +94,15 @@ export class ExecutionHistoryDetailComponent implements OnInit {
 
   contractClass(contract: string): string {
     return 'contract-' + contract.toLowerCase();
+  }
+
+  copyCorrelationId(): void {
+    const correlationId = this.execution()?.correlationId;
+    if (!correlationId) { return; }
+
+    navigator.clipboard.writeText(correlationId).then(
+      () => this.toast.show('Copied', 'Correlation ID copied to clipboard.'),
+      () => this.toast.show('Copy failed', 'Select the text manually.'),
+    );
   }
 }

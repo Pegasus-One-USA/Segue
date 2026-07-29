@@ -16,6 +16,7 @@ export interface RouteExecution {
   nodeRunCount: number;
   errorMessage: string | null;
   workflowDefinitionVersion: number;
+  correlationId: string | null;
 }
 
 export interface PagedResult<T> {

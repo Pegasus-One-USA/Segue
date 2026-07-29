@@ -49,7 +49,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.Remarks,
             current.IpAddress,
             current.UserAgent,
-            current.CorrelationId,
+            entry.CorrelationId ?? current.CorrelationId,
             previousHash));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -88,7 +88,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.FailureReason,
             current.IpAddress,
             current.UserAgent,
-            current.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -105,7 +105,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.UserEmail ?? current.Email,
             current.IpAddress,
             entry.Details,
-            current.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -184,6 +184,8 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
 
     public async Task LogApiRequestAsync(ApiRequestEntry entry, CancellationToken cancellationToken = default)
     {
+        var current = _currentUserService.CurrentUser;
+
         _dbContext.ApiRequestLogs.Add(new ApiRequestLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
@@ -192,7 +194,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.StatusCode,
             entry.DurationMs,
             Truncate(entry.Error, 1000),
-            entry.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

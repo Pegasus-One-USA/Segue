@@ -49,7 +49,7 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
         ConfiguredPipelineRunDto? run = null;
 
         using var actorScope = _ambientActorContext.BeginScope(
-            $"Webhook Ingestion (Automated, config {command.WebhookConfigurationId:N})");
+            $"Webhook Ingestion (Automated, config {command.WebhookConfigurationId:N})", command.CorrelationId);
 
         await MessageRetry.ExecuteAsync(
             async token => run = await _pipelineService.StartWebhookAsync(

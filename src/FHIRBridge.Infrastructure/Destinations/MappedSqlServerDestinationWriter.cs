@@ -74,28 +74,48 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         var systemColumns = await ReadSystemColumnsPresentAsync(
             connection, target.SchemaName, target.TableName, cancellationToken);
 
+        // Each record's write stands alone: a constraint violation (dup key, NOT NULL, truncation, conversion, ...)
+        // on one record's data must not discard every other record already validated and ready to write in the same
+        // batch. Only a SqlException is caught here — anything else (e.g. the connection itself dying) can't be
+        // recovered from per-record and is left to propagate and fail the whole route, as before.
+        var recordErrors = new List<string>();
+        var writtenResourceIds = new List<string?>();
+
         foreach (var record in records)
         {
             var toWrite = AugmentWithSystemColumns(record, systemColumns, context);
-            switch (target.WriteMode)
+            try
             {
-                case SqlDestinationWriteMode.Upsert:
-                    await UpsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
-                    break;
-                case SqlDestinationWriteMode.Update:
-                    await UpdateRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
-                    break;
-                case SqlDestinationWriteMode.Cdc:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
-                    await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
-                    break;
-                default:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
-                    break;
+                switch (target.WriteMode)
+                {
+                    case SqlDestinationWriteMode.Upsert:
+                        await UpsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
+                        break;
+                    case SqlDestinationWriteMode.Update:
+                        await UpdateRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
+                        break;
+                    case SqlDestinationWriteMode.Cdc:
+                        await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
+                        await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
+                        break;
+                    default:
+                        await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
+                        break;
+                }
+
+                writtenResourceIds.Add(record.SourceResourceId);
+            }
+            catch (SqlException exception)
+            {
+                recordErrors.Add(
+                    $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
             }
         }
 
-        return new DestinationWriteResult(records.Count);
+        return new DestinationWriteResult(
+            writtenResourceIds.Count,
+            RecordErrors: recordErrors.Count > 0 ? recordErrors : null,
+            WrittenResourceIds: writtenResourceIds);
     }
 
     // FHIRBridge-managed audit/lineage columns and how to fill each from the run: these describe the pipeline run,
