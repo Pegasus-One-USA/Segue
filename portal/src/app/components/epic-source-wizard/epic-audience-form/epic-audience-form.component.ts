@@ -85,6 +85,16 @@ function detectAuthMethod(audience: EpicAudience, authMethodsSupported: string[]
   return methods.includes('private_key_jwt') ? 'jwt' : null;
 }
 
+/** Client Auth Method default per audience, applied on every audience switch (see the `audience.valueChanges`
+ *  subscription): Backend System is JWT-only per SMART Backend Services (private_key_jwt); every interactive
+ *  audience (EHR launch / standalone / patient) is Public Client + PKCE. */
+const AUDIENCE_DEFAULT_AUTH_METHOD: Record<EpicAudience, 'public' | 'jwt'> = {
+  'provider-ehr-launch': 'public',
+  'provider-standalone': 'public',
+  patient:               'public',
+  'backend-system':      'jwt',
+};
+
 function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
   const hasV1 = capabilities.includes('permission-v1');
   const hasV2 = capabilities.includes('permission-v2');
@@ -126,6 +136,39 @@ const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'pageSize', 'sortOrder', 'includeLinked', 'revIncludeLinked', 'retryPolicy', 'timeoutSeconds', 'maxRecordsPerRun',
   'fullRefreshRecurrence', 'fullRefreshDaysOfWeek', 'fullRefreshDayOfMonth', 'fullRefreshTime',
 ];
+
+/** Blank/default value for each retrieval field, matching the form's own initial values — used to clear a field
+ *  out when switching Retrieval Method away from the method that owns it (see clearInapplicableRetrievalFields). */
+const RETRIEVAL_FIELD_DEFAULTS: Record<RetrievalFieldKey, unknown> = {
+  subscriptionResourceType: [] as string[],
+  webhookResourceType:      [] as string[],
+  searchRestResourceType:   [] as string[],
+  bulkExportResourceType:   [] as string[],
+  eventType:              '',
+  notificationPayload:    '',
+  endpointType:           '',
+  reconciliationSchedule: '',
+  payloadFormat:          '',
+  searchCriteria:         '',
+  incrementalCursor:      false,
+  schedulePollFrequency:  '',
+  runMode:                '',
+  exportScope:            '',
+  groupId:                '',
+  patientIdList:          '',
+  fhirOutputFormat:       'ndjson',
+  fullRefreshRecurrence:  'daily',
+  fullRefreshDaysOfWeek:  [] as string[],
+  fullRefreshDayOfMonth:  '1',
+  fullRefreshTime:        '02:00',
+  pageSize:               '100',
+  sortOrder:              '',
+  includeLinked:          '',
+  revIncludeLinked:       '',
+  retryPolicy:            'exponential',
+  timeoutSeconds:         '30',
+  maxRecordsPerRun:       '',
+};
 
 interface RetrievalFieldOption { value: string; label: string; }
 
@@ -269,7 +312,11 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       // For Standalone this field is hidden — it reuses the shared Resource Type & Scopes picker (Section 5)
       // instead of a second, separate multiselect, since that picker already drives the SMART scopes this
       // connection's one-shot fetch runs under.
-      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
+      // Hidden for every retrieval scope (Standalone already reused the shared Resource Type & Scopes picker
+      // instead; Backend System now gets the same full-MVP1-set default automatically — see
+      // ensureSearchRestResourceTypeDefault — rather than a second, separate multiselect). The control itself
+      // stays in the form: scope generation (activeRetrievalResourceTypes/scopeString) still reads it.
+      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'searchCriteria',        label: 'Search Criteria',                  type: 'text',         required: false, placeholder: 'status=active&category=vital-signs', hint: 'Optional FHIR search parameters appended to every request.' },
       { key: 'runMode',               label: 'Run Mode',                         type: 'select',       required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated', options: [
         { value: 'incremental', label: 'Incremental Sync' },
@@ -691,19 +738,6 @@ export class EpicAudienceFormComponent implements OnInit {
     return field ? this.selectedRetrievalResourceTypes(field.key) : [];
   });
 
-  /**
-   * Epic rejects an unscoped Backend System Patient search outright ("This resource requires demographics or
-   * _id parameter for searching" — business-rule 59159): with no SMART launch context and no discovered patient
-   * cohort, FhirSourceConnectorBase.ApplyPatientScopeAsync has nothing to scope the request with unless this
-   * connection's own Search Criteria supplies one. Search REST + Patient is the only combination where that gap
-   * is guaranteed to hit Epic at runtime, so Search Criteria becomes required exactly there instead of staying
-   * the generally-optional field it is for every other resource type / retrieval method.
-   */
-  protected readonly searchCriteriaRequiredForPatient = computed(() =>
-    this.audience() === 'backend-system'
-    && this.retrievalMethod() === 'search-rest'
-    && this.searchRestResourceTypeValue().includes('Patient'));
-
   /** Connection Test is hidden for now — flip this back to re-enable it (see sectionNumbers/template). */
   protected readonly showConnectionTest = false;
 
@@ -884,6 +918,8 @@ export class EpicAudienceFormComponent implements OnInit {
     }
 
     this.prevAudience = this.audience();
+    this.prevAuthMethod = this.form.controls.authMethod.value as 'public' | 'secret' | 'jwt';
+    this.prevRetrievalMethod = this.form.controls.retrievalMethod.value;
 
     // New (non-editing) connections whose audience uses the shared Resource Type picker (removed from the UI —
     // see AUDIENCE_FIELD_CONFIG.showResourcePicker) always request every MVP1-supported resource type's scope
@@ -894,6 +930,7 @@ export class EpicAudienceFormComponent implements OnInit {
       && this.form.controls.resources.value.length === 0) {
       this.form.controls.resources.setValue([...FHIR_RESOURCES]);
     }
+    this.ensureSearchRestResourceTypeDefault();
 
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
@@ -905,12 +942,22 @@ export class EpicAudienceFormComponent implements OnInit {
         this.clearInapplicableFields(this.prevAudience, nextAudience);
         this.prevAudience = nextAudience;
         this.lockRetrievalMethodIfOneShot();
+        // Client Auth Method follows the audience — Backend System is JWT-only per SMART Backend Services;
+        // every interactive audience is Public Client + PKCE. setValue (not patchValue) so this always goes
+        // through the authMethod.valueChanges subscription below and clears whatever the previous method's
+        // fields were, exactly as if the user had picked the new method themselves.
+        this.form.controls.authMethod.setValue(AUDIENCE_DEFAULT_AUTH_METHOD[nextAudience]);
         this.syncValidators();
       });
 
     this.form.controls.authMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.syncValidators());
+      .subscribe((next) => {
+        const nextMethod = next as 'public' | 'secret' | 'jwt';
+        this.clearInapplicableAuthFields(this.prevAuthMethod, nextMethod);
+        this.prevAuthMethod = nextMethod;
+        this.syncValidators();
+      });
 
     // Switching the base URL to/from a loopback address flips whether the OAuth/credential fields are required.
     this.form.controls.epicBaseUrl.valueChanges
@@ -919,16 +966,15 @@ export class EpicAudienceFormComponent implements OnInit {
 
     this.form.controls.retrievalMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.syncRetrievalValidators());
+      .subscribe((next) => {
+        const nextMethod = (next as RetrievalMethod) || '';
+        this.clearInapplicableRetrievalFields(this.prevRetrievalMethod, nextMethod);
+        this.prevRetrievalMethod = nextMethod;
+        this.ensureSearchRestResourceTypeDefault();
+        this.syncRetrievalValidators();
+      });
 
     this.form.controls.exportScope.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.syncRetrievalValidators());
-
-    // Toggling Patient in/out of Search REST's own Resource Type picker flips whether Search Criteria is
-    // required (see searchCriteriaRequiredForPatient) — re-sync immediately rather than waiting for some other
-    // field's valueChanges to happen to fire next.
-    this.form.controls.searchRestResourceType.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncRetrievalValidators());
 
@@ -1055,6 +1101,8 @@ export class EpicAudienceFormComponent implements OnInit {
     setIfPresent('retryPolicy', 'Retry policy');
     setIfPresent('timeoutSeconds', 'Timeout (seconds)');
     setIfPresent('maxRecordsPerRun', 'Max records per run');
+
+    this.ensureSearchRestResourceTypeDefault();
   }
 
   /**
@@ -1102,6 +1150,8 @@ export class EpicAudienceFormComponent implements OnInit {
 
   // ── audience field lifecycle ────────────────────────────────────────────────
   private prevAudience: EpicAudience = 'provider-ehr-launch';
+  private prevAuthMethod: 'public' | 'secret' | 'jwt' = 'public';
+  private prevRetrievalMethod: RetrievalMethod | '' = '';
 
   /** Clears values for fields that are no longer applicable after an audience switch. */
   private clearInapplicableFields(prev: EpicAudience, next: EpicAudience): void {
@@ -1111,9 +1161,21 @@ export class EpicAudienceFormComponent implements OnInit {
     if (prevCfg.showRedirect && !nextCfg.showRedirect) {
       this.form.patchValue({ callbackUrl: '' });
     }
+    // Entering the other way: callbackUrl was blanked out above the last time an audience that hides it was
+    // active — restore the same sensible default ngOnInit itself starts every new form with, so a real, still-
+    // required field doesn't stay permanently empty (and Add to Pipeline permanently blocked) just because the
+    // user passed through Backend System (or any other showRedirect: false audience) on the way here. Guarded on
+    // "currently empty" so a genuinely restored/edited value is never clobbered.
+    if (!prevCfg.showRedirect && nextCfg.showRedirect && !this.form.controls.callbackUrl.value) {
+      this.form.patchValue({ callbackUrl: OAUTH_DEFAULT_URLS.redirectUri });
+    }
 
     if (prevCfg.showLaunchUrl && !nextCfg.showLaunchUrl) {
       this.form.patchValue({ launchUrl: '' });
+    }
+    // Same restore-on-entry reasoning as callbackUrl above.
+    if (!prevCfg.showLaunchUrl && nextCfg.showLaunchUrl && !this.form.controls.launchUrl.value) {
+      this.form.patchValue({ launchUrl: OAUTH_DEFAULT_URLS.launchUrl });
     }
 
     if (prevCfg.showLaunchDisplayMode && !nextCfg.showLaunchDisplayMode) {
@@ -1175,6 +1237,59 @@ export class EpicAudienceFormComponent implements OnInit {
         retryPolicy: 'exponential', timeoutSeconds: '30',
       });
     }
+  }
+
+  /** Clears whichever Client Auth Method fields belonged only to the method being left, whenever the value
+   *  actually changes — otherwise a Client Secret or JWKS/private-key value typed under one method silently
+   *  survives switching to another and reappears if the user switches back, riding along into save() unnoticed. */
+  private clearInapplicableAuthFields(prev: 'public' | 'secret' | 'jwt', next: 'public' | 'secret' | 'jwt'): void {
+    if (prev === next) return;
+    const patch: Record<string, unknown> = {};
+    if (prev === 'secret') {
+      patch['clientSecret'] = '';
+    }
+    if (prev === 'jwt') {
+      patch['jwksUrl'] = '';
+      patch['jwtKid'] = '';
+      patch['privateKeyRef'] = '';
+      patch['privateKeySecretName'] = '';
+      patch['keySource'] = 'manual';
+    }
+    if (Object.keys(patch).length) this.form.patchValue(patch);
+  }
+
+  /** Clears whichever Retrieval Method fields belonged only to the method being left, whenever the value actually
+   *  changes — mirrors clearInapplicableAuthFields for the Data Retrieval Method dropdown (Backend System only),
+   *  reading field ownership straight from RETRIEVAL_METHOD_CONFIG so it never drifts from the field list/validator
+   *  logic that already reads the same registry. */
+  private clearInapplicableRetrievalFields(prev: RetrievalMethod | '', next: RetrievalMethod | ''): void {
+    if (prev === next) return;
+    const prevKeys = prev ? RETRIEVAL_METHOD_CONFIG[prev].fields.map(f => f.key) : [];
+    const nextKeys = new Set(next ? RETRIEVAL_METHOD_CONFIG[next].fields.map(f => f.key) : []);
+    const patch: Record<string, unknown> = {};
+    for (const key of prevKeys) {
+      if (!nextKeys.has(key)) patch[key] = RETRIEVAL_FIELD_DEFAULTS[key];
+    }
+    if (!Object.keys(patch).length) return;
+    // runMode's own valueChanges subscription disables Incremental Cursor while Run Mode is Incremental Sync —
+    // re-enable it here too whenever runMode itself is being cleared out, mirroring clearInapplicableFields'
+    // existing "leaving showRetrieval" handling, so the control is never left stuck disabled after the field
+    // that disabled it has just been reset out from under it.
+    if ('runMode' in patch) this.form.controls.incrementalCursor.enable({ emitEvent: false });
+    this.form.patchValue(patch);
+  }
+
+  /** Search REST's own Resource Type control is hidden entirely from the UI (see RETRIEVAL_METHOD_CONFIG['search-
+   *  rest'].fields) — scope generation (activeRetrievalResourceTypes/scopeString) still reads it, so a Backend
+   *  System connection with Search REST selected needs a non-empty value from somewhere other than a picker the
+   *  admin can no longer see. Defaults it to every MVP1 resource type, same as the shared Resource Type picker
+   *  already does for audiences that show it (see the showResourcePicker default in ngOnInit). Never overwrites a
+   *  real, already-populated value — a genuinely restored/edited selection (from a saved connection or an edited
+   *  canvas node) is left exactly as-is. */
+  private ensureSearchRestResourceTypeDefault(): void {
+    if (this.form.controls.retrievalMethod.value !== 'search-rest') return;
+    if (this.form.controls.searchRestResourceType.value.length > 0) return;
+    this.form.controls.searchRestResourceType.setValue([...FHIR_RESOURCES]);
   }
 
   /** Standalone always uses Search REST — force-select it whenever the current audience is one-shot scoped, so
@@ -1266,13 +1381,6 @@ export class EpicAudienceFormComponent implements OnInit {
       let required = !!field && visibleKeys.has(key) && field.required;
       if (required && field?.requiredUnless && this.form.get(field.requiredUnless.key)?.value === field.requiredUnless.value) {
         required = false;
-      }
-      // Search Criteria is otherwise optional (see RETRIEVAL_METHOD_CONFIG['search-rest']) — Backend System
-      // searching Patient is the one combination Epic guarantees to reject unscoped (see
-      // searchCriteriaRequiredForPatient), so force it required there regardless of the static config. Gated by
-      // showSection too — entity mode never shows this field, so it must never become a hidden required control.
-      if (showSection && key === 'searchCriteria' && this.searchCriteriaRequiredForPatient()) {
-        required = true;
       }
       apply(key, required);
     }
@@ -1376,6 +1484,8 @@ export class EpicAudienceFormComponent implements OnInit {
     this.wiz.trustedIssuers.set('');
 
     this.prevAudience = this.audience();
+    this.prevAuthMethod = this.form.controls.authMethod.value as 'public' | 'secret' | 'jwt';
+    this.prevRetrievalMethod = this.form.controls.retrievalMethod.value;
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
     this.syncRetrievalValidators();
@@ -1484,6 +1594,13 @@ export class EpicAudienceFormComponent implements OnInit {
    * independently editable, canvas fields once Save is clicked.
    */
   private populateFormFromSourceConnection(dto: SourceConnectionModel): void {
+    // Clear whatever was left in the form from a prior in-progress "New Source" entry (or a previously selected
+    // "Existing Source") before patching in this connection's data — otherwise any field not explicitly named in
+    // the patchValue below (CDS Hooks, a different retrieval method's fields, etc.) silently carries over instead
+    // of starting blank. The patchValue immediately below repopulates every field this DTO actually has data for;
+    // reset() only affects the ones it doesn't, which should start blank rather than keep stale prior input.
+    this.form.reset();
+
     const audience = ((dto.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType])
       || 'provider-ehr-launch') as EpicAudience;
     const authMethod = AUTHENTICATION_TYPE_TO_AUTH_METHOD[dto.authentication?.authenticationType ?? 'None'] ?? 'secret';
@@ -1522,7 +1639,15 @@ export class EpicAudienceFormComponent implements OnInit {
       // (ngOnInit's own sensible defaults) rather than blanking a required field out and silently failing Save.
       launchUrl: dto.interactive?.launchUrl || this.form.controls.launchUrl.value,
       callbackUrl: dto.interactive?.redirectUris?.[0] ?? this.form.controls.callbackUrl.value,
-      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : this.form.controls.resources.value,
+      // Unlike launchUrl/callbackUrl above (whose FormBuilder-literal initial value is already a real, usable
+      // default), `resources`' own literal initial is `[]` — it only becomes FHIR_RESOURCES via an explicit
+      // ngOnInit-time setValue for new/non-editing sources. Since form.reset() (just above, at the top of this
+      // method) wipes that back to `[]`, falling back to `this.form.controls.resources.value` here would silently
+      // leave a required field required-and-empty on every clone whose DTO has no persisted resourceTypes (e.g.
+      // Provider Standalone connections, which never persist a resource-type selection server-side) — exactly the
+      // "Add to Pipeline stays disabled" bug this fallback exists to prevent. FHIR_RESOURCES directly is the same
+      // fallback already used a few lines below for the per-method retrieval resource-type control.
+      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...FHIR_RESOURCES],
       retrievalMethod: resolvedRetrievalMethod,
       searchCriteria: retrieval?.searchCriteria ?? '',
       incrementalCursor: retrieval?.incrementalSyncEnabled ?? false,
@@ -1552,17 +1677,12 @@ export class EpicAudienceFormComponent implements OnInit {
       fhirOutputFormat: retrieval?.outputFormat ?? this.form.controls.fhirOutputFormat.value,
     });
 
-    // Same reasoning as resolvedRetrievalMethod above: this per-method Resource Type control is required for
-    // Backend System/Standalone (retrievalScope 'automated'/'oneshot'), so it needs a non-empty value even when
-    // the cloned connection has no retrieval data to restore it from — otherwise it's exactly one more
-    // required-and-blank field that would force an edit (and a fork) on every clone.
-    // Excludes 'Patient' specifically from this fallback (unlike the shared `resources` picker's own FHIR_RESOURCES
-    // default above) — Backend System + Search REST + Patient is the one combination Epic rejects outright unscoped
-    // (see searchCriteriaRequiredForPatient), requiring a real Search Criteria value this component has no safe way
-    // to invent. Defaulting to every OTHER MVP1 resource type sidesteps that extra required field without silently
-    // fabricating a criteria string that might be wrong.
+    // Same reasoning as resolvedRetrievalMethod above: this per-method Resource Type control needs a non-empty
+    // value even when the cloned connection has no retrieval data to restore it from — same full-MVP1-set
+    // fallback the shared `resources` picker's own default above uses (see also ensureSearchRestResourceTypeDefault,
+    // for the case where the field is Search REST's own hidden control and this clone had no retrieval data at all).
     this.form.get(retrievalResourceKey)?.setValue(
-      retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : FHIR_RESOURCES.filter(r => r !== 'Patient')
+      retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...FHIR_RESOURCES]
     );
 
     // Cloned key material still deserves the "already configured, confirm before replacing" guard — clicking
@@ -1581,6 +1701,8 @@ export class EpicAudienceFormComponent implements OnInit {
     this.discoveredResourceTypes.set(retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : []);
 
     this.prevAudience = audience;
+    this.prevAuthMethod = authMethod;
+    this.prevRetrievalMethod = resolvedRetrievalMethod;
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
     this.syncRetrievalValidators();

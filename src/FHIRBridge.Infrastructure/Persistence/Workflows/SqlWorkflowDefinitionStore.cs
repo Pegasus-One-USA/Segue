@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
@@ -17,10 +18,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Workflows;
 public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
 {
     private readonly FHIRBridgeDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
 
-    public SqlWorkflowDefinitionStore(FHIRBridgeDbContext dbContext)
+    public SqlWorkflowDefinitionStore(FHIRBridgeDbContext dbContext, ICurrentUserService currentUserService)
     {
         _dbContext = dbContext;
+        _currentUserService = currentUserService;
     }
 
     public async Task<WorkflowDefinition> SaveAsync(
@@ -47,6 +50,19 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             _dbContext.WorkflowDefinitions.Remove(existing);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+
+        // Stamped here, explicitly, rather than via the generic IAuditableEntity/AuditingSaveChangesInterceptor
+        // mechanism: this save is always a delete+re-add (see remarks above), so EF always reports "Added" —
+        // relying on the interceptor would reset CreatedOnUtc/CreatedBy to "now" on every edit. CreatedOnUtc/
+        // CreatedBy carry over from the row just deleted; UpdatedOnUtc/UpdatedBy only get set from the second
+        // save onward (mirrors AuditableChildEntity's ModifiedOnUtc staying null until an actual update).
+        var utcNow = DateTime.UtcNow;
+        var actor = _currentUserService.CurrentUser.AuditName;
+        workflowDefinition.StampAudit(
+            createdOnUtc: existing?.CreatedOnUtc ?? utcNow,
+            createdBy: existing?.CreatedBy ?? actor,
+            updatedOnUtc: existing is not null ? utcNow : null,
+            updatedBy: existing is not null ? actor : null);
 
         await _dbContext.WorkflowDefinitions.AddAsync(workflowDefinition, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
