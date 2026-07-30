@@ -12,7 +12,7 @@
         <input
           type="search"
           class="search-input"
-          placeholder="Search by pipeline or source..."
+          placeholder="Search by workflow or source..."
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
@@ -78,7 +78,7 @@
 
         <ng-container matColumnDef="name">
           <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('pipeline')">
-            Pipeline
+            Workflow
             <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'pipeline'">
               {{ sortColumn() === 'pipeline' && sortDirection() === 'desc' ? '↓' : '↑' }}
             </span>
@@ -186,14 +186,14 @@
           @if (searchQuery() || statusFilter() || triggerFilter()) {
             No executions matched your filters
           } @else {
-            No pipeline runs yet
+            No workflow runs yet
           }
         </h3>
         <p class="empty-state__sub">
           @if (searchQuery() || statusFilter() || triggerFilter()) {
             Try adjusting your search or filters.
           } @else {
-            Execution history will appear here once a pipeline runs.
+            Execution history will appear here once a workflow runs.
           }
         </p>
       </div>

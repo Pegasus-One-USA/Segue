@@ -197,7 +197,7 @@ public static class RbacSeedData
     [
         new(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator."),
         new(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users."),
-        new(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output."),
+        new(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs workflow configurations, and reviews data and audit output."),
         new(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs."),
     ];
 

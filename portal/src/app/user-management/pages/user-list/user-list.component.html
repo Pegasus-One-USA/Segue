@@ -47,7 +47,7 @@
       </div>
       <div class="stat-tile__body">
         <span class="stat-tile__value">{{ inactiveUsers() }}</span>
-        <span class="stat-tile__label">Inactive</span>
+        <span class="stat-tile__label">Deactivated</span>
       </div>
     </div>
     <div class="stat-tile">
@@ -231,20 +231,22 @@
                         <mat-icon class="icon-enable">check_circle</mat-icon>
                         Activate User
                       </button>
-                    } @else {
+                    } @else if (!isSelf(user)) {
                       <button mat-menu-item (click)="toggleStatus(user, 'disable')">
                         <mat-icon class="icon-disable">remove_circle</mat-icon>
                         Deactivate User
                       </button>
                     }
                   </ng-container>
-                  <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)">
-                    <mat-divider></mat-divider>
-                    <button mat-menu-item class="menu-item-danger" (click)="deleteUser(user)">
-                      <mat-icon>delete_outline</mat-icon>
-                      Delete User
-                    </button>
-                  </ng-container>
+                  @if (!isSelf(user)) {
+                    <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)">
+                      <mat-divider></mat-divider>
+                      <button mat-menu-item class="menu-item-danger" (click)="deleteUser(user)">
+                        <mat-icon>delete_outline</mat-icon>
+                        Delete User
+                      </button>
+                    </ng-container>
+                  }
                 </mat-menu>
               }
             </div>

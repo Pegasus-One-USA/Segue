@@ -36,7 +36,6 @@
 <div class="sn-labels">
   <strong class="sn-name">{{ transformName() }}</strong>
   <span class="sn-context">from {{ sourceName() }}</span>
-  <span class="sn-type-tag" [style.color]="typeTagColor()" [style.background]="typeTagBg()">{{ typeTag() }}</span>
   @if (isCaveat()) {
     <span class="sn-caveat-tag">⚠ caveat</span>
   }

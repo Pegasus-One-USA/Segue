@@ -264,6 +264,16 @@ public sealed class UserManagementService : IUserManagementService
         var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User was not found.");
 
+        if (!request.IsEnabled)
+        {
+            var currentUserId = _currentUserService.CurrentUser.ExternalUserId;
+            if (!string.IsNullOrWhiteSpace(currentUserId) &&
+                string.Equals(user.ExternalUserId, currentUserId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("You cannot deactivate your own account.");
+            }
+        }
+
         var wasEnabled = user.IsEnabled;
         user.SetEnabled(request.IsEnabled);
         await _repository.UpdateUserAsync(user, cancellationToken);
@@ -306,6 +316,13 @@ public sealed class UserManagementService : IUserManagementService
     {
         var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User was not found.");
+
+        var currentUserId = _currentUserService.CurrentUser.ExternalUserId;
+        if (!string.IsNullOrWhiteSpace(currentUserId) &&
+            string.Equals(user.ExternalUserId, currentUserId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("You cannot delete your own account.");
+        }
 
         await _repository.DeleteUserAsync(user, cancellationToken);
     }

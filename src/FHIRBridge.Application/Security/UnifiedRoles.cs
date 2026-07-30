@@ -13,7 +13,7 @@ public static class UnifiedRoles
     /// <summary>Administers configuration and users.</summary>
     public const string Admin = nameof(Admin);
 
-    /// <summary>Builds and runs pipeline configurations, and reviews data and audit output.</summary>
+    /// <summary>Builds and runs workflow configurations, and reviews data and audit output.</summary>
     public const string Operations = nameof(Operations);
 
     /// <summary>Read-only access to configuration and audit logs.</summary>

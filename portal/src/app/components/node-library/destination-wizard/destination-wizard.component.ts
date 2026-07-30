@@ -223,7 +223,7 @@ export class DestinationWizardComponent implements OnInit {
   // for all of these regardless of what's picked here, so this no longer needs to derive from (and be capped
   // by) the specific upstream source's saved resource list, which could also just be stale on older nodes.
   readonly availableGroups = computed(() => FHIR_RESOURCES);
-  readonly selectedResources = signal<string[]>(['Patient', 'Observation', 'Encounter']);
+  readonly selectedResources = signal<string[]>([]);
 
   // Which other selected resources each resource is configured as a "child" of — e.g.
   // { Observation: ['Patient', 'Encounter'] } means Observation independently requires a mapped
@@ -402,10 +402,6 @@ export class DestinationWizardComponent implements OnInit {
     if (this.showConnectionModeToggle()) {
       this._loadExistingOptions();
     }
-    // New destination: default the selected data groups to whatever the upstream source pulls, so the destination
-    // mirrors the source's Resource Type selection instead of a hardcoded set.
-    const src = this.sourceResources();
-    if (src.length) this.selectedResources.set([...src]);
   }
 
   // ── step helpers ──────────────────────────────────────────────────────────
