@@ -98,5 +98,50 @@
         <button type="button" class="btn-primary" (click)="saveSettings()">Save All Settings</button>
       </div>
     }
+    }
+    @if (section() === 'new11') {
+      @if (new11Loading()) {
+        <p>Loading New 11 settings…</p>
+      } @else {
+        @if (new11LoadError()) {
+          <p class="error-banner">{{ new11LoadError() }}</p>
+        }
+
+        <nav class="settings-tabs" aria-label="New 11 role">
+          @for (role of new11Roles; track role) {
+            <button
+              type="button"
+              class="settings-tabs__item"
+              [class.active]="new11SelectedRole() === role"
+              (click)="selectNew11Role(role)"
+            >{{ roleLabels[role] }}</button>
+          }
+        </nav>
+
+        <section class="settings-section">
+          <h2>{{ roleLabels[new11SelectedRole()] }} (New 11 Workflow)</h2>
+          <label class="field">
+            Workflow URL
+            <input
+              type="text"
+              [ngModel]="new11Urls()[new11SelectedRole()]"
+              (ngModelChange)="setNew11Url(new11SelectedRole(), $event)"
+              placeholder="https://..."
+            />
+          </label>
+        </section>
+
+        @if (new11SaveError()) {
+          <p class="error-banner">{{ new11SaveError() }}</p>
+        }
+        @if (new11Saved()) {
+          <p class="success-banner">Settings saved.</p>
+        }
+
+        <div class="settings-actions">
+          <button type="button" class="btn-primary" (click)="saveNew11Settings()">Save All Settings</button>
+        </div>
+      }
+    }
   </div>
 </div>
