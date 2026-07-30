@@ -387,13 +387,14 @@
                 </span>
               }
             </span>
-            <span class="dw-mapping-target-inline" (click)="$event.stopPropagation()">
+            <span class="dw-mapping-target-inline">
               <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : 'File name' }}</label>
               @if (hasSqlTables()) {
                 <div class="dw-select-wrap">
                   <select class="dw-select dw-target-select"
                           [attr.id]="'dw-target-' + r"
                           [value]="targetFor(r)"
+                          (click)="$event.stopPropagation()"
                           (change)="updateTarget(r, $any($event.target).value)">
                     <option value="" disabled [selected]="!targetFor(r)">Select a table…</option>
                     @for (t of sqlTableOptions(); track t) { <option [value]="t" [selected]="t === targetFor(r)">{{ t }}</option> }
@@ -404,6 +405,7 @@
                   class="dw-map-input dw-target-input"
                   [attr.id]="'dw-target-' + r"
                   [value]="targetFor(r)"
+                  (click)="$event.stopPropagation()"
                   (input)="updateTarget(r, $any($event.target).value)"
                   [placeholder]="isSql() ? 'dbo.Patient' : isMongo() ? 'patients' : 'patients.csv'"
                 />
