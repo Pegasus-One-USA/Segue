@@ -3,6 +3,7 @@ using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Runtime.Application.Workflows;
 
@@ -14,6 +15,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IWorkflowRunStore? _runStore;
     private readonly IWorkflowNodeResourceHistoryRecorder? _resourceHistoryRecorder;
     private readonly IGlobalExceptionManager? _exceptionManager;
+    private readonly IRunStatusNotifier? _runStatusNotifier;
+    private readonly IServiceScopeFactory? _scopeFactory;
 
     public RankedWorkflowOrchestrator(
         IWorkflowGraphValidator graphValidator,
@@ -21,7 +24,9 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IWorkflowAuditRecorder? auditRecorder = null,
         IWorkflowRunStore? runStore = null,
         IWorkflowNodeResourceHistoryRecorder? resourceHistoryRecorder = null,
-        IGlobalExceptionManager? exceptionManager = null)
+        IGlobalExceptionManager? exceptionManager = null,
+        IRunStatusNotifier? runStatusNotifier = null,
+        IServiceScopeFactory? scopeFactory = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
@@ -29,6 +34,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _runStore = runStore;
         _resourceHistoryRecorder = resourceHistoryRecorder;
         _exceptionManager = exceptionManager;
+        _runStatusNotifier = runStatusNotifier;
+        _scopeFactory = scopeFactory;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -75,6 +82,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             correlationId: context.CorrelationId);
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
+
+        // Persist a "Running" row up front (rather than only ever writing this run once it reaches a terminal
+        // state) so a run genuinely appears as Running in the Dashboard/Workflow List — and to any client — for
+        // its entire in-flight duration, not just retroactively once it finishes. SqlWorkflowRunStore.SaveAsync
+        // replaces this placeholder wholesale with the fully-populated terminal aggregate once Succeed()/Fail()
+        // is called below. Best-effort: a transient failure here must never abort the run itself.
+        await PersistRunStartedAsync(workflowRun, cancellationToken);
+        await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Running", DateTimeOffset.UtcNow, null, cancellationToken);
 
         try
         {
@@ -181,6 +196,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 DateTimeOffset.UtcNow), cancellationToken);
 
             await PersistRunAsync(workflowRun, cancellationToken);
+            await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Succeeded", DateTimeOffset.UtcNow, null, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -199,8 +215,19 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 exception.Message), cancellationToken);
 
             // Persist the failed run with its partial node-run timeline. Use None so the history is captured
-            // even when the caller's token is the reason the run aborted.
-            await PersistRunAsync(workflowRun, CancellationToken.None);
+            // even when the caller's token is the reason the run aborted. Best-effort: a store failure here
+            // (e.g. a transient DB error) must not also suppress the "Failed" SignalR notify below, or the run
+            // would be stuck showing "Running" both in the DB and to any live client.
+            try
+            {
+                await PersistRunAsync(workflowRun, CancellationToken.None);
+            }
+            catch
+            {
+                // Swallowed by design — see the remark above; NotifyRunStatusAsync still runs regardless.
+            }
+
+            await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Failed", DateTimeOffset.UtcNow, exception.Message, CancellationToken.None);
 
             if (_exceptionManager is not null)
             {
@@ -224,6 +251,73 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         => _runStore is null
             ? Task.CompletedTask
             : _runStore.SaveAsync(workflowRun, cancellationToken);
+
+    /// <summary>Best-effort initial persist of the run while it's still Running (see the call site above) — swallows
+    /// a transient store failure rather than letting it abort the run, since the terminal <see cref="PersistRunAsync"/>
+    /// call is what actually guarantees this run's history is captured either way.</summary>
+    /// <remarks>
+    /// Deliberately does NOT use <see cref="_runStore"/> when a scope factory is available. That instance (and its
+    /// DbContext) is the SAME one this orchestrator, its executors, and every other DI-resolved dependency reuse for
+    /// the rest of this run — writing this placeholder through it left the DbContext holding a tracked
+    /// <see cref="WorkflowRun"/> aggregate for the run's entire in-flight duration, which caused later node
+    /// execution to hang indefinitely (reproduced and bisected against this exact call). A fresh, short-lived scope
+    /// keeps this one write fully isolated, so its DbContext is created, used, and disposed before node execution
+    /// ever starts.
+    /// </remarks>
+    private async Task PersistRunStartedAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
+    {
+        if (_runStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_scopeFactory is not null)
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var scopedRunStore = scope.ServiceProvider.GetService<IWorkflowRunStore>();
+                if (scopedRunStore is not null)
+                {
+                    await scopedRunStore.SaveAsync(workflowRun, cancellationToken);
+                    return;
+                }
+            }
+
+            await _runStore.SaveAsync(workflowRun, cancellationToken);
+        }
+        catch
+        {
+            // Swallowed by design — see the XML doc above.
+        }
+    }
+
+    /// <summary>Best-effort live push (see <see cref="IRunStatusNotifier"/>) — a broadcast failure must never
+    /// affect the run itself, so any exception here is swallowed rather than propagated.</summary>
+    private async Task NotifyRunStatusAsync(
+        Guid workflowRunId,
+        Guid workflowDefinitionId,
+        string status,
+        DateTimeOffset occurredAt,
+        string? errorMessage,
+        CancellationToken cancellationToken)
+    {
+        if (_runStatusNotifier is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _runStatusNotifier.NotifyAsync(
+                new RunStatusChangedEvent(workflowRunId, workflowDefinitionId, status, occurredAt, errorMessage),
+                cancellationToken);
+        }
+        catch
+        {
+            // Swallowed by design — see the XML doc above.
+        }
+    }
 
     /// <summary>Projects <paramref name="workflowDefinition"/> down to the subgraph <paramref name="targetNodeId"/>
     /// actually depends on — true backward reachability over edges, not a rank threshold (which would incorrectly

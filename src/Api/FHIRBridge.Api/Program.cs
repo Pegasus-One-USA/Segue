@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
+using FHIRBridge.Api.Hubs;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
@@ -148,6 +149,13 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("FHIRBr
 {
     builder.Services.AddWorkflowSqlPersistence(builder.Configuration);
 }
+
+// Backs RunStatusHub — pushes workflow-run status changes (Running/Succeeded/Failed) to the Dashboard and
+// Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's
+// remarks: only registered in this host, so RankedWorkflowOrchestrator resolves it as null (and simply skips the
+// live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
@@ -499,6 +507,7 @@ if (rateLimitingEnabled)
 }
 app.MapControllers();
 app.MapWorkflowEndpoints();
+app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
 // and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html

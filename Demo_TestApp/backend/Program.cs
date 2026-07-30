@@ -73,6 +73,21 @@ using (var scope = app.Services.CreateScope())
     // EF migrations for this project (see HealthAppDbContext) — this app is not meant to model real schema evolution.
     var db = scope.ServiceProvider.GetRequiredService<HealthAppDbContext>();
     db.Database.EnsureCreated();
+
+    // EnsureCreated won't add the New 11 per-role workflow-settings table to an already-existing HealthAppDb, so
+    // ensure it exists and is seeded with the four non-Admin roles here. Idempotent — safe to run every startup,
+    // and a no-op on a brand-new database where EnsureCreated already built the table.
+    db.Database.ExecuteSqlRaw(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Resource11WorkflowSetting')
+    CREATE TABLE [Resource11WorkflowSetting] (
+        [Role] NVARCHAR(40) NOT NULL CONSTRAINT [PK_Resource11WorkflowSetting] PRIMARY KEY,
+        [WorkflowUrl] NVARCHAR(1000) NOT NULL CONSTRAINT [DF_Resource11WorkflowSetting_Url] DEFAULT('')
+    );
+MERGE [Resource11WorkflowSetting] AS target
+USING (VALUES ('Patient'), ('ProviderStandalone'), ('ProviderInApp'), ('BackendSystem')) AS source([Role])
+ON target.[Role] = source.[Role]
+WHEN NOT MATCHED THEN INSERT ([Role], [WorkflowUrl]) VALUES (source.[Role], '');
+");
 }
 
 // Serves the Angular build copied into wwwroot/ at deploy time — this backend hosts its own
@@ -494,6 +509,9 @@ app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, Epi
 });
 
 app.MapBackendSystemEndpoints();
+
+// "New 11" menu data — read-only GETs over the curated _11 tables, available to any authenticated role.
+app.MapResource11Endpoints();
 
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback

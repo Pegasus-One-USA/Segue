@@ -1,6 +1,7 @@
 using System.Data.Common;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using MySqlConnector;
 
 namespace FHIRBridge.Infrastructure.Destinations;
@@ -11,7 +12,8 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class MappedMySqlDestinationWriter : RelationalDestinationWriterBase
 {
-    public MappedMySqlDestinationWriter(ISecretProvider secretProvider) : base(secretProvider)
+    public MappedMySqlDestinationWriter(ISecretProvider secretProvider, IGlobalExceptionManager? exceptionManager = null)
+        : base(secretProvider, exceptionManager)
     {
     }
 

@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Scheduling;
+using FHIRBridge.Governance;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Worker;
@@ -73,6 +74,15 @@ public sealed class ScheduleDispatcherWorker : BackgroundService
         catch (Exception exception)
         {
             _logger.LogError(exception, "Schedule dispatcher tick failed.");
+
+            // No specific pipeline run/correlation id exists at this dispatch-cycle level — this failure means
+            // the scheduler itself didn't run, not that a particular run failed — but it must still reach ErrorLog
+            // so a "nothing is running" incident is visible on the Errors screen instead of only in Serilog.
+            var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+            await exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(Module: "Schedule Dispatcher"),
+                CancellationToken.None);
         }
     }
 }

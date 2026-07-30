@@ -458,45 +458,14 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   transition: filter var(--transition-base), opacity var(--transition-base);
 
   &.is-launch { background: var(--color-primary); color: var(--color-on-primary); }
-  &.has-caret { border-radius: var(--radius-base) 0 0 var(--radius-base); }
   &:hover:not(:disabled) { filter: brightness(0.95); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
-// ── Run split-button (sync vs. background run — see Workflow-Endpoints async /run) ────────────
-// min-width matches the widest label this slot ever renders ("Get Launch URL") so the divider and
-// icon buttons that follow always start at the same x position, whether this row shows that button
-// or the shorter "Run ▾" pair — without this the whole action row shifts left/right per row.
+// min-width matches the widest label this slot ever renders ("Get Launch URL") so the divider and icon buttons
+// that follow always start at the same x position, whether this row shows that button or the shorter "Run" one
+// — without this the whole action row shifts left/right per row.
 .split-btn { position: relative; display: inline-flex; min-width: 103px; }
-
-.btn-primary--caret {
-  height: 36px; padding: 0 4px;
-  border-radius: 0 var(--radius-base) var(--radius-base) 0;
-  border-left: 1px solid rgba(0, 0, 0, 0.12);
-
-  mat-icon { width: 20px; height: 20px; font-size: 20px; }
-}
-
-.run-menu {
-  position: absolute; top: calc(100% + 4px); left: 0;
-  min-width: 240px; z-index: 20;
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-card); box-shadow: var(--shadow-elevated, 0 8px 24px rgba(0, 0, 0, 0.12));
-  padding: 6px; display: flex; flex-direction: column; gap: 2px;
-
-  button {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-    width: 100%; padding: 8px 10px;
-    border: none; border-radius: var(--radius-base); background: transparent;
-    text-align: left; cursor: pointer;
-    transition: background var(--transition-base);
-
-    &:hover { background: var(--color-side); }
-  }
-
-  .run-menu-title { font-size: 13px; font-weight: 600; color: var(--color-ink); }
-  .run-menu-sub { font-size: 11.5px; color: var(--color-muted); }
-}
 
 // Page-level primary CTA ("New Workflow") — deliberately distinct from .btn-primary above, which is the row
 // action button (soft-info by default, teal only for its .is-launch modifier). This is the one true teal
@@ -612,6 +581,19 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+.text-input {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 12px; font-size: 14px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-base);
+  background: var(--color-bg); color: var(--color-ink);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+}
 
 .data-meta {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

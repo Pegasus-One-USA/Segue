@@ -21,6 +21,21 @@ interface AdminSettings {
   providerInAppWorkflowId: string;
 }
 
+/** One row of GET/POST /api/v11/workflow-settings — the New 11 workflow URL for a single non-Admin role. */
+interface Resource11WorkflowSetting {
+  role: string;
+  workflowUrl: string;
+}
+
+// The four non-Admin roles that have a New 11 menu + their own workflow, and their display labels.
+const NEW11_ROLES = ['Patient', 'ProviderStandalone', 'ProviderInApp', 'BackendSystem'] as const;
+const NEW11_ROLE_LABELS: Record<string, string> = {
+  Patient: 'Patient',
+  ProviderStandalone: 'Provider Standalone',
+  ProviderInApp: 'Provider InApp',
+  BackendSystem: 'Backend System',
+};
+
 @Component({
   selector: 'app-admin-settings',
   standalone: true,
@@ -48,10 +63,89 @@ export class AdminSettingsComponent implements OnInit {
   readonly standaloneBaseUrl = signal('');
   readonly providerInAppWorkflowId = signal('');
 
+  // Default | New 11 section switch (the workflow config for each surface lives on its own tab).
+  readonly section = signal<'default' | 'new11'>('default');
+
+  // New 11 per-role workflow settings.
+  readonly new11Roles = NEW11_ROLES;
+  readonly roleLabels = NEW11_ROLE_LABELS;
+  readonly new11SelectedRole = signal<string>('Patient');
+  readonly new11Urls = signal<Record<string, string>>({
+    Patient: '',
+    ProviderStandalone: '',
+    ProviderInApp: '',
+    BackendSystem: '',
+  });
+  readonly new11Loaded = signal(false);
+  readonly new11Loading = signal(false);
+  readonly new11LoadError = signal('');
+  readonly new11SaveError = signal('');
+  readonly new11Saved = signal(false);
+
   constructor(private readonly http: HttpClient) {}
 
   ngOnInit(): void {
     void this.loadSettings();
+  }
+
+  selectSection(section: 'default' | 'new11'): void {
+    this.section.set(section);
+    if (section === 'new11' && !this.new11Loaded()) {
+      void this.loadNew11Settings();
+    }
+  }
+
+  selectNew11Role(role: string): void {
+    this.new11SelectedRole.set(role);
+    this.new11Saved.set(false);
+  }
+
+  setNew11Url(role: string, value: string): void {
+    this.new11Urls.update((map) => ({ ...map, [role]: value }));
+    this.new11Saved.set(false);
+  }
+
+  private async loadNew11Settings(): Promise<void> {
+    this.new11Loading.set(true);
+    this.new11LoadError.set('');
+
+    try {
+      const rows = await firstValueFrom(
+        this.http.get<Resource11WorkflowSetting[]>(`${BACKEND_BASE_URL}/api/v11/workflow-settings`, { withCredentials: true })
+      );
+      const map = { ...this.new11Urls() };
+      for (const row of rows ?? []) {
+        map[row.role] = row.workflowUrl ?? '';
+      }
+      this.new11Urls.set(map);
+      this.new11Loaded.set(true);
+    } catch {
+      this.new11LoadError.set('Could not load New 11 workflow settings.');
+    } finally {
+      this.new11Loading.set(false);
+    }
+  }
+
+  async saveNew11Settings(): Promise<void> {
+    this.new11SaveError.set('');
+    this.new11Saved.set(false);
+
+    const urls = this.new11Urls();
+    const payload: Resource11WorkflowSetting[] = this.new11Roles.map((role) => ({ role, workflowUrl: urls[role] ?? '' }));
+
+    try {
+      const rows = await firstValueFrom(
+        this.http.post<Resource11WorkflowSetting[]>(`${BACKEND_BASE_URL}/api/v11/workflow-settings`, payload, { withCredentials: true })
+      );
+      const map = { ...this.new11Urls() };
+      for (const row of rows ?? []) {
+        map[row.role] = row.workflowUrl ?? '';
+      }
+      this.new11Urls.set(map);
+      this.new11Saved.set(true);
+    } catch {
+      this.new11SaveError.set('Could not save New 11 workflow settings.');
+    }
   }
 
   private async loadSettings(): Promise<void> {

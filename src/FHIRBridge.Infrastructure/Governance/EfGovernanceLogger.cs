@@ -158,7 +158,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.ErrorLogs.Add(new ErrorLog(
+        var errorLog = new ErrorLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.Severity,
@@ -177,9 +177,23 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.TraceId,
             entry.SpanId,
             entry.DiagnosisAction?.ToString(),
-            Truncate(entry.DiagnosisCause, 500)));
+            Truncate(entry.DiagnosisCause, 500));
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _dbContext.ErrorLogs.Add(errorLog);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            // A failed insert (e.g. a reference-id collision — see ErrorReference's remarks) leaves this entity
+            // tracked as Added; without detaching it here, GlobalExceptionManager's retry-with-a-fresh-id would
+            // resubmit this same doomed-to-fail entity alongside the new one on every subsequent SaveChangesAsync
+            // in this scope, guaranteeing every retry fails too regardless of whether the new id would have worked.
+            _dbContext.Entry(errorLog).State = EntityState.Detached;
+            throw;
+        }
     }
 
     public async Task LogApiRequestAsync(ApiRequestEntry entry, CancellationToken cancellationToken = default)

@@ -22,44 +22,64 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
     }
 
+    // Bounds retry-on-collision below: a same-day process restart can regenerate a reference id that collides
+    // with one persisted by a prior instance (see ErrorReference's remarks) — a handful of attempts is enough to
+    // clear that without risking a real, non-collision persistence failure (e.g. DB unreachable) looping pointlessly.
+    private const int MaxCaptureAttempts = 3;
+
     public async Task<ErrorReport> CaptureAsync(
         Exception exception, ExceptionContext context, CancellationToken cancellationToken = default)
     {
-        var referenceId = ErrorReference.New();
         var category = _classifier.Classify(exception);
         var diagnosis = _diagnosisClassifier.Diagnose(exception, category);
         var friendlyMessage = string.IsNullOrWhiteSpace(context.UserFriendlyMessageOverride)
             ? DefaultMessageFor(category, diagnosis)
             : context.UserFriendlyMessageOverride!;
 
+        var referenceId = ErrorReference.New();
+
         // Capturing an error must never itself throw — a failure here (e.g. DB unreachable) must not mask the
-        // original exception or crash the host. Worst case the caller still gets a reference id to quote.
-        try
+        // original exception or crash the host. Worst case the caller still gets a reference id to quote, even if
+        // every attempt below failed to persist. On failure, a fresh reference id is tried again (see remarks on
+        // ErrorReference) rather than giving up after the first attempt — otherwise a same-day restart's first
+        // handful of captures would silently vanish instead of ending up in ErrorLogs.
+        for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
         {
-            await _governanceLogger.LogErrorAsync(
-                new ErrorEntry(
-                    context.Severity,
-                    exception.GetType().Name,
-                    exception.Message,
-                    exception.ToString(),
-                    context.Module,
-                    context.CorrelationId,
-                    referenceId,
-                    category.ToString(),
-                    friendlyMessage,
-                    context.ExecutionId,
-                    context.WorkflowId,
-                    context.EndpointId,
-                    context.RequestId,
-                    context.TraceId,
-                    context.SpanId,
-                    diagnosis.Action,
-                    diagnosis.Cause),
-                cancellationToken);
-        }
-        catch
-        {
-            // Intentionally swallowed: see remarks above.
+            try
+            {
+                await _governanceLogger.LogErrorAsync(
+                    new ErrorEntry(
+                        context.Severity,
+                        exception.GetType().Name,
+                        exception.Message,
+                        exception.ToString(),
+                        context.Module,
+                        context.CorrelationId,
+                        referenceId,
+                        category.ToString(),
+                        friendlyMessage,
+                        context.ExecutionId,
+                        context.WorkflowId,
+                        context.EndpointId,
+                        context.RequestId,
+                        context.TraceId,
+                        context.SpanId,
+                        diagnosis.Action,
+                        diagnosis.Cause),
+                    cancellationToken);
+
+                break;
+            }
+            catch
+            {
+                if (attempt == MaxCaptureAttempts)
+                {
+                    // Intentionally swallowed: see remarks above.
+                    break;
+                }
+
+                referenceId = ErrorReference.New();
+            }
         }
 
         return new ErrorReport(referenceId, category, friendlyMessage, context.CorrelationId, diagnosis.Action);
