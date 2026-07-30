@@ -7,5 +7,7 @@ public enum WorkflowAuditEventType
     NodeExecutionCompleted,
     NodeExecutionFailed,
     WorkflowRunCompleted,
-    WorkflowRunFailed
+    WorkflowRunFailed,
+    NodeExecutionCancelled,
+    WorkflowRunCancelled
 }

@@ -1048,7 +1048,8 @@ public static class WorkflowEndpoints
                 counts[WorkflowRunStatus.Running],
                 counts[WorkflowRunStatus.Succeeded],
                 counts[WorkflowRunStatus.Failed],
-                counts[WorkflowRunStatus.Cancelled]));
+                counts[WorkflowRunStatus.Cancelled],
+                counts[WorkflowRunStatus.PartialSuccess]));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapGet("/workflow-runs/{runId:guid}/summary", async (

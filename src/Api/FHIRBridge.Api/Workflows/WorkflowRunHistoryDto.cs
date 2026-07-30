@@ -33,4 +33,5 @@ public sealed record WorkflowRunStatusCountsDto(
     int Running,
     int Succeeded,
     int Failed,
-    int Cancelled);
+    int Cancelled,
+    int PartialSuccess);
