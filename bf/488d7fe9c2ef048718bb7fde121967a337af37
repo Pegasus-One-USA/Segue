@@ -1,0 +1,116 @@
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.html
+  s_563b36e6d1f96c::t_24058bc9b30e3b 3
+  s_563b36e6d1f96c::t_6831bc9b7f5ed4 32
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_563b36e6d1f96c::t_f248226017517f 414-416
+  s_563b36e6d1f96c::t_b5cc0a0edac85e 542
+  s_563b36e6d1f96c::t_6451e53614f316 609
+  s_563b36e6d1f96c::t_3cb2fe3088c4ab 634
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.ts
+  s_563b36e6d1f96c::t_38c32ec69f1071 33
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_563b36e6d1f96c::t_aed0df44da5cc1 320-326
+  s_563b36e6d1f96c::t_2e734764724f7e 267-276
+src/FHIRBridge.Infrastructure/Persistence/InMemoryUserAccessRepository.cs
+  s_563b36e6d1f96c::t_e7aaa56a329571 16
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_563b36e6d1f96c::t_4b8fd816cce764 14-36
+  s_563b36e6d1f96c::t_9bd8bccb90e3e3 158
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_563b36e6d1f96c::t_37dffc26467dc6 390
+  s_563b36e6d1f96c::t_314982a9b00065 796
+  s_563b36e6d1f96c::t_61b582b8bbf795 639-643
+  s_563b36e6d1f96c::t_d141e49e2389dc 286
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_563b36e6d1f96c::t_56dbed8317106b 31-32
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_563b36e6d1f96c::t_15a019d535e4b0 333
+  s_563b36e6d1f96c::t_5b6088c872565b 760-763,765
+src/FHIRBridge.Application/Rbac/PermissionCategoryCode.cs
+  s_563b36e6d1f96c::t_490d2abfd37905 17
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  s_c60546938fff22::t_a9fcdd2a4f69d8 3
+  s_c60546938fff22::t_10722dcee50f55 52
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_563b36e6d1f96c::t_6f4d6bb8af71f1 237-241
+  s_563b36e6d1f96c::t_e9b2ca7a9d09e3 99-105
+  s_563b36e6d1f96c::t_5cea2a3b9ce4b7 350-353
+  s_563b36e6d1f96c::t_2e42adc5370b32 106
+  s_563b36e6d1f96c::t_327422d445967e 421-430
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_563b36e6d1f96c::t_c737088082aa3a 196
+  s_563b36e6d1f96c::t_3d95f896ddd984 189
+  s_563b36e6d1f96c::t_f5c630345ad189 15
+  s_563b36e6d1f96c::t_bf931ec96d6ee7 81
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_563b36e6d1f96c::t_4cbbbfe71283a1 226
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_563b36e6d1f96c::t_af47cea0681985 136
+  s_563b36e6d1f96c::t_09fa4b51a185db 302
+  s_563b36e6d1f96c::t_e41770667b3836 7
+  s_563b36e6d1f96c::t_ea19c80252522c 267
+  s_563b36e6d1f96c::t_3060fc91bc388a 4-6
+  s_563b36e6d1f96c::t_1e5349f3dfb20e 195
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_563b36e6d1f96c::t_19ed046664956c 349
+portal/src/index.html
+  s_563b36e6d1f96c::t_edc9c007e95b67 9
+  s_563b36e6d1f96c::t_cf58d7b1dc7545 8
+portal/public/favicon.svg
+  s_563b36e6d1f96c::t_06bcc366fb0464 3-7
+  s_563b36e6d1f96c::t_62693cf1f18ca3 1-2,8
+src/FHIRBridge.Application/Security/UnifiedRoles.cs
+  s_563b36e6d1f96c::t_b825f5d52af256 16
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_563b36e6d1f96c::t_f5c0704c5782ba 200
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_563b36e6d1f96c::t_d893af64c2f172 50
+  s_563b36e6d1f96c::t_41ef1d44bd65ab 241-249
+  s_563b36e6d1f96c::t_bad0200e3ab256 234
+portal/src/app/dashboard/layout/sidebar/sidebar.component.html
+  s_563b36e6d1f96c::t_aaaeba1c6fe320 6,11-12
+  s_563b36e6d1f96c::t_9851760e66d852 7-10
+portal/src/app/user-management/pages/user-detail/user-detail.component.html
+  s_563b36e6d1f96c::t_04b37423ce8920 87,93
+  s_563b36e6d1f96c::t_472766204f581a 112-116
+  s_563b36e6d1f96c::t_cf060ecd1b98bf 56
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_563b36e6d1f96c::t_8f6a9e2db330a5 7,12
+portal/src/app/user/models/user-profile.model.ts
+  s_563b36e6d1f96c::t_4d47eaeca4b501 70
+portal/src/app/operations/pages/errors/errors.component.html
+  s_563b36e6d1f96c::t_c65aa8c64501cb 4
+  s_563b36e6d1f96c::t_58d5e1e718b9ed 10
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_563b36e6d1f96c::t_a89386e117ac08 255-258
+  s_563b36e6d1f96c::t_42b03ec8d35478 133
+  s_563b36e6d1f96c::t_4569f171e535bf 343
+  s_563b36e6d1f96c::t_806d309cdb4f50 125-132
+  s_563b36e6d1f96c::t_793a866c0372b6 287-290
+portal/src/app/dashboard/layout/sidebar/sidebar.component.scss
+  s_563b36e6d1f96c::t_878c7f77530d44 29-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "bf488d7fe9c2ef048718bb7fde121967a337af37",
+  "prompts": {},
+  "sessions": {
+    "s_563b36e6d1f96c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d1be468-7973-4038-9618-43ded366ad88",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    },
+    "s_c60546938fff22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4671f36f-ac74-4243-98fb-238f21a2a76b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
