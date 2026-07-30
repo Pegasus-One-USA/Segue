@@ -1,6 +1,7 @@
 using System.Data.Common;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using Npgsql;
 
 namespace FHIRBridge.Infrastructure.Destinations;
@@ -8,7 +9,8 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// <summary>Writes mapped records to PostgreSQL (customer-owned schema; Insert and Upsert write modes).</summary>
 public sealed class MappedPostgreSqlDestinationWriter : RelationalDestinationWriterBase
 {
-    public MappedPostgreSqlDestinationWriter(ISecretProvider secretProvider) : base(secretProvider)
+    public MappedPostgreSqlDestinationWriter(ISecretProvider secretProvider, IGlobalExceptionManager? exceptionManager = null)
+        : base(secretProvider, exceptionManager)
     {
     }
 

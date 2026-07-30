@@ -7,6 +7,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
@@ -23,10 +24,12 @@ namespace FHIRBridge.Infrastructure.Destinations;
 public abstract partial class RelationalDestinationWriterBase : IConfiguredDestinationWriter
 {
     private readonly ISecretProvider _secretProvider;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
-    protected RelationalDestinationWriterBase(ISecretProvider secretProvider)
+    protected RelationalDestinationWriterBase(ISecretProvider secretProvider, IGlobalExceptionManager? exceptionManager = null)
     {
         _secretProvider = secretProvider;
+        _exceptionManager = exceptionManager;
     }
 
     // --- Dialect hooks ---
@@ -79,9 +82,12 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
                     // entirely rather than falling back to Insert.
                     if (TryGetKeyValue(record, target.KeyColumn!, out var updateKeyValue))
                     {
-                        await UpdateRecordAsync(connection, transaction, target, record, updateKeyValue, cancellationToken);
+                        var rowsAffected = await UpdateRecordAsync(connection, transaction, target, record, updateKeyValue, cancellationToken);
                         await transaction.CommitAsync(cancellationToken);
-                        writtenResourceIds.Add(record.SourceResourceId);
+                        if (rowsAffected > 0)
+                        {
+                            writtenResourceIds.Add(record.SourceResourceId);
+                        }
                     }
 
                     continue;
@@ -100,6 +106,14 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
             {
                 recordErrors.Add(
                     $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
+
+                if (_exceptionManager is not null)
+                {
+                    await _exceptionManager.CaptureAsync(
+                        exception,
+                        new ExceptionContext(Module: "Destination Write", CorrelationId: context.CorrelationId),
+                        cancellationToken);
+                }
             }
         }
 
@@ -191,7 +205,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
     /// <summary>Updates the matching row by <see cref="RelationalTarget.KeyColumn"/> only — never inserts. Called
     /// only when the record actually has a key value (see <see cref="WriteAsync"/>); a record with no matching row
     /// is simply left unwritten, which is exactly what "Update only" means.</summary>
-    private async Task UpdateRecordAsync(
+    private async Task<int> UpdateRecordAsync(
         DbConnection connection,
         DbTransaction transaction,
         RelationalTarget target,
@@ -207,7 +221,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
 
         if (columns.Count == 0)
         {
-            return;
+            return 0;
         }
 
         var setClause = string.Join(", ", columns.Select(column => $"{Quote(column)} = @{column}"));
@@ -223,7 +237,7 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         }
         AddParameter(command, "KeyValue", Stringify(keyValue));
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static void AddParameter(DbCommand command, string name, object value)

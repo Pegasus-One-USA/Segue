@@ -24,6 +24,13 @@ public static class FhirBridgeAuthenticationExtensions
     public const string EntraScheme = "Entra";
     public const string SelectorScheme = "FhirBridgeSelector";
 
+    /// <summary>Path prefix for every SignalR hub — browsers cannot set an Authorization header on the WebSocket/
+    /// SSE handshake a hub connection negotiates, so the client instead appends the access token as
+    /// <c>?access_token=...</c> on the connection URL. Only requests under this prefix are allowed to authenticate
+    /// that way (see <see cref="ExtractBearerToken"/> and the <c>OnMessageReceived</c> hooks below) — every other
+    /// endpoint still requires a real Authorization header.</summary>
+    private const string HubPathPrefix = "/hubs";
+
     public static AuthenticationBuilder AddFhirBridgeAuthentication(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -68,15 +75,26 @@ public static class FhirBridgeAuthenticationExtensions
                     jwtBearerOptions.TokenValidationParameters.NameClaimType = "name";
 
                     jwtBearerOptions.Events ??= new JwtBearerEvents();
-                    var inner = jwtBearerOptions.Events.OnTokenValidated;
+                    var innerTokenValidated = jwtBearerOptions.Events.OnTokenValidated;
                     jwtBearerOptions.Events.OnTokenValidated = async context =>
                     {
-                        if (inner is not null)
+                        if (innerTokenValidated is not null)
                         {
-                            await inner(context);
+                            await innerTokenValidated(context);
                         }
 
                         ProjectEntraGroupsOntoRoles(context, entra);
+                    };
+
+                    var innerMessageReceived = jwtBearerOptions.Events.OnMessageReceived;
+                    jwtBearerOptions.Events.OnMessageReceived = async context =>
+                    {
+                        if (innerMessageReceived is not null)
+                        {
+                            await innerMessageReceived(context);
+                        }
+
+                        ApplyQueryStringTokenForHubs(context);
                     };
                 },
                 microsoftIdentityOptions =>
@@ -132,6 +150,45 @@ public static class FhirBridgeAuthenticationExtensions
 
         options.TokenValidationParameters.RoleClaimType = "roles";
         options.TokenValidationParameters.NameClaimType = "name";
+
+        options.Events ??= new JwtBearerEvents();
+        var inner = options.Events.OnMessageReceived;
+        options.Events.OnMessageReceived = async context =>
+        {
+            if (inner is not null)
+            {
+                await inner(context);
+            }
+
+            ApplyQueryStringTokenForHubs(context);
+        };
+    }
+
+    /// <summary>
+    /// A hub connection's WebSocket/SSE handshake can't carry an Authorization header, so its client instead
+    /// appends <c>?access_token=...</c> to the connection URL (see <see cref="HubPathPrefix"/>). Every JWT bearer
+    /// scheme (Local and, when enabled, Entra) needs this same fallback wired into its own <c>OnMessageReceived</c>
+    /// — the policy-scheme selector only decides which scheme to forward to; each forwarded scheme's own handler
+    /// still needs <see cref="MessageReceivedContext.Token"/> set itself, or it just sees no Authorization header
+    /// and rejects the connection.
+    /// </summary>
+    private static void ApplyQueryStringTokenForHubs(MessageReceivedContext context)
+    {
+        if (!string.IsNullOrEmpty(context.Token))
+        {
+            return;
+        }
+
+        if (!context.HttpContext.Request.Path.StartsWithSegments(HubPathPrefix))
+        {
+            return;
+        }
+
+        string? queryToken = context.HttpContext.Request.Query["access_token"];
+        if (!string.IsNullOrWhiteSpace(queryToken))
+        {
+            context.Token = queryToken;
+        }
     }
 
     /// <summary>
@@ -170,13 +227,25 @@ public static class FhirBridgeAuthenticationExtensions
     private static string? ExtractBearerToken(HttpContext context)
     {
         string? header = context.Request.Headers.Authorization;
-        if (string.IsNullOrWhiteSpace(header) ||
-            !header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(header) &&
+            header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            return null;
+            return header["Bearer ".Length..].Trim();
         }
 
-        return header["Bearer ".Length..].Trim();
+        // SignalR's WebSocket/SSE transport can't set a header on the handshake — its client instead appends
+        // ?access_token=... to the connection URL (see HubPathPrefix's remarks). Only trusted for that one
+        // path prefix, so no other endpoint gains a new way to authenticate via query string.
+        if (context.Request.Path.StartsWithSegments(HubPathPrefix))
+        {
+            string? queryToken = context.Request.Query["access_token"];
+            if (!string.IsNullOrWhiteSpace(queryToken))
+            {
+                return queryToken;
+            }
+        }
+
+        return null;
     }
 
     private static void ProjectEntraGroupsOntoRoles(TokenValidatedContext context, EntraAuthenticationOptions entra)

@@ -1,5 +1,7 @@
-import { Component, OnInit, OnDestroy, HostListener, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import {
@@ -9,9 +11,8 @@ import {
   DestinationData,
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
+import { RunStatusHubService } from '../../services/run-status-hub.service';
 
-/** Polling cadence for an async run's status while this screen stays open (see pollRunStatus). */
-const RUN_STATUS_POLL_MS = 3000;
 /** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -38,7 +39,7 @@ type FilterCategory = 'status' | 'audience' | 'source';
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatIconModule],
+  imports: [CommonModule, DatePipe, FormsModule, MatIconModule],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -46,6 +47,8 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly api = inject(WorkflowApiService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly runStatusHub = inject(RunStatusHubService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
@@ -56,17 +59,14 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly busyId = signal<string | null>(null);
   /** Workflow id whose enable/disable or delete call is in flight — disables its row controls. */
   readonly rowBusyId = signal<string | null>(null);
-  /** Workflow id whose "Run (sync) / Run in background" menu is open — see toggleRunMenu. */
-  readonly runMenuOpenId = signal<string | null>(null);
-
-  /** Active status-poll intervals for in-flight async runs, keyed by workflow id — cleared on completion or
-   *  when this screen is torn down (navigating away does NOT stop the run itself, only this UI's polling). */
-  private readonly pollHandles = new Map<string, ReturnType<typeof setInterval>>();
 
   readonly launchModal = signal<LaunchModal | null>(null);
   readonly dataModal = signal<DataModal | null>(null);
   /** Workflow pending delete confirmation. */
   readonly confirmDelete = signal<WorkflowSummary | null>(null);
+  /** Workflow pending copy (duplicate) confirmation — holds the name typed into the modal. */
+  readonly confirmCopy = signal<WorkflowSummary | null>(null);
+  readonly copyName = signal('');
   // Default sort surfaces the most recently run (created/updated activity proxy) workflows first —
   // per user direction, so a newly built or just-triggered workflow is immediately visible without
   // having to search/sort manually. Backend orders never-run workflows last (LastRunAt ?? -1).
@@ -110,6 +110,29 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     { category: 'audience', label: 'Audience' },
     { category: 'source', label: 'Source' },
   ];
+
+  constructor() {
+    // A RunStatusChangedEvent carries workflowDefinitionId + status, both of which map directly onto an
+    // already-loaded row's own fields (workflowId/lastRun/lastRunAt) — unlike the Dashboard's recent-runs list,
+    // this genuinely is a surgical single-row patch, not a refetch: the row already exists on screen, only its
+    // status is stale. reconnected$ below reconciles anything missed while disconnected with a fresh reload().
+    this.runStatusHub.ensureConnected();
+    this.runStatusHub.runStatusChanged$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(event => {
+        this.summaries.update(rows =>
+          rows.map(w =>
+            w.workflowId === event.workflowDefinitionId
+              ? { ...w, lastRun: event.status, lastRunAt: event.occurredAt }
+              : w,
+          ),
+        );
+      });
+
+    this.runStatusHub.reconnected$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.reload());
+  }
 
   ngOnInit(): void {
     this.reload();
@@ -214,8 +237,6 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.pollHandles.forEach(handle => clearInterval(handle));
-    this.pollHandles.clear();
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
@@ -271,11 +292,13 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.router.navigate(['/workflow-builder']);
   }
 
-  /** Default click on the primary button: sync for Launch (unaffected) and, for backwards compatibility, sync for
-   *  Run too — the button waits here and shows a spinner, same as before this screen offered a choice. Pass
-   *  mode: 'async' (from the split-button's dropdown, see toggleRunMenu) to dispatch a background run instead. */
+  /** Launch rows are unaffected (still their own thing — see below). Every Run row now always dispatches in the
+   *  background (the template only ever passes mode: 'async' — see the row-actions template) so the row stays
+   *  interactive and the run survives navigating away; live status arrives via SignalR (RunStatusHubService)
+   *  instead of the old blocking "wait here" option, which is no longer offered in the UI. The 'sync' branch
+   *  below is kept as-is (still the API's supported synchronous mode) rather than deleted outright — it's simply
+   *  unreached from this screen now that mode always defaults from an explicit 'async' call. */
   onAction(row: WorkflowSummary, mode: 'sync' | 'async' = 'sync'): void {
-    this.runMenuOpenId.set(null);
     if (this.busyId()) return;
 
     if (row.action === 'Launch') {
@@ -319,28 +342,19 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Shows/hides the "Run (wait here) / Run in background" menu for one row. Ignored for Launch rows — the launch
-   *  action never executes the pipeline itself, so there's nothing to choose sync/async for (see analysis). */
-  toggleRunMenu(row: WorkflowSummary, event: Event): void {
-    event.stopPropagation();
-    if (row.action !== 'Run') return;
-    this.runMenuOpenId.set(this.runMenuOpenId() === row.workflowId ? null : row.workflowId);
-  }
-
   // Single document:click listener for the whole component — see closeFilterMenuIfOutside above for
   // why this must not be split across multiple @HostListener('document:click') decorators.
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     this.closeFilterMenuIfOutside(event);
-    this.runMenuOpenId.set(null);
   }
 
   /** Dispatches the run to a background task and returns immediately (202 Accepted) — the row stays interactive
-   *  and the run survives navigating to another screen; poll the returned run id for completion. */
+   *  and the run survives navigating to another screen. Completion arrives via the SignalR push
+   *  (RunStatusHubService.runStatusChanged$, wired in the constructor above) rather than polling here. */
   private runAsync(row: WorkflowSummary): void {
     this.api.run(row.workflowId, true).subscribe({
       next: result => {
-        const runId = (result as WorkflowRunStatus).workflowRunId;
         const correlationId = (result as WorkflowRunStatus).correlationId;
         this.toast.success(
           'Running in background',
@@ -354,45 +368,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
               : w,
           ),
         );
-        this.pollRunStatus(row, runId);
       },
       error: err => {
         this.toast.error('Workflow run', this.messageOf(err, 'The background run could not be started.'));
       },
     });
-  }
-
-  /** Polls GET /workflow-runs/{runId}/status until it leaves "Running", then reloads the row from /summary so
-   *  Last Run reflects the persisted terminal result. Stops (without affecting the server-side run) if this
-   *  component is destroyed first — see ngOnDestroy. */
-  private pollRunStatus(row: WorkflowSummary, runId: string): void {
-    const existing = this.pollHandles.get(row.workflowId);
-    if (existing) {
-      clearInterval(existing);
-    }
-
-    const handle = setInterval(() => {
-      this.api.runStatus(runId).subscribe({
-        next: status => {
-          if (status.status === 'Running') return;
-
-          clearInterval(handle);
-          this.pollHandles.delete(row.workflowId);
-          const failed = status.status === 'Failed';
-          this.toast[failed ? 'error' : 'success'](
-            'Workflow run',
-            `"${row.name}" ${failed ? 'failed' : 'completed'}.`,
-          );
-          this.reload();
-        },
-        error: () => {
-          clearInterval(handle);
-          this.pollHandles.delete(row.workflowId);
-        },
-      });
-    }, RUN_STATUS_POLL_MS);
-
-    this.pollHandles.set(row.workflowId, handle);
   }
 
   onViewData(row: WorkflowSummary): void {
@@ -504,6 +484,40 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Copies this workflow's raw id straight to the clipboard — no modal, just the id + a toast confirmation. */
   copyWorkflowId(row: WorkflowSummary): void {
     this.copy(row.workflowId, 'Workflow ID');
+  }
+
+  /** Opens the duplicate-workflow modal, pre-filling a "<name> (copy)" suggestion. */
+  askCopyWorkflow(row: WorkflowSummary): void {
+    this.copyName.set(`${row.name} (copy)`);
+    this.confirmCopy.set(row);
+  }
+
+  cancelCopyWorkflow(): void {
+    this.confirmCopy.set(null);
+    this.copyName.set('');
+  }
+
+  /** Duplicates the workflow under the typed name. The copy is always created disabled (see
+   *  WorkflowEndpoints.copy) so it never double-runs alongside the original — use the row's
+   *  Enable toggle once you've reviewed it. */
+  confirmCopyWorkflow(): void {
+    const row = this.confirmCopy();
+    const name = this.copyName().trim();
+    if (!row || !name) return;
+    this.rowBusyId.set(row.workflowId);
+    this.api.copy(row.workflowId, name).subscribe({
+      next: () => {
+        this.rowBusyId.set(null);
+        this.confirmCopy.set(null);
+        this.copyName.set('');
+        this.reload();
+        this.toast.success('Workflow copied', `"${name}" was created (disabled). Enable it when you're ready.`);
+      },
+      error: err => {
+        this.rowBusyId.set(null);
+        this.toast.error(this.messageOf(err, 'Could not copy the workflow.'));
+      },
+    });
   }
 
   /** Friendly SMART application-type label for the Audience column. */

@@ -9,11 +9,18 @@ namespace FHIRBridge.Governance;
 /// The 6-character suffix combines a per-process day-scoped counter with a base-36 encoding so ids are
 /// readable and collision-resistant across instances; the unique index on <c>ErrorLogs.ErrorReferenceId</c>
 /// is the ultimate backstop. Cloud-agnostic: no dependency on any cloud sequence/counter service.
+///
+/// The counter is seeded from the current tick count (rather than always starting at 0) so a same-day process
+/// restart doesn't regenerate the exact same sequence of ids a prior instance already persisted that day — a
+/// fresh-from-0 counter would otherwise collide with everything the previous instance already saved, and every
+/// one of those collisions previously caused the entire error record to be silently dropped (see
+/// <see cref="GlobalExceptionManager.CaptureAsync"/>'s retry, which is the real backstop for the rare remaining
+/// collision this seeding doesn't fully rule out).
 /// </summary>
 public static class ErrorReference
 {
     private const string Prefix = "ERR";
-    private static long _sequence;
+    private static long _sequence = DateTime.UtcNow.Ticks % 1_000_000;
 
     public static string New() => New(DateTime.UtcNow);
 

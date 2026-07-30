@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Integration.Sql;
 using Microsoft.Data.SqlClient;
 
@@ -24,10 +25,12 @@ namespace FHIRBridge.Infrastructure.Destinations;
 public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
 {
     private readonly ISecretProvider _secretProvider;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
-    public MappedSqlServerDestinationWriter(ISecretProvider secretProvider)
+    public MappedSqlServerDestinationWriter(ISecretProvider secretProvider, IGlobalExceptionManager? exceptionManager = null)
     {
         _secretProvider = secretProvider;
+        _exceptionManager = exceptionManager;
     }
 
     public async Task<DestinationWriteResult> WriteAsync(
@@ -86,13 +89,14 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
             var toWrite = AugmentWithSystemColumns(record, systemColumns, context);
             try
             {
+                var rowsAffected = 1;
                 switch (target.WriteMode)
                 {
                     case SqlDestinationWriteMode.Upsert:
                         await UpsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
                         break;
                     case SqlDestinationWriteMode.Update:
-                        await UpdateRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
+                        rowsAffected = await UpdateRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
                         break;
                     case SqlDestinationWriteMode.Cdc:
                         await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
@@ -103,12 +107,23 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
                         break;
                 }
 
-                writtenResourceIds.Add(record.SourceResourceId);
+                if (rowsAffected > 0)
+                {
+                    writtenResourceIds.Add(record.SourceResourceId);
+                }
             }
             catch (SqlException exception)
             {
                 recordErrors.Add(
                     $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
+
+                if (_exceptionManager is not null)
+                {
+                    await _exceptionManager.CaptureAsync(
+                        exception,
+                        new ExceptionContext(Module: "Destination Write", CorrelationId: context.CorrelationId),
+                        cancellationToken);
+                }
             }
         }
 
@@ -318,7 +333,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
     /// <summary>Updates the matching row by <paramref name="keyColumn"/> only — never inserts. A record whose key
     /// isn't present in the table (or whose key value is missing) is simply left unwritten, which is exactly what
     /// "Update only" means.</summary>
-    private static async Task UpdateRecordAsync(
+    private static async Task<int> UpdateRecordAsync(
         SqlConnection connection,
         string schemaName,
         string tableName,
@@ -328,7 +343,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
     {
         if (!TryGetKeyValue(record, keyColumn, out var keyValue))
         {
-            return;
+            return 0;
         }
 
         var columns = record.Values.Keys
@@ -339,7 +354,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
 
         if (columns.Count == 0)
         {
-            return;
+            return 0;
         }
 
         var setClause = string.Join(", ", columns.Select(column => $"[{column}] = @{column}"));
@@ -352,7 +367,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         await using var command = new SqlCommand(sql, connection);
         AddRecordParameters(command, record, columns, keyColumn, keyValue);
         command.Parameters.AddWithValue($"@{keyColumn}", keyValue ?? DBNull.Value);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task EnsureCdcTableAsync(
