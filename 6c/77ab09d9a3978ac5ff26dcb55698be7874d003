@@ -1,0 +1,40 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_42688973aa00a3::t_b583f1945a35ef 896-899
+  s_42688973aa00a3::t_b718361112d35f 1114-1120,1122,1126
+  s_42688973aa00a3::t_3f3a735219898f 234-236
+  s_42688973aa00a3::t_ba1a2287a0bebe 309-310
+  s_42688973aa00a3::t_ce70002d4b39de 252-253
+  s_42688973aa00a3::t_9cf718c63980dd 723-730,738
+  s_42688973aa00a3::t_946960eec6eceb 1151-1154
+  s_42688973aa00a3::t_9e8aec9a29417d 272-274
+  s_42688973aa00a3::t_bec3f3859ef931 1234-1237
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_42688973aa00a3::t_defd82c86a2c1b 598
+  s_42688973aa00a3::t_5bd8e892c7d340 605-608,610-620,622-627,629
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_42688973aa00a3::t_6347ea3c9e7995 656-661
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_42688973aa00a3::t_f15b7a5629710e 1067-1076
+  s_42688973aa00a3::t_db2250808c6e82 1055-1056
+  s_42688973aa00a3::t_98066b547ec724 898-900,902-904,907-913,916-925
+  s_42688973aa00a3::t_51e077bf8400da 901,905-906,914,926-927
+  s_42688973aa00a3::t_453a72b8dfca41 915
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_42688973aa00a3::t_2961f4dd5e8951 402-408
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "6c77ab09d9a3978ac5ff26dcb55698be7874d003",
+  "prompts": {},
+  "sessions": {
+    "s_42688973aa00a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "422e0048-f6c3-4905-aa21-a71879f16d32",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

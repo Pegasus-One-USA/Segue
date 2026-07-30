@@ -1,0 +1,77 @@
+Demo_TestApp/backend/Program.cs
+  s_e10c7f2a78abc5::t_3166d00973c711 76-90
+  s_e10c7f2a78abc5::t_4b6eca9f4eb101 513-515
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_e10c7f2a78abc5::t_e97dc19062a954 24-29
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-standalone-new11.ts
+  s_e10c7f2a78abc5::t_f22d1d9c68a8af 1-17
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-in-app-new11.ts
+  s_e10c7f2a78abc5::t_ff2ef8b1361acf 1-18
+Demo_TestApp/frontend/src/app/app.html
+  s_e10c7f2a78abc5::t_5e1fc4b671e5d7 25-26,31-35,37,40,42,48,51,58,61
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-standalone-new11.html
+  s_e10c7f2a78abc5::t_aec2a5b597364f 1-12
+Demo_TestApp/backend/Resource11Endpoints.cs
+  s_e10c7f2a78abc5::t_cdb823143b3843 3-6,11-14,21-76,278-279,287-289,302
+  s_e10c7f2a78abc5::t_bad1a7f7d96121 1-2,7-10,15-20,77-277,280-286,290-301,303-305
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.ts
+  s_e10c7f2a78abc5::t_0d0f207b659b35 1-80
+Demo_TestApp/frontend/src/app/app.ts
+  s_e10c7f2a78abc5::t_83aa36594f3be0 8-13
+  s_e10c7f2a78abc5::t_2d22a9d8f23f9b 46-56
+  s_e10c7f2a78abc5::t_d2e18606a74b62 89-92
+  s_e10c7f2a78abc5::t_6aa06f7582bf61 204-212
+  s_e10c7f2a78abc5::t_5194713b590381 119-127
+  s_e10c7f2a78abc5::t_33c109d26c2a31 177-185
+Demo_TestApp/frontend/src/app/demo-types/new-11/core/services/resource-11.service.ts
+  s_e10c7f2a78abc5::t_da24d8f83da3e6 1-22
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-in-app-new11.html
+  s_e10c7f2a78abc5::t_a2870e8fc4cf7f 1-12
+Demo_TestApp/backend/Resource11Entities.cs
+  s_e10c7f2a78abc5::t_0a82a5e2da9687 221-230
+  s_e10c7f2a78abc5::t_0e9e118fe49ec9 1-220
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_e10c7f2a78abc5::t_f57ef4c2ccc75f 24-38,149-150
+  s_e10c7f2a78abc5::t_47ab6e6373ea92 66-84,91-148
+Demo_TestApp/frontend/src/app/demo-types/new-11/patient-new11.ts
+  s_e10c7f2a78abc5::t_786cf212c49217 1-18
+Demo_TestApp/backend/PractitionerFieldExtractor.cs
+  s_e10c7f2a78abc5::t_ead9d1306a5f73 1-136
+Demo_TestApp/frontend/src/app/demo-types/new-11/core/config/resource-11-menu.config.ts
+  s_e10c7f2a78abc5::t_a5872ee17b7446 1-251
+Demo_TestApp/frontend/src/app/demo-types/new-11/backend-system-new11.ts
+  s_e10c7f2a78abc5::t_c401bd7caa63a1 1-17
+Demo_TestApp/frontend/src/app/demo-types/new-11/backend-system-new11.html
+  s_e10c7f2a78abc5::t_906bf149a752e2 1-12
+Demo_TestApp/frontend/src/app/demo-types/new-11/patient-new11.html
+  s_e10c7f2a78abc5::t_87b2b5dd4b47d9 1-12
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.scss
+  s_e10c7f2a78abc5::t_5a50f4dc37d265 1-173
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.html
+  s_e10c7f2a78abc5::t_b492a1fabd44ae 1-70
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_e10c7f2a78abc5::t_1a461b6dab0965 319-324
+  s_e10c7f2a78abc5::t_3ca7d9760dd186 195-198
+  s_e10c7f2a78abc5::t_5a7d3e74b9e776 261-318,325
+  s_e10c7f2a78abc5::t_5a11f6f818cd30 170-194
+Demo_TestApp/frontend/src/styles.scss
+  s_e10c7f2a78abc5::t_2933a60623cb34 282-312
+Demo_TestApp/frontend/src/app/demo-types/new-11/core/models/resource-11.model.ts
+  s_e10c7f2a78abc5::t_39af07dfb68bd0 1-204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "51f78780b080af4d97e12f04fb4527ad4c6166bf",
+  "prompts": {},
+  "sessions": {
+    "s_e10c7f2a78abc5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ae2f68f-c5a5-457d-b9d2-b1b5cb814f75",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

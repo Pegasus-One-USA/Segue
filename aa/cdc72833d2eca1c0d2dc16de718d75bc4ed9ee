@@ -1,0 +1,150 @@
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_be465476bec205::t_4ab023ec34acbd 675-676
+  s_be465476bec205::t_7a02d05ab8516a 54,77-78,101-123
+  s_be465476bec205::t_ccf407111aca6b 342-343
+src/Api/FHIRBridge.Api/Cors/DynamicPortalCorsPolicyProvider.cs
+  s_fdd5d7662ff1a3::t_15d82c57224aaa 36-42
+src/BuildingBlocks/FHIRBridge.SharedKernel/Exceptions/SecretNotConfiguredException.cs
+  s_fdd5d7662ff1a3::t_6f707226eeedff 1-21
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_be465476bec205::t_0a03e4ab12d3c8 161,180-196
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_24fa7417f71b13::t_f5165e6bf1b547 8-9,12-19,47-66
+  s_fdd5d7662ff1a3::t_f4fbf4e56b43c4 32-41,43
+src/BuildingBlocks/FHIRBridge.Governance/ErrorReference.cs
+  s_be465476bec205::t_47c1cde1caa7bc 12-18,23
+portal/package.json
+  s_24fa7417f71b13::t_6b4fdae06d3472 31
+src/Worker/FHIRBridge.Worker/ScheduleDispatcherWorker.cs
+  s_be465476bec205::t_7aca1aa9ebf0b0 77-85
+  s_be465476bec205::t_e1d4f4d3950c1f 3
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_4d2983578f9776::t_4bb7e5f0eb9f20 67-69
+  s_24fa7417f71b13::t_6063e23fd233ac 295-297
+  s_24fa7417f71b13::t_fb594b649a97e4 1-2,14
+  s_4d2983578f9776::t_0e0559068b3fac 42
+  s_24fa7417f71b13::t_4cdbeb279c767a 50-51
+  s_24fa7417f71b13::t_53785eb3ac991b 298-300
+  s_fdd5d7662ff1a3::t_fea55260936367 353-354
+  s_fdd5d7662ff1a3::t_92de3bca70be32 118
+  s_24fa7417f71b13::t_6d34ce7037494a 114-117,119-136
+  s_4d2983578f9776::t_b8c4ac2ed29e2d 4
+  s_4d2983578f9776::t_735639357e82e7 489-522
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  s_24fa7417f71b13::t_7b3220ead5a53c 47,59,62-63
+  s_24fa7417f71b13::t_09a2733e81c744 5-6,12,22-25,27-29
+  s_24fa7417f71b13::t_b11da479c9b45a 1,26,30
+  s_24fa7417f71b13::t_a2d813a83eb586 48,60-61,64-78
+src/BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs
+  s_be465476bec205::t_3e19443a72874f 25-29,39-40,42-46,48-82
+src/FHIRBridge.Infrastructure/Destinations/MappedMySqlDestinationWriter.cs
+  s_be465476bec205::t_b1ce2e0763ee3d 4,15-16
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_4d2983578f9776::t_7d7c2733562298 208-215,222
+  s_4d2983578f9776::t_061dc85461c40a 349-385
+  s_24fa7417f71b13::t_aca610ab0be25f 163-167,173
+src/FHIRBridge.Infrastructure/Security/AzureKeyVaultSecretProvider.cs
+  s_be465476bec205::t_f5c8306540d278 5
+  s_be465476bec205::t_459cf891d50afe 29-34
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_fdd5d7662ff1a3::t_99fcb9f1d1459b 218-229
+  s_24fa7417f71b13::t_4add04c5c2a226 86-93
+  s_fdd5d7662ff1a3::t_7ff77a64489602 19,28-29,38
+  s_fdd5d7662ff1a3::t_9606b4f3398c89 258-266,276-286
+  s_fdd5d7662ff1a3::t_795a89257a95fb 6
+  s_24fa7417f71b13::t_33fd650dfd26c4 18,27,37
+  s_24fa7417f71b13::t_a1bf5c2bf48411 199,230
+  s_24fa7417f71b13::t_ea60002e8f813c 255-257,267-275,287-321
+src/FHIRBridge.Infrastructure/Destinations/MappedPostgreSqlDestinationWriter.cs
+  s_be465476bec205::t_ce696d211442e2 4,12-13
+src/Api/FHIRBridge.Api/Hubs/SignalRRunStatusNotifier.cs
+  s_fdd5d7662ff1a3::t_6f707226eeedff 1-24
+portal/src/app/services/run-status-hub.service.ts
+  s_fdd5d7662ff1a3::t_6f707226eeedff 1-76
+src/Runtime/FHIRBridge.Runtime.Application/Services/PipelineOrchestrator.cs
+  s_be465476bec205::t_e83aab300aa21c 153-154
+  s_be465476bec205::t_ff50ba0ad98484 236-238,253-268
+  s_be465476bec205::t_56338d94f7df35 14,30,38-39,47,269-270
+src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs
+  s_b598587dc3d8dd::t_99ff2a972ae596 85,87-90
+  s_be465476bec205::t_d0a6828f2aa57d 10
+  s_be465476bec205::t_751e1f57a5f3fb 109-116
+  s_be465476bec205::t_271a59dbae321a 27,29,32
+  s_b598587dc3d8dd::t_67def23073efe0 208,224,240
+src/Api/FHIRBridge.Api/Hubs/RunStatusHub.cs
+  s_fdd5d7662ff1a3::t_6f707226eeedff 1-19
+src/FHIRBridge.Infrastructure/Security/ConfigurationSecretProvider.cs
+  s_be465476bec205::t_799b205470805f 3
+  s_be465476bec205::t_689943b1cb8659 25
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_b598587dc3d8dd::t_926a0b9813488d 92,99,110-113
+  s_be465476bec205::t_07b9d45be39525 8
+  s_be465476bec205::t_b9db8f8ac488bf 28,30,33
+  s_be465476bec205::t_4c075c9f12cf30 119-126
+  s_b598587dc3d8dd::t_2023c7e06bf904 336,346,357,370
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IRunStatusNotifier.cs
+  s_fdd5d7662ff1a3::t_6f707226eeedff 1-23
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_24fa7417f71b13::t_2403e8cc756d95 465-467
+  s_4d2983578f9776::t_9675e3caa7d6f3 589,591-595
+  s_4d2983578f9776::t_98e1b2b9c04462 585-588,590,596-597
+src/Api/FHIRBridge.Api/Security/FhirBridgeAuthenticationExtensions.cs
+  s_24fa7417f71b13::t_36842a975db8fe 27-33,98,232,234-235
+  s_24fa7417f71b13::t_eea55af5bbc3b4 230-231,233,236-239,241-245,248
+  s_24fa7417f71b13::t_477cfc9f482f5c 78,81,83,88-97
+  s_24fa7417f71b13::t_d4742a8892db58 153-191
+src/Api/FHIRBridge.Api/Program.cs
+  s_24fa7417f71b13::t_bcdba454c390e1 153-159
+  s_24fa7417f71b13::t_50fcf0305f4f4c 510
+  s_24fa7417f71b13::t_84c534f6ea0b69 5
+portal/package-lock.json
+  s_fdd5d7662ff1a3::t_7d0972ada4d2ab 23,4890-4923,7759-7770,10127-10135,10153-10161,10385-10394,13285-13304,14434-14454,14643-14648,15487-15492,16734-16772,17275-17284,17474-17479,17720-17729
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "aacdc72833d2eca1c0d2dc16de718d75bc4ed9ee",
+  "prompts": {},
+  "sessions": {
+    "s_24fa7417f71b13": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cea28f-ce9f-40ff-8e07-5369a22df224",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_4d2983578f9776": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa6851ac-4e39-437e-a5ef-468d6fe0a293",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_b598587dc3d8dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "604d4b89-b7fc-411f-8dcc-52670e6b197b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_be465476bec205": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d920b7a1-e38a-48fb-997c-e0a22c43b970",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_fdd5d7662ff1a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b15c29e5-450c-48a3-a267-6ee262853b03",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
