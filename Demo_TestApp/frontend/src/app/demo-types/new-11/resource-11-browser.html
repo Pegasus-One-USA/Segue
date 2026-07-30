@@ -1,0 +1,70 @@
+<div class="fullscreen-shell">
+  <header class="fullscreen-shell__topbar">
+    <div class="title-group">
+      <span class="fullscreen-shell__title">HealthApp</span>
+      <span class="login-type-badge">{{ loginTypeLabel() }}</span>
+    </div>
+    <div class="fullscreen-shell__actions">
+      <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <div class="r11-page">
+    <header class="page-header">
+      <h1>New 11 &mdash; Curated Tables</h1>
+      <p class="subtitle">Data as fetched from the <code>_11</code> tables. Pick a resource to view its rows.</p>
+    </header>
+
+    <nav class="r11-resource-nav" aria-label="Resource type">
+      @for (item of menu; track item.key) {
+        <button
+          type="button"
+          class="r11-resource-nav__item"
+          [class.active]="selected().key === item.key"
+          (click)="selectResource(item)"
+        >
+          {{ item.label }}
+        </button>
+      }
+    </nav>
+
+    @if (isLoading()) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+      </div>
+    } @else if (loadError()) {
+      <p class="error-banner">{{ loadError() }}</p>
+    } @else {
+      <div class="r11-result-meta">
+        <strong>{{ selected().label }}</strong> &middot; {{ rows().length }} record{{ rows().length === 1 ? '' : 's' }}
+      </div>
+
+      @if (rows().length === 0) {
+        <p class="empty-state">No {{ selected().label }} records found.</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="r11-table">
+            <thead>
+              <tr>
+                @for (col of selected().columns; track col.key) {
+                  <th>{{ col.label }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track $index) {
+                <tr>
+                  @for (col of selected().columns; track col.key) {
+                    <td>{{ formatCell(row, col) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+</div>
