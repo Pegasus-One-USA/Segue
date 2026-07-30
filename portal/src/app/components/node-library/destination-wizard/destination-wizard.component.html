@@ -11,7 +11,10 @@
       </div>
       <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
     </div>
-    <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+    <div class="dw-topbar-actions">
+      <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+      <button class="dw-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+    </div>
   </div>
 
   <!-- ── Step indicator ───────────────────────────────────────────────────── -->
@@ -373,9 +376,18 @@
 
       @for (r of resourceKeys(); track r) {
         <div class="dw-mapping-group">
-          <div class="dw-mapping-group-head">
-            <strong>{{ r }}</strong>
-            <span class="dw-mapping-target-inline">
+          <div class="dw-mapping-group-head" role="button" tabindex="0"
+               [attr.aria-expanded]="!isGroupCollapsed(r)"
+               (click)="toggleGroup(r)" (keydown.enter)="toggleGroup(r)" (keydown.space)="toggleGroup(r)">
+            <span class="dw-mapping-name">
+              <strong>{{ r }}</strong>
+              @if (resourceIssueCount(r) > 0) {
+                <span class="dw-mapping-issue-badge" [attr.title]="resourceIssueCount(r) + ' mapping issue(s) need attention'">
+                  ⚠ {{ resourceIssueCount(r) }}
+                </span>
+              }
+            </span>
+            <span class="dw-mapping-target-inline" (click)="$event.stopPropagation()">
               <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : 'File name' }}</label>
               @if (hasSqlTables()) {
                 <div class="dw-select-wrap">
@@ -397,9 +409,11 @@
                 />
               }
             </span>
-            <button type="button" class="dw-btn" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
-            <button type="button" class="dw-btn dw-add-field" (click)="addRow(r)">+ Add field</button>
+            <button type="button" class="dw-btn" (click)="$event.stopPropagation(); addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
+            <button type="button" class="dw-btn dw-add-field" (click)="$event.stopPropagation(); addRow(r)">+ Add field</button>
+            <span class="dw-mapping-chevron" [class.collapsed]="isGroupCollapsed(r)">›</span>
           </div>
+          @if (!isGroupCollapsed(r)) {
           <span class="dw-hint dw-mapping-key-hint">
             🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.
           </span>
@@ -532,6 +546,7 @@
               }
             </tbody>
           </table>
+          }
         </div>
       }
     }

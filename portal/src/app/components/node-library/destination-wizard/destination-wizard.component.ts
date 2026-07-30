@@ -162,6 +162,10 @@ export class DestinationWizardComponent implements OnInit {
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
+  /** The relocated "✕" next to "← Back to library" — closes the whole Node Library dialog outright
+   *  (unlike cancel(), which only backs out of this form to the library's sidebar). Mirrors the
+   *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
+  readonly closeAll  = output<void>();
 
   // Lets the parent (Node Library sidebar) lock out the other destination type
   // mid-wizard, and warn before discarding progress if the user switches anyway.
@@ -778,6 +782,44 @@ export class DestinationWizardComponent implements OnInit {
   // ── mapping rows ──────────────────────────────────────────────────────────
   rowsForResource(r: string): MappingRow[] {
     return this.mappingRows().filter(row => row.resource === r);
+  }
+
+  // ── Map fields accordion (Step 3) ────────────────────────────────────────
+  // Explicit per-resource overrides — only touched by toggleGroup(). Whichever set contains a resource wins;
+  // if neither does, isGroupCollapsed() falls back to a sensible default (see below) rather than requiring
+  // every resource to be explicitly toggled once before it renders correctly.
+  private readonly _collapsedGroups = signal<Set<string>>(new Set());
+  private readonly _expandedGroups  = signal<Set<string>>(new Set());
+
+  // Default (no explicit toggle yet): a single resource always starts expanded — there's nothing to declutter.
+  // With several resources, only the first stays open and the rest start collapsed; a resource with an active
+  // mapping issue defaults open too, so a problem is never hidden behind a fold the user never opened.
+  isGroupCollapsed(r: string): boolean {
+    if (this._collapsedGroups().has(r)) return true;
+    if (this._expandedGroups().has(r)) return false;
+    if (this.resourceKeys().length <= 1) return false;
+    if (this.resourceIssueCount(r) > 0) return false;
+    return this.resourceKeys().indexOf(r) > 0;
+  }
+
+  toggleGroup(r: string): void {
+    const collapsedNow = this.isGroupCollapsed(r);
+    if (collapsedNow) {
+      this._expandedGroups.update(s => new Set(s).add(r));
+      this._collapsedGroups.update(s => { const n = new Set(s); n.delete(r); return n; });
+    } else {
+      this._collapsedGroups.update(s => new Set(s).add(r));
+      this._expandedGroups.update(s => { const n = new Set(s); n.delete(r); return n; });
+    }
+  }
+
+  // Badge shown on the group header regardless of collapse state, so collapsing a resource's mapping table
+  // never hides an unverified column, a type mismatch, or a missing required parent selection from view.
+  resourceIssueCount(r: string): number {
+    let count = this.rowsForResource(r)
+      .filter(row => this.isRowColumnUnverified(row) || this.isRowTypeMismatched(row)).length;
+    if (this.resourcesMissingParentSelection().includes(r)) count++;
+    return count;
   }
 
   updateRow(i: number, field: 'targetName', val: string): void {
