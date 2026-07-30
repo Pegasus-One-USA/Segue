@@ -1,9 +1,11 @@
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Moq;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
 
@@ -24,6 +26,16 @@ public sealed class WorkflowSqlStoreTests
         return new FHIRBridgeDbContext(options);
     }
 
+    private static ICurrentUserService CurrentUserAs(string email)
+    {
+        var mock = new Mock<ICurrentUserService>();
+        mock.Setup(s => s.CurrentUser).Returns(new CurrentUserInfo(null, email, null, Array.Empty<string>(), true));
+        return mock.Object;
+    }
+
+    private static SqlWorkflowDefinitionStore CreateDefinitionStore(FHIRBridgeDbContext context, string actorEmail = "test@example.com") =>
+        new(context, CurrentUserAs(actorEmail));
+
     [Fact]
     public async Task Definition_store_round_trips_nodes_edges_and_configuration()
     {
@@ -36,12 +48,12 @@ public sealed class WorkflowSqlStoreTests
 
         await using (var context = CreateContext())
         {
-            await new SqlWorkflowDefinitionStore(context).SaveAsync(workflow, CancellationToken.None);
+            await CreateDefinitionStore(context).SaveAsync(workflow, CancellationToken.None);
         }
 
         await using (var context = CreateContext())
         {
-            var reloaded = await new SqlWorkflowDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
+            var reloaded = await CreateDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
 
             reloaded.Should().NotBeNull();
             reloaded!.Name.Should().Be("Epic -> SQL");
@@ -65,7 +77,7 @@ public sealed class WorkflowSqlStoreTests
 
         await using (var context = CreateContext())
         {
-            await new SqlWorkflowDefinitionStore(context).SaveAsync(version1, CancellationToken.None);
+            await CreateDefinitionStore(context).SaveAsync(version1, CancellationToken.None);
         }
 
         // Same id, an entirely new graph with fresh node ids — mirrors a PUT rebuilding the definition.
@@ -76,12 +88,12 @@ public sealed class WorkflowSqlStoreTests
 
         await using (var context = CreateContext())
         {
-            await new SqlWorkflowDefinitionStore(context).SaveAsync(version2, CancellationToken.None);
+            await CreateDefinitionStore(context).SaveAsync(version2, CancellationToken.None);
         }
 
         await using (var assertContext = CreateContext())
         {
-            var reloaded = await new SqlWorkflowDefinitionStore(assertContext).GetAsync(definitionId, CancellationToken.None);
+            var reloaded = await CreateDefinitionStore(assertContext).GetAsync(definitionId, CancellationToken.None);
 
             reloaded!.Name.Should().Be("v2");
             reloaded.Nodes.Select(node => node.NodeType)
@@ -90,6 +102,45 @@ public sealed class WorkflowSqlStoreTests
             // The v1 graph must be fully gone, not merged.
             assertContext.WorkflowNodes.Count().Should().Be(2);
             assertContext.WorkflowEdges.Count().Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task Definition_store_save_stamps_created_once_and_updated_on_every_later_save()
+    {
+        var definitionId = Guid.NewGuid();
+
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context, "creator@example.com")
+                .SaveAsync(new WorkflowDefinition(definitionId, "v1", 1), CancellationToken.None);
+        }
+
+        DateTime firstCreatedOnUtc;
+        await using (var context = CreateContext())
+        {
+            var afterFirstSave = await CreateDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
+            afterFirstSave!.CreatedBy.Should().Be("creator@example.com");
+            afterFirstSave.UpdatedOnUtc.Should().BeNull();
+            afterFirstSave.UpdatedBy.Should().BeNull();
+            firstCreatedOnUtc = afterFirstSave.CreatedOnUtc;
+        }
+
+        // Same id, a fresh graph — mirrors a PUT rebuilding the definition (an edit, not a first save).
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context, "editor@example.com")
+                .SaveAsync(new WorkflowDefinition(definitionId, "v2", 1), CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var afterEdit = await CreateDefinitionStore(assertContext).GetAsync(definitionId, CancellationToken.None);
+
+            afterEdit!.CreatedOnUtc.Should().Be(firstCreatedOnUtc);
+            afterEdit.CreatedBy.Should().Be("creator@example.com");
+            afterEdit.UpdatedOnUtc.Should().NotBeNull();
+            afterEdit.UpdatedBy.Should().Be("editor@example.com");
         }
     }
 
@@ -142,6 +193,41 @@ public sealed class WorkflowSqlStoreTests
         await using (var assertContext = CreateContext())
         {
             assertContext.WorkflowRuns.Count(persisted => persisted.Id == runId).Should().Be(1);
+        }
+    }
+
+    [Fact]
+    public async Task Run_store_status_counts_reflect_every_run_and_zero_fill_unrepresented_statuses()
+    {
+        var definitionId = Guid.NewGuid();
+
+        var succeeded1 = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+        succeeded1.Succeed(DateTimeOffset.UtcNow);
+        var succeeded2 = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+        succeeded2.Succeed(DateTimeOffset.UtcNow);
+        var failed = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+        failed.Fail("boom", DateTimeOffset.UtcNow);
+        var running = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(context);
+            await store.SaveAsync(succeeded1, CancellationToken.None);
+            await store.SaveAsync(succeeded2, CancellationToken.None);
+            await store.SaveAsync(failed, CancellationToken.None);
+            await store.SaveAsync(running, CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var counts = await new SqlWorkflowRunStore(assertContext).GetStatusCountsAsync(CancellationToken.None);
+
+            counts.Should().HaveCount(5);
+            counts[WorkflowRunStatus.Succeeded].Should().Be(2);
+            counts[WorkflowRunStatus.Failed].Should().Be(1);
+            counts[WorkflowRunStatus.Running].Should().Be(1);
+            counts[WorkflowRunStatus.Pending].Should().Be(0);
+            counts[WorkflowRunStatus.Cancelled].Should().Be(0);
         }
     }
 }

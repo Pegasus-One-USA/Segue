@@ -25,3 +25,12 @@ public sealed record WorkflowRunHistoryDto(
         ? (long)(CompletedAt.Value - StartedAt).TotalMilliseconds
         : null;
 }
+
+/// <summary>All-time run count per <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRunStatus"/>, across
+/// every workflow definition — backs the Dashboard's status stat tiles.</summary>
+public sealed record WorkflowRunStatusCountsDto(
+    int Pending,
+    int Running,
+    int Succeeded,
+    int Failed,
+    int Cancelled);

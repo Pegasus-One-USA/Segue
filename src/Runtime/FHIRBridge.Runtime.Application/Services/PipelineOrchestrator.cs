@@ -11,6 +11,7 @@ using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Domain.Fhir;
 using FHIRBridge.Runtime.Domain.ValueObjects;
 using FHIRBridge.Observability;
+using FHIRBridge.Governance;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -26,6 +27,7 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
     private readonly IPipelineRunStore _pipelineRunStore;
     private readonly IFhirBulkExportClient _bulkExportClient;
     private readonly ILogger<PipelineOrchestrator> _logger;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     public PipelineOrchestrator(
         IFhirSourceClientFactory sourceClientFactory,
@@ -33,7 +35,8 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         IResourceTransformer resourceTransformer,
         IPipelineRunStore pipelineRunStore,
         IFhirBulkExportClient bulkExportClient,
-        ILogger<PipelineOrchestrator> logger)
+        ILogger<PipelineOrchestrator> logger,
+        IGlobalExceptionManager? exceptionManager = null)
     {
         _sourceClientFactory = sourceClientFactory;
         _destinationWriterFactory = destinationWriterFactory;
@@ -41,6 +44,7 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         _pipelineRunStore = pipelineRunStore;
         _bulkExportClient = bulkExportClient;
         _logger = logger;
+        _exceptionManager = exceptionManager;
     }
 
     public async Task<PipelineRunDto> StartAsync(
@@ -146,6 +150,8 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
             _logger.LogError(exception, "Runtime pipeline run {PipelineRunId} failed.", pipelineRun.Id);
             pipelineRun.Fail(exception.Message);
 
+            await CaptureFailureAsync(pipelineRun, exception, cancellationToken);
+
             await AddEventAsync(
                 pipelineRun,
                 "PipelineFailed",
@@ -227,6 +233,9 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         {
             _logger.LogError(exception, "Runtime bulk export run {PipelineRunId} failed.", pipelineRun.Id);
             pipelineRun.Fail(exception.Message);
+
+            await CaptureFailureAsync(pipelineRun, exception, cancellationToken);
+
             await AddEventAsync(
                 pipelineRun,
                 "PipelineFailed",
@@ -239,6 +248,24 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
 
         await _pipelineRunStore.UpdateAsync(pipelineRun, cancellationToken);
         return PipelineDtoMapper.ToDto(pipelineRun);
+    }
+
+    // Persists the failure into the shared ErrorLog store (via GlobalExceptionManager) so it surfaces on both the
+    // Errors screen and Correlation Search, not just as an ErrorMessage on this PipelineRun record.
+    private Task CaptureFailureAsync(PipelineRun pipelineRun, Exception exception, CancellationToken cancellationToken)
+    {
+        if (_exceptionManager is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _exceptionManager.CaptureAsync(
+            exception,
+            new ExceptionContext(
+                Module: "Pipeline Run",
+                CorrelationId: pipelineRun.CorrelationId,
+                ExecutionId: pipelineRun.Id.ToString()),
+            cancellationToken);
     }
 
     // Records the bookkeeping for an already-completed (parallel) extraction. The source round-trip happens in the

@@ -1035,6 +1035,22 @@ public static class WorkflowEndpoints
             return Results.Ok(new PagedResult<WorkflowRunHistoryDto>(paged, totalCount, effectivePage, effectivePageSize));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
+        // All-time run count per status, across every workflow — unlike the paged /workflow-runs list above
+        // (capped to the 500 most recent via ListRecentAsync), this queries the full WorkflowRuns table
+        // directly so the Dashboard's stat tiles reflect a true global count. Backs the Dashboard screen.
+        group.MapGet("/workflow-runs/stats", async (
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            var counts = await runStore.GetStatusCountsAsync(cancellationToken);
+            return Results.Ok(new WorkflowRunStatusCountsDto(
+                counts[WorkflowRunStatus.Pending],
+                counts[WorkflowRunStatus.Running],
+                counts[WorkflowRunStatus.Succeeded],
+                counts[WorkflowRunStatus.Failed],
+                counts[WorkflowRunStatus.Cancelled]));
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         group.MapGet("/workflow-runs/{runId:guid}/summary", async (
             Guid runId,
             IWorkflowRunStore runStore,

@@ -409,9 +409,10 @@
                 />
               }
             </span>
-            <button type="button" class="dw-btn" (click)="$event.stopPropagation(); addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
-            <button type="button" class="dw-btn dw-add-field" (click)="$event.stopPropagation(); addRow(r)">+ Add field</button>
-            <span class="dw-mapping-chevron" [class.collapsed]="isGroupCollapsed(r)">›</span>
+            <button type="button" class="dw-btn" [disabled]="isSql() && !targetFor(r)" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
+            <button type="button" class="dw-btn dw-add-field" [disabled]="isSql() && !targetFor(r)" (click)="addRow(r)">+ Add field</button>
+            <button type="button" class="dw-btn dw-clear-fields" [disabled]="rowsForResource(r).length === 0" (click)="clearFields(r)" title="Remove every mapped field for this resource (except the mandatory id/key rows)">Clear Fields</button>
+			<span class="dw-mapping-chevron" [class.collapsed]="isGroupCollapsed(r)">›</span>
           </div>
           @if (!isGroupCollapsed(r)) {
           <span class="dw-hint dw-mapping-key-hint">
@@ -519,25 +520,6 @@
                     }
                   </td>
                 </tr>
-                @if (hasIdentifierSystemOption(row)) {
-                  <tr class="dw-map-row--system-filter">
-                    <td></td>
-                    <td colspan="4">
-                      <label class="dw-hint" [attr.for]="'dw-identifier-system-' + $index">
-                        Identifier/coding system (optional) — this array carries more than one entry told apart only
-                        by "system"; enter its exact system value (e.g. a MRN/CSN OID such as
-                        "urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260") to pick that one entry.
-                      </label>
-                      <input
-                        class="dw-map-input"
-                        [id]="'dw-identifier-system-' + $index"
-                        placeholder="urn:oid:… or http://…"
-                        [value]="row.identifierSystem ?? ''"
-                        (input)="updateIdentifierSystem(mappingRows().indexOf(row), $any($event.target).value)"
-                      />
-                    </td>
-                  </tr>
-                }
               }
               @if (rowsForResource(r).length === 0) {
                 <tr class="dw-map-empty">

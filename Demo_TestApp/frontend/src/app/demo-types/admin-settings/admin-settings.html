@@ -21,6 +21,12 @@
       <p class="subtitle">FHIRBridge connection points for every demo experience, in one place.</p>
     </header>
 
+    <nav class="settings-tabs" aria-label="Settings section">
+      <button type="button" class="settings-tabs__item" [class.active]="section() === 'default'" (click)="selectSection('default')">Default</button>
+      <button type="button" class="settings-tabs__item" [class.active]="section() === 'new11'" (click)="selectSection('new11')">New 11</button>
+    </nav>
+
+    @if (section() === 'default') {
     @if (isLoading()) {
       <p>Loading current settings…</p>
     } @else {

@@ -51,6 +51,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly ILogger<ConfiguredPipelineService> _logger;
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
     private readonly IDestinationSchemaService? _destinationSchemaService;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     public ConfiguredPipelineService(
         IConfigurationRepository configurationRepository,
@@ -73,7 +74,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IGovernanceLogger? governanceLogger = null,
         IFailureDiagnosisClassifier? diagnosisClassifier = null,
         ISystemSettingsCache? settingsCache = null,
-        IDestinationSchemaService? destinationSchemaService = null)
+        IDestinationSchemaService? destinationSchemaService = null,
+        IGlobalExceptionManager? exceptionManager = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -96,6 +98,29 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _logger = logger;
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
         _destinationSchemaService = destinationSchemaService;
+        _exceptionManager = exceptionManager;
+    }
+
+    // Persists a route/extraction failure into the shared ErrorLog store (via GlobalExceptionManager) so it
+    // surfaces on both the Errors screen and Correlation Search, not just as a string in the run's `errors` list.
+    private Task CaptureFailureAsync(
+        Exception exception,
+        Guid pipelineRunId,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (_exceptionManager is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _exceptionManager.CaptureAsync(
+            exception,
+            new ExceptionContext(
+                Module: "Pipeline Run",
+                CorrelationId: correlationId,
+                ExecutionId: pipelineRunId.ToString()),
+            cancellationToken);
     }
 
     /// <summary>
@@ -313,6 +338,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         routeGroup.Key.SourceConnectionId);
 
                     errors.Add($"{resourceType}/{routeGroup.Key.SourceConnectionId}: {DescribeFailure(exception)}");
+
+                    await CaptureFailureAsync(exception, pipelineRunId, request.CorrelationId, cancellationToken);
 
                     continue;
                 }
@@ -644,6 +671,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             var failureDescription = DescribeFailure(exception);
             errors.Add($"{resourceType}/route/{route.Route.Id}: {failureDescription}");
+
+            await CaptureFailureAsync(exception, pipelineRunId, correlationId, cancellationToken);
 
             await _routeExecutionRepository.CompleteAsync(
                 routeExecutionId,

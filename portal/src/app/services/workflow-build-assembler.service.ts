@@ -30,11 +30,6 @@ interface DestMappingRow {
   isUpsertKey?: boolean; // wizard-forced true on the resource's mandatory id row, false elsewhere
   isRequiredParentRef?: boolean; // wizard-forced true on a locked "child of" reference-field row
   parentResourceType?: string;   // which parent (of possibly several) this locked row satisfies
-  // Set when the wizard's "Identifier/coding system" filter is used to pick this array field's value by a
-  // sibling "system" element (e.g. Patient.identifier[]'s MRN vs CSN vs an Epic-internal-id OID). Both must
-  // be present for the filter to apply — see buildMappingSpec's fields.map.
-  identifierSystem?: string;
-  identifierSystemJsonPath?: string;
 }
 
 /**
@@ -572,11 +567,6 @@ export class WorkflowBuildAssemblerService {
       const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource);
       const arrays = row.arrays ?? [];
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
-      // "Identifier/coding system" filter (see destination-wizard.component's hasIdentifierSystemOption):
-      // pick this array's value by matching a sibling "system" element instead of taking the first item —
-      // reuses CorrelateByCode (originally built for Observation.component[] LOINC codes) since matching a
-      // sibling element by value is exactly what both need.
-      const usesSystemFilter = !!(row.identifierSystem && row.identifierSystemJsonPath);
       return {
         targetField: row.column,
         jsonPath,
@@ -591,11 +581,11 @@ export class WorkflowBuildAssemblerService {
         format: null,
         // A flat destination column takes the first match when the path crosses an array; multi-value
         // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
-        arrayPolicy: usesSystemFilter ? 'CorrelateByCode' : isArrayPath ? 'FirstItem' : 'Scalar',
+        arrayPolicy: isArrayPath ? 'FirstItem' : 'Scalar',
         arrayAncestors: arrays.length > 0 ? arrays : null,
         isUpsertKey: row === idRow,
-        correlationCodeJsonPath: usesSystemFilter ? row.identifierSystemJsonPath : null,
-        correlationCodeValue: usesSystemFilter ? row.identifierSystem : null,
+        correlationCodeJsonPath: null,
+        correlationCodeValue: null,
       };
     });
     // A locked "child of" row is mandatory the same way the id row is — mark it required so the built

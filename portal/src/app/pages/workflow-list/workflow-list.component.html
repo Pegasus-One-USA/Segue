@@ -160,14 +160,17 @@
               <td class="col-actions">
                 <div class="row-actions">
                   <div class="split-btn" (click)="$event.stopPropagation()">
-                    <!-- "Get Launch URL" hidden per request — only the Run button (backend workflows) still renders. -->
+                    <!-- "Get Launch URL" hidden per request — only the Run button (backend workflows) still renders.
+                         The sync "Run (wait here)" option is hidden too — every run now always goes through the
+                         background path (see onAction's 'async' default) so the row stays interactive and the run
+                         survives navigating away, with live status now pushed via SignalR (RunStatusHubService)
+                         instead of requiring the old blocking wait. -->
                     @if (w.action === 'Run') {
                       <button
                         class="btn-primary"
                         type="button"
-                        [class.has-caret]="true"
                         [disabled]="busyId() === w.workflowId"
-                        (click)="onAction(w)"
+                        (click)="onAction(w, 'async')"
                       >
                         @if (busyId() === w.workflowId) {
                           <span class="spinner-sm"></span>
@@ -176,29 +179,6 @@
                         }
                         Run
                       </button>
-                    }
-
-                    @if (w.action === 'Run') {
-                      <button
-                        class="btn-primary btn-primary--caret"
-                        type="button"
-                        title="Run options"
-                        [disabled]="busyId() === w.workflowId"
-                        (click)="toggleRunMenu(w, $event)"
-                      ><mat-icon>arrow_drop_down</mat-icon></button>
-
-                      @if (runMenuOpenId() === w.workflowId) {
-                        <div class="run-menu">
-                          <button type="button" (click)="onAction(w, 'sync')">
-                            <span class="run-menu-title">Run (wait here)</span>
-                            <span class="run-menu-sub">Blocks this screen until the run finishes.</span>
-                          </button>
-                          <button type="button" (click)="onAction(w, 'async')">
-                            <span class="run-menu-title">Run in background</span>
-                            <span class="run-menu-sub">Returns immediately — keeps running if you navigate away.</span>
-                          </button>
-                        </div>
-                      }
                     }
                   </div>
 
@@ -229,9 +209,17 @@
                     class="btn-icon"
                     type="button"
                     [disabled]="rowBusyId() === w.workflowId"
+                    title="Copy workflow"
+                    (click)="askCopyWorkflow(w)"
+                  ><mat-icon>content_copy</mat-icon></button>
+
+                  <button
+                    class="btn-icon"
+                    type="button"
+                    [disabled]="rowBusyId() === w.workflowId"
                     [title]="'Copy workflow ID - ' + w.workflowId"
                     (click)="copyWorkflowId(w)"
-                  ><mat-icon>content_copy</mat-icon></button>
+                  ><mat-icon>tag</mat-icon></button>
 
                   <button
                     class="btn-icon btn-icon--danger"
@@ -351,6 +339,43 @@
           <button class="btn-secondary" type="button" (click)="cancelDelete()">Cancel</button>
           <button class="btn-danger" type="button" [disabled]="rowBusyId() === w.workflowId" (click)="confirmDeleteWorkflow()">
             Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Copy (duplicate) workflow modal ──────────────────────────────────────── -->
+@if (confirmCopy(); as w) {
+  <div class="modal-overlay" (click)="cancelCopyWorkflow()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h2>Copy workflow</h2>
+        <button class="modal-close" type="button" (click)="cancelCopyWorkflow()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">
+          Duplicate <strong>{{ w.name }}</strong> — every node, edge and config is copied exactly under a new name.
+          The copy is created <strong>disabled</strong>; enable it once you've reviewed it.
+        </p>
+        <input
+          class="text-input"
+          type="text"
+          [ngModel]="copyName()"
+          (ngModelChange)="copyName.set($event)"
+          placeholder="New workflow name"
+          (keydown.enter)="confirmCopyWorkflow()"
+        />
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" (click)="cancelCopyWorkflow()">Cancel</button>
+          <button
+            class="btn-primary"
+            type="button"
+            [disabled]="rowBusyId() === w.workflowId || !copyName().trim()"
+            (click)="confirmCopyWorkflow()"
+          >
+            Copy
           </button>
         </div>
       </div>
