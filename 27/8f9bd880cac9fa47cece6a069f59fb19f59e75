@@ -1,0 +1,19 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_c60546938fff22::t_e681ec77cf7fce 390,397,408
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "278f9bd880cac9fa47cece6a069f59fb19f59e75",
+  "prompts": {},
+  "sessions": {
+    "s_c60546938fff22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4671f36f-ac74-4243-98fb-238f21a2a76b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
