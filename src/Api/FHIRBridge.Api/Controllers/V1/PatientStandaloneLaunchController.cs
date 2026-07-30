@@ -2,6 +2,7 @@ using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -11,14 +12,14 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace FHIRBridge.Api.Controllers.V1;
 
 /// <summary>
-/// Anonymous "mint a public launch URL" endpoint for the Patient Standalone flow — the MyChart-endpoint counterpart
-/// of <see cref="OAuthController.GetPublicWorkflowStandaloneUrl"/>. Deliberately a separate controller (not an added
-/// branch on OAuthController) so the existing Provider Standalone endpoint's Epic-only gate never has to change to
-/// support this; the two flows are fully independent from here down. Only mints a context for a workflow the admin
-/// has explicitly opted in via <c>POST /workflows/{workflowId}/enable-public-launch</c> (the same, unmodified
-/// mechanism Provider Standalone already uses) whose source resolves to <see cref="ApplicationType.Patient"/>, and
-/// only for an <paramref name="ehrEndpointId"/> that resolves to an EndpointType.MyChart row — never the shared Epic
-/// sandbox, which stays behind the Provider Standalone endpoint.
+/// Anonymous "mint a public launch URL" endpoint for the Patient Standalone flow — the counterpart of
+/// <see cref="OAuthController.GetPublicWorkflowStandaloneUrl"/>. Deliberately a separate controller (not an added
+/// branch on OAuthController) so the two flows stay fully independent from here down. Only mints a context for a
+/// workflow the admin has explicitly opted in via <c>POST /workflows/{workflowId}/enable-public-launch</c> (the
+/// same, unmodified mechanism Provider Standalone already uses) whose source resolves to
+/// <see cref="ApplicationType.Patient"/>, and only for an <paramref name="ehrEndpointId"/> that resolves to a known
+/// EhrEndpoint row of type <see cref="EhrEndpointType.MyChart"/> — a real customer's own branded instance, never
+/// the shared Epic sandbox.
 /// </summary>
 [ApiController]
 [AllowAnonymous]
@@ -28,18 +29,18 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
 {
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
-    private readonly IPatientStandaloneEhrEndpointService _myChartEndpointService;
+    private readonly IEhrEndpointService _ehrEndpointService;
     private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
 
     public PatientStandaloneLaunchController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
-        IPatientStandaloneEhrEndpointService myChartEndpointService,
+        IEhrEndpointService ehrEndpointService,
         IAllowedCorsOriginsCache allowedCorsOriginsCache)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
-        _myChartEndpointService = myChartEndpointService;
+        _ehrEndpointService = ehrEndpointService;
         _allowedCorsOriginsCache = allowedCorsOriginsCache;
     }
 
@@ -57,7 +58,7 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             return NotFound();
         }
 
-        if (!await _myChartEndpointService.IsMyChartEndpointAsync(ehrEndpointId, cancellationToken))
+        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.MyChart, cancellationToken))
         {
             return NotFound();
         }

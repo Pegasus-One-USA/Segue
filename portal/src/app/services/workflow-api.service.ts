@@ -107,6 +107,7 @@ export interface WorkflowRunResultDto {
 export interface WorkflowRunStatus {
   workflowRunId: string;
   status: 'Running' | 'Succeeded' | 'Failed' | string;
+  correlationId?: string | null;
 }
 
 // ── Option B create-on-save (POST /workflows/build) ────────────────────────────
@@ -259,6 +260,29 @@ export interface WorkflowSummary {
   isPubliclyLaunchable: boolean;
 }
 
+/** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row
+ *  count (before paging) for the "Showing X-Y of Z" / page-count UI. The three available* lists are the full
+ *  distinct-value set across every workflow (not just what matches the active filters), for the Status/Audience/
+ *  Source multi-select filter checkboxes' option lists. */
+export interface WorkflowSummaryPage {
+  items: WorkflowSummary[];
+  totalCount: number;
+  availableStatuses: string[];
+  availableApplicationTypes: string[];
+  availableSourceSystemTypes: string[];
+}
+
+export interface WorkflowSummaryQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
+  statuses?: string[];
+  applicationTypes?: string[];
+  sourceSystemTypes?: string[];
+}
+
 export interface WorkflowLaunchUrl {
   launchUrl: string;
   /** 'ehr-launch' → register in the EHR (invoked by it); 'standalone' | 'patient' → opened directly. */
@@ -318,9 +342,17 @@ export class WorkflowApiService {
     return this.http.post<WorkflowBuildResult>(WORKFLOW_ENDPOINTS.build, request);
   }
 
-  /** Workflow-list screen: one summary row per workflow with the derived Launch/Run action. */
-  summary(): Observable<WorkflowSummary[]> {
-    return this.http.get<WorkflowSummary[]>(WORKFLOW_ENDPOINTS.summary);
+  /** Workflow-list screen: one summary row per workflow with the derived Launch/Run action. Paging/search/sort are
+   *  applied server-side — see WorkflowEndpoints.MapGet("/workflows/summary"). */
+  summary(query: WorkflowSummaryQuery): Observable<WorkflowSummaryPage> {
+    let params = new HttpParams().set('page', query.page).set('pageSize', query.pageSize);
+    if (query.search) params = params.set('search', query.search);
+    if (query.sortColumn) params = params.set('sortColumn', query.sortColumn);
+    if (query.sortDirection) params = params.set('sortDirection', query.sortDirection);
+    for (const value of query.statuses ?? []) params = params.append('statuses', value);
+    for (const value of query.applicationTypes ?? []) params = params.append('applicationTypes', value);
+    for (const value of query.sourceSystemTypes ?? []) params = params.append('sourceSystemTypes', value);
+    return this.http.get<WorkflowSummaryPage>(WORKFLOW_ENDPOINTS.summary, { params });
   }
 
   /**

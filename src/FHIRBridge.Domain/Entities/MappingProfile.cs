@@ -17,12 +17,14 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDispla
         Guid sourceConnectionId,
         Guid destinationId,
         string destinationObject,
-        IEnumerable<MappingField> fields)
+        IEnumerable<MappingField> fields,
+        Guid? sourceConfigurationId = null)
     {
         Id = Guid.NewGuid();
         Name = name;
         ResourceType = resourceType;
         SourceConnectionId = sourceConnectionId;
+        SourceConfigurationId = sourceConfigurationId;
         DestinationId = destinationId;
         DestinationObject = destinationObject;
         IsEnabled = true;
@@ -38,6 +40,15 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDispla
     /// destination, and resource type — routes that reference this mapping inherit all three.
     /// </summary>
     public Guid SourceConnectionId { get; private set; }
+
+    /// <summary>
+    /// The workflow-specific <see cref="SourceConfiguration"/> this mapping uses (search criteria, scopes, sync
+    /// cursor) — additive alongside <see cref="SourceConnectionId"/> while the source-connection/configuration split
+    /// (docs/backend/13-source-connection-configuration-split-plan.md) is rolled out. Nullable until Slice 2 cuts
+    /// application code over to reading/writing it; populated by the Slice 1 migration backfill.
+    /// </summary>
+    public Guid? SourceConfigurationId { get; private set; }
+
     public Guid DestinationId { get; private set; }
     public string DestinationObject { get; private set; } = default!;
     public bool IsEnabled { get; private set; }
@@ -49,11 +60,13 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDispla
         Guid sourceConnectionId,
         Guid destinationId,
         string destinationObject,
-        IEnumerable<MappingField> fields)
+        IEnumerable<MappingField> fields,
+        Guid? sourceConfigurationId = null)
     {
         Name = name;
         ResourceType = resourceType;
         SourceConnectionId = sourceConnectionId;
+        SourceConfigurationId = sourceConfigurationId;
         DestinationId = destinationId;
         DestinationObject = destinationObject;
         ReplaceFields(fields);

@@ -23,4 +23,10 @@ public sealed record MappingFieldDto(
     // "$.component[*].valueQuantity.value"), and the code value that selects which array item's JsonPath value to
     // take (e.g. "8480-6" for BP systolic). Ignored for every other ArrayPolicy.
     string? CorrelationCodeJsonPath = null,
-    string? CorrelationCodeValue = null);
+    string? CorrelationCodeValue = null,
+    // Destination column constraints — never persisted on the mapping profile itself, only filled in at pipeline
+    // run time (see ConfiguredPipelineService.MapResourcesAsync) from the destination's live schema, so
+    // JsonMappingEngine can reject a value that would overflow the column before it's ever sent to the database.
+    int? MaxLength = null,
+    int? Precision = null,
+    int? Scale = null);

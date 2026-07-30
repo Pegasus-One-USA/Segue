@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Configuration;
 
 namespace FHIRBridge.Infrastructure.Security;
@@ -21,8 +22,7 @@ public sealed class ConfigurationSecretProvider : ISecretProvider
 
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidOperationException(
-                $"Secret '{secretReference.SecretName}' was not found for vault '{secretReference.KeyVaultName}'.");
+            throw new SecretNotConfiguredException(secretReference.SecretName, secretReference.KeyVaultName);
         }
 
         return Task.FromResult(value);

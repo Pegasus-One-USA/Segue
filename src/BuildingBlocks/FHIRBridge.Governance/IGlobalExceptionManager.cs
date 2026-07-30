@@ -10,7 +10,19 @@ namespace FHIRBridge.Governance;
 public interface IGlobalExceptionManager
 {
     Task<ErrorReport> CaptureAsync(Exception exception, ExceptionContext context, CancellationToken cancellationToken = default);
+
+    /// <summary>Lightweight counterpart to <see cref="CaptureAsync"/> for expected (sub-500) domain outcomes:
+    /// no <see cref="Exception"/>/stack trace required, no classification/diagnosis performed. Always recorded
+    /// at Severity "Informational" so it stays out of Monitoring → Errors by default while remaining findable
+    /// by CorrelationId/ExecutionId/etc. Returns just the reference id — there is no user-facing report to
+    /// build, since the caller already has its own safe client message.</summary>
+    Task<string> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default);
 }
+
+/// <summary>A routine, expected domain outcome (e.g. a validation rejection, wrong password) that the caller
+/// has already decided not to treat as an incident — captured only for CorrelationId-based traceability, not
+/// for the Global Exception Manager's classification/diagnosis pipeline.</summary>
+public sealed record ExpectedFailure(string ExceptionType, string Message);
 
 /// <summary>Ambient execution context threaded into a captured error. All fields optional — whatever the
 /// originating layer knows (an API request has an endpoint/request id; a workflow run has a workflow id).</summary>

@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -14,10 +15,12 @@ namespace FHIRBridge.Infrastructure.Health;
 public sealed class SqlServerTdeHealthCheck : IHealthCheck
 {
     private readonly IConfiguration _configuration;
+    private readonly ISystemSettingsCache _settingsCache;
 
-    public SqlServerTdeHealthCheck(IConfiguration configuration)
+    public SqlServerTdeHealthCheck(IConfiguration configuration, ISystemSettingsCache settingsCache)
     {
         _configuration = configuration;
+        _settingsCache = settingsCache;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(
@@ -30,7 +33,8 @@ public sealed class SqlServerTdeHealthCheck : IHealthCheck
             return HealthCheckResult.Degraded("FHIRBridgeDb is not configured; TDE status cannot be verified.");
         }
 
-        var requireTde = _configuration.GetValue<bool>("Compliance:RequireTde");
+        var requireTde = await _settingsCache.GetBoolAsync(
+            "Compliance:RequireTde", _configuration.GetValue<bool>("Compliance:RequireTde"), cancellationToken);
         Func<string, HealthCheckResult> notEncrypted = requireTde
             ? reason => HealthCheckResult.Unhealthy(reason)
             : reason => HealthCheckResult.Degraded(reason);

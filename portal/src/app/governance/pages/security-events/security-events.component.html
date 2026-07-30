@@ -89,14 +89,13 @@
     }
 
     @if (result().totalCount > pageSize()) {
-      <mat-paginator
-        [length]="result().totalCount"
-        [pageSize]="pageSize()"
+      <app-pagination-bar
         [pageIndex]="pageIndex()"
+        [pageSize]="pageSize()"
+        [totalCount]="result().totalCount"
         [pageSizeOptions]="[10, 25, 50, 100]"
-        showFirstLastButtons
-        (page)="onPageChange($event)"
-      ></mat-paginator>
+        (pageChange)="onPageChange($event)"
+      />
     }
   </div>
 </div>

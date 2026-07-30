@@ -26,7 +26,7 @@
 }
 
 .page-title { font-size: 22px; font-weight: 700; color: var(--color-ink); margin: 0; }
-.page-sub   { font-size: 14px; color: var(--color-muted); margin: 4px 0 0; max-width: 640px; }
+.page-sub   { font-size: 14px; color: var(--color-muted); margin: 4px 0 0; white-space: nowrap; }
 
 .ico-refresh {
   display: inline-block;
@@ -37,6 +37,10 @@
 
 // ── Filter ──────────────────────────────────────────────────────────────────
 .filter-card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -45,6 +49,7 @@
 
 .search-wrap {
   position: relative;
+  flex: 1 1 280px;
   max-width: 420px;
 
   .search-ico {
@@ -77,6 +82,101 @@
   }
 }
 
+.filters-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &--active {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+}
+
+.filter-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.filter-dropdown-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+}
+
+.filter-dropdown-empty {
+  padding: 8px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.filter-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-ink);
+  cursor: pointer;
+
+  &:hover { background: var(--color-side); }
+
+  input[type='checkbox'] { cursor: pointer; }
+}
+
+.filter-clear-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
 // ── Table ───────────────────────────────────────────────────────────────────
 .table-card {
   background: var(--color-surface);
@@ -84,16 +184,6 @@
   border-radius: var(--radius-card);
   overflow: hidden;
 }
-
-.table-meta {
-  display: flex;
-  align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-side);
-}
-
-.entries-info { font-size: 13px; color: var(--color-muted); }
 
 .table-wrapper { overflow-x: auto; }
 
@@ -280,15 +370,6 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 .cell-name { display: flex; align-items: center; gap: 12px; }
 .name-block { display: flex; flex-direction: column; gap: 2px; }
 
-.pipe-avatar {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: var(--color-info-soft);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font-size: 16px;
-
-  &.launch { background: var(--color-primary-soft); }
-}
-
 .cell-primary { font-size: 14px; font-weight: 600; color: var(--color-ink); }
 .cell-meta    { font-size: 12px; color: var(--color-muted); }
 .cell-muted   { font-size: 13px; color: var(--color-muted); }
@@ -327,17 +408,27 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 }
 
 // ── Buttons ─────────────────────────────────────────────────────────────────
-.row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+// nowrap: the actions cell must never wrap onto a second line — .table-wrapper
+// already scrolls horizontally (see above) if a viewport is ever too narrow to
+// fit it, so wrapping here only ever produced an inconsistent, fragile layout.
+.row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 
-.action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 2px; }
+.action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 2px; flex-shrink: 0; }
 
 .btn-icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px;
-  border: 1.5px solid var(--color-border); border-radius: var(--radius-base);
+  flex-shrink: 0;
+  // The browser's native <button> padding was never reset here — combined with the fixed 32px box
+  // and border, it left too little room to center an 18px icon, so it rendered off-center. Zeroed so
+  // flexbox centering has the full box (minus border) to work with.
+  width: 32px; height: 32px; padding: 0;
+  // §5 table action buttons use the sm (6px) radius, not the general button base radius.
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-sm);
   background: transparent; color: var(--color-ink-2);
-  font-size: 15px; line-height: 1; cursor: pointer;
+  line-height: 1; cursor: pointer;
   transition: border-color var(--transition-base), background var(--transition-base), color var(--transition-base);
+
+  mat-icon { width: 18px; height: 18px; font-size: 18px; }
 
   &:hover:not(:disabled) { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
   &:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -367,41 +458,14 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   transition: filter var(--transition-base), opacity var(--transition-base);
 
   &.is-launch { background: var(--color-primary); color: var(--color-on-primary); }
-  &.has-caret { border-radius: var(--radius-base) 0 0 var(--radius-base); }
   &:hover:not(:disabled) { filter: brightness(0.95); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
-// ── Run split-button (sync vs. background run — see Workflow-Endpoints async /run) ────────────
-.split-btn { position: relative; display: inline-flex; }
-
-.btn-primary--caret {
-  height: 36px; padding: 0 8px;
-  border-radius: 0 var(--radius-base) var(--radius-base) 0;
-  border-left: 1px solid rgba(0, 0, 0, 0.12);
-  font-size: 11px;
-}
-
-.run-menu {
-  position: absolute; top: calc(100% + 4px); left: 0;
-  min-width: 240px; z-index: 20;
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-card); box-shadow: var(--shadow-elevated, 0 8px 24px rgba(0, 0, 0, 0.12));
-  padding: 6px; display: flex; flex-direction: column; gap: 2px;
-
-  button {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-    width: 100%; padding: 8px 10px;
-    border: none; border-radius: var(--radius-base); background: transparent;
-    text-align: left; cursor: pointer;
-    transition: background var(--transition-base);
-
-    &:hover { background: var(--color-side); }
-  }
-
-  .run-menu-title { font-size: 13px; font-weight: 600; color: var(--color-ink); }
-  .run-menu-sub { font-size: 11.5px; color: var(--color-muted); }
-}
+// min-width matches the widest label this slot ever renders ("Get Launch URL") so the divider and icon buttons
+// that follow always start at the same x position, whether this row shows that button or the shorter "Run" one
+// — without this the whole action row shifts left/right per row.
+.split-btn { position: relative; display: inline-flex; min-width: 103px; }
 
 // Page-level primary CTA ("New Workflow") — deliberately distinct from .btn-primary above, which is the row
 // action button (soft-info by default, teal only for its .is-launch modifier). This is the one true teal
@@ -443,7 +507,7 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
-.btn-ico { font-size: 14px; line-height: 1; }
+.btn-ico { width: 16px; height: 16px; font-size: 16px; line-height: 1; }
 
 // ── States ──────────────────────────────────────────────────────────────────
 .state-block {
@@ -518,35 +582,16 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
-.modal-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-  margin-bottom: 6px;
-}
+.text-input {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 12px; font-size: 14px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-base);
+  background: var(--color-bg); color: var(--color-ink);
 
-.modal-input {
-  width: 100%;
-  height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-base);
-  background: var(--color-bg);
-  font-size: 14px;
-  color: var(--color-ink);
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
-
-  &::placeholder { color: var(--color-muted); }
   &:focus {
+    outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px var(--color-primary-soft);
-  }
-  &:disabled {
-    background: var(--color-side);
-    cursor: not-allowed;
   }
 }
 

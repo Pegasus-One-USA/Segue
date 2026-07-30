@@ -1,3 +1,4 @@
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -162,6 +163,7 @@ public sealed class RankedWorkflowOrchestratorTests
         persisted!.Status.Should().Be(WorkflowRunStatus.Succeeded);
         persisted.WorkflowDefinitionId.Should().Be(workflow.Id);
         persisted.NodeRuns.Should().HaveCount(4);
+        persisted.CorrelationId.Should().Be(context.CorrelationId);
     }
 
     [Fact]
@@ -189,6 +191,33 @@ public sealed class RankedWorkflowOrchestratorTests
         persisted.Should().NotBeNull();
         persisted!.Status.Should().Be(WorkflowRunStatus.Failed);
         persisted.ErrorMessage.Should().Be("write failed");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_captures_failed_run_via_exception_manager_with_matching_correlation_id()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("captured-failure");
+        var exceptionManager = new RecordingExceptionManager();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle"),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, _ => throw new InvalidOperationException("write failed"))
+            }),
+            auditRecorder: null,
+            runStore: null,
+            exceptionManager: exceptionManager);
+        var context = CreateContext();
+
+        var act = async () => await orchestrator.ExecuteAsync(workflow, context);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        exceptionManager.CapturedContexts.Should().ContainSingle();
+        exceptionManager.CapturedContexts[0].CorrelationId.Should().Be(context.CorrelationId);
+        exceptionManager.CapturedContexts[0].WorkflowId.Should().Be(workflow.Id.ToString());
     }
 
     [Fact]
@@ -318,6 +347,23 @@ public sealed class RankedWorkflowOrchestratorTests
         {
             _calls.Add(NodeType);
             return Task.FromResult(new WorkflowNodeOutput(node.Id, node.NodeType, NodeType, _contract));
+        }
+    }
+
+    private sealed class RecordingExceptionManager : IGlobalExceptionManager
+    {
+        public List<ExceptionContext> CapturedContexts { get; } = [];
+
+        public Task<ErrorReport> CaptureAsync(Exception exception, ExceptionContext context, CancellationToken cancellationToken = default)
+        {
+            CapturedContexts.Add(context);
+            return Task.FromResult(new ErrorReport("ERR-TEST-000001", ErrorCategory.Unknown, "Something went wrong.", context.CorrelationId));
+        }
+
+        public Task<string> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
+        {
+            CapturedContexts.Add(context);
+            return Task.FromResult("ERR-TEST-000002");
         }
     }
 

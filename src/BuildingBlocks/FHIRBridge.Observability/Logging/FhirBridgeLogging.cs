@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Serilog;
 using Serilog.Configuration;
 using Serilog.Core;
+using Serilog.Enrichers.Span;
 using Serilog.Events;
 
 namespace FHIRBridge.Observability.Logging;
@@ -36,6 +37,7 @@ public static class FhirBridgeLogging
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
             .Enrich.FromLogContext()
+            .Enrich.WithSpan()
             .Enrich.WithProperty("Application", serviceName)
             .Enrich.With(new PhiMaskingEnricher(configuration))
             .WriteTo.Console();

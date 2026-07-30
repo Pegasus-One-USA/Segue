@@ -619,7 +619,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       this.patientError.set('Select a hospital above, then click Connect again to sign in.');
       return;
     }
-
+debugger;
     await this.redirectToMyChart(selectedHospital, workflowId);
   }
 
@@ -632,7 +632,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
   }
 
   // Anonymous — no FHIRBridge session exists yet at this point, so this reads straight from FHIRBridge's public
-  // ehr-mychart-endpoints listing.
+  // ehr-public-endpoints listing.
   private async loadHospitals(): Promise<void> {
     this.isLoadingHospitals.set(true);
     try {

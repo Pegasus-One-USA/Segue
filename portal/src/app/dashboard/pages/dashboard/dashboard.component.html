@@ -4,13 +4,62 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Overview</h1>
-      <p class="page-sub">FHIR pipeline health, Execution status, and System metrics.</p>
+      <p class="page-sub">Segue pipeline health, Execution status, and System metrics.</p>
     </div>
     <div class="header-actions">
       <span class="refresh-hint">Last updated {{ lastRefreshed() | date:'h:mm a' }}</span>
       <button class="refresh-btn" type="button" (click)="refresh()">&#8635; Refresh</button>
       <a class="new-pipeline-btn" routerLink="/workflow-builder">+ New Pipeline</a>
     </div>
+  </div>
+
+  <!-- ─── Workflow Run Status ──────────────────────────────────────────── -->
+  <div class="stats-row">
+    <a class="stat-tile" routerLink="/execution-history" [queryParams]="{ status: 'Succeeded' }">
+      <div class="stat-tile__icon stat-tile__icon--succeeded">
+        <mat-icon>check_circle</mat-icon>
+      </div>
+      <div class="stat-tile__body">
+        <span class="stat-tile__value">{{ runStatusCounts().succeeded }}</span>
+        <span class="stat-tile__label">Succeeded</span>
+      </div>
+    </a>
+    <a class="stat-tile" routerLink="/execution-history" [queryParams]="{ status: 'Failed' }">
+      <div class="stat-tile__icon stat-tile__icon--failed">
+        <mat-icon>error</mat-icon>
+      </div>
+      <div class="stat-tile__body">
+        <span class="stat-tile__value">{{ runStatusCounts().failed }}</span>
+        <span class="stat-tile__label">Failed</span>
+      </div>
+    </a>
+    <a class="stat-tile" routerLink="/execution-history" [queryParams]="{ status: 'Running' }">
+      <div class="stat-tile__icon stat-tile__icon--running">
+        <mat-icon>autorenew</mat-icon>
+      </div>
+      <div class="stat-tile__body">
+        <span class="stat-tile__value">{{ runStatusCounts().running }}</span>
+        <span class="stat-tile__label">Running</span>
+      </div>
+    </a>
+    <a class="stat-tile" routerLink="/execution-history" [queryParams]="{ status: 'Pending' }">
+      <div class="stat-tile__icon stat-tile__icon--pending">
+        <mat-icon>hourglass_empty</mat-icon>
+      </div>
+      <div class="stat-tile__body">
+        <span class="stat-tile__value">{{ runStatusCounts().pending }}</span>
+        <span class="stat-tile__label">Pending</span>
+      </div>
+    </a>
+    <a class="stat-tile" routerLink="/execution-history" [queryParams]="{ status: 'Cancelled' }">
+      <div class="stat-tile__icon stat-tile__icon--cancelled">
+        <mat-icon>cancel</mat-icon>
+      </div>
+      <div class="stat-tile__body">
+        <span class="stat-tile__value">{{ runStatusCounts().cancelled }}</span>
+        <span class="stat-tile__label">Cancelled</span>
+      </div>
+    </a>
   </div>
 
   <app-pipeline-table

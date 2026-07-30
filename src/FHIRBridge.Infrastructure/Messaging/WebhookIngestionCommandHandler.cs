@@ -4,8 +4,11 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Security;
+using FHIRBridge.Observability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 namespace FHIRBridge.Infrastructure.Messaging;
 
@@ -48,8 +51,11 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
 
         ConfiguredPipelineRunDto? run = null;
 
-        using var actorScope = _ambientActorContext.BeginScope(
-            $"Webhook Ingestion (Automated, config {command.WebhookConfigurationId:N})");
+        // Gives this Worker-side execution a real span (there is none today outside ASP.NET Core's own
+        // per-request Activity) — BeginCorrelatedScope below tags it with correlation_id.
+        using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
+        using var actorScope = _ambientActorContext.BeginCorrelatedScope(
+            $"Webhook Ingestion (Automated, config {command.WebhookConfigurationId:N})", command.CorrelationId);
 
         await MessageRetry.ExecuteAsync(
             async token => run = await _pipelineService.StartWebhookAsync(

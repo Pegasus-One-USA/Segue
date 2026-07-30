@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.Abstractions.Security;
@@ -6,6 +7,7 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Pipeline;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -17,34 +19,38 @@ public sealed class Worker : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IOptions<RuntimeWorkerOptions> _options;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly ILogger<Worker> _logger;
 
     public Worker(
         IServiceScopeFactory serviceScopeFactory,
         IOptions<RuntimeWorkerOptions> options,
+        ISystemSettingsCache settingsCache,
         ILogger<Worker> logger)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _options = options;
+        _settingsCache = settingsCache;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Value.Enabled)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation("FHIRBridge runtime worker is disabled. Set RuntimeWorker:Enabled=true to run scheduled Phase 1 jobs.");
-            await WaitUntilStoppedAsync(stoppingToken);
-            return;
-        }
+            var enabled = await _settingsCache.GetBoolAsync("RuntimeWorker:Enabled", _options.Value.Enabled, stoppingToken);
+            if (!enabled)
+            {
+                _logger.LogInformation("FHIRBridge runtime worker is disabled. Set RuntimeWorker:Enabled=true to run scheduled Phase 1 jobs.");
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                continue;
+            }
 
-        await RunOnceAsync(stoppingToken);
-
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(30, _options.Value.IntervalSeconds)));
-
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
             await RunOnceAsync(stoppingToken);
+
+            var intervalSeconds = await _settingsCache.GetIntAsync(
+                "RuntimeWorker:IntervalSeconds", _options.Value.IntervalSeconds, stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(Math.Max(30, intervalSeconds)), stoppingToken);
         }
     }
 
@@ -97,7 +103,7 @@ public sealed class Worker : BackgroundService
 
         try
         {
-            using var actorScope = ambientActorContext.BeginScope("Scheduler (Legacy Poll)");
+            using var actorScope = ambientActorContext.BeginCorrelatedScope("Scheduler (Legacy Poll)", correlationId);
 
             var pipelineRun = await pipelineService.StartAsync(
                 new StartConfiguredPipelineRunRequest(
@@ -160,7 +166,7 @@ public sealed class Worker : BackgroundService
 
             try
             {
-                using var actorScope = ambientActorContext.BeginScope($"Scheduler (Workflow: {workflow.Name})");
+                using var actorScope = ambientActorContext.BeginCorrelatedScope($"Scheduler (Workflow: {workflow.Name})", correlationId);
 
                 var context = new WorkflowExecutionContext(
                     Guid.NewGuid(),
@@ -270,14 +276,4 @@ public sealed class Worker : BackgroundService
                (!route.WebhookConfigurationId.HasValue || webhook?.IsEnabled == true);
     }
 
-    private static async Task WaitUntilStoppedAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
 }

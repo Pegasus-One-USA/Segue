@@ -1,4 +1,5 @@
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services;
 
@@ -6,18 +7,20 @@ public interface IEhrEndpointService
 {
     Task<IReadOnlyList<EhrEndpointDto>> GetAllAsync(CancellationToken cancellationToken);
 
-    /// <summary>Anonymous-safe listing/search of Epic-sandbox-typed endpoints only — backs the public
-    /// ehr-epic-endpoints controller. See <see cref="PublicEhrEpicEndpointDto"/> for why this is a separate,
-    /// narrower shape. <paramref name="search"/> is an optional case-insensitive contains-match on Name.</summary>
-    Task<IReadOnlyList<PublicEhrEpicEndpointDto>> GetPublicEpicEndpointsAsync(
-        string? search, CancellationToken cancellationToken);
+    /// <summary>Anonymous-safe listing/search of EhrEndpoint rows for one audience, scoped by
+    /// <paramref name="endpointType"/> — backs the public ehr-public-endpoints controller. See
+    /// <see cref="PublicEhrEndpointDto"/> for why this is a separate, narrower shape. <paramref name="search"/> is
+    /// an optional case-insensitive contains-match on Name.</summary>
+    Task<IReadOnlyList<PublicEhrEndpointDto>> GetPublicEndpointsAsync(
+        EhrEndpointType endpointType, string? search, CancellationToken cancellationToken);
 
     Task<EhrEndpointDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Whether <paramref name="ehrEndpointId"/> resolves to an EndpointType.Epic row — validates a
-    /// request-time id came from the same restricted set <see cref="GetPublicEpicEndpointsAsync"/> exposes, not an
-    /// arbitrary/other-typed (e.g. a specific customer's live MyChart) row.</summary>
-    Task<bool> IsEpicEndpointAsync(Guid ehrEndpointId, CancellationToken cancellationToken);
+    /// <summary>Whether <paramref name="ehrEndpointId"/> resolves to an EhrEndpoint row of the given
+    /// <paramref name="endpointType"/> — validates a request-time id came from the same audience-scoped set
+    /// <see cref="GetPublicEndpointsAsync"/> exposes for that type, so a Patient-flow caller can't sneak in an
+    /// Epic-sandbox row (or vice versa).</summary>
+    Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, EhrEndpointType endpointType, CancellationToken cancellationToken);
 
     Task<EhrEndpointDto> AddAsync(CreateEhrEndpointRequest request, CancellationToken cancellationToken);
 

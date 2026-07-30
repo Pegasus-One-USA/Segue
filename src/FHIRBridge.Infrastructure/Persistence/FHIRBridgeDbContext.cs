@@ -15,6 +15,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     }
 
     public DbSet<SourceConnection> SourceConnections => Set<SourceConnection>();
+    public DbSet<SourceConfiguration> SourceConfigurations => Set<SourceConfiguration>();
     public DbSet<WebhookConfiguration> WebhookConfigurations => Set<WebhookConfiguration>();
     public DbSet<DestinationConfiguration> DestinationConfigurations => Set<DestinationConfiguration>();
     public DbSet<MappingProfile> MappingProfiles => Set<MappingProfile>();
@@ -35,6 +36,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<EhrEndpoint> EhrEndpoints => Set<EhrEndpoint>();
     public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();

@@ -1,0 +1,30 @@
+<div class="pagination-bar">
+  <div class="page-size-select">
+    <span class="page-size-label">Rows per page</span>
+    <div class="select-wrap">
+      <select
+        aria-label="Rows per page"
+        (change)="onPageSizeChange(+$any($event.target).value)"
+      >
+        @for (size of pageSizeOptions(); track size) {
+          <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+        }
+      </select>
+      <svg class="select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+        <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <span class="range-info">Showing <strong>{{ rangeStart() }}–{{ rangeEnd() }}</strong> of <strong>{{ totalCount() }}</strong></span>
+
+  <div class="page-nav">
+    <button class="page-nav-btn" type="button" [disabled]="pageIndex() === 0" (click)="prevPage()" aria-label="Previous page">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12 6 8l4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <span class="page-of">Page {{ pageIndex() + 1 }} of {{ totalPages() }}</span>
+    <button class="page-nav-btn" type="button" [disabled]="pageIndex() >= totalPages() - 1" (click)="nextPage()" aria-label="Next page">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</div>

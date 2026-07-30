@@ -8,7 +8,6 @@ import { FormsModule } from '@angular/forms';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 
 import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -34,6 +33,7 @@ import { DisableWithoutPermissionDirective } from '../../../auth/directives/disa
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 import { ToastService } from '../../../services/toast.service';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
   'SuperAdmin': { label: 'Super Admin', color: '#5B21B6', bg: '#EDE9FE' },
@@ -49,7 +49,7 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: s
     CommonModule,
     FormsModule,
     MatTableModule,
-    MatPaginatorModule,
+    PaginationBarComponent,
     MatSortModule,
     MatButtonModule,
     MatIconModule,
@@ -97,7 +97,9 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actions'];
 
-  readonly roleOptions: UserRole[] = ['SuperAdmin', 'Admin', 'Operations', 'Audit'];
+  // Seeded with the 4 built-ins so the dropdown isn't empty while getRoles() is in flight —
+  // replaced with the real role list (including any custom roles) once it loads, see ngOnInit.
+  readonly roleOptions = signal<UserRole[]>(['SuperAdmin', 'Admin', 'Operations', 'Audit']);
 
   readonly statusOptions: UserStatus[] = ['active', 'inactive', 'pending'];
   readonly roleConfig = ROLE_CONFIG;
@@ -133,6 +135,13 @@ export class UserListComponent implements OnInit, OnDestroy {
     });
 
     this.loadUsers();
+
+    this.userService.getRoles()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: roles => this.roleOptions.set(roles.map(r => r.name)),
+        error: () => { /* keep the built-in fallback list */ },
+      });
   }
 
   ngOnDestroy(): void {
@@ -181,7 +190,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.loadUsers();
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.page.set(e.pageIndex + 1);
     this.perPage.set(e.pageSize);
     this.loadUsers();
@@ -217,17 +226,25 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   openAssignRolesDialog(user: User): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Assign), 'You do not have permission to assign roles.')) return;
-    const ref = this.dialog.open(AssignRolesDialogComponent, {
-      width: '680px', disableClose: true, restoreFocus: false, data: { user },
+    // The list row's User (mapListDto) never carries full Role objects (id/permissions) — only
+    // the role name string — so the dialog can't tell which role is currently assigned. Fetch the
+    // full detail (mapDetailDto) first so isAssigned()/the allocation preview have real role ids.
+    this.userService.getUser(user.id).subscribe({
+      next: fullUser => {
+        const ref = this.dialog.open(AssignRolesDialogComponent, {
+          width: '820px', maxWidth: '95vw', disableClose: true, restoreFocus: false, data: { user: fullUser },
+        });
+        ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
+      },
+      error: () => this.toast.error('Failed to load user details.'),
     });
-    ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
   }
 
   // ─── User actions ─────────────────────────────────────────────────────────
   deleteUser(user: User): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Delete), 'You do not have permission to delete users.')) return;
     const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '420px', restoreFocus: false,
+      width: '400px', restoreFocus: false,
       data: {
         title:        'Delete user',
         message:      `Are you sure you want to delete "${user.fullName}"? This action cannot be undone.`,

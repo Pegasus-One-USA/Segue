@@ -48,6 +48,12 @@
   border: 1px solid color-mix(in srgb, var(--color-success) 35%, white);
 }
 
+.eaf-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .eaf-cancel-btn {
   font-size: 12.5px;
   font-weight: 600;
@@ -59,6 +65,22 @@
   transition: color 0.12s;
 
   &:hover { color: var(--color-ink); }
+}
+
+/* The dialog-level "✕" (fully closes Node Library), relocated here next to "← Back to library"
+   now that the outer Node Library header is gone. */
+.eaf-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
 }
 
 /* ── Body ───────────────────────────────────────────────────────────────────── */
@@ -252,6 +274,35 @@
   &:focus {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12);
+  }
+}
+
+/* ── Existing connection row (select + clear button) ────────────────────────── */
+.eaf-existing-connection-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+
+  .eaf-select-wrap { flex: 1; }
+}
+
+.eaf-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-input);
+  border-radius: 9px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+
+  &:hover {
+    color: var(--color-ink);
+    border-color: var(--color-border);
   }
 }
 
@@ -671,8 +722,13 @@
   &--primary {
     background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
     color: var(--color-on-primary);
-    &:hover { background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark)); transform: translateY(-1px); }
-    &:active { transform: translateY(0); }
+    &:hover:not(:disabled) { background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark)); transform: translateY(-1px); }
+    &:active:not(:disabled) { transform: translateY(0); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Still clickable (unlike :disabled) — clicking while invalid runs save()'s own
+       markAllAsTouched()/focus-first-invalid path so the user sees which field is missing. */
+    &.eaf-btn--invalid { opacity: 0.5; }
   }
 }
 

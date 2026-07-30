@@ -2,12 +2,14 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
+using FHIRBridge.Api.Hubs;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using Microsoft.AspNetCore.DataProtection;
 using FHIRBridge.Application;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
@@ -133,7 +135,6 @@ builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.A
 
 builder.Services
     .AddFHIRBridgeApplication()
-    .AddPatientStandaloneApplicationServices()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
     .AddWorkflowCore()
     .AddWorkflowInfrastructure();
@@ -148,6 +149,13 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("FHIRBr
 {
     builder.Services.AddWorkflowSqlPersistence(builder.Configuration);
 }
+
+// Backs RunStatusHub — pushes workflow-run status changes (Running/Succeeded/Failed) to the Dashboard and
+// Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's
+// remarks: only registered in this host, so RankedWorkflowOrchestrator resolves it as null (and simply skips the
+// live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
@@ -205,17 +213,31 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 // Rate limiting (HIPAA/SOC2 CC6.2): throttle unauthenticated credential + ingestion endpoints
 // to blunt brute-force and abuse. Partitioned per client IP; sensitive endpoints opt in via
-// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*".
-builder.Services.AddRateLimiter(options =>
+// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*",
+// with a SystemSettings DB row (same key) overriding the appsettings value if present. The .NET rate
+// limiter builds its partitioned limiters once at startup, so a DB override here takes effect on the
+// next process restart, not live — see ISystemSettingsCache for knobs that apply without a restart.
+using (var settingsBootstrapScope = builder.Services.BuildServiceProvider().CreateScope())
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    var settingsCache = settingsBootstrapScope.ServiceProvider
+        .GetRequiredService<FHIRBridge.Application.Abstractions.Caching.ISystemSettingsCache>();
 
-    var authPermit = builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10;
-    var authWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5;
-    var oauthPermit = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:PermitPerWindow") ?? 30;
-    var oauthWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:WindowMinutes") ?? 5;
-    var webhookPermit = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120;
-    var webhookWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1;
+    var authPermit = settingsCache.GetIntAsync(
+        "RateLimiting:Auth:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10, default).GetAwaiter().GetResult();
+    var authWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:Auth:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5, default).GetAwaiter().GetResult();
+    var oauthPermit = settingsCache.GetIntAsync(
+        "RateLimiting:OAuth:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:OAuth:PermitPerWindow") ?? 30, default).GetAwaiter().GetResult();
+    var oauthWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:OAuth:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:OAuth:WindowMinutes") ?? 5, default).GetAwaiter().GetResult();
+    var webhookPermit = settingsCache.GetIntAsync(
+        "RateLimiting:Webhook:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120, default).GetAwaiter().GetResult();
+    var webhookWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:Webhook:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1, default).GetAwaiter().GetResult();
+
+    builder.Services.AddRateLimiter(options =>
+    {
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("auth", context =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -249,11 +271,26 @@ builder.Services.AddRateLimiter(options =>
 
     static string ClientPartitionKey(HttpContext context) =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-});
+    });
+}
 
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+
+// Pushes the same CorrelationId every downstream consumer (HttpContextCurrentUserService, the exception
+// handler below) resolves onto every Serilog line for this request — including routine sub-500 rejections,
+// which deliberately never reach a governance table (see the exception handler's comment) and would
+// otherwise be findable only by full-text-searching the exception message/path in Seq.
+app.Use(async (context, next) =>
+{
+    var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+    System.Diagnostics.Activity.Current?.SetTag("correlation_id", correlationId);
+    using (Serilog.Context.LogContext.PushProperty("CorrelationId", correlationId))
+    {
+        await next();
+    }
+});
 
 // A [StandardPermission(group, action)] whose derived code has no matching
 // RbacSeedData.Permissions entry still gets a policy (see PermissionCatalog.AllPermissionCodes
@@ -277,7 +314,7 @@ app.UseExceptionHandler(errorApp =>
             .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
         if (feature?.Error is null) return;
 
-        var (status, message, trusted) = MapException(feature.Error);
+        var (status, message, trusted, fieldErrors) = MapException(feature.Error);
 
         // A non-5xx message is shown to the client only if it's trusted (author-written UserMessage) or passes the
         // client-safe filter. Otherwise it's null and the manager emits a generic category message. This is the
@@ -300,10 +337,30 @@ app.UseExceptionHandler(errorApp =>
         if (status < 500)
         {
             app.Logger.LogWarning(feature.Error, "Expected domain failure on {Path}.", context.Request.Path);
+
+            // Not routed through CaptureAsync (no ErrorLogs row at ordinary severity — see comment above), but
+            // still recorded at Severity "Informational" via the lightweight CaptureExpectedAsync path so the
+            // rejection is findable by CorrelationId (e.g. Correlation Search) without appearing in the default
+            // Operations → Errors view. No reference id is surfaced to the client — this is a backend trail only.
+            var expectedExceptionManager = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGlobalExceptionManager>();
+            var expectedCorrelationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+            var expectedActivity = System.Diagnostics.Activity.Current;
+            _ = await expectedExceptionManager.CaptureExpectedAsync(
+                new FHIRBridge.Governance.ExpectedFailure(feature.Error.GetType().Name, feature.Error.Message),
+                new FHIRBridge.Governance.ExceptionContext(
+                    Module: "Api",
+                    Severity: "Informational",
+                    CorrelationId: expectedCorrelationId,
+                    EndpointId: $"{context.Request.Method} {context.Request.Path}",
+                    RequestId: context.TraceIdentifier,
+                    TraceId: expectedActivity?.TraceId.ToString(),
+                    SpanId: expectedActivity?.SpanId.ToString()));
+
             await context.Response.WriteAsJsonAsync(new
             {
                 error = clientMessage ?? "The request could not be processed.",
                 message = clientMessage ?? "The request could not be processed.",
+                fieldErrors,
             });
             return;
         }
@@ -433,12 +490,24 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 // Enabled by default; can be turned off for hermetic tests or single-tenant deployments that
 // throttle upstream. Policies are always registered so [EnableRateLimiting] metadata resolves.
-if (app.Configuration.GetValue("RateLimiting:Enabled", true))
+// SystemSettings DB override (same key) takes effect on the next restart, same as the permit/window
+// values configured above.
+bool rateLimitingEnabled;
+using (var rateLimitingSettingsScope = app.Services.CreateScope())
+{
+    var settingsCache = rateLimitingSettingsScope.ServiceProvider
+        .GetRequiredService<FHIRBridge.Application.Abstractions.Caching.ISystemSettingsCache>();
+    rateLimitingEnabled = settingsCache.GetBoolAsync(
+        "RateLimiting:Enabled", app.Configuration.GetValue("RateLimiting:Enabled", true), default).GetAwaiter().GetResult();
+}
+
+if (rateLimitingEnabled)
 {
     app.UseRateLimiter();
 }
 app.MapControllers();
 app.MapWorkflowEndpoints();
+app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
 // and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html
@@ -471,6 +540,12 @@ static void BootstrapDatabase(WebApplication app)
     {
         seeder.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
+
+    // One-time: populate SystemSettings with the value each DB-backed config key is already effectively
+    // using (appsettings/code default) — so shipping this feature changes zero behavior until an admin
+    // edits a row. Insert-only; never overwrites a row an admin has since customized.
+    var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
+    systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Generates and persists the JWT signing key / download-link signing secret the first time an install has
@@ -619,23 +694,29 @@ static async Task SyncDiscoveredPermissionsAsync(
     }
 }
 
-// Returns the HTTP status, a candidate client message, and whether that message is TRUSTED (author-written and
-// safe to show verbatim). Only FHIRBridgeException.UserMessage is trusted; every other message is derived from a
-// raw exception and MUST pass ClientSafeMessage before it can reach a client (see the exception handler).
-static (int status, string message, bool trusted) MapException(Exception ex)
+// Returns the HTTP status, a candidate client message, whether that message is TRUSTED (author-written and safe
+// to show verbatim), and — only for RequestValidationException — the field-keyed messages a FluentValidation
+// check produced. Only FHIRBridgeException.UserMessage is trusted; every other message is derived from a raw
+// exception and MUST pass ClientSafeMessage before it can reach a client (see the exception handler).
+static (int status, string message, bool trusted, IReadOnlyDictionary<string, string[]>? fieldErrors) MapException(Exception ex)
 {
+    // Field-shaped input validation (FluentValidation) — the only branch that carries fieldErrors, so the UI can
+    // map a rejection back onto the specific control that caused it instead of just a flat message.
+    if (ex is RequestValidationException rve)
+        return (StatusCodes.Status400BadRequest, rve.UserMessage, true, rve.FieldErrors);
+
     // FHIRBridgeException subtypes are deliberate, client-safe domain failures. UserMessage (not Message) is the
     // author-written text intended for end users — Message keeps the entity name + raw id for logs only.
     if (ex is NotFoundException nfe)
-        return (StatusCodes.Status404NotFound, nfe.UserMessage, true);
+        return (StatusCodes.Status404NotFound, nfe.UserMessage, true, null);
     if (ex is FHIRBridgeException fbe)
-        return (StatusCodes.Status400BadRequest, fbe.UserMessage, true);
+        return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null);
 
     if (ex is not InvalidOperationException and not UnauthorizedAccessException and not ArgumentException)
-        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", true);
+        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", true, null);
 
     if (ex is UnauthorizedAccessException || ex is ArgumentException a && a.Message.Contains("unauthorized"))
-        return (StatusCodes.Status401Unauthorized, ex.Message, false);
+        return (StatusCodes.Status401Unauthorized, ex.Message, false, null);
 
     var msg = ex.Message;
 
@@ -644,17 +725,17 @@ static (int status, string message, bool trusted) MapException(Exception ex)
     // if its text happens to contain one of these substrings (e.g. an upstream HTML 404 page contains "not found").
     if (msg.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("does not exist", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status404NotFound, msg, false);
+        return (StatusCodes.Status404NotFound, msg, false, null);
 
     if (msg.Contains("already exists", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status409Conflict, msg, false);
+        return (StatusCodes.Status409Conflict, msg, false, null);
 
     if (msg.Contains("invalid or expired", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("email or password", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("Current password is invalid", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status401Unauthorized, msg, false);
+        return (StatusCodes.Status401Unauthorized, msg, false, null);
 
-    return (StatusCodes.Status400BadRequest, msg, false);
+    return (StatusCodes.Status400BadRequest, msg, false, null);
 }
 
 // The single guardrail that makes raw exception text safe-by-construction — see FHIRBridge.Governance.SafeErrorText.

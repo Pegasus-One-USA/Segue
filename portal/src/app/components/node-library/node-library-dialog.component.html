@@ -1,33 +1,6 @@
 <app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard())" (closed)="close()">
   <div class="nld">
 
-    <!-- ── Header ──────────────────────────────────────────────────────────── -->
-    <div class="nld-header">
-      <div class="nld-header-left">
-        <span class="nld-brand-hex">⬡</span>
-        <div>
-          <h2 class="nld-title">Node Library</h2>
-          <p class="nld-subtitle">
-            @if (mode() === 'source') {
-              Choose a data source to start your pipeline
-            } @else {
-              Choose the next step — context-aware recommendations applied
-            }
-          </p>
-        </div>
-      </div>
-
-      <div class="nld-header-right">
-        @if (mode() === 'transform' && pickerMeta()) {
-          <div class="nld-ctx-chips">
-            <span class="nld-ctx-chip">{{ pickerMeta()?.rule }}</span>
-            <span class="nld-ctx-chip">{{ pickerMeta()?.cfg?.context }}</span>
-          </div>
-        }
-        <button class="nld-close" type="button" (click)="close()">×</button>
-      </div>
-    </div>
-
     <!-- ── Body: sidebar + detail ──────────────────────────────────────────── -->
     <div class="nld-body">
 
@@ -126,6 +99,7 @@
           <app-epic-audience-form
             (saved)="onEpicFormSaved()"
             (cancelled)="onEpicFormCancelled()"
+            (closeAll)="close()"
           />
 
         } @else if (showDestWizard() && destWizardType() && destWizardAttach()) {
@@ -138,6 +112,7 @@
             [sourceResources]="sourceResources()"
             (saved)="onDestWizardSaved($event)"
             (cancelled)="onDestWizardCancelled()"
+            (closeAll)="close()"
             (stepChange)="destWizardStep.set($event)"
             (progressChange)="destWizardHasProgressed.set($event)"
           />

@@ -14,7 +14,8 @@ public sealed record AuditEntry(
     string? OldValueJson = null,
     string? NewValueJson = null,
     string Status = "Success",
-    string? Remarks = null);
+    string? Remarks = null,
+    string? CorrelationId = null);
 
 /// <summary>A patient/resource access event — recorded PHI-free (identifiers only, never clinical content).</summary>
 public sealed record DataAccessEntry(
@@ -31,7 +32,8 @@ public sealed record AuthenticationEntry(
     string AuthenticationType,
     bool Success,
     string? UserEmail = null,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    string? CorrelationId = null);
 
 /// <summary>An RBAC authorization decision — callers write this on denial, the compliance-relevant case.</summary>
 public sealed record AuthorizationEntry(
@@ -46,7 +48,8 @@ public sealed record SecurityEventEntry(
     string EventType,
     string Severity,
     string? UserEmail = null,
-    string? Details = null);
+    string? Details = null,
+    string? CorrelationId = null);
 
 /// <summary>A scheduler dispatch decision — the scheduler recognized due work and handed it off.</summary>
 public sealed record SchedulerRunEntry(
@@ -131,10 +134,18 @@ public sealed record EndpointHealthEntry(
     string? Message = null);
 
 /// <summary>A SMART on FHIR launch completing (or failing) — no FHIRBridge portal user is involved, this is
-/// the EHR/patient authorizing a source connection's data access.</summary>
+/// the EHR/patient authorizing a source connection's data access. <see cref="GrantedScope"/>/
+/// <see cref="PatientContextGranted"/>/<see cref="TokenCacheKeyHash"/> are populated for interactive
+/// (EHR-launch/standalone) sign-ins only — they diagnose whether this launch actually established the patient
+/// context a later unscoped Patient search depends on, and let a save-time key be compared against a later
+/// lookup-time key without ever printing the underlying CallerId/session identifier.</summary>
 public sealed record SmartLaunchEntry(
     Guid SourceConnectionId,
     string SourceName,
     string LaunchType,
     bool Success,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    string? GrantedScope = null,
+    bool? PatientContextGranted = null,
+    string? TokenCacheKeyHash = null,
+    string? CorrelationId = null);

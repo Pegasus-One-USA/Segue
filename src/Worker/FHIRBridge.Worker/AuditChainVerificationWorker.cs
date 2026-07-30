@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Governance;
 using Microsoft.Extensions.Options;
@@ -13,34 +14,40 @@ public sealed class AuditChainVerificationWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IOptions<AuditChainVerificationOptions> _options;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly ILogger<AuditChainVerificationWorker> _logger;
 
     public AuditChainVerificationWorker(
         IServiceScopeFactory serviceScopeFactory,
         IOptions<AuditChainVerificationOptions> options,
+        ISystemSettingsCache settingsCache,
         ILogger<AuditChainVerificationWorker> logger)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _options = options;
+        _settingsCache = settingsCache;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Value.Enabled)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation("Audit chain verification worker is disabled. Set AuditChainVerification:Enabled=true to run it.");
-            return;
-        }
+            var enabled = await _settingsCache.GetBoolAsync(
+                "AuditChainVerification:Enabled", _options.Value.Enabled, stoppingToken);
+            if (!enabled)
+            {
+                _logger.LogInformation("Audit chain verification worker is disabled. Set AuditChainVerification:Enabled=true to run it.");
+                await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+                continue;
+            }
 
-        var interval = TimeSpan.FromHours(Math.Max(1, _options.Value.IntervalHours));
-        using var timer = new PeriodicTimer(interval);
-
-        do
-        {
             await VerifyAsync(stoppingToken);
+
+            var intervalHours = await _settingsCache.GetIntAsync(
+                "AuditChainVerification:IntervalHours", _options.Value.IntervalHours, stoppingToken);
+            await Task.Delay(TimeSpan.FromHours(Math.Max(1, intervalHours)), stoppingToken);
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     private async Task VerifyAsync(CancellationToken cancellationToken)

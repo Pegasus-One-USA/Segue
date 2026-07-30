@@ -33,8 +33,10 @@ Only the `.csproj` (with package + SharedKernel references) exists in this skele
 ## Roadmap — what it will do in detail
 This block is the observability backbone for a HIPAA-sensitive platform, so the roadmap prioritizes correctness, privacy, and operability:
 - **Port the reference implementation** so every host gets metrics, traces, and structured logging from a single `AddFhirBridgeObservability` + `ConfigureFhirBridge` pair.
-- **Trace context propagation** across the async pipeline (API → Service Bus → Worker → Runtime) so a single pipeline run is one distributed trace, with `PipelineRunId`/`CorrelationId` carried via `LogContext` and baggage.
-- **Custom activity sources** for pipeline stages (extract / map / write) to complement the counters, giving span-level latency attribution.
+- ~~**Trace context propagation** across the async pipeline (API → Service Bus → Worker → Runtime) so a single pipeline run is one distributed trace, with `PipelineRunId`/`CorrelationId` carried via `LogContext` and baggage.~~
+  **Delivered (partial):** `CorrelationId` is now tagged onto `Activity.Current` at the two seams that establish it (the Api correlation middleware, `AmbientActorContextExtensions.BeginCorrelatedScope`), and `Enrich.WithSpan()` puts `TraceId`/`SpanId` on every Serilog line. Cross-process continuity is still best-effort/`Azure.*`-source-only — RabbitMQ and the in-memory `IMessageConsumer` transports don't propagate W3C trace headers across the queue hop yet; that remains a follow-up.
+- ~~**Custom activity sources** for pipeline stages (extract / map / write) to complement the counters, giving span-level latency attribution.~~
+  **Delivered:** `FhirBridgeActivitySource` (`FHIRBridge.Pipeline`), registered via `.AddSource(...)` in `AddFhirBridgeObservability`, wraps `PipelineRunCommandHandler`, `WebhookIngestionCommandHandler`, and `PipelineOrchestrator.StartAsync`/`StartBulkExportAsync` in a `PipelineRun.Process` span tagged with `correlation_id`.
 - **Health and readiness checks** surfaced alongside metrics, and a hardened admin-dashboard snapshot endpoint backed by `IMetricsSnapshotProvider`.
 - **Alerting hooks** — error-rate and failed-run thresholds exported to Azure Monitor / OTLP backends.
 - **Hardened PHI masking** — expand the masked-property set, add value-pattern masking (e.g. detect MRN/SSN shapes), and verify masking against log fixtures so PHI can never reach a sink, satisfying audit requirements.

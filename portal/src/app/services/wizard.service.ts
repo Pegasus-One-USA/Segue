@@ -415,6 +415,11 @@ export class WizardService {
         privateKeyKeyVaultName:   liveAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
         privateKeySecretName:     liveAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
         keyId:                    liveAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
+        // Persisted so reopening this connection (Settings → Source Connections, which has no workflow node to
+        // recover it from otherwise — see EpicAudienceFormComponent's liveJwksUrl remarks) shows back whatever URL
+        // was actually registered with the EHR, hosted or externally-typed, instead of only ever recomputing
+        // FHIRBridge's own hosted URL guess.
+        jwksUrl:                  liveAuthMethod === 'jwt' ? (fields['JWKS URL'] || null) : null,
       },
       interactive: audCfg.showRedirect
         ? {
@@ -423,7 +428,11 @@ export class WizardService {
             trustedIssuers:  this.trustedIssuers().trim() ? [this.trustedIssuers().trim()] : [],
           }
         : null,
-      retrieval: audCfg.showRetrieval
+      // Retrieval (search criteria, resource types, scopes, pagination, bulk-export settings) is workflow-specific,
+      // not connection-level — entity mode (Settings → Source Connections) manages only the reusable connection,
+      // so it never persists a retrieval payload here regardless of what the audience would otherwise show in
+      // canvas mode. See EpicAudienceFormComponent.showRetrievalSection, which hides the corresponding UI section.
+      retrieval: (this.wizardMode() === 'canvas' && audCfg.showRetrieval)
         ? {
             retrievalMethod:        fields['Retrieval method key'] || 'search-rest',
             resourceTypes:          retrievalResourceTypes,

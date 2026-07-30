@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -19,6 +20,7 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly IEmailSender _emailSender;
     private readonly ITotpService _totpService;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly LocalAuthOptions _localAuthOptions;
 
     public LocalAuthService(
@@ -29,6 +31,7 @@ public sealed class LocalAuthService : ILocalAuthService
         IEmailSender emailSender,
         ITotpService totpService,
         IGovernanceLogger governanceLogger,
+        ISystemSettingsCache settingsCache,
         IOptions<LocalAuthOptions> localAuthOptions)
     {
         _repository = repository;
@@ -38,7 +41,18 @@ public sealed class LocalAuthService : ILocalAuthService
         _emailSender = emailSender;
         _totpService = totpService;
         _governanceLogger = governanceLogger;
+        _settingsCache = settingsCache;
         _localAuthOptions = localAuthOptions.Value;
+    }
+
+    private async Task<(int MaxFailedAttempts, int LockoutMinutes)> ResolveLockoutPolicyAsync(
+        CancellationToken cancellationToken)
+    {
+        var maxFailedAttempts = await _settingsCache.GetIntAsync(
+            "LocalAuth:Lockout:MaxFailedAttempts", _localAuthOptions.Lockout.MaxFailedAttempts, cancellationToken);
+        var lockoutMinutes = await _settingsCache.GetIntAsync(
+            "LocalAuth:Lockout:LockoutMinutes", _localAuthOptions.Lockout.LockoutMinutes, cancellationToken);
+        return (maxFailedAttempts, lockoutMinutes);
     }
 
     public async Task<LocalLoginResponse> LoginAsync(
@@ -69,15 +83,15 @@ public sealed class LocalAuthService : ILocalAuthService
             // Count the failed attempt against a real, local-login account so the lockout threshold engages.
             if (user is not null && accountUsable)
             {
-                user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
-                    TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
+                var (maxFailedAttempts, lockoutMinutes) = await ResolveLockoutPolicyAsync(cancellationToken);
+                user.RegisterFailedLogin(maxFailedAttempts, TimeSpan.FromMinutes(lockoutMinutes));
                 await _repository.UpdateUserAsync(user, cancellationToken);
 
                 if (user.IsLockedOut(DateTime.UtcNow))
                 {
                     await _governanceLogger.LogSecurityEventAsync(
                         new SecurityEventEntry("AccountLockedThresholdReached", "High", email,
-                            $"{_localAuthOptions.Lockout.MaxFailedAttempts} consecutive failed login attempts"),
+                            $"{maxFailedAttempts} consecutive failed login attempts"),
                         cancellationToken);
                 }
             }
@@ -137,8 +151,8 @@ public sealed class LocalAuthService : ILocalAuthService
         if (!IsMfaSatisfied(user, request.Code))
         {
             // A guess against a live challenge is a real failed attempt, unlike the code-less first step.
-            user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
-                TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
+            var (maxFailedAttempts, lockoutMinutes) = await ResolveLockoutPolicyAsync(cancellationToken);
+            user.RegisterFailedLogin(maxFailedAttempts, TimeSpan.FromMinutes(lockoutMinutes));
             await _repository.UpdateUserAsync(user, cancellationToken);
             await _governanceLogger.LogAuthenticationAsync(
                 new AuthenticationEntry("MFA", Success: false, user.Email, "Invalid MFA code"), cancellationToken);

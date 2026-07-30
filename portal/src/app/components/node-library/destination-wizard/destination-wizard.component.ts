@@ -146,7 +146,7 @@ export class DestinationWizardComponent implements OnInit {
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
   private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
-  readonly destType   = input.required<'sql' | 'csv' | 'mysql'>();
+  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -154,6 +154,10 @@ export class DestinationWizardComponent implements OnInit {
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
+  /** The relocated "✕" next to "← Back to library" — closes the whole Node Library dialog outright
+   *  (unlike cancel(), which only backs out of this form to the library's sidebar). Mirrors the
+   *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
+  readonly closeAll  = output<void>();
 
   // Lets the parent (Node Library sidebar) lock out the other destination type
   // mid-wizard, and warn before discarding progress if the user switches anyway.
@@ -179,6 +183,17 @@ export class DestinationWizardComponent implements OnInit {
     password:  [''],
     schema:    ['dbo', []],
     writeMode: ['upsert', []],
+  });
+
+  readonly mongoForm = this.fb.group({
+    name:             ['MongoDB Production', [Validators.required]],
+    // Single URI (database embedded, e.g. mongodb://user:pass@host:27017/dbname?authSource=admin) — matches
+    // what MappedMongoDestinationWriter expects. Treated as a whole as a secret (see SECRET_FIELD_KEYS): there's
+    // no live probe to validate a split server/database/credentials form against, so one opaque field is
+    // simplest and avoids a redundant connection-string-assembly step this wizard would otherwise need.
+    connectionString: ['', [Validators.required]],
+    collection:       ['', [Validators.required]],
+    writeMode:        ['upsert', []],
   });
 
   readonly csvForm = this.fb.group({
@@ -241,14 +256,21 @@ export class DestinationWizardComponent implements OnInit {
 
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
+  private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL reuses the SQL family's form/steps (server/database/auth + live table/column introspection) —
-  // only the probed destinationType and saved transformId differ from SQL Server.
+  // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
+  // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
   readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql');
   readonly isMySql      = computed(() => this.destType() === 'mysql');
+  readonly isMongo      = computed(() => this.destType() === 'mongo');
+  readonly isCsv        = computed(() => this.destType() === 'csv');
   readonly destLabel    = computed(() =>
-    this.destType() === 'sql' ? 'SQL Server' : this.destType() === 'mysql' ? 'MySQL' : 'CSV');
+    this.destType() === 'sql' ? 'SQL Server'
+      : this.destType() === 'mysql' ? 'MySQL'
+      : this.destType() === 'mongo' ? 'MongoDB'
+      : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
   /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
@@ -257,7 +279,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
     const rows = this.mappingRows();
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -375,6 +397,11 @@ export class DestinationWizardComponent implements OnInit {
       this._populateFromNode(edit);
       return;
     }
+    // No explicit New/Existing toggle — the "Existing connection" dropdown is just always there, so load its
+    // options unconditionally instead of waiting for a "switch to Existing" step that no longer exists.
+    if (this.showConnectionModeToggle()) {
+      this._loadExistingOptions();
+    }
     // New destination: default the selected data groups to whatever the upstream source pulls, so the destination
     // mirrors the source's Resource Type selection instead of a hardcoded set.
     const src = this.sourceResources();
@@ -389,15 +416,23 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.csvForm.invalid;
+      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
-    if (s >= 3) return this._hasUnverifiedColumns();
+    if (s >= 3) return this._hasUnverifiedColumns() || this._hasTypeMismatchedColumns() || this.resourcesMissingParentSelection().length > 0;
     return false;
   }
 
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
+    // The button is only visually dimmed while invalid (see dw-btn--invalid), not hard-disabled — clicking it
+    // now reveals exactly which field is missing instead of just silently doing nothing.
+    if (this.isNextDisabled()) {
+      if (this.step() === 1) {
+        (this.isSql() ? this.sqlForm : this.isMongo() ? this.mongoForm : this.csvForm).markAllAsTouched();
+      }
+      return;
+    }
     // SQL: leaving Configure auto-tests the connection and loads tables before advancing.
     if (this.step() === 1 && this.isSql() && this.probeState() !== 'ok') {
       this.testConnection();
@@ -457,12 +492,22 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── select existing connection ───────────────────────────────────────────
-  setConnectionMode(mode: 'new' | 'existing'): void {
-    this.connectionMode.set(mode);
-    if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
-      this._loadExistingOptions();
+  /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
+   *  the only way back to blank now that there's no explicit New/Existing toggle to switch away from. */
+  clearExistingConnection(): void {
+    this.connectionMode.set('new');
+    this.selectedExistingId.set(null);
+    this._existingBaseline = null;
+    if (this.isSql()) {
+      this.sqlForm.reset();
+      this.probeState.set('idle');
+      this.sqlTables.set([]);
+    } else if (this.isMongo()) {
+      this.mongoForm.reset();
+    } else {
+      this.csvForm.reset();
+      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
     }
-    if (!this.isSql()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   private _loadExistingOptions(): void {
@@ -471,7 +516,11 @@ export class DestinationWizardComponent implements OnInit {
       .getPaged({ isEnabled: true, page: 1, pageSize: 100 })
       .pipe(
         map(page => {
-          const wantedTypes = this.isSql() ? DestinationWizardComponent.SQL_TYPES : DestinationWizardComponent.CSV_TYPES;
+          const wantedTypes = this.isSql()
+            ? DestinationWizardComponent.SQL_TYPES
+            : this.isMongo()
+              ? DestinationWizardComponent.MONGO_TYPES
+              : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -503,6 +552,7 @@ export class DestinationWizardComponent implements OnInit {
   private _existingBaseline: Record<string, unknown> | null = null;
 
   selectExisting(id: string): void {
+    this.connectionMode.set('existing');
     this.selectedExistingId.set(id);
     const selected = this.existingOptions().find(o => o.id === id);
     if (!selected) return;
@@ -521,6 +571,14 @@ export class DestinationWizardComponent implements OnInit {
         writeMode: metadata['dest_writeMode'] || 'upsert',
       });
       this._existingBaseline = this.sqlForm.getRawValue();
+    } else if (this.isMongo()) {
+      this.mongoForm.patchValue({
+        name:             metadata['dest_name']       || selected.name,
+        connectionString: '',
+        collection:       metadata['dest_collection']  || selected.target || '',
+        writeMode:        metadata['dest_writeMode']    || 'upsert',
+      });
+      this._existingBaseline = this.mongoForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -544,6 +602,7 @@ export class DestinationWizardComponent implements OnInit {
           : 60,
       });
       this._existingBaseline = this.csvForm.getRawValue();
+      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
     }
   }
 
@@ -565,10 +624,10 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -612,6 +671,15 @@ export class DestinationWizardComponent implements OnInit {
     return (this.tableForResourceTarget(r)?.columns ?? [])
       .filter(c => !c.isAutoGenerated)
       .map(c => c.name);
+  }
+
+  // True when a resource's live target table loaded real columns but every one of them is identity/computed
+  // (columnsForResourceTarget is therefore empty) — distinguishes that case from "no schema loaded yet" so the
+  // template can show an explanatory message instead of silently falling back to a free-text column input,
+  // which otherwise looks identical to the CSV/unprobed case and leaves the admin guessing why no columns show.
+  allColumnsAutoGenerated(r: string): boolean {
+    const columns = this.tableForResourceTarget(r)?.columns ?? [];
+    return columns.length > 0 && columns.every(c => c.isAutoGenerated);
   }
 
   // ── data groups ───────────────────────────────────────────────────────────
@@ -674,6 +742,44 @@ export class DestinationWizardComponent implements OnInit {
     return this.mappingRows().filter(row => row.resource === r);
   }
 
+  // ── Map fields accordion (Step 3) ────────────────────────────────────────
+  // Explicit per-resource overrides — only touched by toggleGroup(). Whichever set contains a resource wins;
+  // if neither does, isGroupCollapsed() falls back to a sensible default (see below) rather than requiring
+  // every resource to be explicitly toggled once before it renders correctly.
+  private readonly _collapsedGroups = signal<Set<string>>(new Set());
+  private readonly _expandedGroups  = signal<Set<string>>(new Set());
+
+  // Default (no explicit toggle yet): a single resource always starts expanded — there's nothing to declutter.
+  // With several resources, only the first stays open and the rest start collapsed; a resource with an active
+  // mapping issue defaults open too, so a problem is never hidden behind a fold the user never opened.
+  isGroupCollapsed(r: string): boolean {
+    if (this._collapsedGroups().has(r)) return true;
+    if (this._expandedGroups().has(r)) return false;
+    if (this.resourceKeys().length <= 1) return false;
+    if (this.resourceIssueCount(r) > 0) return false;
+    return this.resourceKeys().indexOf(r) > 0;
+  }
+
+  toggleGroup(r: string): void {
+    const collapsedNow = this.isGroupCollapsed(r);
+    if (collapsedNow) {
+      this._expandedGroups.update(s => new Set(s).add(r));
+      this._collapsedGroups.update(s => { const n = new Set(s); n.delete(r); return n; });
+    } else {
+      this._collapsedGroups.update(s => new Set(s).add(r));
+      this._expandedGroups.update(s => { const n = new Set(s); n.delete(r); return n; });
+    }
+  }
+
+  // Badge shown on the group header regardless of collapse state, so collapsing a resource's mapping table
+  // never hides an unverified column, a type mismatch, or a missing required parent selection from view.
+  resourceIssueCount(r: string): number {
+    let count = this.rowsForResource(r)
+      .filter(row => this.isRowColumnUnverified(row) || this.isRowTypeMismatched(row)).length;
+    if (this.resourcesMissingParentSelection().includes(r)) count++;
+    return count;
+  }
+
   updateRow(i: number, field: 'targetName', val: string): void {
     this.mappingRows.update(rows => {
       // The id row's column is auto-resolved (and its dropdown rendered read-only, see isIdColumnLocked in the
@@ -691,6 +797,7 @@ export class DestinationWizardComponent implements OnInit {
   // Adds one empty mapping row for the resource — defaults to the first field
   // not already mapped, so repeated clicks step through the catalog.
   addRow(resource: string): void {
+    if (this.isSql() && !this.targetFor(resource)) return; // no table chosen yet — nothing to map columns against
     const fields = this.availableFields(resource);
     if (!fields.length) return;
     const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
@@ -718,6 +825,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly AUTO_MATCH_THRESHOLD = 0.5;
 
   addFields(resource: string): void {
+    if (this.isSql() && !this.targetFor(resource)) return; // no table chosen yet — nothing to map columns against
     const idField = this.idFieldFor(resource);
     const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
     const remaining = this.availableFields(resource).filter(f =>
@@ -814,6 +922,13 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  // Clears every removable row for a resource in one click (mirrors removeRow's own exemptions — the id row and
+  // any locked parent-reference rows stay, since both are mandatory and neither has a manual remove control).
+  clearFields(resource: string): void {
+    this.mappingRows.update(rows =>
+      rows.filter(row => row.resource !== resource || this.isIdRow(row) || !!row.isRequiredParentRef));
+  }
+
   // ── mandatory id / upsert-key row ─────────────────────────────────────────
   // Every resource's own `id` field (e.g. Patient.id) must always be mapped and must always be the Upsert
   // key, so two records can never collide/duplicate on write — this can't be turned off or reassigned.
@@ -882,6 +997,35 @@ export class DestinationWizardComponent implements OnInit {
     return !columns.includes(row.targetName);
   }
 
+  // The live target column a row is currently mapped to, or undefined when the schema isn't loaded / the
+  // column isn't a real one on this table (see isRowColumnUnverified — that case is reported separately).
+  private _targetColumn(row: MappingRow): DestinationColumn | undefined {
+    return this.tableForResourceTarget(row.resource)?.columns.find(c => c.name === row.targetName);
+  }
+
+  // Mirrors the server-side check in CreateMappingProfileRequestValidator: a field's FHIR value type
+  // (String/Integer/Decimal/Boolean/Date/DateTime/Json) must match the destination column's mapping value
+  // type, or the write engine can't coerce one to the other. Today this is caught only when the save request
+  // hits the backend validator — surfacing it here lets the admin fix it during mapping instead of after a
+  // rejected save. Only flagged once the column itself is schema-verified (isRowColumnUnverified false) and
+  // the row actually carries catalog-derived valueType metadata (absent for the built-in fallback defs).
+  isRowTypeMismatched(row: MappingRow): boolean {
+    if (!row.valueType) return false;
+    if (this.isRowColumnUnverified(row)) return false;
+    const column = this._targetColumn(row);
+    if (!column) return false;
+    return !column.mappingValueType || column.mappingValueType.toLowerCase() !== row.valueType.toLowerCase();
+  }
+
+  // Human-readable message for isRowTypeMismatched, phrased the same way as the server-side validator's
+  // rejection so the admin sees identical wording whether the mismatch is caught here or (for anything this
+  // client-side check misses) at save time.
+  typeMismatchMessage(row: MappingRow): string {
+    const column = this._targetColumn(row);
+    if (!column) return '';
+    return `'${column.name}' is a ${column.dataType} column (expects ${column.mappingValueType}), but this field is mapped as ${row.valueType}.`;
+  }
+
   // Blocks proceeding past the mapping step while any selected resource has a mapped row (id or otherwise)
   // whose column isn't verified against the live destination schema — the save-time gate the destination-node
   // config alone can't guarantee, since nothing upstream forces the user to actually pick from the live column
@@ -889,6 +1033,23 @@ export class DestinationWizardComponent implements OnInit {
   private _hasUnverifiedColumns(): boolean {
     return this.mappingRows().some(row =>
       this.selectedResources().includes(row.resource) && this.isRowColumnUnverified(row));
+  }
+
+  // Same gate as _hasUnverifiedColumns, for type mismatches (see isRowTypeMismatched) — blocks proceeding
+  // past the mapping step so a save-time rejection from CreateMappingProfileRequestValidator is never the
+  // first the admin hears of it.
+  private _hasTypeMismatchedColumns(): boolean {
+    return this.mappingRows().some(row =>
+      this.selectedResources().includes(row.resource) && this.isRowTypeMismatched(row));
+  }
+
+  // Resources offering at least one candidate parent (per candidateParentsFor) with none picked yet — an
+  // unselected chip means _reconcileParentRefRows never locks in that reference field, so the row saves with no
+  // link back to its actual parent. Blocks Next/Save until at least one parent is chosen per such resource (see
+  // isNextDisabled) rather than only warning after the fact.
+  resourcesMissingParentSelection(): string[] {
+    return this.resourceKeys().filter(r =>
+      this.candidateParentsFor(r).length > 0 && this.selectedParentsOf(r).length === 0);
   }
 
   // Keeps every selected resource's mandatory id row in sync with the live schema and the catalog: inserts it
@@ -900,6 +1061,12 @@ export class DestinationWizardComponent implements OnInit {
     let next = [...this.mappingRows()];
 
     for (const r of this.selectedResources()) {
+      // SQL destinations pick a target table per resource (Step 3's "Select a table…" dropdown) — nothing should
+      // populate until the admin has actually chosen one, otherwise the mandatory id row (and any rows added via
+      // "+ Add field" / "Add Fields") shows up against no real table at all. CSV/Mongo have no comparable "not yet
+      // chosen" state (targetFor always holds a usable default), so they're unaffected.
+      if (this.isSql() && !this.targetFor(r)) continue;
+
       const idField = this.idFieldFor(r);
       if (!idField) continue;
 
@@ -1057,7 +1224,7 @@ export class DestinationWizardComponent implements OnInit {
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
-  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql'): void {
+  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql' | 'mongo'): void {
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
       if (targets[r]) continue;
@@ -1092,6 +1259,13 @@ export class DestinationWizardComponent implements OnInit {
         password:  f['dest_password']  || '',
         schema:    f['dest_schema']    || 'dbo',
         writeMode: f['dest_writeMode'] || 'upsert',
+      });
+    } else if (this.isMongo()) {
+      this.mongoForm.patchValue({
+        name:             f['dest_name']       || 'MongoDB Production',
+        connectionString: '',
+        collection:       f['dest_collection']  || '',
+        writeMode:        f['dest_writeMode']    || 'upsert',
       });
     } else {
       this.csvForm.patchValue({
@@ -1167,6 +1341,12 @@ export class DestinationWizardComponent implements OnInit {
         config['dest_username'] = v.username ?? '';
         config['dest_password'] = v.password ?? '';
       }
+    } else if (type === 'mongo') {
+      const v = this.mongoForm.value;
+      config['dest_name']             = v.name             ?? '';
+      config['dest_connectionString'] = v.connectionString ?? '';
+      config['dest_collection']       = v.collection       ?? '';
+      config['dest_writeMode']        = v.writeMode        ?? 'upsert';
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -1241,7 +1421,7 @@ export class DestinationWizardComponent implements OnInit {
 
     this.saved.emit({
       attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : 'dest-csv',
+      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
       status:      'enabled',
       config,
     });

@@ -35,13 +35,6 @@
           </div>
         }
 
-        @if (loading()) {
-          <div class="panel-loading">
-            <mat-spinner diameter="32" color="primary"></mat-spinner>
-            <span>Loading roles...</span>
-          </div>
-        }
-
         @if (!loading()) {
           <div class="roles-list">
             @for (role of allRoles(); track role.id) {
@@ -79,6 +72,12 @@
                     @if (role.isSystemRole) {
                       <span class="system-badge" matTooltip="Built-in system role">System</span>
                     }
+                    @if (isAssigned(role.id)) {
+                      <span class="assigned-badge">
+                        <mat-icon>check_circle</mat-icon>
+                        Currently assigned
+                      </span>
+                    }
                   </div>
                   <p class="role-item__desc">{{ role.description }}</p>
                   <p class="role-item__perms">
@@ -95,7 +94,7 @@
       <div class="perms-panel">
         <div class="panel-title">
           <mat-icon>security</mat-icon>
-          Role Allocations
+          <span class="panel-title__label">Role Allocations</span>
           <span class="perm-summary">
             <span class="perm-count perm-count--allowed">{{ allowedCount() }} allowed</span>
             <span class="perm-count perm-count--denied">{{ deniedCount() }} denied</span>

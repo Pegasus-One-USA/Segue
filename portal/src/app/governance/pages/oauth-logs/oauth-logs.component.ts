@@ -1,14 +1,14 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { AuthenticationLogEntry, PagedResult } from '../../models/governance.model';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 @Component({
   selector: 'app-oauth-logs',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule],
+  imports: [CommonModule, DatePipe, MatTableModule, PaginationBarComponent],
   templateUrl: './oauth-logs.component.html',
   styleUrl: './oauth-logs.component.scss',
 })
@@ -18,7 +18,7 @@ export class OAuthLogsComponent implements OnInit {
   readonly loading = signal(false);
   readonly result = signal<PagedResult<AuthenticationLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   readonly displayedCols = ['occurredOnUtc', 'authenticationType', 'userEmail', 'success', 'failureReason', 'correlationId'];
 
@@ -34,7 +34,7 @@ export class OAuthLogsComponent implements OnInit {
     });
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
     this.load();

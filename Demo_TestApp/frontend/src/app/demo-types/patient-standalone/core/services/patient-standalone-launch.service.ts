@@ -9,9 +9,9 @@ import { environment } from '../../../../../environments/environment';
 // below still take an explicit workflowId parameter (rather than always using one resolved field), since the list
 // fetch and the per-patient detail fetch run against two different workflows (see launch-standalone-patient.ts).
 
-/** Matches FHIRBridge's PublicEhrEpicEndpointDto shape (GET /api/v1/ehr-mychart-endpoints) — anonymous,
- *  EndpointType.MyChart rows only (a specific customer/hospital's own branded production instance, never Epic's
- *  shared sandbox — that stays behind Provider Standalone's own picker). */
+/** Matches FHIRBridge's PublicEhrEndpointDto shape (GET /api/v1/ehr-public-endpoints?endpointType=MyChart) —
+ *  anonymous, scoped to EndpointType.MyChart rows only (a real customer's own branded instance), never the shared
+ *  Epic sandbox rows Provider Standalone's picker lists. */
 export interface MyChartEndpoint {
   id: string;
   name: string;
@@ -272,8 +272,8 @@ export class PatientStandaloneLaunchService {
 
   async loadHospitals(search?: string): Promise<MyChartEndpoint[]> {
     const url = search
-      ? `${this.baseUrl}/api/v1/ehr-mychart-endpoints?search=${encodeURIComponent(search)}`
-      : `${this.baseUrl}/api/v1/ehr-mychart-endpoints`;
+      ? `${this.baseUrl}/api/v1/ehr-public-endpoints?endpointType=MyChart&search=${encodeURIComponent(search)}`
+      : `${this.baseUrl}/api/v1/ehr-public-endpoints?endpointType=MyChart`;
     return firstValueFrom(this.http.get<MyChartEndpoint[]>(url));
   }
 

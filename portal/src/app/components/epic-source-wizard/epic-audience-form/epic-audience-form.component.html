@@ -14,10 +14,14 @@
         <span class="eaf-connected-badge">✓ Endpoints resolved</span>
       }
     </div>
-    <!-- "Back to library" only makes sense inside Pipeline Builder's Node Library — the Source Connections page
-         has no library to go back to; its own footer Cancel/Close button already covers dismissing the form. -->
+    <!-- "Back to library"/close only make sense inside Pipeline Builder's Node Library — the Source
+         Connections page has no library to go back to; its own footer Cancel/Close button already
+         covers dismissing the form. -->
     @if (wiz.wizardMode() !== 'entity') {
-      <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+      <div class="eaf-topbar-actions">
+        <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+        <button class="eaf-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+      </div>
     }
   </div>
 
@@ -47,28 +51,21 @@
       </div>
     }
 
-    <!-- ═══════════ SECTION 0b: New Source / Existing Source ══════════════════ -->
-    <!-- Canvas-mode create only — editing an existing node already has its own data, and entity mode's Create
-         flow has no "clone from existing" need yet. -->
-    @if (showSourcePicker()) {
-      <div class="eaf-section">
-        <div class="eaf-grid">
-          <div class="eaf-field">
-            <label class="eaf-label" for="eaf-sourceMode">Source</label>
-            <div class="eaf-select-wrap">
-              <select id="eaf-sourceMode" class="eaf-select"
-                      [value]="sourceMode()"
-                      (change)="onSourceModeChange($any($event.target).value)">
-                <option value="new">New Source</option>
-                <option value="existing">Existing Source</option>
-              </select>
-            </div>
-            <p class="eaf-hint">Start from scratch, or copy the configuration of a source connection you've already set up.</p>
-          </div>
+    <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
+    <div class="eaf-section">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">1</span>
+        <span class="eaf-section-title">Audience &amp; Environment</span>
+      </div>
 
-          @if (sourceMode() === 'existing') {
-            <div class="eaf-field">
-              <label class="eaf-label" for="eaf-existingConnection">Existing Epic Connection</label>
+      <div class="eaf-grid">
+        <!-- Row 1: Existing Epic Connection | App Name — canvas-mode create only (see showSourcePicker); editing
+             an existing node already has its own data, and entity mode's Create flow has no "clone from existing"
+             need yet. Always visible (no New/Existing toggle) — leaving it unselected just means "New Source". -->
+        @if (showSourcePicker()) {
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-existingConnection">Existing Epic Connection</label>
+            <div class="eaf-existing-connection-row">
               <div class="eaf-select-wrap">
                 <select id="eaf-existingConnection" class="eaf-select"
                         [disabled]="loadingExisting()"
@@ -82,25 +79,26 @@
                   }
                 </select>
               </div>
-              @if (!loadingExisting() && existingConnections().length === 0) {
-                <p class="eaf-hint">No existing Epic source connections found.</p>
-              } @else {
-                <p class="eaf-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</p>
+              @if (selectedExistingId()) {
+                <button type="button" class="eaf-clear-btn" title="Clear selected connection — start a new source instead"
+                        (click)="clearExistingConnection()">✕</button>
               }
             </div>
-          }
+            @if (!loadingExisting() && existingConnections().length === 0) {
+              <p class="eaf-hint">No existing Epic source connections found — configure a new one below.</p>
+            } @else {
+              <p class="eaf-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</p>
+            }
+          </div>
+        }
+
+        <div class="eaf-field" [class.eaf-field--full]="!showSourcePicker()">
+          <label class="eaf-label" for="eaf-appName">App Name</label>
+          <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
+                 placeholder="e.g. Segue Provider Launch" />
         </div>
-      </div>
-    }
 
-    <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
-    <div class="eaf-section">
-      <div class="eaf-section-head">
-        <span class="eaf-section-num">1</span>
-        <span class="eaf-section-title">Audience &amp; Environment</span>
-      </div>
-
-      <div class="eaf-grid">
+        <!-- Epic Audience | Environment -->
         <div class="eaf-field" [class.eaf-field--error]="form.controls.audience.touched && form.controls.audience.invalid">
           <label class="eaf-label" for="eaf-audience">Epic Audience <span class="eaf-req">*</span></label>
           <div class="eaf-select-wrap">
@@ -132,12 +130,6 @@
             </select>
           </div>
           <p class="eaf-hint">Decides which Client ID set applies. Epic issues separate IDs per environment.</p>
-        </div>
-
-        <div class="eaf-field eaf-field--full">
-          <label class="eaf-label" for="eaf-appName">App Name</label>
-          <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
-                 placeholder="e.g. Segue Provider Launch" />
         </div>
       </div>
     </div>
@@ -235,7 +227,8 @@
       </div>
 
       <!-- ═══════════ SECTION 4: Credentials ══════════════════════════════════ -->
-      <div class="eaf-section">
+      <div class="eaf-section"
+           [class.eaf-section--last]="!(showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) && !audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
         <div class="eaf-section-head">
           <span class="eaf-section-num">4</span>
           <span class="eaf-section-title">Credentials</span>
@@ -296,6 +289,8 @@
               }
               @if (audience() === 'backend-system' && (isGenKey() || isImportKey())) {
                 <p class="eaf-hint">Auto-filled with this connection's real JWKS URL once known — save first if it still shows a placeholder.</p>
+              } @else if (keyLoadedFromExistingConnection()) {
+                <p class="eaf-hint">Auto-filled with FHIRBridge's hosted JWKS URL for this connection's existing key. If Epic is actually configured to fetch from a different, self-hosted URL, replace this with that URL instead.</p>
               } @else {
                 <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in Epic APP).</p>
               }
@@ -330,7 +325,7 @@
                       <option value="import">Import Existing Private Key</option>
                     </select>
                   </div>
-                  <p class="eaf-hint">"Generate"/"Import" have FHIRBridge provision and store the private key for you — no need to type Key ID/Key Vault Name/Secret Name by hand.</p>
+                  <p class="eaf-hint">"Generate"/"Import" have Segue provision and store the private key for you — no need to type Key ID/Key Vault Name/Secret Name by hand.</p>
                 </div>
 
                 @if (replacingKey()) {
@@ -374,7 +369,7 @@
                         <span class="eaf-tag-auto">&#10003; key imported</span>
                       }
                     </div>
-                    <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). FHIRBridge validates it and signs with it as-is — no new key is generated.</p>
+                    <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). Segue validates it and signs with it as-is — no new key is generated.</p>
                   </div>
                 }
 
@@ -426,7 +421,8 @@
 
       @if (showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) {
         <!-- ═══════════ SECTION: Application URLs ═══════════════════════════════ -->
-        <div class="eaf-section">
+        <div class="eaf-section"
+             [class.eaf-section--last]="!audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().urls }}</span>
             <span class="eaf-section-title">Application URLs</span>
@@ -490,7 +486,7 @@
 
       @if (audienceConfig().showCdsHooks) {
         <!-- ═══════════ SECTION: CDS Hooks ═══════════════════════════════════════ -->
-        <div class="eaf-section">
+        <div class="eaf-section" [class.eaf-section--last]="!showConnectionTest && !showRetrievalSection()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().cds }}</span>
             <span class="eaf-section-title">CDS Hooks</span>
@@ -546,45 +542,47 @@
       }
 
       <!-- ═══════════ Connection Test ═══════════════════════════════════════════ -->
-      <div class="eaf-section" [class.eaf-section--last]="!audienceConfig().showRetrieval">
-        <div class="eaf-section-head">
-          <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
-          <span class="eaf-section-title">Connection Test</span>
-          <span class="eaf-hint-inline">n/a — action, not a field</span>
-        </div>
+      @if (showConnectionTest) {
+        <div class="eaf-section" [class.eaf-section--last]="!showRetrievalSection()">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
+            <span class="eaf-section-title">Connection Test</span>
+            <span class="eaf-hint-inline">n/a — action, not a field</span>
+          </div>
 
-        <div class="eaf-test-row">
-          <button class="eaf-test-btn" type="button"
-                  [disabled]="testStatus() === 'running' || isReadonly"
-                  (click)="runTestConnection()">
-            @if (testStatus() === 'running') {
-              <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
-            } @else if (testStatus() === 'ok') {
-              ✓ Test passed — run again
+          <div class="eaf-test-row">
+            <button class="eaf-test-btn" type="button"
+                    [disabled]="testStatus() === 'running' || isReadonly"
+                    (click)="runTestConnection()">
+              @if (testStatus() === 'running') {
+                <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
+              } @else if (testStatus() === 'ok') {
+                ✓ Test passed — run again
+              } @else if (testStatus() === 'fail') {
+                ✗ Test failed — retry
+              } @else {
+                ⚡ Test Connection
+              }
+            </button>
+
+            @if (testStatus() === 'ok') {
+              <span class="eaf-test-result eaf-test-result--ok">
+                Token endpoint reachable and responding.
+              </span>
             } @else if (testStatus() === 'fail') {
-              ✗ Test failed — retry
+              <span class="eaf-test-result eaf-test-result--fail">
+                Connection failed. Check the token endpoint URL and credentials.
+              </span>
             } @else {
-              ⚡ Test Connection
+              <span class="eaf-test-note">
+                Validates before save — checks token endpoint is reachable and credentials are accepted.
+              </span>
             }
-          </button>
-
-          @if (testStatus() === 'ok') {
-            <span class="eaf-test-result eaf-test-result--ok">
-              Token endpoint reachable and responding.
-            </span>
-          } @else if (testStatus() === 'fail') {
-            <span class="eaf-test-result eaf-test-result--fail">
-              Connection failed. Check the token endpoint URL and credentials.
-            </span>
-          } @else {
-            <span class="eaf-test-note">
-              Validates before save — checks token endpoint is reachable and credentials are accepted.
-            </span>
-          }
+          </div>
         </div>
-      </div>
+      }
 
-    @if (audienceConfig().showRetrieval) {
+    @if (showRetrievalSection()) {
       <!-- ═══════════ Data Retrieval Method ═══════════════════════════════════ -->
       <div class="eaf-section" [class.eaf-section--last]="!retrievalConfig()">
         <div class="eaf-section-head">
@@ -592,7 +590,7 @@
           <span class="eaf-section-title">Data Retrieval Method</span>
         </div>
         @if (audienceConfig().retrievalScope === 'automated') {
-          <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this Backend System connection.</p>
+          <p class="eaf-section-sub">Choose how Segue receives resource updates from this Backend System connection.</p>
 
           <div class="eaf-grid">
             <div class="eaf-field eaf-field--full"
@@ -649,7 +647,7 @@
                 } @else {
                   <label class="eaf-label" [attr.for]="'eaf-' + field.key">
                     {{ field.label }}
-                    @if (field.required || (field.key === 'searchCriteria' && searchCriteriaRequiredForPatient())) {
+                    @if (field.required) {
                       <span class="eaf-req">*</span>
                     }
                   </label>
@@ -716,11 +714,7 @@
                 @if (isRetrievalFieldInvalid(field)) {
                   <p class="eaf-error-msg">{{ field.label }} is required.</p>
                 }
-                @if (field.key === 'searchCriteria' && searchCriteriaRequiredForPatient()) {
-                  <p class="eaf-hint">Required: Epic rejects an unscoped Backend System Patient search (no launch
-                    context exists to scope it automatically). Supply an identifier, demographics, or _id here —
-                    e.g. <code>identifier=&lt;system&gt;|&lt;value&gt;</code> or <code>family=Smith&amp;birthdate=1990-01-01</code>.</p>
-                } @else if (field.hint) {
+                @if (field.hint) {
                   <p class="eaf-hint">{{ field.hint }}</p>
                 }
               </div>
@@ -793,7 +787,7 @@
   <div class="eaf-footer">
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
-      <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
+      <button class="eaf-btn eaf-btn--primary" type="button" [class.eaf-btn--invalid]="form.invalid" (click)="save()">
         {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Pipeline') }}
       </button>
     }

@@ -42,6 +42,12 @@
   color: var(--color-ink);
 }
 
+.dw-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .dw-back-btn {
   font-size: 12.5px;
   font-weight: 600;
@@ -52,6 +58,22 @@
   padding: 5px 10px;
   border-radius: 6px;
   white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
+}
+
+/* The dialog-level "✕" (fully closes Node Library), relocated here next to "← Back to library"
+   now that the outer Node Library header is gone. */
+.dw-close-btn {
+  background: none;
+  border: none;
+  font-size: 19px;
+  line-height: 1;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
   transition: background 0.12s, color 0.12s;
 
   &:hover { background: var(--color-bg); color: var(--color-ink-2); }
@@ -178,6 +200,38 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.dw-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* ── Existing connection row (select + clear button) ─────────────────────── */
+.dw-existing-connection-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+
+  .dw-select-wrap { flex: 1; }
+}
+
+.dw-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+
+  &:hover { color: var(--color-ink); border-color: var(--color-primary); }
 }
 
 .dw-field {
@@ -335,6 +389,9 @@
   overflow: hidden;
 }
 
+/* The whole row toggles the accordion (role="button" in the template) — the target select/input and the
+   Add Fields/+ Add field buttons stop click propagation so they keep their own behavior instead of also
+   toggling. */
 .dw-mapping-group-head {
   display: flex;
   align-items: center;
@@ -345,6 +402,39 @@
   font-weight: 700;
   color: var(--color-ink);
   border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+
+  &:hover { background: var(--color-bg); }
+}
+
+.dw-mapping-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dw-mapping-chevron {
+  display: inline-block;
+  font-size: 15px;
+  color: var(--color-muted-2);
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+  margin-left: auto;
+
+  &.collapsed { transform: rotate(0deg); }
+}
+
+.dw-mapping-issue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .dw-mapping-target-label {
@@ -587,6 +677,10 @@
   font-weight: 600;
   line-height: 1.5;
 
+  &.dw-parent-refs-warn {
+    margin: 10px 14px;
+  }
+
   &--info {
     background: var(--color-info-soft);
     border: 1px solid color-mix(in srgb, var(--color-info) 35%, white);
@@ -646,11 +740,9 @@
     &:hover:not(:disabled) {
       background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark));
     }
-  }
-}
 
-.dw-conn-mode {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+    /* Still clickable (unlike :disabled) — clicking while invalid marks the active step's form touched so
+       the user sees exactly which field is missing, instead of the button just silently doing nothing. */
+    &.dw-btn--invalid { opacity: 0.5; }
+  }
 }

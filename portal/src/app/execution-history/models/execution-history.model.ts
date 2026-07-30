@@ -16,6 +16,7 @@ export interface RouteExecution {
   nodeRunCount: number;
   errorMessage: string | null;
   workflowDefinitionVersion: number;
+  correlationId: string | null;
 }
 
 export interface PagedResult<T> {
@@ -32,6 +33,18 @@ export interface RouteExecutionFilter {
   search?: string;
   page: number;
   pageSize: number;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
+}
+
+/** Matches the backend's WorkflowRunStatusCountsDto (GET /workflow-runs/stats) — an all-time count per
+ *  status across every workflow, backing the Dashboard's status stat tiles. */
+export interface WorkflowRunStatusCounts {
+  pending: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  cancelled: number;
 }
 
 /** Matches the backend's WorkflowNodeRunPayloadDto — what a single node fetched/transformed/wrote. */

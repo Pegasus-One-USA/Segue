@@ -59,7 +59,8 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         new(DestinationType.Pdf, typeof(MappedPdfDestinationWriter)),
         new(DestinationType.Avro, typeof(MappedAvroDestinationWriter)),
         new(DestinationType.Protobuf, typeof(MappedProtobufDestinationWriter)),
-        new(DestinationType.Databricks, typeof(MappedDatabricksDestinationWriter))
+        new(DestinationType.Databricks, typeof(MappedDatabricksDestinationWriter)),
+        new(DestinationType.Mongo, typeof(MappedMongoDestinationWriter))
     ];
 
     private static IReadOnlyDictionary<DestinationType, Type> BuildRegistry(

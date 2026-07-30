@@ -27,6 +27,11 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
 
         builder.Property(x => x.LastTriggeredOnUtc);
 
+        builder.Property(x => x.CreatedOnUtc).IsRequired();
+        builder.Property(x => x.CreatedBy).HasMaxLength(320);
+        builder.Property(x => x.UpdatedOnUtc);
+        builder.Property(x => x.UpdatedBy).HasMaxLength(320);
+
         // Workflow-level scheduling metadata (approach B) — flattened into the WorkflowDefinitions row. Optional:
         // existing rows (and manual/launched workflows) simply have null trigger columns.
         builder.OwnsOne(x => x.Trigger, trigger =>
@@ -134,6 +139,7 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.TargetNodeId);
+        builder.Property(x => x.CorrelationId).HasMaxLength(100);
 
         builder.HasMany(x => x.NodeRuns)
             .WithOne()
@@ -145,6 +151,7 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
 
         builder.HasIndex(x => x.WorkflowDefinitionId);
         builder.HasIndex(x => x.StartedAt);
+        builder.HasIndex(x => x.CorrelationId);
     }
 }
 

@@ -119,6 +119,16 @@ public sealed class S3DestinationNodeExecutor : DestinationNodeExecutor
     }
 }
 
+public sealed class MongoDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public MongoDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.MongoDestination, DestinationType.Mongo, writerFactory, workflowDefinitionStore, governanceLogger)
+    {
+    }
+}
+
 public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecutor
 {
     public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
@@ -518,6 +528,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.MySql,
         DestinationType.PostgreSql,
         DestinationType.Snowflake,
+        DestinationType.Mongo,
     ];
 
     private readonly DestinationType _destinationType;
@@ -568,6 +579,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         int written;
         string? downloadUrl;
         GeneratedFile? inlineDownload;
+        FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult? writeResult = null;
         var explicitProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile");
 
         if (explicitProfile is null && MultiTableRelationalDestinationTypes.Contains(_destinationType))
@@ -590,6 +602,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 var groupResult = await writer.WriteAsync(destination, profile, groupRecords, writeContext, cancellationToken);
                 totalWritten += groupResult.Count;
                 firstDownloadUrl ??= groupResult.DownloadUrl;
+                writeResult = groupResult;
             }
 
             written = totalWritten;
@@ -601,7 +614,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         else
         {
             var mappingProfile = explicitProfile ?? CreateMappingProfile(node, preferredResourceType: null, records);
-            var writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
+            writeResult = await writer.WriteAsync(destination, mappingProfile, records, writeContext, cancellationToken);
             written = writeResult.Count;
             downloadUrl = writeResult.DownloadUrl;
             inlineDownload = writeResult.InlineDownload;

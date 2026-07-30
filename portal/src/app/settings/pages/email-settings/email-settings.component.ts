@@ -33,7 +33,7 @@ export class EmailSettingsComponent implements OnInit, HasUnsavedChanges {
     enableSsl:   [true],
     username:    [''],
     fromAddress: ['', [Validators.required, Validators.email]],
-    fromName:    ['FHIRBridge', Validators.required],
+    fromName:    ['Segue', Validators.required],
     // Write-only: blank means "keep the currently saved password". Only sent to the API when non-blank.
     password:    [''],
   });

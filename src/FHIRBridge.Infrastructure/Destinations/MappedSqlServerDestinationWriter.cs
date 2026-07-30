@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Integration.Sql;
 using Microsoft.Data.SqlClient;
 
@@ -13,8 +14,8 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// <summary>
 /// Writes mapped records to SQL Server / Azure SQL. The customer owns the destination schema: the target table must
 /// already exist, and only the mapped destination columns are ever written — no system/audit columns are added.
-/// Supports Insert, Upsert (MERGE on the mapped field flagged <see cref="MappingField.IsUpsertKey"/>), and CDC write
-/// modes.
+/// Supports Insert, Upsert (MERGE on the mapped field flagged <see cref="MappingField.IsUpsertKey"/>), Update
+/// (updates the matching row by that same key only, never inserts), and CDC write modes.
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
 /// TODO: CDC mode still auto-creates its companion table, which conflicts with the customer-owned-schema model;
@@ -24,10 +25,12 @@ namespace FHIRBridge.Infrastructure.Destinations;
 public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
 {
     private readonly ISecretProvider _secretProvider;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
-    public MappedSqlServerDestinationWriter(ISecretProvider secretProvider)
+    public MappedSqlServerDestinationWriter(ISecretProvider secretProvider, IGlobalExceptionManager? exceptionManager = null)
     {
         _secretProvider = secretProvider;
+        _exceptionManager = exceptionManager;
     }
 
     public async Task<DestinationWriteResult> WriteAsync(
@@ -74,25 +77,60 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         var systemColumns = await ReadSystemColumnsPresentAsync(
             connection, target.SchemaName, target.TableName, cancellationToken);
 
+        // Each record's write stands alone: a constraint violation (dup key, NOT NULL, truncation, conversion, ...)
+        // on one record's data must not discard every other record already validated and ready to write in the same
+        // batch. Only a SqlException is caught here — anything else (e.g. the connection itself dying) can't be
+        // recovered from per-record and is left to propagate and fail the whole route, as before.
+        var recordErrors = new List<string>();
+        var writtenResourceIds = new List<string?>();
+
         foreach (var record in records)
         {
             var toWrite = AugmentWithSystemColumns(record, systemColumns, context);
-            switch (target.WriteMode)
+            try
             {
-                case SqlDestinationWriteMode.Upsert:
-                    await UpsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
-                    break;
-                case SqlDestinationWriteMode.Cdc:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
-                    await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
-                    break;
-                default:
-                    await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
-                    break;
+                var rowsAffected = 1;
+                switch (target.WriteMode)
+                {
+                    case SqlDestinationWriteMode.Upsert:
+                        await UpsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
+                        break;
+                    case SqlDestinationWriteMode.Update:
+                        rowsAffected = await UpdateRecordAsync(connection, target.SchemaName, target.TableName, toWrite, target.KeyColumn!, cancellationToken);
+                        break;
+                    case SqlDestinationWriteMode.Cdc:
+                        await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
+                        await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
+                        break;
+                    default:
+                        await InsertRecordAsync(connection, target.SchemaName, target.TableName, toWrite, cancellationToken);
+                        break;
+                }
+
+                if (rowsAffected > 0)
+                {
+                    writtenResourceIds.Add(record.SourceResourceId);
+                }
+            }
+            catch (SqlException exception)
+            {
+                recordErrors.Add(
+                    $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
+
+                if (_exceptionManager is not null)
+                {
+                    await _exceptionManager.CaptureAsync(
+                        exception,
+                        new ExceptionContext(Module: "Destination Write", CorrelationId: context.CorrelationId),
+                        cancellationToken);
+                }
             }
         }
 
-        return new DestinationWriteResult(records.Count);
+        return new DestinationWriteResult(
+            writtenResourceIds.Count,
+            RecordErrors: recordErrors.Count > 0 ? recordErrors : null,
+            WrittenResourceIds: writtenResourceIds);
     }
 
     // FHIRBridge-managed audit/lineage columns and how to fill each from the run: these describe the pipeline run,
@@ -292,6 +330,46 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <summary>Updates the matching row by <paramref name="keyColumn"/> only — never inserts. A record whose key
+    /// isn't present in the table (or whose key value is missing) is simply left unwritten, which is exactly what
+    /// "Update only" means.</summary>
+    private static async Task<int> UpdateRecordAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        MappedDestinationRecord record,
+        string keyColumn,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetKeyValue(record, keyColumn, out var keyValue))
+        {
+            return 0;
+        }
+
+        var columns = record.Values.Keys
+            .Select(ValidateIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(column => !string.Equals(column, keyColumn, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (columns.Count == 0)
+        {
+            return 0;
+        }
+
+        var setClause = string.Join(", ", columns.Select(column => $"[{column}] = @{column}"));
+        var sql = $"""
+            UPDATE [{schemaName}].[{tableName}]
+            SET {setClause}
+            WHERE [{ValidateIdentifier(keyColumn)}] = @{keyColumn};
+            """;
+
+        await using var command = new SqlCommand(sql, connection);
+        AddRecordParameters(command, record, columns, keyColumn, keyValue);
+        command.Parameters.AddWithValue($"@{keyColumn}", keyValue ?? DBNull.Value);
+        return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task EnsureCdcTableAsync(
         SqlConnection connection,
         string schemaName,
@@ -424,6 +502,13 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
                 "designated as the upsert key. Mark one mapped field's IsUpsertKey in the mapping profile.");
         }
 
+        if (writeMode == SqlDestinationWriteMode.Update && keyColumn is null)
+        {
+            throw new InvalidOperationException(
+                $"Destination '{schemaName}.{tableName}' is configured for Update mode but no mapped field is " +
+                "designated as the update key. Mark one mapped field's IsUpsertKey in the mapping profile.");
+        }
+
         return new SqlDestinationTarget(schemaName, tableName, writeMode, keyColumn);
     }
 
@@ -473,6 +558,7 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         {
             "upsert" => SqlDestinationWriteMode.Upsert,
             "cdc" => SqlDestinationWriteMode.Cdc,
+            "update" => SqlDestinationWriteMode.Update,
             _ => SqlDestinationWriteMode.Insert
         };
     }
@@ -505,6 +591,10 @@ public sealed partial class MappedSqlServerDestinationWriter : IConfiguredDestin
         /// Application-level change history: the row is inserted into the target table and also appended to a
         /// companion <c>{Table}_Cdc</c> table. This is not SQL Server's native Change Data Capture.
         /// </summary>
-        Cdc
+        Cdc,
+
+        /// <summary>Updates the matching row by key only; never inserts. A record whose key has no match in the
+        /// table is left unwritten.</summary>
+        Update
     }
 }

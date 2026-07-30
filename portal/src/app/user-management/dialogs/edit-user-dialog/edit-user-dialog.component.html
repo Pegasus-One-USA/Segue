@@ -23,14 +23,14 @@
 
       <!-- Row 1: First + Last name -->
       <div class="form-row form-row--2col">
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>First Name</mat-label>
           <input matInput formControlName="firstName" autocomplete="off" />
           <mat-error *ngIf="hasError('firstName', 'required')">First name is required</mat-error>
           <mat-error *ngIf="hasError('firstName', 'maxlength')">Too long</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>Last Name</mat-label>
           <input matInput formControlName="lastName" autocomplete="off" />
           <mat-error *ngIf="hasError('lastName', 'required')">Last name is required</mat-error>
@@ -50,7 +50,7 @@
 
       <!-- Row 2: Role + Status -->
       <div class="form-row form-row--2col">
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>Role</mat-label>
           <mat-icon matPrefix>badge</mat-icon>
           <mat-select formControlName="role">
@@ -61,7 +61,7 @@
           <mat-error *ngIf="hasError('role', 'required')">Role is required</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>Status</mat-label>
           <mat-icon matPrefix>toggle_on</mat-icon>
           <mat-select formControlName="status">
@@ -75,13 +75,13 @@
 
       <!-- Row 3: Department + Job Title -->
       <div class="form-row form-row--2col">
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>Department</mat-label>
           <mat-icon matPrefix>business</mat-icon>
           <input matInput formControlName="department" autocomplete="off" />
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>Job Title</mat-label>
           <mat-icon matPrefix>work</mat-icon>
           <input matInput formControlName="jobTitle" autocomplete="off" />
@@ -89,7 +89,7 @@
       </div>
 
       <!-- Row 4: Phone -->
-      <mat-form-field appearance="outline" class="form-field form-field--full">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field form-field--full">
         <mat-label>Phone</mat-label>
         <mat-icon matPrefix>phone</mat-icon>
         <input matInput formControlName="phone" type="tel" placeholder="+1 (555) 000-0000" autocomplete="off" />

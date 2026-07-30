@@ -2,7 +2,6 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -10,15 +9,19 @@ import { GovernanceApiService } from '../../services/governance-api.service';
 import { AuditLogEntry, PagedResult } from '../../models/governance.model';
 import { LocalDateTimePipe } from '../../../core/pipes/local-date-time.pipe';
 import { DiffDetailDialogComponent, FieldDiff } from '../../dialogs/diff-detail-dialog/diff-detail-dialog.component';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 function formatValue(value: unknown): string {
   return value === undefined || value === null ? '—' : String(value);
 }
 
+type SortColumn = 'occurredOnUtc' | 'actor' | 'module' | 'action' | 'entity' | 'status' | 'correlationId';
+type SortDirection = 'asc' | 'desc';
+
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, LocalDateTimePipe, MatTableModule, MatPaginatorModule, MatIconModule, MatTooltipModule, MatDialogModule],
+  imports: [CommonModule, LocalDateTimePipe, MatTableModule, MatIconModule, MatTooltipModule, MatDialogModule, PaginationBarComponent],
   templateUrl: './audit-logs.component.html',
   styleUrl: './audit-logs.component.scss',
 })
@@ -34,7 +37,9 @@ export class AuditLogsComponent implements OnInit {
   readonly entityId = signal('');
   readonly result = signal<PagedResult<AuditLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
+  readonly sortColumn = signal<SortColumn>('occurredOnUtc');
+  readonly sortDirection = signal<SortDirection>('desc');
 
   /** Only meaningful once scoped to one entity via viewEntityHistory() — result().items is newest-first
    *  (SequenceNumber descending), so the oldest entry is v1. */
@@ -63,21 +68,37 @@ export class AuditLogsComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
+    // historyMode never sends a sort override — versionByEntryId assumes the backend's default order
+    // (newest-first by the hash-chain's own sequence number) to number versions oldest-first correctly.
     this.api.auditLogs(
       this.correlationId() || undefined,
       this.pageIndex() + 1,
       this.pageSize(),
       this.entityType() || undefined,
       this.entityId() || undefined,
+      this.historyMode() ? undefined : this.sortColumn(),
+      this.historyMode() ? undefined : this.sortDirection(),
     ).subscribe({
       next: result => { this.result.set(result); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
+    this.load();
+  }
+
+  onSort(column: SortColumn): void {
+    if (this.historyMode()) return;
+    if (this.sortColumn() === column) {
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortColumn.set(column);
+      this.sortDirection.set('asc');
+    }
+    this.pageIndex.set(0);
     this.load();
   }
 

@@ -49,7 +49,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.Remarks,
             current.IpAddress,
             current.UserAgent,
-            current.CorrelationId,
+            entry.CorrelationId ?? current.CorrelationId,
             previousHash));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -88,7 +88,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.FailureReason,
             current.IpAddress,
             current.UserAgent,
-            current.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -105,7 +105,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.UserEmail ?? current.Email,
             current.IpAddress,
             entry.Details,
-            current.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -158,7 +158,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.ErrorLogs.Add(new ErrorLog(
+        var errorLog = new ErrorLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.Severity,
@@ -177,13 +177,29 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.TraceId,
             entry.SpanId,
             entry.DiagnosisAction?.ToString(),
-            Truncate(entry.DiagnosisCause, 500)));
+            Truncate(entry.DiagnosisCause, 500));
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _dbContext.ErrorLogs.Add(errorLog);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            // A failed insert (e.g. a reference-id collision — see ErrorReference's remarks) leaves this entity
+            // tracked as Added; without detaching it here, GlobalExceptionManager's retry-with-a-fresh-id would
+            // resubmit this same doomed-to-fail entity alongside the new one on every subsequent SaveChangesAsync
+            // in this scope, guaranteeing every retry fails too regardless of whether the new id would have worked.
+            _dbContext.Entry(errorLog).State = EntityState.Detached;
+            throw;
+        }
     }
 
     public async Task LogApiRequestAsync(ApiRequestEntry entry, CancellationToken cancellationToken = default)
     {
+        var current = _currentUserService.CurrentUser;
+
         _dbContext.ApiRequestLogs.Add(new ApiRequestLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
@@ -192,7 +208,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.StatusCode,
             entry.DurationMs,
             Truncate(entry.Error, 1000),
-            entry.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -264,6 +280,8 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
 
     public async Task LogSmartLaunchAsync(SmartLaunchEntry entry, CancellationToken cancellationToken = default)
     {
+        var current = _currentUserService.CurrentUser;
+
         _dbContext.SmartLaunchLogs.Add(new SmartLaunchLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
@@ -271,7 +289,11 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.SourceName,
             entry.LaunchType,
             entry.Success,
-            Truncate(entry.FailureReason, 1000)));
+            Truncate(entry.FailureReason, 1000),
+            Truncate(entry.GrantedScope, 500),
+            entry.PatientContextGranted,
+            entry.TokenCacheKeyHash,
+            entry.CorrelationId ?? current.CorrelationId));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

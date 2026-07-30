@@ -9,6 +9,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
@@ -25,6 +26,20 @@ public static class WorkflowEndpoints
 {
     // Node executors read config with JsonSerializerDefaults.Web (camelCase); serialize embedded fields the same way.
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
+
+    // Standardizes every /workflows/build validation rejection to the same { error, message, fieldErrors } shape
+    // Program.cs's MapException already produces for RequestValidationException, instead of the bare strings this
+    // endpoint used to return — so the Angular error handler has one shape to read regardless of which check failed.
+    private static IResult ValidationBadRequest(string message) =>
+        Results.BadRequest(new { error = message, message, fieldErrors = (IReadOnlyDictionary<string, string[]>?)null });
+
+    private static IResult ValidationBadRequest(string field, string message) =>
+        Results.BadRequest(new
+        {
+            error = message,
+            message,
+            fieldErrors = (IReadOnlyDictionary<string, string[]>?)new Dictionary<string, string[]> { [field] = [message] },
+        });
 
     public static IEndpointRouteBuilder MapWorkflowEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -62,7 +77,7 @@ public static class WorkflowEndpoints
             var parentReferenceError = ValidateMappingParentReferences(request.Mappings ?? [], parentReferenceResolver);
             if (parentReferenceError is not null)
             {
-                return Results.BadRequest(parentReferenceError);
+                return ValidationBadRequest(parentReferenceError);
             }
 
             // Destinations, Sources, Mappings, and the workflow-definition save below used to each commit
@@ -87,7 +102,7 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
                 }
 
                 var destination = spec.ExistingId is { } existingDestinationId
@@ -111,7 +126,7 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Source spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Source spec references unknown node '{spec.NodeId}'.");
                 }
 
                 var source = spec.ExistingId is { } existingSourceId
@@ -138,18 +153,18 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
                 }
 
                 if (!TryResolveEntityId(spec.SourceNodeId, sourceIds, nodes, "sourceConnectionId", out var sourceConnectionId))
                 {
-                    return Results.BadRequest(
+                    return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references source node '{spec.SourceNodeId}' with no created or referenced source connection.");
                 }
 
                 if (!TryResolveEntityId(spec.DestinationNodeId, destinationIds, nodes, "destinationId", out var destinationId))
                 {
-                    return Results.BadRequest(
+                    return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
                 }
 
@@ -164,7 +179,7 @@ public static class WorkflowEndpoints
                     spec, destinationId, destinationSchemaService, cancellationToken);
                 if (columnError is not null)
                 {
-                    return Results.BadRequest(columnError);
+                    return ValidationBadRequest(columnError);
                 }
 
                 var mappingRequest = new CreateMappingProfileRequest(
@@ -284,12 +299,22 @@ public static class WorkflowEndpoints
 
         // Workflow-list screen: one summary row per workflow — shape, enabled state, last run, and the derived
         // action. The source node's referenced connection decides Launch (interactive SMART) vs Run (backend), so the
-        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration).
+        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration). Paging/search/sort
+        // are applied server-side (see WorkflowSummaryPageDto) — the portal's workflow-list screen no longer slices
+        // the full set client-side.
         group.MapGet("/workflows/summary", async (
             IWorkflowDefinitionStore store,
             IWorkflowRunStore runStore,
             IConfigurationRepository configurationRepository,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            int page = 1,
+            int pageSize = 20,
+            string? search = null,
+            string? sortColumn = null,
+            string? sortDirection = null,
+            string[]? statuses = null,
+            string[]? applicationTypes = null,
+            string[]? sourceSystemTypes = null) =>
         {
             var workflows = await store.ListAsync(cancellationToken);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
@@ -354,9 +379,52 @@ public static class WorkflowEndpoints
                     workflow.IsPubliclyLaunchable));
             }
 
-            return Results.Ok(summaries
-                .OrderBy(summary => summary.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray());
+            // Facet option lists reflect the full unfiltered set (not `matching`) so unchecking every box in one
+            // category doesn't make the other categories' checkboxes disappear out from under the user.
+            var availableStatuses = summaries.Select(s => s.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableApplicationTypes = summaries.Select(s => s.ApplicationType).OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableSourceSystemTypes = summaries.Select(s => s.SourceSystemType).OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+
+            IEnumerable<WorkflowSummaryDto> matching = summaries;
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                matching = matching.Where(summary =>
+                    summary.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                    || (summary.ApplicationType?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+
+            if (statuses is { Length: > 0 })
+            {
+                var statusSet = new HashSet<string>(statuses, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => statusSet.Contains(summary.Status));
+            }
+
+            if (applicationTypes is { Length: > 0 })
+            {
+                var applicationTypeSet = new HashSet<string>(applicationTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => summary.ApplicationType is not null && applicationTypeSet.Contains(summary.ApplicationType));
+            }
+
+            if (sourceSystemTypes is { Length: > 0 })
+            {
+                var sourceSystemTypeSet = new HashSet<string>(sourceSystemTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => summary.SourceSystemType is not null && sourceSystemTypeSet.Contains(summary.SourceSystemType));
+            }
+
+            var sorted = SortSummaries(matching, sortColumn, sortDirection).ToArray();
+
+            var effectivePage = Math.Max(1, page);
+            var effectivePageSize = Math.Clamp(pageSize, 1, 200);
+            var pageItems = sorted
+                .Skip((effectivePage - 1) * effectivePageSize)
+                .Take(effectivePageSize)
+                .ToArray();
+
+            return Results.Ok(new WorkflowSummaryPageDto(
+                pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Source Connections page: which source-connection ids are referenced by at least one workflow's Source
@@ -591,9 +659,12 @@ public static class WorkflowEndpoints
             }
 
             var workflowRunId = Guid.NewGuid();
+            // Reuse the ambient correlation id (same header/TraceIdentifier the API's global exception handler and
+            // ErrorLogs use) so this run's ErrorLogs, audit trail, and outbound API Requests can all be found via
+            // the same id — see the checkpoint endpoint below for the matching pattern.
             var context = new WorkflowExecutionContext(
                 workflowRunId,
-                request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
+                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
                 targetPatientId: request?.PatientId,
@@ -611,14 +682,20 @@ public static class WorkflowEndpoints
                 {
                     using var scope = scopeFactory.CreateScope();
                     var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<IRankedWorkflowOrchestrator>();
+                    // No HttpContext survives into this detached Task.Run, so HttpContextCurrentUserService would
+                    // otherwise stamp every AuditLog/AuthenticationLog/SecurityEvent this run produces with a null
+                    // CorrelationId — set the ambient scope explicitly so it falls back to this run's real id instead.
+                    var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
+                    using var actorScope = ambientActorContext.BeginCorrelatedScope("Background Workflow Run", context.CorrelationId);
                     try
                     {
                         await scopedOrchestrator.ExecuteAsync(workflow, context, CancellationToken.None);
                     }
                     catch (Exception exception)
                     {
-                        // The orchestrator already persists the failed run with its error message; this is just
-                        // so a background failure isn't silently swallowed from an ops/logging perspective.
+                        // The orchestrator already persists the failed run with its error message and captures it
+                        // via IGlobalExceptionManager (same CorrelationId) before rethrowing; this is just so a
+                        // background failure isn't silently swallowed from an ops/logging perspective.
                         loggerFactory.CreateLogger("WorkflowEndpoints")
                             .LogError(exception, "Background run {WorkflowRunId} for workflow {WorkflowId} failed.", workflowRunId, workflowId);
                     }
@@ -630,7 +707,7 @@ public static class WorkflowEndpoints
 
                 return Results.Accepted(
                     $"/api/v1/workflow-runs/{workflowRunId}/status",
-                    new WorkflowRunStatusResponse(workflowRunId, "Running"));
+                    new WorkflowRunStatusResponse(workflowRunId, "Running", context.CorrelationId));
             }
 
             var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
@@ -661,7 +738,7 @@ public static class WorkflowEndpoints
                 var run = await runStore.GetAsync(runId, cancellationToken);
                 return run is null
                     ? Results.NotFound()
-                    : Results.Ok(new WorkflowRunStatusResponse(run.Id, run.Status.ToString()));
+                    : Results.Ok(new WorkflowRunStatusResponse(run.Id, run.Status.ToString(), run.CorrelationId));
             }
         });
 
@@ -882,6 +959,8 @@ public static class WorkflowEndpoints
             string? search,
             int? page,
             int? pageSize,
+            string? sortColumn,
+            string? sortDirection,
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
@@ -915,7 +994,8 @@ public static class WorkflowEndpoints
                     run.TriggerType,
                     run.NodeRuns.Count,
                     run.ErrorMessage,
-                    run.WorkflowDefinitionVersion));
+                    run.WorkflowDefinitionVersion,
+                    run.CorrelationId));
             }
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -947,13 +1027,28 @@ public static class WorkflowEndpoints
             var effectivePage = page is > 0 ? page.Value : 1;
             var effectivePageSize = pageSize is > 0 ? pageSize.Value : 25;
             var totalCount = items.Count;
-            var paged = items
-                .OrderByDescending(x => x.StartedAt)
+            var paged = SortRuns(items, sortColumn, sortDirection)
                 .Skip((effectivePage - 1) * effectivePageSize)
                 .Take(effectivePageSize)
                 .ToList();
 
             return Results.Ok(new PagedResult<WorkflowRunHistoryDto>(paged, totalCount, effectivePage, effectivePageSize));
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // All-time run count per status, across every workflow — unlike the paged /workflow-runs list above
+        // (capped to the 500 most recent via ListRecentAsync), this queries the full WorkflowRuns table
+        // directly so the Dashboard's stat tiles reflect a true global count. Backs the Dashboard screen.
+        group.MapGet("/workflow-runs/stats", async (
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            var counts = await runStore.GetStatusCountsAsync(cancellationToken);
+            return Results.Ok(new WorkflowRunStatusCountsDto(
+                counts[WorkflowRunStatus.Pending],
+                counts[WorkflowRunStatus.Running],
+                counts[WorkflowRunStatus.Succeeded],
+                counts[WorkflowRunStatus.Failed],
+                counts[WorkflowRunStatus.Cancelled]));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapGet("/workflow-runs/{runId:guid}/summary", async (
@@ -992,7 +1087,8 @@ public static class WorkflowEndpoints
                 run.TriggerType,
                 run.NodeRuns.Count,
                 run.ErrorMessage,
-                run.WorkflowDefinitionVersion));
+                run.WorkflowDefinitionVersion,
+                run.CorrelationId));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads.
@@ -1338,6 +1434,60 @@ public static class WorkflowEndpoints
             .FirstOrDefault() ?? string.Empty;
 
         return (destinationId, destinationObject);
+    }
+
+    /// <summary>Mirrors the portal's audienceLabel() so 'audience' sorts the same friendly grouping the column
+    /// displays, not the raw ApplicationType enum name.</summary>
+    private static string AudienceSortLabel(string? applicationType) => applicationType switch
+    {
+        "EhrLaunch"  => "EHR Launch (Provider)",
+        "Standalone" => "Provider Standalone",
+        "Patient"    => "Patient Standalone",
+        "Backend"    => "Backend Service",
+        _            => "—",
+    };
+
+    private static IEnumerable<WorkflowSummaryDto> SortSummaries(
+        IEnumerable<WorkflowSummaryDto> summaries, string? sortColumn, string? sortDirection)
+    {
+        var descending = string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedEnumerable<WorkflowSummaryDto> Order<TKey>(Func<WorkflowSummaryDto, TKey> keySelector) =>
+            descending
+                ? summaries.OrderByDescending(keySelector)
+                : summaries.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "source"   => Order(summary => (summary.SourceSystemType ?? string.Empty).ToLowerInvariant()),
+            "audience" => Order(summary => AudienceSortLabel(summary.ApplicationType).ToLowerInvariant()),
+            "status"   => Order(summary => summary.Status),
+            "lastRun"  => Order(summary => summary.LastRunAt?.UtcTicks ?? -1),
+            _          => Order(summary => summary.Name.ToLowerInvariant()),
+        };
+    }
+
+    // Defaults to newest-first by start time — matches this endpoint's pre-sorting behavior before
+    // sortColumn/sortDirection existed, so an unsorted request (the initial page load) looks unchanged.
+    private static IEnumerable<WorkflowRunHistoryDto> SortRuns(
+        IEnumerable<WorkflowRunHistoryDto> runs, string? sortColumn, string? sortDirection)
+    {
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedEnumerable<WorkflowRunHistoryDto> Order<TKey>(Func<WorkflowRunHistoryDto, TKey> keySelector) =>
+            descending
+                ? runs.OrderByDescending(keySelector)
+                : runs.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "pipeline"    => Order(run => run.PipelineName.ToLowerInvariant()),
+            "source"      => Order(run => (run.SourceName ?? run.SourceSystemType ?? string.Empty).ToLowerInvariant()),
+            "status"      => Order(run => run.Status),
+            "duration"    => Order(run => run.DurationMs ?? -1),
+            "triggeredBy" => Order(run => (run.TriggeredBy ?? run.TriggerType ?? string.Empty).ToLowerInvariant()),
+            _             => Order(run => run.StartedAt),
+        };
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)

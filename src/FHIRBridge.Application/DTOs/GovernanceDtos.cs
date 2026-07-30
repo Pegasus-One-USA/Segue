@@ -171,7 +171,11 @@ public sealed record SmartLaunchLogDto(
     string SourceName,
     string LaunchType,
     bool Success,
-    string? FailureReason);
+    string? FailureReason,
+    string? GrantedScope,
+    bool? PatientContextGranted,
+    string? TokenCacheKeyHash,
+    string? CorrelationId);
 
 /// <summary>The currently-effective retention policy for one governance/operations data class.</summary>
 public sealed record RetentionPolicyDto(
@@ -250,9 +254,8 @@ public sealed record ArchiveManifestDto(
 
 /// <summary>
 /// Correlation Search's result — everything across every governance/operations table (plus the Configured
-/// Pipeline run header, if any) that shares one CorrelationId. <c>EndpointHealthCheck</c> and
-/// <c>SmartLaunchLog</c> are deliberately not included: neither carries a CorrelationId (health checks are
-/// periodic, not per-run; SMART launches have no ambient correlation-id concept in that flow today).
+/// Pipeline run header, if any) that shares one CorrelationId. <c>EndpointHealthCheck</c> is deliberately not
+/// included: health checks are periodic, not per-run, so they don't carry a CorrelationId.
 /// </summary>
 public sealed record CorrelationSearchResultDto(
     string CorrelationId,
@@ -268,10 +271,25 @@ public sealed record CorrelationSearchResultDto(
     IReadOnlyList<ApiRequestLogDto> ApiRequests,
     IReadOnlyList<ExportHistoryDto> Exports,
     IReadOnlyList<NotificationHistoryDto> Notifications,
-    IReadOnlyList<ValidationFailureDto> ValidationFailures)
+    IReadOnlyList<ValidationFailureDto> ValidationFailures,
+    IReadOnlyList<WorkflowRunSummaryDto> WorkflowRuns,
+    IReadOnlyList<SmartLaunchLogDto> SmartLaunchLogs)
 {
     public int TotalCount =>
         (PipelineRun is null ? 0 : 1) + AuditLogs.Count + DataAccessLogs.Count + AuthenticationLogs.Count +
         SecurityEvents.Count + AuthorizationLogs.Count + SchedulerHistory.Count + RetryHistory.Count + Errors.Count +
-        ApiRequests.Count + Exports.Count + Notifications.Count + ValidationFailures.Count;
+        ApiRequests.Count + Exports.Count + Notifications.Count + ValidationFailures.Count + WorkflowRuns.Count +
+        SmartLaunchLogs.Count;
 }
+
+/// <summary>Runtime-plane (DAG) workflow run header, as surfaced by Correlation Search — a lighter shape than
+/// the portal's full Execution History row since this is a cross-reference, not the primary listing.</summary>
+public sealed record WorkflowRunSummaryDto(
+    Guid Id,
+    Guid WorkflowDefinitionId,
+    string Status,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? TriggeredBy,
+    string? TriggerType,
+    string? ErrorMessage);

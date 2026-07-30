@@ -17,11 +17,12 @@ public sealed class InMemoryEhrEndpointRepository : IEhrEndpointRepository
         Task.FromResult<IReadOnlyList<EhrEndpoint>>(
             _store.Values.Where(x => !x.IsDeleted).OrderBy(x => x.Name).ToArray());
 
-    public Task<IReadOnlyList<EhrEndpoint>> GetByEndpointTypeAsync(
+    public Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<EhrEndpoint>>(
             _store.Values
-                .Where(x => !x.IsDeleted && x.EndpointType == endpointType)
+                .Where(x => !x.IsDeleted)
+                .Where(x => x.EndpointType == endpointType)
                 .Where(x => string.IsNullOrWhiteSpace(search) || x.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(x => x.Name)
                 .ToArray());

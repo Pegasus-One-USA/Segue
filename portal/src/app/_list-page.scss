@@ -121,6 +121,26 @@
 
 .col-index { width: 52px; text-align: center !important; color: var(--color-muted) !important; font-size: 13px !important; }
 
+// Sortable column headers (see Execution History, Workflows) — click a header to sort by it.
+.col-sortable {
+  cursor: pointer;
+  user-select: none;
+
+  &:hover { color: var(--color-ink); }
+}
+
+.sort-ico {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--color-muted-2);
+  opacity: 0.5;
+
+  &--active {
+    color: var(--color-primary);
+    opacity: 1;
+  }
+}
+
 .cell-primary { font-size: 14px; font-weight: 600; color: var(--color-ink); }
 .cell-muted   { font-size: 13px; color: var(--color-muted); }
 

@@ -68,16 +68,15 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 entry.State = EntityState.Modified;
                 softDeletable.ApplyDeleted(actor, now);
             }
-            else if (entry.State == EntityState.Deleted && entry.Metadata.IsOwned())
-            {
-                // Remove() cascades EntityState.Deleted onto an aggregate's owned sub-entities (e.g.
-                // SourceConnection.Authentication) too. Converting only the root to a soft-delete Modified above
-                // leaves those owned entries still Deleted — and since an owned type sharing its owner's table has
-                // no separate row to delete, EF folds that into the same UPDATE by nulling its columns, which
-                // throws for any required (NOT NULL) owned property. Untracked-as-unchanged instead: a soft delete
-                // must never touch the owned data at all, required or not.
-                entry.State = EntityState.Unchanged;
-            }
+            // A Deleted owned entry (e.g. SourceConnection.Authentication, or its own nested PrivateKey/
+            // ClientSecret) is fixed up below, in the second pass over Entries() — NOT here. This used to also
+            // unconditionally flip any Deleted+owned entry to Unchanged right here, which silently broke every
+            // "reassign an owned reference to a brand-new instance" update (e.g. ConfigurationMapper.ToDomain
+            // building a fresh SecretReference/SourceAuthenticationConfiguration on every save): flipping the
+            // orphaned old instance to Unchanged before the second pass ever saw it as Deleted pre-empted that
+            // pass's own (correctly guarded) handling, so the new instance's Added entry never turned into a real
+            // UPDATE — the old (stale) values silently won, with no error and no visible sign anything was wrong.
+            // See the second pass's own remarks for the full soft-delete-cascade vs. reference-replacement story.
 
             if (entry.Entity is IAuditableEntity auditable)
             {

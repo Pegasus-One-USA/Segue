@@ -1,0 +1,159 @@
+<div class="list-page">
+
+  <!-- Decrypt Provisioned Secret tool -->
+  <div class="filter-card">
+    <div class="filter-header-text">
+      <h3>Decrypt Provisioned Secret</h3>
+      <p>
+        Paste a raw <code>ProvisionedSecrets.ProtectedValue</code> blob to recover its plaintext (e.g. a private
+        key PEM) — only works for a value encrypted by <strong>this instance's own</strong> Data Protection key
+        ring. A value copied from a different FHIRBridge deployment cannot be decrypted here.
+      </p>
+    </div>
+
+    <textarea
+      class="search-input"
+      style="width: 100%; min-height: 90px; font-family: monospace; resize: vertical;"
+      placeholder="Paste the ProtectedValue here…"
+      [value]="protectedValueInput()"
+      (input)="protectedValueInput.set($any($event.target).value)"
+    ></textarea>
+
+    <div class="filter-actions" style="margin-top: 8px;">
+      <button class="btn-add" type="button" [disabled]="decrypting()" (click)="decryptProvisionedSecret()">
+        {{ decrypting() ? 'Decrypting…' : 'Decrypt' }}
+      </button>
+      @if (decryptedPlaintext() || decryptError()) {
+        <button class="btn-add" type="button" (click)="clearDecryptTool()">Clear</button>
+      }
+    </div>
+
+    @if (decryptError()) {
+      <p style="color: #c0392b; margin-top: 8px;">{{ decryptError() }}</p>
+    }
+
+    @if (decryptedPlaintext()) {
+      <div style="margin-top: 12px;">
+        <pre style="white-space: pre-wrap; word-break: break-all; background: rgba(127,127,127,0.08); padding: 12px; border-radius: 6px; font-family: monospace;">{{ decryptedPlaintext() }}</pre>
+        <button class="btn-add" type="button" (click)="downloadDecryptedPem()">Download as .pem</button>
+      </div>
+    }
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="filter-header-text">
+        <p>Runtime-editable config values that override their appsettings default. Most take effect immediately — some (noted below) need a restart.</p>
+      </div>
+
+      <div class="search-wrap">
+        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search by key or description…"
+          [value]="search()"
+          (input)="search.set($any($event.target).value)"
+        />
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-add" type="button" (click)="openAdd()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Add Setting
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table Card -->
+  <div class="table-card">
+
+    @if (loading()) {
+      <!-- The global loader already shows this page is busy — no local spinner here. -->
+    } @else {
+
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="filtered()" class="data-table">
+
+          <!-- Key Column -->
+          <ng-container matColumnDef="key">
+            <th mat-header-cell *matHeaderCellDef>Key</th>
+            <td mat-cell *matCellDef="let s">
+              <div class="cell-name">
+                <div class="endpoint-avatar">
+                  <mat-icon>tune</mat-icon>
+                </div>
+                <span class="cell-primary cell-mono">{{ s.key }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Value Column -->
+          <ng-container matColumnDef="value">
+            <th mat-header-cell *matHeaderCellDef>Value</th>
+            <td mat-cell *matCellDef="let s"><span class="cell-mono">{{ s.value }}</span></td>
+          </ng-container>
+
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let s" class="col-description">{{ s.description || '—' }}</td>
+          </ng-container>
+
+          <!-- Modified Column -->
+          <ng-container matColumnDef="modifiedOnUtc">
+            <th mat-header-cell *matHeaderCellDef>Last Edited</th>
+            <td mat-cell *matCellDef="let s">{{ (s.modifiedOnUtc | date: 'short') || '—' }}</td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let s" class="col-actions">
+              <div class="actions-cell">
+                <button mat-icon-button class="btn-edit" matTooltip="Edit value" (click)="openEdit(s)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button class="btn-delete" matTooltip="Revert to default" (click)="confirmDelete(s)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      @if (filtered().length === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon-wrap">
+            <mat-icon>tune</mat-icon>
+          </div>
+          <h3 class="empty-state__title">No settings found</h3>
+          <p class="empty-state__sub">
+            @if (settings().length === 0) {
+              No DB-backed settings exist yet — they're seeded automatically the first time the API starts.
+            } @else {
+              Try a different search term.
+            }
+          </p>
+        </div>
+      }
+
+    }
+
+  </div>
+
+</div>

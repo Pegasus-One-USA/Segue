@@ -236,6 +236,11 @@ public sealed class WorkflowGraphLaunchTests
         public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct) => throw new NotSupportedException();
         public Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+        public Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct) => throw new NotSupportedException();
+        public Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task RemoveDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();

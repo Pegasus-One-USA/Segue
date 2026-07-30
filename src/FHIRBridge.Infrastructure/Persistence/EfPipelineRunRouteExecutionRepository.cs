@@ -153,7 +153,8 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
             ? new Dictionary<string, int>()
             : await _dbContext.ErrorLogs
                 .AsNoTracking()
-                .Where(x => x.CorrelationId != null && correlationIds.Contains(x.CorrelationId))
+                .Where(x => x.CorrelationId != null && correlationIds.Contains(x.CorrelationId)
+                    && x.Severity != "Informational")
                 .GroupBy(x => x.CorrelationId!)
                 .Select(g => new { CorrelationId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.CorrelationId, x => x.Count, cancellationToken);

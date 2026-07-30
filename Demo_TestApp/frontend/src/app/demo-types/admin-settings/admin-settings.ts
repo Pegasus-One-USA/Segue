@@ -1,16 +1,10 @@
-import { Component, OnInit, computed, input, output, signal } from '@angular/core';
+import { Component, OnInit, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
-
-// A bare GUID (with or without hyphens) is never a valid FHIRBridge launch-context token — real tokens are Data
-// Protection-encrypted, URL-safe base64 (100+ chars, no fixed hyphen pattern). This exists purely to catch the
-// easy mistake of pasting a workflow id where a minted launch-context token belongs (see GET
-// /api/v1/workflows/{id}/launch-url) — it does not attempt to validate that a non-GUID-shaped value is real.
-const GUID_PATTERN = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 /** Matches Demo_TestApp's GET/POST /api/settings response — the single, unified settings surface for every demo
  *  type's FHIRBridge connection points. Only the Admin role can read or write this. */
@@ -24,8 +18,23 @@ interface AdminSettings {
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
-  providerLaunchContext: string;
+  providerInAppWorkflowId: string;
 }
+
+/** One row of GET/POST /api/v11/workflow-settings — the New 11 workflow URL for a single non-Admin role. */
+interface Resource11WorkflowSetting {
+  role: string;
+  workflowUrl: string;
+}
+
+// The four non-Admin roles that have a New 11 menu + their own workflow, and their display labels.
+const NEW11_ROLES = ['Patient', 'ProviderStandalone', 'ProviderInApp', 'BackendSystem'] as const;
+const NEW11_ROLE_LABELS: Record<string, string> = {
+  Patient: 'Patient',
+  ProviderStandalone: 'Provider Standalone',
+  ProviderInApp: 'Provider InApp',
+  BackendSystem: 'Backend System',
+};
 
 @Component({
   selector: 'app-admin-settings',
@@ -52,20 +61,91 @@ export class AdminSettingsComponent implements OnInit {
   readonly standaloneWorkflowId = signal('');
   readonly standaloneDetailWorkflowId = signal('');
   readonly standaloneBaseUrl = signal('');
-  readonly providerLaunchContext = signal('');
+  readonly providerInAppWorkflowId = signal('');
 
-  // Drives a warning under the Launch Context field — this exact mistake (an admin pasting the "Provider InApp"
-  // workflow's own id here instead of a real minted token) is what caused a full "invalid or has been tampered
-  // with" investigation; see fhirbridge-demo-testapp-workflow-ids memory. GET /api/v1/workflows/{id}/launch-url
-  // (SuperAdmin bearer token) mints the real value.
-  readonly providerLaunchContextLooksLikeWorkflowId = computed(() =>
-    GUID_PATTERN.test(this.providerLaunchContext().trim())
-  );
+  // Default | New 11 section switch (the workflow config for each surface lives on its own tab).
+  readonly section = signal<'default' | 'new11'>('default');
+
+  // New 11 per-role workflow settings.
+  readonly new11Roles = NEW11_ROLES;
+  readonly roleLabels = NEW11_ROLE_LABELS;
+  readonly new11SelectedRole = signal<string>('Patient');
+  readonly new11Urls = signal<Record<string, string>>({
+    Patient: '',
+    ProviderStandalone: '',
+    ProviderInApp: '',
+    BackendSystem: '',
+  });
+  readonly new11Loaded = signal(false);
+  readonly new11Loading = signal(false);
+  readonly new11LoadError = signal('');
+  readonly new11SaveError = signal('');
+  readonly new11Saved = signal(false);
 
   constructor(private readonly http: HttpClient) {}
 
   ngOnInit(): void {
     void this.loadSettings();
+  }
+
+  selectSection(section: 'default' | 'new11'): void {
+    this.section.set(section);
+    if (section === 'new11' && !this.new11Loaded()) {
+      void this.loadNew11Settings();
+    }
+  }
+
+  selectNew11Role(role: string): void {
+    this.new11SelectedRole.set(role);
+    this.new11Saved.set(false);
+  }
+
+  setNew11Url(role: string, value: string): void {
+    this.new11Urls.update((map) => ({ ...map, [role]: value }));
+    this.new11Saved.set(false);
+  }
+
+  private async loadNew11Settings(): Promise<void> {
+    this.new11Loading.set(true);
+    this.new11LoadError.set('');
+
+    try {
+      const rows = await firstValueFrom(
+        this.http.get<Resource11WorkflowSetting[]>(`${BACKEND_BASE_URL}/api/v11/workflow-settings`, { withCredentials: true })
+      );
+      const map = { ...this.new11Urls() };
+      for (const row of rows ?? []) {
+        map[row.role] = row.workflowUrl ?? '';
+      }
+      this.new11Urls.set(map);
+      this.new11Loaded.set(true);
+    } catch {
+      this.new11LoadError.set('Could not load New 11 workflow settings.');
+    } finally {
+      this.new11Loading.set(false);
+    }
+  }
+
+  async saveNew11Settings(): Promise<void> {
+    this.new11SaveError.set('');
+    this.new11Saved.set(false);
+
+    const urls = this.new11Urls();
+    const payload: Resource11WorkflowSetting[] = this.new11Roles.map((role) => ({ role, workflowUrl: urls[role] ?? '' }));
+
+    try {
+      const rows = await firstValueFrom(
+        this.http.post<Resource11WorkflowSetting[]>(`${BACKEND_BASE_URL}/api/v11/workflow-settings`, payload, { withCredentials: true })
+      );
+      const map = { ...this.new11Urls() };
+      for (const row of rows ?? []) {
+        map[row.role] = row.workflowUrl ?? '';
+      }
+      this.new11Urls.set(map);
+      this.new11Saved.set(true);
+    } catch {
+      this.new11SaveError.set('Could not save New 11 workflow settings.');
+    }
   }
 
   private async loadSettings(): Promise<void> {
@@ -85,7 +165,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneWorkflowId.set(current.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(current.standaloneBaseUrl);
-      this.providerLaunchContext.set(current.providerLaunchContext);
+      this.providerInAppWorkflowId.set(current.providerInAppWorkflowId);
     } catch {
       this.loadError.set('Could not load settings.');
     } finally {
@@ -111,7 +191,7 @@ export class AdminSettingsComponent implements OnInit {
             standaloneWorkflowId: this.standaloneWorkflowId(),
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             standaloneBaseUrl: this.standaloneBaseUrl(),
-            providerLaunchContext: this.providerLaunchContext(),
+            providerInAppWorkflowId: this.providerInAppWorkflowId(),
           },
           { withCredentials: true }
         )
@@ -125,7 +205,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneWorkflowId.set(result.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(result.standaloneBaseUrl);
-      this.providerLaunchContext.set(result.providerLaunchContext);
+      this.providerInAppWorkflowId.set(result.providerInAppWorkflowId);
       this.saved.set(true);
     } catch {
       this.saveError.set('Could not save settings.');

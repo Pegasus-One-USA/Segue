@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { CorrelationSearchResult } from '../../models/correlation-search.model';
 
@@ -21,6 +21,13 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
     entries.push({ timeUtc: run.startedOnUtc, category: 'Pipeline Run Started', summary: `Triggered by ${run.triggeredBy ?? '—'} (${run.triggerType ?? '—'})`, raw: run });
     if (run.completedOnUtc) {
       entries.push({ timeUtc: run.completedOnUtc, category: 'Pipeline Run Completed', summary: `Status: ${run.status}`, raw: run });
+    }
+  }
+
+  for (const x of result.workflowRuns) {
+    entries.push({ timeUtc: x.startedAt, category: 'Workflow Run Started', summary: `Triggered by ${x.triggeredBy ?? '—'} (${x.triggerType ?? '—'})`, raw: x });
+    if (x.completedAt) {
+      entries.push({ timeUtc: x.completedAt, category: 'Workflow Run Completed', summary: `Status: ${x.status}`, raw: x });
     }
   }
 
@@ -46,7 +53,8 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
     entries.push({ timeUtc: x.occurredOnUtc, category: 'Notification', summary: `${x.notificationType} to ${x.recipient} — ${x.status}`, raw: x });
   }
   for (const x of result.errors) {
-    entries.push({ timeUtc: x.occurredOnUtc, category: 'Error', summary: `${x.exceptionType}: ${x.message}`, raw: x });
+    const trace = x.traceId ? ` [trace ${x.traceId}]` : '';
+    entries.push({ timeUtc: x.occurredOnUtc, category: 'Error', summary: `${x.severity} — ${x.exceptionType}: ${x.message}${trace}`, raw: x });
   }
   for (const x of result.validationFailures) {
     entries.push({ timeUtc: x.occurredOnUtc, category: 'Validation Failure', summary: x.resourceType, raw: x });
@@ -60,6 +68,9 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
   for (const x of result.securityEvents) {
     entries.push({ timeUtc: x.occurredOnUtc, category: 'Security Event', summary: `${x.severity} — ${x.eventType}`, raw: x });
   }
+  for (const x of result.smartLaunchLogs) {
+    entries.push({ timeUtc: x.occurredOnUtc, category: 'SMART Launch', summary: `${x.sourceName} (${x.launchType}) — ${x.success ? 'OK' : 'Failed: ' + (x.failureReason ?? '')}`, raw: x });
+  }
 
   return entries.sort((a, b) => new Date(a.timeUtc).getTime() - new Date(b.timeUtc).getTime());
 }
@@ -67,7 +78,7 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
 @Component({
   selector: 'app-correlation-search',
   standalone: true,
-  imports: [CommonModule, DatePipe],
+  imports: [CommonModule, DatePipe, RouterLink],
   templateUrl: './correlation-search.component.html',
   styleUrl: './correlation-search.component.scss',
 })

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using Microsoft.Extensions.Options;
@@ -19,12 +20,17 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
 {
     private readonly GeneratedFileDownloadOptions _options;
     private readonly IAppSecretAccessor _secretAccessor;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly string _rootPath;
 
-    public GeneratedFileDownloadLinkService(IOptions<GeneratedFileDownloadOptions> options, IAppSecretAccessor secretAccessor)
+    public GeneratedFileDownloadLinkService(
+        IOptions<GeneratedFileDownloadOptions> options,
+        IAppSecretAccessor secretAccessor,
+        ISystemSettingsCache settingsCache)
     {
         _options = options.Value;
         _secretAccessor = secretAccessor;
+        _settingsCache = settingsCache;
         // A relative RootPath must not be resolved against the process's current working directory — that varies
         // by how the host is launched (console vs IIS vs Windows Service) — so it's anchored to the app's own base
         // directory instead. PhysicalFileResult (used to serve the file back) requires an absolute path.
@@ -47,7 +53,10 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
         var payload = new TokenPayload(guid, createdUtc, createdUtc + expiry, file.ContentType, file.FileName);
         var token = Sign(payload);
 
-        return $"{_options.PublicBaseUrl.TrimEnd('/')}/api/v1/generated-files/{token}";
+        var publicBaseUrl = await _settingsCache.GetStringAsync(
+            "GeneratedFileDownload:PublicBaseUrl", _options.PublicBaseUrl, cancellationToken);
+
+        return $"{publicBaseUrl.TrimEnd('/')}/api/v1/generated-files/{token}";
     }
 
     public Task<GeneratedFileDownloadResolution?> TryResolveAsync(string token, CancellationToken cancellationToken)

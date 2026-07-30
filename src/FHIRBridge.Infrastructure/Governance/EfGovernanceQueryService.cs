@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
@@ -30,7 +31,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
     }
 
     public async Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
-        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken)
+        string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
+        string? sortColumn = null, string? sortDirection = null)
     {
         var query = _dbContext.AuditLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -48,8 +50,7 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
 
         var normalizedTake = NormalizeTake(take);
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(x => x.SequenceNumber)
+        var items = await ApplyAuditLogSort(query, sortColumn, sortDirection)
             .Skip(NormalizeSkip(skip))
             .Take(normalizedTake)
             .Select(x => new AuditLogDto(
@@ -58,6 +59,31 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .ToListAsync(cancellationToken);
 
         return ToPaged(items, totalCount, skip, normalizedTake);
+    }
+
+    // A null/unrecognized sortColumn always falls back to the original hardcoded ordering (newest-first
+    // by the hash-chain's own sequence) regardless of sortDirection — version-history mode (see
+    // AuditLogsComponent.historyMode/versionByEntryId on the frontend) depends on that exact default and
+    // never sends a sortColumn itself, so this stays correct even if a stale sort param somehow arrives.
+    private static IOrderedQueryable<AuditLog> ApplyAuditLogSort(
+        IQueryable<AuditLog> query, string? sortColumn, string? sortDirection)
+    {
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedQueryable<AuditLog> Order<TKey>(Expression<Func<AuditLog, TKey>> keySelector) =>
+            descending ? query.OrderByDescending(keySelector) : query.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "occurredOnUtc" => Order(x => x.OccurredOnUtc),
+            "actor"         => Order(x => x.Actor),
+            "module"        => Order(x => x.Module),
+            "action"        => Order(x => x.Action),
+            "entity"        => Order(x => x.EntityName ?? x.EntityId ?? string.Empty),
+            "status"        => Order(x => x.Status),
+            "correlationId" => Order(x => x.CorrelationId ?? string.Empty),
+            _               => query.OrderByDescending(x => x.SequenceNumber),
+        };
     }
 
     public async Task<PagedResult<DataAccessLogDto>> GetDataAccessLogsAsync(
@@ -240,6 +266,11 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             query = query.Where(x => x.EndpointId == search.EndpointId);
         if (!string.IsNullOrWhiteSpace(search.Severity))
             query = query.Where(x => x.Severity == search.Severity);
+        else
+            // Informational rows (routine sub-500 rejections captured via CaptureExpectedAsync) are findable
+            // by CorrelationId/ExecutionId/etc. but must stay out of the default Operations → Errors view —
+            // that's the whole point of not routing them through the heavy 5xx CaptureAsync path.
+            query = query.Where(x => x.Severity != "Informational");
         if (!string.IsNullOrWhiteSpace(search.Category))
             query = query.Where(x => x.Category == search.Category);
         if (search.FromUtc.HasValue)
@@ -396,7 +427,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .OrderByDescending(x => x.OccurredOnUtc)
             .Take(NormalizeTake(take))
             .Select(x => new SmartLaunchLogDto(
-                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason))
+                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason,
+                x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash, x.CorrelationId))
             .ToListAsync(cancellationToken);
     }
 
@@ -418,11 +450,30 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         var exports = await GetExportHistoryAsync(correlationId, 0, take, cancellationToken);
         var notifications = await GetNotificationHistoryAsync(correlationId, 0, take, cancellationToken);
         var validationFailures = await GetValidationFailuresAsync(correlationId, 0, take, cancellationToken);
+        var workflowRuns = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Where(run => run.CorrelationId == correlationId)
+            .OrderByDescending(run => run.StartedAt)
+            .Take(take)
+            .Select(run => new WorkflowRunSummaryDto(
+                run.Id, run.WorkflowDefinitionId, run.Status.ToString(), run.StartedAt, run.CompletedAt,
+                run.TriggeredBy, run.TriggerType, run.ErrorMessage))
+            .ToListAsync(cancellationToken);
+        var smartLaunchLogs = await _dbContext.SmartLaunchLogs
+            .AsNoTracking()
+            .Where(x => x.CorrelationId == correlationId)
+            .OrderByDescending(x => x.OccurredOnUtc)
+            .Take(take)
+            .Select(x => new SmartLaunchLogDto(
+                x.Id, x.OccurredOnUtc, x.SourceConnectionId, x.SourceName, x.LaunchType, x.Success, x.FailureReason,
+                x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash, x.CorrelationId))
+            .ToListAsync(cancellationToken);
 
         return new CorrelationSearchResultDto(
             correlationId, pipelineRun, auditLogs.Items, dataAccessLogs.Items, authenticationLogs.Items,
             securityEvents.Items, authorizationLogs.Items, schedulerHistory.Items, retryHistory.Items,
-            errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items);
+            errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items,
+            workflowRuns, smartLaunchLogs);
     }
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)
@@ -447,12 +498,15 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
 
     public async Task<IReadOnlyList<ArchiveManifestDto>> GetArchiveManifestsAsync(CancellationToken cancellationToken)
     {
-        return await _dbContext.ArchiveManifestEntries.AsNoTracking()
+        var latestPerDataClass = await _dbContext.ArchiveManifestEntries.AsNoTracking()
             .GroupBy(x => x.DataClass)
             .Select(g => g.OrderByDescending(x => x.CreatedOnUtc).First())
+            .ToListAsync(cancellationToken);
+
+        return latestPerDataClass
             .OrderBy(x => x.DataClass)
             .Select(x => new ArchiveManifestDto(x.DataClass, x.ArchivedThroughUtc, x.FileLocation, x.RecordCount, x.CreatedOnUtc))
-            .ToListAsync(cancellationToken);
+            .ToList();
     }
 
     private static PagedResult<T> ToPaged<T>(IReadOnlyList<T> items, int totalCount, int skip, int take) =>

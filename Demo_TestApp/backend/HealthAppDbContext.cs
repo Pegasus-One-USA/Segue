@@ -109,14 +109,18 @@ public sealed class WorkflowSettingsEntity
     // as PatientBaseUrl above: this demo type is meant to be admin-configurable and rebuild-free per environment.
     public string StandaloneBaseUrl { get; set; } = string.Empty;
 
-    // Provider_InApp's single FHIRBridge launch-context token — previously a gitignored, per-developer local file
-    // (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts); moved here so it's admin-configurable
-    // through its own Settings gear (see launch-provider-in-app.ts) with no frontend rebuild needed to change it.
-    // Unlike Provider_Standalone, this demo type needs only one token: it drives a single EHR-launch exchange
-    // (FHIRBridge's /api/v1/oauth/launch/{context}), not a separate list/detail workflow pair. Provider_InApp's
-    // FHIRBridge base URL deliberately reuses StandaloneBaseUrl above rather than getting its own field — both
-    // demo types are Provider-role launches against the same FHIRBridge deployment.
-    public string ProviderLaunchContext { get; set; } = string.Empty;
+    // Provider_InApp's single FHIRBridge EHR-launch workflow id — previously a gitignored, per-developer local
+    // file (Demo_TestApp/frontend's demo-type-2/core/config/launch.config.ts), then a hand-pasted, pre-minted
+    // launch-context token (a mistake-prone step: an admin pasting the raw workflow id here instead of a minted
+    // token was indistinguishable at a glance and caused a full "invalid or has been tampered with" investigation).
+    // Now a raw workflow id, same shape as StandaloneWorkflowId etc. above — the actual opaque launch-context token
+    // is minted on demand from this id via FHIRBridge's anonymous GET /api/v1/workflows/{id}/public-launch-context
+    // (see Program.cs's /api/provider-in-app-launch-context), which requires the workflow to be opted into public
+    // launch via POST /api/v1/workflows/{id}/enable-public-launch. Unlike Provider_Standalone, this demo type needs
+    // only one workflow: it drives a single EHR-launch exchange (FHIRBridge's /api/v1/oauth/launch/{context}), not a
+    // separate list/detail pair. Provider_InApp's FHIRBridge base URL deliberately reuses StandaloneBaseUrl above
+    // rather than getting its own field — both demo types are Provider-role launches against the same deployment.
+    public string ProviderInAppWorkflowId { get; set; } = string.Empty;
 }
 
 public sealed class HealthAppDbContext : DbContext
@@ -162,6 +166,35 @@ public sealed class HealthAppDbContext : DbContext
     public DbSet<MedicationRequestEntity> MedicationRequests => Set<MedicationRequestEntity>();
 
     public DbSet<MedicationAdministrationEntity> MedicationAdministrations => Set<MedicationAdministrationEntity>();
+
+    // "_11" curated landing tables (Patient_11 .. Procedure_11) — the business/layman view read by the "New 11"
+    // menu each non-Admin role gets. Read-only; rows are loaded externally (or by EnsureCreated on a brand-new
+    // database). See Resource11Entities.cs and Resource11Endpoints.cs.
+    public DbSet<Patient11Entity> Patients11 => Set<Patient11Entity>();
+
+    public DbSet<Practitioner11Entity> Practitioners11 => Set<Practitioner11Entity>();
+
+    public DbSet<Encounter11Entity> Encounters11 => Set<Encounter11Entity>();
+
+    public DbSet<Observation11Entity> Observations11 => Set<Observation11Entity>();
+
+    public DbSet<Condition11Entity> Conditions11 => Set<Condition11Entity>();
+
+    public DbSet<AllergyIntolerance11Entity> AllergyIntolerances11 => Set<AllergyIntolerance11Entity>();
+
+    public DbSet<MedicationRequest11Entity> MedicationRequests11 => Set<MedicationRequest11Entity>();
+
+    public DbSet<MedicationAdministration11Entity> MedicationAdministrations11 => Set<MedicationAdministration11Entity>();
+
+    public DbSet<ServiceRequest11Entity> ServiceRequests11 => Set<ServiceRequest11Entity>();
+
+    public DbSet<DiagnosticReport11Entity> DiagnosticReports11 => Set<DiagnosticReport11Entity>();
+
+    public DbSet<Procedure11Entity> Procedures11 => Set<Procedure11Entity>();
+
+    // Per-role "New 11" workflow URLs. Ensured + seeded at startup (see Program.cs) rather than via HasData, so it
+    // works against an already-existing HealthAppDb too.
+    public DbSet<Resource11WorkflowSettingEntity> Resource11WorkflowSettings => Set<Resource11WorkflowSettingEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -223,6 +256,71 @@ public sealed class HealthAppDbContext : DbContext
         {
             e.ToTable("MedicationAdministration");
             e.HasKey(x => x.MedicationAdministrationId);
+        });
+
+        // "_11" curated tables. On a brand-new database EnsureCreated builds these from the entity model; on an
+        // existing HealthAppDb they must be created out-of-band by "9 resource tables _11 (curated).sql" (same
+        // caveat as the tables above — EnsureCreated never alters an already-existing database).
+        modelBuilder.Entity<Patient11Entity>(e =>
+        {
+            e.ToTable("Patient_11");
+            e.HasKey(x => x.PatientId);
+        });
+        modelBuilder.Entity<Practitioner11Entity>(e =>
+        {
+            e.ToTable("Practitioner_11");
+            e.HasKey(x => x.PractitionerId);
+        });
+        modelBuilder.Entity<Encounter11Entity>(e =>
+        {
+            e.ToTable("Encounter_11");
+            e.HasKey(x => x.EncounterId);
+        });
+        modelBuilder.Entity<Observation11Entity>(e =>
+        {
+            e.ToTable("Observation_11");
+            e.HasKey(x => x.ObservationId);
+        });
+        modelBuilder.Entity<Condition11Entity>(e =>
+        {
+            e.ToTable("Condition_11");
+            e.HasKey(x => x.ConditionId);
+        });
+        modelBuilder.Entity<AllergyIntolerance11Entity>(e =>
+        {
+            e.ToTable("AllergyIntolerance_11");
+            e.HasKey(x => x.AllergyId);
+        });
+        modelBuilder.Entity<MedicationRequest11Entity>(e =>
+        {
+            e.ToTable("MedicationRequest_11");
+            e.HasKey(x => x.MedicationRequestId);
+        });
+        modelBuilder.Entity<MedicationAdministration11Entity>(e =>
+        {
+            e.ToTable("MedicationAdministration_11");
+            e.HasKey(x => x.MedicationAdministrationId);
+        });
+        modelBuilder.Entity<ServiceRequest11Entity>(e =>
+        {
+            e.ToTable("ServiceRequest_11");
+            e.HasKey(x => x.ServiceRequestId);
+        });
+        modelBuilder.Entity<DiagnosticReport11Entity>(e =>
+        {
+            e.ToTable("DiagnosticReport_11");
+            e.HasKey(x => x.DiagnosticReportId);
+        });
+        modelBuilder.Entity<Procedure11Entity>(e =>
+        {
+            e.ToTable("Procedure_11");
+            e.HasKey(x => x.ProcedureId);
+        });
+        modelBuilder.Entity<Resource11WorkflowSettingEntity>(e =>
+        {
+            e.ToTable("Resource11WorkflowSetting");
+            e.HasKey(x => x.Role);
+            e.Property(x => x.Role).HasMaxLength(40);
         });
 
         // DB-level default so RecordCreatedOn is populated even for rows a real destination writer inserts

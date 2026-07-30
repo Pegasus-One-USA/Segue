@@ -70,6 +70,14 @@ export const SETTINGS_ROUTES: Routes = [
             m => m.AppSecretListComponent
           ),
       },
+      {
+        path: 'system-settings',
+        canActivate: [superAdminGuard],
+        loadComponent: () =>
+          import('../system-settings/pages/system-setting-list/system-setting-list.component').then(
+            m => m.SystemSettingListComponent
+          ),
+      },
       { path: '', redirectTo: 'branding', pathMatch: 'full' },
     ],
   },

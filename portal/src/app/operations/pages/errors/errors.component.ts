@@ -31,7 +31,7 @@ export class ErrorsComponent implements OnInit {
   readonly result = signal<PagedResult<ErrorLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly expandedId = signal<string | null>(null);
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(25);
+  readonly pageSize = signal(10);
 
   // Phase 6A – Monitoring → Errors search criteria.
   readonly errorReferenceId = signal('');
@@ -43,7 +43,7 @@ export class ErrorsComponent implements OnInit {
   readonly status = signal('');
 
   readonly categories = ['Business', 'Validation', 'Infrastructure', 'Authentication', 'Authorization', 'Database', 'Network', 'ExternalSystem', 'Unknown'];
-  readonly severities = ['Error', 'Warning'];
+  readonly severities = ['Error', 'Warning', 'Informational'];
   readonly statuses = ['Open', 'Resolved'];
 
   readonly displayedCols = [

@@ -14,6 +14,11 @@ export interface SourceAuthenticationModel {
   privateKeyKeyVaultName?: string | null;
   privateKeySecretName?: string | null;
   keyId?: string | null;
+  /** The URL actually registered with the EHR to fetch this connection's JWK Set — FHIRBridge's own hosted
+   *  .well-known/jwks.json for a Generated/Imported key, or an admin-typed external URL for a key served
+   *  elsewhere. Purely informational (FHIRBridge never fetches it itself); persisted so reopening this
+   *  connection shows back whatever was actually registered instead of only ever guessing. */
+  jwksUrl?: string | null;
 }
 
 /** Matches SourceInteractiveConfigurationDto.cs exactly. */

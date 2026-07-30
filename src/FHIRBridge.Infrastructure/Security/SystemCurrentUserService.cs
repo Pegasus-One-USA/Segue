@@ -29,7 +29,8 @@ public sealed class SystemCurrentUserService : ICurrentUserService
                 Email: null,
                 DisplayName: actor ?? "System",
                 Roles: [],
-                IsAuthenticated: false);
+                IsAuthenticated: false,
+                CorrelationId: _ambientActorContext.CorrelationId);
         }
     }
 }

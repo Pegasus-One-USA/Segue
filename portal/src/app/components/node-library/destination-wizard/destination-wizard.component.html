@@ -11,7 +11,10 @@
       </div>
       <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
     </div>
-    <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+    <div class="dw-topbar-actions">
+      <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+      <button class="dw-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+    </div>
   </div>
 
   <!-- ── Step indicator ───────────────────────────────────────────────────── -->
@@ -39,23 +42,17 @@
         <span class="dw-section-title">Configure {{ destLabel() }}</span>
       </div>
 
+      <!-- No explicit New/Existing toggle — the dropdown is always offered (canvas create only, see
+           showConnectionModeToggle); leaving it unselected just means "New connection". -->
       @if (showConnectionModeToggle()) {
-        <div class="dw-conn-mode">
-          <button type="button" class="dw-btn" [class.dw-btn--primary]="connectionMode() === 'new'" (click)="setConnectionMode('new')">
-            Create new
-          </button>
-          <button type="button" class="dw-btn" [class.dw-btn--primary]="connectionMode() === 'existing'" (click)="setConnectionMode('existing')">
-            Select existing
-          </button>
-        </div>
-
-        @if (connectionMode() === 'existing') {
-          <div class="dw-field dw-field--full">
-            <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection <span class="dw-req">*</span></label>
+        <div class="dw-field dw-field--full">
+          <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection</label>
+          <div class="dw-existing-connection-row">
             <div class="dw-select-wrap">
               <select
                 id="dw-existing"
                 class="dw-select"
+                [disabled]="existingOptionsLoading()"
                 [value]="selectedExistingId() ?? ''"
                 (change)="selectExisting($any($event.target).value)"
               >
@@ -65,16 +62,22 @@
                 }
               </select>
             </div>
-            @if (!existingOptionsLoading() && existingOptions().length === 0) {
-              <span class="dw-error">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here).</span>
+            @if (selectedExistingId()) {
+              <button type="button" class="dw-clear-btn" title="Clear selected connection — start a new one instead"
+                      (click)="clearExistingConnection()">✕</button>
             }
           </div>
-        }
+          @if (!existingOptionsLoading() && existingOptions().length === 0) {
+            <span class="dw-hint">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here) — configure a new one below.</span>
+          } @else {
+            <span class="dw-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</span>
+          }
+        </div>
       }
 
       @if (isSql()) {
         <form [formGroup]="sqlForm" class="dw-form" autocomplete="off">
-          <div class="dw-grid-2">
+          <div class="dw-grid-3">
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched">
               <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
@@ -138,7 +141,7 @@
               </div>
             </div>
 
-          </div><!-- /dw-grid-2 -->
+          </div><!-- /dw-grid-3 -->
         </form>
 
         @if (probeState() === 'testing') {
@@ -150,6 +153,47 @@
         @if (probeState() === 'ok') {
           <div class="dw-callout dw-callout--info">Connected — {{ sqlTables().length }} table(s) loaded. Choose tables &amp; columns in Map fields.</div>
         }
+      } @else if (isMongo()) {
+        <form [formGroup]="mongoForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched">
+              <label class="dw-label" for="dw-mongo-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-mongo-name" class="dw-input" formControlName="name" placeholder="e.g. MongoDB Production" />
+              @if (mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched">
+              <label class="dw-label" for="dw-mongo-conn">Connection string <span class="dw-req">*</span></label>
+              <input id="dw-mongo-conn" type="password" class="dw-input" formControlName="connectionString"
+                placeholder="mongodb://user:pass@host:27017/dbname?authSource=admin" autocomplete="new-password" />
+              @if (mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched) {
+                <span class="dw-error">Connection string is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched">
+              <label class="dw-label" for="dw-mongo-collection">Collection <span class="dw-req">*</span></label>
+              <input id="dw-mongo-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients" />
+              @if (mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched) {
+                <span class="dw-error">Collection name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-mongo-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-mongo-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="upsert">Upsert by source id</option>
+                  <option value="insert">Insert only</option>
+                </select>
+              </div>
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -326,21 +370,31 @@
         <span class="dw-section-num">3</span>
         <span class="dw-section-title">Map fields</span>
         <span class="dw-section-hint">
-          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : 'Map FHIR paths to CSV file columns.' }}
+          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
         </span>
       </div>
 
       @for (r of resourceKeys(); track r) {
         <div class="dw-mapping-group">
-          <div class="dw-mapping-group-head">
-            <strong>{{ r }}</strong>
+          <div class="dw-mapping-group-head" role="button" tabindex="0"
+               [attr.aria-expanded]="!isGroupCollapsed(r)"
+               (click)="toggleGroup(r)" (keydown.enter)="toggleGroup(r)" (keydown.space)="toggleGroup(r)">
+            <span class="dw-mapping-name">
+              <strong>{{ r }}</strong>
+              @if (resourceIssueCount(r) > 0) {
+                <span class="dw-mapping-issue-badge" [attr.title]="resourceIssueCount(r) + ' mapping issue(s) need attention'">
+                  ⚠ {{ resourceIssueCount(r) }}
+                </span>
+              }
+            </span>
             <span class="dw-mapping-target-inline">
-              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : 'File name' }}</label>
+              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : 'File name' }}</label>
               @if (hasSqlTables()) {
                 <div class="dw-select-wrap">
                   <select class="dw-select dw-target-select"
                           [attr.id]="'dw-target-' + r"
                           [value]="targetFor(r)"
+                          (click)="$event.stopPropagation()"
                           (change)="updateTarget(r, $any($event.target).value)">
                     <option value="" disabled [selected]="!targetFor(r)">Select a table…</option>
                     @for (t of sqlTableOptions(); track t) { <option [value]="t" [selected]="t === targetFor(r)">{{ t }}</option> }
@@ -351,14 +405,18 @@
                   class="dw-map-input dw-target-input"
                   [attr.id]="'dw-target-' + r"
                   [value]="targetFor(r)"
+                  (click)="$event.stopPropagation()"
                   (input)="updateTarget(r, $any($event.target).value)"
-                  [placeholder]="isSql() ? 'dbo.Patient' : 'patients.csv'"
+                  [placeholder]="isSql() ? 'dbo.Patient' : isMongo() ? 'patients' : 'patients.csv'"
                 />
               }
             </span>
-            <button type="button" class="dw-btn" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
-            <button type="button" class="dw-btn dw-add-field" (click)="addRow(r)">+ Add field</button>
+            <button type="button" class="dw-btn" [disabled]="isSql() && !targetFor(r)" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
+            <button type="button" class="dw-btn dw-add-field" [disabled]="isSql() && !targetFor(r)" (click)="addRow(r)">+ Add field</button>
+            <button type="button" class="dw-btn dw-clear-fields" [disabled]="rowsForResource(r).length === 0" (click)="clearFields(r)" title="Remove every mapped field for this resource (except the mandatory id/key rows)">Clear Fields</button>
+			<span class="dw-mapping-chevron" [class.collapsed]="isGroupCollapsed(r)">›</span>
           </div>
+          @if (!isGroupCollapsed(r)) {
           <span class="dw-hint dw-mapping-key-hint">
             🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.
           </span>
@@ -381,6 +439,11 @@
                 </button>
               }
             </div>
+            @if (selectedParentsOf(r).length === 0) {
+              <div class="dw-callout dw-callout--warn dw-parent-refs-warn">
+                Select at least one parent for {{ r }} — otherwise this record will save with no link back to its parent resource.
+              </div>
+            }
           }
 
           <table class="dw-map-table">
@@ -388,7 +451,7 @@
               <tr>
                 <th>Business field</th>
                 <th>FHIR path</th>
-                <th>{{ isSql() ? 'Column' : 'CSV column' }}</th>
+                <th>{{ isSql() ? 'Column' : isMongo() ? 'Field' : 'CSV column' }}</th>
                 <th class="dw-map-key-col" title="Upsert key — the column an Upsert write matches an existing row on">Key</th>
                 <th class="dw-map-actions" aria-label="Actions"></th>
               </tr>
@@ -419,6 +482,11 @@
                   <td>
                     @if (isIdRow(row) && isIdColumnLocked(r)) {
                       <span class="dw-map-locked" title="Auto-matched to this table's primary/unique key column">🔒 {{ row.targetName }}</span>
+                      @if (isRowTypeMismatched(row)) {
+                        <span class="dw-error">⚠ {{ typeMismatchMessage(row) }}</span>
+                      }
+                    } @else if (hasSqlTables() && allColumnsAutoGenerated(r)) {
+                      <span class="dw-error">All identity or calculated columns are excluded.</span>
                     } @else if (hasSqlTables() && columnsForResourceTarget(r).length) {
                       <div class="dw-select-wrap">
                         <select class="dw-select"
@@ -434,6 +502,8 @@
                         <span class="dw-hint">No primary/unique key detected on this table — choose the column that uniquely identifies each {{ r }}.</span>
                       } @else if (isRowColumnUnverified(row)) {
                         <span class="dw-error">⚠ '{{ row.targetName || '(none)' }}' is not a column on this table — pick a real column.</span>
+                      } @else if (isRowTypeMismatched(row)) {
+                        <span class="dw-error">⚠ {{ typeMismatchMessage(row) }}</span>
                       }
                     } @else {
                       <input
@@ -460,6 +530,7 @@
               }
             </tbody>
           </table>
+          }
         </div>
       }
     }
@@ -497,6 +568,19 @@
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ sqlForm.value.writeMode }}</span>
           </div>
+        } @else if (isMongo()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ mongoForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Collection</span>
+            <span class="dw-review-val dw-mono">{{ mongoForm.value.collection || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
+          </div>
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -526,6 +610,12 @@
       </div>
     }
 
+    @if ((isStepActive(3) || isStepActive(4)) && resourcesMissingParentSelection().length > 0) {
+      <div class="dw-callout dw-callout--warn">
+        Select a parent for: {{ resourcesMissingParentSelection().join(', ') }} before continuing.
+      </div>
+    }
+
   </div><!-- /dw-body -->
 
   <!-- ── Footer ───────────────────────────────────────────────────────────── -->
@@ -537,7 +627,8 @@
       <button
         class="dw-btn dw-btn--primary"
         type="button"
-        [disabled]="isNextDisabled() || probeState() === 'testing'"
+        [class.dw-btn--invalid]="isNextDisabled()"
+        [disabled]="probeState() === 'testing'"
         (click)="next()"
       >
         @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }

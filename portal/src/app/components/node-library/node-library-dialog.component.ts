@@ -65,6 +65,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-azuresql':    { abbr: 'AZS', color: '#0078D4' },
   'dest-postgres':    { abbr: 'PG',  color: '#336791' },
   'dest-mysql':       { abbr: 'MY',  color: '#4479A1' },
+  'dest-mongo':       { abbr: 'MDB', color: '#47A248' },
   'dest-snowflake':   { abbr: 'SNW', color: '#29B5E8' },
   'dest-powerbi':     { abbr: 'PBI', color: '#F2C811' },
   'dest-tableau':     { abbr: 'TAB', color: '#E97627' },
@@ -146,7 +147,7 @@ export class NodeLibraryDialogComponent {
 
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
-  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | null>(null);
+  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
 
@@ -163,7 +164,7 @@ export class NodeLibraryDialogComponent {
   // lock the other destination type out mid-wizard and warn before discarding.
   readonly destWizardStep         = signal(1);
   readonly destWizardHasProgressed = signal(false);
-  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | null>(null);
+  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | null>(null);
 
   private readonly destTypeLocked = computed(() =>
     this.showDestWizard() && this.destWizardStep() > 1
@@ -177,7 +178,7 @@ export class NodeLibraryDialogComponent {
         const node = untracked(() => this.store.byId(id));
         if (node?.kind === 'transform') {
           const tId = (node as TransformNode).transformId;
-          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql') {
+          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo') {
             untracked(() => this._openDestWizardEdit(node));
           }
           return;
@@ -250,7 +251,7 @@ export class NodeLibraryDialogComponent {
 
         // Lock the other destination type while mid-way through configuring one —
         // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql') && this.destTypeLocked()) {
+        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo') && this.destTypeLocked()) {
           status = 'disabled';
           reason = 'Finish or go back to Configure before switching destination type.';
         }
@@ -339,9 +340,9 @@ export class NodeLibraryDialogComponent {
       this.openEpicForm();
       return;
     }
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql') {
-      const type: 'sql' | 'csv' | 'mysql' =
-        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : 'csv';
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo') {
+      const type: 'sql' | 'csv' | 'mysql' | 'mongo' =
+        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-mongo' ? 'mongo' : 'csv';
       // Switching type after the user has already filled in later steps would
       // silently discard that progress — confirm first.
       if (this.showDestWizard() && this.destWizardType() !== type && this.destWizardHasProgressed()) {
@@ -355,8 +356,8 @@ export class NodeLibraryDialogComponent {
     this.selectedId.set(item.id);
   }
 
-  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | null): string {
-    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : 'CSV';
+  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | null): string {
+    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'mongo' ? 'MongoDB' : 'CSV';
   }
 
   confirmDestSwitch(): void {
@@ -390,7 +391,7 @@ export class NodeLibraryDialogComponent {
   }
 
   // ── destination wizard ────────────────────────────────────────────────────
-  private _openDestWizard(type: 'sql' | 'csv' | 'mysql'): void {
+  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo'): void {
     const pm = this.pickerModel();
     if (!pm) return;
     this.destWizardType.set(type);
@@ -403,8 +404,8 @@ export class NodeLibraryDialogComponent {
 
   private _openDestWizardEdit(node: CanvasNode): void {
     const tId = (node as TransformNode).transformId;
-    const type: 'sql' | 'csv' | 'mysql' =
-      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : 'csv';
+    const type: 'sql' | 'csv' | 'mysql' | 'mongo' =
+      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-mongo' ? 'mongo' : 'csv';
     const inbound = this.store.inboundEdges(node.id);
     const parentId = inbound[0]?.from ?? '';
     const parentNode = parentId ? this.store.byId(parentId) : null;

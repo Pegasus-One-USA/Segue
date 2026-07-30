@@ -22,20 +22,19 @@ public sealed class EhrEndpointService : IEhrEndpointService
         return endpoints.Select(EhrEndpointMapper.ToDto).ToArray();
     }
 
-    public async Task<IReadOnlyList<PublicEhrEpicEndpointDto>> GetPublicEpicEndpointsAsync(
-        string? search, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<PublicEhrEndpointDto>> GetPublicEndpointsAsync(
+        EhrEndpointType endpointType, string? search, CancellationToken cancellationToken)
     {
-        var endpoints = await _repository.GetByEndpointTypeAsync(EhrEndpointType.Epic, search, cancellationToken);
+        var endpoints = await _repository.GetPublicAsync(endpointType, search, cancellationToken);
         return endpoints
-            .Take(PublicEpicEndpointsResultCap)
-            .Select(x => new PublicEhrEpicEndpointDto(x.Id, x.Name, x.FhirBaseUrl, x.Status))
+            .Take(PublicEndpointsResultCap)
+            .Select(x => new PublicEhrEndpointDto(x.Id, x.Name, x.FhirBaseUrl, x.Status))
             .ToArray();
     }
 
-    // The Epic-type set is a handful of rows today, but this same anonymous listing/search path would also serve a
-    // much larger directory (e.g. MyChart's 480+ rows) if ever pointed at it — cap the response instead of assuming
-    // "small" stays true.
-    private const int PublicEpicEndpointsResultCap = 50;
+    // The directory can be in the hundreds of rows (e.g. the MyChart set alone) — cap the response rather than
+    // assume "small" stays true.
+    private const int PublicEndpointsResultCap = 50;
 
     public async Task<EhrEndpointDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -43,10 +42,10 @@ public sealed class EhrEndpointService : IEhrEndpointService
         return endpoint is null ? null : EhrEndpointMapper.ToDto(endpoint);
     }
 
-    public async Task<bool> IsEpicEndpointAsync(Guid ehrEndpointId, CancellationToken cancellationToken)
+    public async Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, EhrEndpointType endpointType, CancellationToken cancellationToken)
     {
         var endpoint = await _repository.GetByIdAsync(ehrEndpointId, cancellationToken);
-        return endpoint is not null && endpoint.EndpointType == EhrEndpointType.Epic;
+        return endpoint is not null && endpoint.EndpointType == endpointType;
     }
 
     public async Task<EhrEndpointDto> AddAsync(CreateEhrEndpointRequest request, CancellationToken cancellationToken)

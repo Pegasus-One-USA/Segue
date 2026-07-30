@@ -1,12 +1,6 @@
 <!-- user-management/pages/role-permissions/role-permissions.component.html -->
 <div class="role-permissions-page">
 
-  @if (loading()) {
-    <div class="loading-state">
-      <mat-spinner diameter="32"></mat-spinner>
-    </div>
-  }
-
   @if (!loading()) {
     @if (!role()) {
       <div class="empty-state">

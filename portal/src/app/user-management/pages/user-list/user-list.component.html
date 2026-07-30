@@ -88,8 +88,8 @@
             (change)="roleFilter.set($any($event.target).value); onFilterChange()"
           >
             <option value="">All Roles</option>
-            @for (role of roleOptions; track role) {
-              <option [value]="role">{{ roleConfig[role].label }}</option>
+            @for (role of roleOptions(); track role) {
+              <option [value]="role">{{ getRoleConfig(role).label }}</option>
             }
           </select>
           <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -121,11 +121,7 @@
 
   <!-- ─── Table Card ───────────────────────────────────────────────────── -->
   <div class="table-card">
-    @if (loading()) {
-      <div class="loading-overlay">
-        <mat-spinner diameter="40" color="primary"></mat-spinner>
-      </div>
-    }
+    <!-- The global loader already shows this page is busy — no local overlay/spinner here. -->
 
     <div class="table-wrapper">
       <table
@@ -287,15 +283,13 @@
 
     <!-- Paginator -->
     @if (total() > 0) {
-      <mat-paginator
-        [length]="total()"
-        [pageSize]="perPage()"
+      <app-pagination-bar
         [pageIndex]="page() - 1"
+        [pageSize]="perPage()"
+        [totalCount]="total()"
         [pageSizeOptions]="[5, 10, 25, 50]"
-        showFirstLastButtons
-        (page)="onPageChange($event)"
-        class="table-paginator"
-      ></mat-paginator>
+        (pageChange)="onPageChange($event)"
+      />
     }
   </div>
 

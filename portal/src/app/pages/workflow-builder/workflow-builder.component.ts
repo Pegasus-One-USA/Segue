@@ -1,5 +1,5 @@
 import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStore } from '../../services/pipeline.store';
@@ -46,6 +46,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly graphMapper = inject(WorkflowGraphMapperService);
   private readonly buildAssembler = inject(WorkflowBuildAssemblerService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   constructor() {
@@ -273,7 +274,14 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       this.toast.show('Cannot save workflow', msg);
       return;
     }
-    const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
+    // Mappings must count too: a workflow wired entirely to already-provisioned source/destination
+    // connections (sourceConnectionResolved/destinationResolved both "true") has zero source/destination
+    // specs to create, but can still carry new/changed mapping rows that need a MappingProfile created and
+    // stamped onto the Field Mapping node — skipping the build call in that case silently left the mapping
+    // node's config empty (no mappingProfileId), so every run mapped zero records despite "succeeding".
+    const hasSpecs = (request.sources?.length ?? 0) > 0
+      || (request.destinations?.length ?? 0) > 0
+      || (request.mappings?.length ?? 0) > 0;
     if (hasSpecs) {
       this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
       return;
@@ -307,8 +315,15 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         const msg = typeof err?.error?.error === 'string'
           ? err.error.error
           : 'Something went wrong while saving this workflow. Please contact your admin.';
-        this.workflowStatus.set(msg);
-        this.toast.show('Create-on-save failed', typeof msg === 'string' ? msg : 'See status for details.');
+        // A structured validation rejection (RequestValidationException / WorkflowEndpoints' ValidationBadRequest
+        // helper) carries per-field messages alongside the flat `error` string — surface all of them rather than
+        // just the generic top-level message, since `msg` alone ("Validation failed.") isn't actionable on its own.
+        const fieldErrors = err?.error?.fieldErrors as Record<string, string[]> | null | undefined;
+        const detail = fieldErrors && Object.keys(fieldErrors).length
+          ? Object.values(fieldErrors).flat().join(' ')
+          : msg;
+        this.workflowStatus.set(detail);
+        this.toast.show('Create-on-save failed', detail);
         this.workflowBusy.set(false);
       },
     });
@@ -382,7 +397,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
     if (!anyCorrected) {
       this.workflowBusy.set(false);
-      this.resetCanvasAndWorkflowState();
+      this.finishSave();
       return;
     }
 
@@ -390,13 +405,13 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     this.workflowApi.save(definitionRequest, workflowId).subscribe({
       next: () => {
         this.workflowBusy.set(false);
-        this.resetCanvasAndWorkflowState();
+        this.finishSave();
       },
       error: () => {
         // Best-effort: the original build already succeeded and is fully durable — only this cosmetic
         // JWKS-URL correction failed to re-save. Not worth blocking or re-prompting the user over.
         this.workflowBusy.set(false);
-        this.resetCanvasAndWorkflowState();
+        this.finishSave();
       },
     });
   }
@@ -594,7 +609,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       const node = this.store.byId(nodeId);
       if (node?.kind === 'transform') {
         const tId = (node as TransformNode).transformId;
-        if (tId === 'dest-sqlserver' || tId === 'dest-csv') {
+        if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo') {
           // Edit destination node — open library in transform mode with parent as origin.
           const parent = this.store.parentOf(nodeId);
           this.editingNodeId.set(nodeId);
@@ -674,7 +689,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
               this.workflowStatus.set(`Saved ${saved.name}.`);
               this.toast.success('Workflow saved', `"${saved.name}" was saved.`);
               this.workflowBusy.set(false);
-              this.resetCanvasAndWorkflowState();
+              this.finishSave();
               return;
             }
 
@@ -683,7 +698,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
                 this.workflowStatus.set(`Saved and activated ${active.name}.`);
                 this.toast.success('Workflow saved', `"${active.name}" was saved and activated.`);
                 this.workflowBusy.set(false);
-                this.resetCanvasAndWorkflowState();
+                this.finishSave();
               },
               error: () => {
                 this.workflowStatus.set('Saved workflow, but activation failed.');
@@ -714,7 +729,17 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     return this.workflowBusy();
   }
 
-  /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */
+  /** Post-save wrap-up — always returns to the Workflows list, where the save (new or updated) is now
+   *  visible, instead of leaving you staring at a blanked-out or unchanged canvas. markSaved() first,
+   *  or the unsaved-changes guard (which only ever saw the canvas reset itself clean via reset() before)
+   *  intercepts this very navigation and asks "Leave this page?" right after a successful save. */
+  private finishSave(): void {
+    this.store.markSaved();
+    this.router.navigate(['/workflows']);
+  }
+
+  /** Blanks the canvas and workflow identity — used when explicitly starting a new workflow (see
+   *  ngOnInit/onReset), not after a save (see finishSave). */
   private resetCanvasAndWorkflowState(): void {
     this.store.reset();
     this.currentWorkflowId.set(null);
