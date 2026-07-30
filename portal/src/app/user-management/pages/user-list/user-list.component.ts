@@ -122,6 +122,15 @@ export class UserListComponent implements OnInit, OnDestroy {
   hasRowMenu   = (): boolean =>
     this.canEdit() || this.canAssignRole() || this.canToggle() || this.canInvite() || this.canDelete();
 
+  // Compared by email, not id: the list's user.id is the real database GUID, but
+  // authService.currentUser().id is derived from the JWT's external/oid claim (see
+  // buildUserFromJwt) — a different identity space that never matches the GUID. Email is the
+  // one identifier populated consistently on both sides.
+  isSelf = (user: User): boolean => {
+    const email = this.authService.currentUser()?.email;
+    return !!email && email.toLowerCase() === user.email?.toLowerCase();
+  };
+
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   ngOnInit(): void {
     this.searchSubject.pipe(
@@ -243,6 +252,10 @@ export class UserListComponent implements OnInit, OnDestroy {
   // ─── User actions ─────────────────────────────────────────────────────────
   deleteUser(user: User): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Delete), 'You do not have permission to delete users.')) return;
+    if (this.isSelf(user)) {
+      this.toast.error('You cannot delete your own account.');
+      return;
+    }
     const ref = this.dialog.open(ConfirmDialogComponent, {
       width: '400px', restoreFocus: false,
       data: {
@@ -271,6 +284,10 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   toggleStatus(user: User, action: 'enable' | 'disable'): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Deactivate), 'You do not have permission to activate or deactivate users.')) return;
+    if (action === 'disable' && this.isSelf(user)) {
+      this.toast.error('You cannot deactivate your own account.');
+      return;
+    }
     const call$ = action === 'enable'
       ? this.userService.enableUser(user.id)
       : this.userService.disableUser(user.id);
@@ -323,7 +340,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   getStatusLabel(status: string): string {
     const map: Record<string, string> = {
       active:   'Active',
-      inactive: 'Inactive',
+      inactive: 'Deactivated',
       pending:  'Invited',
     };
     return map[status] ?? status;

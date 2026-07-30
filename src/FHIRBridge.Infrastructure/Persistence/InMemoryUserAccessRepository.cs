@@ -13,7 +13,7 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         {
             new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator.", isSystem: true),
             new Role(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users.", isSystem: true),
-            new Role(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output.", isSystem: true),
+            new Role(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs workflow configurations, and reviews data and audit output.", isSystem: true),
             new Role(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs.", isSystem: true)
         }.ToDictionary(role => role.Id));
 

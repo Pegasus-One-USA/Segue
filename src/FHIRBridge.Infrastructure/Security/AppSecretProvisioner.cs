@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -48,7 +49,7 @@ public static class AppSecretProvisioner
                 reference.KeyVaultName);
             return existing;
         }
-        catch (InvalidOperationException)
+        catch (SecretNotConfiguredException)
         {
             // No value in the DB-provisioned store, Key Vault, or config fallback — first boot on this install.
             var generated = AppSecretValueGenerator.Generate();

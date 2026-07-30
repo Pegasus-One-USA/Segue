@@ -1,6 +1,10 @@
 <app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard())" (closed)="close()">
   <div class="nld">
 
+    @if (!(showEpicForm() || showDestWizard())) {
+      <button class="nld-close" type="button" aria-label="Close" (click)="close()">×</button>
+    }
+
     <!-- ── Body: sidebar + detail ──────────────────────────────────────────── -->
     <div class="nld-body">
 
@@ -129,7 +133,7 @@
             <h3 class="nld-empty-title">Select a node from the left</h3>
             <p class="nld-empty-sub">
               View available actions, configuration options, and applicability details
-              before adding the node to your pipeline.
+              before adding the node to your workflow.
             </p>
             @if (mode() === 'transform' && pickerMeta()) {
               <div class="nld-empty-context">
@@ -188,7 +192,7 @@
               <div class="nld-applicability">
                 <div class="nld-app-label">Applicability</div>
                 @if (selectedItem()!.status === 'show' || selectedItem()!.status === 'enabled') {
-                  <div class="nld-app-badge applicable">✓ Applicable for this pipeline context</div>
+                  <div class="nld-app-badge applicable">✓ Applicable for this workflow context</div>
                 } @else if (selectedItem()!.status === 'caveat') {
                   <div class="nld-app-badge caveat">⚠ Works — with a caveat</div>
                 } @else if (selectedItem()!.status === 'disabled') {
@@ -260,7 +264,7 @@
             <!-- Transform info -->
             @if (!selectedItem()!.isSource && pickerMeta()) {
               <div class="nld-fields-card">
-                <div class="nld-fields-title">Pipeline Context</div>
+                <div class="nld-fields-title">Workflow Context</div>
                 <div class="nld-field-row">
                   <span class="nld-fk">Rule</span>
                   <span class="nld-fv">{{ pickerMeta()?.ruleLabel }}</span>
@@ -295,7 +299,7 @@
                   [disabled]="selectedItem()!.status === 'hide'"
                   (click)="addSelected()"
                 >
-                  +&nbsp; Add to Pipeline
+                  +&nbsp; Add to Workflow
                 </button>
               }
               <button class="nld-back" type="button" (click)="selectedId.set(null)">
