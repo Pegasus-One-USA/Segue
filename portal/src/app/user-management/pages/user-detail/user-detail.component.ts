@@ -96,6 +96,14 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
 
   readonly roleConfig = ROLE_CONFIG;
 
+  // Compared by email, not id: user().id is the real database GUID, but authService.currentUser().id
+  // is derived from the JWT's external/oid claim (see buildUserFromJwt) — a different identity space
+  // that never matches the GUID. Email is the one identifier populated consistently on both sides.
+  isSelf = computed(() => {
+    const email = this.authService.currentUser()?.email;
+    return !!email && email.toLowerCase() === this.user()?.email?.toLowerCase();
+  });
+
   // Bypassing a user's second factor entirely is too sensitive to delegate to the general "edit
   // user" permission Admins also hold — the backend enforces this too (SuperAdminOnly policy on
   // POST /users/{id}/mfa/disable); this just keeps the button from being shown to someone who'd
@@ -226,6 +234,11 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     const u = this.user();
     if (!u) return;
 
+    if (action !== 'enable' && this.isSelf()) {
+      this.toast.error(`You cannot ${action} your own account.`);
+      return;
+    }
+
     const call$ =
       action === 'enable'  ? this.userService.enableUser(u.id)  :
       action === 'disable' ? this.userService.disableUser(u.id) :
@@ -334,6 +347,10 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   deleteUser(): void {
     const u = this.user();
     if (!u) return;
+    if (this.isSelf()) {
+      this.toast.error('You cannot delete your own account.');
+      return;
+    }
     const confirmed = window.confirm(
       `Are you sure you want to delete "${u.fullName}"? This action cannot be undone.`,
     );
@@ -400,5 +417,15 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
       pending:   'status-pending',
     };
     return map[status] ?? 'status-inactive';
+  }
+
+  getStatusLabel(status: string): string {
+    const map: Record<string, string> = {
+      active:    'Active',
+      inactive:  'Deactivated',
+      suspended: 'Suspended',
+      pending:   'Invited',
+    };
+    return map[status] ?? status;
   }
 }

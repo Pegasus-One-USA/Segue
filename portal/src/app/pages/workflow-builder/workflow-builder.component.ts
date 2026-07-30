@@ -346,7 +346,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       if (resourceTypes.length) {
         this.toast.show(
           'Epic scopes synced',
-          `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every pipeline currently using it).`,
+          `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every workflow currently using it).`,
         );
       }
     }

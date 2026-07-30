@@ -28,8 +28,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   background: var(--color-primary-soft);
   border-radius: 8px;
   color: var(--color-primary);
@@ -42,6 +42,12 @@
   color: var(--color-ink);
 }
 
+.dw-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .dw-back-btn {
   font-size: 12.5px;
   font-weight: 600;
@@ -52,6 +58,22 @@
   padding: 5px 10px;
   border-radius: 6px;
   white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
+}
+
+/* The dialog-level "✕" (fully closes Node Library), relocated here next to "← Back to library"
+   now that the outer Node Library header is gone. */
+.dw-close-btn {
+  background: none;
+  border: none;
+  font-size: 19px;
+  line-height: 1;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
   transition: background 0.12s, color 0.12s;
 
   &:hover { background: var(--color-bg); color: var(--color-ink-2); }
@@ -367,6 +389,9 @@
   overflow: hidden;
 }
 
+/* The whole row toggles the accordion (role="button" in the template) — the target select/input and the
+   Add Fields/+ Add field buttons stop click propagation so they keep their own behavior instead of also
+   toggling. */
 .dw-mapping-group-head {
   display: flex;
   align-items: center;
@@ -377,6 +402,39 @@
   font-weight: 700;
   color: var(--color-ink);
   border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+
+  &:hover { background: var(--color-bg); }
+}
+
+.dw-mapping-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dw-mapping-chevron {
+  display: inline-block;
+  font-size: 15px;
+  color: var(--color-muted-2);
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+  margin-left: auto;
+
+  &.collapsed { transform: rotate(0deg); }
+}
+
+.dw-mapping-issue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .dw-mapping-target-label {

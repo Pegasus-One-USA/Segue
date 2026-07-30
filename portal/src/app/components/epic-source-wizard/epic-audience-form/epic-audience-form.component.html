@@ -14,10 +14,14 @@
         <span class="eaf-connected-badge">✓ Endpoints resolved</span>
       }
     </div>
-    <!-- "Back to library" only makes sense inside Pipeline Builder's Node Library — the Source Connections page
-         has no library to go back to; its own footer Cancel/Close button already covers dismissing the form. -->
+    <!-- "Back to library"/close only make sense inside Pipeline Builder's Node Library — the Source
+         Connections page has no library to go back to; its own footer Cancel/Close button already
+         covers dismissing the form. -->
     @if (wiz.wizardMode() !== 'entity') {
-      <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+      <div class="eaf-topbar-actions">
+        <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+        <button class="eaf-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+      </div>
     }
   </div>
 
@@ -279,7 +283,7 @@
               <label class="eaf-label" for="eaf-jwksUrl">Private Key / JWKS URL <span class="eaf-req">*</span></label>
               <input id="eaf-jwksUrl" class="eaf-input" type="url" formControlName="jwksUrl"
                      [readonly]="audience() === 'backend-system' && (isGenKey() || isImportKey())"
-                     placeholder="https://fhirbridge.com/.well-known/jwks.json" />
+                     placeholder="https://segue.com/.well-known/jwks.json" />
               @if (form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid) {
                 <p class="eaf-error-msg">Enter a valid JWKS URL.</p>
               }
@@ -383,7 +387,7 @@
                   <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
                   <input id="eaf-privateKeyRef" class="eaf-input" type="text" formControlName="privateKeyRef"
                          [readonly]="isGenKey() || isImportKey()"
-                         [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. fhirbridge-secrets'" />
+                         [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. segue-secrets'" />
                   @if (form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid) {
                     <p class="eaf-error-msg">Key Vault Name is required.</p>
                   }
@@ -632,6 +636,11 @@
                    [class.eaf-field--error]="isRetrievalFieldInvalid(field)">
 
                 @if (field.type === 'checkbox') {
+                  <!-- Every other field type renders an .eaf-label above its control; a checkbox row has no
+                       separate label (its text sits inline with the checkbox), so without this hidden spacer
+                       its control sits ~1 label-line higher than a same-row field's control/hint, misaligning
+                       the two visually even though the grid row itself is correctly sized. -->
+                  <span class="eaf-label" style="visibility: hidden" aria-hidden="true">&nbsp;</span>
                   <label class="eaf-checkbox-row"
                          [class.eaf-checkbox-row--locked]="field.key === 'incrementalCursor' && incrementalCursorLocked()">
                     <input type="checkbox" [formControlName]="field.key" />
@@ -784,7 +793,7 @@
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
       <button class="eaf-btn eaf-btn--primary" type="button" [class.eaf-btn--invalid]="form.invalid" (click)="save()">
-        {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Pipeline') }}
+        {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Workflow') }}
       </button>
     }
   </div>

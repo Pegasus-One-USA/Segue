@@ -53,7 +53,7 @@
                 {{ getRoleConfig(user()!.role).label }}
               </span>
               <span class="status-badge" [ngClass]="getStatusClass(user()!.status)">
-                {{ user()!.status | titlecase }}
+                {{ getStatusLabel(user()!.status) }}
               </span>
               @if (user()!.department) {
                 <span class="hero-dept">
@@ -84,13 +84,13 @@
                 Enable User
               </button>
             }
-            @if (user()!.status === 'active') {
+            @if (user()!.status === 'active' && !isSelf()) {
               <button mat-menu-item (click)="toggleStatus('disable')">
                 <mat-icon class="icon-disable">remove_circle</mat-icon>
                 Disable User
               </button>
             }
-            @if (user()!.status !== 'suspended') {
+            @if (user()!.status !== 'suspended' && !isSelf()) {
               <button mat-menu-item (click)="toggleStatus('suspend')">
                 <mat-icon class="icon-suspend">block</mat-icon>
                 Suspend User
@@ -109,9 +109,11 @@
             }
           </mat-menu>
 
-          <button mat-icon-button class="btn-delete" (click)="deleteUser()" matTooltip="Delete user">
-            <mat-icon>delete_outline</mat-icon>
-          </button>
+          @if (!isSelf()) {
+            <button mat-icon-button class="btn-delete" (click)="deleteUser()" matTooltip="Delete user">
+              <mat-icon>delete_outline</mat-icon>
+            </button>
+          }
         </div>
       </div>
     </div>

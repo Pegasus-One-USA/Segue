@@ -30,7 +30,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 
 const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
   { value: 'active',    label: 'Active' },
-  { value: 'inactive',  label: 'Inactive' },
+  { value: 'inactive',  label: 'Deactivated' },
   { value: 'pending',   label: 'Pending' },
   { value: 'suspended', label: 'Suspended' },
 ];

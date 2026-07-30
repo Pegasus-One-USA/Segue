@@ -67,7 +67,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
   {
     id: 'Operations',
     label: 'Operations',
-    description: 'Builds and runs pipeline configurations, and reviews data and audit output',
+    description: 'Builds and runs workflow configurations, and reviews data and audit output',
     color: '#00A89D',
     permissions: ['Pipeline creation', 'Run pipelines', 'View logs', 'View reports'],
   },

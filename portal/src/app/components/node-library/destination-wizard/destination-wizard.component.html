@@ -11,7 +11,10 @@
       </div>
       <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
     </div>
-    <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+    <div class="dw-topbar-actions">
+      <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+      <button class="dw-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+    </div>
   </div>
 
   <!-- ── Step indicator ───────────────────────────────────────────────────── -->
@@ -373,8 +376,17 @@
 
       @for (r of resourceKeys(); track r) {
         <div class="dw-mapping-group">
-          <div class="dw-mapping-group-head">
-            <strong>{{ r }}</strong>
+          <div class="dw-mapping-group-head" role="button" tabindex="0"
+               [attr.aria-expanded]="!isGroupCollapsed(r)"
+               (click)="toggleGroup(r)" (keydown.enter)="toggleGroup(r)" (keydown.space)="toggleGroup(r)">
+            <span class="dw-mapping-name">
+              <strong>{{ r }}</strong>
+              @if (resourceIssueCount(r) > 0) {
+                <span class="dw-mapping-issue-badge" [attr.title]="resourceIssueCount(r) + ' mapping issue(s) need attention'">
+                  ⚠ {{ resourceIssueCount(r) }}
+                </span>
+              }
+            </span>
             <span class="dw-mapping-target-inline">
               <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : 'File name' }}</label>
               @if (hasSqlTables()) {
@@ -382,6 +394,7 @@
                   <select class="dw-select dw-target-select"
                           [attr.id]="'dw-target-' + r"
                           [value]="targetFor(r)"
+                          (click)="$event.stopPropagation()"
                           (change)="updateTarget(r, $any($event.target).value)">
                     <option value="" disabled [selected]="!targetFor(r)">Select a table…</option>
                     @for (t of sqlTableOptions(); track t) { <option [value]="t" [selected]="t === targetFor(r)">{{ t }}</option> }
@@ -392,15 +405,18 @@
                   class="dw-map-input dw-target-input"
                   [attr.id]="'dw-target-' + r"
                   [value]="targetFor(r)"
+                  (click)="$event.stopPropagation()"
                   (input)="updateTarget(r, $any($event.target).value)"
                   [placeholder]="isSql() ? 'dbo.Patient' : isMongo() ? 'patients' : 'patients.csv'"
                 />
               }
             </span>
-            <button type="button" class="dw-btn" [disabled]="isSql() && !targetFor(r)" (click)="addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
-            <button type="button" class="dw-btn dw-add-field" [disabled]="isSql() && !targetFor(r)" (click)="addRow(r)">+ Add field</button>
-            <button type="button" class="dw-btn dw-clear-fields" [disabled]="rowsForResource(r).length === 0" (click)="clearFields(r)" title="Remove every mapped field for this resource (except the mandatory id/key rows)">Clear Fields</button>
+            <button type="button" class="dw-btn" [disabled]="isSql() && !targetFor(r)" (click)="$event.stopPropagation(); addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
+            <button type="button" class="dw-btn dw-add-field" [disabled]="isSql() && !targetFor(r)" (click)="$event.stopPropagation(); addRow(r)">+ Add field</button>
+            <button type="button" class="dw-btn dw-clear-fields" [disabled]="rowsForResource(r).length === 0" (click)="$event.stopPropagation(); clearFields(r)" title="Remove every mapped field for this resource (except the mandatory id/key rows)">Clear Fields</button>
+			<span class="dw-mapping-chevron" [class.collapsed]="isGroupCollapsed(r)">›</span>
           </div>
+          @if (!isGroupCollapsed(r)) {
           <span class="dw-hint dw-mapping-key-hint">
             🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.
           </span>
@@ -514,6 +530,7 @@
               }
             </tbody>
           </table>
+          }
         </div>
       }
     }
@@ -522,7 +539,7 @@
     @if (isStepActive(4)) {
       <div class="dw-section-head">
         <span class="dw-section-num">4</span>
-        <span class="dw-section-title">Review &amp; add to pipeline</span>
+        <span class="dw-section-title">Review &amp; add to workflow</span>
       </div>
 
       <div class="dw-review-grid">
@@ -589,7 +606,7 @@
       </div>
 
       <div class="dw-callout dw-callout--info">
-        After adding to the pipeline, the {{ destLabel() }} node will be connected automatically to the selected source.
+        After adding to the workflow, the {{ destLabel() }} node will be connected automatically to the selected source.
       </div>
     }
 
@@ -614,7 +631,7 @@
         [disabled]="probeState() === 'testing'"
         (click)="next()"
       >
-        @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Pipeline' }} }
+        @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Workflow' }} }
         @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
         @else { Next }
       </button>

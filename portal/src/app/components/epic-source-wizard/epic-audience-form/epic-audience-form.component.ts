@@ -16,6 +16,8 @@ import { ISourceConnectionService } from '../../../source-connections/services/i
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 import { environment } from '../../../../environments/environment';
 import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
+import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 
 export type { EpicAudience };
 
@@ -328,7 +330,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       // low-traffic) — these are different backend trigger primitives (Poll+minutes vs Schedule+cron), so they get
       // different controls rather than forcing one picker to do both jobs. None of this applies to Standalone —
       // a user-initiated one-shot fetch has no recurring schedule to configure.
-      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS, requiredUnless: { key: 'runMode', value: 'manual' }, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode !== 'full', hint: 'Not required when Run Mode is Manual Only — the pipeline only runs when triggered.' },
+      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS, requiredUnless: { key: 'runMode', value: 'manual' }, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode !== 'full', hint: 'Not required when Run Mode is Manual Only — the workflow only runs when triggered.' },
       { key: 'fullRefreshRecurrence',  label: 'Repeat',                           type: 'select',       required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Full Refresh reloads everything with no incremental filter — anchor it to a specific, low-traffic time rather than a tight interval.' },
       { key: 'fullRefreshDaysOfWeek', label: 'On',                               type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'weekly' },
       { key: 'fullRefreshDayOfMonth', label: 'Day of month',                     type: 'select',       required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
@@ -383,9 +385,13 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
   templateUrl: './epic-audience-form.component.html',
   styleUrl: './epic-audience-form.component.scss',
 })
-export class EpicAudienceFormComponent implements OnInit {
+export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   readonly cancelled = output<void>();
   readonly saved     = output<void>();
+  /** The relocated "✕" next to "← Back to library" — closes the whole Node Library dialog outright
+   *  (unlike cancel(), which only backs out of this form to the library's sidebar). Mirrors the
+   *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
+  readonly closeAll  = output<void>();
 
   // The "Application URLs" section (Launch URL / Redirect URI) is hidden — both fields are now always
   // resolved from the actual deployment host (see OAUTH_DEFAULT_URLS) rather than admin-entered, so there's
@@ -401,6 +407,7 @@ export class EpicAudienceFormComponent implements OnInit {
   private  readonly fb         = inject(FormBuilder);
   private  readonly destroyRef = inject(DestroyRef);
   private  readonly sourceConnectionSvc = inject(ISourceConnectionService);
+  private  readonly unsavedChangesPrompt = inject(UnsavedChangesPromptService);
 
   protected readonly ehrOptions = EHR_OPTIONS;
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
@@ -750,8 +757,12 @@ export class EpicAudienceFormComponent implements OnInit {
    * audience, client details) — so this section is hidden there regardless of what the audience would otherwise
    * show, and wizard.service.ts's entity-mode save() never sends a retrieval payload either.
    */
+  // Restricted to Backend System only: Provider Standalone's audienceConfig().showRetrieval also stays true
+  // (its 'oneshot' retrievalScope still drives the automated<->oneshot field carry-over/reset logic in
+  // onAudienceChange below, keyed off AUDIENCE_FIELD_CONFIG directly), but Standalone no longer gets a visible
+  // Data Retrieval Method / Retrieval Configuration section of its own — those are Backend System only now.
   protected readonly showRetrievalSection = computed(() =>
-    this.audienceConfig().showRetrieval && this.wiz.wizardMode() === 'canvas');
+    this.audienceConfig().showRetrieval && this.audience() === 'backend-system' && this.wiz.wizardMode() === 'canvas');
 
   /** Section numbers shift depending on which optional sections the current audience shows. */
   protected readonly sectionNumbers = computed(() => {
@@ -2017,7 +2028,21 @@ export class EpicAudienceFormComponent implements OnInit {
     this.saved.emit();
   }
 
-  protected cancel(): void { this.cancelled.emit(); }
+  /** Backs both the topbar "← Back to library" and the footer "Cancel" buttons — same confirm-before-discard
+   *  prompt the rest of the app uses for routed pages (UnsavedChangesPromptService), just invoked directly
+   *  here since this form is an inline panel inside NodeLibraryDialogComponent, not its own route. */
+  protected cancel(): void {
+    this.unsavedChangesPrompt.confirmLeave(this).subscribe(canLeave => {
+      if (canLeave) this.cancelled.emit();
+    });
+  }
+
+  /** HasUnsavedChanges — form.dirty flips true the moment any control is edited by the user (via
+   *  typing/selecting), regardless of whether this is a brand-new node or an in-place edit. Disabled
+   *  (read-only view) controls can never become dirty, so no separate readonly check is needed. */
+  hasUnsavedChanges(): boolean {
+    return this.form.dirty;
+  }
 
   protected async copyRedirectUri(): Promise<void> {
     try {
