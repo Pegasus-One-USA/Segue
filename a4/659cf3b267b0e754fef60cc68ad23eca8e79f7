@@ -1,0 +1,46 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_c60546938fff22::t_e5c14f7e97b729 19-20
+  s_c60546938fff22::t_54e4dd1ece6f8d 1905-1919
+  s_c60546938fff22::t_842a172f58c8dc 341
+  s_c60546938fff22::t_db5af634ca1d4d 363
+  s_c60546938fff22::t_071e46b56dda3d 344-347
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_c60546938fff22::t_4e5694b444dc52 126-128,135-136
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_c60546938fff22::t_4da72f8c03c475 787-824
+  s_c60546938fff22::t_99fe80d269b44e 165-168
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_c60546938fff22::t_4ad448efc90d94 379-382,389-390,412-414
+  s_c60546938fff22::t_15899dcd918474 14-17
+  s_c60546938fff22::t_06ad6b1efe5737 416
+  s_c60546938fff22::t_31dbfbd2abf468 383-388
+  s_c60546938fff22::t_9c09cd0804a85b 549
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_c60546938fff22::t_db930966427bec 17-19,21-24
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_c60546938fff22::t_c4c090c76fe633 102
+  s_c60546938fff22::t_517ce4cb3089a3 115
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_c60546938fff22::t_8df9ec73f440fc 51-56,70-85
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_c60546938fff22::t_e79e8643c80bdd 422,424,426-427
+  s_c60546938fff22::t_bedfd5d1943a7e 77-81,408-409,411-421,428-437
+  s_c60546938fff22::t_8bb27f3eb6b97d 45-50,66-76
+  s_c60546938fff22::t_cc7bcbe62244fb 392-394,405-407,410,423,425
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a4659cf3b267b0e754fef60cc68ad23eca8e79f7",
+  "prompts": {},
+  "sessions": {
+    "s_c60546938fff22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4671f36f-ac74-4243-98fb-238f21a2a76b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
