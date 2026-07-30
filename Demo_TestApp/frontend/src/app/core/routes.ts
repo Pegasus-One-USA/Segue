@@ -4,3 +4,9 @@
 // import: app.ts already imports every demo-experience component, so one importing back from app.ts would create
 // a cycle.
 export const PATIENT_STANDALONE_PATH = '/launchpatientstandalone';
+
+// Mirrors app.ts's AUTH_ROLE_STORAGE_KEY sessionStorage pattern, but for the logged-in account's email — the
+// stable identity FHIRBridge permanently binds a MyChart patient / Epic practitioner to (see
+// LaunchStandalonePatientComponent/LaunchStandaloneProviderComponent's userIdentity getters). Kept here rather
+// than exported from app.ts directly, for the same circular-import reason as PATIENT_STANDALONE_PATH above.
+export const AUTH_EMAIL_STORAGE_KEY = 'hb_auth_email';

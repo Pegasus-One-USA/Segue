@@ -134,13 +134,27 @@ export class LaunchProviderInAppComponent implements OnInit {
     // FHIRBridge sets this instead of ?workflowRunId= when the workflow it triggered after OAuth threw —
     // surface it rather than silently falling back to mock data, which would look like a working demo.
     const launchError = params.get('launchError');
+    const workflowRunId = params.get('workflowRunId');
+
+    // Consume both once, then strip them from the visible URL — same reasoning as the Standalone components'
+    // own history.replaceState calls (see launch-standalone-provider.ts/launch-standalone-patient.ts): without
+    // this, ?workflowRunId=... sits in the address bar indefinitely (this app has no router to otherwise clean
+    // it up), and app.ts's login() deliberately preserves the current query string across a subsequent login for
+    // this exact role (needed so a real iss+launch survives logging in first) — which also preserves a STALE
+    // workflowRunId across a DIFFERENT HealthApp account's later login on the same tab. That account would then
+    // silently be shown whichever patient the ORIGINAL account's real EHR launch fetched (FHIRBridge's launch-
+    // result endpoint has no per-caller ownership check on the run id), never seeing an error or a fresh fetch.
+    if (launchError || workflowRunId) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
     if (launchError) {
       this.launchError.set(launchError);
       this.isPatientLoading.set(false);
       return;
     }
 
-    this.patientService.getPatient().subscribe({
+    this.patientService.getPatient(workflowRunId).subscribe({
       next: (patient) => {
         this.patient.set(patient);
         this.isPatientLoading.set(false);

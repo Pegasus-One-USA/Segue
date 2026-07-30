@@ -22,7 +22,12 @@
     </header>
 
     <section class="standalone-section">
-      @if (launchError()) {
+      @if (launchError() === 'context_mismatch') {
+        <p class="error-banner">
+          This account is already linked to a different patient/practitioner and cannot be re-authorized with a
+          different one. Please contact your administrator if you believe this is an error.
+        </p>
+      } @else if (launchError()) {
         <p class="error-banner">
           The workflow FHIRBridge triggered after sign-in failed to complete ({{ launchError() }}). Check
           FHIRBridge's Execution History for this run's error detail.

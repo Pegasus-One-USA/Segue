@@ -35,6 +35,18 @@
       }
 
       <section class="settings-section">
+        <h2>New 11 Feature Flag</h2>
+        <label class="field field--checkbox">
+          <input
+            type="checkbox"
+            [ngModel]="new11Enabled()"
+            (ngModelChange)="toggleNew11Enabled($event)"
+          />
+          Enable New 11 (shows the New 11 tab in every role's Default | New 11 menu)
+        </label>
+      </section>
+
+      <section class="settings-section">
         <h2>Patient_Standalone (Role: Patient)</h2>
         <label class="field">
           Workflow URL
@@ -97,6 +109,63 @@
       <div class="settings-actions">
         <button type="button" class="btn-primary" (click)="saveSettings()">Save All Settings</button>
       </div>
+    }
+    }
+
+    @if (section() === 'new11') {
+    @if (new11Loading()) {
+      <p>Loading New 11 workflow settings…</p>
+    } @else {
+      @if (new11LoadError()) {
+        <p class="error-banner">{{ new11LoadError() }}</p>
+      }
+
+      <section class="settings-section">
+        <h2>New 11 — per-role workflow URLs</h2>
+        <p class="subtitle">Each role has a <strong>List</strong> workflow and a <strong>Details</strong> workflow. Import Practitioners uses the selected role's Details URL (falling back to List).</p>
+
+        <nav class="settings-tabs" aria-label="New 11 role">
+          @for (role of new11Roles; track role) {
+            <button
+              type="button"
+              class="settings-tabs__item"
+              [class.active]="new11SelectedRole() === role"
+              (click)="selectNew11Role(role)"
+            >{{ roleLabels[role] }}</button>
+          }
+        </nav>
+
+        <label class="field">
+          {{ roleLabels[new11SelectedRole()] }} — List Workflow URL
+          <input
+            type="text"
+            [ngModel]="new11()[new11SelectedRole()]?.list"
+            (ngModelChange)="setNew11(new11SelectedRole(), 'list', $event)"
+            placeholder="https://..."
+          />
+        </label>
+        <label class="field">
+          {{ roleLabels[new11SelectedRole()] }} — Details Workflow URL
+          <input
+            type="text"
+            [ngModel]="new11()[new11SelectedRole()]?.details"
+            (ngModelChange)="setNew11(new11SelectedRole(), 'details', $event)"
+            placeholder="https://..."
+          />
+        </label>
+      </section>
+
+      @if (new11SaveError()) {
+        <p class="error-banner">{{ new11SaveError() }}</p>
+      }
+      @if (new11Saved()) {
+        <p class="success-banner">Settings saved.</p>
+      }
+
+      <div class="settings-actions">
+        <button type="button" class="btn-primary" (click)="saveNew11Settings()">Save New 11 Settings</button>
+      </div>
+    }
     }
   </div>
 </div>

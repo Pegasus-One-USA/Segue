@@ -22,6 +22,9 @@ public sealed class BackendServicesApplicationStrategy : SourceApplicationStrate
 
     public override ApplicationType Handles => ApplicationType.Backend;
 
+    // Machine-to-machine: no per-user patient/practitioner context is ever established.
+    public override FhirContextBindingKind BindingResourceType => FhirContextBindingKind.None;
+
     public override SourceApplicationDescriptor Describe() => new(
         ApplicationType.Backend,
         SmartOAuthFlows.ClientCredentials,

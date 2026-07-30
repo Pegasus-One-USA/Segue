@@ -6,6 +6,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
 import { FHIRBRIDGE_BASE_URL, STANDALONE_DETAIL_WORKFLOW_ID, STANDALONE_WORKFLOW_ID } from './core/config/standalone-launch.config';
 import { environment } from '../../../environments/environment';
+import { AUTH_EMAIL_STORAGE_KEY } from '../../core/routes';
 
 /** Matches Demo_TestApp/backend's GET /api/provider-standalone-settings and /api/provider-standalone-workflow-ids
  *  responses (also the POST /api/provider-standalone-settings response). */
@@ -334,9 +335,34 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   // written to.
   private static readonly SESSION_ID_STORAGE_KEY = 'providerStandaloneSessionId';
 
+  // Scopes the persisted sessionId to the currently logged-in HealthApp account (userIdentity below). Without
+  // this, a plain browser-wide key meant two different HealthApp accounts sharing one browser (e.g.
+  // providerstandalone@ logging out, providerstandalone1@ logging in) would read back the SAME localStorage
+  // sessionId — it was never cleared on logout — so the second account's "Fetch Patient List" would silently
+  // reuse the first account's already-cached Epic token instead of prompting its own fresh sign-in. Falls back
+  // to the bare key only when no account email is available (matches the old, pre-scoped behavior for that edge
+  // case alone).
+  private get sessionIdStorageKey(): string {
+    const identity = this.userIdentity;
+    return identity
+      ? `${LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY}:${identity}`
+      : LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY;
+  }
+
+  // HealthApp's own logged-in account email (see core/routes.ts's AUTH_EMAIL_STORAGE_KEY) — the stable identity
+  // FHIRBridge permanently binds the authorized Epic practitioner to. Distinct from sessionId above (an opaque
+  // per-browser cache key): this must identify the same real HealthApp account across every browser/session.
+  private get userIdentity(): string | null {
+    try {
+      return sessionStorage.getItem(AUTH_EMAIL_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
   private get sessionId(): string | null {
     try {
-      return localStorage.getItem(LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY);
+      return localStorage.getItem(this.sessionIdStorageKey);
     } catch {
       return null;
     }
@@ -345,9 +371,9 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   private set sessionId(value: string | null) {
     try {
       if (value) {
-        localStorage.setItem(LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY, value);
+        localStorage.setItem(this.sessionIdStorageKey, value);
       } else {
-        localStorage.removeItem(LaunchStandaloneProviderComponent.SESSION_ID_STORAGE_KEY);
+        localStorage.removeItem(this.sessionIdStorageKey);
       }
     } catch {
       // Private-browsing/storage-disabled — sessionId just won't persist across the Epic round trip, falling back
@@ -387,6 +413,15 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       // cleared the session.
       window.history.replaceState(null, '', window.location.pathname);
       void this.loadHospitals();
+
+      // context_mismatch means the token exchange itself was rejected — this Epic account is permanently bound to
+      // a different patient/practitioner (see InteractiveSourceAuthorizationService.EnforceUserFhirContextBindingAsync)
+      // and no usable token was ever saved. Unlike workflow_failed, there is nothing to fetch here: proceeding would
+      // just surface a confusing, unrelated error from the missing token instead of this clear rejection reason.
+      if (launchError === 'context_mismatch') {
+        this.launchError.set(launchError);
+        return;
+      }
 
       this.hasEpicToken.set(true);
       this.launchError.set(launchError);
@@ -834,6 +869,13 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       const params: Record<string, string> = { ehrEndpointId: endpoint.id, callerId };
       if (this.sessionId) {
         params['sessionId'] = this.sessionId;
+      }
+      // HealthApp's own logged-in account email (see core/routes.ts's AUTH_EMAIL_STORAGE_KEY) — the stable identity
+      // FHIRBridge permanently binds the authorized Epic practitioner to, distinct from sessionId (an opaque
+      // per-browser cache key): this must identify the same real HealthApp account across every browser/session.
+      const userIdentity = this.userIdentity;
+      if (userIdentity) {
+        params['userIdentity'] = userIdentity;
       }
       const result = await firstValueFrom(
         this.http.get<PublicStandaloneUrlResponse>(

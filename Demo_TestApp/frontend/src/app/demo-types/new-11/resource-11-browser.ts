@@ -3,12 +3,23 @@ import { Component, OnInit, inject, input, output, signal } from '@angular/core'
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
-import { RESOURCE_11_MENU, Resource11Column, Resource11MenuItem } from './core/config/resource-11-menu.config';
-import { Resource11Service } from './core/services/resource-11.service';
+import {
+  PATIENT_DETAIL_RESOURCES,
+  PATIENT_LIST_COLUMNS,
+  PATIENT_RESOURCE,
+  PRACTITIONER_RESOURCE,
+  Resource11Column,
+  Resource11MenuItem,
+} from './core/config/resource-11-menu.config';
+import { MissingPractitioner, Resource11Service } from './core/services/resource-11.service';
 
-// Shared "New 11" data browser: a resource selector (the 11 curated _11 tables) + a table that shows every row of
-// the selected table, exactly as fetched from /api/v11/{apiSegment}. Fully driven by RESOURCE_11_MENU, so the same
-// component serves every non-Admin role's "New 11" menu — the per-role wrappers just embed it.
+type Mode = 'patients' | 'practitioners';
+
+// Shared "New 11" browser. Two top-level views over the curated _11 tables:
+//  • Patients   — a Patient List; clicking a row opens that patient's per-resource tabs (Encounter, Observation, …).
+//  • Practitioners — the global Practitioner_11 list plus an "Import Practitioners" button that pulls the ids
+//    referenced across the other tables but not yet present here, via the role's configured New 11 workflow.
+// The same component serves every non-Admin role's New 11 menu; the per-role wrappers just embed it.
 @Component({
   selector: 'app-resource-11-browser',
   standalone: true,
@@ -21,45 +32,160 @@ export class Resource11BrowserComponent implements OnInit {
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
 
-  readonly menu = RESOURCE_11_MENU;
-  readonly selected = signal<Resource11MenuItem>(RESOURCE_11_MENU[0]);
+  readonly mode = signal<Mode>('patients');
 
-  readonly rows = signal<Record<string, unknown>[]>([]);
-  readonly isLoading = signal(true);
-  readonly loadError = signal<string | null>(null);
+  // --- Patients: list -> per-patient resource tabs ---
+  readonly patientListColumns = PATIENT_LIST_COLUMNS;
+  readonly detailResources = PATIENT_DETAIL_RESOURCES;
+
+  readonly patients = signal<Record<string, unknown>[]>([]);
+  readonly patientsLoading = signal(true);
+  readonly patientsError = signal<string | null>(null);
+
+  readonly selectedPatient = signal<Record<string, unknown> | null>(null);
+  readonly detailResource = signal<Resource11MenuItem>(PATIENT_DETAIL_RESOURCES[0]);
+  readonly detailRows = signal<Record<string, unknown>[]>([]);
+  readonly detailLoading = signal(false);
+  readonly detailError = signal<string | null>(null);
+
+  // --- Practitioners: global list + import ---
+  readonly practitionerColumns = PRACTITIONER_RESOURCE.columns;
+  readonly practitioners = signal<Record<string, unknown>[]>([]);
+  readonly practitionersLoading = signal(false);
+  readonly practitionersError = signal<string | null>(null);
+  private readonly practitionersLoaded = signal(false);
+
+  readonly missingPractitioners = signal<MissingPractitioner[]>([]);
+  readonly importing = signal(false);
+  readonly importMessage = signal<string | null>(null);
+  readonly importError = signal<string | null>(null);
 
   private readonly resource11 = inject(Resource11Service);
   private readonly datePipe = inject(DatePipe);
 
   ngOnInit(): void {
-    void this.loadRows();
+    void this.loadPatients();
   }
 
-  selectResource(item: Resource11MenuItem): void {
-    if (this.selected().key === item.key) {
+  selectMode(mode: Mode): void {
+    if (this.mode() === mode) {
       return;
     }
-    this.selected.set(item);
-    void this.loadRows();
+    this.mode.set(mode);
+    if (mode === 'practitioners' && !this.practitionersLoaded()) {
+      void this.loadPractitioners();
+    }
   }
 
-  private async loadRows(): Promise<void> {
-    this.isLoading.set(true);
-    this.loadError.set(null);
-
+  // ---- Patients ----
+  private async loadPatients(): Promise<void> {
+    this.patientsLoading.set(true);
+    this.patientsError.set(null);
     try {
-      const rows = await firstValueFrom(this.resource11.getRows(this.selected()));
-      this.rows.set(rows ?? []);
+      const rows = await firstValueFrom(this.resource11.getRows(PATIENT_RESOURCE));
+      this.patients.set(rows ?? []);
     } catch {
-      this.loadError.set(`Could not load ${this.selected().label} records. Make sure the _11 tables exist and are populated.`);
-      this.rows.set([]);
+      this.patientsError.set('Could not load patients. Make sure the _11 tables exist and are populated.');
+      this.patients.set([]);
     } finally {
-      this.isLoading.set(false);
+      this.patientsLoading.set(false);
+    }
+  }
+
+  openPatient(patient: Record<string, unknown>): void {
+    this.selectedPatient.set(patient);
+    this.detailResource.set(PATIENT_DETAIL_RESOURCES[0]);
+    void this.loadDetail();
+  }
+
+  backToList(): void {
+    this.selectedPatient.set(null);
+    this.detailRows.set([]);
+  }
+
+  selectDetailResource(item: Resource11MenuItem): void {
+    if (this.detailResource().key === item.key) {
+      return;
+    }
+    this.detailResource.set(item);
+    void this.loadDetail();
+  }
+
+  patientTitle(): string {
+    const p = this.selectedPatient();
+    return p ? String(p['fullName'] ?? p['patientId'] ?? 'Patient') : '';
+  }
+
+  private async loadDetail(): Promise<void> {
+    const patient = this.selectedPatient();
+    if (!patient) {
+      return;
+    }
+    const patientId = String(patient['patientId'] ?? '');
+    this.detailLoading.set(true);
+    this.detailError.set(null);
+    try {
+      const rows = await firstValueFrom(this.resource11.getPatientResourceRows(patientId, this.detailResource()));
+      this.detailRows.set(rows ?? []);
+    } catch {
+      this.detailError.set(`Could not load ${this.detailResource().label} for this patient.`);
+      this.detailRows.set([]);
+    } finally {
+      this.detailLoading.set(false);
+    }
+  }
+
+  // ---- Practitioners ----
+  private async loadPractitioners(): Promise<void> {
+    this.practitionersLoading.set(true);
+    this.practitionersError.set(null);
+    try {
+      const rows = await firstValueFrom(this.resource11.getRows(PRACTITIONER_RESOURCE));
+      this.practitioners.set(rows ?? []);
+      this.practitionersLoaded.set(true);
+    } catch {
+      this.practitionersError.set('Could not load practitioners. Make sure the _11 tables exist and are populated.');
+      this.practitioners.set([]);
+    } finally {
+      this.practitionersLoading.set(false);
+    }
+    await this.loadMissing();
+  }
+
+  private async loadMissing(): Promise<void> {
+    try {
+      const missing = await firstValueFrom(this.resource11.getMissingPractitioners());
+      this.missingPractitioners.set(missing ?? []);
+    } catch {
+      // Best-effort — if the reference tables can't be read, just don't offer an import.
+      this.missingPractitioners.set([]);
+    }
+  }
+
+  async importMissingPractitioners(): Promise<void> {
+    if (this.importing() || this.missingPractitioners().length === 0) {
+      return;
+    }
+    this.importing.set(true);
+    this.importMessage.set(null);
+    this.importError.set(null);
+    try {
+      const result = await firstValueFrom(this.resource11.importPractitioners());
+      if (result.status === 'Succeeded') {
+        await this.loadPractitioners(); // refresh table + recompute what's still missing
+        this.importMessage.set(result.message ?? `Imported ${result.imported ?? 0} practitioner(s).`);
+      } else {
+        this.importError.set(result.errorMessage ?? 'Import failed.');
+      }
+    } catch {
+      this.importError.set('Import request failed. Please try again.');
+    } finally {
+      this.importing.set(false);
     }
   }
 
   // Turns a raw cell value into display text: '-' for missing, Yes/No for booleans, localized dates for date/
-  // datetime columns, and the value itself otherwise. Keeps every null-handling/formatting decision in one place.
+  // datetime columns, and the value itself otherwise.
   formatCell(row: Record<string, unknown>, col: Resource11Column): string {
     const value = row[col.key];
     if (value === null || value === undefined || value === '') {

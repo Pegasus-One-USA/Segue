@@ -179,6 +179,7 @@ public static class DependencyInjection
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
             services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
+            services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();

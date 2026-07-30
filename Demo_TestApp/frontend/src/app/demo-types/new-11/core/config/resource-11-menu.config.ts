@@ -244,8 +244,36 @@ export const RESOURCE_11_MENU: Resource11MenuItem[] = [
       { key: 'performedByName', label: 'Performed By' },
       { key: 'serviceRequestId', label: 'Service Request ID' },
       { key: 'diagnosticReportId', label: 'Report ID' },
-      { key: 'patientId', label: 'Patient ID' },
       { key: 'encounterId', label: 'Encounter ID' },
     ],
   },
+];
+
+// ---- Groupings used by the New 11 browser -------------------------------------------------------------------
+// New 11 is a Patient List -> per-patient tabs master-detail, plus a separate global Practitioners view.
+
+const byKey = (key: string) => RESOURCE_11_MENU.find((m) => m.key === key)!;
+
+/** The Patient resource (its list endpoint /api/v11/patients backs the top-level Patient List). */
+export const PATIENT_RESOURCE: Resource11MenuItem = byKey('patient');
+
+/** The global Practitioner resource (/api/v11/practitioners) — a standalone tab, not per-patient. */
+export const PRACTITIONER_RESOURCE: Resource11MenuItem = byKey('practitioner');
+
+/** The nine clinical resources shown as tabs once a patient is selected. Each apiSegment doubles as the
+ *  /api/v11/patient/{patientId}/{apiSegment} path segment for that patient's rows. */
+export const PATIENT_DETAIL_RESOURCES: Resource11MenuItem[] = RESOURCE_11_MENU.filter(
+  (m) => m.key !== 'patient' && m.key !== 'practitioner',
+);
+
+/** Compact column set for the clickable Patient List table (the full set is wide). */
+export const PATIENT_LIST_COLUMNS: Resource11Column[] = [
+  { key: 'patientId', label: 'Patient ID' },
+  { key: 'fullName', label: 'Name' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'birthDate', label: 'DOB', type: 'date' },
+  { key: 'medicalRecordNumber', label: 'MRN' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'city', label: 'City' },
+  { key: 'state', label: 'State' },
 ];

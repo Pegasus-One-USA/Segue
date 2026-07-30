@@ -12,6 +12,7 @@ import {
   extractPatientDetail,
   indicatesReAuthorizationNeeded,
 } from './core/services/patient-standalone-launch.service';
+import { AUTH_EMAIL_STORAGE_KEY } from '../../core/routes';
 
 @Component({
   selector: 'app-launch-standalone-patient',
@@ -43,6 +44,18 @@ export class LaunchStandalonePatientComponent implements OnInit {
     return `${window.location.origin}${window.location.pathname}`;
   }
 
+  // HealthApp's own logged-in account email (see app.ts's AUTH_EMAIL_STORAGE_KEY) — the stable identity FHIRBridge
+  // permanently binds the authorized MyChart patient to (see mintLaunchUrl's userIdentity param). Distinct from
+  // sessionId above (an opaque per-browser cache key): this must identify the same real HealthApp account across
+  // every browser/session, not just one.
+  private get userIdentity(): string | null {
+    try {
+      return sessionStorage.getItem(AUTH_EMAIL_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
   // FHIRBridge-minted opaque identifier that its Patient Standalone token cache actually keys on instead of
   // SourceConnectionId (see SmartAuthorizationCodeTokenProvider.BuildStoreKey) — unlike pageCallerId above, this is
   // unique per real signed-in patient session, not shared by every visitor to this page. Persisted in localStorage
@@ -53,9 +66,22 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // of each workflow's check missing it and falling back to a per-SourceConnection key that was never written to.
   private static readonly SESSION_ID_STORAGE_KEY = 'patientStandaloneSessionId';
 
+  // Scopes the persisted sessionId to the currently logged-in HealthApp account (userIdentity above). Without
+  // this, a plain browser-wide key meant two different HealthApp accounts sharing one browser (e.g. patient@
+  // logging out, patient2@ logging in) would read back the SAME localStorage sessionId — it was never cleared on
+  // logout — so the second account's "Connect Get Data" would silently reuse the first account's already-cached
+  // MyChart token instead of prompting its own fresh sign-in. Falls back to the bare key only when no account
+  // email is available (matches the old, pre-scoped behavior for that edge case alone).
+  private get sessionIdStorageKey(): string {
+    const identity = this.userIdentity;
+    return identity
+      ? `${LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY}:${identity}`
+      : LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY;
+  }
+
   private get sessionId(): string | null {
     try {
-      return localStorage.getItem(LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY);
+      return localStorage.getItem(this.sessionIdStorageKey);
     } catch {
       return null;
     }
@@ -64,9 +90,9 @@ export class LaunchStandalonePatientComponent implements OnInit {
   private set sessionId(value: string | null) {
     try {
       if (value) {
-        localStorage.setItem(LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY, value);
+        localStorage.setItem(this.sessionIdStorageKey, value);
       } else {
-        localStorage.removeItem(LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY);
+        localStorage.removeItem(this.sessionIdStorageKey);
       }
     } catch {
       // Private-browsing/storage-disabled — sessionId just won't persist across the MyChart round trip, falling
@@ -223,6 +249,15 @@ export class LaunchStandalonePatientComponent implements OnInit {
     // every time, re-triggering an auto-fetch even after Reset Token deliberately cleared the session.
     window.history.replaceState(null, '', window.location.pathname);
     void this.loadHospitals();
+
+    // context_mismatch means the token exchange itself was rejected — this MyChart account is permanently bound to
+    // a different patient/practitioner (see InteractiveSourceAuthorizationService.EnforceUserFhirContextBindingAsync)
+    // and no usable token was ever saved. Unlike a workflow-only failure, there is nothing to fetch here: proceeding
+    // would just surface a confusing, unrelated error from the missing token instead of this clear rejection reason.
+    if (launchError === 'context_mismatch') {
+      this.launchError.set(launchError);
+      return;
+    }
 
     this.hasMyChartToken.set(true);
     this.launchError.set(launchError);
@@ -670,7 +705,7 @@ debugger;
       // first-ever visit. Persist whatever comes back in the response either way, since FHIRBridge mints one when
       // none was supplied.
       const result = await this.launchService.mintLaunchUrl(
-        workflowId, endpoint.id, this.pageCallerId, this.sessionId ?? undefined,
+        workflowId, endpoint.id, this.pageCallerId, this.sessionId ?? undefined, this.userIdentity ?? undefined,
       );
       this.sessionId = result.sessionId;
       window.location.href = result.launchUrl;

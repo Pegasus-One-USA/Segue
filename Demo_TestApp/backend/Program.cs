@@ -74,19 +74,31 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<HealthAppDbContext>();
     db.Database.EnsureCreated();
 
-    // EnsureCreated won't add the New 11 per-role workflow-settings table to an already-existing HealthAppDb, so
-    // ensure it exists and is seeded with the four non-Admin roles here. Idempotent — safe to run every startup,
-    // and a no-op on a brand-new database where EnsureCreated already built the table.
+    // EnsureCreated won't add the New 11 workflow-settings table to an already-existing HealthAppDb, so ensure it
+    // exists (single row, List + Details URL per role, business-named columns) and has its seed row here.
+    // Idempotent — safe every startup, a no-op on a brand-new DB where EnsureCreated already built the table. Also
+    // drops the previous per-role shape ('Resource11WorkflowSetting', singular) if it lingers from an earlier build.
     db.Database.ExecuteSqlRaw(@"
-IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Resource11WorkflowSetting')
-    CREATE TABLE [Resource11WorkflowSetting] (
-        [Role] NVARCHAR(40) NOT NULL CONSTRAINT [PK_Resource11WorkflowSetting] PRIMARY KEY,
-        [WorkflowUrl] NVARCHAR(1000) NOT NULL CONSTRAINT [DF_Resource11WorkflowSetting_Url] DEFAULT('')
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Resource11WorkflowSetting')
+    DROP TABLE [Resource11WorkflowSetting];
+
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Resource11WorkflowSettings')
+    CREATE TABLE [Resource11WorkflowSettings] (
+        [Id] INT NOT NULL CONSTRAINT [PK_Resource11WorkflowSettings] PRIMARY KEY,
+        [Patient_List_11]            NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PatL]  DEFAULT(''),
+        [Patient_Details_11]         NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PatD]  DEFAULT(''),
+        [Provider_List_11]           NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PrvL]  DEFAULT(''),
+        [Provider_Details_11]        NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PrvD]  DEFAULT(''),
+        [ProviderInApp_List_11]      NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PiaL]  DEFAULT(''),
+        [ProviderInApp_Details_11]   NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PiaD]  DEFAULT(''),
+        [BackendSystem_List_11]      NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_BsL]   DEFAULT(''),
+        [BackendSystem_Details_11]   NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_BsD]   DEFAULT('')
     );
-MERGE [Resource11WorkflowSetting] AS target
-USING (VALUES ('Patient'), ('ProviderStandalone'), ('ProviderInApp'), ('BackendSystem')) AS source([Role])
-ON target.[Role] = source.[Role]
-WHEN NOT MATCHED THEN INSERT ([Role], [WorkflowUrl]) VALUES (source.[Role], '');
+
+IF NOT EXISTS (SELECT 1 FROM [Resource11WorkflowSettings] WHERE [Id] = 1)
+    INSERT INTO [Resource11WorkflowSettings]
+        ([Id],[Patient_List_11],[Patient_Details_11],[Provider_List_11],[Provider_Details_11],[ProviderInApp_List_11],[ProviderInApp_Details_11],[BackendSystem_List_11],[BackendSystem_Details_11])
+    VALUES (1,'','','','','','','','');
 ");
 }
 
@@ -314,7 +326,12 @@ app.MapGet("/api/provider-in-app-launch-context", async (
     }
 
     var client = httpClientFactory.CreateClient("Workflow");
-    var mintUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/public-launch-context";
+    // ProviderInApp has no session at mint time (see this endpoint's own anonymous-by-design remarks above), so the
+    // logged-in HealthApp account can't be read from a cookie here the way Patient/Provider Standalone do. Exactly
+    // one seeded HealthApp account (providerInApp@healthapp.local) ever drives this flow, so a fixed identity is
+    // sent instead — FHIRBridge permanently binds it to whichever patient Epic's embedded launch establishes first.
+    const string providerInAppUserIdentity = "providerinapp@healthapp.local";
+    var mintUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/public-launch-context?userIdentity={Uri.EscapeDataString(providerInAppUserIdentity)}";
 
     try
     {

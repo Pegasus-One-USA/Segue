@@ -12,7 +12,7 @@ import { ProviderStandaloneNew11Component } from './demo-types/new-11/provider-s
 import { ProviderInAppNew11Component } from './demo-types/new-11/provider-in-app-new11';
 import { BackendSystemNew11Component } from './demo-types/new-11/backend-system-new11';
 import { environment } from '../environments/environment';
-import { PATIENT_STANDALONE_PATH } from './core/routes';
+import { AUTH_EMAIL_STORAGE_KEY, PATIENT_STANDALONE_PATH } from './core/routes';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
 
@@ -153,6 +153,7 @@ export class App implements OnInit {
       this.role.set(response.role);
       this.loggedIn.set(true);
       sessionStorage.setItem(AUTH_ROLE_STORAGE_KEY, response.role);
+      sessionStorage.setItem(AUTH_EMAIL_STORAGE_KEY, response.email);
     } catch {
       // No valid session cookie — stay on the login screen.
     }
@@ -173,6 +174,7 @@ export class App implements OnInit {
       this.role.set(response.role);
       this.loggedIn.set(true);
       sessionStorage.setItem(AUTH_ROLE_STORAGE_KEY, response.role);
+      sessionStorage.setItem(AUTH_EMAIL_STORAGE_KEY, response.email);
 
       // Send every role to its own default route on sign-in, regardless of which path the login form was served
       // from (after logout that's always '/', but a direct deep link or an Epic launch URL can differ).
@@ -197,6 +199,7 @@ export class App implements OnInit {
       // still needs to be logged out of this app locally rather than stuck on a dead "logged in" screen.
     }
     sessionStorage.removeItem(AUTH_ROLE_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_EMAIL_STORAGE_KEY);
     this.loggedIn.set(false);
     this.role.set(null);
     this.loginEmail.set('');

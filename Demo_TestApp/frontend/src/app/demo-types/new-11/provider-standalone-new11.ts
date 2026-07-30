@@ -1,6 +1,7 @@
 import { Component, input, output, signal } from '@angular/core';
 import { LaunchStandaloneProviderComponent } from '../provider-standalone/launch-standalone-provider';
 import { Resource11BrowserComponent } from './resource-11-browser';
+import { isNew11Enabled } from './new11-flag';
 
 // ProviderStandalone role shell: "Default | New 11" menu. Default keeps the existing standalone-provider launch
 // screen untouched; New 11 shows the curated _11 tables.
@@ -14,4 +15,6 @@ export class ProviderStandaloneNew11Component {
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
   readonly view = signal<'default' | 'new11'>('default');
+  // See PatientNew11Component's new11Enabled remarks — same read-once-at-construction pattern.
+  readonly new11Enabled = isNew11Enabled();
 }
