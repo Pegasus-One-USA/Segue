@@ -14,10 +14,14 @@
         <span class="eaf-connected-badge">✓ Endpoints resolved</span>
       }
     </div>
-    <!-- "Back to library" only makes sense inside Pipeline Builder's Node Library — the Source Connections page
-         has no library to go back to; its own footer Cancel/Close button already covers dismissing the form. -->
+    <!-- "Back to library"/close only make sense inside Pipeline Builder's Node Library — the Source
+         Connections page has no library to go back to; its own footer Cancel/Close button already
+         covers dismissing the form. -->
     @if (wiz.wizardMode() !== 'entity') {
-      <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+      <div class="eaf-topbar-actions">
+        <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+        <button class="eaf-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+      </div>
     }
   </div>
 
