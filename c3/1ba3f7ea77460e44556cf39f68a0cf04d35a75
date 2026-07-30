@@ -1,0 +1,52 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_925bbd0f4dc509::t_a2e11aafb7f3b8 519-520
+  s_925bbd0f4dc509::t_dff9c76d080f7c 340-343
+  s_925bbd0f4dc509::t_10858416c58acf 259,264-293
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_925bbd0f4dc509::t_bd8b073b758215 1051-1052
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_925bbd0f4dc509::t_694bc5d82b6376 36-37
+src/Api/FHIRBridge.Api/Program.cs
+  s_925bbd0f4dc509::t_5ee924c12a1602 715-725
+src/Runtime/FHIRBridge.Runtime.Domain/Exceptions/WorkflowRunCancelledException.cs
+  s_925bbd0f4dc509::t_67afe99c2c730d 1-22
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_925bbd0f4dc509::t_e3970d564cbfcb 79-96
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_925bbd0f4dc509::t_b4b115e736da7f 144-149
+  s_925bbd0f4dc509::t_26e1b8ea26ecbc 173-189,209-213,215-218,233-263
+  s_925bbd0f4dc509::t_0a2ffb2b69459c 85,214,219
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_925bbd0f4dc509::t_b5896dfed14dd4 435,440-441,446,456
+  s_925bbd0f4dc509::t_8b8d23a2092088 300-360
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorAuthorizationTests.cs
+  s_925bbd0f4dc509::t_eabf9e5d10bb94 1-136
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRunStatus.cs
+  s_925bbd0f4dc509::t_451283f6c9ec21 9-13
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_925bbd0f4dc509::t_17aad5758039ed 128-133
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_925bbd0f4dc509::t_bb08876d1357d1 225,231
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Audit/WorkflowAuditEventType.cs
+  s_925bbd0f4dc509::t_bf7794f296dd31 10-12
+src/Runtime/FHIRBridge.Runtime.Domain/Exceptions/ResourceAuthorizationException.cs
+  s_925bbd0f4dc509::t_5269f80478b9c5 1-23
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowNodeRun.cs
+  s_925bbd0f4dc509::t_608aba27790182 59-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "c31ba3f7ea77460e44556cf39f68a0cf04d35a75",
+  "prompts": {},
+  "sessions": {
+    "s_925bbd0f4dc509": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ec0f854-eaa8-4a08-80bb-3fcd4dc2c91d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
