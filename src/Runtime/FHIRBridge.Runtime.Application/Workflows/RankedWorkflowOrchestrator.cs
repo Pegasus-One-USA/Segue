@@ -82,6 +82,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             correlationId: context.CorrelationId);
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
+        var skippedResourceTypesAcrossRun = new List<string>();
 
         // Persist a "Running" row up front (rather than only ever writing this run once it reaches a terminal
         // state) so a run genuinely appears as Running in the Dashboard/Workflow List — and to any client — for
@@ -140,6 +141,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                     outputsByNodeId[node.Id] = output;
                     nodeRun.Succeed(CreateLineageJson(node, incomingOutputs, output), DateTimeOffset.UtcNow);
 
+                    if (output.Metadata.TryGetValue("skippedResourceTypes", out var skippedValue)
+                        && skippedValue is string[] { Length: > 0 } skippedReasons)
+                    {
+                        skippedResourceTypesAcrossRun.AddRange(skippedReasons);
+                    }
+
                     if (_resourceHistoryRecorder is not null && output.Contract != WorkflowDataContract.None)
                     {
                         await _resourceHistoryRecorder.RecordNodeOutputAsync(
@@ -163,6 +170,23 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                         output.Contract,
                         DateTimeOffset.UtcNow), cancellationToken);
                 }
+                catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
+                {
+                    nodeRun.Cancel(cancelException.Message, DateTimeOffset.UtcNow);
+                    await _auditRecorder.RecordAsync(new(
+                        WorkflowAuditEventType.NodeExecutionCancelled,
+                        workflowDefinition.Id,
+                        workflowRun.Id,
+                        node.Id,
+                        node.NodeType,
+                        null,
+                        null,
+                        inputContract,
+                        WorkflowDataContract.None,
+                        DateTimeOffset.UtcNow,
+                        cancelException.Message), cancellationToken);
+                    throw;
+                }
                 catch (Exception exception)
                 {
                     nodeRun.Fail(exception.Message, DateTimeOffset.UtcNow);
@@ -182,7 +206,17 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 }
             }
 
-            workflowRun.Succeed(DateTimeOffset.UtcNow);
+            if (skippedResourceTypesAcrossRun.Count > 0)
+            {
+                var summary = "Partial success — some resource types were skipped because this app is not " +
+                    $"authorized for them: {string.Join(" | ", skippedResourceTypesAcrossRun)}";
+                workflowRun.PartialSucceed(summary, DateTimeOffset.UtcNow);
+            }
+            else
+            {
+                workflowRun.Succeed(DateTimeOffset.UtcNow);
+            }
+
             await _auditRecorder.RecordAsync(new(
                 WorkflowAuditEventType.WorkflowRunCompleted,
                 workflowDefinition.Id,
@@ -196,7 +230,37 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 DateTimeOffset.UtcNow), cancellationToken);
 
             await PersistRunAsync(workflowRun, cancellationToken);
-            await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Succeeded", DateTimeOffset.UtcNow, null, cancellationToken);
+            await NotifyRunStatusAsync(
+                workflowRun.Id, workflowDefinition.Id, workflowRun.Status.ToString(), DateTimeOffset.UtcNow, workflowRun.ErrorMessage, cancellationToken);
+        }
+        catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
+        {
+            workflowRun.Cancel(cancelException.Message, DateTimeOffset.UtcNow);
+            await _auditRecorder.RecordAsync(new(
+                WorkflowAuditEventType.WorkflowRunCancelled,
+                workflowDefinition.Id,
+                workflowRun.Id,
+                null,
+                null,
+                null,
+                null,
+                WorkflowDataContract.None,
+                WorkflowDataContract.None,
+                DateTimeOffset.UtcNow,
+                cancelException.Message), cancellationToken);
+
+            try
+            {
+                await PersistRunAsync(workflowRun, CancellationToken.None);
+            }
+            catch
+            {
+                // Swallowed by design — see the matching remark in the generic failure branch below.
+            }
+
+            await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, cancelException.Message, CancellationToken.None);
+
+            throw;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

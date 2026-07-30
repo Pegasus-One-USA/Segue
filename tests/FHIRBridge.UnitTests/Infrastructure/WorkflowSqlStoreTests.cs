@@ -222,12 +222,13 @@ public sealed class WorkflowSqlStoreTests
         {
             var counts = await new SqlWorkflowRunStore(assertContext).GetStatusCountsAsync(CancellationToken.None);
 
-            counts.Should().HaveCount(5);
+            counts.Should().HaveCount(6);
             counts[WorkflowRunStatus.Succeeded].Should().Be(2);
             counts[WorkflowRunStatus.Failed].Should().Be(1);
             counts[WorkflowRunStatus.Running].Should().Be(1);
             counts[WorkflowRunStatus.Pending].Should().Be(0);
             counts[WorkflowRunStatus.Cancelled].Should().Be(0);
+            counts[WorkflowRunStatus.PartialSuccess].Should().Be(0);
         }
     }
 }

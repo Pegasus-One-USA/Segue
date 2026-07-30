@@ -76,4 +76,22 @@ public sealed class WorkflowRun
         CompletedAt = completedAt;
         Status = WorkflowRunStatus.Failed;
     }
+
+    /// <summary>Every node ran, but one or more non-parent resource types were skipped for lack of authorization —
+    /// distinct from <see cref="Fail"/> since the rest of the run's output is still valid and was written.</summary>
+    public void PartialSucceed(string summaryMessage, DateTimeOffset completedAt)
+    {
+        ErrorMessage = summaryMessage;
+        CompletedAt = completedAt;
+        Status = WorkflowRunStatus.PartialSuccess;
+    }
+
+    /// <summary>The run never reached extraction of anything downstream: a parent/cohort-seeding resource type
+    /// (e.g. Patient) wasn't authorized, so the whole run was aborted up front rather than left to fail node-by-node.</summary>
+    public void Cancel(string reason, DateTimeOffset completedAt)
+    {
+        ErrorMessage = reason;
+        CompletedAt = completedAt;
+        Status = WorkflowRunStatus.Cancelled;
+    }
 }

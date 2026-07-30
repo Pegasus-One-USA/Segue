@@ -297,6 +297,67 @@ public sealed class RankedWorkflowOrchestratorTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    [Fact]
+    public async Task ExecuteAsync_cancels_the_run_when_a_node_reports_the_parent_resource_type_is_unauthorized()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("cancelled-parent");
+        var runStore = new InMemoryWorkflowRunStore();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ =>
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException(
+                        "Patient", "403 Forbidden", new InvalidOperationException("403 Forbidden"))),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload)
+            }),
+            auditRecorder: null,
+            runStore: runStore);
+        var context = CreateContext();
+
+        var act = async () => await orchestrator.ExecuteAsync(workflow, context);
+
+        await act.Should().ThrowAsync<FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException>();
+        var persisted = await runStore.GetAsync(context.WorkflowRunId, CancellationToken.None);
+        persisted.Should().NotBeNull();
+        persisted!.Status.Should().Be(WorkflowRunStatus.Cancelled);
+        persisted.ErrorMessage.Should().Contain("Patient");
+        persisted.CorrelationId.Should().Be(context.CorrelationId);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_marks_the_run_PartialSuccess_when_a_node_reports_skipped_child_resource_types()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("partial-success");
+        var runStore = new InMemoryWorkflowRunStore();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle",
+                    metadata: new Dictionary<string, object?>
+                    {
+                        ["skippedResourceTypes"] = new[] { "Observation: not authorized for this app (403) — Forbidden" }
+                    }),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload)
+            }),
+            auditRecorder: null,
+            runStore: runStore);
+        var context = CreateContext();
+
+        var result = await orchestrator.ExecuteAsync(workflow, context);
+
+        result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.PartialSuccess);
+        result.WorkflowRun.ErrorMessage.Should().Contain("Observation");
+        var persisted = await runStore.GetAsync(context.WorkflowRunId, CancellationToken.None);
+        persisted!.Status.Should().Be(WorkflowRunStatus.PartialSuccess);
+        persisted.CorrelationId.Should().Be(context.CorrelationId);
+    }
+
     private static WorkflowDefinition BuildValidSourceToSqlWorkflow(string name)
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), name, 1);
@@ -371,15 +432,18 @@ public sealed class RankedWorkflowOrchestratorTests
     {
         private readonly Func<IReadOnlyCollection<WorkflowNodeOutput>, object?> _execute;
         private readonly WorkflowDataContract _contract;
+        private readonly IReadOnlyDictionary<string, object?>? _metadata;
 
         public PayloadExecutor(
             string nodeType,
             WorkflowDataContract contract,
-            Func<IReadOnlyCollection<WorkflowNodeOutput>, object?> execute)
+            Func<IReadOnlyCollection<WorkflowNodeOutput>, object?> execute,
+            IReadOnlyDictionary<string, object?>? metadata = null)
         {
             NodeType = nodeType;
             _contract = contract;
             _execute = execute;
+            _metadata = metadata;
         }
 
         public string NodeType { get; }
@@ -389,6 +453,6 @@ public sealed class RankedWorkflowOrchestratorTests
             WorkflowNode node,
             IReadOnlyCollection<WorkflowNodeOutput> inputs,
             CancellationToken cancellationToken)
-            => Task.FromResult(new WorkflowNodeOutput(node.Id, node.NodeType, _execute(inputs), _contract));
+            => Task.FromResult(new WorkflowNodeOutput(node.Id, node.NodeType, _execute(inputs), _contract, _metadata));
     }
 }

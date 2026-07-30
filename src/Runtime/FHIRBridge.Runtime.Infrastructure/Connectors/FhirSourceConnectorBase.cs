@@ -125,6 +125,12 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             if (!response.IsSuccessStatusCode)
             {
                 var message = await BuildFailureMessageAsync(nextUrl, response, cancellationToken);
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException(
+                        resourceType, (int)response.StatusCode, message);
+                }
+
                 throw new InvalidOperationException(message);
             }
 

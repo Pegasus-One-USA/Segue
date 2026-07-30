@@ -712,6 +712,17 @@ static (int status, string message, bool trusted, IReadOnlyDictionary<string, st
     if (ex is FHIRBridgeException fbe)
         return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null);
 
+    // A parent/cohort-seeding resource type (e.g. Patient) wasn't authorized for this app, so the whole workflow
+    // run was cancelled up front — a short, author-written (trusted) message naming the resource type, rather
+    // than the full inner FHIR error text, so it survives ClientSafeMessage's length/shape filter intact.
+    if (ex is FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException workflowCancelled)
+        return (
+            StatusCodes.Status422UnprocessableEntity,
+            $"Workflow cancelled: this app is not authorized for '{workflowCancelled.ResourceType}', which is " +
+            "required as the parent/cohort scope for this workflow. Check the correlation id for full details.",
+            true,
+            null);
+
     if (ex is not InvalidOperationException and not UnauthorizedAccessException and not ArgumentException)
         return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", true, null);
 
