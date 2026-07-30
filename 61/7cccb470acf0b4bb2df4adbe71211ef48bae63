@@ -1,0 +1,222 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_160813b88bae05::t_6e6dce1399ba73 25-27
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-standalone-new11.html
+  s_2c3477acb7de61::t_5de2b81601bd6f 2-7,9,11-12
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.scss
+  s_e10c7f2a78abc5::t_1dfee1d98b2381 162-163,165-235
+  s_e10c7f2a78abc5::t_04b0a69c684549 113-146,157-161
+  s_e10c7f2a78abc5::t_69df1e45103add 164
+Demo_TestApp/frontend/src/app/app.ts
+  s_160813b88bae05::t_f757fa88442416 177
+  s_160813b88bae05::t_106f7ce999a04f 202
+  s_160813b88bae05::t_5aa91c683ad951 156
+  s_160813b88bae05::t_4e23431ce2c49a 15
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.html
+  s_2c3477acb7de61::t_ab9860272ee590 38-42
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_2c3477acb7de61::t_ff9a7357e8090b 23-26
+Demo_TestApp/frontend/src/app/demo-types/new-11/backend-system-new11.ts
+  s_2c3477acb7de61::t_6fbdf6d8f210d4 4,18-19
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_160813b88bae05::t_d1a45b93cfe986 708
+  s_2c3477acb7de61::t_6af268a5b7d7c1 69-81,84,93,95
+  s_160813b88bae05::t_f1ae42e270df57 15
+  s_160813b88bae05::t_b291419029df5e 47-58
+  s_2c3477acb7de61::t_5245af7584add1 253-261
+src/FHIRBridge.Infrastructure/Security/DataProtectionLaunchTokenProtector.cs
+  s_160813b88bae05::t_cc95df3819d347 37-38,41-46,48-51,55,57-60
+  s_160813b88bae05::t_4c852c9ac8ab9f 71-73
+  s_160813b88bae05::t_5b2127c32809b7 121-136
+  s_160813b88bae05::t_76cff0bf1a0005 189-190,195,203-204,208-209
+src/FHIRBridge.Application/Abstractions/Persistence/IUserFhirContextBindingRepository.cs
+  s_160813b88bae05::t_932b9db141f57e 1-12
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-standalone-new11.ts
+  s_2c3477acb7de61::t_d36fd195ce497a 4,18-19
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_160813b88bae05::t_3d6836c90ac525 227-232,234
+  s_160813b88bae05::t_1fa4bb56709d28 390,392-394,400-401,409-418
+  s_160813b88bae05::t_70965fff3c33c5 74
+  s_2c3477acb7de61::t_81e37a33c68782 395-399,402-408
+  s_160813b88bae05::t_3991106161a693 181
+  s_160813b88bae05::t_4567d4b30b11d8 98-99
+Demo_TestApp/backend/Resource11Entities.cs
+  s_e10c7f2a78abc5::t_fd28337d49b187 222-228,230-239
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_160813b88bae05::t_d56d9755313f19 352-362
+  s_160813b88bae05::t_5c3b06304aadba 873-879
+  s_2c3477acb7de61::t_ab42e19f87af32 338-351
+  s_2c3477acb7de61::t_28d4d9976f7580 365,374,376
+  s_2c3477acb7de61::t_c0b99239ac8521 417-425
+  s_160813b88bae05::t_0f69ddbef692c7 9
+src/FHIRBridge.Application/Abstractions/Security/ILaunchTokenProtector.cs
+  s_160813b88bae05::t_f0a466fed7e7a0 49-54
+  s_160813b88bae05::t_4537a98f016350 12-15,19-22
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_160813b88bae05::t_0108a8172bd36b 40
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_160813b88bae05::t_abb0818e4c681b 107-110,118-119
+  s_160813b88bae05::t_65a6fb3428e61a 64-67,76-80
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategy.cs
+  s_160813b88bae05::t_71c7b292e9e417 22-25
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_160813b88bae05::t_72a3ee4cec9110 182
+Demo_TestApp/frontend/src/app/demo-types/new-11/backend-system-new11.html
+  s_2c3477acb7de61::t_fe96307f1a709e 2-7,9,11-12
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_160813b88bae05::t_f50bf094dc49e5 25-27
+Demo_TestApp/backend/migrations/2026-07-30_resource11-workflow-settings-reshape.sql
+  s_2c3477acb7de61::t_887d27cb0a9f3e 1-34
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260730090858_AddUserFhirContextBindings.Designer.cs
+  s_160813b88bae05::t_384872696f8dec 1-3467
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/BackendServicesApplicationStrategy.cs
+  s_160813b88bae05::t_7671c4b01c2e2a 25-27
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/SmartAuthorizationCodeExchangeResult.cs
+  s_160813b88bae05::t_869f2b4fe45335 9-12,18-20
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.html
+  s_e10c7f2a78abc5::t_5d5cec01e8751a 17,20-22,25-37,39,41-63,65-90,93-112,114-119,122-125,127-128,130-145
+  s_e10c7f2a78abc5::t_3310e9b08d7d10 38,40,64,91,113
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.scss
+  s_e10c7f2a78abc5::t_9920245bde03f6 32-59
+  s_2c3477acb7de61::t_fa031945f8ab73 95-105
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_160813b88bae05::t_ef832a54f4e43a 67-68
+  s_160813b88bae05::t_6c6d985f36cd87 304-305
+  s_160813b88bae05::t_93e655f75f02d9 454-455
+  s_160813b88bae05::t_d4932ae6f990d2 253
+  s_160813b88bae05::t_800bb62da232e2 613-671
+  s_160813b88bae05::t_4f1dc9ee9b3c83 13
+  s_160813b88bae05::t_813ccb48c50cf1 85-86
+  s_160813b88bae05::t_0b8e6b0e17eabc 95-96,98-99
+  s_160813b88bae05::t_d95735c13bff8d 283,290
+  s_160813b88bae05::t_11175ad8cae55f 340
+  s_160813b88bae05::t_a209067506f737 169,177
+  s_160813b88bae05::t_eaec8c4b2c9237 399,415-416
+  s_2c3477acb7de61::t_a78c78faa99d7a 541-550
+  s_2c3477acb7de61::t_b1a1be20879046 557-559,561-563
+  s_160813b88bae05::t_7ee1a0cf79627a 45-46
+  s_160813b88bae05::t_e20c944ff4090a 539-540,551-556,560,564-565
+  s_160813b88bae05::t_673af6ed454c6d 360-361
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserFhirContextBindingConfiguration.cs
+  s_160813b88bae05::t_932b9db141f57e 1-21
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/SourceApplicationDescriptor.cs
+  s_160813b88bae05::t_c1eabd7ba94cfc 21-32
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_e10c7f2a78abc5::t_7c505caf1efe5d 195-197
+  s_e10c7f2a78abc5::t_788b905460eb15 319,321-331
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IOAuthAuthorizationStateStore.cs
+  s_160813b88bae05::t_0afb7ea307c0ca 50-55
+Demo_TestApp/backend/Properties/launchSettings.json
+  s_160813b88bae05::t_6c60392f3fd4cf 14
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-in-app-new11.html
+  s_2c3477acb7de61::t_03c9736d855bed 2-7,9,11-12
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-in-app-new11.ts
+  s_2c3477acb7de61::t_3e1309d7603fb4 4,19-20
+src/FHIRBridge.Infrastructure/Persistence/EfUserFhirContextBindingRepository.cs
+  s_160813b88bae05::t_932b9db141f57e 1-25
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_160813b88bae05::t_5801eeacc6a8a3 314-317,319,328-330
+src/Api/FHIRBridge.Api/Controllers/V1/PatientStandaloneLaunchController.cs
+  s_160813b88bae05::t_8fb340798a8dfb 92-98
+  s_160813b88bae05::t_f08b7171d57b5e 53
+Demo_TestApp/frontend/src/app/demo-types/new-11/patient-new11.html
+  s_2c3477acb7de61::t_d0fbaf5f4da22d 2-7,9,11-12
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_160813b88bae05::t_384872696f8dec 2294-2328
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_2c3477acb7de61::t_972e52c9024f2e 38-48
+  s_160813b88bae05::t_9dd18daecddeb4 37,113-123,126-138,140-141,153-169
+  s_e10c7f2a78abc5::t_50a48d2a53ccda 124-125,139,142-152
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_160813b88bae05::t_c9ece023379a40 26-28
+Demo_TestApp/backend/Resource11Endpoints.cs
+  s_e10c7f2a78abc5::t_bbd6e36d1fe7ee 364
+  s_e10c7f2a78abc5::t_213ff03c2cf240 79-105,144
+  s_e10c7f2a78abc5::t_86b44412f22c8d 15-16
+  s_e10c7f2a78abc5::t_eb771857a18438 136-140,143
+  s_e10c7f2a78abc5::t_25b277386b3eee 246-247,250,261,268,272,276-312
+  s_e10c7f2a78abc5::t_40ed34f7a72e7c 141-142,145-147,152-155,157
+  s_e10c7f2a78abc5::t_26631b83731f1c 313
+tests/FHIRBridge.UnitTests/Sources/InteractiveSourceAuthorizationServiceTests.cs
+  s_160813b88bae05::t_3fb97da6a2e8ec 12
+  s_160813b88bae05::t_85e4311bcd4328 34-35
+  s_160813b88bae05::t_42da1285230f45 53-54
+Demo_TestApp/frontend/src/app/core/routes.ts
+  s_160813b88bae05::t_3da640bfdcffdf 7-12
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_160813b88bae05::t_acc6ef0788d263 17-18
+src/FHIRBridge.Domain/Entities/UserFhirContextBinding.cs
+  s_160813b88bae05::t_932b9db141f57e 1-47
+tests/FHIRBridge.UnitTests/Security/DataProtectionLaunchTokenProtectorTests.cs
+  s_160813b88bae05::t_88bb204413c4b0 75-118
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.html
+  s_2c3477acb7de61::t_9e4e7451ba0121 34-39
+Demo_TestApp/frontend/src/app/demo-types/new-11/core/services/resource-11.service.ts
+  s_e10c7f2a78abc5::t_c90738fb324938 9-22,36,45-60
+  s_e10c7f2a78abc5::t_9e32be5d725d4f 37-44
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_e10c7f2a78abc5::t_8b34cbd1a51e18 117-118,122-129,136,138,151-156,160,162
+  s_2c3477acb7de61::t_af5c38470e1213 69-73
+  s_2c3477acb7de61::t_12ea8f256912dd 6
+  s_e10c7f2a78abc5::t_3278007389aae7 25-27,29-30,33
+  s_e10c7f2a78abc5::t_317b0736b7b36b 81-86
+  s_2c3477acb7de61::t_72e6393c94ec21 100-104
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts
+  s_2c3477acb7de61::t_1bc73fd09c639e 137-150,157
+Demo_TestApp/backend/Program.cs
+  s_160813b88bae05::t_70502a8d767537 329-334
+  s_e10c7f2a78abc5::t_9bf763d18655f0 77-80,82-95,97-101
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_160813b88bae05::t_5b13f7d695eaef 362-364
+  s_160813b88bae05::t_9517787cda6533 397-402,426,437-454
+  s_160813b88bae05::t_ae032446769d74 315,318-319
+  s_2c3477acb7de61::t_0ec03fd7aef49c 512-522,531
+Demo_TestApp/frontend/src/app/demo-types/new-11/core/config/resource-11-menu.config.ts
+  s_e10c7f2a78abc5::t_46865749681e60 251-278
+  s_e10c7f2a78abc5::t_484e8a8814895d 279
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/core/services/patient.service.ts
+  s_2c3477acb7de61::t_a2a50fe1fb42b0 75-79,81
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.html
+  s_2c3477acb7de61::t_d75b869a490c0c 25-30
+Demo_TestApp/frontend/src/app/demo-types/new-11/new11-flag.ts
+  s_2c3477acb7de61::t_56e9ea34b68d86 1-19
+Demo_TestApp/frontend/src/app/demo-types/new-11/patient-new11.ts
+  s_2c3477acb7de61::t_c058a49432235a 4,19-22
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260730090858_AddUserFhirContextBindings.cs
+  s_160813b88bae05::t_384872696f8dec 1-44
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.ts
+  s_e10c7f2a78abc5::t_d4c4a9f31794ed 58-61,92-94,135,151,153-154,156-163,165,167-171,173-174,176-179,181,183
+  s_e10c7f2a78abc5::t_2841f870475d33 14
+  s_e10c7f2a78abc5::t_40cb7e7ada7711 6-13,16-22,35-43,45-57,67-91,95-111,114-121,124-134,138-150,152,155,166,175,188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "617cccb470acf0b4bb2df4adbe71211ef48bae63",
+  "prompts": {},
+  "sessions": {
+    "s_160813b88bae05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09e110f9-6110-486c-9be3-ffe12427b023",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_2c3477acb7de61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "082b46ed-5d5f-4be0-8b9a-90821bcd5557",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_e10c7f2a78abc5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ae2f68f-c5a5-457d-b9d2-b1b5cb814f75",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
