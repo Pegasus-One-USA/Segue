@@ -311,9 +311,12 @@ export class PatientStandaloneLaunchService {
   // callerId here is the OAuth redirect-back URL (unrelated to the token cache) — see redirectToMyChart's own
   // remarks. sessionId is the separate, opaque identifier that becomes the actual token-cache key: pass whatever
   // this browser already has persisted (a returning session) so FHIRBridge reuses it instead of minting a new one;
-  // omit it on a first-ever visit and persist whatever comes back in the response.
+  // omit it on a first-ever visit and persist whatever comes back in the response. userIdentity is HealthApp's own
+  // logged-in account email (e.g. patient@healthapp.local) — distinct from sessionId (an opaque per-browser cache
+  // key): FHIRBridge permanently binds this identity to the one MyChart patient its first authorization returns,
+  // rejecting a later authorization under the same identity that returns a different patient.
   async mintLaunchUrl(
-    workflowId: string, ehrEndpointId: string, callerId?: string, sessionId?: string,
+    workflowId: string, ehrEndpointId: string, callerId?: string, sessionId?: string, userIdentity?: string,
   ): Promise<PublicPatientStandaloneUrlResponse> {
     const params: Record<string, string> = { ehrEndpointId };
     if (callerId) {
@@ -321,6 +324,9 @@ export class PatientStandaloneLaunchService {
     }
     if (sessionId) {
       params['sessionId'] = sessionId;
+    }
+    if (userIdentity) {
+      params['userIdentity'] = userIdentity;
     }
     return firstValueFrom(
       this.http.get<PublicPatientStandaloneUrlResponse>(

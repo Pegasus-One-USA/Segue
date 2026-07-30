@@ -50,7 +50,7 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicPatientStandaloneUrl(
         Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, [FromQuery] string? sessionId,
-        CancellationToken cancellationToken)
+        [FromQuery] string? userIdentity, CancellationToken cancellationToken)
     {
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
         if (workflow is null || !workflow.IsPubliclyLaunchable)
@@ -89,7 +89,13 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             ? sessionId
             : Guid.NewGuid().ToString("N");
 
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId);
+        // userIdentity is a stable identifier for HealthApp's own logged-in account (e.g. patient@healthapp.local)
+        // — distinct from sessionId above, which is only an opaque per-browser cache key. When present, it is what
+        // CompleteAsync permanently binds to one FHIR patient. Never validated as an origin (unlike callerId): it
+        // is not a URL and never drives a redirect.
+        var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
+
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
         return Ok(BuildLaunchResponse(context, effectiveSessionId));
     }
 

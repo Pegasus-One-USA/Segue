@@ -219,12 +219,22 @@ public sealed class Procedure11Entity
     public string? PerformedByName { get; set; }
 }
 
-// Per-role workflow URL for the "New 11" menu — one row per non-Admin role (Patient, ProviderStandalone,
-// ProviderInApp, BackendSystem). Admin-configured (see the Admin settings "New 11" tab) and used to import
-// referenced-but-missing Practitioners into Practitioner_11. The table is ensured + seeded at startup in
-// Program.cs (EnsureCreated won't add it to an already-existing HealthAppDb).
-public sealed class Resource11WorkflowSettingEntity
+// Workflow URLs for the "New 11" menu — a single row (Id = 1) with a List + Details URL per non-Admin role
+// (Patient, ProviderStandalone="Provider", ProviderInApp, BackendSystem). Admin-configured (see the Admin settings
+// "New 11" tab). Column names are the business-facing "<Role>_List_11" / "<Role>_Details_11" names mapped in
+// HealthAppDbContext.OnModelCreating. The table is ensured + seeded at startup in Program.cs (EnsureCreated won't
+// add it to an already-existing HealthAppDb). The Import Practitioners button uses the current role's Details URL,
+// falling back to its List URL.
+public sealed class Resource11WorkflowSettingsEntity
 {
-    public string Role { get; set; } = string.Empty;
-    public string WorkflowUrl { get; set; } = string.Empty;
+    public int Id { get; set; }
+
+    public string PatientListWorkflowUrl { get; set; } = string.Empty;         // Patient_List_11
+    public string PatientDetailsWorkflowUrl { get; set; } = string.Empty;      // Patient_Details_11
+    public string ProviderListWorkflowUrl { get; set; } = string.Empty;        // Provider_List_11
+    public string ProviderDetailsWorkflowUrl { get; set; } = string.Empty;     // Provider_Details_11
+    public string ProviderInAppListWorkflowUrl { get; set; } = string.Empty;   // ProviderInApp_List_11
+    public string ProviderInAppDetailsWorkflowUrl { get; set; } = string.Empty; // ProviderInApp_Details_11
+    public string BackendSystemListWorkflowUrl { get; set; } = string.Empty;   // BackendSystem_List_11
+    public string BackendSystemDetailsWorkflowUrl { get; set; } = string.Empty; // BackendSystem_Details_11
 }

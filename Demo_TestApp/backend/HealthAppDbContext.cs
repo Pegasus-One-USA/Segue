@@ -192,9 +192,9 @@ public sealed class HealthAppDbContext : DbContext
 
     public DbSet<Procedure11Entity> Procedures11 => Set<Procedure11Entity>();
 
-    // Per-role "New 11" workflow URLs. Ensured + seeded at startup (see Program.cs) rather than via HasData, so it
-    // works against an already-existing HealthAppDb too.
-    public DbSet<Resource11WorkflowSettingEntity> Resource11WorkflowSettings => Set<Resource11WorkflowSettingEntity>();
+    // "New 11" workflow URLs (single row, List + Details per role). Ensured + seeded at startup (see Program.cs)
+    // rather than via HasData, so it works against an already-existing HealthAppDb too.
+    public DbSet<Resource11WorkflowSettingsEntity> Resource11WorkflowSettings => Set<Resource11WorkflowSettingsEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -316,11 +316,19 @@ public sealed class HealthAppDbContext : DbContext
             e.ToTable("Procedure_11");
             e.HasKey(x => x.ProcedureId);
         });
-        modelBuilder.Entity<Resource11WorkflowSettingEntity>(e =>
+        modelBuilder.Entity<Resource11WorkflowSettingsEntity>(e =>
         {
-            e.ToTable("Resource11WorkflowSetting");
-            e.HasKey(x => x.Role);
-            e.Property(x => x.Role).HasMaxLength(40);
+            e.ToTable("Resource11WorkflowSettings");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.PatientListWorkflowUrl).HasColumnName("Patient_List_11").HasMaxLength(1000);
+            e.Property(x => x.PatientDetailsWorkflowUrl).HasColumnName("Patient_Details_11").HasMaxLength(1000);
+            e.Property(x => x.ProviderListWorkflowUrl).HasColumnName("Provider_List_11").HasMaxLength(1000);
+            e.Property(x => x.ProviderDetailsWorkflowUrl).HasColumnName("Provider_Details_11").HasMaxLength(1000);
+            e.Property(x => x.ProviderInAppListWorkflowUrl).HasColumnName("ProviderInApp_List_11").HasMaxLength(1000);
+            e.Property(x => x.ProviderInAppDetailsWorkflowUrl).HasColumnName("ProviderInApp_Details_11").HasMaxLength(1000);
+            e.Property(x => x.BackendSystemListWorkflowUrl).HasColumnName("BackendSystem_List_11").HasMaxLength(1000);
+            e.Property(x => x.BackendSystemDetailsWorkflowUrl).HasColumnName("BackendSystem_Details_11").HasMaxLength(1000);
         });
 
         // DB-level default so RecordCreatedOn is populated even for rows a real destination writer inserts

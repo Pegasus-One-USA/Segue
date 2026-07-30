@@ -37,6 +37,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<UserFhirContextBinding> UserFhirContextBindings => Set<UserFhirContextBinding>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();

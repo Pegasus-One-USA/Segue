@@ -72,12 +72,13 @@ export class PatientService {
    * EHR launch) — a real launch that fails to produce patient data errors out instead of masking the failure
    * behind mock data that looks like a working demo (see launch-provider-in-app.ts's launchError handling).
    *
-   * Reads workflowRunId straight off window.location.search rather than ActivatedRoute: this app has no
-   * <router-outlet> (see app.routes.ts), so ActivatedRoute.snapshot isn't reliably populated by the time this
-   * root-provided singleton is constructed and called.
+   * Takes workflowRunId as a caller-supplied value rather than reading window.location.search itself: the caller
+   * (LaunchProviderInAppComponent.ngOnInit) strips this query param from the URL right after reading it — a stale
+   * ?workflowRunId= left sitting in the address bar would otherwise get silently re-fetched and shown to whichever
+   * HealthApp account is logged in next on the same tab (that run's own result endpoint has no per-caller
+   * ownership check), not just the account whose real EHR launch actually produced it.
    */
-  getPatient(): Observable<Patient> {
-    const workflowRunId = new URLSearchParams(window.location.search).get('workflowRunId');
+  getPatient(workflowRunId: string | null): Observable<Patient> {
     if (!workflowRunId) {
       return of(MOCK_PATIENT).pipe(delay(600));
     }

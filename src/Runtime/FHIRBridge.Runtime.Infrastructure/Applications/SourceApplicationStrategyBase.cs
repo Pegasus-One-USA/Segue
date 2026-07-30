@@ -14,6 +14,8 @@ public abstract class SourceApplicationStrategyBase : ISourceApplicationStrategy
 {
     public abstract ApplicationType Handles { get; }
 
+    public abstract FhirContextBindingKind BindingResourceType { get; }
+
     public abstract SourceApplicationDescriptor Describe();
 
     public abstract Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);

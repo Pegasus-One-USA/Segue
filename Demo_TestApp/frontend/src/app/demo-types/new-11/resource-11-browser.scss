@@ -110,6 +110,40 @@
   }
 }
 
+.r11-resource-nav--tabs {
+  border-bottom: 1px solid #eceff1;
+  padding-bottom: 12px;
+}
+
+.r11-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.r11-back {
+  border: 1px solid var(--color-border, #d0d7de);
+  background: #fff;
+  color: #0d47a1;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+
+  &:hover {
+    background: #f5f9ff;
+  }
+}
+
+.r11-detail-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0d47a1;
+}
+
 .r11-result-meta {
   margin-bottom: 12px;
   color: #607d8b;
@@ -117,6 +151,85 @@
 
   strong {
     color: #37474f;
+  }
+}
+
+.r11-row-click {
+  cursor: pointer;
+
+  &:hover {
+    background: #f5f9ff;
+  }
+}
+
+// Practitioner tab: "import referenced-but-missing practitioners via the role's workflow" panel.
+.r11-import {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid #ffe0b2;
+  background: #fff8ec;
+  border-radius: 8px;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    color: #8a5a00;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  &__btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 999px;
+    background: #0d47a1;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      background: #093775;
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  }
+
+  &__list {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    color: #5d4037;
+    font-size: 13px;
+
+    li {
+      margin: 2px 0;
+    }
+  }
+
+  &__id {
+    color: #a1887f;
+    font-size: 11px;
+    margin-left: 6px;
+  }
+
+  &__ok {
+    margin: 0;
+    color: #2e7d32;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  &__msg {
+    margin: 10px 0 0;
+    color: #2e7d32;
+    font-size: 13px;
+    font-weight: 600;
   }
 }
 

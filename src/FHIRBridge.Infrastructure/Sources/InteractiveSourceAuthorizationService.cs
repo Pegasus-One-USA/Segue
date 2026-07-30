@@ -10,6 +10,7 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Workflows;
+using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -41,6 +42,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly ICurrentUserService _currentUserService;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly ISourceApplicationStrategyRegistry _applicationStrategyRegistry;
+    private readonly IUserFhirContextBindingRepository _userFhirContextBindingRepository;
     private readonly ILogger<InteractiveSourceAuthorizationService> _logger;
 
     // Scenario B (optional): when the graph-execution flag is on for a source, the launch runs its persisted
@@ -61,6 +64,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         IConfiguredPipelineService pipelineService,
         ICurrentUserService currentUserService,
         IGovernanceLogger governanceLogger,
+        ISourceApplicationStrategyRegistry applicationStrategyRegistry,
+        IUserFhirContextBindingRepository userFhirContextBindingRepository,
         ILogger<InteractiveSourceAuthorizationService> logger,
         IRankedWorkflowOrchestrator? workflowOrchestrator = null,
         ILaunchWorkflowResolver? launchWorkflowResolver = null,
@@ -77,6 +82,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _pipelineService = pipelineService;
         _currentUserService = currentUserService;
         _governanceLogger = governanceLogger;
+        _applicationStrategyRegistry = applicationStrategyRegistry;
+        _userFhirContextBindingRepository = userFhirContextBindingRepository;
         _logger = logger;
         _workflowOrchestrator = workflowOrchestrator;
         _launchWorkflowResolver = launchWorkflowResolver;
@@ -85,11 +92,11 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _settingsCache = settingsCache;
     }
 
-    public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null) =>
-        _launchTokenProtector.ProtectContext(routeId, ehrEndpointId, callerId, sessionId);
+    public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null) =>
+        _launchTokenProtector.ProtectContext(routeId, ehrEndpointId, callerId, sessionId, userIdentity);
 
-    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null) =>
-        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId, sessionId);
+    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null) =>
+        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId, sessionId, userIdentity);
 
     public async Task<Uri> StartAsync(
         Guid sourceConnectionId,
@@ -159,7 +166,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId,
-                callerId: effectiveCallerId, cancellationToken);
+                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity);
         }
 
         if (context.RouteId is { } contextRouteId)
@@ -167,7 +174,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null,
-                callerId: effectiveCallerId, cancellationToken);
+                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity);
         }
 
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -243,7 +250,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: context.CallerId, cancellationToken, sessionId: context.SessionId);
+            callerId: context.CallerId, cancellationToken, sessionId: context.SessionId, userIdentity: context.UserIdentity);
 
         return authorizationUrl;
     }
@@ -273,14 +280,14 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         {
             var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
             return await StartStandaloneCoreAsync(
-                workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken);
+                workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken, context.UserIdentity);
         }
 
         if (context.RouteId is { } contextRouteId)
         {
             var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
             return await StartStandaloneCoreAsync(
-                sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken);
+                sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken, context.UserIdentity);
         }
 
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -294,7 +301,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         EhrEndpoint? ehrEndpoint,
         string? callerId,
         string? sessionId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? userIdentity = null)
     {
         // A resolved hospital/organization endpoint overrides the connection's own configured base URL — discovery
         // must fetch SMART configuration from that SAME url, or the authorize/token endpoints returned would belong
@@ -329,7 +337,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: callerId, cancellationToken, sessionId: sessionId);
+            callerId: callerId, cancellationToken, sessionId: sessionId, userIdentity: userIdentity);
 
         return authorizationUrl;
     }
@@ -349,7 +357,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         Guid? routeId,
         Guid? workflowId,
         string? callerId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? userIdentity = null)
     {
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(launch))
         {
@@ -387,7 +396,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: callerId, cancellationToken);
+            callerId: callerId, cancellationToken, userIdentity: userIdentity);
 
         return authorizationUrl;
     }
@@ -403,7 +412,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string requestedRedirectUri,
         string? callerId,
         CancellationToken cancellationToken,
-        string? sessionId = null)
+        string? sessionId = null,
+        string? userIdentity = null)
     {
         // Prefer a registered redirect URI (must match the EHR registration exactly); fall back to the request-derived one.
         var effectiveRedirectUri = sourceConnection.Interactive?.RedirectUris.FirstOrDefault() ?? requestedRedirectUri;
@@ -441,7 +451,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 ResolvedBaseUrl: source.BaseUrl,
                 HasLaunchContext: launch is not null,
                 CallerId: callerId,
-                SessionId: sessionId),
+                SessionId: sessionId,
+                UserIdentity: userIdentity),
             cancellationToken);
 
         return new Uri(request.AuthorizationUrl);
@@ -525,6 +536,33 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 TokenCacheKeyHash: exchangeResult.TokenCacheKeyHash),
             CancellationToken.None);
 
+        if (await EnforceUserFhirContextBindingAsync(sourceConnection, pending, exchangeResult, CancellationToken.None))
+        {
+            // The token exchange above already persisted this rejected token (RequestAndStoreAsync saves
+            // unconditionally, before this mismatch check ever runs) — discard it now under the same CallerId/
+            // patient-scoped keys it was just saved under, so a caller that immediately checks token-status/re-fetches
+            // doesn't find a usable token for an authorization that was just rejected.
+            if (_authorizationFlow is IFhirPatientContextProvider patientContextProvider)
+            {
+                await patientContextProvider.DiscardTokenAsync(
+                    source with { TargetPatientId = exchangeResult.PatientId }, CancellationToken.None);
+            }
+
+            await _governanceLogger.LogSmartLaunchAsync(
+                new SmartLaunchEntry(
+                    pending.SourceConnectionId, pending.SourceName, launchType, Success: false,
+                    $"ContextMismatch: authorization rejected — this account is already bound to a different FHIR patient/practitioner. {DescribeTokenKey(pending.SessionId)}"),
+                CancellationToken.None);
+
+            // Same caller-wins-over-static-config precedence as the normal redirect below (see postLaunchRedirectUri)
+            // — a third-party app that minted its own callerId still gets the rejection routed back to itself
+            // rather than being stranded on this API's bare in-app page.
+            return new InteractiveAuthorizationResult(
+                pending.SourceConnectionId, pending.SourceName,
+                PostLaunchRedirectUri: pending.CallerId ?? sourceConnection.Interactive?.PostLaunchRedirectUri,
+                ContextMismatch: true);
+        }
+
         Guid? workflowRunId = null;
         var workflowRunFailed = false;
         // A workflow-bound sign-in with no launch context (Standalone/patient-standalone — no `launch` token was
@@ -570,6 +608,65 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         return new InteractiveAuthorizationResult(
             pending.SourceConnectionId, pending.SourceName, workflowRunId, postLaunchRedirectUri, workflowRunFailed,
             WorkflowRunSkipped: skipWorkflowTrigger);
+    }
+
+    // Enforces a permanent user-to-FHIR-context binding: when this authorization carries a UserIdentity (a
+    // third-party app's own end-user identity, e.g. Demo_TestApp's logged-in account email) and the source's
+    // application type establishes a durable per-user context (Patient or Practitioner — see
+    // ISourceApplicationStrategy.BindingResourceType, resolved through the registry rather than switched on
+    // ApplicationType), the first successful authorization for that (source, identity) pair permanently pins it to
+    // the returned resource id. Returns true when THIS authorization must be rejected because it returned a
+    // different resource id than a previously stored binding — the caller must not trigger any pipeline/workflow
+    // run or treat the token as usable in that case.
+    private async Task<bool> EnforceUserFhirContextBindingAsync(
+        SourceConnection sourceConnection,
+        PendingAuthorization pending,
+        SmartAuthorizationCodeExchangeResult exchangeResult,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(pending.UserIdentity)
+            || sourceConnection.ApplicationType is not { } applicationType
+            || !_applicationStrategyRegistry.TryResolve(applicationType, out var strategy)
+            || strategy.BindingResourceType == FhirContextBindingKind.None)
+        {
+            return false;
+        }
+
+        var (resourceType, resourceId) = strategy.BindingResourceType == FhirContextBindingKind.Practitioner
+            ? (FhirContextResourceType.Practitioner, exchangeResult.PractitionerId)
+            : (FhirContextResourceType.Patient, exchangeResult.PatientId);
+
+        if (string.IsNullOrWhiteSpace(resourceId))
+        {
+            // The EHR didn't return the context this binding kind needs (e.g. no fhirUser claim in the id_token, or
+            // a misconfigured scope). Nothing to enforce against yet — log and let the sign-in proceed rather than
+            // hard-failing every launch until the EHR registration is fixed.
+            _logger.LogWarning(
+                "User-to-FHIR-context binding skipped for source {SourceConnectionId}: expected a {ResourceType} " +
+                "context but none was returned by the EHR.",
+                sourceConnection.Id, resourceType);
+            return false;
+        }
+
+        var existing = await _userFhirContextBindingRepository.GetAsync(sourceConnection.Id, pending.UserIdentity!, cancellationToken);
+        if (existing is null)
+        {
+            await _userFhirContextBindingRepository.AddAsync(
+                new UserFhirContextBinding(sourceConnection.Id, pending.UserIdentity!, resourceType, resourceId),
+                cancellationToken);
+            return false;
+        }
+
+        if (!string.Equals(existing.ResourceId, resourceId, StringComparison.Ordinal) || existing.ResourceType != resourceType)
+        {
+            _logger.LogWarning(
+                "User-to-FHIR-context binding mismatch for source {SourceConnectionId}: this account is bound to a " +
+                "different {ResourceType} than the one this authorization returned.",
+                sourceConnection.Id, resourceType);
+            return true;
+        }
+
+        return false;
     }
 
     // After a launch completes, run every enabled pipeline route bound to the launched source — the launch establishes

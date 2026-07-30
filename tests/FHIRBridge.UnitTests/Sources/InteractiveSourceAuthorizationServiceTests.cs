@@ -9,6 +9,7 @@ using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Sources;
+using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Infrastructure.Auth;
@@ -30,6 +31,8 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     private readonly Mock<IConfiguredPipelineService> _pipeline = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
     private readonly Mock<IGovernanceLogger> _governanceLogger = new();
+    private readonly Mock<ISourceApplicationStrategyRegistry> _applicationStrategyRegistry = new();
+    private readonly Mock<IUserFhirContextBindingRepository> _userFhirContextBindingRepository = new();
 
     public InteractiveSourceAuthorizationServiceTests()
     {
@@ -47,6 +50,8 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _pipeline.Object,
         _currentUser.Object,
         _governanceLogger.Object,
+        _applicationStrategyRegistry.Object,
+        _userFhirContextBindingRepository.Object,
         NullLogger<InteractiveSourceAuthorizationService>.Instance);
 
     private SourceConnection SeedEpicSource(

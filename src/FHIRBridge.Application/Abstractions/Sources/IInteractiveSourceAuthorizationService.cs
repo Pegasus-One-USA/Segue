@@ -61,8 +61,10 @@ public interface IInteractiveSourceAuthorizationService
     /// for a given pipeline route. <paramref name="ehrEndpointId"/> optionally names a specific hospital/organization
     /// EhrEndpoint to launch against instead of the source connection's own configured base URL. <paramref name="callerId"/>
     /// optionally carries the caller-supplied return URL (e.g. the third-party app requesting this launch URL) to
-    /// redirect to on completion instead of the source's static PostLaunchRedirectUri.</summary>
-    string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null);
+    /// redirect to on completion instead of the source's static PostLaunchRedirectUri. <paramref name="userIdentity"/>
+    /// optionally carries a stable identifier for the end user driving this launch — see
+    /// <see cref="FHIRBridge.Application.Abstractions.Security.LaunchContext.UserIdentity"/>.</summary>
+    string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null);
 
     /// <summary>Builds the opaque, encrypted launch token for a workflow graph: launching it runs that workflow (its
     /// source node's connection drives the OAuth + trusted-issuer validation). <paramref name="ehrEndpointId"/>
@@ -71,8 +73,11 @@ public interface IInteractiveSourceAuthorizationService
     /// redirect to on completion instead of the source's static PostLaunchRedirectUri. <paramref name="sessionId"/>
     /// optionally carries a caller-supplied (or FHIRBridge-minted) opaque session identifier — see
     /// <see cref="FHIRBridge.Application.Abstractions.Security.LaunchContext.SessionId"/> — used instead of
-    /// <paramref name="callerId"/> to key the Patient Standalone interactive token cache.</summary>
-    string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null);
+    /// <paramref name="callerId"/> to key the Patient Standalone interactive token cache. <paramref name="userIdentity"/>
+    /// optionally carries a stable identifier for the end user driving this launch — see
+    /// <see cref="FHIRBridge.Application.Abstractions.Security.LaunchContext.UserIdentity"/> — used to enforce a
+    /// permanent user-to-FHIR-context binding on callback.</summary>
+    string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null);
 
     /// <summary>
     /// Starts a standalone / patient interactive sign-in directly from an encrypted launch-context token — no EHR
@@ -99,7 +104,10 @@ public interface IInteractiveSourceAuthorizationService
 /// WAS bound but deliberately not attempted (a Standalone/patient-standalone sign-in with no upfront launch
 /// context — see CompleteAsync's skipWorkflowTrigger) — the caller still redirects, but with a neutral "signed in"
 /// marker rather than an error one, since nothing actually failed. All flags are false/null when no workflow run
-/// was triggered at all (a plain sign-in) or no redirect URI is configured.
+/// was triggered at all (a plain sign-in) or no redirect URI is configured. <see cref="ContextMismatch"/> is set
+/// when this sign-in was rejected because the authorizing user's account is already permanently bound to a
+/// different FHIR patient/practitioner than the one this authorization just returned — no pipeline/workflow run is
+/// triggered, no token is left usable for a run, and the caller should show an error rather than redirect normally.
 /// </summary>
 public sealed record InteractiveAuthorizationResult(
     Guid SourceConnectionId,
@@ -107,4 +115,5 @@ public sealed record InteractiveAuthorizationResult(
     Guid? WorkflowRunId = null,
     string? PostLaunchRedirectUri = null,
     bool WorkflowRunFailed = false,
-    bool WorkflowRunSkipped = false);
+    bool WorkflowRunSkipped = false,
+    bool ContextMismatch = false);

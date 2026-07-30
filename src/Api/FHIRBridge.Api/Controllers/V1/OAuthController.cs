@@ -71,7 +71,7 @@ public sealed class OAuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicWorkflowLaunchContext(
-        Guid workflowId, [FromQuery] string? callerId, CancellationToken cancellationToken)
+        Guid workflowId, [FromQuery] string? callerId, [FromQuery] string? userIdentity, CancellationToken cancellationToken)
     {
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
         if (workflow is null || !workflow.IsPubliclyLaunchable)
@@ -95,7 +95,8 @@ public sealed class OAuthController : ControllerBase
             });
         }
 
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId: null, callerId);
+        var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId: null, callerId, sessionId: null, effectiveUserIdentity);
         return Ok(new { context });
     }
 
@@ -177,7 +178,7 @@ public sealed class OAuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicWorkflowStandaloneUrl(
         Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, [FromQuery] string? sessionId,
-        CancellationToken cancellationToken)
+        [FromQuery] string? userIdentity, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url requested: workflowId={WorkflowId} ehrEndpointId={EhrEndpointId}",
@@ -223,8 +224,14 @@ public sealed class OAuthController : ControllerBase
             ? sessionId
             : Guid.NewGuid().ToString("N");
 
+        // userIdentity is a stable identifier for the third-party app's own logged-in end user (e.g. its account
+        // email) — distinct from sessionId above, which is only an opaque per-browser cache key. When present, it
+        // is what CompleteAsync permanently binds to one FHIR patient/practitioner. Never validated as an origin
+        // (unlike callerId): it is not a URL and never drives a redirect.
+        var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
+
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
         var response = BuildLaunchResponse(applicationType, context, effectiveSessionId);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",
@@ -380,9 +387,35 @@ public sealed class OAuthController : ControllerBase
         _logger.LogInformation(
             "[Step 6/6] /oauth/callback completed: sourceConnectionId={SourceConnectionId} source={Source} " +
             "workflowRunId={WorkflowRunId} workflowRunFailed={WorkflowRunFailed} workflowRunSkipped={WorkflowRunSkipped} " +
-            "postLaunchRedirectUri={PostLaunchRedirectUri}",
+            "contextMismatch={ContextMismatch} postLaunchRedirectUri={PostLaunchRedirectUri}",
             result.SourceConnectionId, result.SourceName, result.WorkflowRunId, result.WorkflowRunFailed,
-            result.WorkflowRunSkipped, result.PostLaunchRedirectUri);
+            result.WorkflowRunSkipped, result.ContextMismatch, result.PostLaunchRedirectUri);
+
+        // This account is permanently bound to a different FHIR patient/practitioner than the one this
+        // authorization just returned — no pipeline/workflow run was triggered and the token is not usable. When
+        // the launch carries a redirect back to the third-party app that originated it (e.g. Demo_TestApp), hand
+        // the rejection back there via a launchError marker instead of stranding the browser here — the app is
+        // expected to surface its own error UI. Only a launch with nowhere to redirect back to falls through to
+        // the plain in-app page below.
+        if (result.ContextMismatch)
+        {
+            if (!string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
+            {
+                var mismatchReturnUrl = QueryHelpers.AddQueryString(
+                    result.PostLaunchRedirectUri, "launchError", "context_mismatch");
+                return Redirect(mismatchReturnUrl);
+            }
+
+            return Content(
+                "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Authorization rejected</title></head>" +
+                "<body style=\"font-family:sans-serif;max-width:32rem;margin:4rem auto;text-align:center;\">" +
+                "<h2>Authorization rejected</h2>" +
+                "<p>This account is already linked to a different patient/practitioner and cannot be re-authorized " +
+                "with a different one. Please close this window and contact your administrator if you believe this " +
+                "is an error.</p>" +
+                "</body></html>",
+                "text/html");
+        }
 
         // A workflow-triggered launch with a configured PostLaunchRedirectUri hands the browser back to the
         // third-party app that opened the EHR launch, rather than leaving it on this bare JSON response — the run

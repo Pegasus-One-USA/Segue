@@ -312,9 +312,11 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 throw new InvalidOperationException($"{ProviderName} token endpoint did not return an access_token.");
             }
 
+            string? practitionerId = null;
             if (!string.IsNullOrWhiteSpace(token.IdToken))
             {
-                await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
+                var fhirUser = await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
+                practitionerId = ExtractPractitionerId(fhirUser);
             }
 
             // token.Patient is a FHIR resource id, not logged in full elsewhere in this line — only its presence is
@@ -357,7 +359,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 token.AccessToken!,
                 token.Scope,
                 !string.IsNullOrWhiteSpace(token.Patient),
-                HashKey(BuildStoreKey(source, null)));
+                HashKey(BuildStoreKey(source, null)),
+                PatientId: token.Patient,
+                PractitionerId: practitionerId);
         }
     }
 
@@ -390,7 +394,12 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         }
     }
 
-    private async Task ValidateIdTokenAsync(
+    /// <summary>
+    /// Validates the id_token's signature/issuer/audience/lifetime and returns its <c>fhirUser</c> claim (a
+    /// SMART-standard reference such as <c>Practitioner/123</c> or an absolute URL ending in one), or null when the
+    /// claim is absent.
+    /// </summary>
+    private async Task<string?> ValidateIdTokenAsync(
         FhirSourceConfiguration source,
         string idToken,
         CancellationToken cancellationToken)
@@ -414,7 +423,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             new HttpDocumentRetriever(_httpClient) { RequireHttps = !IsLocalHttp(metadataAddress) });
         var configuration = await configurationManager.GetConfigurationAsync(cancellationToken);
 
-        handler.ValidateToken(idToken, new TokenValidationParameters
+        var principal = handler.ValidateToken(idToken, new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidIssuer = configuration.Issuer,
@@ -425,6 +434,24 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             IssuerSigningKeys = configuration.SigningKeys,
             ClockSkew = TimeSpan.FromMinutes(2)
         }, out _);
+
+        return principal.FindFirst("fhirUser")?.Value;
+    }
+
+    // Parses a SMART fhirUser reference (relative "Practitioner/123" or absolute ".../Practitioner/123") into the
+    // bare Practitioner id, or null when it references a different resource type (e.g. Patient/RelatedPerson) or
+    // doesn't parse as a reference at all.
+    private static string? ExtractPractitionerId(string? fhirUserReference)
+    {
+        if (string.IsNullOrWhiteSpace(fhirUserReference))
+        {
+            return null;
+        }
+
+        var segments = fhirUserReference.TrimEnd('/').Split('/');
+        return segments.Length >= 2 && string.Equals(segments[^2], "Practitioner", StringComparison.Ordinal)
+            ? segments[^1]
+            : null;
     }
 
     private static bool IsLocalHttp(string metadataAddress) =>
@@ -482,11 +509,17 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         source.ApplicationType is ApplicationType.Patient or ApplicationType.Standalone
             && !string.IsNullOrWhiteSpace(source.CallerId);
 
-    // Saves under the CallerId-keyed slot (when applicable) AND the legacy per-SourceConnection slot, so a caller
-    // that doesn't yet supply CallerId (the launch's own immediate convenience auto-run, or a consumer app not yet
-    // updated to send it on later /run calls) still finds this session's token under the key it has always used.
-    // A no-op second write when no CallerId was used (the two keys are identical), so every non-Patient /
-    // no-caller-id source behaves exactly as before.
+    // Saves under the CallerId-keyed slot ONLY for a Patient/Standalone source (see IsCallerIdKeyed) — this used to
+    // ALSO dual-write a "legacy" per-SourceConnection slot (CallerId=null) so a caller that hadn't yet adopted
+    // CallerId could still find its token. That legacy slot is a real cross-account data leak: it is shared by
+    // EVERY end user of the same SourceConnection, and GetStoredTokenAsync/BuildStoreKey falls back to reading it
+    // whenever a caller omits CallerId — which is exactly what happens for a brand-new HealthApp account that has
+    // never connected before (its frontend has no sessionId to send yet). That account would then silently be
+    // handed back whichever OTHER end user's token was last written to the shared slot, with no OAuth round trip
+    // at all. The current frontend (Provider/Patient Standalone) always sends CallerId once it has one — the only
+    // caller that can ever omit it is a truly first-time visitor, for whom "no token" is the only correct answer.
+    // So the legacy write is now skipped entirely for CallerId-keyed sources; every other ApplicationType (which
+    // never reaches IsCallerIdKeyed==true) is unaffected.
     private Task SaveUnderBothKeysAsync(
         FhirSourceConfiguration source,
         string? patientId,
@@ -495,25 +528,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     {
         var key = BuildStoreKey(source, patientId);
         LogKeySave(source, key, patientId);
-        var saveTask = _tokenStore.SaveAsync(key, stored, cancellationToken);
-
-        if (IsCallerIdKeyed(source))
-        {
-            var legacyKey = BuildStoreKey(source with { CallerId = null }, patientId);
-            if (!string.Equals(legacyKey, key, StringComparison.Ordinal))
-            {
-                LogKeySave(source with { CallerId = null }, legacyKey, patientId);
-                return SaveBothAsync(saveTask, legacyKey, stored, cancellationToken);
-            }
-        }
-
-        return saveTask;
-    }
-
-    private async Task SaveBothAsync(Task firstSave, string legacyKey, StoredOAuthToken stored, CancellationToken cancellationToken)
-    {
-        await firstSave;
-        await _tokenStore.SaveAsync(legacyKey, stored, cancellationToken);
+        return _tokenStore.SaveAsync(key, stored, cancellationToken);
     }
 
     // Same PHI-safe logging discipline as LogKeyLookup — see that method's remarks.

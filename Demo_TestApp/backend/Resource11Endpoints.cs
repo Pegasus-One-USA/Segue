@@ -12,7 +12,8 @@ public static class Resource11Endpoints
 {
     private const string SessionCookieName = "hb_session";
 
-    // The four non-Admin roles that have a "New 11" menu + their own workflow setting (see HealthAppDbContext.cs).
+    // The four non-Admin roles configurable on the Admin → New 11 settings tab, each with a List + Details URL.
+    // ("Provider" in the DB column names = ProviderStandalone.)
     private static readonly string[] New11Roles =
         [UserRoles.Patient, UserRoles.ProviderStandalone, UserRoles.ProviderInApp, UserRoles.BackendSystem];
 
@@ -75,6 +76,33 @@ public static class Resource11Endpoints
                 ? Results.Unauthorized()
                 : Results.Ok(await db.Procedures11.AsNoTracking().OrderByDescending(x => x.PerformedDate).ToListAsync(ct)));
 
+        // ---- Per-patient detail (New 11 Patient List -> patient -> tabs) --------------------------------------
+
+        // Rows of one clinical resource for a single patient. Backs the per-patient tabs shown after a Patient List
+        // row is clicked. Reference columns may be bare ids or "Patient/{id}", so match both.
+        app.MapGet("/api/v11/patient/{patientId}/{resource}", async (string patientId, string resource, HttpContext http, SessionStore sessions, HealthAppDbContext db, CancellationToken ct) =>
+        {
+            if (!TryGetSession(http, sessions))
+            {
+                return Results.Unauthorized();
+            }
+
+            var reference = $"Patient/{patientId}";
+            return resource switch
+            {
+                "encounters" => Results.Ok(await db.Encounters11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.StartDate).ToListAsync(ct)),
+                "observations" => Results.Ok(await db.Observations11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.EffectiveDateTime).ToListAsync(ct)),
+                "conditions" => Results.Ok(await db.Conditions11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.RecordedDate).ToListAsync(ct)),
+                "allergy-intolerances" => Results.Ok(await db.AllergyIntolerances11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.RecordedDate).ToListAsync(ct)),
+                "medication-requests" => Results.Ok(await db.MedicationRequests11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.PrescribedDate).ToListAsync(ct)),
+                "medication-administrations" => Results.Ok(await db.MedicationAdministrations11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.AdministeredDateTime).ToListAsync(ct)),
+                "service-requests" => Results.Ok(await db.ServiceRequests11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.OrderedDate).ToListAsync(ct)),
+                "diagnostic-reports" => Results.Ok(await db.DiagnosticReports11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.IssuedDateTime).ToListAsync(ct)),
+                "procedures" => Results.Ok(await db.Procedures11.AsNoTracking().Where(x => x.PatientId == patientId || x.PatientId == reference).OrderByDescending(x => x.PerformedDate).ToListAsync(ct)),
+                _ => Results.NotFound(),
+            };
+        });
+
         // ---- Practitioner "import missing" -------------------------------------------------------------------
 
         // Practitioners referenced by other _11 tables (Encounter, Observation, ...) that have no row of their own
@@ -99,26 +127,34 @@ public static class Resource11Endpoints
                 return Results.Unauthorized();
             }
 
-            var setting = await db.Resource11WorkflowSettings.FirstOrDefaultAsync(s => s.Role == role, ct);
-            var workflowUrl = setting?.WorkflowUrl;
-            if (string.IsNullOrWhiteSpace(workflowUrl))
-            {
-                return Results.Ok(new { status = "Failed", errorMessage = $"No New 11 workflow is configured for the {role} role. Ask an admin to set one on the Admin → New 11 tab." });
-            }
-
             var missing = await ComputeMissingPractitionersAsync(db, ct);
             if (missing.Count == 0)
             {
                 return Results.Ok(new { status = "Succeeded", imported = 0, message = "No missing practitioners to import." });
             }
 
+            // Importing specific practitioners by id is a "details" fetch — use the role's Details workflow, falling
+            // back to its List workflow when Details is unset.
+            var settings = await GetOrCreateSettingsAsync(db, ct);
+            var (listUrl, detailsUrl) = GetForRole(settings, role);
+            var workflowUrl = !string.IsNullOrWhiteSpace(detailsUrl) ? detailsUrl : listUrl;
+            if (string.IsNullOrWhiteSpace(workflowUrl))
+            {
+                return Results.Ok(new { status = "Failed", errorMessage = $"No New 11 workflow is configured for the {role} role. Ask an admin to set its List/Details URL on the Admin → New 11 tab." });
+            }
+
+            var idsCsv = string.Join(",", missing.Select(m => m.PractitionerId));
+
             var client = httpClientFactory.CreateClient("Workflow");
             HttpResponseMessage response;
             try
             {
-                // Send the missing ids as a hint; a smart workflow can fetch exactly those, a simple one can ignore it.
+                // Pass the missing practitioner ids comma-separated (query string) AND as an array (JSON body) so
+                // the workflow can pull exactly those from the source (Epic).
+                var separator = workflowUrl.Contains('?') ? "&" : "?";
+                var requestUrl = $"{workflowUrl}{separator}practitionerIds={Uri.EscapeDataString(idsCsv)}";
                 var requestBody = JsonSerializer.Serialize(new { practitionerIds = missing.Select(m => m.PractitionerId).ToArray() });
-                response = await client.PostAsync(workflowUrl, new StringContent(requestBody, Encoding.UTF8, "application/json"), ct);
+                response = await client.PostAsync(requestUrl, new StringContent(requestBody, Encoding.UTF8, "application/json"), ct);
             }
             catch (Exception ex)
             {
@@ -207,14 +243,11 @@ public static class Resource11Endpoints
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             }
 
-            var saved = await db.Resource11WorkflowSettings.AsNoTracking().ToDictionaryAsync(s => s.Role, s => s.WorkflowUrl, ct);
-            var all = New11Roles
-                .Select(r => new Resource11WorkflowSettingDto(r, saved.TryGetValue(r, out var url) ? url : string.Empty))
-                .ToList();
-            return Results.Ok(all);
+            var settings = await GetOrCreateSettingsAsync(db, ct);
+            return Results.Ok(ToDtos(settings));
         });
 
-        app.MapPost("/api/v11/workflow-settings", async (List<Resource11WorkflowSettingDto> updates, HttpContext http, SessionStore sessions, HealthAppDbContext db, CancellationToken ct) =>
+        app.MapPost("/api/v11/workflow-settings", async (List<Resource11RoleWorkflowsDto> updates, HttpContext http, SessionStore sessions, HealthAppDbContext db, CancellationToken ct) =>
         {
             if (!TryGetSessionRole(http, sessions, out var role))
             {
@@ -225,30 +258,57 @@ public static class Resource11Endpoints
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             }
 
+            var settings = await GetOrCreateSettingsAsync(db, ct);
             foreach (var update in updates ?? [])
             {
                 if (update is null || !New11Roles.Contains(update.Role))
                 {
                     continue; // ignore unknown roles
                 }
-
-                var row = await db.Resource11WorkflowSettings.FirstOrDefaultAsync(s => s.Role == update.Role, ct);
-                if (row is null)
-                {
-                    row = new Resource11WorkflowSettingEntity { Role = update.Role };
-                    db.Resource11WorkflowSettings.Add(row);
-                }
-                row.WorkflowUrl = update.WorkflowUrl?.Trim() ?? string.Empty;
+                SetForRole(settings, update.Role, update.ListUrl?.Trim() ?? string.Empty, update.DetailsUrl?.Trim() ?? string.Empty);
             }
 
             await db.SaveChangesAsync(ct);
-
-            var saved = await db.Resource11WorkflowSettings.AsNoTracking().ToDictionaryAsync(s => s.Role, s => s.WorkflowUrl, ct);
-            var all = New11Roles
-                .Select(r => new Resource11WorkflowSettingDto(r, saved.TryGetValue(r, out var url) ? url : string.Empty))
-                .ToList();
-            return Results.Ok(all);
+            return Results.Ok(ToDtos(settings));
         });
+    }
+
+    private static async Task<Resource11WorkflowSettingsEntity> GetOrCreateSettingsAsync(HealthAppDbContext db, CancellationToken ct)
+    {
+        var row = await db.Resource11WorkflowSettings.FirstOrDefaultAsync(s => s.Id == 1, ct);
+        if (row is null)
+        {
+            row = new Resource11WorkflowSettingsEntity { Id = 1 };
+            db.Resource11WorkflowSettings.Add(row);
+        }
+        return row;
+    }
+
+    private static List<Resource11RoleWorkflowsDto> ToDtos(Resource11WorkflowSettingsEntity s) =>
+        New11Roles.Select(r =>
+        {
+            var (list, details) = GetForRole(s, r);
+            return new Resource11RoleWorkflowsDto(r, list, details);
+        }).ToList();
+
+    private static (string List, string Details) GetForRole(Resource11WorkflowSettingsEntity s, string role) => role switch
+    {
+        UserRoles.Patient => (s.PatientListWorkflowUrl, s.PatientDetailsWorkflowUrl),
+        UserRoles.ProviderStandalone => (s.ProviderListWorkflowUrl, s.ProviderDetailsWorkflowUrl),
+        UserRoles.ProviderInApp => (s.ProviderInAppListWorkflowUrl, s.ProviderInAppDetailsWorkflowUrl),
+        UserRoles.BackendSystem => (s.BackendSystemListWorkflowUrl, s.BackendSystemDetailsWorkflowUrl),
+        _ => (string.Empty, string.Empty),
+    };
+
+    private static void SetForRole(Resource11WorkflowSettingsEntity s, string role, string list, string details)
+    {
+        switch (role)
+        {
+            case UserRoles.Patient: s.PatientListWorkflowUrl = list; s.PatientDetailsWorkflowUrl = details; break;
+            case UserRoles.ProviderStandalone: s.ProviderListWorkflowUrl = list; s.ProviderDetailsWorkflowUrl = details; break;
+            case UserRoles.ProviderInApp: s.ProviderInAppListWorkflowUrl = list; s.ProviderInAppDetailsWorkflowUrl = details; break;
+            case UserRoles.BackendSystem: s.BackendSystemListWorkflowUrl = list; s.BackendSystemDetailsWorkflowUrl = details; break;
+        }
     }
 
     // Distinct practitioner ids referenced across every _11 table EXCEPT Practitioner_11, minus those already
@@ -301,5 +361,5 @@ public static class Resource11Endpoints
     }
 }
 
-record Resource11WorkflowSettingDto(string Role, string WorkflowUrl);
+record Resource11RoleWorkflowsDto(string Role, string ListUrl, string DetailsUrl);
 record PractitionerRefDto(string PractitionerId, string? Name);
