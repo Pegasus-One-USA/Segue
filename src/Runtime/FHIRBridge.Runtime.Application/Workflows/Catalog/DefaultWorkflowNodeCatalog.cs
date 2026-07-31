@@ -42,10 +42,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.CsvDestination),
         Destination(WorkflowNodeTypes.MySqlDestination),
         Destination(WorkflowNodeTypes.MongoDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo destinations are exposed in the palette. The writers
-        // below remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
+        Destination(WorkflowNodeTypes.PostgreSqlDestination),
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql destinations are exposed in the palette.
+        // The writers below remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
-        // Destination(WorkflowNodeTypes.PostgreSqlDestination),
         // Destination(WorkflowNodeTypes.SnowflakeDestination),
         // Destination(WorkflowNodeTypes.PowerBiDestination),
         // Destination(WorkflowNodeTypes.TableauDestination),
@@ -198,6 +198,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.CsvDestination => "dest-csv",
             WorkflowNodeTypes.MySqlDestination => "dest-mysql",
             WorkflowNodeTypes.MongoDestination => "dest-mongo",
+            WorkflowNodeTypes.PostgreSqlDestination => "dest-postgres",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -214,6 +215,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.CsvDestination => "CSV",
             WorkflowNodeTypes.MySqlDestination => "MySQL",
             WorkflowNodeTypes.MongoDestination => "MongoDB",
+            WorkflowNodeTypes.PostgreSqlDestination => "PostgreSQL",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -230,6 +232,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.CsvDestination => "Emit mapped records as CSV files.",
             WorkflowNodeTypes.MySqlDestination => "Write mapped records to MySQL.",
             WorkflowNodeTypes.MongoDestination => "Write mapped records to MongoDB.",
+            WorkflowNodeTypes.PostgreSqlDestination => "Write mapped records to PostgreSQL.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

@@ -302,15 +302,19 @@ export class WorkflowBuildAssemblerService {
     const isMySql =
       node.nodeType.includes('MySql') ||
       (fields['__transformId'] ?? '') === 'dest-mysql';
+    const isPostgres =
+      node.nodeType.includes('PostgreSql') ||
+      (fields['__transformId'] ?? '') === 'dest-postgres';
     const isSql =
       isMySql ||
+      isPostgres ||
       node.nodeType.includes('SqlServer') ||
       (fields['__transformId'] ?? '') === 'dest-sqlserver';
     const isMongo =
       node.nodeType.includes('Mongo') ||
       (fields['__transformId'] ?? '') === 'dest-mongo';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -333,14 +337,14 @@ export class WorkflowBuildAssemblerService {
     if (isSql) {
       return {
         name,
-        destinationType: isMySql ? 'MySql' : 'SqlServer',
+        destinationType: isMySql ? 'MySql' : isPostgres ? 'PostgreSql' : 'SqlServer',
         keyVaultName,
         secretName,
         target: null,
         inlineSecret:
           hasExistingSecret && !fields['dest_password']
             ? null
-            : this.buildSqlConnectionString(fields, isMySql),
+            : this.buildSqlConnectionString(fields, isMySql, isPostgres),
         connectionMetadataJson: this.buildConnectionMetadata(fields, 'sql'),
       };
     }
@@ -402,6 +406,7 @@ export class WorkflowBuildAssemblerService {
             'dest_username',
             'dest_schema',
             'dest_writeMode',
+            'dest_requireSsl',
           ]
         : kind === 'mongo'
           ? ['dest_name', 'dest_collection', 'dest_writeMode']
@@ -429,9 +434,23 @@ export class WorkflowBuildAssemblerService {
     return JSON.stringify(metadata);
   }
 
-  private buildSqlConnectionString(f: Record<string, string>, isMySql = false): string {
+  private buildSqlConnectionString(f: Record<string, string>, isMySql = false, isPostgres = false): string {
     const server = f['dest_server'] ?? '';
     const database = f['dest_database'] ?? '';
+    const requireSsl = f['dest_requireSsl'] === 'true';
+    if (isPostgres) {
+      // Npgsql uses Host (not Server) and Username (not User Id); "Require" mode encrypts without validating
+      // the server certificate, so no separate "trust cert" flag is needed. Off by default — a local/docker
+      // Postgres with SSL disabled would otherwise refuse to connect — checked for providers that enforce it
+      // (e.g. AWS RDS's rds.force_ssl).
+      return [
+        `Host=${server}`,
+        `Database=${database}`,
+        `Username=${f['dest_username'] ?? ''}`,
+        `Password=${f['dest_password'] ?? ''}`,
+        `SSL Mode=${requireSsl ? 'Require' : 'Prefer'}`,
+      ].join(';');
+    }
     const parts = [`Server=${server}`, `Database=${database}`];
     if (isMySql) {
       // MySqlConnector's connection string builder rejects SQL-Server-only keywords
@@ -440,6 +459,7 @@ export class WorkflowBuildAssemblerService {
       parts.push(
         `User Id=${f['dest_username'] ?? ''}`,
         `Password=${f['dest_password'] ?? ''}`,
+        `SslMode=${requireSsl ? 'Required' : 'Preferred'}`,
       );
       return parts.join(';');
     }

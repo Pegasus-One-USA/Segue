@@ -18,8 +18,21 @@ export function newSecretName(destinationName: string): string {
 }
 
 export function buildSqlConnectionString(f: Record<string, string>): string {
+  const engine = f['dest_engine'] ?? 'sqlserver';
   const server = f['dest_server'] ?? '';
   const database = f['dest_database'] ?? '';
+  const requireSsl = f['dest_requireSsl'] === 'true';
+
+  if (engine === 'postgres') {
+    // "Require" mode encrypts without validating the server certificate — no separate "trust cert" flag needed.
+    // Defaults to Prefer (off) so a local/docker Postgres with SSL disabled still connects; check the SSL
+    // toggle for providers that enforce it (e.g. AWS RDS's rds.force_ssl).
+    return [`Host=${server}`, `Database=${database}`, `Username=${f['dest_username'] ?? ''}`, `Password=${f['dest_password'] ?? ''}`, `SSL Mode=${requireSsl ? 'Require' : 'Prefer'}`].join(';');
+  }
+  if (engine === 'mysql') {
+    return [`Server=${server}`, `Database=${database}`, `User Id=${f['dest_username'] ?? ''}`, `Password=${f['dest_password'] ?? ''}`, `SslMode=${requireSsl ? 'Required' : 'Preferred'}`].join(';');
+  }
+
   const parts = [`Server=${server}`, `Database=${database}`];
   if ((f['dest_auth'] ?? 'sql-auth') === 'sql-auth') {
     parts.push(`User Id=${f['dest_username'] ?? ''}`, `Password=${f['dest_password'] ?? ''}`);
@@ -47,7 +60,7 @@ export function buildSftpUri(f: Record<string, string>): string {
  */
 export function buildConnectionMetadata(f: Record<string, string>, isSql: boolean): string {
   const keys = isSql
-    ? ['dest_name', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode']
+    ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
     : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
        'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
        'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',

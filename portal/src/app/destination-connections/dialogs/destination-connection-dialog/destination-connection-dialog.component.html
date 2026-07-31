@@ -35,8 +35,8 @@
       <p class="dcd-hint">Choose a connection type to continue.</p>
       <div class="dcd-type-choice">
         <button type="button" class="dcd-type-card" (click)="chooseType('sql')">
-          <strong>SQL Server</strong>
-          <span>Write mapped records into a relational table.</span>
+          <strong>SQL</strong>
+          <span>Write mapped records into a relational table (SQL Server, MySQL, or PostgreSQL).</span>
         </button>
         <button type="button" class="dcd-type-card" (click)="chooseType('csv')">
           <strong>CSV</strong>
@@ -78,7 +78,7 @@
           Enter the full connection details below — they'll replace the existing secret. Leaving this
           collapsed keeps the current connection secret unchanged.
         </p>
-        <app-destination-connection-form [destType]="chosenType()!" mode="edit" />
+        <app-destination-connection-form [destType]="chosenType()!" mode="edit" [initialConfig]="editInitialConfig()" />
       }
     }
   }
