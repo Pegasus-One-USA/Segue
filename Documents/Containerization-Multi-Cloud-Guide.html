@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Containerization &amp; Multi-Cloud Deployment Guide — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --docker: #1D63ED;
+    --docker-bg: #E0EAFE;
+    --azure: #0078D4;
+    --azure-bg: #DEEFFC;
+    --aws: #EC7211;
+    --aws-bg: #FFF1E0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h2.section-divider {
+    margin-top: 72px;
+    padding: 22px 26px;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 26px;
+  }
+  h2.section-divider.docker-divider { background: linear-gradient(135deg, var(--docker) 0%, #1039A6 100%); }
+  h2.section-divider.azure-divider { background: linear-gradient(135deg, var(--azure) 0%, #003E73 100%); }
+  h2.section-divider.aws-divider { background: linear-gradient(135deg, var(--aws) 0%, #A85300 100%); }
+  h2.section-divider .os-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 36px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  h3 code.file-title {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 15px;
+    background: #F1F5F9;
+    padding: 3px 8px;
+    border-radius: 6px;
+    color: #0F172A;
+  }
+  h4 { font-size: 14px; font-weight: 700; margin: 22px 0 8px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 16px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+  nav.toc li.toc-section-head { font-weight: 800; margin-top: 8px; list-style: none; margin-left: -22px; }
+  nav.toc li.toc-section-head a { color: var(--primary); }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-fixed    { color: #fff; background: var(--deleted); }
+  .pill-docker   { color: var(--docker); background: var(--docker-bg); }
+  .pill-azure    { color: var(--azure); background: var(--azure-bg); }
+  .pill-aws      { color: #9A4A0A; background: var(--aws-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.bad { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout.docker { border-left-color: var(--docker); background: var(--docker-bg); }
+  .callout.azure { border-left-color: var(--azure); background: var(--azure-bg); }
+  .callout.aws { border-left-color: var(--aws); background: var(--aws-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); display: block; }
+
+  .bug-card {
+    border: 1px solid var(--deleted);
+    background: #FFFBFB;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+  }
+  .bug-card h4 { margin-top: 0; color: var(--deleted); font-size: 15px; }
+  .bug-card .bug-meta { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Containerization &amp; Multi-Cloud Deployment Guide</h1>
+    <p class="subtitle">FHIRBridge &mdash; every file created under <code style="background:rgba(255,255,255,0.15);color:#fff;">containerization/</code>, what it builds, and how the same 5-container topology deploys to local Docker, Azure Container Apps, and AWS ECS Fargate.</p>
+    <div class="meta">
+      <div><strong>Scope</strong> containerization/ (new folder), .dockerignore, src/Gateway/FHIRBridge.Gateway/Program.cs (1 bug fix)</div>
+      <div><strong>Status</strong> Docker path built, run, and verified end-to-end &middot; Azure/AWS Terraform written and reviewed, not yet applied to a real subscription</div>
+      <div><strong>Containers</strong> 5 &mdash; fhirbridge-app, demo-app, sqlserver, redis, worker</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#topology">Container Topology</a></li>
+      <li><a href="#folder-layout">Folder Layout</a></li>
+      <li class="toc-section-head"><a href="#docker-section">&#9654; Docker &amp; Local</a></li>
+      <li><a href="#local-inventory">Resource &amp; Cost Inventory</a></li>
+      <li><a href="#dockerignore">.dockerignore</a></li>
+      <li><a href="#dockerfile-app">docker/fhirbridge-app/Dockerfile</a></li>
+      <li><a href="#entrypoint">docker/fhirbridge-app/entrypoint.sh</a></li>
+      <li><a href="#dockerfile-demo">docker/demo-app/Dockerfile</a></li>
+      <li><a href="#dockerfile-worker">docker/worker/Dockerfile</a></li>
+      <li><a href="#compose-yml">compose/docker-compose.yml</a></li>
+      <li><a href="#env-example">compose/.env.example</a></li>
+      <li><a href="#build-scripts">scripts/build-images.sh &amp; .ps1</a></li>
+      <li><a href="#tf-local">terraform/environments/local</a></li>
+      <li><a href="#local-cleanup">Cleanup / teardown</a></li>
+      <li class="toc-section-head"><a href="#azure-section">&#9654; Azure (Container Apps)</a></li>
+      <li><a href="#azure-inventory">Resource &amp; Cost Inventory</a></li>
+      <li><a href="#azure-variables">azure/variables.tf</a></li>
+      <li><a href="#azure-main">azure/main.tf</a></li>
+      <li><a href="#azure-outputs">azure/outputs.tf &amp; tfvars.example</a></li>
+      <li><a href="#azure-flow">Deploy flow, step by step</a></li>
+      <li><a href="#azure-cleanup">Cleanup / teardown</a></li>
+      <li><a href="#azure-easy-install">azure-deploy/ &mdash; easy install (Bicep)</a></li>
+      <li class="toc-section-head"><a href="#aws-section">&#9654; AWS (ECS Fargate)</a></li>
+      <li><a href="#aws-inventory">Resource &amp; Cost Inventory</a></li>
+      <li><a href="#aws-variables">aws/variables.tf</a></li>
+      <li><a href="#aws-main">aws/main.tf</a></li>
+      <li><a href="#aws-storage">aws/storage.tf</a></li>
+      <li><a href="#aws-discovery">aws/discovery.tf</a></li>
+      <li><a href="#aws-alb">aws/alb.tf</a></li>
+      <li><a href="#aws-tasks">aws/tasks.tf</a></li>
+      <li><a href="#aws-services">aws/services.tf</a></li>
+      <li><a href="#aws-outputs">aws/outputs.tf &amp; tfvars.example</a></li>
+      <li><a href="#aws-flow">Deploy flow, step by step</a></li>
+      <li><a href="#aws-cleanup">Cleanup / teardown</a></li>
+      <li class="toc-section-head"><a href="#vendor-registry-section">&#9654; Vendor Registry</a></li>
+      <li><a href="#vendor-inventory">Resource &amp; Cost Inventory</a></li>
+      <li><a href="#vendor-main">vendor-registry/main.tf</a></li>
+      <li><a href="#vendor-outputs">vendor-registry/outputs.tf &amp; tfvars.example</a></li>
+      <li><a href="#vendor-workflow">Publish &amp; distribute workflow</a></li>
+      <li><a href="#vendor-cleanup">Cleanup / teardown</a></li>
+      <li class="toc-section-head"><a href="#bugs">&#9654; Bugs Found &amp; Fixed</a></li>
+      <li><a href="#bug-race">1. Api/Worker migration race</a></li>
+      <li><a href="#bug-worker">2. Worker base image</a></li>
+      <li><a href="#bug-gateway">3. Gateway content root</a></li>
+      <li><a href="#reference">Quick Reference &mdash; Full File Manifest</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    This guide documents everything under the new <code>containerization/</code> folder: Dockerfiles,
+    the local Compose stack, the build scripts, and three separate Terraform environments
+    (local Docker, Azure Container Apps, AWS ECS Fargate) that all stand up the <strong>same
+    5-container topology</strong>. It is additive &mdash; the repo-root <code>docker-compose.yml</code>
+    (a dev/E2E dependency stack: HAPI FHIR, RabbitMQ, output DBs, etc.) and the existing Windows
+    Service / GitHub Actions deploy path (<code>deploy/windows/</code>, <code>.github/workflows/deploy.yml</code>)
+    are both untouched.
+  </p>
+  <div class="summary-grid">
+    <div class="card"><div class="num">5</div><div class="label">containers per environment</div></div>
+    <div class="card"><div class="num">3</div><div class="label">Dockerfiles (2 more use official images as-is)</div></div>
+    <div class="card"><div class="num">3</div><div class="label">deploy targets: local, Azure, AWS</div></div>
+    <div class="card"><div class="num">3</div><div class="label">real bugs found &amp; fixed during live verification</div></div>
+  </div>
+  <p>
+    The design leans hard on reuse: <code>FHIRBridge.Api</code> and <code>FHIRBridge.Gateway</code>
+    already implement exactly the topology needed (Api loopback-only, Gateway as the sole public
+    entry point reverse-proxying <code>/api/**</code> and <code>/swagger/**</code>) for the existing
+    Windows Service deployment described in <code>deploy/windows/README.md</code> &mdash; the
+    container design reproduces that instead of inventing a new reverse proxy (no nginx anywhere).
+    Both the Api and the Demo app backend already auto-provision their own database schema on
+    startup (<code>Database.Migrate()</code> / <code>EnsureCreated()</code>), so the SQL Server
+    container needs no init scripts.
+  </p>
+
+  <h2 id="topology"><span class="num">2.</span>Container Topology</h2>
+  <table class="file-table">
+    <tr><th>#</th><th>Container</th><th>Runs</th><th>Public?</th></tr>
+    <tr>
+      <td class="why"><strong>1</strong></td>
+      <td class="why"><code>fhirbridge-app</code></td>
+      <td class="why"><code>FHIRBridge.Api</code> (loopback-only, <code>127.0.0.1:5000</code>) + <code>FHIRBridge.Gateway</code> (serves the Angular portal, reverse-proxies <code>/api/**</code> + <code>/swagger/**</code> to the Api)</td>
+      <td class="why">Yes &mdash; port 80</td>
+    </tr>
+    <tr>
+      <td class="why"><strong>2</strong></td>
+      <td class="why"><code>demo-app</code></td>
+      <td class="why"><code>HealthAppBackend</code>, self-hosting its own Angular build (same-origin, single process)</td>
+      <td class="why">Yes &mdash; port 5500</td>
+    </tr>
+    <tr>
+      <td class="why"><strong>3</strong></td>
+      <td class="why"><code>sqlserver</code></td>
+      <td class="why"><code>mcr.microsoft.com/mssql/server:2022-latest</code>, <code>MSSQL_PID=Express</code> &mdash; hosts both <code>FHIRBridge</code> and <code>HealthAppDb</code></td>
+      <td class="why">No &mdash; internal only</td>
+    </tr>
+    <tr>
+      <td class="why"><strong>4</strong></td>
+      <td class="why"><code>redis</code></td>
+      <td class="why"><code>redis:7-alpine</code> &mdash; backs <code>ConnectionStrings:Redis</code>, shared by the Api and Worker</td>
+      <td class="why">No &mdash; internal only</td>
+    </tr>
+    <tr>
+      <td class="why"><strong>5</strong></td>
+      <td class="why"><code>worker</code></td>
+      <td class="why"><code>FHIRBridge.Worker</code> &mdash; background scheduler/pipeline processor, no HTTP endpoint</td>
+      <td class="why">No</td>
+    </tr>
+  </table>
+  <div class="callout">
+    <strong>Why fhirbridge-app bundles two processes</strong>
+    Rather than inventing a new split, this mirrors the Windows Service topology exactly: the Api is
+    never exposed outside its own container (identical to never being exposed outside the VM in
+    production), and the Gateway is the only thing anyone talks to. One image, one <code>entrypoint.sh</code>,
+    two <code>dotnet</code> processes.
+  </div>
+
+  <h2 id="folder-layout"><span class="num">3.</span>Folder Layout</h2>
+  <pre><code>containerization/
+  docker/
+    fhirbridge-app/Dockerfile        Api + Gateway, one image
+    fhirbridge-app/entrypoint.sh     launches both processes
+    demo-app/Dockerfile              HealthAppBackend + its own Angular build
+    worker/Dockerfile                FHIRBridge.Worker only
+  compose/
+    docker-compose.yml               all 5 containers, one bridge network
+    .env.example                     secrets template (committed; .env is gitignored)
+  scripts/
+    build-images.sh                  builds + optionally pushes the 3 custom images (bash)
+    build-images.ps1                 same, PowerShell
+  terraform/
+    .gitignore                       excludes .terraform/, state files, real tfvars
+    environments/
+      local/    main.tf variables.tf outputs.tf terraform.tfvars.example
+      azure/    main.tf variables.tf outputs.tf terraform.tfvars.example
+      aws/      main.tf storage.tf discovery.tf alb.tf tasks.tf services.tf
+                variables.tf outputs.tf terraform.tfvars.example
+  README.md                          top-level guide (build/run/deploy quick start)
+.dockerignore                        repo root &mdash; keeps build contexts small</code></pre>
+
+  <!-- ================= DOCKER SECTION ================= -->
+  <h2 id="docker-section" class="section-divider docker-divider"><span class="os-icon">&#128051;</span>Docker &amp; Local Deployment</h2>
+  <p class="section-intro">
+    Every Dockerfile below builds from the <strong>repo root</strong> as its context (e.g.
+    <code>docker build -f containerization/docker/fhirbridge-app/Dockerfile .</code>) because it
+    needs to reach <code>src/</code>, <code>portal/</code>, and/or <code>Demo_TestApp/</code>, all of
+    which live outside the <code>containerization/</code> folder itself.
+  </p>
+
+  <h3 id="local-inventory">Resource &amp; Cost Inventory <span class="pill pill-docker">local</span></h3>
+  <div class="callout docker">
+    <strong>Total cost: $0</strong>
+    Everything below runs entirely on your own machine's Docker Desktop/Engine. There is no cloud
+    billing account involved at all — the only "cost" is local disk space and CPU while it's running.
+  </div>
+  <table class="file-table">
+    <tr><th>Resource</th><th>What it is</th><th>Billable?</th></tr>
+    <tr><td class="why">5 containers (<code>sqlserver</code>, <code>redis</code>, <code>fhirbridge-app</code>, <code>demo-app</code>, <code>worker</code>)</td><td class="why">Local processes, one per container</td><td class="status"><span class="pill pill-new">$0</span></td></tr>
+    <tr><td class="why">3 volumes (<code>sqlserver-data</code>, <code>redis-data</code>, <code>fhirbridge-dataprotection-keys</code>)</td><td class="why">Local disk, persisted across restarts</td><td class="status"><span class="pill pill-new">$0</span></td></tr>
+    <tr><td class="why">1 bridge network (<code>fhirbridge-containerized</code>)</td><td class="why">Container-name DNS between the 5 containers</td><td class="status"><span class="pill pill-new">$0</span></td></tr>
+    <tr><td class="why">Images: 2 pulled (SQL Server, Redis) + 3 built (fhirbridge-app, demo-app, worker)</td><td class="why">Local disk; one-time bandwidth to pull the public base images</td><td class="status"><span class="pill pill-new">$0</span></td></tr>
+  </table>
+  <p><strong>Tagging:</strong> every container, volume, and (in the Terraform-local variant) network
+  carries the same 4 identifying labels —
+  <code>com.fhirbridge.project=FHIRBridge</code>, <code>com.fhirbridge.component=containerization</code>,
+  <code>com.fhirbridge.environment=local</code>, <code>com.fhirbridge.managed-by=docker-compose</code>
+  (or <code>Terraform</code> for the Terraform-local variant). Find everything at a glance with
+  <code>docker ps --filter label=com.fhirbridge.project=FHIRBridge</code>.</p>
+
+  <h3 id="dockerignore"><code class="file-title">.dockerignore</code> <span class="pill pill-new">new, repo root</span></h3>
+  <p>Keeps every Docker build context small and fast by excluding exactly what <code>.gitignore</code>
+  already excludes from source control, plus frontend build artifacts that would otherwise get
+  copied into every image layer for no reason.</p>
+  <pre><code># .NET build output
+**/bin/
+**/obj/
+**/artifacts/
+**/TestResults/
+
+# Node / Angular
+**/node_modules/
+**/.angular/
+**/dist/
+
+# VCS / editor / misc
+.git/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Terraform (never needed inside an image build context)
+containerization/terraform/**/.terraform/
+containerization/terraform/**/*.tfstate*
+
+# Tests and docs aren't needed inside any image
+tests/
+docs/</code></pre>
+
+  <h3 id="dockerfile-app"><code class="file-title">docker/fhirbridge-app/Dockerfile</code> <span class="pill pill-new">new</span></h3>
+  <p>A 3-stage build producing the one image that runs both <code>FHIRBridge.Api</code> and
+  <code>FHIRBridge.Gateway</code>.</p>
+  <pre><code># ---- Stage 1: Angular portal build ----
+FROM node:20-alpine AS portal-build
+ARG PORTAL_CONFIG=production
+WORKDIR /src/portal
+# .npmrc (legacy-peer-deps=true) must be present before `npm ci` — without it npm's default
+# strict peer-dependency resolution flags several transitive version pairs (chokidar, ajv, keyv)
+# as an out-of-sync lockfile, even though the lockfile itself is fine under the project's own
+# npm config.
+COPY portal/package.json portal/package-lock.json portal/.npmrc ./
+RUN npm ci
+COPY portal/ ./
+RUN npm run build -- --configuration=${PORTAL_CONFIG}
+
+# ---- Stage 2: .NET publish (Api + Gateway) ----
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+WORKDIR /src
+COPY src/ ./src/
+RUN dotnet publish src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj \
+      -c Release --no-self-contained -o /app/publish/api \
+    &amp;&amp; dotnet publish src/Gateway/FHIRBridge.Gateway/FHIRBridge.Gateway.csproj \
+      -c Release --no-self-contained -o /app/publish/gateway
+
+# ---- Stage 3: runtime ----
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=dotnet-build /app/publish/api ./api
+COPY --from=dotnet-build /app/publish/gateway ./gateway
+COPY --from=portal-build /src/portal/dist/fhirbridge-ui/browser ./portal
+COPY containerization/docker/fhirbridge-app/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+EXPOSE 80
+ENTRYPOINT ["./entrypoint.sh"]</code></pre>
+  <ul class="feature-list">
+    <li><strong>Stage 1 (portal-build)</strong> — builds the Angular portal with the same
+    <code>ng build --configuration</code> convention already used everywhere else in this repo
+    (<code>production</code> / <code>staging</code> / <code>qa</code> / <code>dev</code> /
+    <code>working</code>, selectable via the <code>PORTAL_CONFIG</code> build arg). Copies
+    <code>.npmrc</code> alongside <code>package.json</code>/<code>package-lock.json</code> — this
+    was the source of a real bug, see the <a href="#bug-gateway">bugs section</a> for the sibling
+    issue and <a href="#reference">quick reference</a> generally; without <code>.npmrc</code>'s
+    <code>legacy-peer-deps=true</code>, <code>npm ci</code> fails with a false "lockfile out of
+    sync" error even though the lockfile itself is fine.</li>
+    <li><strong>Stage 2 (dotnet-build)</strong> — publishes <em>both</em> <code>FHIRBridge.Api</code>
+    and <code>FHIRBridge.Gateway</code> from the same <code>src/</code> copy, into two separate
+    output folders (<code>/app/publish/api</code>, <code>/app/publish/gateway</code>).</li>
+    <li><strong>Stage 3 (final)</strong> — assembles the runtime image on
+    <code>mcr.microsoft.com/dotnet/aspnet:9.0</code> (needs the ASP.NET Core shared framework, not
+    just the bare .NET runtime, since both Api and Gateway are Kestrel-hosted). Copies the Api
+    publish output to <code>/app/api</code>, the Gateway publish output to <code>/app/gateway</code>,
+    and the Angular build to <code>/app/portal</code> (the Gateway's static-file root). Only port
+    <strong>80</strong> is exposed — the Api's port 5000 is loopback-only inside the container and
+    is never meant to be published by the orchestrator, matching the "not reachable from outside the
+    server" note in the existing Windows deploy docs.</li>
+  </ul>
+
+  <h3 id="entrypoint"><code class="file-title">docker/fhirbridge-app/entrypoint.sh</code> <span class="pill pill-new">new</span></h3>
+  <p>The script that actually launches both processes inside the one container, since a Dockerfile's
+  <code>ENTRYPOINT</code> can only name one command.</p>
+  <pre><code>#!/bin/bash
+set -e
+
+env ASPNETCORE_URLS=http://127.0.0.1:5000 \
+    ASPNETCORE_CONTENTROOT=/app/api \
+    dotnet /app/api/FHIRBridge.Api.dll &amp;
+API_PID=$!
+
+env ASPNETCORE_URLS=http://+:80 \
+    ASPNETCORE_CONTENTROOT=/app/gateway \
+    StaticFiles__RootPath=/app/portal \
+    dotnet /app/gateway/FHIRBridge.Gateway.dll &amp;
+GATEWAY_PID=$!
+
+terminate() {
+  kill -TERM "$API_PID" "$GATEWAY_PID" 2>/dev/null || true
+}
+trap terminate TERM INT
+
+# If either process dies, the container should die too so the orchestrator restarts it.
+wait -n "$API_PID" "$GATEWAY_PID"
+EXIT_CODE=$?
+terminate
+exit $EXIT_CODE</code></pre>
+  <ul class="feature-list">
+    <li><strong>Two scoped <code>env VAR=value command &amp;</code> invocations</strong> — each
+    process gets its <em>own</em> <code>ASPNETCORE_URLS</code> (Api binds loopback-only on 5000;
+    Gateway binds all interfaces on 80) without needing a container-wide <code>ENV</code>, which
+    would force both processes to the same bind address.</li>
+    <li><strong><code>ASPNETCORE_CONTENTROOT</code> per process</strong> — the fix for the real bug
+    documented in <a href="#bug-gateway">Bugs Found &amp; Fixed #3</a>. ASP.NET Core resolves
+    <code>appsettings.json</code> (and <code>wwwroot</code>) relative to the process's content root,
+    which defaults to its current working directory — not the folder containing its DLL. Both
+    <code>dotnet</code> invocations here run from the script's own cwd (<code>/app</code>, the
+    image's <code>WORKDIR</code>), so without this each process would look for config next to
+    <code>/app</code> instead of <code>/app/api</code> or <code>/app/gateway</code> and silently
+    start with none of it.</li>
+    <li><strong><code>StaticFiles__RootPath=/app/portal</code></strong> — only set for the Gateway
+    process; tells it where the Angular build lives (read by
+    <code>src/Gateway/FHIRBridge.Gateway/Program.cs</code>'s <code>StaticFiles:RootPath</code>
+    config key).</li>
+    <li><strong><code>trap</code> + <code>wait -n</code></strong> — forwards <code>SIGTERM</code>/<code>SIGINT</code>
+    to both children on container stop, and exits the whole container the moment <em>either</em>
+    process dies (rather than leaving a half-alive container running), so the orchestrator's
+    restart policy actually gets a chance to recover it.</li>
+  </ul>
+
+  <h3 id="dockerfile-demo"><code class="file-title">docker/demo-app/Dockerfile</code> <span class="pill pill-new">new</span></h3>
+  <p>A simpler 3-stage build — <code>HealthAppBackend</code> already self-hosts its own Angular
+  build as a single process (same pattern as the Api's own <code>wwwroot</code> convention, just
+  wired through the <code>DEMOAPP_PORTAL_PATH</code> env var instead), so there's no second process
+  to juggle here.</p>
+  <pre><code># ---- Stage 1: Angular frontend build ----
+FROM node:20-alpine AS frontend-build
+ARG DEMO_CONFIG=production
+WORKDIR /src/frontend
+COPY Demo_TestApp/frontend/package.json Demo_TestApp/frontend/package-lock.json ./
+RUN npm ci
+COPY Demo_TestApp/frontend/ ./
+RUN npm run build -- --configuration=${DEMO_CONFIG}
+
+# ---- Stage 2: .NET publish ----
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+WORKDIR /src
+COPY Demo_TestApp/backend/ ./backend/
+RUN dotnet publish backend/HealthAppBackend.csproj \
+      -c Release --no-self-contained -o /app/publish
+
+# ---- Stage 3: runtime ----
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=dotnet-build /app/publish ./
+COPY --from=frontend-build /src/frontend/dist/frontend/browser ./portal
+
+ENV ASPNETCORE_URLS=http://+:5500
+ENV DEMOAPP_PORTAL_PATH=/app/portal
+
+EXPOSE 5500
+ENTRYPOINT ["dotnet", "HealthAppBackend.dll"]</code></pre>
+  <p>Note this Dockerfile did <em>not</em> hit the same content-root bug as
+  <code>fhirbridge-app</code> — the published DLL and its <code>appsettings.json</code> land
+  directly in <code>/app</code>, which is also the container's <code>WORKDIR</code> and therefore
+  also the process's default content root, with no subfolder mismatch.</p>
+
+  <h3 id="dockerfile-worker"><code class="file-title">docker/worker/Dockerfile</code> <span class="pill pill-new">new</span></h3>
+  <p>The simplest of the three — <code>FHIRBridge.Worker</code> has no HTTP endpoint at all.</p>
+  <pre><code># ---- Stage 1: .NET publish ----
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+WORKDIR /src
+COPY src/ ./src/
+RUN dotnet publish src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj \
+      -c Release --no-self-contained -o /app/publish
+
+# ---- Stage 2: runtime ----
+# Despite having no Kestrel endpoint, FHIRBridge.Worker pulls in the ASP.NET Core shared framework
+# transitively (via FHIRBridge.Infrastructure/Observability) — the plain dotnet/runtime image is
+# missing it and fails at launch with "Framework: 'Microsoft.AspNetCore.App' ... No frameworks
+# were found", so this needs the aspnet base image too.
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=dotnet-build /app/publish ./
+
+ENTRYPOINT ["dotnet", "FHIRBridge.Worker.dll"]</code></pre>
+  <p>The comment in Stage 2 documents a real bug found and fixed during verification &mdash; see
+  <a href="#bug-worker">Bugs Found &amp; Fixed #2</a>. The original version used the smaller,
+  ASP.NET-Core-free <code>dotnet/runtime:9.0</code> image, which is the theoretically "correct"
+  choice for a worker with no web server — except this specific worker's dependency graph needs the
+  ASP.NET Core shared framework anyway, so it crashed on launch until switched to
+  <code>dotnet/aspnet:9.0</code>.</p>
+
+  <h3 id="compose-yml"><code class="file-title">compose/docker-compose.yml</code> <span class="pill pill-new">new</span></h3>
+  <p>The fast, manual local path — brings up all 5 containers on one bridge network with
+  container-name-based DNS (so <code>Server=sqlserver,1433;...</code> and <code>redis:6379</code>
+  just resolve).</p>
+  <pre><code>name: fhirbridge-containerized
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Express"
+      MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD}"
+    ports: ["${SQL_HOST_PORT:-1434}:1433"]
+    volumes: [sqlserver-data:/var/opt/mssql]
+    healthcheck: { test: [...sqlcmd SELECT 1...], interval: 10s, retries: 10 }
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    ports: ["${REDIS_HOST_PORT:-6380}:6379"]
+    volumes: [redis-data:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"], interval: 10s, retries: 10 }
+
+  fhirbridge-app:
+    build:
+      context: ../../
+      dockerfile: containerization/docker/fhirbridge-app/Dockerfile
+      args: { PORTAL_CONFIG: "${PORTAL_BUILD_CONFIG:-production}" }
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
+      Authentication__SigningKey: "${JWT_SIGNING_KEY}"
+      DataProtection__KeyRingPath: "/app/keys"
+      Portal__AllowedOrigins__0: "http://localhost:${DEMO_HOST_PORT:-5500}"
+      Swagger__Enabled: "true"
+    ports: ["${APP_HOST_PORT:-8080}:80"]
+    volumes: [fhirbridge-dataprotection-keys:/app/keys]
+    restart: unless-stopped   # see "migration race" bug below
+
+  demo-app:
+    build: { context: ../../, dockerfile: containerization/docker/demo-app/Dockerfile,
+             args: { DEMO_CONFIG: "${DEMO_BUILD_CONFIG:-production}" } }
+    depends_on: { sqlserver: { condition: service_healthy } }
+    environment:
+      ConnectionStrings__Default: "Server=sqlserver,1433;Database=HealthAppDb;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      AllowedFrontendOrigin: "http://localhost:${DEMO_HOST_PORT:-5500}"
+    ports: ["${DEMO_HOST_PORT:-5500}:5500"]
+    restart: unless-stopped
+
+  worker:
+    build: { context: ../../, dockerfile: containerization/docker/worker/Dockerfile }
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      fhirbridge-app: { condition: service_started }   # head start, not a guarantee
+    environment:
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
+      RuntimeWorker__Enabled: "true"
+      Messaging__Provider: "InMemory"
+    restart: unless-stopped
+
+volumes:
+  sqlserver-data:
+  redis-data:
+  fhirbridge-dataprotection-keys:</code></pre>
+  <p><em>(Abbreviated for readability — the real file has the full healthcheck commands and every
+  key spelled out; see the file on disk for the byte-for-byte version.)</em></p>
+  <ul class="feature-list">
+    <li><strong>Host ports are all offset</strong> from the repo-root dev/E2E
+    <code>docker-compose.yml</code>'s defaults (1433/6379) — <code>sqlserver</code> uses 1434,
+    <code>redis</code> uses 6380 — so both stacks can run at the same time without a port clash.
+    <code>fhirbridge-app</code> publishes 8080, <code>demo-app</code> publishes 5500 (matching its
+    established convention from the Windows deploy docs).</li>
+    <li><strong>Every config value flows in via environment variables</strong> using ASP.NET Core's
+    <code>Section__Key</code> double-underscore override convention — nothing here depends on
+    baking secrets into an image or editing <code>appsettings.json</code>.</li>
+    <li><strong><code>restart: unless-stopped</code></strong> on all three custom app services is
+    the safety net for the migration race documented in
+    <a href="#bug-race">Bugs Found &amp; Fixed #1</a>.</li>
+    <li><strong><code>Swagger__Enabled: "true"</code></strong> — <code>Swagger:Enabled</code>
+    defaults to <code>false</code> outside <code>Development</code> in <code>FHIRBridge.Api</code>'s
+    own <code>Program.cs</code>; without this override, the Gateway's <code>/swagger/**</code> proxy
+    route would have nothing to forward to.</li>
+    <li><strong>Redis now requires a password everywhere</strong> — the HIPAA hardening pass added
+    <code>--requirepass</code> to the <code>redis</code> container's <code>command</code> (and a
+    matching <code>redis-cli -a</code> healthcheck), and every connection string that points at Redis
+    changed from <code>host:6379</code> to <code>host:6379,password=&lt;password&gt;</code>
+    (StackExchange.Redis's comma-separated option syntax). Every SQL Server connection string also
+    now carries <code>Encrypt=True</code> alongside <code>TrustServerCertificate=True</code> — some
+    previously had only the latter, meaning traffic between app and database wasn't actually
+    encrypted.</li>
+  </ul>
+
+  <h3 id="env-example"><code class="file-title">compose/.env.example</code> <span class="pill pill-new">new</span></h3>
+  <p>Committed template for the local secrets file. <code>.env</code> itself is gitignored (via the
+  repo root <code>.gitignore</code>'s existing "Environment files" entry, which already covers
+  <code>.env</code> anywhere in the tree).</p>
+  <pre><code>SQL_SA_PASSWORD=Ch4ngeMe!Str0ng
+JWT_SIGNING_KEY=replace-with-a-long-random-string-at-least-32-chars
+REDIS_PASSWORD=replace-with-a-strong-redis-password
+
+PORTAL_BUILD_CONFIG=production
+DEMO_BUILD_CONFIG=production
+
+IMAGE_TAG=local
+ASPNETCORE_ENVIRONMENT=Production
+
+APP_HOST_PORT=8080
+DEMO_HOST_PORT=5500
+SQL_HOST_PORT=1434
+REDIS_HOST_PORT=6380</code></pre>
+
+  <h3 id="build-scripts"><code class="file-title">scripts/build-images.sh</code> &amp; <code class="file-title">build-images.ps1</code> <span class="pill pill-new">new</span></h3>
+  <p>Identical logic in bash and PowerShell — builds all 3 custom images from the repo root and
+  optionally pushes them to a registry. This is deliberately the <em>only</em> place images get
+  built: neither the Azure nor AWS Terraform ever runs <code>docker build</code> itself.</p>
+  <pre><code># Usage
+./build-images.sh                                          # local tags only, no push
+./build-images.sh -t v1.2.0                                 # local tags, specific version
+./build-images.sh -r myregistry.azurecr.io -t v1.2.0 -p     # build, tag, push to ACR
+./build-images.sh -r &lt;account&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com/fhirbridge -t v1.2.0 -p  # ECR
+
+# PowerShell equivalent
+./build-images.ps1 -Registry myregistry.azurecr.io -Tag v1.2.0 -Push</code></pre>
+  <ul class="feature-list">
+    <li><strong><code>-r</code>/<code>-Registry</code></strong> — registry/repo prefix (blank means
+    local-tag-only, e.g. <code>fhirbridge-app:local</code>).</li>
+    <li><strong><code>-t</code>/<code>-Tag</code></strong> — image tag, default <code>local</code>.</li>
+    <li><strong><code>-p</code>/<code>-Push</code></strong> — pushes each image after building;
+    requires a registry and that you're already authenticated to it
+    (<code>az acr login</code> / <code>aws ecr get-login-password | docker login</code>).</li>
+    <li>Both scripts iterate the same 3-entry map — <code>fhirbridge-app</code>,
+    <code>demo-app</code>, <code>fhirbridge-worker</code> — each pointing at its Dockerfile under
+    <code>containerization/docker/</code>, and both resolve the repo root relative to their own
+    script location so they work from any current directory.</li>
+  </ul>
+
+  <h3 id="tf-local"><code class="file-title">terraform/environments/local/</code> <span class="pill pill-new">new</span></h3>
+  <p>Reproduces the exact same 5-container topology as <code>docker-compose.yml</code>, but via
+  Terraform's <code>kreuzwerker/docker</code> provider — so a single <code>terraform apply</code>
+  can stand up the local stack too, for anyone who wants one consistent <code>terraform apply</code>
+  workflow across all three environments. The Compose file remains the faster manual path; this
+  exists in addition to it, not instead of it.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>What it does</th></tr>
+    <tr><td class="file-path">variables.tf</td><td class="why"><code>image_tag</code>, <code>sql_sa_password</code> (sensitive), <code>jwt_signing_key</code> (sensitive), host port overrides — mirrors <code>.env.example</code>'s knobs as Terraform variables.</td></tr>
+    <tr><td class="file-path">main.tf</td><td class="why">1 <code>docker_network</code>, 3 <code>docker_volume</code>s, 2 pulled images (<code>docker_image</code> for sqlserver/redis), 5 <code>docker_container</code> resources — one per container, each with its own <code>env</code> list, port mapping, and (for the 3 custom images) a plain <code>image = "fhirbridge-app:${var.image_tag}"</code> reference assuming the build script already ran.</td></tr>
+    <tr><td class="file-path">outputs.tf</td><td class="why"><code>fhirbridge_app_url</code>, <code>demo_app_url</code> — the two localhost URLs to open.</td></tr>
+    <tr><td class="file-path">terraform.tfvars.example</td><td class="why">Committed template; copy to <code>terraform.tfvars</code> (gitignored) and fill in secrets.</td></tr>
+  </table>
+  <p>Key resource excerpt — the worker's dependency chain, showing the same "head start, not a
+  guarantee" pattern used everywhere the migration race applies:</p>
+  <pre><code>resource "docker_container" "worker" {
+  name  = "fhirbridge-ctr-worker"
+  image = "fhirbridge-worker:${var.image_tag}"
+
+  # fhirbridge_app is a head start, not a guarantee: both it and worker auto-migrate FHIRBridgeDb
+  # on boot and can race on the initial CREATE DATABASE on a fresh database. restart="unless-stopped"
+  # above is the actual safety net that turns a lost race into a self-healing retry.
+  depends_on = [docker_container.sqlserver, docker_container.redis, docker_container.fhirbridge_app]
+  ...
+  restart = "unless-stopped"
+}</code></pre>
+
+  <h3 id="local-cleanup"><code class="file-title">scripts/cleanup-local.sh</code> &amp; <code class="file-title">cleanup-local.ps1</code> <span class="pill pill-new">new</span></h3>
+  <p>Tears the local stack back down once you're done testing — since the total cost is $0 there's
+  no billing urgency, but leftover containers/volumes still eat local disk and can collide with a
+  later run.</p>
+  <pre><code>./cleanup-local.sh              # docker compose down -v (containers + volumes + network)
+./cleanup-local.sh -k           # docker compose down, keep volumes (data survives)
+./cleanup-local.sh -t           # terraform destroy in terraform/environments/local instead
+./cleanup-local.sh -y           # skip the confirmation prompt
+
+# PowerShell: cleanup-local.ps1 -KeepVolumes | -Terraform | -Yes</code></pre>
+
+  <!-- ================= AZURE SECTION ================= -->
+  <h2 id="azure-section" class="section-divider azure-divider"><span class="os-icon">&#9729;</span>Azure &mdash; Container Apps</h2>
+  <p class="section-intro">
+    Deploys the identical 5-container topology to <strong>Azure Container Apps</strong> — chosen
+    over AKS (too much surface for this scope) and App Service for Containers (no natural fit for
+    5 independently-scaled containers in one environment). Lives entirely under
+    <code>containerization/terraform/environments/azure/</code>.
+  </p>
+  <div class="callout azure">
+    <strong>Bootstrap order matters</strong>
+    Terraform here only <em>deploys</em> — it never runs <code>docker build</code>. The Azure
+    Container Registry (ACR) must exist and already contain the 3 custom images before the
+    Container Apps that reference them can be created. See <a href="#azure-flow">the deploy flow</a>
+    below for the exact two-phase <code>apply</code> sequence.
+  </div>
+
+  <h3 id="azure-inventory">Resource &amp; Cost Inventory <span class="pill pill-azure">azure</span></h3>
+  <p>Both deploy paths build the identical 5-container topology, but they're no longer 100% resource-
+  identical: the Terraform environment below adds a Key Vault (see row below); the Bicep "easy
+  install" path (<a href="#azure-easy-install">further down</a>) does not, and still takes secrets
+  as plain <code>@secure()</code> parameters.</p>
+  <table class="file-table">
+    <tr><th>Resource</th><th>Type</th><th>Billable?</th><th>Cost driver</th></tr>
+    <tr><td class="why">Resource Group <span class="pill pill-azure" style="font-size:10px;">Terraform: pre-existing</span></td><td class="why">Container</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">The Terraform environment deploys <em>into</em> an existing group (<code>rg-tusharpuri</code> by default) rather than creating one &mdash; it's read via a <code>data</code> source, never created or destroyed by this config. The Bicep path still lets the customer create/pick their own at deploy time, unchanged.</td></tr>
+    <tr><td class="why">Container Registry (Basic SKU)</td><td class="why">ACR</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Flat daily rate + storage used</td></tr>
+    <tr><td class="why">Key Vault (Standard SKU) <span class="pill pill-azure" style="font-size:10px;">Terraform only</span></td><td class="why">Secrets</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Per-10k-operations pricing, no monthly base fee &mdash; negligible cost at this scale</td></tr>
+    <tr><td class="why">Log Analytics Workspace</td><td class="why">Monitoring</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Per-GB log data ingested (small free allowance/month)</td></tr>
+    <tr><td class="why">Container Apps Environment</td><td class="why">Environment</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">The environment itself has no charge — billing is per Container App below</td></tr>
+    <tr><td class="why">Storage Account (Standard LRS)</td><td class="why">Storage</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Per-GB stored + transactions, usually a few cents/month at this scale</td></tr>
+    <tr><td class="why">2&times; Azure Files shares (sql-data, redis-data)</td><td class="why">Storage</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Billed on <em>actual</em> data stored, not the 50GB/10GB quota ceiling</td></tr>
+    <tr><td class="why"><code>sqlserver</code> Container App (1 vCPU / 2GiB, always-on)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why"><code>minReplicas: 1</code> means this never scales to zero &mdash; billed vCPU-seconds + GiB-seconds 24/7</td></tr>
+    <tr><td class="why"><code>redis</code> Container App (0.5 vCPU / 1GiB, always-on)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Same &mdash; always-on</td></tr>
+    <tr><td class="why"><code>fhirbridge-app</code> Container App (0.5 vCPU / 1GiB, 1&ndash;3 replicas)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">At least 1 replica always running; scales up to 3 under load</td></tr>
+    <tr><td class="why"><code>demo-app</code> Container App (0.25 vCPU / 0.5GiB, 1&ndash;3 replicas)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Same pattern</td></tr>
+    <tr><td class="why"><code>worker</code> Container App (0.25 vCPU / 0.5GiB, always-on)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Always-on, no ingress</td></tr>
+  </table>
+  <div class="callout azure">
+    <strong>Biggest cost driver: the 5 Container Apps run continuously</strong>
+    Every app here has <code>minReplicas: 1</code> (or more), which means none of them scale to
+    zero &mdash; you're billed for compute the whole time the environment exists, not just while
+    someone is actively using it. These figures are illustrative cost <em>drivers</em>, not quotes
+    &mdash; check the <a href="https://azure.microsoft.com/pricing/calculator/">Azure Pricing
+    Calculator</a> for current, region-specific numbers before relying on them.
+  </div>
+  <p><strong>Tagging:</strong> every resource above that supports tags carries the same 4 tags
+  (<code>Project=FHIRBridge</code>, <code>Component=containerization</code>,
+  <code>Environment=&lt;name_prefix&gt;</code>, <code>ManagedBy=Terraform</code> or
+  <code>Bicep</code>) &mdash; defined once as <code>local.common_tags</code> /
+  <code>commonTags</code> and applied per-resource, since (unlike AWS) the azurerm provider has no
+  single "apply to everything automatically" mechanism. These tags back the Azure Cost Management
+  "group by tag" view, and are what the Bicep path's tag-based cleanup mode matches against.</p>
+
+  <h3 id="azure-variables"><code class="file-title">azure/variables.tf</code> <span class="pill pill-new">new</span></h3>
+  <pre><code>variable "name_prefix"         { default = "fhirbridge" }      # builds every resource name
+variable "resource_group_name" { default = "rg-tusharpuri" }   # must already exist — see below
+variable "image_tag"           { default = "latest" }          # must match what build-images pushed
+variable "sql_port"            { default = 1433 }              # client-configurable per environment
+variable "redis_port"          { default = 6379 }              # client-configurable per environment
+variable "sql_sa_password"     { sensitive = true }
+variable "jwt_signing_key"     { sensitive = true }
+variable "redis_password"      { sensitive = true }             # HIPAA pass: Redis now requires auth everywhere</code></pre>
+  <div class="callout azure">
+    <strong>Deploys into an existing resource group — never creates or destroys one</strong>
+    <code>resource_group_name</code> must name a resource group that already exists
+    (<code>az group create --name rg-tusharpuri --location eastus</code>, one time, if it doesn't).
+    Every resource below reads its location from that group via a <code>data</code> source rather
+    than a separate <code>location</code> variable, so everything always lands in the same region
+    as the group. There is no <code>location</code> variable anymore — removed when this changed.
+  </div>
+  <div class="callout azure">
+    <strong>No port variable for <code>fhirbridge-app</code> / <code>demo-app</code></strong>
+    <code>sql_port</code>/<code>redis_port</code> only apply to the two internal-only Container
+    Apps. The two public apps have no equivalent — Azure Container Apps external HTTP ingress is
+    always served at <code>https://&lt;app-name&gt;.&lt;environment-domain&gt;</code> on standard
+    443, with no client-configurable port. That's a genuine platform limitation, not a gap left in
+    this Terraform.
+  </div>
+
+  <h3 id="azure-main"><code class="file-title">azure/main.tf</code> <span class="pill pill-new">new</span></h3>
+  <p>Everything for this environment lives in one file. Walked through resource-by-resource:</p>
+
+  <h4>Providers &amp; naming</h4>
+  <pre><code>terraform {
+  required_providers {
+    azurerm = { source = "hashicorp/azurerm", version = "~> 3.100" }
+    random  = { source = "hashicorp/random",  version = "~> 3.6" }
+  }
+}
+resource "random_id" "suffix" { byte_length = 3 }
+
+locals {
+  suffix               = random_id.suffix.hex
+  acr_name             = "${var.name_prefix}acr${local.suffix}"   # globally unique, alnum only
+  storage_account_name = "${var.name_prefix}st${local.suffix}"    # globally unique, &le;24 chars
+
+  # Plain-string app names — NOT resource attribute lookups — so a Container App can compute its
+  # OWN public URL from its own name + the environment's default_domain, without needing to read
+  # back its own not-yet-created computed attributes (a self-reference Terraform can't resolve).
+  sqlserver_name      = "${var.name_prefix}-sqlserver"
+  redis_name          = "${var.name_prefix}-redis"
+  fhirbridge_app_name = "${var.name_prefix}-app"
+  demo_app_name       = "${var.name_prefix}-demo-app"
+  worker_name         = "${var.name_prefix}-worker"
+}</code></pre>
+  <p>The <code>random_id</code> suffix exists because Azure Storage Accounts and Container
+  Registries both require <em>globally unique</em> names across all of Azure, not just within the
+  resource group.</p>
+
+  <h4>Secrets (Key Vault is the source of truth)</h4>
+  <p>Part of the HIPAA hardening pass: secrets used to flow straight from Terraform variables into
+  each Container App's <code>secret</code> block. Now every Container App reads them out of an
+  <code>azurerm_key_vault</code> instead — the variables still seed the initial values, but the
+  Vault is what's actually read at deploy time.</p>
+  <pre><code>data "azurerm_client_config" "current" {}
+
+resource "azurerm_key_vault" "main" {
+  name                       = "${var.name_prefix}-kv-${local.suffix}"
+  location                   = var.location
+  resource_group_name        = azurerm_resource_group.main.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  enable_rbac_authorization  = true
+  soft_delete_retention_days = 7
+  tags                       = local.common_tags
+}
+
+# The applying identity needs write access before it can seed secret values below.
+resource "azurerm_role_assignment" "terraform_kv_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_key_vault_secret" "sql_sa_password" {
+  name         = "sql-sa-password"
+  value        = var.sql_sa_password
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.terraform_kv_secrets_officer]
+  lifecycle    { ignore_changes = [value] }
+}
+# ...and the same again for jwt_signing_key / redis_password</code></pre>
+  <div class="callout azure">
+    <strong>Rotating a secret sticks &mdash; on purpose</strong>
+    <code>lifecycle { ignore_changes = [value] }</code> means that after the first
+    <code>apply</code>, Terraform never overwrites a secret's value again. Rotate one directly in
+    the Vault (Portal or <code>az keyvault secret set</code>) and it stays rotated permanently — a
+    later <code>terraform apply</code> run with the old <code>terraform.tfvars</code> value will
+    <strong>not</strong> revert it. This is deliberate: it lets an operator rotate a credential
+    without touching Terraform state, at the cost of the tfvars file no longer reflecting what's
+    actually live after the first rotation.
+  </div>
+  <p>Every Container App that previously read <code>var.sql_sa_password</code> /
+  <code>var.jwt_signing_key</code> / <code>var.redis_password</code> directly now reads
+  <code>azurerm_key_vault_secret.sql_sa_password.value</code> /
+  <code>azurerm_key_vault_secret.jwt_signing_key.value</code> /
+  <code>azurerm_key_vault_secret.redis_password.value</code> instead — the <code>sqlserver</code>
+  app's <code>secret</code> block, the <code>redis</code> app's <code>command</code> override,
+  <code>fhirbridge_app</code>'s <code>secret</code> blocks and both connection strings,
+  <code>demo_app</code>'s <code>secret</code> block and connection string, and <code>worker</code>'s
+  <code>secret</code> block and both connection strings.</p>
+  <p><strong>Terraform-only:</strong> the Bicep "easy install" path (<a href="#azure-easy-install">further
+  down</a>) was <em>not</em> changed for this — it still takes <code>sqlSaPassword</code> /
+  <code>jwtSigningKey</code> / <code>redisPassword</code> as plain <code>@secure()</code> parameters,
+  with no Key Vault involved.</p>
+
+  <h4>Existing resource group, registry, Container Apps Environment</h4>
+  <pre><code>data "azurerm_resource_group" "main" { name = var.resource_group_name }
+
+resource "azurerm_container_registry" "acr" {
+  name                = local.acr_name
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  sku = "Basic", admin_enabled = true   # admin creds used directly, no AAD role wiring
+}
+
+resource "azurerm_log_analytics_workspace" "main" { sku = "PerGB2018", retention_in_days = 30 }
+
+resource "azurerm_container_app_environment" "main" {
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+}</code></pre>
+  <p><code>data "azurerm_resource_group" "main"</code> looks up an <em>existing</em> group by name
+  rather than creating one — every other resource in this file reads its
+  <code>resource_group_name</code>/<code>location</code> from this data source. Container Apps
+  <em>requires</em> a Log Analytics workspace for its environment — that's not optional overhead,
+  it's how Container Apps captures container stdout/stderr and system logs.</p>
+
+  <h4>Persistent storage for SQL Server + Redis</h4>
+  <p>Container Apps are otherwise fully stateless — no persistent disk exists unless you explicitly
+  mount one. Azure Files is the supported option, registered against the environment as
+  "environment storage" and then mounted per-app.</p>
+  <pre><code>resource "azurerm_storage_account" "main" { account_tier = "Standard", account_replication_type = "LRS" }
+resource "azurerm_storage_share" "sql_data"   { name = "sql-data",   quota = 50 }
+resource "azurerm_storage_share" "redis_data" { name = "redis-data", quota = 10 }
+
+resource "azurerm_container_app_environment_storage" "sql_data" {
+  account_name = azurerm_storage_account.main.name
+  access_key   = azurerm_storage_account.main.primary_access_key
+  share_name   = azurerm_storage_share.sql_data.name
+  access_mode  = "ReadWrite"
+}
+# ...and the same again for redis_data</code></pre>
+
+  <h4>SQL Server Express &amp; Redis — internal-only, single replica</h4>
+  <pre><code>resource "azurerm_container_app" "sqlserver" {
+  secret { name = "sql-sa-password", value = azurerm_key_vault_secret.sql_sa_password.value }
+
+  template {
+    min_replicas = 1
+    max_replicas = 1   # a second replica would corrupt the shared Azure Files data directory
+
+    volume { name = "sql-data", storage_type = "AzureFile", storage_name = ...sql_data.name }
+    container {
+      image = "mcr.microsoft.com/mssql/server:2022-latest"
+      cpu = 1.0, memory = "2Gi"
+      env { name = "ACCEPT_EULA", value = "Y" }
+      env { name = "MSSQL_PID", value = "Express" }
+      env { name = "MSSQL_TCP_PORT", value = tostring(var.sql_port) }
+      env { name = "MSSQL_SA_PASSWORD", secret_name = "sql-sa-password" }
+      volume_mounts { name = "sql-data", path = "/var/opt/mssql" }
+    }
+  }
+
+  ingress {
+    external_enabled = false     # internal-only: reachable by other apps in this environment, never the internet
+    target_port      = var.sql_port
+    transport        = "tcp"
+    traffic_weight { latest_revision = true, percentage = 100 }
+  }
+}</code></pre>
+  <div class="callout bad">
+    <strong>Found in practice: <code>MSSQL_SA_PASSWORD</code> only applies the very first time
+    SQL Server initializes an empty <code>/var/opt/mssql</code></strong> — once it's written a
+    <code>master</code> database to the mounted Azure Files share, every later restart keeps that
+    <em>original</em> password no matter what you put in the secret/env var afterward. If you
+    change <code>sqlSaPassword</code> and redeploy (Terraform apply or a Bicep one-click re-run
+    into the same resource group + name prefix), the app containers will start sending the new
+    password while SQL Server is still enforcing the old one — a persistent
+    <code>Login failed for user 'sa'. Reason: Password did not match...</code> that looks like a
+    wiring bug but isn't. Fix: delete and recreate the <code>sql-data</code> file share (<code>az
+    storage share delete</code> / <code>create</code> with <code>--account-key</code>, since these
+    two subcommands don't accept <code>--auth-mode key</code>), then restart the SQL container app
+    revision so it reinitializes against the now-empty share.
+  </div>
+  <div class="callout warn">
+    <strong>Found in practice: avoid <code>$</code>, backticks, and quote characters in
+    <code>sqlSaPassword</code>/<code>jwtSigningKey</code>/<code>redisPassword</code></strong> —
+    a password containing <code>$$</code> was directly observed being corrupted to a shell PID
+    substitution (<code>S@1Pa$$2026</code> became <code>S@1Pa302026</code>) when passed through a
+    shell-processed path, consistent with known issues in some container entrypoint scripts that
+    re-embed env vars into a shell command line without full quoting. Stick to letters + digits for
+    these three secrets — length and case-mixing give you plenty of strength without the risk.
+    Separately, watch for a stray leading/trailing space from copy-pasting a password out of a
+    chat window or document — ADO.NET trims it when parsing a connection string but the SQL
+    container's raw env var does not, so the two sides silently disagree. Compare
+    <code>(secretValue).Length</code> against the password's expected character count to catch
+    this in seconds instead of debugging a "wrong password" for an hour.
+  </div>
+  <pre><code>resource "azurerm_container_app" "redis" {
+  secret { name = "redis-password", value = azurerm_key_vault_secret.redis_password.value }
+
+  template {
+    min_replicas = 1, max_replicas = 1
+    volume { name = "redis-data", storage_type = "AzureFile", storage_name = ...redis_data.name }
+    container {
+      image   = "redis:7-alpine"
+      cpu = 0.5, memory = "1Gi"
+      command = ["redis-server", "--port", tostring(var.redis_port), "--requirepass", azurerm_key_vault_secret.redis_password.value]
+      volume_mounts { name = "redis-data", path = "/data" }
+    }
+  }
+
+  ingress { external_enabled = false, target_port = var.redis_port, transport = "tcp"
+            traffic_weight { latest_revision = true, percentage = 100 } }
+}</code></pre>
+
+  <h4>fhirbridge-app — public, autoscaling</h4>
+  <pre><code>resource "azurerm_container_app" "fhirbridge_app" {
+  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis]
+
+  secret { name = "sql-sa-password", value = azurerm_key_vault_secret.sql_sa_password.value }
+  secret { name = "jwt-signing-key", value = azurerm_key_vault_secret.jwt_signing_key.value }
+  secret { name = "acr-password", value = azurerm_container_registry.acr.admin_password }
+  registry { server = acr.login_server, username = acr.admin_username, password_secret_name = "acr-password" }
+
+  template {
+    min_replicas = 1, max_replicas = 3
+    container {
+      image = "${acr.login_server}/fhirbridge-app:${var.image_tag}"
+      cpu = 0.5, memory = "1Gi"
+      env { name = "ConnectionStrings__FHIRBridgeDb"
+            value = "Server=${local.sqlserver_name},${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True" }
+      env { name = "ConnectionStrings__Redis"
+            value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value}" }
+      env { name = "Authentication__SigningKey", secret_name = "jwt-signing-key" }
+      env { name = "Portal__AllowedOrigins__0"
+            value = "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}" }
+    }
+  }
+
+  ingress { external_enabled = true, target_port = 80, transport = "auto"
+            traffic_weight { latest_revision = true, percentage = 100 } }
+}</code></pre>
+  <p>Note <code>fhirbridge-app</code>'s own ingress stays fixed at <code>target_port = 80</code> —
+  external HTTP ingress on Container Apps has no client-configurable port, so <code>sql_port</code>/
+  <code>redis_port</code> only ever affect the two internal-only apps and the connection strings
+  that point at them.</p>
+  <div class="callout azure">
+    <strong>How cross-container URLs resolve without a second <code>apply</code></strong>
+    A Container App's public FQDN is always predictable: <code>&lt;app-name&gt;.&lt;environment
+    default_domain&gt;</code>. Since the environment's <code>default_domain</code> is a property of
+    the <em>environment</em>, not of any individual app, <code>fhirbridge-app</code> can compute
+    <code>demo-app</code>'s URL (for CORS) from a plain string + that shared domain — no self-
+    reference, no waiting for a second apply.
+  </div>
+  <p><code>demo_app</code> and <code>worker</code> follow the same registry/secret pattern; the demo
+  app similarly computes its own public origin from its own name + the environment domain (for
+  <code>AllowedFrontendOrigin</code>), and both declare an explicit <code>depends_on</code> on
+  <code>sqlserver</code>/<code>redis</code>/<code>fhirbridge_app</code>, since their connection
+  strings reference those by plain hostname rather than a Terraform attribute (which would have
+  created an implicit dependency automatically).</p>
+
+  <h4>Custom domains for <code>fhirbridge_app</code> / <code>demo_app</code> (optional) <span class="pill pill-new">new</span></h4>
+  <p>Both apps default to their auto-generated <code>*.azurecontainerapps.io</code> URL, but
+  <code>fhirbridge_app_custom_domain</code>/<code>demo_app_custom_domain</code> variables (blank by
+  default) let you bind a real domain instead — with a free, auto-renewing Azure-managed
+  certificate, not a self-signed or manually-uploaded one.</p>
+  <pre><code>resource "azurerm_container_app_environment_managed_certificate" "fhirbridge_app" {
+  count                        = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  name                         = "${local.fhirbridge_app_name}-cert"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  subject_name                 = var.fhirbridge_app_custom_domain
+  domain_control_validation    = "CNAME"
+}
+
+resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
+  count                                    = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  name                                     = var.fhirbridge_app_custom_domain
+  container_app_id                        = azurerm_container_app.fhirbridge_app.id
+  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.fhirbridge_app[0].id
+  certificate_binding_type                 = "SniEnabled"
+}
+# ...and the same pair again for demo_app</code></pre>
+  <div class="callout azure">
+    <strong>Why this has to be a two-phase apply</strong>
+    Azure can't issue or verify a certificate for a domain until DNS proves you control it, and
+    that proof — a TXT record — can only be generated once the Container App itself already exists.
+    <strong>Phase 1:</strong> apply with the custom-domain variables left blank (the default); read
+    the <code>fhirbridge_app_domain_verification</code>/<code>demo_app_domain_verification</code>
+    outputs afterward. <strong>Add DNS records at your provider:</strong> a CNAME pointing your
+    domain at the app's existing <code>*.azurecontainerapps.io</code> hostname, and a TXT record
+    named <code>asuid.&lt;your domain&gt;</code> whose value is that verification output. Wait for
+    DNS to propagate. <strong>Phase 2:</strong> set the variable to your domain and re-apply — this
+    creates the managed-certificate resource above, which validates the TXT record at apply time
+    (and fails outright if DNS isn't ready yet), then binds it. Leave the variable blank and none of
+    this runs — both apps behave exactly as before this feature existed.
+  </div>
+  <p>Binding a custom domain to <code>demo_app</code> also needs a CORS fix on
+  <code>fhirbridge_app</code>'s side: its <code>Portal__AllowedOrigins</code> allowlist only knows
+  about the demo app's default origin by default, so a <code>dynamic "env"</code> block adds a
+  second <code>Portal__AllowedOrigins__1</code> entry for the custom domain, but only when
+  <code>demo_app_custom_domain</code> is actually set — otherwise the demo app's own calls into this
+  API would get silently rejected by CORS the moment its origin changed.</p>
+
+  <h3 id="azure-outputs"><code class="file-title">azure/outputs.tf</code> &amp; <code class="file-title">terraform.tfvars.example</code> <span class="pill pill-new">new</span></h3>
+  <pre><code>output "acr_login_server"    { ... }   # push images here first
+output "fhirbridge_app_url"  { value = "https://${local.fhirbridge_app_name}.${...default_domain}" }
+output "demo_app_url"        { value = "https://${local.demo_app_name}.${...default_domain}" }
+output "fhirbridge_app_domain_verification" { value = azurerm_container_app.fhirbridge_app.custom_domain_verification_id }
+output "demo_app_domain_verification"       { value = azurerm_container_app.demo_app.custom_domain_verification_id }
+output "fhirbridge_app_custom_domain_url"   { value = var.fhirbridge_app_custom_domain != "" ? "https://${var.fhirbridge_app_custom_domain}" : null }
+output "demo_app_custom_domain_url"         { value = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : null }
+output "key_vault_name" {
+  value       = azurerm_key_vault.main.name
+  description = "Rotate a secret with: az keyvault secret set --vault-name &lt;this&gt; --name &lt;sql-sa-password|jwt-signing-key|redis-password&gt; --value &lt;new-value&gt;, then restart the affected Container App revisions."
+}</code></pre>
+  <pre><code># terraform.tfvars.example
+name_prefix         = "fhirbridge"
+resource_group_name = "rg-tusharpuri"   # must already exist
+image_tag           = "v1"
+sql_port            = 1433
+redis_port          = 6379
+sql_sa_password     = "Ch4ngeMe!Str0ng"
+jwt_signing_key     = "replace-with-a-long-random-string-at-least-32-chars"
+redis_password      = "replace-with-a-strong-redis-password"</code></pre>
+  <p><code>sql_sa_password</code>/<code>jwt_signing_key</code>/<code>redis_password</code> are
+  unchanged as top-level variables — they now exist purely to <em>seed</em> the Key Vault secrets on
+  first apply, rather than being read directly by any Container App.</p>
+
+  <h3 id="azure-flow"><span class="pill pill-azure">Deploy flow</span> Step by step</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">0</div><div class="step-body"><strong>Make sure the target resource group exists</strong><span><code>az group create --name rg-tusharpuri --location eastus</code> — one time only; skip if it already exists. This Terraform never creates or deletes it.</span></div></div>
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Copy &amp; edit secrets</strong><span><code>cp terraform.tfvars.example terraform.tfvars</code>, fill in real values including <code>resource_group_name</code>.</span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Create just the ACR first</strong><span><code>terraform apply -target=azurerm_container_registry.acr</code> — the registry has to exist before it has anything in it.</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Push images to that ACR</strong><span><code>../../../scripts/build-images.sh -r &lt;acr_login_server output&gt; -t &lt;image_tag&gt; -p</code></span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Full apply</strong><span><code>terraform apply</code> — creates the Container Apps Environment, storage, and all 5 Container Apps inside the existing resource group, now that their images actually exist in ACR.</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Open the URLs</strong><span><code>terraform output fhirbridge_app_url</code> / <code>demo_app_url</code></span></div></div>
+  </div>
+
+  <h3 id="azure-cleanup"><code class="file-title">scripts/cleanup-azure.sh</code> &amp; <code class="file-title">cleanup-azure.ps1</code> <span class="pill pill-new">new</span></h3>
+  <p>The resource group is pre-existing and not managed by this config, so <code>terraform destroy</code>
+  removes every resource Terraform created inside it — ACR, Key Vault, storage, Container Apps
+  Environment, and all 5 Container Apps — but leaves the group itself in place. This is still the
+  important one to actually run after testing: unlike local Docker, everything in the inventory
+  above keeps billing until it's deleted.</p>
+  <pre><code>./cleanup-azure.sh          # prompts for confirmation, then terraform destroy
+./cleanup-azure.sh -y       # skip the confirmation prompt (-auto-approve)
+
+# PowerShell: cleanup-azure.ps1 [-Yes]</code></pre>
+
+  <h3 id="azure-easy-install">azure-deploy/ &mdash; Easy Install (Bicep) <span class="pill pill-new">new</span></h3>
+  <p>A single-template counterpart to the Terraform environment above: same 5-container topology,
+  same Container Apps design, but expressed as one Bicep file so a customer can deploy it with a
+  single command or a single "Deploy to Azure" button click instead of running
+  <code>terraform init/apply</code> themselves. Built for the "install it like a product" scenario
+  rather than your own CI/CD.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>What it does</th></tr>
+    <tr><td class="file-path">main.bicep</td><td class="why">The template itself &mdash; compiles cleanly with <code>bicep build</code> (verified). Resource-group scoped: the customer picks/creates the resource group in the Portal wizard, this template doesn't create it. Takes <code>sqlSaPassword</code>/<code>jwtSigningKey</code> as <code>@secure()</code> parameters, plus <code>imageRegistryServer</code>/<code>imageTag</code>/<code>imageRegistryUsername</code>/<code>imageRegistryPassword</code> so it can pull the 3 images from wherever you've published them &mdash; a one-click deploy is only possible if those images already exist somewhere reachable <em>before</em> the customer clicks deploy.</td></tr>
+    <tr><td class="file-path">createUiDefinition.json</td><td class="why">A ready-to-use custom Portal wizard (grouped "FHIRBridge Settings" — SQL SA password, JWT signing key, Redis password, all three <code>PasswordBox</code> fields — and "Version" steps) for the Template Specs, Marketplace Managed Application, or plain "Deploy to Azure" button paths. Registry access is <em>not</em> a customer-facing field anymore: it's a fixed, scoped read-only ACR pull token baked into the file's <code>outputs</code> (see the vendor registry section below), so the customer only ever picks the version tag to install. Testable standalone in Microsoft's <a href="https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade">CreateUiDefinition sandbox</a> without deploying anything.</td></tr>
+    <tr><td class="file-path">main.parameters.example.json</td><td class="why">Committed parameter-file template for the CLI deploy path (<code>az deployment group create --parameters @main.parameters.json</code>).</td></tr>
+    <tr><td class="file-path">cleanup.sh / cleanup.ps1</td><td class="why">Since this path has no Terraform state, cleanup reads <code>main.bicep</code>'s own <code>resourceManifest</code> output first (every resource ID this deployment created, straight from the deployment's own history — no extra resource needed to store it) and deletes exactly those IDs, which is precise even in a shared resource group. Only falls back to deleting the whole resource group (<code>-g</code>/<code>-ResourceGroup</code>, and only if it contains no disk snapshots — this is a hard, unbypassable gate, since snapshots are how backups of anything else sharing that resource group are protected) or finds-and-deletes every resource carrying a matching <code>Environment</code> AND <code>ManagedBy=Bicep</code> tag (<code>-e</code>/<code>-EnvironmentTag</code>) if that manifest isn't found (e.g. an older deployment, or history was purged).</td></tr>
+    <tr><td class="file-path">README.md</td><td class="why">The full three-tier story: (1) one CLI command, works today; (2) a real "Deploy to Azure" button once <code>main.json</code> (compiled via <code>az bicep build</code>) is hosted at a public URL; (3) Template Specs or a full Marketplace Managed Application listing using the same <code>createUiDefinition.json</code>.</td></tr>
+  </table>
+  <p>Tags on this path use the same 4-key scheme as the Terraform environment (<code>commonTags</code>
+  variable in <code>main.bicep</code>: <code>Project</code>, <code>Component</code>,
+  <code>Environment</code>, <code>ManagedBy: 'Bicep'</code>) applied to every resource that supports
+  it (Log Analytics, Container Apps Environment, Storage Account, all 5 Container Apps).</p>
+
+  <!-- ================= AWS SECTION ================= -->
+  <h2 id="aws-section" class="section-divider aws-divider"><span class="os-icon">&#9729;</span>AWS &mdash; ECS Fargate</h2>
+  <p class="section-intro">
+    Deploys the same 5-container topology to <strong>AWS ECS Fargate</strong> — chosen over EKS
+    (too much Terraform/operational surface for this scope) and plain EC2 + Compose (least
+    "cloud-native", though simplest mentally). This environment is the largest of the three because
+    AWS has no single "Container Apps"-equivalent managed abstraction — networking, service
+    discovery, load balancing, and storage are each their own resource family. Split across 7 files
+    under <code>containerization/terraform/environments/aws/</code>.
+  </p>
+  <div class="callout aws">
+    <strong>HIPAA hardening pass: private subnets, one NAT Gateway, self-signed TLS on the ALB</strong>
+    All 5 ECS Fargate tasks now run in private subnets with <code>assign_public_ip = false</code> —
+    only the ALB itself sits in the public subnets and is internet-facing. Outbound internet access
+    for the tasks (pulling images from ECR, calling out) is routed through a <strong>single</strong>
+    NAT Gateway, not one per AZ — a deliberate cost/simplicity trade-off, not high availability; if
+    that NAT Gateway's AZ has an outage, all 5 tasks lose outbound connectivity together. The ALB
+    listeners also moved from HTTP to HTTPS using a self-signed certificate — real encryption in
+    transit today, with a swap to a CA-issued certificate (e.g. via ACM DNS validation) left as a
+    deliberate later step; until then, browsers will show a trust warning.
+  </div>
+
+  <h3 id="aws-inventory">Resource &amp; Cost Inventory <span class="pill pill-aws">aws</span></h3>
+  <table class="file-table">
+    <tr><th>Resource</th><th>Type</th><th>Billable?</th><th>Cost driver</th></tr>
+    <tr><td class="why">VPC + Internet Gateway + 2 public subnets + route table + 2 route table associations</td><td class="why">Networking</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">&mdash;</td></tr>
+    <tr><td class="why">2 private subnets + private route table + 2 route table associations</td><td class="why">Networking</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">The subnets/routes themselves have no charge &mdash; the NAT Gateway below is the billable part</td></tr>
+    <tr><td class="why">1 NAT Gateway + 1 Elastic IP</td><td class="why">Networking</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Hourly rate + per-GB data processing &mdash; runs the whole time the stack exists; likely the single biggest new recurring cost from the HIPAA hardening pass. Single NAT, not one per AZ &mdash; a cost/simplicity trade-off, not HA.</td></tr>
+    <tr><td class="why">3 Security Groups (alb, ecs_tasks, efs)</td><td class="why">Networking</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">&mdash;</td></tr>
+    <tr><td class="why">3 ECR repositories</td><td class="why">Registry</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Per-GB image storage, minimal at this scale</td></tr>
+    <tr><td class="why">ECS Cluster</td><td class="why">Orchestration</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">The cluster itself has no charge &mdash; billing is per running Fargate task, below</td></tr>
+    <tr><td class="why">3 Secrets Manager secrets (SQL password, JWT key, Redis password)</td><td class="why">Secrets</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Small flat fee per secret per month + API call charges &mdash; Redis password added by the HIPAA pass</td></tr>
+    <tr><td class="why">ACM certificate (self-signed import) + TLS private key + self-signed cert</td><td class="why">Certificates</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">ACM certificates are always free, whether imported (self-signed, today) or DNS-validated (a real CA cert, later)</td></tr>
+    <tr><td class="why">IAM role + managed policy attachment + inline policy</td><td class="why">IAM</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">&mdash;</td></tr>
+    <tr><td class="why">5 CloudWatch Log Groups</td><td class="why">Logging</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Ingestion + storage, usage-based, minimal at low log volume</td></tr>
+    <tr><td class="why">EFS filesystem (encrypted) + 2 mount targets (private subnets) + 2 access points</td><td class="why">Storage</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Per-GB-month actually stored + throughput; encryption at rest adds no separate line item</td></tr>
+    <tr><td class="why">Cloud Map namespace + 2 services (sqlserver, redis)</td><td class="why">Service discovery</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Small flat fee per namespace/month + per-query charges</td></tr>
+    <tr><td class="why">Application Load Balancer (HTTPS) + 2 target groups + 2 listeners</td><td class="why">Load balancing</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Fixed hourly rate + LCU usage &mdash; runs the whole time the stack exists</td></tr>
+    <tr><td class="why">5 ECS task definitions</td><td class="why">Definitions</td><td class="status"><span class="pill pill-new">Free</span></td><td class="why">Definitions themselves are free &mdash; only running tasks (below) cost anything</td></tr>
+    <tr><td class="why">5 ECS services running 5 Fargate tasks (sqlserver 1 vCPU/4GB, redis/app/demo/worker smaller) in private subnets</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why"><code>desired_count = 1</code> on every service means all 5 tasks run continuously &mdash; billed per vCPU-second + GB-second the whole time, the largest cost driver in this environment</td></tr>
+  </table>
+  <div class="callout aws">
+    <strong>Biggest cost drivers: the ALB, the NAT Gateway, and the 5 continuously-running Fargate tasks</strong>
+    Same caveat as Azure: these are illustrative cost <em>drivers</em>, not quotes &mdash; check the
+    <a href="https://calculator.aws/">AWS Pricing Calculator</a> for current, region-specific
+    numbers before relying on them.
+  </div>
+  <p><strong>Tagging:</strong> handled with a single <code>default_tags</code> block on the
+  <code>aws</code> provider itself (in <code>main.tf</code>) rather than repeating a
+  <code>tags = {...}</code> on every resource &mdash; AWS's provider applies
+  <code>Project=FHIRBridge</code>, <code>Component=containerization</code>,
+  <code>Environment=&lt;name_prefix&gt;</code>, <code>ManagedBy=Terraform</code> to every taggable
+  resource automatically, guaranteeing nothing gets missed. Find everything via AWS Cost Explorer's
+  "group by tag," or <code>aws resourcegroupstaggingapi get-resources --tag-filters
+  Key=Project,Values=FHIRBridge</code>.</p>
+
+  <h3 id="aws-variables"><code class="file-title">aws/variables.tf</code> <span class="pill pill-new">new</span></h3>
+  <pre><code>variable "name_prefix"        { default = "fhirbridge" }
+variable "aws_region"         { default = "us-east-1" }
+variable "vpc_cidr"           { default = "10.90.0.0/16" }
+variable "image_tag"          { default = "latest" }
+variable "fhirbridge_app_port" { default = 80 }    # ALB listener port only, see below
+variable "demo_app_port"       { default = 5500 }  # ALB listener port only, see below
+variable "sql_port"            { default = 1433 }  # passed through to the process, see below
+variable "redis_port"          { default = 6379 }  # passed through to the process, see below
+variable "sql_sa_password"    { sensitive = true }
+variable "jwt_signing_key"    { sensitive = true }
+variable "redis_password"     { sensitive = true }  # HIPAA pass: Redis now requires auth everywhere</code></pre>
+  <div class="callout aws">
+    <strong>Two different kinds of "port variable" here</strong>
+    <code>fhirbridge_app_port</code>/<code>demo_app_port</code> only change the <strong>ALB
+    listener</strong> — what a client types after the ALB's DNS name. The containers themselves
+    still listen on their fixed internal ports (80/5500) baked into the images, so changing these
+    needs no rebuild. <code>sql_port</code>/<code>redis_port</code> are different: Fargate's
+    <code>awsvpc</code> networking mode has no host-level port remapping the way Docker does, so
+    these actually have to reach the running process — <code>tasks.tf</code> sets
+    <code>MSSQL_TCP_PORT</code> for SQL Server and a <code>redis-server --port</code> command
+    override for Redis.
+  </div>
+
+  <h3 id="aws-main"><code class="file-title">aws/main.tf</code> <span class="pill pill-new">new</span></h3>
+  <p>Networking, ECR, the ECS cluster, secrets, and IAM — everything the other files depend on.</p>
+
+  <h4>A small dedicated VPC — 2 public subnets, 2 private subnets, 1 NAT Gateway</h4>
+  <p>Part of the HIPAA hardening pass: the original cut ran every Fargate task in the public subnets
+  with a public IP so they could reach ECR without a NAT gateway. That's been replaced — all 5 tasks
+  now live in private subnets, reaching the internet (ECR pulls, etc.) through a single NAT Gateway
+  instead. Only the ALB stays in the public subnets.</p>
+  <pre><code>resource "aws_vpc" "main" { cidr_block = var.vpc_cidr, enable_dns_support = true, enable_dns_hostnames = true }
+resource "aws_internet_gateway" "main" { vpc_id = aws_vpc.main.id }
+
+resource "aws_subnet" "public" {
+  count                   = 2
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone       = local.azs[count.index]   # first 2 AZs from a data source
+  map_public_ip_on_launch = true
+}
+
+resource "aws_route_table" "public" {
+  route { cidr_block = "0.0.0.0/0", gateway_id = aws_internet_gateway.main.id }
+}
+resource "aws_route_table_association" "public" { count = 2, ... }
+
+resource "aws_subnet" "private" {
+  count                   = 2
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  availability_zone       = local.azs[count.index]
+  map_public_ip_on_launch = false
+}
+
+resource "aws_eip" "nat" { domain = "vpc" }
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id   # a single NAT gateway, not one per AZ — cost/simplicity trade-off, not HA
+}
+
+resource "aws_route_table" "private" {
+  route { cidr_block = "0.0.0.0/0", nat_gateway_id = aws_nat_gateway.main.id }
+}
+resource "aws_route_table_association" "private" { count = 2, subnet_id = aws_subnet.private[count.index].id, ... }</code></pre>
+
+  <h4>Security groups</h4>
+  <pre><code>resource "aws_security_group" "alb" {
+  ingress { from_port = 80,   to_port = 80,   cidr_blocks = ["0.0.0.0/0"] }   # fhirbridge-app
+  ingress { from_port = 5500, to_port = 5500, cidr_blocks = ["0.0.0.0/0"] }   # demo-app
+  egress  { from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = ["0.0.0.0/0"] }
+}
+
+resource "aws_security_group" "ecs_tasks" {
+  ingress { from_port = 0, to_port = 65535, security_groups = [aws_security_group.alb.id] }   # from ALB
+  ingress { from_port = 0, to_port = 65535, self = true }   # inter-service (Cloud Map reachability)
+  egress  { ... }
+}</code></pre>
+
+  <h4>ECR, ECS cluster, secrets, IAM, log groups</h4>
+  <pre><code>resource "aws_ecr_repository" "fhirbridge_app" { name = "${var.name_prefix}/fhirbridge-app" }
+resource "aws_ecr_repository" "demo_app"       { name = "${var.name_prefix}/demo-app" }
+resource "aws_ecr_repository" "worker"         { name = "${var.name_prefix}/fhirbridge-worker" }
+
+resource "aws_ecs_cluster" "main" { name = "${var.name_prefix}-cluster" }
+
+resource "aws_secretsmanager_secret" "sql_sa_password" { ... }
+resource "aws_secretsmanager_secret_version" "sql_sa_password" { secret_string = var.sql_sa_password }
+# ...and the same again for jwt_signing_key and redis_password (HIPAA pass: Redis now requires auth)
+
+resource "aws_iam_role" "ecs_task_execution" {
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume.json   # trusts ecs-tasks.amazonaws.com
+}
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_managed" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"   # pull from ECR, write logs
+}
+resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
+  policy = data.aws_iam_policy_document.ecs_task_execution_secrets.json   # secretsmanager:GetSecretValue, scoped to the 3 secrets above
+}
+
+resource "aws_cloudwatch_log_group" "fhirbridge_app" { name = "/ecs/${var.name_prefix}/fhirbridge-app", retention_in_days = 14 }
+# ...one more per service (demo_app, worker, sqlserver, redis)</code></pre>
+  <p>The task execution role is deliberately narrow: the managed
+  <code>AmazonECSTaskExecutionRolePolicy</code> (pull images, write to CloudWatch) plus one inline
+  policy granting <code>secretsmanager:GetSecretValue</code> on <em>exactly</em> the three secrets
+  this stack creates — nothing broader.</p>
+
+  <h4>Self-signed TLS certificate for the ALB</h4>
+  <p>Also part of the HIPAA hardening pass: the ALB listeners now terminate HTTPS. A real,
+  CA-issued certificate is a future swap (e.g. ACM DNS validation once a real domain is in play) —
+  for now, Terraform generates a self-signed certificate and imports it into ACM so the listeners
+  have something to bind to.</p>
+  <pre><code>terraform {
+  required_providers {
+    tls = { source = "hashicorp/tls", version = "~> 4.0" }
+  }
+}
+
+resource "tls_private_key" "alb" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+resource "tls_self_signed_cert" "alb" {
+  private_key_pem       = tls_private_key.alb.private_key_pem
+  validity_period_hours = 8760   # 1 year
+  subject { common_name = "${var.name_prefix}.local" }
+  allowed_uses = ["key_encipherment", "digital_signature", "server_auth"]
+}
+
+resource "aws_acm_certificate" "alb" {
+  private_key      = tls_private_key.alb.private_key_pem
+  certificate_body = tls_self_signed_cert.alb.cert_pem
+  lifecycle { create_before_destroy = true }
+}</code></pre>
+
+  <h3 id="aws-storage"><code class="file-title">aws/storage.tf</code> <span class="pill pill-new">new</span></h3>
+  <p>Persistent storage for SQL Server + Redis — Fargate tasks have no durable disk otherwise. One
+  EFS filesystem, two access points so each service gets an isolated root directory. Two HIPAA-pass
+  changes here: the filesystem is now encrypted at rest, and the mount targets moved from the public
+  subnets to the private subnets alongside the tasks that use them.</p>
+  <pre><code>resource "aws_security_group" "efs" {
+  ingress { from_port = 2049, to_port = 2049, security_groups = [aws_security_group.ecs_tasks.id] }  # NFS, ECS tasks only
+}
+
+resource "aws_efs_file_system" "main" {
+  creation_token = "${var.name_prefix}-data"
+  encrypted      = true   # HIPAA fix: PHI-bearing storage now encrypted at rest — wasn't on by default
+}
+resource "aws_efs_mount_target" "main" { count = 2, subnet_id = aws_subnet.private[count.index].id, ... }
+
+resource "aws_efs_access_point" "sql_data" {
+  posix_user { uid = 0, gid = 0 }
+  root_directory { path = "/sql-data", creation_info { owner_uid = 0, owner_gid = 0, permissions = "0755" } }
+}
+resource "aws_efs_access_point" "redis_data" { ...path = "/redis-data"... }</code></pre>
+
+  <h3 id="aws-discovery"><code class="file-title">aws/discovery.tf</code> <span class="pill pill-new">new</span></h3>
+  <p>AWS Cloud Map — the ECS equivalent of Docker Compose's automatic container-name DNS. Lets
+  <code>fhirbridge-app</code>/<code>demo-app</code>/<code>worker</code> reach <code>sqlserver</code>
+  and <code>redis</code> by hostname instead of hunting for IPs.</p>
+  <pre><code>resource "aws_service_discovery_private_dns_namespace" "main" {
+  name = "${var.name_prefix}.internal"   # e.g. fhirbridge.internal
+  vpc  = aws_vpc.main.id
+}
+
+resource "aws_service_discovery_service" "sqlserver" {
+  name = "sqlserver"   # resolves as sqlserver.fhirbridge.internal
+  dns_config { namespace_id = ..., dns_records { ttl = 10, type = "A" }, routing_policy = "MULTIVALUE" }
+}
+resource "aws_service_discovery_service" "redis" { name = "redis", ... }   # redis.fhirbridge.internal</code></pre>
+
+  <h3 id="aws-alb"><code class="file-title">aws/alb.tf</code> <span class="pill pill-new">new</span></h3>
+  <p>One Application Load Balancer, two listeners — <code>var.fhirbridge_app_port</code> (default 80)
+  for <code>fhirbridge-app</code>, <code>var.demo_app_port</code> (default 5500) for
+  <code>demo-app</code> (matching its established convention). <code>worker</code>/
+  <code>sqlserver</code>/<code>redis</code> get no target group at all; they're reached only via
+  Cloud Map inside the VPC, never through the ALB. Both listeners now terminate HTTPS using the
+  self-signed certificate imported above — the target groups and containers behind them stay plain
+  HTTP, since that traffic never leaves the private subnets between the ALB and the tasks.</p>
+  <pre><code>resource "aws_lb" "main" { internal = false, load_balancer_type = "application", subnets = aws_subnet.public[*].id }
+
+resource "aws_lb_target_group" "fhirbridge_app" {
+  port = 80, target_type = "ip"
+  health_check { path = "/health", matcher = "200" }
+}
+resource "aws_lb_target_group" "demo_app" {
+  port = 5500, target_type = "ip"
+  health_check { path = "/", matcher = "200-399" }
+}
+
+resource "aws_lb_listener" "fhirbridge_app" {
+  port              = var.fhirbridge_app_port
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.alb.arn
+  default_action { forward -> fhirbridge_app target group }
+}
+resource "aws_lb_listener" "demo_app" {
+  port              = var.demo_app_port
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.alb.arn
+  default_action { forward -> demo_app target group }
+}</code></pre>
+
+  <h3 id="aws-tasks"><code class="file-title">aws/tasks.tf</code> <span class="pill pill-new">new</span></h3>
+  <p>5 Fargate task definitions — each a <code>container_definitions</code> JSON blob built with
+  <code>jsonencode()</code>. cpu/memory pairs are valid Fargate combinations (256/512 through
+  1024/4096).</p>
+  <table class="file-table">
+    <tr><th>Task</th><th>cpu / memory</th><th>Notable config</th></tr>
+    <tr><td class="file-path">sqlserver</td><td class="why">1024 / 4096</td><td class="why">EFS volume (<code>sql-data</code> access point) mounted at <code>/var/opt/mssql</code>; <code>MSSQL_TCP_PORT</code> set from <code>var.sql_port</code> (Fargate's <code>awsvpc</code> mode has no host-level port remap, so this has to reach the process directly); <code>MSSQL_SA_PASSWORD</code> pulled from Secrets Manager via the task's <code>secrets</code> block (never plaintext).</td></tr>
+    <tr><td class="file-path">redis</td><td class="why">256 / 512</td><td class="why">EFS volume (<code>redis-data</code>) mounted at <code>/data</code>; command overridden to <code>sh -c "redis-server --port ${var.redis_port} --requirepass \"$REDIS_PASSWORD\""</code>, with <code>REDIS_PASSWORD</code> injected via <code>secrets</code> (Secrets Manager), never plaintext <code>environment</code>.</td></tr>
+    <tr><td class="file-path">fhirbridge-app</td><td class="why">512 / 1024</td><td class="why"><code>ConnectionStrings__FHIRBridgeDb</code>/<code>Redis</code> point at Cloud Map hostnames (<code>sqlserver.fhirbridge.internal</code>) with <code>Encrypt=True</code> and the Redis password appended; <code>Portal__AllowedOrigins__0</code> computed from the ALB's own <code>dns_name</code> (a different resource, so this is a normal forward reference, not a self-reference).</td></tr>
+    <tr><td class="file-path">demo-app</td><td class="why">256 / 512</td><td class="why">Same pattern; <code>AllowedFrontendOrigin</code> also derived from the ALB DNS name.</td></tr>
+    <tr><td class="file-path">worker</td><td class="why">256 / 512</td><td class="why">No port mappings at all — no HTTP endpoint.</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>Redis runs as root inside its own task</strong>
+    Wrapping the command in <code>sh -c</code> so the password can be interpolated from an env var
+    bypasses the <code>redis:7-alpine</code> image's own privilege-drop-to-non-root entrypoint step,
+    so <code>redis-server</code> ends up running as root inside its Fargate task. This is an accepted
+    trade-off here given Fargate's task-level isolation (no shared host kernel with other tenants'
+    containers) — not something to carry over uncritically to a different runtime.
+  </div>
+  <p>Representative excerpt (fhirbridge-app):</p>
+  <pre><code>container_definitions = jsonencode([{
+  name  = "fhirbridge-app"
+  image = "${aws_ecr_repository.fhirbridge_app.repository_url}:${var.image_tag}"
+  portMappings = [{ containerPort = 80, protocol = "tcp" }]
+  environment = [
+    { name = "ConnectionStrings__FHIRBridgeDb"
+      value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
+    { name = "ConnectionStrings__Redis"
+      value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password}" },
+    { name = "Portal__AllowedOrigins__0", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
+  ]
+  secrets = [{ name = "Authentication__SigningKey", valueFrom = aws_secretsmanager_secret.jwt_signing_key.arn }]
+  logConfiguration = { logDriver = "awslogs", options = { "awslogs-group" = ..., "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "app" } }
+}])</code></pre>
+
+  <h3 id="aws-services"><code class="file-title">aws/services.tf</code> <span class="pill pill-new">new</span></h3>
+  <p>5 ECS Fargate services — the layer that actually keeps <code>desired_count</code> tasks running
+  and wires each task definition to either a Cloud Map registry, an ALB target group, or neither.</p>
+  <pre><code>resource "aws_ecs_service" "sqlserver" {
+  desired_count = 1, launch_type = "FARGATE"
+  # HIPAA pass: private subnets, no public IP — only the ALB is internet-facing now.
+  network_configuration { subnets = aws_subnet.private[*].id, security_groups = [ecs_tasks.id], assign_public_ip = false }
+  service_registries { registry_arn = aws_service_discovery_service.sqlserver.arn }
+}
+# redis: identical shape, its own service_registries entry
+
+resource "aws_ecs_service" "fhirbridge_app" {
+  depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_lb_listener.fhirbridge_app]
+  load_balancer { target_group_arn = aws_lb_target_group.fhirbridge_app.arn, container_name = "fhirbridge-app", container_port = 80 }
+  ...
+}
+# demo_app: same shape, its own target group + listener dependency
+
+resource "aws_ecs_service" "worker" {
+  # fhirbridge_app is a head start, not a guarantee — see the migration-race bug below.
+  depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_ecs_service.fhirbridge_app]
+  # no load_balancer block, no service_registries — nothing reaches this except the VPC itself
+}</code></pre>
+  <p>Every <code>depends_on</code> here is explicit rather than inferred, for the same reason as in
+  Azure: connection strings reference other services by their <em>predictable</em> Cloud Map
+  hostname (a plain string), not a Terraform resource attribute, so Terraform's automatic dependency
+  graph has nothing to infer the ordering from unless it's spelled out.</p>
+
+  <h3 id="aws-outputs"><code class="file-title">aws/outputs.tf</code> &amp; <code class="file-title">terraform.tfvars.example</code> <span class="pill pill-new">new</span></h3>
+  <pre><code>output "ecr_repository_urls" {
+  value = { fhirbridge_app = ..., demo_app = ..., worker = ... }   # push images here first
+}
+output "fhirbridge_app_url" {
+  value       = "https://${aws_lb.main.dns_name}:${var.fhirbridge_app_port}"
+  description = "Self-signed cert — expect a browser trust warning until a CA-issued certificate is swapped in."
+}
+output "demo_app_url" {
+  value       = "https://${aws_lb.main.dns_name}:${var.demo_app_port}"
+  description = "Self-signed cert — expect a browser trust warning until a CA-issued certificate is swapped in."
+}</code></pre>
+  <pre><code># terraform.tfvars.example
+name_prefix         = "fhirbridge"
+aws_region          = "us-east-1"
+image_tag           = "v1"
+fhirbridge_app_port = 80
+demo_app_port       = 5500
+sql_port            = 1433
+redis_port          = 6379
+sql_sa_password     = "Ch4ngeMe!Str0ng"
+jwt_signing_key     = "replace-with-a-long-random-string-at-least-32-chars"
+redis_password      = "replace-with-a-strong-redis-password"</code></pre>
+
+  <h3 id="aws-flow"><span class="pill pill-aws">Deploy flow</span> Step by step</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Copy &amp; edit secrets</strong><span><code>cp terraform.tfvars.example terraform.tfvars</code></span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Create the 3 ECR repos first</strong><span><code>terraform apply -target=aws_ecr_repository.fhirbridge_app -target=aws_ecr_repository.demo_app -target=aws_ecr_repository.worker</code></span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Push images</strong><span><code>../../../scripts/build-images.sh -r &lt;account&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com/&lt;name_prefix&gt; -t &lt;image_tag&gt; -p</code></span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Full apply</strong><span><code>terraform apply</code> — VPC, security groups, ECS cluster, EFS, Cloud Map, ALB, all 5 task definitions and services.</span></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Open the URLs</strong><span><code>terraform output fhirbridge_app_url</code> / <code>demo_app_url</code></span></div></div>
+  </div>
+
+  <h3 id="aws-cleanup"><code class="file-title">scripts/cleanup-aws.sh</code> &amp; <code class="file-title">cleanup-aws.ps1</code> <span class="pill pill-new">new</span></h3>
+  <p><code>terraform destroy</code> removes every resource in the inventory above — VPC, ECR repos,
+  ECS cluster/services/tasks, EFS, Cloud Map, ALB, secrets, log groups, IAM role — in dependency
+  order, in one pass. Given the ALB and 5 continuously-running Fargate tasks are billed the entire
+  time they exist, this is the important script to actually run once you're done testing.</p>
+  <pre><code>./cleanup-aws.sh          # prompts for confirmation, then terraform destroy
+./cleanup-aws.sh -y       # skip the confirmation prompt (-auto-approve)
+
+# PowerShell: cleanup-aws.ps1 [-Yes]</code></pre>
+
+  <!-- ================= VENDOR REGISTRY SECTION ================= -->
+  <h2 id="vendor-registry-section" class="section-divider azure-divider"><span class="os-icon">&#128230;</span>Vendor Registry &mdash; Publishing &amp; Distributing Versions</h2>
+  <p class="section-intro">
+    A persistent, vendor-owned Azure Container Registry — deliberately separate from every
+    deployment environment above (<code>local</code>/<code>azure</code>/<code>aws</code>), since it
+    holds real release history rather than disposable test resources. Lives under
+    <code>containerization/terraform/vendor-registry/</code>.
+  </p>
+  <div class="callout azure">
+    <strong>Why this is a separate environment, not part of ../environments/azure</strong>
+    The Azure/AWS environments above get destroyed and recreated repeatedly during testing
+    (<code>cleanup-azure.sh|ps1</code>, <code>cleanup-aws.sh|ps1</code>). A registry holding actual
+    published versions needs to survive all of that — so it's its own Terraform config, in its own
+    (ideally separate) resource group, never touched by any other environment's
+    <code>terraform destroy</code>.
+  </div>
+
+  <h3 id="vendor-inventory">Resource &amp; Cost Inventory <span class="pill pill-azure">azure</span></h3>
+  <table class="file-table">
+    <tr><th>Resource</th><th>Type</th><th>Billable?</th><th>Cost driver</th></tr>
+    <tr><td class="why">Container Registry (Basic SKU)</td><td class="why">ACR</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Flat daily rate + storage used — grows slowly as more published versions accumulate (old tags aren't automatically deleted)</td></tr>
+  </table>
+  <p><strong>Tagging:</strong> <code>Project=FHIRBridge</code>, <code>Component=vendor-registry</code>,
+  <code>Environment=&lt;name_prefix&gt;</code>, <code>ManagedBy=Terraform</code> — the
+  <code>Component</code> value is what distinguishes this from a client test deployment
+  (<code>Component=containerization</code>) whenever both happen to share the same resource group,
+  which is the case today (both currently point at <code>rg-tusharpuri</code>, the only group this
+  account has access to).</p>
+
+  <h3 id="vendor-main"><code class="file-title">vendor-registry/main.tf</code> <span class="pill pill-new">new</span></h3>
+  <pre><code>data "azurerm_resource_group" "main" { name = var.resource_group_name }   # existing group, never created/destroyed here
+
+resource "random_id" "suffix" { byte_length = 3 }   # keeps the ACR name globally unique
+
+resource "azurerm_container_registry" "vendor" {
+  name                   = "${var.name_prefix}vendor${random_id.suffix.hex}"
+  sku                    = "Basic"
+  admin_enabled          = false   # no shared admin username/password — AAD identity + role grant only
+  anonymous_pull_enabled = false   # explicit, not just relying on the platform default — no public pulls, ever
+  tags                   = local.common_tags
+}</code></pre>
+  <div class="callout azure">
+    <strong>Access protection, spelled out in code</strong>
+    Nobody can pull or push without first authenticating as an identity that's been explicitly
+    granted a role on this registry — no shared credential that could leak, and every grant is
+    individually revocable. When a real external client eventually needs pull access, the
+    documented mechanism (in this file's own comments) is a repository-scoped, read-only ACR
+    "token" (<code>az acr token create --scope-map _repositories_pull</code>) — never admin
+    credentials, never a broad role grant.
+  </div>
+
+  <h3 id="vendor-outputs"><code class="file-title">vendor-registry/outputs.tf</code> &amp; <code class="file-title">terraform.tfvars.example</code> <span class="pill pill-new">new</span></h3>
+  <pre><code>output "acr_name"          { value = azurerm_container_registry.vendor.name }          # for az acr login --name
+output "acr_login_server"  { value = azurerm_container_registry.vendor.login_server }  # for build-images -Registry, and az acr import --source</code></pre>
+
+  <h3 id="vendor-workflow"><span class="pill pill-azure">Workflow</span> Publish once, deploy anywhere</h3>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Set up the registry (one-time)</strong><span><code>terraform init &amp;&amp; terraform apply</code> in <code>vendor-registry/</code></span></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Publish a version, built locally</strong><span><code>az acr login --name &lt;acr_name&gt;</code>, then <code>build-images.sh|ps1 -Registry &lt;acr_login_server&gt; -Tag v1.2.0 -Push</code> — the SAME script the local/Azure/AWS environments use, deliberately not <code>az acr build</code> (Azure's remote-build option), since that would upload the full source tree to a cloud build sandbox instead of just the compiled image</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Copy that version into a client's own registry</strong><span><code>az acr import --name &lt;client-acr&gt; --source &lt;vendor acr_login_server&gt;/fhirbridge-app:v1.2.0 --image fhirbridge-app:v1.2.0</code> — a server-to-server image copy, no rebuild, no source involved</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Point the client deployment at it</strong><span>Set <code>image_tag = "v1.2.0"</code> in that deployment's <code>terraform.tfvars</code> (or <code>imageTag</code> for Bicep) and apply as usual</span></div></div>
+  </div>
+  <div class="callout azure">
+    <strong>Why local Docker, not a remote build service, for the one step that actually matters</strong>
+    <code>az acr build</code> (ACR Tasks) builds remotely — convenient, but it means uploading your
+    entire source tree to a cloud build sandbox every time, even one scoped to your own
+    subscription. Building locally means source never leaves the machine that already has it; only
+    the finished, compiled image ever gets pushed anywhere. Slower to publish a new version this way
+    (Docker has to be running wherever the build script runs), but publishing is an infrequent,
+    deliberate release action — not something that needs to happen on every deploy, and never
+    something a client installing the product has to do at all.
+  </div>
+  <p>Re-publishing under a tag that already exists overwrites it in place — use a new tag for every
+  real release. A version already imported into a client's registry is unaffected by a later
+  overwrite in the vendor registry, since <code>az acr import</code> made an independent copy at
+  that point in time.</p>
+
+  <h3 id="vendor-cleanup"><code class="file-title">scripts/cleanup-vendor-registry.sh</code> &amp; <code class="file-title">cleanup-vendor-registry.ps1</code> <span class="pill pill-new">new</span></h3>
+  <p>Rarely needed — this registry is meant to persist. Same tag-preview-before/after +
+  exit-code-checked pattern as the other cleanup scripts, but filtered on both
+  <code>Project=FHIRBridge</code> <em>and</em> <code>Component=vendor-registry</code>, since the
+  resource group may also currently hold an unrelated <code>azure</code> test deployment
+  (<code>Component=containerization</code>) that a plain <code>Project</code>-only filter would mix
+  in.</p>
+  <pre><code>az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='rg-tusharpuri' &amp;&amp; tags.Component=='vendor-registry']" --output table
+
+./cleanup-vendor-registry.sh          # prompts for confirmation, then terraform destroy
+./cleanup-vendor-registry.sh -y       # skip the confirmation prompt
+
+# PowerShell: cleanup-vendor-registry.ps1 [-Yes]</code></pre>
+
+  <!-- ================= BUGS SECTION ================= -->
+  <h2 id="bugs" class="section-divider" style="background: linear-gradient(135deg, #DC2626 0%, #7F1D1D 100%);"><span class="os-icon">&#128027;</span>Bugs Found &amp; Fixed During Live Verification</h2>
+  <p class="section-intro">
+    None of this was taken on faith — all 3 images were built and actually run (individually,
+    then via the full <code>docker compose</code> stack, against a real SQL Server Express
+    container) before being called done. That live verification surfaced 3 real bugs, all fixed
+    before considering the work complete.
+  </p>
+
+  <div class="bug-card" id="bug-race">
+    <h4>1. Api / Worker migration race on a fresh database</h4>
+    <div class="bug-meta">Found via: full <code>docker compose up</code> &middot; Fixed in: <code>compose/docker-compose.yml</code>, all 3 Terraform environments</div>
+    <p><code>FHIRBridge.Api</code> and <code>FHIRBridge.Worker</code> both call
+    <code>Database.Migrate()</code> against <code>FHIRBridgeDb</code> independently on startup. On
+    a brand-new SQL Server instance, both can race to run <code>CREATE DATABASE</code> at the same
+    moment — the loser crashes with <code>SqlException: Database 'FHIRBridge' already exists</code>.
+    This is a latent bug in the application's own dual-auto-migration design, not something
+    introduced by containerization — the same race could occur in the real Windows Service
+    deployment too if both services start close together.</p>
+    <p><strong>Fix:</strong> <code>restart: unless-stopped</code> added to all 3 custom app services
+    in Compose (and the Terraform equivalent — Container Apps/ECS both restart failed
+    replicas/tasks automatically already) turns a lost race into a self-healing retry: the loser
+    restarts, finds the database already created, and proceeds normally. A <code>worker</code>
+    <code>depends_on: fhirbridge-app { condition: service_started }</code> head start was also added
+    everywhere to make the race far less likely in the first place — documented in code as "a head
+    start, not a guarantee."</p>
+  </div>
+
+  <div class="bug-card" id="bug-worker">
+    <h4>2. Worker container needed the <code>aspnet</code> base image, not plain <code>runtime</code></h4>
+    <div class="bug-meta">Found via: standalone worker container smoke test &middot; Fixed in: <code>docker/worker/Dockerfile</code></div>
+    <p><code>FHIRBridge.Worker</code> has no Kestrel endpoint, so the "correct-looking" runtime base
+    image is the smaller <code>mcr.microsoft.com/dotnet/runtime:9.0</code> (no ASP.NET Core shared
+    framework). It crashed immediately on launch:</p>
+    <pre><code>You must install or update .NET to run this application.
+Framework: 'Microsoft.AspNetCore.App', version '9.0.0' (x64)
+No frameworks were found.</code></pre>
+    <p>The worker's dependency graph (<code>FHIRBridge.Infrastructure</code> /
+    <code>FHIRBridge.Observability</code>) transitively requires the ASP.NET Core shared framework
+    even though the Worker itself never starts a web server.</p>
+    <p><strong>Fix:</strong> switched the final stage to <code>mcr.microsoft.com/dotnet/aspnet:9.0</code>,
+    matching the other two images. Re-verified against a real SQL Server container afterward — clean
+    startup, no crash.</p>
+  </div>
+
+  <div class="bug-card" id="bug-gateway">
+    <h4>3. Gateway loaded zero YARP routes — wrong content root, not CORS</h4>
+    <div class="bug-meta">Found via: full compose stack, browser DevTools showed a 404 on <code>/api/v1/auth/setup-status</code> &middot; Fixed in: <code>docker/fhirbridge-app/entrypoint.sh</code>, <code>src/Gateway/FHIRBridge.Gateway/Program.cs</code></div>
+    <p>The most involved of the three. A same-origin <code>GET /api/v1/auth/setup-status</code>
+    (page and API both on <code>localhost:8080</code> — CORS never applies to same-origin requests
+    at all) returned a bare, header-less <code>404</code>. Direct testing inside the container
+    proved the Api itself answered correctly on its loopback port; the Gateway was the one
+    returning 404 for <em>every</em> path under <code>/api/**</code>, uniformly, with zero log
+    output — meaning the request never reached a matched endpoint at all.</p>
+    <p>Root cause, confirmed by instrumenting the Gateway with a temporary diagnostic dump of its
+    loaded proxy config: <strong><code>Loaded 0 route(s), 0 cluster(s)</code></strong>. ASP.NET
+    Core resolves <code>appsettings.json</code> relative to the process's <em>content root</em>,
+    which defaults to its current working directory — not the directory containing its DLL.
+    <code>entrypoint.sh</code> launched both processes from the container's shared
+    <code>WORKDIR /app</code> (e.g. <code>dotnet /app/gateway/FHIRBridge.Gateway.dll</code>) without
+    ever <code>cd</code>-ing into <code>/app/gateway</code> first or setting the content root
+    explicitly — so the Gateway looked for config at <code>/app/appsettings.json</code> (doesn't
+    exist) instead of <code>/app/gateway/appsettings.json</code> (the real file, with the correct
+    <code>ReverseProxy</code> section), and silently started with none of it. The exact same defect
+    also explains a <code>WebRootPath was not found: /app/wwwroot</code> warning visible in
+    <em>every</em> log capture throughout this work — the clue was there from the start.</p>
+    <p>This is a bug in the container's own <code>entrypoint.sh</code> design (two apps sharing one
+    <code>WORKDIR</code> without per-process content roots) — <strong>not</strong> pre-existing
+    Gateway application code, correcting an earlier misdiagnosis during the investigation.</p>
+    <p><strong>Fix:</strong> <code>ASPNETCORE_CONTENTROOT=/app/api</code> and
+    <code>ASPNETCORE_CONTENTROOT=/app/gateway</code> added to each process's scoped <code>env</code>
+    invocation in <code>entrypoint.sh</code>. A small, genuinely separate pre-existing issue was
+    fixed at the same time while in that code: the Gateway's static-file/SPA-fallback branch only
+    excluded <code>/api</code> from its predicate, not <code>/swagger</code>, so real Swagger UI was
+    being shadowed by the portal's <code>index.html</code>:</p>
+    <pre><code>// before
+context =&gt; !context.Request.Path.StartsWithSegments("/api")
+// after
+context =&gt; !context.Request.Path.StartsWithSegments("/api") &amp;&amp; !context.Request.Path.StartsWithSegments("/swagger")</code></pre>
+    <p>Re-verified live after the fix: <code>/api/v1/auth/setup-status</code> →
+    <code>200 {"requiresSetup":true}</code>, <code>/swagger/index.html</code> → real Swagger UI,
+    portal and demo app both still <code>200</code>.</p>
+  </div>
+
+  <!-- ================= REFERENCE ================= -->
+  <h2 id="reference"><span class="num">&#9733;</span>Quick Reference &mdash; Full File Manifest</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose</th><th>Status</th></tr>
+    <tr><td class="file-path">.dockerignore</td><td class="why">Repo-root build-context filter for every Dockerfile</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/docker/fhirbridge-app/Dockerfile</td><td class="why">Builds the Api+Gateway image</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/docker/fhirbridge-app/entrypoint.sh</td><td class="why">Launches both processes with correct env/content-roots</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/docker/demo-app/Dockerfile</td><td class="why">Builds the Demo app image</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/docker/worker/Dockerfile</td><td class="why">Builds the Worker image</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/compose/docker-compose.yml</td><td class="why">All 5 containers, local orchestration</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/compose/.env.example</td><td class="why">Secrets template for Compose</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/scripts/build-images.sh / .ps1</td><td class="why">Build/push script (bash + PowerShell)</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/scripts/cleanup-local.sh / .ps1</td><td class="why">Tear down the local Compose or Terraform-local stack</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/scripts/cleanup-azure.sh / .ps1</td><td class="why"><code>terraform destroy</code> wrapper for the Azure environment</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/scripts/cleanup-aws.sh / .ps1</td><td class="why"><code>terraform destroy</code> wrapper for the AWS environment</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/scripts/cleanup-vendor-registry.sh / .ps1</td><td class="why"><code>terraform destroy</code> wrapper for the vendor registry, tag-filtered on <code>Component=vendor-registry</code></td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/terraform/.gitignore</td><td class="why">Excludes .terraform/, state files, real tfvars</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/terraform/environments/local/*.tf</td><td class="why">Docker-provider reproduction of the Compose stack; every resource labeled</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/terraform/environments/azure/*.tf</td><td class="why">Container Apps deployment; every taggable resource carries <code>local.common_tags</code></td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/terraform/environments/aws/*.tf</td><td class="why">ECS Fargate deployment (7 files); tagged via provider-level <code>default_tags</code></td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/terraform/vendor-registry/*.tf</td><td class="why">Persistent, vendor-owned ACR for publishing/versioning release images — separate from every deployment environment above</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/azure-deploy/main.bicep</td><td class="why">Single-template "easy install" Azure deployment (same topology, tagged via <code>commonTags</code>)</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/azure-deploy/createUiDefinition.json</td><td class="why">Custom Portal deployment wizard for the Bicep path</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/azure-deploy/main.parameters.example.json</td><td class="why">CLI deploy parameter-file template</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/azure-deploy/cleanup.sh / .ps1</td><td class="why">Resource-group or tag-based teardown for the Bicep path (no Terraform state to destroy from)</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/azure-deploy/README.md</td><td class="why">The 3-tier "easy install" story: CLI one-liner, Deploy-to-Azure button, Template Specs/Marketplace</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">containerization/README.md</td><td class="why">Top-level build/run/deploy quick start</td><td class="status"><span class="pill pill-new">new</span></td></tr>
+    <tr><td class="file-path">src/Gateway/FHIRBridge.Gateway/Program.cs</td><td class="why">3-line fix: exclude <code>/swagger</code> from the SPA-fallback branch too</td><td class="status"><span class="pill pill-modified">modified</span></td></tr>
+  </table>
+
+  <footer>
+    Generated to accompany the <code>containerization/</code> work on this branch. All 5 containers
+    were built and run end-to-end via <code>docker compose up</code> on the local Docker Desktop
+    environment before this document was written. Azure and AWS Terraform were reviewed carefully
+    but not yet applied to a real subscription — run <code>terraform validate</code>/<code>plan</code>
+    yourself, or ask for a walkthrough, before a real <code>apply</code>.
+  </footer>
+
+</div>
+</body>
+</html>
