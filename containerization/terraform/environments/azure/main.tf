@@ -37,6 +37,16 @@ provider "azurerm" {
     key_vault {
       purge_soft_delete_on_destroy = false
     }
+
+    # Log Analytics workspaces have the opposite default problem from Key Vault: deleting one
+    # normally just soft-deletes it (kept recoverable for a retention window), so it lingers in
+    # `az resource list`/the Portal even after `terraform destroy` reports success. Unlike Key
+    # Vault's purge, permanently deleting a workspace doesn't need any extra permission beyond the
+    # normal delete action this account already has — so opt into it, keeping cleanup actually
+    # clean instead of leaving a soft-deleted workspace behind every time.
+    log_analytics_workspace {
+      permanently_delete_on_destroy = true
+    }
   }
 
   # Without this, the provider tries to auto-register every resource provider it supports
@@ -305,7 +315,10 @@ resource "azurerm_container_app" "sqlserver" {
   }
 
   ingress {
-    external_enabled = false
+    # See var.sql_external_access's description — defaults to false (internal-only, as this
+    # deployment is otherwise built around network isolation). Only ever set to true deliberately,
+    # for a temporary connectivity check (e.g. connecting with SSMS), then revert and re-apply.
+    external_enabled = var.sql_external_access
     target_port      = var.sql_port
     transport        = "tcp"
 
@@ -433,6 +446,17 @@ resource "azurerm_container_app" "fhirbridge_app" {
         name  = "Portal__AllowedOrigins__0"
         value = "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
       }
+      # Only emitted once demo_app_custom_domain is actually set — otherwise the demo app only
+      # ever calls from its default *.azurecontainerapps.io origin, which __0 above already covers.
+      # Without this, binding a custom domain to the demo app would silently break its own calls
+      # into this API with a CORS rejection, since its new origin wouldn't be on the allowlist.
+      dynamic "env" {
+        for_each = var.demo_app_custom_domain != "" ? [1] : []
+        content {
+          name  = "Portal__AllowedOrigins__1"
+          value = "https://${var.demo_app_custom_domain}"
+        }
+      }
       env {
         name  = "AllowedHosts"
         value = "*"
@@ -515,6 +539,54 @@ resource "azurerm_container_app" "demo_app" {
       percentage      = 100
     }
   }
+}
+
+# --- Custom domains (optional, per app) ---
+#
+# Two-phase by necessity, not by choice: Azure can't issue or verify a certificate for a domain
+# until DNS proves you control it, and that proof (the TXT record below) can only be generated
+# once the Container App itself already exists. See fhirbridge_app_custom_domain's description in
+# variables.tf for the full apply-twice flow. Left at their default ("") these four resources
+# don't get created at all (count = 0) and both apps behave exactly as before this feature existed.
+#
+# azurerm_container_app_environment_managed_certificate is the resource that actually performs the
+# DNS validation at apply time (it calls Azure's ACME-backed managed-certificate issuance, which
+# checks the TXT record) — this step fails outright if DNS isn't propagated yet, which is expected.
+# azurerm_container_app_custom_domain then binds that verified, issued certificate to the specific
+# app's ingress.
+
+resource "azurerm_container_app_environment_managed_certificate" "fhirbridge_app" {
+  count                        = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  name                         = "${local.fhirbridge_app_name}-cert"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  subject_name                 = var.fhirbridge_app_custom_domain
+  domain_control_validation    = "CNAME"
+  tags                         = local.common_tags
+}
+
+resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
+  count                                    = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  name                                     = var.fhirbridge_app_custom_domain
+  container_app_id                        = azurerm_container_app.fhirbridge_app.id
+  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.fhirbridge_app[0].id
+  certificate_binding_type                 = "SniEnabled"
+}
+
+resource "azurerm_container_app_environment_managed_certificate" "demo_app" {
+  count                        = var.demo_app_custom_domain != "" ? 1 : 0
+  name                         = "${local.demo_app_name}-cert"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  subject_name                 = var.demo_app_custom_domain
+  domain_control_validation    = "CNAME"
+  tags                         = local.common_tags
+}
+
+resource "azurerm_container_app_custom_domain" "demo_app" {
+  count                                    = var.demo_app_custom_domain != "" ? 1 : 0
+  name                                     = var.demo_app_custom_domain
+  container_app_id                        = azurerm_container_app.demo_app.id
+  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.demo_app[0].id
+  certificate_binding_type                 = "SniEnabled"
 }
 
 # --- Worker (no ingress) ---

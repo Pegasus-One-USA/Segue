@@ -20,3 +20,23 @@ output "fhirbridge_app_url" {
 output "demo_app_url" {
   value = "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
 }
+
+output "fhirbridge_app_domain_verification" {
+  description = "Always available, regardless of whether fhirbridge_app_custom_domain is set. Add a CNAME (your domain -> fhirbridge_app_url's hostname) and a TXT record named asuid.<your domain> with this value at your DNS provider, wait for propagation, THEN set fhirbridge_app_custom_domain and re-apply."
+  value       = azurerm_container_app.fhirbridge_app.custom_domain_verification_id
+}
+
+output "demo_app_domain_verification" {
+  description = "Same idea as fhirbridge_app_domain_verification, for the demo app's custom domain."
+  value       = azurerm_container_app.demo_app.custom_domain_verification_id
+}
+
+output "fhirbridge_app_custom_domain_url" {
+  description = "Populated once fhirbridge_app_custom_domain is set and that apply has completed; null otherwise."
+  value       = var.fhirbridge_app_custom_domain != "" ? "https://${var.fhirbridge_app_custom_domain}" : null
+}
+
+output "demo_app_custom_domain_url" {
+  description = "Populated once demo_app_custom_domain is set and that apply has completed; null otherwise."
+  value       = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : null
+}

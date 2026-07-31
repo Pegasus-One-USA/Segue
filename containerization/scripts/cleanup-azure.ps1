@@ -5,8 +5,20 @@
 # everything Terraform created but leaves the resource group itself intact, since it wasn't created
 # by this config and may be shared with other things.
 #
+# Before destroying, this downloads and shows main.tf's own resource-manifest blob
+# (resources.txt, in the storage account this config creates) as the preview - not a Terraform
+# state query, an actual file that survives independently of state. It's downloaded BEFORE
+# `terraform destroy` runs, while the blob (and everything else) still exists. Since that manifest
+# is computed directly from Terraform's own resource references, it's already precise - no
+# selection step needed here, just a clear preview and a plain confirm. Falls back to the
+# tag-filtered `az resource list` preview only if the manifest can't be fetched (e.g. a very old
+# deployment made before this output existed).
+#
+# The actual deletion still goes through `terraform destroy`, not manual `az resource delete` calls
+# - that's what correctly handles dependency order AND keeps Terraform's state in sync afterward.
+#
 # Usage:
-#   ./cleanup-azure.ps1          # prompts for confirmation, then terraform destroy
+#   ./cleanup-azure.ps1          # shows the manifest (or tag-based fallback), then terraform destroy
 #   ./cleanup-azure.ps1 -Yes     # skip the confirmation prompt (-auto-approve)
 param(
     [switch]$Yes
@@ -24,29 +36,57 @@ try {
     }
 
     # Read the target resource group name from tfvars (falls back to the variable default) -
-    # purely for the tag-filtered preview below, not used by `terraform destroy` itself (that's
-    # state-scoped and never touches anything outside what Terraform created, tagged or not).
+    # purely for the tag-filtered fallback preview below, not used by `terraform destroy` itself
+    # (that's state-scoped and never touches anything outside what Terraform created, tagged or
+    # not).
     $RgName = "rg-tusharpuri"
     if (Test-Path "terraform.tfvars") {
         $match = Select-String -Path "terraform.tfvars" -Pattern '^\s*resource_group_name\s*=\s*"([^"]*)"' | Select-Object -First 1
         if ($match) { $RgName = $match.Matches[0].Groups[1].Value }
     }
 
-    # az CLI rejects combining --tag with --resource-group on `az resource list` ("you cannot use
-    # '--tag' with '--resource-group'") - so filter by tag across the subscription instead and
-    # narrow to this resource group client-side via --query.
     $azAvailable = [bool](Get-Command az -ErrorAction SilentlyContinue)
+    $manifestShown = $false
+
     if ($azAvailable) {
-        Write-Host "Resources tagged Project=FHIRBridge currently in resource group '$RgName' (before destroy):"
-        try { az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName']" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
-        Write-Host ""
+        Write-Host "==> Fetching the resource manifest (resources.txt) before anything is destroyed ..."
+        $manifestLocalFile = Join-Path $env:TEMP "fhirbridge-resources-preview.txt"
+        try {
+            $downloadCmd = terraform output -raw resource_manifest_download_cmd 2>$null
+            if ($downloadCmd -and $downloadCmd.Trim() -ne "") {
+                $cmdWithLocalPath = $downloadCmd -replace '--file\s+\S+', "--file `"$manifestLocalFile`""
+                Invoke-Expression "$cmdWithLocalPath --only-show-errors" *> $null
+                if (Test-Path $manifestLocalFile) {
+                    Write-Host ""
+                    Write-Host "----- resources.txt (fetched just now, before destroy) -----"
+                    Get-Content $manifestLocalFile | ForEach-Object { Write-Host $_ }
+                    Write-Host "--------------------------------------------------------------"
+                    Write-Host ""
+                    $manifestShown = $true
+                    Remove-Item $manifestLocalFile -ErrorAction SilentlyContinue
+                }
+            }
+        } catch {
+            $manifestShown = $false
+        }
+
+        if (-not $manifestShown) {
+            Write-Host "Couldn't fetch resources.txt (older deployment, or not logged in to az) - falling back to a tag-based preview instead."
+            Write-Host "Resources tagged Project=FHIRBridge currently in resource group '$RgName' (before destroy):"
+            try { az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName']" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
+            Write-Host ""
+        }
     }
 
-    if ($Yes) {
-        terraform destroy -auto-approve
-    } else {
-        terraform destroy
+    if (-not $Yes) {
+        $reply = Read-Host "Destroy everything shown above? [y/N]"
+        if ($reply -notmatch '^[Yy]$') { Write-Host "Aborted."; exit 1 }
     }
+
+    # -auto-approve here regardless of $Yes: the confirmation gate above already covers it (unless
+    # -Yes was passed to skip that too), so Terraform's own separate "type yes" prompt would just
+    # be a redundant second confirmation of the same action.
+    terraform destroy -auto-approve
     # PowerShell does NOT treat a non-zero exit code from a native command (terraform.exe) as a
     # terminating error, even with $ErrorActionPreference = "Stop" - that setting only covers
     # PowerShell's own cmdlets/exceptions. Without this explicit check, the script would print

@@ -257,6 +257,13 @@
       <li><a href="#aws-steps">Setup steps</a></li>
       <li><a href="#aws-troubleshooting">If something goes wrong</a></li>
       <li><a href="#aws-teardown">Tearing it down</a></li>
+      <li class="toc-section-head"><a href="#vendor-section">&#9654; Publishing &amp; Distributing Versions</a></li>
+      <li><a href="#vendor-prereqs">Prerequisites</a></li>
+      <li><a href="#vendor-setup-steps">One-time registry setup</a></li>
+      <li><a href="#vendor-publish-steps">Publishing a new version</a></li>
+      <li><a href="#vendor-distribute-steps">Installing a version for a client</a></li>
+      <li><a href="#vendor-troubleshooting">If something goes wrong</a></li>
+      <li><a href="#vendor-teardown">Tearing it down</a></li>
     </ol>
   </nav>
 
@@ -531,6 +538,49 @@ terraform apply</code></pre>
     tfvars file can never silently undo a rotation.
   </div>
 
+  <h4>Optional: put a real domain on <code>fhirbridge_app</code> and/or <code>demo_app</code> <span class="pill pill-new">new</span></h4>
+  <div class="step">
+    <div class="step-num">8a</div>
+    <div class="step-body">
+      <strong>Get the verification value (already available from the apply you just ran)</strong>
+      <pre><code>terraform output fhirbridge_app_domain_verification
+terraform output demo_app_domain_verification</code></pre>
+      <p>These are always populated, whether or not you ever set a custom domain — no extra apply
+      needed to get them.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">8b</div>
+    <div class="step-body">
+      <strong>At your DNS provider, add two records for the domain you want to use</strong>
+      <p>A <strong>CNAME</strong> pointing your domain (e.g. <code>app.customer.com</code>) at the
+      app's existing hostname from <code>fhirbridge_app_url</code>/<code>demo_app_url</code>, and a
+      <strong>TXT</strong> record named <code>asuid.app.customer.com</code> whose value is the
+      verification output from step 8a. Wait for DNS to propagate before continuing — this can take
+      anywhere from a few minutes to longer depending on your provider.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">8c</div>
+    <div class="step-body">
+      <strong>Set the domain and apply again</strong>
+      <pre><code>terraform apply -var="fhirbridge_app_custom_domain=app.customer.com"
+# or add it to terraform.tfvars instead of passing -var each time</code></pre>
+      <p>This is the step that actually validates DNS, issues the free managed certificate, and
+      binds the domain — it will fail with a clear error if step 8b's records haven't propagated
+      yet. Just wait a bit longer and re-run this same command.</p>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if
+      <code>terraform output fhirbridge_app_custom_domain_url</code> now prints your domain instead
+      of <code>null</code>, and it loads over HTTPS in a browser.</div>
+    </div>
+  </div>
+  <div class="callout warn">
+    <strong>Setting a domain on <code>demo_app</code> too?</strong> Make sure
+    <code>fhirbridge_app</code> gets redeployed after (a plain <code>terraform apply</code> with no
+    changes is enough) — it needs to pick up the demo app's new origin in its CORS allowlist, or the
+    demo app's own calls into the API will start failing.
+  </div>
+
   <h3 id="azure-bicep-steps">Path B: Bicep (One-Command / Customer Install)</h3>
   <div class="step">
     <div class="step-num">1</div>
@@ -564,13 +614,27 @@ cp main.parameters.example.json main.parameters.json</code></pre>
       <code>jwtSigningKey</code>, and <code>redisPassword</code> (all three are secure params, same
       pattern), plus the registry name and — since the ACR above requires credentials — the
       username/password from the previous step. <code>sqlPort</code> and <code>redisPort</code> are
-      also there if you need non-default internal ports, but the defaults are fine as-is.</p>
+      also there if you need non-default internal ports, but the defaults are fine as-is. Each
+      container also has a <code>*Size</code> parameter (<code>sqlServerSize</code>,
+      <code>redisSize</code>, <code>fhirbridgeAppSize</code>, <code>demoAppSize</code>,
+      <code>workerSize</code>) — one of <code>Small</code>/<code>Medium</code>/<code>Large</code>/
+      <code>XLarge</code>, defaulting to today's values; bump <code>sqlServerSize</code> to
+      <code>XLarge</code> if SQL Server's first-run setup crashes with an out-of-memory exit code.</p>
       <pre><code>az deployment group create \
   --resource-group fhirbridge-rg \
   --template-file main.bicep \
   --parameters main.parameters.json</code></pre>
       <p>This single command creates literally everything — takes 2&ndash;5 minutes.</p>
     </div>
+  </div>
+  <div class="callout azure">
+    <strong>Optional: a real domain for <code>fhirbridgeAppCustomDomain</code>/<code>demoAppCustomDomain</code></strong>
+    Same two-phase idea as the Terraform path above (deploy once with these blank, read
+    <code>fhirbridgeAppDomainVerificationId</code>/<code>demoAppDomainVerificationId</code> from the
+    deployment's outputs, add the CNAME + TXT records at your DNS provider, wait for propagation,
+    then redeploy with the domain filled in) — see Path A's step 8 for the full walkthrough, it's
+    identical here, just via <code>main.parameters.json</code> instead of <code>terraform.tfvars</code>.
+    The one-click Portal wizard version of this same flow has its own dedicated "Custom Domains" step.
   </div>
   <div class="step">
     <div class="step-num">4</div>
@@ -622,12 +686,32 @@ cp main.parameters.example.json main.parameters.json</code></pre>
   <p><strong>Path B (Bicep):</strong></p>
   <pre><code>cd containerization/azure-deploy
 ./cleanup.sh -g fhirbridge-rg</code></pre>
-  <div class="callout bad">
-    <strong>Don't skip this either</strong>
-    Unlike Path A, this deletes the <em>entire resource group</em> named here (<code>-g</code>) —
-    only use this against a resource group dedicated to this deployment, never a shared one.
-    Confirm it's actually gone afterward with <code>az group show --name fhirbridge-rg</code> (it
-    should return a "not found" error once deletion finishes).
+  <div class="callout">
+    <strong>Precise by default now</strong>
+    This first reads <code>main.bicep</code>'s own <code>resourceManifest</code> output (every
+    resource ID this deployment created, kept in the deployment's history for free) and deletes
+    exactly those — safe even against a resource group shared with other, unrelated resources.
+    It only falls back to deleting the <em>entire</em> resource group named here (<code>-g</code>)
+    if that manifest can't be found, and even then it refuses outright if the group contains any
+    disk snapshot (a snapshot is how a backup is protected — this script will never delete one).
+    Use <code>-e &lt;environment-tag-value&gt;</code> instead for a shared group where the manifest
+    genuinely isn't available. Confirm the deployment's own resources are gone afterward with
+    <code>az resource list --resource-group fhirbridge-rg</code>.
+  </div>
+  <div class="callout warn">
+    <strong>Changing <code>sqlSaPassword</code> and redeploying into the same resource group +
+    name prefix won't actually change SQL Server's password</strong> — it only applies the very
+    first time SQL Server initializes its data directory; every later restart keeps whatever
+    password was set originally, even though the app containers pick up the new one immediately.
+    You'll see a persistent <code>Login failed for user 'sa'</code> that looks like a
+    misconfiguration but isn't. Fix: delete and recreate the <code>sql-data</code> Azure File
+    share (<code>az storage share delete</code>/<code>create</code>, passing
+    <code>--account-key</code> explicitly since these two subcommands don't accept
+    <code>--auth-mode key</code>), then restart the SQL container app revision so it reinitializes
+    against the empty share. Also avoid <code>$</code>, backticks, and quote characters in this
+    password and the JWT signing key/Redis password — one was directly observed being corrupted
+    by shell metacharacter expansion on the way into the container. Plain letters and digits, made
+    long, are both safer and plenty strong.
   </div>
 
   <!-- ================= AWS SECTION ================= -->
@@ -774,6 +858,141 @@ terraform apply</code></pre>
     The load balancer and all 5 containers bill continuously for as long as they exist — there's
     no "pause" button here either. Confirm everything is gone afterward by checking the ECS console
     or running <code>terraform show</code> (it should report no resources).
+  </div>
+
+  <!-- ================= VENDOR REGISTRY SECTION ================= -->
+  <h2 id="vendor-section" class="section-divider azure-divider"><span class="os-icon">&#128230;</span>Publishing &amp; Distributing Versions</h2>
+  <p class="file-summary">A one-time setup, then a repeatable two-step cycle for every real release:
+  publish a version (built locally), then hand a specific client that exact version — without their
+  Azure account, or anyone else's, ever touching source code.</p>
+
+  <h3 id="vendor-prereqs">Prerequisites</h3>
+  <table class="reqs">
+    <tr><th>Needed</th><th>How to check / get it</th></tr>
+    <tr><td><strong>Azure CLI + Terraform</strong></td><td>Same as the Azure section above — <code>az version</code> / <code>terraform version</code>.</td></tr>
+    <tr><td><strong>Docker Desktop, running</strong></td><td><code>docker info</code> should return engine details with no connection errors. Publishing a version always builds locally — there's no remote-build step here.</td></tr>
+    <tr><td><strong>Access to a resource group</strong></td><td>Can be the same one you already use for testing (e.g. <code>rg-tusharpuri</code>) — see the callout below on why a dedicated one is better long-term.</td></tr>
+  </table>
+
+  <h3 id="vendor-setup-steps">One-time registry setup</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Confirm (or create) the target resource group</strong>
+      <pre><code>az group show --name rg-tusharpuri</code></pre>
+      <p>If it doesn't exist yet: <code>az group create --name rg-tusharpuri --location eastus</code>.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Set up the registry</strong>
+      <pre><code>cd containerization/terraform/vendor-registry
+cp terraform.tfvars.example terraform.tfvars</code></pre>
+      <p>Open <code>terraform.tfvars</code> and confirm <code>resource_group_name</code> matches
+      step 1.</p>
+      <pre><code>terraform init
+terraform apply</code></pre>
+      <p>Type <code>yes</code> when prompted.</p>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if <code>terraform output acr_login_server</code>
+      prints something like <code>fhirbridgevendor8ae7f3.azurecr.io</code>.</div>
+    </div>
+  </div>
+  <div class="callout azure">
+    <strong>Using the same resource group as your test deployment, for now</strong>
+    That's fine to start — but this registry is meant to persist permanently, unlike the
+    <code>azure</code>/<code>aws</code> test environments which get destroyed and recreated often.
+    Move it to a dedicated resource group later by changing one line
+    (<code>resource_group_name</code>) in <code>terraform.tfvars</code> and re-applying — no other
+    changes needed.
+  </div>
+
+  <h3 id="vendor-publish-steps">Publishing a new version</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Log in to the registry</strong>
+      <pre><code>az acr login --name fhirbridgevendor8ae7f3</code></pre>
+      <p>Use the <em>short</em> registry name here (<code>terraform output acr_name</code>) — not
+      the full <code>.azurecr.io</code> address.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Build locally and push</strong>
+      <pre><code>cd ../../scripts
+./build-images.sh -r fhirbridgevendor8ae7f3.azurecr.io -t v1.0.0 -p
+# PowerShell: ./build-images.ps1 -Registry fhirbridgevendor8ae7f3.azurecr.io -Tag v1.0.0 -Push</code></pre>
+      <p>Use the <em>full</em> registry hostname here (<code>terraform output acr_login_server</code>)
+      — the opposite of step 1. This is the same script used for local/Azure/AWS testing; Docker
+      builds each image on your own machine, then pushes only the finished, compiled image. Your
+      source code is never uploaded anywhere — this deliberately does not use Azure's remote-build
+      option (<code>az acr build</code>), which would upload your full source tree to a cloud build
+      sandbox instead.</p>
+      <div class="checkpoint"><strong>You'll know it worked</strong> if you see
+      <code>Done. Images tagged with prefix '...' and tag 'v1.0.0'.</code> with no errors, and each
+      image showed a "Pushed" line (not "Mounted from," which just means Docker reused an identical
+      layer already in the registry — still a successful push).</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <strong>Confirm what actually landed in the registry</strong>
+      <pre><code>az acr repository list --name fhirbridgevendor8ae7f3 --output table
+az acr repository show-tags --name fhirbridgevendor8ae7f3 --repository fhirbridge-app --output table</code></pre>
+    </div>
+  </div>
+
+  <h3 id="vendor-distribute-steps">Installing a version for a client</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Copy the published version into the client's own registry</strong>
+      <pre><code>az acr import --name &lt;client-acr-name&gt; --source fhirbridgevendor8ae7f3.azurecr.io/fhirbridge-app:v1.0.0 --image fhirbridge-app:v1.0.0
+az acr import --name &lt;client-acr-name&gt; --source fhirbridgevendor8ae7f3.azurecr.io/demo-app:v1.0.0 --image demo-app:v1.0.0
+az acr import --name &lt;client-acr-name&gt; --source fhirbridgevendor8ae7f3.azurecr.io/fhirbridge-worker:v1.0.0 --image fhirbridge-worker:v1.0.0</code></pre>
+      <p>A server-to-server image copy — no rebuild, no source involved, and no local Docker needed
+      for this step. <code>&lt;client-acr-name&gt;</code> is whichever registry that client's own
+      Terraform (or Bicep) deployment already created for itself.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Point that deployment at the imported version</strong>
+      <p>Set <code>image_tag = "v1.0.0"</code> in that deployment's <code>terraform.tfvars</code>
+      (or <code>imageTag</code> in <code>main.parameters.json</code> for the Bicep path), then apply
+      as usual.</p>
+    </div>
+  </div>
+
+  <h3 id="vendor-troubleshooting">If Something Goes Wrong</h3>
+  <div class="callout warn">
+    <strong><code>denied: requested access to the resource is denied</code>, and the push log shows <code>docker.io/...</code></strong>
+    — <code>-Registry</code>/<code>-r</code> was given the short registry name instead of the full
+    <code>.azurecr.io</code> hostname, so Docker assumed Docker Hub instead of your ACR (Docker's
+    rule: no dot in the first path segment means Docker Hub). Re-run with the full
+    <code>acr_login_server</code> value.
+  </div>
+  <div class="callout warn">
+    <strong>Publishing the same tag again</strong> — re-running step 2 above with a tag that
+    already exists in the registry simply overwrites it; that's expected, not an error. Anyone
+    already deployed on that exact tag won't automatically pick up the change — re-run the
+    <code>az acr import</code> + redeploy (or <code>az containerapp update --image ...</code> for a
+    fast one-off nudge) to actually push it out to a specific client.
+  </div>
+
+  <h3 id="vendor-teardown">Tearing It Down</h3>
+  <p>Rarely needed — this registry is meant to persist across every test teardown above.</p>
+  <pre><code>cd containerization/scripts
+./cleanup-vendor-registry.sh
+# PowerShell: cleanup-vendor-registry.ps1</code></pre>
+  <div class="callout bad">
+    <strong>Double-check before confirming</strong>
+    Since this may currently share a resource group with a test deployment, confirm the preview
+    list this script prints only shows the registry itself before typing <code>yes</code>.
   </div>
 
   <footer>

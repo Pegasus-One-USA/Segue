@@ -55,10 +55,49 @@ param redisPort int = 6379
 @secure()
 param redisPassword string
 
+@description('Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank (default) to keep using the auto-generated *.azurecontainerapps.io URL. Requires a two-phase deploy: (1) deploy with this left blank, read the fhirbridgeAppDomainVerificationId output, add a CNAME (this domain -> fhirbridgeAppUrl\'s hostname) and a TXT record named asuid.<this domain> (value = that output) at your DNS provider, wait for propagation; (2) set this parameter and redeploy — this provisions a free Azure-managed certificate (fails if DNS isn\'t ready yet) and binds the domain.')
+param fhirbridgeAppCustomDomain string = ''
+
+@description('Custom domain for the Demo app. Same two-phase flow as fhirbridgeAppCustomDomain — see the demoAppDomainVerificationId output.')
+param demoAppCustomDomain string = ''
+
 // fhirbridge-app / demo-app have no equivalent parameter: Azure Container Apps external HTTP
 // ingress has no client-configurable port — it's always https://<app>.<domain> with no port
 // number in the URL, regardless of targetPort. That's a genuine Container Apps platform
 // constraint, not something this template can work around.
+
+@description('SQL Server container size.')
+@allowed(['Small', 'Medium', 'Large', 'XLarge'])
+param sqlServerSize string = 'Large'
+
+@description('Redis container size.')
+@allowed(['Small', 'Medium', 'Large', 'XLarge'])
+param redisSize string = 'Medium'
+
+@description('FHIRBridge app (Api + Gateway) container size.')
+@allowed(['Small', 'Medium', 'Large', 'XLarge'])
+param fhirbridgeAppSize string = 'Medium'
+
+@description('Demo app container size.')
+@allowed(['Small', 'Medium', 'Large', 'XLarge'])
+param demoAppSize string = 'Small'
+
+@description('Worker container size.')
+@allowed(['Small', 'Medium', 'Large', 'XLarge'])
+param workerSize string = 'Small'
+
+// Azure Container Apps' Consumption plan only accepts CPU/memory at a fixed 1:2 ratio from a
+// specific set of valid pairs — arbitrary combinations are rejected at deploy time. Exposing raw
+// numeric fields to the customer risks an invalid combo, so every container picks from this same
+// preset ladder instead. XLarge exists mainly for sqlServerSize: SQL Server's first-run
+// initialization can spike memory harder than steady-state, and 2Gi (Large) has been observed
+// hitting an OOM kill (container exit code 137) during that one-time setup.
+var containerSizes = {
+  Small:  { cpu: json('0.25'), memory: '0.5Gi' }
+  Medium: { cpu: json('0.5'),  memory: '1Gi' }
+  Large:  { cpu: json('1.0'),  memory: '2Gi' }
+  XLarge: { cpu: json('2.0'),  memory: '4Gi' }
+}
 
 // Applied to every resource below that supports `tags` — lets you find/filter/cost-report on
 // everything this deployment created, and is what cleanup.sh|ps1's tag-based teardown mode
@@ -197,7 +236,7 @@ resource sqlserverApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'sqlserver'
           image: 'mcr.microsoft.com/mssql/server:2022-latest'
-          resources: { cpu: json('1.0'), memory: '2Gi' }
+          resources: containerSizes[sqlServerSize]
           env: [
             { name: 'ACCEPT_EULA', value: 'Y' }
             { name: 'MSSQL_PID', value: 'Express' }
@@ -237,7 +276,7 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'redis'
           image: 'redis:7-alpine'
-          resources: { cpu: json('0.5'), memory: '1Gi' }
+          resources: containerSizes[redisSize]
           command: ['redis-server', '--port', string(redisPort), '--requirepass', redisPassword]
           volumeMounts: [
             { volumeName: 'redis-data', mountPath: '/data' }
@@ -249,6 +288,41 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       scale: { minReplicas: 1, maxReplicas: 1 }
     }
+  }
+}
+
+// --- Custom domains (optional, per app) ---
+//
+// Two-phase by necessity, not by choice: Azure can't issue/verify a certificate for a domain until
+// DNS proves you control it, and that proof (the TXT record) can only be generated once the
+// Container App itself already exists. See fhirbridgeAppCustomDomain's description above for the
+// full deploy-twice flow. Left at their default (''), neither of these resources gets created —
+// the `if` conditions below make them no-ops — and both apps behave exactly as before this
+// feature existed.
+//
+// NOTE: Microsoft.App/managedEnvironments/managedCertificates is Azure's free managed-certificate
+// mechanism for Container Apps custom domains (mirrors azurerm_container_app_environment_managed_
+// certificate in the Terraform environment). Validate with `az bicep build` + a real
+// `az deployment group validate`/apply before relying on this — this resource type/apiVersion
+// combination hasn't been exercised against a live subscription yet in this repo.
+
+resource fhirbridgeAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(fhirbridgeAppCustomDomain)) {
+  parent: containerAppEnv
+  name: '${fhirbridgeAppName}-cert'
+  location: location
+  properties: {
+    subjectName: fhirbridgeAppCustomDomain
+    domainControlValidation: 'CNAME'
+  }
+}
+
+resource demoAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(demoAppCustomDomain)) {
+  parent: containerAppEnv
+  name: '${demoAppName}-cert'
+  location: location
+  properties: {
+    subjectName: demoAppCustomDomain
+    domainControlValidation: 'CNAME'
   }
 }
 
@@ -270,6 +344,9 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 80
         transport: 'auto'
+        customDomains: !empty(fhirbridgeAppCustomDomain) ? [
+          { name: fhirbridgeAppCustomDomain, certificateId: fhirbridgeAppManagedCert.id, bindingType: 'SniEnabled' }
+        ] : []
       }
     }
     template: {
@@ -277,8 +354,8 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'fhirbridge-app'
           image: '${imageRegistryServer}/fhirbridge-app:${imageTag}'
-          resources: { cpu: json('0.5'), memory: '1Gi' }
-          env: [
+          resources: containerSizes[fhirbridgeAppSize]
+          env: concat([
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
             { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword}' }
@@ -290,7 +367,13 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'Portal__AllowedOrigins__0', value: 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}' }
             { name: 'AllowedHosts', value: '*' }
             { name: 'Swagger__Enabled', value: 'true' }
-          ]
+          ], !empty(demoAppCustomDomain) ? [
+            // Only present once demoAppCustomDomain is set — otherwise the demo app only ever
+            // calls from its default origin, already covered by __0 above. Without this, binding a
+            // custom domain to the demo app would silently break its own calls into this API with
+            // a CORS rejection, since its new origin wouldn't be on the allowlist.
+            { name: 'Portal__AllowedOrigins__1', value: 'https://${demoAppCustomDomain}' }
+          ] : [])
         }
       ]
       scale: { minReplicas: 1, maxReplicas: 3 }
@@ -314,6 +397,9 @@ resource demoApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 5500
         transport: 'auto'
+        customDomains: !empty(demoAppCustomDomain) ? [
+          { name: demoAppCustomDomain, certificateId: demoAppManagedCert.id, bindingType: 'SniEnabled' }
+        ] : []
       }
     }
     template: {
@@ -321,7 +407,7 @@ resource demoApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'demo-app'
           image: '${imageRegistryServer}/demo-app:${imageTag}'
-          resources: { cpu: json('0.25'), memory: '0.5Gi' }
+          resources: containerSizes[demoAppSize]
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__Default', value: 'Server=${sqlServerName},${sqlPort};Database=HealthAppDb;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
@@ -352,7 +438,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'worker'
           image: '${imageRegistryServer}/fhirbridge-worker:${imageTag}'
-          resources: { cpu: json('0.25'), memory: '0.5Gi' }
+          resources: containerSizes[workerSize]
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
@@ -374,3 +460,34 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 output fhirbridgeAppUrl string = 'https://${fhirbridgeAppName}.${containerAppEnv.properties.defaultDomain}'
 output demoAppUrl string = 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}'
+
+// Always populated regardless of whether *CustomDomain is set — add a CNAME (your domain -> the
+// matching *Url output's hostname) and a TXT record named asuid.<your domain> with this value at
+// your DNS provider, wait for propagation, THEN set fhirbridgeAppCustomDomain/demoAppCustomDomain
+// and redeploy.
+output fhirbridgeAppDomainVerificationId string = fhirbridgeApp.properties.customDomainVerificationId
+output demoAppDomainVerificationId string = demoApp.properties.customDomainVerificationId
+
+output fhirbridgeAppCustomDomainUrl string = !empty(fhirbridgeAppCustomDomain) ? 'https://${fhirbridgeAppCustomDomain}' : ''
+output demoAppCustomDomainUrl string = !empty(demoAppCustomDomain) ? 'https://${demoAppCustomDomain}' : ''
+
+// Every resource this deployment created, in a dependency-safe DELETION order (children before
+// their parents — e.g. the 5 Container Apps before the environment they run in). Azure keeps this
+// output in the deployment's own history (`az deployment group show --name main --query
+// properties.outputs.resourceManifest.value`) indefinitely, with no extra resource needed to store
+// it — cleanup.sh|ps1 reads this first and deletes exactly these IDs in order, falling back to a
+// tag-based scan only if this deployment record isn't found (e.g. deployment history was purged).
+output resourceManifest array = [
+  sqlserverApp.id
+  redisApp.id
+  fhirbridgeApp.id
+  demoApp.id
+  workerApp.id
+  sqlDataStorage.id
+  redisDataStorage.id
+  sqlDataShare.id
+  redisDataShare.id
+  containerAppEnv.id
+  storageAccount.id
+  logAnalytics.id
+]

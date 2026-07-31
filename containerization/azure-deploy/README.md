@@ -16,23 +16,54 @@ the customer also builds Docker images. That's a normal part of shipping softwar
 (the vendor) build and publish a release once; every customer's one-click deploy just references
 it.
 
+Use `../terraform/vendor-registry` for this — a persistent ACR in your own subscription, built for
+exactly this purpose (see the containerization guide's "Vendor Registry" section for the full
+walkthrough):
+
 ```bash
-# From the repo root, once per release:
-../scripts/build-images.sh -r <your-registry> -t v1.2.0 -p
-# or on Windows:
-../scripts/build-images.ps1 -Registry <your-registry> -Tag v1.2.0 -Push
+cd ../terraform/vendor-registry && terraform apply   # one-time setup
+az acr login --name <acr_name output>
+cd ../../scripts
+./build-images.sh -r <acr_login_server output> -t v1.2.0 -p
+# or on Windows: ./build-images.ps1 -Registry <acr_login_server output> -Tag v1.2.0 -Push
 ```
 
-`<your-registry>` can be:
-- **A private registry you control** (an Azure Container Registry in your own subscription, a
-  private GHCR/Docker Hub repo). Customers then need pull credentials — `imageRegistryUsername`/
-  `imageRegistryPassword` in this template — which you provide them (e.g. an ACR token scoped to
-  read-only pull).
-- **A public registry** (a public GHCR package, public Docker Hub repo). No credentials needed at
-  all — leave `imageRegistryUsername`/`imageRegistryPassword` blank and Container Apps pulls
-  anonymously. Simplest for the customer, but the images (compiled .NET DLLs, Angular bundles) are
-  then publicly downloadable — decide if that's acceptable for this product before choosing this
-  route.
+Docker builds locally here — source never leaves your machine, only the compiled image gets
+pushed.
+
+### Wiring up registry access (`createUiDefinition.json`) — do this before hosting the file
+
+`createUiDefinition.json` no longer asks the customer for a registry at all — the "Container
+Images" step only has a version field now. Registry access is fixed, not customer-editable, using
+a **read-only ACR token** on the vendor registry:
+
+```bash
+az acr token create --registry <vendor acr_name> --name one-click-pull --scope-map _repositories_pull
+```
+
+This prints a username + password that can only pull images, nothing else, and can be individually
+revoked at any time without affecting anything else (`az acr token delete --registry <acr_name>
+--name one-click-pull`, then create a new one). Replace the 3 placeholder strings in
+`createUiDefinition.json`'s `outputs` section with the real values before hosting it:
+
+| Placeholder | Replace with |
+|---|---|
+| `__VENDOR_ACR_LOGIN_SERVER__` | The vendor registry's login server (`terraform output acr_login_server` in `../terraform/vendor-registry`) |
+| `__VENDOR_ACR_PULL_TOKEN_USERNAME__` | The token name from the command above (`one-click-pull`) |
+| `__VENDOR_ACR_PULL_TOKEN_PASSWORD__` | The password the `az acr token create` command printed |
+
+**Trade-off worth knowing:** since `createUiDefinition.json` is hosted in a *publicly-readable*
+storage container (Tier 2 below) so the Deploy-to-Azure button can fetch it, embedding this token
+here means it's technically public too — anyone who downloads the JSON directly could read it out,
+not just people who click the button. The bounded mitigation is exactly why a read-only, scoped,
+revocable token is used here instead of an admin credential or a broader role: the worst case is
+someone can pull your images, and you can kill that specific token at any time. If that trade-off
+isn't acceptable for a given release, fall back to a public registry instead — no rework needed,
+`main.bicep` already treats `imageRegistryUsername`/`imageRegistryPassword` as optional (empty
+string skips registry auth entirely). Just set `__VENDOR_ACR_LOGIN_SERVER__` to the public
+registry's address and leave the other two placeholders as empty strings (`""`) instead of real
+credentials — the images become publicly downloadable in that case, so decide if that's acceptable
+for this product first.
 
 ## Tier 1 — one command, works today
 

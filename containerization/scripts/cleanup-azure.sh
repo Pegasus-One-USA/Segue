@@ -6,8 +6,20 @@
 # everything Terraform created but leaves the resource group itself intact, since it wasn't created
 # by this config and may be shared with other things.
 #
+# Before destroying, this downloads and shows main.tf's own resource-manifest blob (resources.txt,
+# in the storage account this config creates) as the preview — not a Terraform state query, an
+# actual file that survives independently of state. It's downloaded BEFORE `terraform destroy`
+# runs, while the blob (and everything else) still exists. Since that manifest is computed directly
+# from Terraform's own resource references, it's already precise — no selection step needed here,
+# just a clear preview and a plain confirm. Falls back to the tag-filtered `az resource list`
+# preview only if the manifest can't be fetched (e.g. a very old deployment made before this output
+# existed).
+#
+# The actual deletion still goes through `terraform destroy`, not manual `az resource delete` calls
+# — that's what correctly handles dependency order AND keeps Terraform's state in sync afterward.
+#
 # Usage:
-#   ./cleanup-azure.sh          # prompts for confirmation, then terraform destroy
+#   ./cleanup-azure.sh          # shows the manifest (or tag-based fallback), then terraform destroy
 #   ./cleanup-azure.sh -y       # skip the confirmation prompt (-auto-approve)
 set -euo pipefail
 
@@ -29,27 +41,51 @@ if [[ ! -f terraform.tfstate && ! -d .terraform ]]; then
 fi
 
 # Read the target resource group name straight from tfvars (falls back to the variable default) —
-# purely for the tag-filtered preview below, not used by `terraform destroy` itself (that's
-# state-scoped and never touches anything outside what Terraform created, tagged or not).
+# purely for the tag-filtered fallback preview below, not used by `terraform destroy` itself
+# (that's state-scoped and never touches anything outside what Terraform created, tagged or not).
 RG_NAME="$(grep -E '^[[:space:]]*resource_group_name[[:space:]]*=' terraform.tfvars 2>/dev/null | sed -E 's/^[^=]*=[[:space:]]*"([^"]*)".*/\1/')"
 RG_NAME="${RG_NAME:-rg-tusharpuri}"
 
-# az CLI rejects combining --tag with --resource-group on `az resource list` ("you cannot use
-# '--tag' with '--resource-group'") — so filter by tag across the subscription instead and narrow
-# to this resource group client-side via --query.
+MANIFEST_SHOWN="false"
 if command -v az >/dev/null 2>&1; then
-  echo "Resources tagged Project=FHIRBridge currently in resource group '${RG_NAME}' (before destroy):"
-  az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}']" --output table 2>/dev/null \
-    || echo "  (couldn't query — not logged in to az, or the group doesn't exist)"
-  echo
+  echo "==> Fetching the resource manifest (resources.txt) before anything is destroyed ..."
+  MANIFEST_LOCAL_FILE="$(mktemp -t fhirbridge-resources-preview.XXXXXX)"
+  DOWNLOAD_CMD="$(terraform output -raw resource_manifest_download_cmd 2>/dev/null || true)"
+  if [[ -n "$DOWNLOAD_CMD" ]]; then
+    CMD_WITH_LOCAL_PATH="$(echo "$DOWNLOAD_CMD" | sed -E "s#--file [^ ]+#--file \"${MANIFEST_LOCAL_FILE}\"#")"
+    if eval "$CMD_WITH_LOCAL_PATH --only-show-errors" >/dev/null 2>&1 && [[ -s "$MANIFEST_LOCAL_FILE" ]]; then
+      echo ""
+      echo "----- resources.txt (fetched just now, before destroy) -----"
+      cat "$MANIFEST_LOCAL_FILE"
+      echo "--------------------------------------------------------------"
+      echo ""
+      MANIFEST_SHOWN="true"
+    fi
+  fi
+  rm -f "$MANIFEST_LOCAL_FILE"
+
+  if [[ "$MANIFEST_SHOWN" != "true" ]]; then
+    echo "Couldn't fetch resources.txt (older deployment, or not logged in to az) — falling back to a tag-based preview instead."
+    # az CLI rejects combining --tag with --resource-group on `az resource list` ("you cannot use
+    # '--tag' with '--resource-group'") — so filter by tag across the subscription instead and
+    # narrow to this resource group client-side via --query.
+    echo "Resources tagged Project=FHIRBridge currently in resource group '${RG_NAME}' (before destroy):"
+    az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}']" --output table 2>/dev/null \
+      || echo "  (couldn't query — not logged in to az, or the group doesn't exist)"
+    echo
+  fi
+fi
+
+if [[ "$ASSUME_YES" != "true" ]]; then
+  read -r -p "Destroy everything shown above? [y/N] " reply
+  [[ "$reply" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 fi
 
 set +e
-if [[ "$ASSUME_YES" == "true" ]]; then
-  terraform destroy -auto-approve
-else
-  terraform destroy
-fi
+# -auto-approve regardless: the confirmation gate above already covers it (unless -y was passed
+# to skip that too), so Terraform's own separate "type yes" prompt would just be a redundant
+# second confirmation of the same action.
+terraform destroy -auto-approve
 DESTROY_EXIT=$?
 set -e
 

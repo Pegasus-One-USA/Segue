@@ -57,3 +57,21 @@ variable "redis_password" {
   type        = string
   sensitive   = true
 }
+
+variable "fhirbridge_app_custom_domain" {
+  description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank (default) to keep using the auto-generated *.azurecontainerapps.io URL. Setting this requires a two-phase apply: (1) apply with this left blank, read the fhirbridge_app_domain_verification output, add a CNAME (pointing this domain at fhirbridge_app_url's hostname) and a TXT record named asuid.<this domain> (value = that output) at your DNS provider, wait for DNS to propagate; (2) set this variable to the domain and re-apply — this provisions a free Azure-managed certificate (which validates the TXT record at apply time, so it fails if DNS isn't ready) and binds the domain."
+  type        = string
+  default     = ""
+}
+
+variable "demo_app_custom_domain" {
+  description = "Custom domain for the Demo app. Same two-phase flow as fhirbridge_app_custom_domain — see the demo_app_domain_verification output."
+  type        = string
+  default     = ""
+}
+
+variable "sql_external_access" {
+  description = "TESTING ONLY: exposes SQL Server directly to the internet (Container Apps external TCP ingress on var.sql_port) so it can be reached from a local client like SSMS. Defaults to false — this deployment is otherwise built around network isolation (sqlserver/redis are internal-only by design), and this bypasses that deliberately. Only set to true for a temporary connectivity check, then set back to false and re-apply. Even with this on, the sa password (from Key Vault) is still required to connect — this only controls network reachability, not authentication."
+  type        = bool
+  default     = false
+}
