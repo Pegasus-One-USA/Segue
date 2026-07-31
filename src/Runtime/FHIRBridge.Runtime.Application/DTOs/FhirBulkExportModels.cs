@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace FHIRBridge.Runtime.Application.DTOs;
 
 /// <summary>The scope of a FHIR Bulk Data export ($export) kick-off.</summary>
@@ -36,4 +38,28 @@ public static class BulkExportScopes
         "patient" => BulkExportScope.Patient,
         _ => BulkExportScope.System,
     };
+
+    /// <summary>Resolves the <c>_type</c> value to actually send for a Group <c>$export</c> kick-off. A job scoped to
+    /// ONLY <c>Patient</c> (e.g. <c>Group/{id}/$export?_type=Patient</c>) trips a real Epic Interconnect Group-export
+    /// limitation: to materialize the group's Patient records, Epic resolves membership via an internal, unscoped
+    /// Patient search in that lone-type case, which its own business rule then rejects ("requires demographics or
+    /// _id parameter", code 59159). Epic only exhibits this for a single, Patient-only <c>_type</c> on a GROUP
+    /// export — a job requesting Patient alongside any other resource type is unaffected, and a System-level export
+    /// (which reads directly from the tenant's Patient store with no membership-resolution step) doesn't need this
+    /// workaround at all, so this deliberately only applies to Group scope — narrowing it to System too would trade
+    /// a small, targeted Patient fetch for an unrestricted whole-tenant export with no evidence Epic needs it there.
+    /// Omitting <c>_type</c> entirely (server default: every resource type it's willing to export for the group)
+    /// sidesteps the lone-type code path; callers already filter the resulting NDJSON down to whichever resource
+    /// types they actually route, so this only ever widens what's returned, never what's consumed.</summary>
+    public static IReadOnlyCollection<string>? ResolveTypeParameter(BulkExportScope scope, IReadOnlyCollection<string>? resourceTypes)
+    {
+        if (scope != BulkExportScope.Group)
+        {
+            return resourceTypes;
+        }
+
+        return resourceTypes is { Count: 1 } && resourceTypes.Any(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase))
+            ? null
+            : resourceTypes;
+    }
 }

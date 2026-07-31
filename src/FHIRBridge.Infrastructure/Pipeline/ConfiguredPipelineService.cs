@@ -1202,7 +1202,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return new FhirBulkExportRequest(
             scope,
             GroupId: scope == BulkExportScope.Group ? retrieval?.GroupId : null,
-            ResourceTypes: resourceTypes,
+            ResourceTypes: BulkExportScopes.ResolveTypeParameter(scope, resourceTypes),
             Since: since,
             PatientIds: scope == BulkExportScope.Patient ? retrieval?.PatientIds : null,
             OutputFormat: retrieval?.OutputFormat);

@@ -205,6 +205,42 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             source = source with { SourceType = _sourceType };
         }
 
+        // Bulk-export/retrieval settings (Data Retrieval Method, Export Scope, Group ID, Patient ID list, FHIR
+        // output format) are workflow-node-scoped — see epic-audience-form.component.ts's "Retrieval Configuration"
+        // panel and its accompanying comment: they deliberately live on the node, not on the reusable SourceConnection
+        // entity, since one connection can be referenced by several workflows that each need different retrieval
+        // behavior. ResolveAsync above only hydrates auth/base-URL/scopes from the connection entity, so a node whose
+        // SourceConnection was never separately given matching Retrieval* column values resolves RetrievalMethod to
+        // null — useBulkExport below would then silently evaluate false and this run would fall back to an unscoped
+        // search-rest fetch instead of running the bulk export the wizard shows as configured. Mirrors
+        // workflow-build-assembler.service.ts's buildRetrieval() field mapping exactly, including the ndjson ->
+        // application/fhir+ndjson MIME normalization ($export's _outputFormat expects the registered MIME type, not
+        // the wizard's short token). Only overrides when the node actually specifies a retrieval method — a node with
+        // none keeps whatever the resolved source already carries (unchanged behavior for every other node shape).
+        var nodeRetrievalMethod = ReadStringConfiguration(node, "Retrieval method key");
+        if (!string.IsNullOrWhiteSpace(nodeRetrievalMethod))
+        {
+            var nodeExportScope = ReadStringConfiguration(node, "Export scope");
+            var nodeOutputFormatToken = ReadStringConfiguration(node, "FHIR output format");
+            var nodePatientIds = (ReadStringConfiguration(node, "Patient ID / list") ?? string.Empty)
+                .Split([',', '\n', '\r', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            source = source with
+            {
+                RetrievalMethod = nodeRetrievalMethod,
+                ExportScope = string.IsNullOrWhiteSpace(nodeExportScope) ? null : nodeExportScope,
+                GroupId = string.Equals(nodeExportScope, "group", StringComparison.OrdinalIgnoreCase)
+                    ? ReadStringConfiguration(node, "Group ID")
+                    : null,
+                PatientIds = string.Equals(nodeExportScope, "patient", StringComparison.OrdinalIgnoreCase) && nodePatientIds.Length > 0
+                    ? nodePatientIds
+                    : null,
+                OutputFormat = nodeOutputFormatToken is { Length: > 0 } token && token.StartsWith("ndjson", StringComparison.OrdinalIgnoreCase)
+                    ? "application/fhir+ndjson"
+                    : null,
+            };
+        }
+
         var client = _sourceClientFactory.Create(_sourceType);
 
         // Below configuredResources in priority: a Backend System Search REST retrieval config carries its own
@@ -566,7 +602,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         return new FhirBulkExportRequest(
             scope,
             GroupId: scope == BulkExportScope.Group ? source.GroupId : null,
-            ResourceTypes: resourceTypes,
+            ResourceTypes: BulkExportScopes.ResolveTypeParameter(scope, resourceTypes),
             Since: source.Since,
             PatientIds: null,
             OutputFormat: source.OutputFormat);
@@ -599,7 +635,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             return new FhirBulkExportRequest(
                 configuredScope,
                 GroupId: configuredScope == BulkExportScope.Group ? source.GroupId : null,
-                ResourceTypes: [resourceType],
+                ResourceTypes: BulkExportScopes.ResolveTypeParameter(configuredScope, [resourceType]),
                 Since: source.Since,
                 PatientIds: null,
                 OutputFormat: source.OutputFormat);
@@ -609,7 +645,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         return new FhirBulkExportRequest(
             effectiveScope,
             GroupId: effectiveScope == BulkExportScope.Group ? source.GroupId : null,
-            ResourceTypes: [resourceType],
+            ResourceTypes: BulkExportScopes.ResolveTypeParameter(effectiveScope, [resourceType]),
             Since: source.Since,
             PatientIds: effectiveScope == BulkExportScope.Patient ? (cohortPatientIds ?? source.PatientIds) : null,
             OutputFormat: source.OutputFormat);

@@ -210,6 +210,122 @@ public sealed class SourceNodeExecutorCohortTests
         output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(2);
     }
 
+    [Fact]
+    public async Task Group_scoped_bulk_export_of_only_patient_omits_type_parameter()
+    {
+        // Epic Interconnect rejects a Group export scoped to ONLY _type=Patient — it internally falls back to an
+        // unscoped/demographics Patient search to materialize group membership, which its own business rule then
+        // rejects (code 59159, "requires demographics or _id parameter"). A workflow whose source AND destination
+        // are both configured for just "Patient" has no other resource type to batch alongside it (see
+        // BulkExportScopes.ResolveTypeParameter), so the fix is to omit _type entirely for this lone-Patient case.
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            SourceConnectionId: sourceConnectionId,
+            RetrievalMethod: "bulk-export",
+            ExportScope: "group",
+            GroupId: "group-123");
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var bulkExportClient = new Mock<IFhirBulkExportClient>();
+        bulkExportClient
+            .Setup(x => x.ExportAsync(It.IsAny<FhirBulkExportRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(new Mock<IFhirSourceClient>().Object);
+
+        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
+        var node = BuildNode(sourceConnectionId, "Patient");
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var output = await executor.ExecuteAsync(context, node, [], CancellationToken.None);
+
+        bulkExportClient.Verify(
+            x => x.ExportAsync(It.IsAny<FhirBulkExportRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        var capturedRequest = bulkExportClient.Invocations.Single().Arguments[0].Should().BeOfType<FhirBulkExportRequest>().Subject;
+        capturedRequest.Scope.Should().Be(BulkExportScope.Group);
+        capturedRequest.GroupId.Should().Be("group-123");
+        capturedRequest.ResourceTypes.Should().BeNull();
+
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task Node_level_retrieval_config_drives_bulk_export_even_when_connection_entity_has_none()
+    {
+        // Regression for the real-world failure: the workflow-builder's "Retrieval Configuration" panel (Data
+        // Retrieval Method / Export Scope / Group ID / FHIR output format) is workflow-node-scoped — it's written
+        // into WorkflowNodes.ConfigurationJson, never synced back onto the reusable SourceConnection entity (see
+        // epic-audience-form.component.ts's comment on why: one connection can be referenced by several workflows
+        // that each need different retrieval behavior). ResolveAsync only hydrates auth/base-URL/scopes from the
+        // entity, so a connection whose Retrieval* columns are still null (never separately configured on the
+        // Settings -> Source Connections screen) must not silently make useBulkExport resolve false and fall back
+        // to an unscoped search-rest fetch — the node's own config has to win.
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, []
+            // RetrievalMethod/ExportScope/GroupId/OutputFormat all default to null here — mirrors the DB row.
+            , SourceConnectionId: sourceConnectionId);
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var bulkExportClient = new Mock<IFhirBulkExportClient>();
+        bulkExportClient
+            .Setup(x => x.ExportAsync(It.IsAny<FhirBulkExportRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+
+        var client = new Mock<IFhirSourceClient>();
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
+
+        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
+
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "node-retrieval-override-test", 1);
+        var configurationJson = $$"""
+            {
+              "sourceConnectionId":"{{sourceConnectionId}}",
+              "sourceConnectionResolved":"true",
+              "Resources":"Patient",
+              "Retrieval method key":"bulk-export",
+              "Export scope":"group",
+              "Group ID":"group-abc",
+              "FHIR output format":"ndjson"
+            }
+            """;
+        var node = workflow.AddNode(WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, rank: 0, configurationJson: configurationJson);
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var output = await executor.ExecuteAsync(context, node, [], CancellationToken.None);
+
+        // Search-rest must never have been hit — the run went entirely through bulk export.
+        client.Verify(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        bulkExportClient.Verify(
+            x => x.ExportAsync(It.IsAny<FhirBulkExportRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        var capturedRequest = bulkExportClient.Invocations.Single().Arguments[0].Should().BeOfType<FhirBulkExportRequest>().Subject;
+        capturedRequest.Scope.Should().Be(BulkExportScope.Group);
+        capturedRequest.GroupId.Should().Be("group-abc");
+        capturedRequest.ResourceTypes.Should().BeNull(); // lone-Patient omission, see ResolveTypeParameter
+
+        var capturedSource = bulkExportClient.Invocations.Single().Arguments[1].Should().BeOfType<FhirSourceConfiguration>().Subject;
+        capturedSource.OutputFormat.Should().Be("application/fhir+ndjson");
+
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(1);
+        output.Metadata!["retrievalMethod"].Should().Be("bulk-export");
+    }
+
     private static WorkflowNode BuildNode(Guid sourceConnectionId, string resources)
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "cohort-test", 1);
