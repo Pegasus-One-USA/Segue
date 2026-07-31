@@ -1,0 +1,180 @@
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_bcd3dfe81559c0::t_dee13eee7b86ec 33-34
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  s_bcd3dfe81559c0::t_be0581e030344c 45
+tests/FHIRBridge.UnitTests/SystemSettings/AllowedCorsOriginsServiceTests.cs
+  s_bcd3dfe81559c0::t_eae9a39ede80b6 21
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_bcd3dfe81559c0::t_7d17fa387241d7 44-47
+  s_bcd3dfe81559c0::t_be011011df0383 75-77
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_bcd3dfe81559c0::t_9305f13706f2a0 131-140,147-151
+  s_bcd3dfe81559c0::t_cd95f860c2e90e 141-146
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_bcd3dfe81559c0::t_af46361463467b 112-113
+  s_bcd3dfe81559c0::t_5525b970dd9ace 64
+  s_bcd3dfe81559c0::t_b6dee9aad56515 66-73
+  s_bcd3dfe81559c0::t_9ac7d5dbe28a25 65
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260731084237_AddCreatedByCreatedOnUtcDefaults.Designer.cs
+  s_bcd3dfe81559c0::t_3e4b15b086c241 1-3580
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_bcd3dfe81559c0::t_0d9317be1dea19 30-34
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_bcd3dfe81559c0::t_b4ab4aec55f671 61-67
+  s_bcd3dfe81559c0::t_893a714019b72d 109-110
+  s_bcd3dfe81559c0::t_595b05d764e9e2 90-91
+  s_bcd3dfe81559c0::t_54178d86ee3674 2,14,16,19,25-41
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_bcd3dfe81559c0::t_469eacd1cf8a62 102-109,116-120
+  s_bcd3dfe81559c0::t_57903fbe440485 110-115
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_bcd3dfe81559c0::t_290343b2ac12f4 155-162
+tests/FHIRBridge.UnitTests/Configuration/ParentReferenceValidationTests.cs
+  s_bcd3dfe81559c0::t_a10023b95deb15 49
+src/FHIRBridge.Application/Abstractions/Security/IUserDisplayNameResolver.cs
+  s_bcd3dfe81559c0::t_46adf07b6ac7a4 1-29
+src/Api/FHIRBridge.Api/Security/HttpContextCurrentUserService.cs
+  s_bcd3dfe81559c0::t_e3dd390d800f31 56-57
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_bcd3dfe81559c0::t_3a28a7d70ec819 101-106,108
+  s_bcd3dfe81559c0::t_45551776dce3b2 91-100,107,109-111
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_bcd3dfe81559c0::t_374d8281ceaaf3 46
+  s_bcd3dfe81559c0::t_d4e729e7204ad8 48-58,62,67-71
+  s_bcd3dfe81559c0::t_40010f062abe3a 47
+src/FHIRBridge.Application/DTOs/UserManagementDto.cs
+  s_bcd3dfe81559c0::t_baa4cfb48e0080 18-21
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_bcd3dfe81559c0::t_cea03b2b52c023 98
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_bcd3dfe81559c0::t_ec0140d545a0d1 202-203,210-214
+  s_bcd3dfe81559c0::t_1f2c5ea2fdffb3 21,25-26,30
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_bcd3dfe81559c0::t_6111ac9312be89 80-84
+tests/FHIRBridge.UnitTests/Configuration/SourceConfigurationAutoProvisionTests.cs
+  s_bcd3dfe81559c0::t_aac9bcf2098d04 37
+src/FHIRBridge.Application/Security/CurrentUserClaimReader.cs
+  s_bcd3dfe81559c0::t_d49e994c2cc50b 36-40,46-49
+  s_bcd3dfe81559c0::t_c31a61d9928853 50-51
+src/FHIRBridge.Application/Mappings/SystemSettingMapper.cs
+  s_bcd3dfe81559c0::t_1ce4a221f8d0f1 15-17
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260731084237_AddCreatedByCreatedOnUtcDefaults.cs
+  s_bcd3dfe81559c0::t_3e4b15b086c241 1-10,19-21,31-779
+  s_bcd3dfe81559c0::t_1596f3520d1aa0 11-18,22-30
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_bcd3dfe81559c0::t_6c5e8aac613c63 104-124
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_bcd3dfe81559c0::t_26bfeb7072883e 126-131
+  s_bcd3dfe81559c0::t_dc7bb2500e916b 116-125,132-136
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  s_bcd3dfe81559c0::t_b46fce9fd4ff2d 50
+tests/FHIRBridge.UnitTests/Users/AcceptInviteViaSsoTests.cs
+  s_bcd3dfe81559c0::t_370057f3389e8b 34
+src/FHIRBridge.Application/DTOs/SourceConnectionDto.cs
+  s_bcd3dfe81559c0::t_77d42e1b4b193c 15-19
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_bcd3dfe81559c0::t_5ec0f69d3d7ac6 48
+  s_bcd3dfe81559c0::t_f618983641f432 50-60,64,67-71
+  s_bcd3dfe81559c0::t_f44c0f8bc57a32 49
+tests/FHIRBridge.UnitTests/Security/PassthroughUserDisplayNameResolver.cs
+  s_bcd3dfe81559c0::t_de58b6d85c1313 1-23
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_bcd3dfe81559c0::t_c4148a8bc52e16 114-117
+src/FHIRBridge.Application/Services/AllowedCorsOriginsService.cs
+  s_bcd3dfe81559c0::t_36c1438cb652cc 3,16,22,27,34-42,59-61
+src/Api/FHIRBridge.Api/Workflows/WorkflowSummaryModels.cs
+  s_bcd3dfe81559c0::t_f46b91dcb6aa9e 23-27
+src/FHIRBridge.Application/DTOs/RoleDto.cs
+  s_bcd3dfe81559c0::t_ba5d7c1a0971cf 8-12
+portal/src/app/auth/services/api-user.service.ts
+  s_bcd3dfe81559c0::t_a24219b3df1248 56-59
+  s_bcd3dfe81559c0::t_097db184b69f1d 109-111
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  s_bcd3dfe81559c0::t_70f6ee4f346b71 36
+src/FHIRBridge.Application/DTOs/DestinationConfigurationDto.cs
+  s_bcd3dfe81559c0::t_0301b9fa765a22 15-19
+src/FHIRBridge.Application/Abstractions/Security/ICurrentUserService.cs
+  s_bcd3dfe81559c0::t_25599fde9db7f8 19-24,28-32,34-38
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_bcd3dfe81559c0::t_61bda45c5c4ea3 35-39
+  s_bcd3dfe81559c0::t_26ac5e49d95d40 137-141
+portal/src/app/services/workflow-api.service.ts
+  s_bcd3dfe81559c0::t_3375af19c5e0a9 261-264
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_bcd3dfe81559c0::t_479b48c21a06ba 2,25,27-30,34,42-51,59-68
+  s_bcd3dfe81559c0::t_ad0055ad3aa807 79-80,84
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_bcd3dfe81559c0::t_2fc446eb8a6ad4 58-69,73,79-83
+  s_bcd3dfe81559c0::t_c95ad3ef6f9cbb 56
+  s_bcd3dfe81559c0::t_308f1328d1d27c 57
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_bcd3dfe81559c0::t_fa5fe6d0afc585 380-384
+  s_bcd3dfe81559c0::t_0583e1a7acc84c 387-395
+  s_bcd3dfe81559c0::t_1f818990d37eaa 1482
+  s_bcd3dfe81559c0::t_fd439756ef92ae 309
+  s_bcd3dfe81559c0::t_76350642c9130d 396
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  s_bcd3dfe81559c0::t_309bce5fec72b6 36
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_bcd3dfe81559c0::t_6fe3f079a621ee 65-68
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_bcd3dfe81559c0::t_8ea46fac10c3b2 119
+  s_bcd3dfe81559c0::t_660552ab2881c4 95-106,109,112-116
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_bcd3dfe81559c0::t_a8445228bf3593 125
+  s_bcd3dfe81559c0::t_f61edf42e0ab36 119-124
+  s_bcd3dfe81559c0::t_6a8ec38e2ca3b9 111-116
+portal/src/app/auth/models/user.model.ts
+  s_bcd3dfe81559c0::t_ae5444eb78be5f 89-90
+  s_bcd3dfe81559c0::t_6ae01a5ff8133f 49-51
+  s_bcd3dfe81559c0::t_eb64680734c64c 190-192
+  s_bcd3dfe81559c0::t_5e0b37e7dcbf97 167-170
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_bcd3dfe81559c0::t_05ab30081f584a 127-134
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_bcd3dfe81559c0::t_e46a706329c8fb 20,30,39
+  s_bcd3dfe81559c0::t_72a7f2279ded90 518-519,534-537
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_bcd3dfe81559c0::t_266f7c04195a9e 200-209,211-215
+  s_bcd3dfe81559c0::t_1260ea6ed4caad 210
+src/Api/FHIRBridge.Api/Security/FhirBridgeAuthenticationExtensions.cs
+  s_bcd3dfe81559c0::t_044c2eb07b8702 3
+  s_bcd3dfe81559c0::t_54c3c9c9c2f14f 253-285
+  s_bcd3dfe81559c0::t_6bd06700c2bf49 88
+  s_bcd3dfe81559c0::t_6df5988114b3f4 286-287
+src/FHIRBridge.Infrastructure/Security/UserDisplayNameResolver.cs
+  s_bcd3dfe81559c0::t_572c1f147e1223 1-61
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_bcd3dfe81559c0::t_3e4b15b086c241 32-36,39-41,151-155,158-160,212-216,219-221,339-343,346-348,1229-1233,1236-1238,1306-1310,1313-1315,1379-1383,1386-1388,1458-1462,1465-1467,1527-1531,1534-1536,1594-1598,1601-1603,1845-1849,1852-1854,1923-1927,1930-1932,1995-1999,2002-2004,2064-2068,2071-2073,2129-2133,2136-2138,2186-2190,2193-2195,2248-2252,2255-2257,2456-2460,2463-2465,2540-2541,2543-2544,2547-2549
+portal/src/app/system-settings/models/system-setting.model.ts
+  s_bcd3dfe81559c0::t_18df0ba4e3e528 9-10
+src/FHIRBridge.Application/Services/SystemSettingsService.cs
+  s_bcd3dfe81559c0::t_5affdc5f7ece99 3,13,15-16,20,26-35
+src/FHIRBridge.Application/DTOs/SystemSettingDto.cs
+  s_bcd3dfe81559c0::t_16392a368aa66f 9-11
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_bcd3dfe81559c0::t_883ba8cc928bea 34
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_bcd3dfe81559c0::t_f323159795b0bc 167-168
+  s_bcd3dfe81559c0::t_9caddb8d2acf93 121-126
+  s_bcd3dfe81559c0::t_da18acf172f73c 120
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_bcd3dfe81559c0::t_e4e7ed5eed4d3d 350-359,361
+  s_bcd3dfe81559c0::t_cc909e93fbab9c 32,43,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "e20ae91deb8e91be22d56349efd31eb4de889ea4",
+  "prompts": {},
+  "sessions": {
+    "s_bcd3dfe81559c0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42e077ea-969d-4802-ae25-3f18afcac872",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
