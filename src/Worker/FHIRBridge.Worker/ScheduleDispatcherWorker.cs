@@ -41,6 +41,15 @@ public sealed class ScheduleDispatcherWorker : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            var heartbeatLoggingEnabled = await _settingsCache.GetBoolAsync(
+                "ScheduleDispatcher:HeartbeatLoggingEnabled", _options.Value.HeartbeatLoggingEnabled, stoppingToken);
+
+            if (heartbeatLoggingEnabled)
+            {
+                _logger.LogInformation(
+                    "Schedule dispatcher heartbeat: tick starting at {UtcNow}.", DateTime.UtcNow);
+            }
+
             var enabled = await _settingsCache.GetBoolAsync(
                 "ScheduleDispatcher:Enabled", _options.Value.Enabled, stoppingToken);
             if (!enabled)

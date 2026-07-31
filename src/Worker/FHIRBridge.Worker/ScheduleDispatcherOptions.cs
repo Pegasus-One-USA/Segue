@@ -11,4 +11,12 @@ public sealed class ScheduleDispatcherOptions
     public bool Enabled { get; set; } = true;
 
     public int IntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Verbose per-tick heartbeat and per-route due/skip diagnostic logging, toggled live via the
+    /// <c>ScheduleDispatcher:HeartbeatLoggingEnabled</c> system setting (no restart required). Meant to be turned on
+    /// while diagnosing "scheduled workflow didn't fire" issues and back off once confirmed healthy, since it logs
+    /// every dispatcher tick and every configured route on every tick.
+    /// </summary>
+    public bool HeartbeatLoggingEnabled { get; set; } = true;
 }

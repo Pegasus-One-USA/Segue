@@ -21,6 +21,9 @@ public static class FhirBridgeLogging
     /// <list type="bullet">
     /// <item><c>Observability:SeqServerUrl</c> — when set, logs are also sent to Seq (e.g. http://localhost:5341).</item>
     /// <item><c>ApplicationInsights:ConnectionString</c> — when set, logs are also sent to Azure Monitor.</item>
+    /// <item><c>Observability:LogFilePath</c> — when set, logs are also written to a rolling file at this path
+    /// (e.g. <c>logs/fhirbridge-worker-.log</c> — the dash before the extension is where Serilog inserts the date).
+    /// Needed for hosts running as a Windows Service/systemd unit with no attached console.</item>
     /// <item><c>Observability:Phi:MaskedProperties</c> — optional comma-separated override of masked property names.</item>
     /// </list>
     /// Minimum-level overrides keep EF Core / framework noise out of the structured logs by default; the
@@ -46,6 +49,16 @@ public static class FhirBridgeLogging
         if (!string.IsNullOrWhiteSpace(seqUrl))
         {
             logger.WriteTo.Seq(seqUrl);
+        }
+
+        var logFilePath = configuration["Observability:LogFilePath"];
+        if (!string.IsNullOrWhiteSpace(logFilePath))
+        {
+            logger.WriteTo.File(
+                logFilePath,
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 30,
+                shared: true);
         }
 
         var appInsightsConnection = configuration["ApplicationInsights:ConnectionString"];

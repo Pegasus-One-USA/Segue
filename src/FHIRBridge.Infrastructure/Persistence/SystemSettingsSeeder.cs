@@ -33,6 +33,7 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
             ("RuntimeWorker:IntervalSeconds", Int("RuntimeWorker:IntervalSeconds", 300), "Runtime worker poll interval, in seconds."),
             ("ScheduleDispatcher:Enabled", Bool("ScheduleDispatcher:Enabled", true), "Master on/off for the queue-based schedule dispatcher."),
             ("ScheduleDispatcher:IntervalSeconds", Int("ScheduleDispatcher:IntervalSeconds", 60), "Schedule dispatcher poll interval, in seconds."),
+            ("ScheduleDispatcher:HeartbeatLoggingEnabled", Bool("ScheduleDispatcher:HeartbeatLoggingEnabled", true), "Master on/off for the schedule dispatcher's verbose per-tick heartbeat and per-route due/skip diagnostic logs. Turn off once scheduling is confirmed healthy to cut log volume."),
             ("EndpointHealthCheck:Enabled", Bool("EndpointHealthCheck:Enabled", false), "Master on/off for periodic source/destination connectivity checks."),
             ("EndpointHealthCheck:IntervalSeconds", Int("EndpointHealthCheck:IntervalSeconds", 300), "Endpoint health check interval, in seconds."),
             ("AuditChainVerification:Enabled", Bool("AuditChainVerification:Enabled", true), "Master on/off for the scheduled audit-log hash-chain verification."),
