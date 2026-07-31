@@ -2,18 +2,41 @@
   padding: 16px 24px 32px;
 }
 
-.patient-details__header {
+// Mirrors backend-system.scss's .bs-detail-head — back button + title, same shape as the Patient List's own
+// page-header so navigating into a patient doesn't feel like a different screen.
+.bs-detail-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
 
-  h2 {
-    margin: 0;
-    color: #0d47a1;
-    font-size: 22px;
-    font-weight: 600;
+  &__info {
+    display: flex;
+    flex-direction: column;
   }
+}
+
+.bs-back {
+  border: 1px solid var(--color-border, #d0d7de);
+  background: #fff;
+  color: #0d47a1;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: #f5f9ff;
+  }
+}
+
+.bs-detail-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0d47a1;
 }
 
 .patient-details__subtitle {
@@ -21,60 +44,50 @@
   font-size: 13px;
 }
 
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--color-border, #d0d7de);
-  background: #fff;
-  cursor: pointer;
-
-  &:hover {
-    background: #f5f5f5;
-  }
-}
-
-.patient-details__body {
+// Same pill nav as backend-system.scss's .bs-view-nav (Patient List / Practitioners switch), reused here for the
+// per-patient resource tabs (Encounters, Observations, ...) so both screens use identical nav styling.
+.bs-view-nav {
   display: flex;
-  gap: 24px;
-  align-items: flex-start;
-}
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
 
-.resource-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 220px;
-  flex-shrink: 0;
-}
-
-.resource-nav__item {
-  text-align: left;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: #37474f;
-  font-size: 14px;
-  cursor: pointer;
-
-  &:hover {
-    background: #eceff1;
+  &--tabs {
+    border-bottom: 1px solid #eceff1;
+    padding-bottom: 12px;
   }
 
-  &--active {
-    background: #e3f2fd;
-    color: #0d47a1;
+  &__item {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border, #d0d7de);
+    background: #fff;
+    color: #37474f;
+    font-size: 13px;
     font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+      background: #f5f9ff;
+    }
+
+    &.active {
+      background: #0d47a1;
+      border-color: #0d47a1;
+      color: #fff;
+    }
   }
 }
 
-.resource-content {
-  flex: 1;
-  min-width: 0;
+.bs-result-meta {
+  margin-bottom: 12px;
+  color: #607d8b;
+  font-size: 14px;
+
+  strong {
+    color: #37474f;
+  }
 }
 
 .loading-container {
@@ -98,6 +111,34 @@
   border-radius: 8px;
 }
 
-.resource-table {
+// Same table look as backend-system.scss's .bs-table (Patient List / Practitioners).
+.bs-table {
   width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eceff1;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+
+  th {
+    background: #f8fafc;
+    color: #37474f;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+  }
+
+  tbody tr:hover {
+    background: #f5f9ff;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
 }

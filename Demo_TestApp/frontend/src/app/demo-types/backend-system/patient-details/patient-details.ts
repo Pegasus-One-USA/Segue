@@ -1,8 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { Component, effect, input, output, signal } from '@angular/core';
-import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTableModule } from '@angular/material/table';
 import { firstValueFrom } from 'rxjs';
 import { BackendSystemService, PatientDataSource } from '../core/services/backend-system.service';
 import { BACKEND_SYSTEM_MENU, ResourceMenuItem } from '../core/config/backend-system-menu.config';
@@ -10,7 +8,7 @@ import { BACKEND_SYSTEM_MENU, ResourceMenuItem } from '../core/config/backend-sy
 @Component({
   selector: 'app-patient-details',
   standalone: true,
-  imports: [DatePipe, MatIconModule, MatProgressSpinnerModule, MatTableModule],
+  imports: [DatePipe, MatProgressSpinnerModule],
   templateUrl: './patient-details.html',
   styleUrl: './patient-details.scss',
 })
@@ -44,10 +42,6 @@ export class PatientDetailsComponent {
 
   selectMenu(menuKey: string): void {
     this.selectedMenuKey.set(menuKey);
-  }
-
-  displayedColumns(): string[] {
-    return this.selectedMenu()?.columns.map((column) => column.key) ?? [];
   }
 
   selectedMenu(): ResourceMenuItem | undefined {
