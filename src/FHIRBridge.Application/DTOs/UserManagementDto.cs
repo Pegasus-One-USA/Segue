@@ -15,4 +15,7 @@ public sealed record UserManagementDto(
     DateTime CreatedOnUtc,
     DateTime? LastLoginOnUtc,
     bool MfaEnabled,
-    bool MustSetupMfa);
+    bool MustSetupMfa,
+    string? CreatedBy = null,
+    DateTime? ModifiedOnUtc = null,
+    string? ModifiedBy = null);

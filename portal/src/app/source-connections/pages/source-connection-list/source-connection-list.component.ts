@@ -60,7 +60,21 @@ export class SourceConnectionListComponent implements OnInit {
    *  for these so a connection a workflow still depends on can't be changed or removed out from under it. */
   readonly usedConnectionIds = signal<ReadonlySet<string>>(new Set());
 
-  readonly displayedCols = ['index', 'name', 'sourceSystemType', 'audience', 'baseUrl', 'clientId', 'status', 'actions'];
+  readonly displayedCols = ['index', 'name', 'sourceSystemType', 'audience', 'baseUrl', 'clientId', 'status', 'actionBy', 'actionOn', 'actions'];
+
+  /** Only one sortable column beyond the regular ones — "Action on" — server-driven since this list is
+   *  server-paged. Mutually exclusive with sortColumn/sortDirection; see onSort/toggleActionOnSort. */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+    this.pageIndex.set(0);
+    this.load();
+  }
+
+  private clearActionOnSort(): void {
+    this.actionOnSortDirection.set(null);
+  }
 
   readonly ehrOptions: { value: EhrVendor; label: string }[] = [
     { value: 'Epic',               label: 'Epic' },
@@ -122,14 +136,15 @@ export class SourceConnectionListComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
+    const actionOnDir = this.actionOnSortDirection();
     this.svc
       .getPaged({
         search: this.searchQuery() || undefined,
         sourceSystemType: this.ehrFilter() || undefined,
         applicationType: this.audienceFilter() || undefined,
         isEnabled: this.statusFilter() === '' ? undefined : this.statusFilter() === 'true',
-        sortBy: this.sortColumn(),
-        sortOrder: this.sortDirection(),
+        sortBy: actionOnDir ? 'actionOn' : this.sortColumn(),
+        sortOrder: actionOnDir ?? this.sortDirection(),
         page: this.pageIndex() + 1,
         pageSize: this.pageSize(),
       })
@@ -178,6 +193,7 @@ export class SourceConnectionListComponent implements OnInit {
   }
 
   onSort(column: SourceSortColumn): void {
+    this.clearActionOnSort();
     if (this.sortColumn() === column) {
       this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -195,6 +211,7 @@ export class SourceConnectionListComponent implements OnInit {
     this.statusFilter.set('');
     this.sortColumn.set('name');
     this.sortDirection.set('asc');
+    this.clearActionOnSort();
     this.pageIndex.set(0);
     this.load();
   }

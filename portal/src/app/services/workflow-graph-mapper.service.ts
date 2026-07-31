@@ -31,6 +31,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'field-mapping': 'MappingNode',
   'dest-sqlserver': 'SqlServerDestinationNode',
   'dest-mysql': 'MySqlDestinationNode',
+  'dest-postgres': 'PostgreSqlDestinationNode',
   'dest-mongo': 'MongoDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',

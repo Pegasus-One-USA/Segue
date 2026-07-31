@@ -31,6 +31,7 @@ public sealed class AcceptInviteViaSsoTests
         _repository.Object,
         _passwordHasher.Object,
         _currentUser.Object,
+        new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
         _email.Object,
         _externalTokenValidator.Object,
         _localAuth.Object,

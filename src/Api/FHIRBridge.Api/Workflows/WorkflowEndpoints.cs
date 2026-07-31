@@ -306,6 +306,7 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IWorkflowRunStore runStore,
             IConfigurationRepository configurationRepository,
+            IUserDisplayNameResolver userDisplayNameResolver,
             CancellationToken cancellationToken,
             int page = 1,
             int pageSize = 20,
@@ -376,8 +377,22 @@ public static class WorkflowEndpoints
                     sourceSystemType,
                     applicationType?.ToString(),
                     hasDestination,
-                    workflow.IsPubliclyLaunchable));
+                    workflow.IsPubliclyLaunchable,
+                    workflow.CreatedOnUtc,
+                    workflow.CreatedBy,
+                    workflow.UpdatedOnUtc,
+                    workflow.UpdatedBy));
             }
+
+            // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
+            // string) to a display name in one batched lookup, before filtering/paging.
+            var actorNames = await userDisplayNameResolver.ResolveAsync(
+                summaries.SelectMany(summary => new[] { summary.CreatedBy, summary.ModifiedBy }), cancellationToken);
+            summaries = summaries.Select(summary => summary with
+            {
+                CreatedBy = summary.CreatedBy is { } createdBy ? actorNames.GetValueOrDefault(createdBy, createdBy) : null,
+                ModifiedBy = summary.ModifiedBy is { } modifiedBy ? actorNames.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+            }).ToList();
 
             // Facet option lists reflect the full unfiltered set (not `matching`) so unchecking every box in one
             // category doesn't make the other categories' checkboxes disappear out from under the user.
@@ -1464,6 +1479,7 @@ public static class WorkflowEndpoints
             "audience" => Order(summary => AudienceSortLabel(summary.ApplicationType).ToLowerInvariant()),
             "status"   => Order(summary => summary.Status),
             "lastRun"  => Order(summary => summary.LastRunAt?.UtcTicks ?? -1),
+            "actionOn" => Order(summary => (summary.ModifiedOnUtc ?? summary.CreatedOnUtc)?.Ticks ?? -1),
             _          => Order(summary => summary.Name.ToLowerInvariant()),
         };
     }

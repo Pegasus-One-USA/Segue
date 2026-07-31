@@ -88,10 +88,10 @@
             </div>
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched">
-              <label class="dw-label" for="dw-server">SQL Server <span class="dw-req">*</span></label>
+              <label class="dw-label" for="dw-server">{{ showSslToggle() ? 'Host' : 'SQL Server' }} <span class="dw-req">*</span></label>
               <input id="dw-server" class="dw-input" formControlName="server" placeholder="tcp:sql-prod.company.com,1433" />
               @if (sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched) {
-                <span class="dw-error">SQL Server host is required.</span>
+                <span class="dw-error">Server host is required.</span>
               }
             </div>
 
@@ -108,8 +108,10 @@
               <div class="dw-select-wrap">
                 <select id="dw-auth" class="dw-select" formControlName="auth">
                   <option value="sql-auth">SQL Username / Password</option>
-                  <option value="managed-identity">Managed Identity</option>
-                  <option value="azure-ad">Azure AD</option>
+                  @if (!showSslToggle()) {
+                    <option value="managed-identity">Managed Identity</option>
+                    <option value="azure-ad">Azure AD</option>
+                  }
                 </select>
               </div>
             </div>
@@ -122,6 +124,16 @@
               <div class="dw-field">
                 <label class="dw-label" for="dw-password">Password</label>
                 <input id="dw-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+              </div>
+            }
+
+            @if (showSslToggle()) {
+              <div class="dw-field dw-field--checkbox">
+                <label class="dw-label">
+                  <input type="checkbox" formControlName="requireSsl" />
+                  Require SSL
+                </label>
+                <span class="dw-hint">Enable for managed providers that enforce SSL (e.g. AWS RDS). Leave off for local/docker instances without SSL configured.</span>
               </div>
             }
 

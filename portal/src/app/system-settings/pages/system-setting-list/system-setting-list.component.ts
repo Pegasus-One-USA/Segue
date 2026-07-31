@@ -92,15 +92,31 @@ export class SystemSettingListComponent implements OnInit {
     this.decryptedPlaintext.set(null);
   }
 
+  /** Only one sortable column today — "Action on" (createdOnUtc, or modifiedOnUtc when later). */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+  }
+
+  private static actionOnOf(s: SystemSetting): number {
+    const value = s.modifiedOnUtc || s.createdOnUtc;
+    return value ? new Date(value).getTime() : 0;
+  }
+
   readonly filtered = computed(() => {
     const term = this.search().trim().toLowerCase();
-    if (!term) return this.settings();
-    return this.settings().filter(
+    const rows = !term ? this.settings() : this.settings().filter(
       s => s.key.toLowerCase().includes(term) || (s.description ?? '').toLowerCase().includes(term)
     );
+
+    const direction = this.actionOnSortDirection();
+    if (!direction) return rows;
+    const sorted = [...rows].sort((a, b) => SystemSettingListComponent.actionOnOf(a) - SystemSettingListComponent.actionOnOf(b));
+    return direction === 'desc' ? sorted.reverse() : sorted;
   });
 
-  readonly displayedCols = ['key', 'value', 'description', 'modifiedOnUtc', 'actions'];
+  readonly displayedCols = ['key', 'value', 'description', 'actionBy', 'modifiedOnUtc', 'actions'];
 
   ngOnInit(): void {
     this.load();

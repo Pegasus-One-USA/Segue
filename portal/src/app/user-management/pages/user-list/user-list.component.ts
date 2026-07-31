@@ -95,7 +95,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   inactiveUsers      = computed(() => this.users().filter(u => u.status !== 'active').length);
   mustChangePwdUsers = computed(() => this.users().filter(u => u.mustChangePassword).length);
 
-  readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actions'];
+  readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actionBy', 'actionOn', 'actions'];
 
   // Seeded with the 4 built-ins so the dropdown isn't empty while getRoles() is in flight —
   // replaced with the real role list (including any custom roles) once it loads, see ngOnInit.

@@ -86,10 +86,14 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
         query = sortBy?.ToLowerInvariant() switch
         {
-            "ehr"      => desc ? query.OrderByDescending(x => x.SourceSystemType) : query.OrderBy(x => x.SourceSystemType),
-            "audience" => desc ? query.OrderByDescending(x => x.ApplicationType)  : query.OrderBy(x => x.ApplicationType),
-            "status"   => desc ? query.OrderByDescending(x => x.IsEnabled)        : query.OrderBy(x => x.IsEnabled),
-            _          => desc ? query.OrderByDescending(x => x.Name)            : query.OrderBy(x => x.Name),
+            // Must match the frontend's SourceSortColumn values (source-connection.model.ts) lowercased,
+            // not the column display labels (EHR/Audience/Status) — those never matched here, so sorting
+            // by those three columns silently no-opped back to Name ordering.
+            "sourcesystemtype" => desc ? query.OrderByDescending(x => x.SourceSystemType)               : query.OrderBy(x => x.SourceSystemType),
+            "applicationtype"  => desc ? query.OrderByDescending(x => x.ApplicationType)                : query.OrderBy(x => x.ApplicationType),
+            "isenabled"        => desc ? query.OrderByDescending(x => x.IsEnabled)                       : query.OrderBy(x => x.IsEnabled),
+            "actionon"         => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc) : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _                  => desc ? query.OrderByDescending(x => x.Name)                            : query.OrderBy(x => x.Name),
         };
 
         var items = await query
@@ -212,10 +216,11 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
         query = sortBy?.ToLowerInvariant() switch
         {
-            "type"   => desc ? query.OrderByDescending(x => x.DestinationType) : query.OrderBy(x => x.DestinationType),
-            "target" => desc ? query.OrderByDescending(x => x.Target)          : query.OrderBy(x => x.Target),
-            "status" => desc ? query.OrderByDescending(x => x.IsEnabled)       : query.OrderBy(x => x.IsEnabled),
-            _        => desc ? query.OrderByDescending(x => x.Name)           : query.OrderBy(x => x.Name),
+            "type"     => desc ? query.OrderByDescending(x => x.DestinationType)                  : query.OrderBy(x => x.DestinationType),
+            "target"   => desc ? query.OrderByDescending(x => x.Target)                             : query.OrderBy(x => x.Target),
+            "status"   => desc ? query.OrderByDescending(x => x.IsEnabled)                          : query.OrderBy(x => x.IsEnabled),
+            "actionon" => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc)    : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _          => desc ? query.OrderByDescending(x => x.Name)                              : query.OrderBy(x => x.Name),
         };
 
         var items = await query

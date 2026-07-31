@@ -62,6 +62,10 @@ export interface SourceConnectionModel {
   applicationType?: string | null;
   interactive?: SourceInteractiveConfigurationModel | null;
   retrieval?: SourceRetrievalConfigurationModel | null;
+  createdOnUtc?: string | null;
+  createdBy?: string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?: string | null;
 }
 
 /** Matches CreateSourceConnectionRequest's expected body shape for both create (POST) and update (PUT). */
@@ -87,7 +91,7 @@ export interface GeneratedSigningKeyModel {
 /** Matches the backend's ApplicationType enum (serialized as a string) — the "Audience" column/filter. */
 export type ApplicationTypeModel = 'Backend' | 'EhrLaunch' | 'Standalone' | 'Patient';
 
-export type SourceSortColumn = 'name' | 'sourceSystemType' | 'applicationType' | 'isEnabled';
+export type SourceSortColumn = 'name' | 'sourceSystemType' | 'applicationType' | 'isEnabled' | 'actionOn';
 export type SortOrder = 'asc' | 'desc';
 
 export interface PagedResult<T> {

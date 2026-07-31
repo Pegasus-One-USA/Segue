@@ -32,7 +32,11 @@ public static class ConfigurationMapper
             sourceConnection.IsEnabled,
             sourceConnection.ApplicationType,
             ToDto(sourceConnection.Interactive),
-            ToDto(sourceConnection.Retrieval));
+            ToDto(sourceConnection.Retrieval),
+            sourceConnection.CreatedOnUtc,
+            sourceConnection.CreatedBy,
+            sourceConnection.ModifiedOnUtc,
+            sourceConnection.ModifiedBy);
     }
 
     private static SourceInteractiveConfigurationDto? ToDto(SourceInteractiveConfiguration? interactive) =>
@@ -130,7 +134,11 @@ public static class ConfigurationMapper
             destinationConfiguration.SecretReference.SecretName,
             destinationConfiguration.Target,
             destinationConfiguration.IsEnabled,
-            destinationConfiguration.ConnectionMetadataJson);
+            destinationConfiguration.ConnectionMetadataJson,
+            destinationConfiguration.CreatedOnUtc,
+            destinationConfiguration.CreatedBy,
+            destinationConfiguration.ModifiedOnUtc,
+            destinationConfiguration.ModifiedBy);
     }
 
     public static MappingProfileDto ToDto(MappingProfile mappingProfile)

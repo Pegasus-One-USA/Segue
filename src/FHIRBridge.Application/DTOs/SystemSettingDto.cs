@@ -6,6 +6,8 @@ public sealed record SystemSettingDto(
     string Value,
     string? Description,
     DateTime CreatedOnUtc,
-    DateTime? ModifiedOnUtc);
+    DateTime? ModifiedOnUtc,
+    string? CreatedBy = null,
+    string? ModifiedBy = null);
 
 public sealed record SetSystemSettingRequest(string Value, string? Description);

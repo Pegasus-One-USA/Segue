@@ -18,13 +18,16 @@ public sealed class RoleManagementService : IRoleManagementService
 
     private readonly IUserAccessRepository _repository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
 
     public RoleManagementService(
         IUserAccessRepository repository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IUserDisplayNameResolver userDisplayNameResolver)
     {
         _repository = repository;
         _currentUserService = currentUserService;
+        _userDisplayNameResolver = userDisplayNameResolver;
     }
 
     public async Task<IReadOnlyList<RoleDto>> GetRolesAsync(CancellationToken cancellationToken)
@@ -196,13 +199,19 @@ public sealed class RoleManagementService : IRoleManagementService
     private async Task<RoleDto> ToDtoAsync(Role role, CancellationToken cancellationToken)
     {
         var permissions = await _repository.GetRolePermissionsAsync(role.Id, cancellationToken);
+        var createdBy = await _userDisplayNameResolver.ResolveOneAsync(role.CreatedBy, cancellationToken);
+        var modifiedBy = await _userDisplayNameResolver.ResolveOneAsync(role.ModifiedBy, cancellationToken);
 
         return new RoleDto(
             role.Id,
             role.Name,
             role.Description,
             permissions.Where(p => p.IsActive).Select(ToDto).ToArray(),
-            SystemRoleIds.Contains(role.Id) || role.IsSystem);
+            SystemRoleIds.Contains(role.Id) || role.IsSystem,
+            role.CreatedOnUtc,
+            createdBy,
+            role.ModifiedOnUtc,
+            modifiedBy);
     }
 
     private static PermissionDto ToDto(Permission permission)

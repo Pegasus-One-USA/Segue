@@ -43,16 +43,32 @@ export class EhrEndpointListComponent implements OnInit {
 
   readonly endpoints = signal<EhrEndpoint[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'vendor', 'endpointType', 'fhirBaseUrl', 'status', 'actions'];
+  readonly displayedCols = ['index', 'name', 'vendor', 'endpointType', 'fhirBaseUrl', 'status', 'actionBy', 'actionOn', 'actions'];
+
+  /** Only one sortable column today — "Action on" (createdOnUtc, or modifiedOnUtc when later). */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+  }
+
+  private static actionOnOf(e: EhrEndpoint): number {
+    const value = e.modifiedOnUtc || e.createdOnUtc;
+    return value ? new Date(value).getTime() : 0;
+  }
 
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
-    if (!q) return this.endpoints();
-    return this.endpoints().filter(e =>
+    const rows = !q ? this.endpoints() : this.endpoints().filter(e =>
       e.name.toLowerCase().includes(q) ||
       e.vendor.toLowerCase().includes(q) ||
       e.fhirBaseUrl.toLowerCase().includes(q)
     );
+
+    const direction = this.actionOnSortDirection();
+    if (!direction) return rows;
+    const sorted = [...rows].sort((a, b) => EhrEndpointListComponent.actionOnOf(a) - EhrEndpointListComponent.actionOnOf(b));
+    return direction === 'desc' ? sorted.reverse() : sorted;
   });
 
   readonly paginated = computed(() => {

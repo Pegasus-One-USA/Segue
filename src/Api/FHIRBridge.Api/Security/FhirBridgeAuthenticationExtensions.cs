@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Security;
 using Microsoft.AspNetCore.Authentication;
@@ -84,6 +85,7 @@ public static class FhirBridgeAuthenticationExtensions
                         }
 
                         ProjectEntraGroupsOntoRoles(context, entra);
+                        await ProjectInternalUserIdAsync(context);
                     };
 
                     var innerMessageReceived = jwtBearerOptions.Events.OnMessageReceived;
@@ -246,6 +248,41 @@ public static class FhirBridgeAuthenticationExtensions
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Entra tokens never carry FHIRBridge's internal Users.Id — only the Entra object id (oid), which is stored
+    /// as this user's ExternalUserId. Look the user up by that and stamp a "uid" claim identical in shape to the
+    /// one JwtAccessTokenIssuer sets for Local tokens, so CurrentUserClaimReader.GetUserId works the same for
+    /// both schemes. Best-effort: an unresolvable user (e.g. Entra login before the account was provisioned in
+    /// FHIRBridge) just leaves "uid" absent — CurrentUserInfo.UserId stays null and provenance falls back to
+    /// AuditName's email/ExternalUserId path, same as before this existed.
+    /// </summary>
+    private static async Task ProjectInternalUserIdAsync(TokenValidatedContext context)
+    {
+        if (context.Principal?.Identity is not ClaimsIdentity identity || identity.HasClaim(c => c.Type == "uid"))
+        {
+            return;
+        }
+
+        var externalUserId = identity.Claims.FirstOrDefault(c =>
+            c.Type is "oid" or "http://schemas.microsoft.com/identity/claims/objectidentifier" or ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(externalUserId))
+        {
+            return;
+        }
+
+        var userAccessRepository = context.HttpContext.RequestServices.GetService<IUserAccessRepository>();
+        if (userAccessRepository is null)
+        {
+            return;
+        }
+
+        var user = await userAccessRepository.GetUserByExternalIdAsync(externalUserId, context.HttpContext.RequestAborted);
+        if (user is not null)
+        {
+            identity.AddClaim(new Claim("uid", user.Id.ToString()));
+        }
     }
 
     private static void ProjectEntraGroupsOntoRoles(TokenValidatedContext context, EntraAuthenticationOptions entra)

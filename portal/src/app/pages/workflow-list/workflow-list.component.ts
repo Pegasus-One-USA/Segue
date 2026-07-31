@@ -31,7 +31,7 @@ interface DataModal {
   error: string | null;
 }
 
-type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun';
+type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun' | 'actionOn';
 type SortDirection = 'asc' | 'desc';
 /** Multi-select filter categories shown in the filter bar — see filterDefs/signalFor. */
 type FilterCategory = 'status' | 'audience' | 'source';
