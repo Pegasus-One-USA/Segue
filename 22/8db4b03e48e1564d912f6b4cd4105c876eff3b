@@ -1,0 +1,19 @@
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_e62876d6ad2963::t_543344c4650223 263-275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "228db4b03e48e1564d912f6b4cd4105c876eff3b",
+  "prompts": {},
+  "sessions": {
+    "s_e62876d6ad2963": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96b1c455-8d5e-41cc-abaf-73c3768a8f2c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

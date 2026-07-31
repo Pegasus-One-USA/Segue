@@ -1,0 +1,183 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_406c1571f7ddf4::t_8cb694f50e5bc4 31-32,45-50,66-81,392-394,405-437
+.gitignore
+  s_1baa0fa027616f::t_708ca4ff60b26f 74-76
+Demo_TestApp/backend/HealthAppBackend.csproj
+  s_a5fcd0f359e190::t_c9f8ced6a5d94f 16
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_24fa7417f71b13::t_d31b6427ae15ec 17-19,21-24,286,390,639-643,796
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_08313b6cd63437::t_0a97ba0af34cbf 51-56,70-85
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_24fa7417f71b13::t_ea1578dfff0653 19-20,333,388,391-394,410,760-763,765,2031-2045
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_24fa7417f71b13::t_0a49559ba2ede8 14-17,379-389,397,408,414-417,419,533,542,609,634
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_24fa7417f71b13::t_3a55331f92f228 157-160,226,741-778
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_53e23ba7967cdf::t_659a3e3fddb322 4-6,106,119,136,195,267,302
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.html
+  s_43a1e5fa590c3d::t_d3508ef4483269 3,32
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_43a1e5fa590c3d::t_4717812ba0a627 7,12
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_4a6381e5723310::t_aee6d4787a1691 15,81,189,196
+portal/src/app/operations/pages/errors/errors.component.html
+  s_f25f365950cfaa::t_86c14da1beed09 4,10
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_fd42d1d392b686::t_475c1c324ac87f 349
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_c8924f0d34965f::t_47bb814b9149f0 99-106,237-241,350-353,421-430
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_a9f0e927680e93::t_447f2ccf3aaf09 50,234,241-249
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_a9f0e927680e93::t_6edfffa7d2f38c 125-133,255-258,287-290,343
+portal/src/index.html
+  s_29a967ba537f2c::t_9a62b2c9cceab7 8-9
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_655d7121a91143::t_6d4eb23d4a1e9b 200
+src/FHIRBridge.Application/Security/UnifiedRoles.cs
+  s_0ead78eb882bde::t_3a267231b3b749 16
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_29a967ba537f2c::t_3aceb08719191c 267-276,320-326
+src/FHIRBridge.Infrastructure/Persistence/InMemoryUserAccessRepository.cs
+  s_f1d5588aba2813::t_b2d6a12b0574a3 16
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  s_f25f365950cfaa::t_4743cefcf5ebca 3,52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "7217d20a7af91d7e4cbfd70c0fe333e204909aba",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_0ead78eb882bde": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4e1a6ae189e04814",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_1baa0fa027616f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73caafdc-ecf4-464f-b20f-fe2414e08300",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_24fa7417f71b13": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cea28f-ce9f-40ff-8e07-5369a22df224",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_29a967ba537f2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea0894a5-0d0c-496a-9e21-486e7821de47",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_406c1571f7ddf4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09113d4a-15f1-43e2-8ea5-4bf49ea476b0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_43a1e5fa590c3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8042e2b4-3b0e-422c-af76-269d56a47c51",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_4a6381e5723310": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ba51d4b0-f8d9-4a43-8e7c-ffcf0a5890e5",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_53e23ba7967cdf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7be27372-081d-4225-898f-041c07e75a0e",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_655d7121a91143": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b4333382-f9e8-4af3-8ae7-25ba4a341177",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a5fcd0f359e190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69d7b858-5290-4282-aeda-ff2bd1655728",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a9f0e927680e93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8289ad858e3d8ec0",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_c8924f0d34965f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f01de126-fa34-4d6b-98d4-ac698aee3fce",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f1d5588aba2813": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ad0a28eeb8373c317",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f25f365950cfaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c468680b-ea36-4815-89f3-0f719670723d",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_fd42d1d392b686": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d0d2510-862b-4216-8454-e67f0aa280ac",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
