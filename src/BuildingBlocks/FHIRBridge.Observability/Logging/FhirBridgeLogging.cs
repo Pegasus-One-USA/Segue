@@ -54,8 +54,17 @@ public static class FhirBridgeLogging
         var logFilePath = configuration["Observability:LogFilePath"];
         if (!string.IsNullOrWhiteSpace(logFilePath))
         {
+            // A relative path resolves against the process's current working directory, not the executable's
+            // folder -- for a Windows Service started via the SCM (New-Service/sc.exe, no explicit working
+            // directory), that CWD defaults to C:\Windows\System32, not the deploy folder. Anchor explicitly to
+            // AppContext.BaseDirectory so the log always lands next to the exe/dll regardless of host (Windows
+            // Service, systemd, IIS, `dotnet run`).
+            var resolvedLogFilePath = Path.IsPathRooted(logFilePath)
+                ? logFilePath
+                : Path.Combine(AppContext.BaseDirectory, logFilePath);
+
             logger.WriteTo.File(
-                logFilePath,
+                resolvedLogFilePath,
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 30,
                 shared: true);
