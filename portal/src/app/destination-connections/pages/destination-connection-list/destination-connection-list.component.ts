@@ -61,7 +61,16 @@ export class DestinationConnectionListComponent implements OnInit {
    *  Delete independently of historyById (a never-run destination can still be wired into a live workflow). */
   readonly usedInWorkflowIds = signal<Set<string>>(new Set());
 
-  readonly displayedCols = ['name', 'destinationType', 'target', 'isEnabled', 'actions'];
+  readonly displayedCols = ['name', 'destinationType', 'target', 'isEnabled', 'actionBy', 'actionOn', 'actions'];
+
+  /** Only one sortable column today — "Action on" — server-driven since this list is server-paged. */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+    this.pageIndex.set(0);
+    this.load();
+  }
 
   readonly typeOptions: { value: DestinationType; label: string }[] = [
     { value: 'SqlServer', label: 'SQL Server' },
@@ -100,6 +109,8 @@ export class DestinationConnectionListComponent implements OnInit {
         destinationType: this.typeFilter() || undefined,
         page: this.pageIndex() + 1,
         pageSize: this.pageSize(),
+        sortBy: this.actionOnSortDirection() ? 'actionOn' : undefined,
+        sortDirection: this.actionOnSortDirection() ?? undefined,
       })
       .subscribe({
         next: page => {

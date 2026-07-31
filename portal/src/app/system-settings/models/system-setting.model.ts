@@ -6,6 +6,8 @@ export interface SystemSetting {
   description: string | null;
   createdOnUtc: string;
   modifiedOnUtc: string | null;
+  createdBy?: string | null;
+  modifiedBy?: string | null;
 }
 
 export interface SetSystemSettingRequest {

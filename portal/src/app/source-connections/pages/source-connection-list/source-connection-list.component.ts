@@ -53,17 +53,34 @@ export class SourceConnectionListComponent implements OnInit {
    *  for these so a connection a workflow still depends on can't be changed or removed out from under it. */
   readonly usedConnectionIds = signal<ReadonlySet<string>>(new Set());
 
-  readonly displayedCols = ['index', 'name', 'sourceSystemType', 'audience', 'baseUrl', 'clientId', 'status', 'actions'];
+  readonly displayedCols = ['index', 'name', 'sourceSystemType', 'audience', 'baseUrl', 'clientId', 'status', 'actionBy', 'actionOn', 'actions'];
+
+  /** Only one sortable column today — "Action on" (createdOnUtc, or modifiedOnUtc when later) — so this is a
+   *  simple toggle rather than a general per-column sort key. */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+  }
+
+  private static actionOnOf(c: SourceConnectionModel): number {
+    const value = c.modifiedOnUtc || c.createdOnUtc;
+    return value ? new Date(value).getTime() : 0;
+  }
 
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
-    if (!q) return this.connections();
-    return this.connections().filter(c =>
+    const rows = !q ? this.connections() : this.connections().filter(c =>
       c.name.toLowerCase().includes(q) ||
       c.sourceSystemType.toLowerCase().includes(q) ||
       (c.applicationType ?? '').toLowerCase().includes(q) ||
       c.baseUrl.toLowerCase().includes(q)
     );
+
+    const direction = this.actionOnSortDirection();
+    if (!direction) return rows;
+    const sorted = [...rows].sort((a, b) => SourceConnectionListComponent.actionOnOf(a) - SourceConnectionListComponent.actionOnOf(b));
+    return direction === 'desc' ? sorted.reverse() : sorted;
   });
 
   readonly paginated = computed(() => {

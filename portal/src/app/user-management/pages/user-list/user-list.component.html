@@ -197,6 +197,22 @@
           </td>
         </ng-container>
 
+        <!-- Action by Column -->
+        <ng-container matColumnDef="actionBy">
+          <th mat-header-cell *matHeaderCellDef>Action by</th>
+          <td mat-cell *matCellDef="let user">
+            <span class="cell-muted">{{ (user.modifiedBy || user.createdBy) ?? '—' }}</span>
+          </td>
+        </ng-container>
+
+        <!-- Action on Column -->
+        <ng-container matColumnDef="actionOn">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header="updatedAt">Action on</th>
+          <td mat-cell *matCellDef="let user">
+            <span class="cell-muted">{{ formatDate(user.updatedAt || user.createdAt) }}</span>
+          </td>
+        </ng-container>
+
         <!-- Actions Column -->
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef></th>

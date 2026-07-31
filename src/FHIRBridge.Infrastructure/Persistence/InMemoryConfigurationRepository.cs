@@ -124,7 +124,14 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
             query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
         }
 
-        var ordered = query.OrderBy(x => x.Name).ToList();
+        var descending = string.Equals(filter.SortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+        var orderedQuery = string.Equals(filter.SortBy, "actionOn", StringComparison.OrdinalIgnoreCase)
+            ? (descending
+                ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc)
+                : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc))
+            : query.OrderBy(x => x.Name);
+
+        var ordered = orderedQuery.ToList();
         var take = Math.Clamp(pageSize, 1, 200);
         var skip = Math.Max(0, (page - 1) * take);
         var items = ordered.Skip(skip).Take(take).ToList();

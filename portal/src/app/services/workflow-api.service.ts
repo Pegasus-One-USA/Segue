@@ -258,6 +258,10 @@ export interface WorkflowSummary {
   applicationType: string | null;   // Backend | EhrLaunch | Standalone | Patient
   hasDestination: boolean;
   isPubliclyLaunchable: boolean;
+  createdOnUtc?: string | null;
+  createdBy?: string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?: string | null;
 }
 
 /** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row

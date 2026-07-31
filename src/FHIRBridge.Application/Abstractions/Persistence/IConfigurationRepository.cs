@@ -77,4 +77,8 @@ public interface IConfigurationRepository
 public sealed record DestinationFilter(
     string? Search,
     DestinationType? DestinationType,
-    bool? IsEnabled);
+    bool? IsEnabled,
+    // Only "actionOn" (ModifiedOnUtc ?? CreatedOnUtc) is supported today — anything else falls back to the
+    // default Name ordering, same as no sort at all.
+    string? SortBy = null,
+    string? SortDirection = null);

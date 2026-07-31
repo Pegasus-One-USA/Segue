@@ -111,6 +111,10 @@ public static class DependencyInjection
         services.AddSingleton<ISystemSettingsCache, InProcessSystemSettingsCache>();
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
 
+        // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
+        // that's the in-memory or EF-backed implementation registered below.
+        services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
+
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
 
         if (string.IsNullOrWhiteSpace(connectionString))

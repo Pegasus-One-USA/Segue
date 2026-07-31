@@ -18,6 +18,7 @@ public sealed class AllowedCorsOriginsServiceTests
     private AllowedCorsOriginsService Service(bool requireHttps = true) => new(
         _repository.Object,
         _cache.Object,
+        new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
         Options.Create(new AllowedCorsOriginsOptions { RequireHttps = requireHttps }));
 
     [Fact]

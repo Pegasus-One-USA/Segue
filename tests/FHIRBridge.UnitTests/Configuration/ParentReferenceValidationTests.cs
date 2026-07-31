@@ -46,6 +46,7 @@ public sealed class ParentReferenceValidationTests
             _resolver.Object,
             new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
             new CreateDestinationConfigurationRequestValidator(),
+            new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 

@@ -101,6 +101,27 @@ public sealed class FHIRBridgeDbContext : DbContext
                     .Property(nameof(AuditableEntity<int>.RowVersion))
                     .IsRowVersion();
             }
+
+            // CreatedOnUtc/CreatedBy are always stamped by AuditingSaveChangesInterceptor before a row is ever
+            // saved (see its Stamp() — every Added IAuditableEntity gets ApplyCreated(actor, now), and actor is
+            // never null: CurrentUserInfo.AuditName falls back through UserId → Email → ExternalUserId →
+            // "anonymous"). These DB-level NOT NULL + defaults are a safety net for any insert path that could
+            // ever bypass the interceptor (raw SQL, a future direct-context seed), not the primary guarantee.
+            // ModifiedOnUtc/ModifiedBy/DeletedOnUtc/DeletedBy stay nullable — legitimately absent until a row is
+            // actually modified/deleted.
+            if (!entityType.IsOwned() && typeof(IAuditableEntity).IsAssignableFrom(clrType))
+            {
+                modelBuilder.Entity(clrType)
+                    .Property(nameof(IAuditableEntity.CreatedOnUtc))
+                    .IsRequired()
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                modelBuilder.Entity(clrType)
+                    .Property(nameof(IAuditableEntity.CreatedBy))
+                    .IsRequired()
+                    .HasMaxLength(320)
+                    .HasDefaultValue("system");
+            }
         }
     }
 

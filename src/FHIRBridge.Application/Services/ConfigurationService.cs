@@ -29,6 +29,7 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly IParentReferenceResolver _parentReferenceResolver;
     private readonly IValidator<CreateMappingProfileRequest> _mappingProfileValidator;
     private readonly IValidator<CreateDestinationConfigurationRequest> _destinationConfigurationValidator;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
     private readonly ILogger<ConfigurationService> _logger;
 
     public ConfigurationService(
@@ -39,6 +40,7 @@ public sealed class ConfigurationService : IConfigurationService
         IParentReferenceResolver parentReferenceResolver,
         IValidator<CreateMappingProfileRequest> mappingProfileValidator,
         IValidator<CreateDestinationConfigurationRequest> destinationConfigurationValidator,
+        IUserDisplayNameResolver userDisplayNameResolver,
         ILogger<ConfigurationService> logger)
     {
         _repository = repository;
@@ -48,6 +50,7 @@ public sealed class ConfigurationService : IConfigurationService
         _parentReferenceResolver = parentReferenceResolver;
         _mappingProfileValidator = mappingProfileValidator;
         _destinationConfigurationValidator = destinationConfigurationValidator;
+        _userDisplayNameResolver = userDisplayNameResolver;
         _logger = logger;
     }
 
@@ -344,8 +347,18 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         var result = await _repository.GetDestinationsPagedAsync(filter, page, pageSize, cancellationToken);
+        var dtos = result.Items.Select(ConfigurationMapper.ToDto).ToList();
+
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
+        var resolved = dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        }).ToList();
+
         return new PagedResult<DestinationConfigurationDto>(
-            result.Items.Select(ConfigurationMapper.ToDto).ToList(),
+            resolved,
             result.TotalCount,
             result.Page,
             result.PageSize);

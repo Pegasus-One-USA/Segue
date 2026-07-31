@@ -152,8 +152,14 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         var take = Math.Clamp(pageSize, 1, 200);
         var skip = Math.Max(0, (page - 1) * take);
 
-        var items = await query
-            .OrderBy(x => x.Name)
+        var descending = string.Equals(filter.SortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+        var ordered = string.Equals(filter.SortBy, "actionOn", StringComparison.OrdinalIgnoreCase)
+            ? (descending
+                ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc)
+                : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc))
+            : query.OrderBy(x => x.Name);
+
+        var items = await ordered
             .Skip(skip)
             .Take(take)
             .ToListAsync(ct);

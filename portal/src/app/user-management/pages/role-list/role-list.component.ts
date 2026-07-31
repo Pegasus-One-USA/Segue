@@ -45,14 +45,30 @@ export class RoleListComponent implements OnInit {
 
   readonly roles = signal<Role[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'description', 'permissions', 'actions'];
+  readonly displayedCols = ['index', 'name', 'description', 'permissions', 'actionBy', 'actionOn', 'actions'];
+
+  /** Only one sortable column today — "Action on" (createdAt, or modifiedOnUtc when later). */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+  }
+
+  private static actionOnOf(r: Role): number {
+    const value = r.modifiedOnUtc || r.createdAt;
+    return value ? new Date(value).getTime() : 0;
+  }
 
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
-    if (!q) return this.roles();
-    return this.roles().filter(r =>
+    const rows = !q ? this.roles() : this.roles().filter(r =>
       r.displayName.toLowerCase().includes(q) || r.description.toLowerCase().includes(q)
     );
+
+    const direction = this.actionOnSortDirection();
+    if (!direction) return rows;
+    const sorted = [...rows].sort((a, b) => RoleListComponent.actionOnOf(a) - RoleListComponent.actionOnOf(b));
+    return direction === 'desc' ? sorted.reverse() : sorted;
   });
 
   readonly paginated = computed(() => {

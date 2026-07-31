@@ -62,6 +62,10 @@ export interface SourceConnectionModel {
   applicationType?: string | null;
   interactive?: SourceInteractiveConfigurationModel | null;
   retrieval?: SourceRetrievalConfigurationModel | null;
+  createdOnUtc?: string | null;
+  createdBy?: string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?: string | null;
 }
 
 /** Matches CreateSourceConnectionRequest's expected body shape for both create (POST) and update (PUT). */

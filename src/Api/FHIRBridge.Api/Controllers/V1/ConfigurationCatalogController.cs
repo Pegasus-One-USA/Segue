@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
@@ -21,11 +22,16 @@ public sealed class ConfigurationCatalogController : ControllerBase
 {
     private readonly IConfigurationRepository _repository;
     private readonly IConfigurationService _configurationService;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
 
-    public ConfigurationCatalogController(IConfigurationRepository repository, IConfigurationService configurationService)
+    public ConfigurationCatalogController(
+        IConfigurationRepository repository,
+        IConfigurationService configurationService,
+        IUserDisplayNameResolver userDisplayNameResolver)
     {
         _repository = repository;
         _configurationService = configurationService;
+        _userDisplayNameResolver = userDisplayNameResolver;
     }
 
     [HttpGet("source-connections")]
@@ -33,7 +39,16 @@ public sealed class ConfigurationCatalogController : ControllerBase
     public async Task<IActionResult> ListSourceConnections(CancellationToken cancellationToken)
     {
         var sources = await _repository.GetSourceConnectionsAsync(cancellationToken);
-        return Ok(sources.Select(ConfigurationMapper.ToDto).ToArray());
+        var dtos = sources.Select(ConfigurationMapper.ToDto).ToArray();
+
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
+
+        return Ok(dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        }).ToArray());
     }
 
     [HttpGet("destinations")]
@@ -41,7 +56,16 @@ public sealed class ConfigurationCatalogController : ControllerBase
     public async Task<IActionResult> ListDestinations(CancellationToken cancellationToken)
     {
         var destinations = await _repository.GetDestinationsAsync(cancellationToken);
-        return Ok(destinations.Select(ConfigurationMapper.ToDto).ToArray());
+        var dtos = destinations.Select(ConfigurationMapper.ToDto).ToArray();
+
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
+
+        return Ok(dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        }).ToArray());
     }
 
     [HttpGet("destinations/paged")]
@@ -52,10 +76,12 @@ public sealed class ConfigurationCatalogController : ControllerBase
         [FromQuery] bool? isEnabled,
         [FromQuery] int page,
         [FromQuery] int pageSize,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortDirection,
         CancellationToken cancellationToken)
     {
         var result = await _configurationService.GetDestinationConfigurationsPagedAsync(
-            new DestinationFilter(search, destinationType, isEnabled),
+            new DestinationFilter(search, destinationType, isEnabled, sortBy, sortDirection),
             page <= 0 ? 1 : page,
             pageSize <= 0 ? 25 : pageSize,
             cancellationToken);

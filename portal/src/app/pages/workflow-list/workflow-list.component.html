@@ -117,6 +117,13 @@
                 {{ sortColumn() === 'lastRun' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
+            <th>Action by</th>
+            <th class="col-sortable" (click)="onSort('actionOn')">
+              Action on
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'actionOn'">
+                {{ sortColumn() === 'actionOn' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <th class="col-actions">Actions</th>
           </tr>
         </thead>
@@ -157,6 +164,8 @@
                   <span class="cell-muted">Never run</span>
                 }
               </td>
+              <td><span class="cell-muted">{{ (w.modifiedBy || w.createdBy) ?? '—' }}</span></td>
+              <td><span class="cell-muted">{{ ((w.modifiedOnUtc || w.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
               <td class="col-actions">
                 <div class="row-actions">
                   <div class="split-btn" (click)="$event.stopPropagation()">
