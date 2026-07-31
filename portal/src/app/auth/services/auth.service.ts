@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
+import { tap, finalize } from 'rxjs/operators';
 import { Observable, EMPTY, of } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
@@ -113,11 +113,18 @@ export class AuthService {
   }
 
   // ─── Logout ────────────────────────────────────────────────────────────────
+  // Clears local session state and navigates to login unconditionally via finalize(), regardless of
+  // whether the backend POST /auth/logout call succeeds — an already-expired/invalid access token makes
+  // that call 401 (the auth interceptor deliberately never retries/refreshes calls under /auth/, see
+  // auth.interceptor.ts), and with only a `next` handler that 401 previously left the user stuck "signed
+  // in" with a dead session, since the token was never cleared and the redirect never fired.
   logout(): void {
-    this.api.logout().subscribe(() => {
-      this.session.end();
-      this.router.navigate(['/auth/login']);
-    });
+    this.api.logout().pipe(
+      finalize(() => {
+        this.session.end();
+        this.router.navigate(['/auth/login']);
+      }),
+    ).subscribe({ error: () => {} });
   }
 
   // ─── Register ──────────────────────────────────────────────────────────────

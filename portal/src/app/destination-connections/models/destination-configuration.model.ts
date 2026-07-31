@@ -62,10 +62,15 @@ export interface PagedResult<T> {
   pageSize: number;
 }
 
+export type DestinationSortColumn = 'name' | 'destinationType' | 'target' | 'isEnabled';
+export type SortOrder = 'asc' | 'desc';
+
 export interface DestinationConfigurationFilter {
   search?: string;
   destinationType?: DestinationType;
   isEnabled?: boolean;
+  sortBy?: DestinationSortColumn;
+  sortOrder?: SortOrder;
   page: number;
   pageSize: number;
 }

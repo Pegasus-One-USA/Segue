@@ -32,7 +32,35 @@
           [routerLinkActiveOptions]="{ exact: entry.exact ?? false }"
           [title]="collapsed() ? entry.label : ''"
         >
-          <span class="nav-icon">{{ entry.icon }}</span>
+          <span class="nav-icon">
+            @switch (entry.route) {
+              @case ('/dashboard') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+                  <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+                  <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+                  <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+                </svg>
+              }
+              @case ('/workflows') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="6" height="6" rx="1.5"/>
+                  <rect x="15" y="3" width="6" height="6" rx="1.5"/>
+                  <rect x="9" y="15" width="6" height="6" rx="1.5"/>
+                  <path d="M6 9v2a3 3 0 0 0 3 3h.5M18 9v2a3 3 0 0 1-3 3h-.5"/>
+                </svg>
+              }
+              @case ('/governance') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 21s7.5-3.5 7.5-9V6l-7.5-3-7.5 3v6c0 5.5 7.5 9 7.5 9Z"/>
+                  <path d="m9 11.5 2 2 4-4.5"/>
+                </svg>
+              }
+              @default {
+                {{ entry.icon }}
+              }
+            }
+          </span>
           @if (!collapsed()) {
             <span class="nav-label">{{ entry.label }}</span>
           }

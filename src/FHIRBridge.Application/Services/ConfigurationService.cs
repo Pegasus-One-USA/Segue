@@ -341,9 +341,11 @@ public sealed class ConfigurationService : IConfigurationService
         DestinationFilter filter,
         int page,
         int pageSize,
+        string? sortBy,
+        string? sortOrder,
         CancellationToken cancellationToken)
     {
-        var result = await _repository.GetDestinationsPagedAsync(filter, page, pageSize, cancellationToken);
+        var result = await _repository.GetDestinationsPagedAsync(filter, page, pageSize, sortBy, sortOrder, cancellationToken);
         return new PagedResult<DestinationConfigurationDto>(
             result.Items.Select(ConfigurationMapper.ToDto).ToList(),
             result.TotalCount,

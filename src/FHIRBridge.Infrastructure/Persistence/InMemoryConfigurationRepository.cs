@@ -37,6 +37,54 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     public Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<SourceConnection>>(_sources.Values.OrderBy(x => x.Name).ToList());
 
+    public Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(
+        SourceConnectionFilter filter,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortOrder,
+        CancellationToken ct)
+    {
+        var query = _sources.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            query = query.Where(x =>
+                x.Name.Contains(filter.Search, StringComparison.OrdinalIgnoreCase) ||
+                x.BaseUrl.Contains(filter.Search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (filter.SourceSystemType.HasValue)
+        {
+            query = query.Where(x => x.SourceSystemType == filter.SourceSystemType.Value);
+        }
+
+        if (filter.ApplicationType.HasValue)
+        {
+            query = query.Where(x => x.ApplicationType == filter.ApplicationType.Value);
+        }
+
+        if (filter.IsEnabled.HasValue)
+        {
+            query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        IOrderedEnumerable<SourceConnection> ordering = sortBy?.ToLowerInvariant() switch
+        {
+            "ehr"      => desc ? query.OrderByDescending(x => x.SourceSystemType) : query.OrderBy(x => x.SourceSystemType),
+            "audience" => desc ? query.OrderByDescending(x => x.ApplicationType)  : query.OrderBy(x => x.ApplicationType),
+            "status"   => desc ? query.OrderByDescending(x => x.IsEnabled)        : query.OrderBy(x => x.IsEnabled),
+            _          => desc ? query.OrderByDescending(x => x.Name)            : query.OrderBy(x => x.Name),
+        };
+        var ordered = ordering.ToList();
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+        var items = ordered.Skip(skip).Take(take).ToList();
+
+        return Task.FromResult(new PagedResult<SourceConnection>(items, ordered.Count, page, take));
+    }
+
     public Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct)
     {
         _sources.TryGetValue(id, out var e);
@@ -105,6 +153,8 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         DestinationFilter filter,
         int page,
         int pageSize,
+        string? sortBy,
+        string? sortOrder,
         CancellationToken ct)
     {
         var query = _destinations.Values.AsEnumerable();
@@ -124,7 +174,15 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
             query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
         }
 
-        var ordered = query.OrderBy(x => x.Name).ToList();
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        IOrderedEnumerable<DestinationConfiguration> ordering = sortBy?.ToLowerInvariant() switch
+        {
+            "type"   => desc ? query.OrderByDescending(x => x.DestinationType) : query.OrderBy(x => x.DestinationType),
+            "target" => desc ? query.OrderByDescending(x => x.Target)          : query.OrderBy(x => x.Target),
+            "status" => desc ? query.OrderByDescending(x => x.IsEnabled)       : query.OrderBy(x => x.IsEnabled),
+            _        => desc ? query.OrderByDescending(x => x.Name)           : query.OrderBy(x => x.Name),
+        };
+        var ordered = ordering.ToList();
         var take = Math.Clamp(pageSize, 1, 200);
         var skip = Math.Max(0, (page - 1) * take);
         var items = ordered.Skip(skip).Take(take).ToList();
