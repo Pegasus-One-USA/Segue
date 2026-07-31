@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap, finalize } from 'rxjs/operators';
+import { tap, finalize, catchError } from 'rxjs/operators';
 import { Observable, EMPTY, of } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
@@ -120,11 +120,15 @@ export class AuthService {
   // in" with a dead session, since the token was never cleared and the redirect never fired.
   logout(): void {
     this.api.logout().pipe(
+      // Swallow the error here (a dead/expired token 401s) rather than in subscribe()'s error callback —
+      // finalize() below already does the actual cleanup unconditionally, so there's nothing left for an
+      // error handler to do.
+      catchError(() => EMPTY),
       finalize(() => {
         this.session.end();
         this.router.navigate(['/auth/login']);
       }),
-    ).subscribe({ error: () => {} });
+    ).subscribe();
   }
 
   // ─── Register ──────────────────────────────────────────────────────────────

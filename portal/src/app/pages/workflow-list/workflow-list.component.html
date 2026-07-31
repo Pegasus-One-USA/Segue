@@ -201,12 +201,14 @@
                     ><mat-icon>more_vert</mat-icon></button>
 
                     @if (openActionMenuId() === w.workflowId && actionMenuPosition(); as pos) {
+                      <!-- No click-outside guard needed here: the panel stays a DOM descendant of .row-menu
+                           even though it renders position: fixed, so closeFilterMenuIfOutside's own
+                           closest('.row-menu') check already treats a click anywhere in here as "inside". -->
                       <div
                         class="row-menu-panel"
                         [style.top.px]="pos.top"
                         [style.bottom.px]="pos.bottom"
                         [style.right.px]="pos.right"
-                        (click)="$event.stopPropagation()"
                       >
                         <button type="button" class="row-menu-item" (click)="onEdit(w); openActionMenuId.set(null)">
                           <mat-icon>edit</mat-icon> Edit in Workflow Builder
