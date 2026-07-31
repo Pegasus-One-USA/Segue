@@ -77,6 +77,11 @@ builder.Services.AddHostedService<PipelineRunCommandProcessor>();
 // race to resolve here; registering this was always safe, it just hadn't been done.
 builder.Services.AddHostedService<WebhookIngestionCommandProcessor>();
 
+// Resumable bulk-export polling: BulkExportPollWorker checks every in-flight $export job's status on a timer
+// instead of any caller (a route run, a workflow-node run) blocking inline for the job's full duration.
+builder.Services.Configure<BulkExportPollOptions>(builder.Configuration.GetSection("BulkExportPoll"));
+builder.Services.AddHostedService<BulkExportPollWorker>();
+
 builder.Services.Configure<EndpointHealthCheckOptions>(builder.Configuration.GetSection("EndpointHealthCheck"));
 builder.Services.AddHostedService<EndpointHealthCheckWorker>();
 

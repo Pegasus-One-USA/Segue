@@ -64,6 +64,14 @@ public sealed class WorkflowRun
 
     public void AddNodeRun(WorkflowNodeRun nodeRun) => _nodeRuns.Add(nodeRun);
 
+    /// <summary>Pauses the run at a source node that deferred to an async bulk-export job — deliberately does not
+    /// set <see cref="CompletedAt"/>, since this is not a terminal state; <see cref="Succeed"/>/<see cref="Fail"/>
+    /// are still called once the poller resumes execution and the run actually finishes.</summary>
+    public void AwaitBulkExport()
+    {
+        Status = WorkflowRunStatus.AwaitingBulkExport;
+    }
+
     public void Succeed(DateTimeOffset completedAt)
     {
         CompletedAt = completedAt;

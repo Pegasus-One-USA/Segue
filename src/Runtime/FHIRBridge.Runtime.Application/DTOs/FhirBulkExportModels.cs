@@ -28,6 +28,29 @@ public sealed record FhirBulkExportRequest(
 /// <summary>One NDJSON output file produced by a completed export.</summary>
 public sealed record BulkExportFile(string ResourceType, string Url);
 
+/// <summary>Outcome of a single <c>$export</c> status-URL poll (see
+/// <see cref="Abstractions.Connectors.IFhirBulkExportClient.PollOnceAsync"/>) — deliberately returned rather than
+/// thrown for <see cref="BulkExportPollStatus.Failed"/>, so a caller polling on a schedule (rather than blocking in
+/// a loop) can persist the failure without an unhandled exception skipping that persistence.</summary>
+public sealed record BulkExportPollResult(
+    BulkExportPollStatus Status,
+    IReadOnlyList<BulkExportFile>? Files = null,
+    TimeSpan? RetryAfter = null,
+    string? ErrorMessage = null);
+
+/// <summary>Status of a single bulk-export poll attempt.</summary>
+public enum BulkExportPollStatus
+{
+    /// <summary>Server returned 202 Accepted — job still running.</summary>
+    InProgress,
+
+    /// <summary>Server returned 200 OK with the completion manifest.</summary>
+    Completed,
+
+    /// <summary>Server returned an unexpected status.</summary>
+    Failed
+}
+
 /// <summary>Shared parsing of the persisted export-scope token to <see cref="BulkExportScope"/> (System is the safe
 /// default for unset/legacy/unknown values). Used by both pipeline planes so the mapping never diverges.</summary>
 public static class BulkExportScopes

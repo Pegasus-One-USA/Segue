@@ -22,6 +22,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<ResourcePipelineRoute> ResourcePipelineRoutes => Set<ResourcePipelineRoute>();
     public DbSet<SourceCapabilityProfile> SourceCapabilityProfiles => Set<SourceCapabilityProfile>();
     public DbSet<ConfiguredPipelineRunRecord> ConfiguredPipelineRuns => Set<ConfiguredPipelineRunRecord>();
+    public DbSet<BulkExportJob> BulkExportJobs => Set<BulkExportJob>();
     public DbSet<PipelineRunRouteExecution> PipelineRunRouteExecutions => Set<PipelineRunRouteExecution>();
     public DbSet<PipelineRunResourceRecord> PipelineRunResourceRecords => Set<PipelineRunResourceRecord>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();

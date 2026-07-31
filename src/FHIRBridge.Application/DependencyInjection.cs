@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IHedisMeasureReportService, HedisMeasureReportService>();
         services.AddScoped<IAnomalyDetectionService, RunAnomalyDetectionService>();
         services.AddScoped<IPipelineRunMetricsService, PipelineRunMetricsService>();
+        services.AddScoped<IBulkExportPollService, BulkExportPollService>();
 
         return services;
     }

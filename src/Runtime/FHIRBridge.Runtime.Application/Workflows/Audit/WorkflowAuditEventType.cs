@@ -9,5 +9,8 @@ public enum WorkflowAuditEventType
     WorkflowRunCompleted,
     WorkflowRunFailed,
     NodeExecutionCancelled,
-    WorkflowRunCancelled
+    WorkflowRunCancelled,
+
+    /// <summary>A source node deferred to an async bulk-export job; the run is paused until a poller resumes it.</summary>
+    WorkflowRunAwaitingBulkExport
 }

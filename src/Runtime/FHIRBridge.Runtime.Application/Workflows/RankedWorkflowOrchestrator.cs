@@ -17,6 +17,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IGlobalExceptionManager? _exceptionManager;
     private readonly IRunStatusNotifier? _runStatusNotifier;
     private readonly IServiceScopeFactory? _scopeFactory;
+    private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
+    private readonly IBulkExportPauseRecorder? _bulkExportPauseRecorder;
 
     public RankedWorkflowOrchestrator(
         IWorkflowGraphValidator graphValidator,
@@ -26,7 +28,9 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IWorkflowNodeResourceHistoryRecorder? resourceHistoryRecorder = null,
         IGlobalExceptionManager? exceptionManager = null,
         IRunStatusNotifier? runStatusNotifier = null,
-        IServiceScopeFactory? scopeFactory = null)
+        IServiceScopeFactory? scopeFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IBulkExportPauseRecorder? bulkExportPauseRecorder = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
@@ -36,6 +40,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _exceptionManager = exceptionManager;
         _runStatusNotifier = runStatusNotifier;
         _scopeFactory = scopeFactory;
+        _workflowDefinitionStore = workflowDefinitionStore;
+        _bulkExportPauseRecorder = bulkExportPauseRecorder;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -92,21 +98,111 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         await PersistRunStartedAsync(workflowRun, cancellationToken);
         await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Running", DateTimeOffset.UtcNow, null, cancellationToken);
 
+        await _auditRecorder.RecordAsync(new(
+            WorkflowAuditEventType.WorkflowRunStarted,
+            workflowDefinition.Id,
+            workflowRun.Id,
+            null,
+            null,
+            null,
+            null,
+            WorkflowDataContract.None,
+            WorkflowDataContract.None,
+            DateTimeOffset.UtcNow), cancellationToken);
+
+        return await RunNodesAsync(
+            workflowDefinition, effectiveDefinition, workflowRun, context, orderedNodes,
+            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken);
+    }
+
+    /// <summary>Resumes a run that <see cref="RunNodesAsync"/> paused at <paramref name="nodeId"/> (a source node
+    /// that deferred to an async bulk-export job — see <see cref="WorkflowRunStatus.AwaitingBulkExport"/>). Called
+    /// by <c>BulkExportPollWorker</c> once the job completes. Reconstructs everything the original in-memory
+    /// <see cref="ExecuteAsync"/> call held — the execution context, and every node output computed before the
+    /// pause — from what was persisted onto the <c>BulkExportJob</c> row at pause time, since none of it survives
+    /// as ambient/in-memory state across a Worker tick boundary (this may run in an entirely different process).
+    /// <para>Only supports one pause per run: if a node further downstream also defers, that second deferral is
+    /// treated as an ordinary in-loop pause (handled the same way by <see cref="RunNodesAsync"/>) — the run pauses
+    /// again and needs a second resume call, so multiple sequential bulk-export nodes in one run each get their own
+    /// resume cycle rather than needing to be anticipated here.</para></summary>
+    public async Task<WorkflowRunResult> ResumeAfterBulkExportAsync(
+        Guid workflowRunId,
+        Guid nodeId,
+        string? priorNodeOutputsJson,
+        string? contextJson,
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources,
+        CancellationToken cancellationToken = default)
+    {
+        if (_runStore is null)
+        {
+            throw new InvalidOperationException("No IWorkflowRunStore configured; cannot resume a paused run.");
+        }
+
+        if (_workflowDefinitionStore is null)
+        {
+            throw new InvalidOperationException("No IWorkflowDefinitionStore configured; cannot resume a paused run.");
+        }
+
+        var workflowRun = await _runStore.GetAsync(workflowRunId, cancellationToken)
+            ?? throw new InvalidOperationException($"Workflow run '{workflowRunId}' was not found.");
+        var workflowDefinition = await _workflowDefinitionStore.GetAsync(workflowRun.WorkflowDefinitionId, cancellationToken)
+            ?? throw new InvalidOperationException($"Workflow definition '{workflowRun.WorkflowDefinitionId}' was not found.");
+
+        var effectiveDefinition = workflowRun.TargetNodeId is { } targetId
+            ? RestrictToAncestorClosure(workflowDefinition, targetId)
+            : workflowDefinition;
+
+        var pausedNode = effectiveDefinition.Nodes.FirstOrDefault(n => n.Id == nodeId)
+            ?? throw new InvalidOperationException($"Node '{nodeId}' was not found on workflow '{workflowDefinition.Id}'.");
+
+        var context = DeserializeExecutionContext(contextJson, workflowRunId);
+        var orderedNodes = TopologicalSort(effectiveDefinition);
+        var outputsByNodeId = DeserializePriorNodeOutputs(priorNodeOutputsJson);
+        var skippedResourceTypesAcrossRun = new List<string>();
+
+        var materializedOutput = new WorkflowNodeOutput(
+            pausedNode.Id,
+            pausedNode.NodeType,
+            new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceBatch(ToPayloadEnvelopes(resources)),
+            WorkflowDataContract.ResourceBatch,
+            new Dictionary<string, object?> { ["executor"] = "BulkExportPollWorker", ["count"] = resources.Count });
+        outputsByNodeId[pausedNode.Id] = materializedOutput;
+
+        var resumedNodeRun = new WorkflowNodeRun(
+            Guid.NewGuid(), workflowRun.Id, pausedNode.Id, pausedNode.NodeType, pausedNode.Rank, pausedNode.SubRank, DateTimeOffset.UtcNow);
+        workflowRun.AddNodeRun(resumedNodeRun);
+        resumedNodeRun.Succeed(CreateLineageJson(pausedNode, [], materializedOutput), DateTimeOffset.UtcNow);
+
+        if (_resourceHistoryRecorder is not null)
+        {
+            await _resourceHistoryRecorder.RecordNodeOutputAsync(
+                workflowRun.Id, resumedNodeRun.Id, pausedNode.NodeType,
+                materializedOutput.Contract.ToString(), materializedOutput.Payload, cancellationToken);
+        }
+
+        var remainingNodes = orderedNodes.SkipWhile(n => n.Id != pausedNode.Id).Skip(1).ToArray();
+
+        return await RunNodesAsync(
+            workflowDefinition, effectiveDefinition, workflowRun, context, remainingNodes,
+            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken);
+    }
+
+    /// <summary>Runs <paramref name="nodesToRun"/> in order against <paramref name="workflowRun"/>, shared by both a
+    /// fresh <see cref="ExecuteAsync"/> call and <see cref="ResumeAfterBulkExportAsync"/> picking up after a pause —
+    /// so the success/partial-success/cancel/fail handling and persistence stay identical for both entry points.</summary>
+    private async Task<WorkflowRunResult> RunNodesAsync(
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinition effectiveDefinition,
+        WorkflowRun workflowRun,
+        WorkflowExecutionContext context,
+        IReadOnlyCollection<WorkflowNode> nodesToRun,
+        Dictionary<Guid, WorkflowNodeOutput> outputsByNodeId,
+        List<string> skippedResourceTypesAcrossRun,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            await _auditRecorder.RecordAsync(new(
-                WorkflowAuditEventType.WorkflowRunStarted,
-                workflowDefinition.Id,
-                workflowRun.Id,
-                null,
-                null,
-                null,
-                null,
-                WorkflowDataContract.None,
-                WorkflowDataContract.None,
-                DateTimeOffset.UtcNow), cancellationToken);
-
-            foreach (var node in orderedNodes)
+            foreach (var node in nodesToRun)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -121,7 +217,6 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                     node.SubRank,
                     DateTimeOffset.UtcNow);
 
-                workflowRun.AddNodeRun(nodeRun);
                 await _auditRecorder.RecordAsync(new(
                     WorkflowAuditEventType.NodeExecutionStarted,
                     workflowDefinition.Id,
@@ -138,7 +233,42 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 {
                     var executor = _executorRegistry.GetRequired(node.NodeType);
                     var output = await executor.ExecuteAsync(context, node, incomingOutputs, cancellationToken);
+
+                    if (output.Metadata.TryGetValue(WorkflowNodeOutputMetadataKeys.BulkExportDeferredJobId, out var deferredJobIdValue)
+                        && deferredJobIdValue is string deferredJobIdText
+                        && Guid.TryParse(deferredJobIdText, out var deferredJobId))
+                    {
+                        // Paused: this node's run isn't added to workflowRun's history yet — it isn't done — a
+                        // resume adds its terminal (Succeeded) run once the deferred job's output is materialized.
+                        // Persist everything computed so far (every prior node's output) so a resume, quite
+                        // possibly in a different Worker process, can seed outputsByNodeId without recomputing it.
+                        if (_bulkExportPauseRecorder is not null)
+                        {
+                            await _bulkExportPauseRecorder.RecordPauseAsync(
+                                deferredJobId, SerializePriorNodeOutputs(outputsByNodeId), cancellationToken);
+                        }
+
+                        workflowRun.AwaitBulkExport();
+                        await _auditRecorder.RecordAsync(new(
+                            WorkflowAuditEventType.WorkflowRunAwaitingBulkExport,
+                            workflowDefinition.Id,
+                            workflowRun.Id,
+                            node.Id,
+                            node.NodeType,
+                            null,
+                            null,
+                            inputContract,
+                            WorkflowDataContract.None,
+                            DateTimeOffset.UtcNow), cancellationToken);
+                        await PersistRunAsync(workflowRun, cancellationToken);
+                        await NotifyRunStatusAsync(
+                            workflowRun.Id, workflowDefinition.Id, "AwaitingBulkExport", DateTimeOffset.UtcNow, null, cancellationToken);
+
+                        return new WorkflowRunResult(workflowRun, outputsByNodeId);
+                    }
+
                     outputsByNodeId[node.Id] = output;
+                    workflowRun.AddNodeRun(nodeRun);
                     nodeRun.Succeed(CreateLineageJson(node, incomingOutputs, output), DateTimeOffset.UtcNow);
 
                     if (output.Metadata.TryGetValue("skippedResourceTypes", out var skippedValue)
@@ -172,6 +302,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 }
                 catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
                 {
+                    workflowRun.AddNodeRun(nodeRun);
                     nodeRun.Cancel(cancelException.Message, DateTimeOffset.UtcNow);
                     await _auditRecorder.RecordAsync(new(
                         WorkflowAuditEventType.NodeExecutionCancelled,
@@ -189,6 +320,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 }
                 catch (Exception exception)
                 {
+                    workflowRun.AddNodeRun(nodeRun);
                     nodeRun.Fail(exception.Message, DateTimeOffset.UtcNow);
                     await _auditRecorder.RecordAsync(new(
                         WorkflowAuditEventType.NodeExecutionFailed,
@@ -211,6 +343,24 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 var summary = "Partial success — some resource types were skipped because this app is not " +
                     $"authorized for them: {string.Join(" | ", skippedResourceTypesAcrossRun)}";
                 workflowRun.PartialSucceed(summary, DateTimeOffset.UtcNow);
+
+                // Unlike Cancel/Fail, reaching here throws nothing — this branch is a normal completion path, so
+                // without an explicit capture call the skipped-resource-type reason only ever lands in
+                // WorkflowRun.ErrorMessage. Correlation Search's Workflow Runs table doesn't render that field, so
+                // the only place this becomes visible there is the dedicated Errors section — same place Cancel's
+                // scope-authorization reason already shows up, via the same CaptureExpectedAsync/Informational path.
+                if (_exceptionManager is not null)
+                {
+                    await _exceptionManager.CaptureExpectedAsync(
+                        new ExpectedFailure("PartialSuccess", summary),
+                        new ExceptionContext(
+                            Module: "Workflow",
+                            Severity: "Informational",
+                            CorrelationId: context.CorrelationId,
+                            WorkflowId: workflowDefinition.Id.ToString(),
+                            ExecutionId: workflowRun.Id.ToString()),
+                        cancellationToken);
+                }
             }
             else
             {
@@ -511,4 +661,103 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             outputContract = output.Contract.ToString(),
             outputMetadata = output.Metadata
         });
+
+    /// <summary>Snapshot of one already-computed node's output, for round-tripping across the pause/resume
+    /// boundary. Only <see cref="WorkflowDataContract.ResourceBatch"/> payloads are actually persisted — every node
+    /// that can run before a source node defers is itself a source node (per the pipeline's fixed
+    /// Extraction → Governance → Transform → Output topology, extraction nodes have no dependency on each other),
+    /// so <c>ResourceBatch</c> is the only payload shape that can ever appear here in practice. Anything else is
+    /// kept as metadata-only (no generic way to round-trip an arbitrary <c>object?</c> payload through JSON).</summary>
+    private sealed record PriorNodeOutputSnapshot(
+        string NodeType,
+        string Contract,
+        IReadOnlyDictionary<string, object?> Metadata,
+        FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceEnvelope[]? Resources);
+
+    private static FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceEnvelope[] ToPayloadEnvelopes(
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources)
+        => resources
+            .Select(resource => new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceEnvelope(
+                resource.ResourceType, resource.ResourceId ?? string.Empty, resource.RawJson))
+            .ToArray();
+
+    private static string SerializePriorNodeOutputs(IReadOnlyDictionary<Guid, WorkflowNodeOutput> outputsByNodeId)
+    {
+        var snapshot = outputsByNodeId.ToDictionary(
+            pair => pair.Key.ToString(),
+            pair => new PriorNodeOutputSnapshot(
+                pair.Value.NodeType,
+                pair.Value.Contract.ToString(),
+                pair.Value.Metadata,
+                pair.Value.Contract == WorkflowDataContract.ResourceBatch
+                    && pair.Value.Payload is FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceBatch resourceBatch
+                        ? resourceBatch.Resources.ToArray()
+                        : null));
+
+        return JsonSerializer.Serialize(snapshot);
+    }
+
+    private static Dictionary<Guid, WorkflowNodeOutput> DeserializePriorNodeOutputs(string? priorNodeOutputsJson)
+    {
+        var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
+        if (string.IsNullOrWhiteSpace(priorNodeOutputsJson))
+        {
+            return outputsByNodeId;
+        }
+
+        var snapshot = JsonSerializer.Deserialize<Dictionary<string, PriorNodeOutputSnapshot>>(priorNodeOutputsJson);
+        if (snapshot is null)
+        {
+            return outputsByNodeId;
+        }
+
+        foreach (var (nodeIdText, entry) in snapshot)
+        {
+            if (!Guid.TryParse(nodeIdText, out var nodeId))
+            {
+                continue;
+            }
+
+            var contract = Enum.TryParse<WorkflowDataContract>(entry.Contract, out var parsedContract)
+                ? parsedContract
+                : WorkflowDataContract.None;
+            object? payload = entry.Resources is { } resources
+                ? new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceBatch(resources)
+                : null;
+
+            outputsByNodeId[nodeId] = new WorkflowNodeOutput(nodeId, entry.NodeType, payload, contract, entry.Metadata);
+        }
+
+        return outputsByNodeId;
+    }
+
+    private sealed record SerializedExecutionContext(
+        Guid WorkflowRunId,
+        string CorrelationId,
+        string? TriggeredBy,
+        string? TriggerType,
+        string? TargetPatientId,
+        string? PatientSearchCriteria,
+        string? CallerId);
+
+    private static WorkflowExecutionContext DeserializeExecutionContext(string? contextJson, Guid fallbackWorkflowRunId)
+    {
+        if (string.IsNullOrWhiteSpace(contextJson))
+        {
+            return new WorkflowExecutionContext(fallbackWorkflowRunId, fallbackWorkflowRunId.ToString("N"));
+        }
+
+        var dto = JsonSerializer.Deserialize<SerializedExecutionContext>(contextJson)
+            ?? new SerializedExecutionContext(fallbackWorkflowRunId, fallbackWorkflowRunId.ToString("N"), null, null, null, null, null);
+
+        return new WorkflowExecutionContext(
+            dto.WorkflowRunId,
+            dto.CorrelationId,
+            properties: null,
+            dto.TriggeredBy,
+            dto.TriggerType,
+            dto.TargetPatientId,
+            dto.PatientSearchCriteria,
+            dto.CallerId);
+    }
 }

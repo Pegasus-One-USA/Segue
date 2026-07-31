@@ -18,8 +18,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -31,8 +32,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -44,8 +46,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -57,8 +60,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -70,8 +74,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -83,8 +88,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -96,8 +102,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -109,8 +116,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
     {
     }
 }
@@ -137,6 +145,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly ISourceConnectionSyncCursorStore? _syncCursorStore;
     private readonly IFhirBulkExportClient? _bulkExportClient;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
+    private readonly FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? _bulkExportJobRepository;
 
     protected SourceNodeExecutor(
         string nodeType,
@@ -145,7 +154,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
-        IWorkflowDefinitionStore? workflowDefinitionStore = null)
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
@@ -154,6 +164,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _syncCursorStore = syncCursorStore;
         _bulkExportClient = bulkExportClient;
         _workflowDefinitionStore = workflowDefinitionStore;
+        _bulkExportJobRepository = bulkExportJobRepository;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -306,6 +317,43 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         if (explicitSystemOrGroupExport)
         {
             var batchedRequest = BuildBatchedBulkExportRequest(source, executionOrder);
+
+            // A System/Group export is exactly one $export job for this whole node (every resource type batched
+            // into it, per the comment above) — the one shape simple enough to defer safely. Kick it off and hand
+            // back a sentinel output instead of blocking this node's execution (and so the whole DAG run) for up
+            // to the job's ~2-hour worst case; a BulkExportPollWorker tick resumes the run once it completes.
+            // Only possible when this source resolves back to a real SourceConnection (so a poll tick can
+            // re-resolve credentials later) and the job repository is actually wired — otherwise fall through to
+            // the original blocking call, unchanged.
+            if (_bulkExportJobRepository is not null && source.SourceConnectionId is { } deferrableSourceConnectionId)
+            {
+                var statusUrl = await _bulkExportClient!.KickOffExportAsync(batchedRequest, source, cancellationToken);
+                var job = new FHIRBridge.Domain.Entities.BulkExportJob(
+                    Guid.NewGuid(),
+                    FHIRBridge.Domain.Entities.BulkExportJobSourcePath.WorkflowNode,
+                    deferrableSourceConnectionId,
+                    sourceConfigurationId: null,
+                    exportRequestJson: System.Text.Json.JsonSerializer.Serialize(batchedRequest),
+                    kickedOffOnUtc: DateTime.UtcNow,
+                    correlationId: context.CorrelationId,
+                    triggeredBy: context.TriggeredBy,
+                    workflowRunId: context.WorkflowRunId,
+                    workflowNodeId: node.Id,
+                    contextJson: System.Text.Json.JsonSerializer.Serialize(context));
+                job.MarkKickedOff(statusUrl);
+                await _bulkExportJobRepository.AddAsync(job, cancellationToken);
+
+                return new WorkflowNodeOutput(
+                    node.Id,
+                    node.NodeType,
+                    payload: null,
+                    WorkflowDataContract.None,
+                    new Dictionary<string, object?>
+                    {
+                        [WorkflowNodeOutputMetadataKeys.BulkExportDeferredJobId] = job.Id.ToString(),
+                    });
+            }
+
             var batchedResources = await _bulkExportClient!.ExportAsync(batchedRequest, source, cancellationToken);
             batchedBulkResourcesByType = batchedResources
                 .GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase)

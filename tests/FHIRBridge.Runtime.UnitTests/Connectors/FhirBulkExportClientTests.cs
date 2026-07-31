@@ -20,7 +20,7 @@ public sealed class FhirBulkExportClientTests
         RuntimeSourceType.Epic, "Epic", "https://fhir.example.com/R4", "https://auth/token", "client-1",
         null, null, [], SearchCount: 100, MaxPages: 1);
 
-    private static FhirRestBulkExportClient CreateClient(RecordingHandler handler, string token = "access-token") =>
+    private static FhirRestBulkExportClient CreateClient(HttpMessageHandler handler, string token = "access-token") =>
         new(new HttpClient(handler), new StubTokenProvider(token), delay: (_, _) => Task.CompletedTask);
 
     [Fact]
@@ -110,6 +110,87 @@ public sealed class FhirBulkExportClientTests
 
         // A loopback/unauthenticated source (e.g. local HAPI) resolves to an empty token — no bearer must be sent.
         handler.KickOffHadAuthHeader.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task KickOffExportAsync_returns_the_content_location_status_url()
+    {
+        var handler = new RecordingHandler();
+        var client = CreateClient(handler);
+
+        var statusUrl = await client.KickOffExportAsync(
+            new FhirBulkExportRequest(BulkExportScope.System, ResourceTypes: ["Patient"]),
+            Source, CancellationToken.None);
+
+        statusUrl.Should().Be("https://fhir.example.com/status/1");
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_returns_InProgress_with_RetryAfter_on_202()
+    {
+        var handler = new SinglePollHandler(HttpStatusCode.Accepted, retryAfterSeconds: 7);
+        var client = CreateClient(handler);
+
+        var result = await client.PollOnceAsync("https://fhir.example.com/status/1", Source, CancellationToken.None);
+
+        result.Status.Should().Be(BulkExportPollStatus.InProgress);
+        result.RetryAfter.Should().Be(TimeSpan.FromSeconds(7));
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_returns_Completed_with_parsed_files_on_200()
+    {
+        var handler = new SinglePollHandler(HttpStatusCode.OK, manifestBody: """
+            { "output": [{ "type": "Patient", "url": "https://fhir.example.com/files/1.ndjson" }] }
+            """);
+        var client = CreateClient(handler);
+
+        var result = await client.PollOnceAsync("https://fhir.example.com/status/1", Source, CancellationToken.None);
+
+        result.Status.Should().Be(BulkExportPollStatus.Completed);
+        result.Files.Should().ContainSingle(f => f.Url == "https://fhir.example.com/files/1.ndjson");
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_returns_Failed_without_throwing_on_unexpected_status()
+    {
+        var handler = new SinglePollHandler(HttpStatusCode.InternalServerError);
+        var client = CreateClient(handler);
+
+        var result = await client.PollOnceAsync("https://fhir.example.com/status/1", Source, CancellationToken.None);
+
+        result.Status.Should().Be(BulkExportPollStatus.Failed);
+        result.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+    }
+
+    private sealed class SinglePollHandler : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _statusCode;
+        private readonly int? _retryAfterSeconds;
+        private readonly string? _manifestBody;
+
+        public SinglePollHandler(HttpStatusCode statusCode, int? retryAfterSeconds = null, string? manifestBody = null)
+        {
+            _statusCode = statusCode;
+            _retryAfterSeconds = retryAfterSeconds;
+            _manifestBody = manifestBody;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(_statusCode);
+            if (_retryAfterSeconds is { } seconds)
+            {
+                response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(seconds));
+            }
+
+            if (_manifestBody is not null)
+            {
+                response.Content = new StringContent(_manifestBody);
+            }
+
+            return Task.FromResult(response);
+        }
     }
 
     private sealed class StubTokenProvider : IFhirAccessTokenProvider
