@@ -1,0 +1,230 @@
+src/FHIRBridge.Infrastructure/Scheduling/ScheduleEvaluationService.cs
+  s_644c8309209587::t_95c727582fe14c 93
+  s_644c8309209587::t_2b5a3c0cdb0b13 90-92
+  s_644c8309209587::t_d7b37df03a57ea 94-96
+  s_644c8309209587::t_e307c2ace963ab 1,19,24,28,36-38,53,57-89,97-107,116,118-119,127-137
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_406c1571f7ddf4::t_aecb3d3074cd31 2-12,401-405
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_39432b15d913d6::t_72fc32a5642d73 24-25
+portal/public/mock/branding/default.json
+  s_29a967ba537f2c::t_61e5d19c11306a 19
+portal/src/app/auth/services/auth.service.ts
+  s_6fe72b0759281b::t_b1a43798b22fcd 3,116-120,122-131
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_08313b6cd63437::t_3ea46f321d24c3 1-4,6-16,28,105-110,720,737-741
+portal/src/app/core/api-endpoints.ts
+  s_43a1e5fa590c3d::t_11e60be044d9a9 79
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_39432b15d913d6::t_fd003f8dc6c5a7 69-71,76-77
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_39432b15d913d6::t_9448870e380fe7 30-37,41-42,70-75,85-90,95-100,107-112,178,181,186-187,189-190,192-193
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_bcd3dfe81559c0::t_d30e0a0b75e4b7 1,14,21,40,52-54,78-81,106,111-115,164-181,185-188,193
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_bcd3dfe81559c0::t_71de30fba138a2 34
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_bcd3dfe81559c0::t_971e29e53ab458 24-25
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_4a6381e5723310::t_e9d36264fb814b 56-57
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_bcd3dfe81559c0::t_5e59d518af34a9 78-85,95,204-280
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_24fa7417f71b13::t_45d39a89d35181 92-111,206-212,289,396-399,449-501
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_1310dc455d7699::t_5959add12a2415 108-124,200-218,228-231,250-260
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_bcd3dfe81559c0::t_e63a9f3935f76c 90-113
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_bcd3dfe81559c0::t_8322f829f7fb45 21-46,50-51,81,85,93-98,111-116,124-129,153-158,225,231,238-239,248-249,251-252,254-255
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_bcd3dfe81559c0::t_2be56adf9a40b8 1,14-15,20,36,48-52,57-58,65-66,71-72,75-76,79-91,93-98,100-105,114,119,137,139-161,174-204,209-214,216,219,222,263
+portal/src/app/source-connections/services/api-source-connection.service.ts
+  s_08313b6cd63437::t_9e49baca9b9b7d 2,7-13,25-41
+portal/src/app/source-connections/services/i-source-connection.service.ts
+  s_08313b6cd63437::t_d733b21174283c 2-8,12
+portal/src/index.html
+  s_29a967ba537f2c::t_ad93fd2e765ca3 8
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_bcd3dfe81559c0::t_b0408dfd26172a 8,55-82,106-107,113,116-117
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  s_d6653b6b7d4145::t_24669062f13f01 26
+src/BuildingBlocks/FHIRBridge.Observability/FHIRBridge.Observability.csproj
+  s_7dd4af41fc47fd::t_5ae57037f230d1 22
+src/BuildingBlocks/FHIRBridge.Observability/Logging/FhirBridgeLogging.cs
+  s_7dd4af41fc47fd::t_97702e8492ae8d 24-26,54-72
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_bcd3dfe81559c0::t_7e27acae1f5344 3,24-25,45-46,84-91
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_95e777373fed34::t_128cc454256614 347-348,351
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_3183b454f306bf::t_ebbccbdd8affeb 38-39
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_bcd3dfe81559c0::t_133c52fe11fcac 48-106,189-190,216-226
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_bcd3dfe81559c0::t_0e7bc4514acd0d 40-88,157-158,178-187
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_37a277480b1ea1::t_33075de4f91107 36
+src/Worker/FHIRBridge.Worker/ScheduleDispatcherOptions.cs
+  s_655d7121a91143::t_6f5216f8c8446c 14-21
+src/Worker/FHIRBridge.Worker/ScheduleDispatcherWorker.cs
+  s_be465476bec205::t_36a36effa8255d 44-52
+src/Worker/FHIRBridge.Worker/appsettings.json
+  s_be465476bec205::t_2393033424653b 11-18
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  s_bcd3dfe81559c0::t_edfe2399427b89 103,107
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_3183b454f306bf::t_015222f1ae7d83 217-218,221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "a0d46b90bceab3b5181c296cad267276fb362234",
+  "prompts": {},
+  "sessions": {
+    "s_08313b6cd63437": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef75c5c2-08f9-4d3b-90d9-c02280740983",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_1310dc455d7699": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a19d4eea2463dedac",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_24fa7417f71b13": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3cea28f-ce9f-40ff-8e07-5369a22df224",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_29a967ba537f2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ea0894a5-0d0c-496a-9e21-486e7821de47",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_3183b454f306bf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "713a1f57-7458-4972-a94c-2fb0cfeb0337",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_37a277480b1ea1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2af7fe59-d20a-4318-82a5-82618fa80564",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_39432b15d913d6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df13092f-8dfb-4599-85c3-af64db759cde",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_406c1571f7ddf4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09113d4a-15f1-43e2-8ea5-4bf49ea476b0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_43a1e5fa590c3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8042e2b4-3b0e-422c-af76-269d56a47c51",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_4a6381e5723310": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ba51d4b0-f8d9-4a43-8e7c-ffcf0a5890e5",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_644c8309209587": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11eaa6a5-4deb-4734-9464-4884ba8ca45f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_655d7121a91143": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b4333382-f9e8-4af3-8ae7-25ba4a341177",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6fe72b0759281b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6414b046-f7ab-4143-a0b0-117bda65c2b1",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_7dd4af41fc47fd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe41be14-1e2e-41c3-b427-851611f070eb",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_95e777373fed34": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8562615b-6809-42d0-833c-07e2ae2ae7fc",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_bcd3dfe81559c0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42e077ea-969d-4802-ae25-3f18afcac872",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_be465476bec205": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d920b7a1-e38a-48fb-997c-e0a22c43b970",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d6653b6b7d4145": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f1f01c0-0b78-48bd-8c60-7a2a868b28f5",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
