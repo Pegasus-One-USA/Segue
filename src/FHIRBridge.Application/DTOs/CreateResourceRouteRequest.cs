@@ -10,7 +10,8 @@ public sealed record CreateResourceRouteRequest(
     string? SearchParameters,
     bool IsEnabled,
     int Priority,
-    IReadOnlyList<ResourceRouteMappingRequest>? ResourceMappings = null);
+    IReadOnlyList<ResourceRouteMappingRequest>? ResourceMappings = null,
+    string TimeZoneId = "UTC");
 
 public sealed record ResourceRouteMappingRequest(
     Guid MappingProfileId,

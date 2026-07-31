@@ -128,7 +128,7 @@ type RetrievalFieldKey =
   | 'payloadFormat' | 'searchCriteria' | 'incrementalCursor' | 'schedulePollFrequency' | 'runMode'
   | 'exportScope' | 'groupId' | 'patientIdList' | 'fhirOutputFormat'
   | 'pageSize' | 'sortOrder' | 'includeLinked' | 'revIncludeLinked' | 'retryPolicy' | 'timeoutSeconds' | 'maxRecordsPerRun'
-  | 'fullRefreshRecurrence' | 'fullRefreshDaysOfWeek' | 'fullRefreshDayOfMonth' | 'fullRefreshTime';
+  | 'fullRefreshRecurrence' | 'fullRefreshDaysOfWeek' | 'fullRefreshDayOfMonth' | 'fullRefreshTime' | 'fullRefreshTimeZone';
 
 const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'subscriptionResourceType', 'webhookResourceType', 'searchRestResourceType', 'bulkExportResourceType',
@@ -136,8 +136,27 @@ const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'payloadFormat', 'searchCriteria', 'incrementalCursor', 'schedulePollFrequency', 'runMode',
   'exportScope', 'groupId', 'patientIdList', 'fhirOutputFormat',
   'pageSize', 'sortOrder', 'includeLinked', 'revIncludeLinked', 'retryPolicy', 'timeoutSeconds', 'maxRecordsPerRun',
-  'fullRefreshRecurrence', 'fullRefreshDaysOfWeek', 'fullRefreshDayOfMonth', 'fullRefreshTime',
+  'fullRefreshRecurrence', 'fullRefreshDaysOfWeek', 'fullRefreshDayOfMonth', 'fullRefreshTime', 'fullRefreshTimeZone',
 ];
+
+/** Browser's own zone (e.g. "America/New_York") — used as the schedule time zone picker's default. */
+function detectBrowserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** All IANA zone identifiers the runtime knows about, for the "Time zone" select. Falls back to a short curated
+ *  list on engines without `Intl.supportedValuesOf` (older Safari/older browsers not in FHIRBridge's support matrix
+ *  but cheap to guard against). */
+const TIME_ZONE_OPTIONS: readonly RetrievalFieldOption[] = (() => {
+  const zones: string[] = typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone')
+    : ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London'];
+  return zones.map(zone => ({ value: zone, label: zone.replace(/_/g, ' ') }));
+})();
 
 /** Blank/default value for each retrieval field, matching the form's own initial values — used to clear a field
  *  out when switching Retrieval Method away from the method that owns it (see clearInapplicableRetrievalFields). */
@@ -163,6 +182,7 @@ const RETRIEVAL_FIELD_DEFAULTS: Record<RetrievalFieldKey, unknown> = {
   fullRefreshDaysOfWeek:  [] as string[],
   fullRefreshDayOfMonth:  '1',
   fullRefreshTime:        '02:00',
+  fullRefreshTimeZone:    '',
   pageSize:               '100',
   sortOrder:              '',
   includeLinked:          '',
@@ -334,7 +354,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       { key: 'fullRefreshRecurrence',  label: 'Repeat',                           type: 'select',       required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Full Refresh reloads everything with no incremental filter — anchor it to a specific, low-traffic time rather than a tight interval.' },
       { key: 'fullRefreshDaysOfWeek', label: 'On',                               type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'weekly' },
       { key: 'fullRefreshDayOfMonth', label: 'Day of month',                     type: 'select',       required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
-      { key: 'fullRefreshTime',       label: 'At',                               type: 'time',          required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTime',       label: 'At',                               type: 'time',          required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Runs in the time zone selected below. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTimeZone',   label: 'Time zone',                        type: 'select',       required: true, options: TIME_ZONE_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'The schedule above is evaluated in this time zone, including daylight saving transitions.' },
       // ── Max Results / Include Related Resources: main-grid fields for Standalone, tucked into "Advanced Search
       // Options" for Backend System (unchanged Backend behavior — just joined by two new promoted-for-Standalone
       // fields below). ─────────────────────────────────────────────────────────
@@ -373,7 +394,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       { key: 'fullRefreshRecurrence', label: 'Repeat',        type: 'select',         required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'How often to re-run this export. Patient ID list exports run manually and are not scheduled.' },
       { key: 'fullRefreshDaysOfWeek', label: 'On',            type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.exportScope !== 'patient' && ctx.fullRefreshRecurrence === 'weekly' },
       { key: 'fullRefreshDayOfMonth', label: 'Day of month',  type: 'select',         required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.exportScope !== 'patient' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
-      { key: 'fullRefreshTime',       label: 'At',            type: 'time',           required: true, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTime',       label: 'At',            type: 'time',           required: true, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'Runs in the time zone selected below. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTimeZone',   label: 'Time zone',     type: 'select',         required: true, options: TIME_ZONE_OPTIONS, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'The schedule above is evaluated in this time zone, including daylight saving transitions.' },
     ],
   },
 };
@@ -520,6 +542,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     fullRefreshDaysOfWeek:  [[] as string[]],
     fullRefreshDayOfMonth:  ['1'],
     fullRefreshTime:        ['02:00'],
+    fullRefreshTimeZone:    [detectBrowserTimeZone()],
     // ── Advanced Search Options (Search REST only) ──────────────────────────────
     pageSize:               ['100'],
     sortOrder:              [''],
@@ -546,6 +569,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   private readonly fullRefreshDaysOfWeekValue = toSignal(this.form.controls.fullRefreshDaysOfWeek.valueChanges, { initialValue: this.form.controls.fullRefreshDaysOfWeek.value });
   private readonly fullRefreshDayOfMonthValue = toSignal(this.form.controls.fullRefreshDayOfMonth.valueChanges, { initialValue: this.form.controls.fullRefreshDayOfMonth.value });
   private readonly fullRefreshTimeValue       = toSignal(this.form.controls.fullRefreshTime.valueChanges,       { initialValue: this.form.controls.fullRefreshTime.value });
+  private readonly fullRefreshTimeZoneValue   = toSignal(this.form.controls.fullRefreshTimeZone.valueChanges,   { initialValue: this.form.controls.fullRefreshTimeZone.value });
 
   // One bridge per retrieval method's own Resource Type control — never shared,
   // so each method keeps an independent selection instead of leaking into the others.
@@ -702,16 +726,17 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   protected readonly fullRefreshCronSummary = computed(() => {
     const cron = this.fullRefreshCronExpression();
     const time = this.fullRefreshTimeValue() || '02:00';
+    const zone = this.fullRefreshTimeZoneValue() || 'UTC';
     switch (this.fullRefreshRecurrenceValue()) {
       case 'weekly': {
         const days = this.fullRefreshDaysOfWeekValue() ?? [];
         const labels = WEEKDAY_OPTIONS.filter(o => days.includes(o.value)).map(o => o.label);
-        return labels.length ? `Weekly on ${labels.join(', ')} at ${time} — ${cron}` : 'Select at least one day.';
+        return labels.length ? `Weekly on ${labels.join(', ')} at ${time} ${zone} — ${cron}` : 'Select at least one day.';
       }
       case 'monthly':
-        return `Monthly on day ${this.fullRefreshDayOfMonthValue() || '1'} at ${time} — ${cron}`;
+        return `Monthly on day ${this.fullRefreshDayOfMonthValue() || '1'} at ${time} ${zone} — ${cron}`;
       default:
-        return `Daily at ${time} — ${cron}`;
+        return `Daily at ${time} ${zone} — ${cron}`;
     }
   });
 
@@ -1111,6 +1136,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     }
     setIfPresent('fullRefreshDayOfMonth', 'Full refresh day of month');
     setIfPresent('fullRefreshTime', 'Full refresh time');
+    setIfPresent('fullRefreshTimeZone', 'Full refresh time zone');
 
     setIfPresent('pageSize', 'Page size (_count)');
     setIfPresent('sortOrder', 'Sort (_sort)');
@@ -1234,6 +1260,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
         incrementalCursor: false, schedulePollFrequency: '', runMode: '', exportScope: '',
         groupId: '', patientIdList: '', fhirOutputFormat: 'ndjson',
         fullRefreshRecurrence: 'daily', fullRefreshDaysOfWeek: [], fullRefreshDayOfMonth: '1', fullRefreshTime: '02:00',
+        fullRefreshTimeZone: detectBrowserTimeZone(),
         pageSize: '100', sortOrder: '', includeLinked: '', revIncludeLinked: '',
         retryPolicy: 'exponential', timeoutSeconds: '30', maxRecordsPerRun: '',
       });
@@ -1251,6 +1278,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
         searchRestResourceType: [],
         incrementalCursor: false, schedulePollFrequency: '', runMode: '',
         fullRefreshRecurrence: 'daily', fullRefreshDaysOfWeek: [], fullRefreshDayOfMonth: '1', fullRefreshTime: '02:00',
+        fullRefreshTimeZone: detectBrowserTimeZone(),
         pageSize: '100', sortOrder: '', revIncludeLinked: '',
         retryPolicy: 'exponential', timeoutSeconds: '30',
       });
@@ -2016,6 +2044,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
           'Full refresh days of week':  (v.fullRefreshDaysOfWeek ?? []).join(','),
           'Full refresh day of month':  v.fullRefreshDayOfMonth ?? '1',
           'Full refresh time':          v.fullRefreshTime ?? '02:00',
+          'Full refresh time zone':     v.fullRefreshTimeZone || detectBrowserTimeZone(),
           'Full refresh schedule (cron)': this.fullRefreshCronExpression() ?? '',
         } : {}),
         // ── Advanced Search Options ──────────────────────────────────────────

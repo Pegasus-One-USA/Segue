@@ -21,4 +21,5 @@ public sealed record WorkflowTrigger(
     WorkflowTriggerType Type,
     string? ScheduleExpression,
     int? IntervalMinutes,
-    bool BackfillOnFirstRun);
+    bool BackfillOnFirstRun,
+    string TimeZoneId = "UTC");

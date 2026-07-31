@@ -627,7 +627,7 @@ public static class WorkflowEndpoints
                 .ToArray();
 
             var triggerRequest = source.Trigger is { } trigger
-                ? new WorkflowTriggerRequest(trigger.Type, trigger.ScheduleExpression, trigger.IntervalMinutes, trigger.BackfillOnFirstRun)
+                ? new WorkflowTriggerRequest(trigger.Type, trigger.ScheduleExpression, trigger.IntervalMinutes, trigger.BackfillOnFirstRun, trigger.TimeZoneId)
                 : null;
 
             // Always created disabled, regardless of the source's enabled state: an enabled Schedule/Poll trigger
@@ -1598,6 +1598,7 @@ public static class WorkflowEndpoints
             request.Type,
             request.ScheduleExpression,
             request.IntervalMinutes,
-            request.BackfillOnFirstRun);
+            request.BackfillOnFirstRun,
+            request.TimeZoneId);
     }
 }

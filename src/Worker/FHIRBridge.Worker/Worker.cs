@@ -199,7 +199,7 @@ public sealed class Worker : BackgroundService
         return trigger.Type switch
         {
             WorkflowTriggerType.Schedule =>
-                ScheduleExpressionMatcher.IsDueSince(trigger.ScheduleExpression, workflow.LastTriggeredOnUtc, nowUtc),
+                ScheduleExpressionMatcher.IsDueSince(trigger.ScheduleExpression, workflow.LastTriggeredOnUtc, nowUtc, trigger.TimeZoneId),
             WorkflowTriggerType.Poll =>
                 trigger.IntervalMinutes is int minutes && minutes > 0 &&
                 (workflow.LastTriggeredOnUtc is null ||
@@ -234,7 +234,7 @@ public sealed class Worker : BackgroundService
                 route.IsEnabled &&
                 RouteDependenciesAreEnabled(route, mappings, sources, destinations, webhooks) &&
                 IsScheduledPullMode(route.IngestionMode) &&
-                ScheduleExpressionMatcher.IsDue(route.ScheduleExpression, nowUtc))
+                ScheduleExpressionMatcher.IsDue(route.ScheduleExpression, nowUtc, route.TimeZoneId))
             .Select(route => mappings.TryGetValue(route.MappingProfileId, out var mapping) ? mapping.ResourceType : null)
             .Where(resourceType => !string.IsNullOrWhiteSpace(resourceType))
             .Select(resourceType => resourceType!)

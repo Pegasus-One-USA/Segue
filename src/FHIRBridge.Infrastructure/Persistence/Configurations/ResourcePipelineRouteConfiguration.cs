@@ -15,6 +15,7 @@ public sealed class ResourcePipelineRouteConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.MappingProfileId).IsRequired();
         builder.Property(x => x.IngestionMode).HasConversion<string>().HasMaxLength(100).IsRequired();
         builder.Property(x => x.ScheduleExpression).HasMaxLength(1000);
+        builder.Property(x => x.TimeZoneId).HasMaxLength(100).IsRequired().HasDefaultValue("UTC");
         builder.Property(x => x.SearchParameters).HasMaxLength(1000);
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.Priority).IsRequired();

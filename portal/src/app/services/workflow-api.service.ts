@@ -61,6 +61,8 @@ export interface WorkflowTriggerRequest {
   scheduleExpression?: string | null;
   intervalMinutes?: number | null;
   backfillOnFirstRun?: boolean;
+  /** IANA time zone (e.g. "America/New_York") the schedule is evaluated in. Defaults to "UTC" server-side. */
+  timeZoneId?: string | null;
 }
 
 export interface WorkflowNodeDto extends WorkflowNodeRequest {

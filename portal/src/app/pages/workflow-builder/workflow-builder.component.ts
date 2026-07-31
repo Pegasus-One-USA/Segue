@@ -154,16 +154,17 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     const wizardFields = this.backendRetrievalFields();
     if (wizardFields) {
       // Bulk export: System/Group run on the calendar Repeat (compiled cron); a Patient id list is a one-off (manual).
+      const timeZoneId = wizardFields['Full refresh time zone'] || 'UTC';
       if (wizardFields['Retrieval method key'] === 'bulk-export') {
         return wizardFields['Export scope'] === 'patient'
           ? { type: 'Manual' }
-          : { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+          : { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *', timeZoneId };
       }
       switch (wizardFields['Run mode']) {
         case 'incremental':
           return { type: 'Poll', intervalMinutes: this.pollFrequencyToMinutes(wizardFields['Schedule / poll frequency']) };
         case 'full':
-          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *', timeZoneId };
         default:
           return { type: 'Manual' };
       }

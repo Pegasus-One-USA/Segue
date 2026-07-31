@@ -509,7 +509,8 @@ public sealed class ConfigurationService : IConfigurationService
             request.ScheduleExpression,
             request.SearchParameters,
             request.IsEnabled,
-            priority: 0);
+            priority: 0,
+            request.TimeZoneId);
 
         await _repository.AddRouteAsync(route, cancellationToken);
 
@@ -546,7 +547,8 @@ public sealed class ConfigurationService : IConfigurationService
             request.ScheduleExpression,
             request.SearchParameters,
             request.IsEnabled,
-            request.Priority);
+            request.Priority,
+            request.TimeZoneId);
         await ApplyResourceMappingsAsync(route, request, cancellationToken);
 
         await _repository.AddRouteAsync(route, cancellationToken);
@@ -568,7 +570,8 @@ public sealed class ConfigurationService : IConfigurationService
             request.ScheduleExpression,
             request.SearchParameters,
             request.IsEnabled,
-            request.Priority);
+            request.Priority,
+            request.TimeZoneId);
         await ApplyResourceMappingsAsync(route, request, cancellationToken);
 
         await _repository.UpdateRouteAsync(route, cancellationToken);

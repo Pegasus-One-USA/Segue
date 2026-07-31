@@ -43,6 +43,8 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
             trigger.Property(t => t.ScheduleExpression).HasMaxLength(200).HasColumnName("TriggerScheduleExpression");
             trigger.Property(t => t.IntervalMinutes).HasColumnName("TriggerIntervalMinutes");
             trigger.Property(t => t.BackfillOnFirstRun).HasColumnName("TriggerBackfillOnFirstRun");
+            trigger.Property(t => t.TimeZoneId).HasMaxLength(100).HasColumnName("TriggerTimeZoneId")
+                .HasDefaultValue("UTC");
         });
         builder.Navigation(x => x.Trigger).IsRequired(false);
 

@@ -57,7 +57,7 @@ public sealed class EfSchedulerSummaryService : ISchedulerSummaryService
             .Select(route =>
             {
                 var name = mappingNamesById.GetValueOrDefault(route.MappingProfileId, "Unnamed route");
-                var nextRunUtc = ScheduleExpressionMatcher.NextDueAfter(route.ScheduleExpression, nowUtc);
+                var nextRunUtc = ScheduleExpressionMatcher.NextDueAfter(route.ScheduleExpression, nowUtc, timeZoneId: route.TimeZoneId);
                 var lastRun = latestByRouteId.GetValueOrDefault(route.Id);
 
                 return new SchedulerSummaryDto(

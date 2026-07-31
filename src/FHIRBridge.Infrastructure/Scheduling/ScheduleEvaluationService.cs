@@ -49,7 +49,7 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
             if (!route.IsEnabled ||
                 !IsScheduledPullMode(route.IngestionMode) ||
                 !RouteDependenciesAreEnabled(route, mappings, sources, destinations, webhooks) ||
-                !ScheduleExpressionMatcher.IsDueSince(route.ScheduleExpression, route.LastTriggeredOnUtc, utcNow))
+                !ScheduleExpressionMatcher.IsDueSince(route.ScheduleExpression, route.LastTriggeredOnUtc, utcNow, route.TimeZoneId))
             {
                 continue;
             }

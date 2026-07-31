@@ -1082,7 +1082,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             .Where(route => request.RouteIds is not null
                 ? request.RouteIds.Contains(route.Route.Id)
                 : !request.RunDueSchedulesOnly ||
-                  ScheduleExpressionMatcher.IsDue(route.Route.ScheduleExpression, scheduledAtUtc))
+                  ScheduleExpressionMatcher.IsDue(route.Route.ScheduleExpression, scheduledAtUtc, route.Route.TimeZoneId))
             .OrderBy(route => route.Route.Priority)
             .ThenBy(route => route.Route.Id)
             .ThenBy(route => route.ExecutionOrder)

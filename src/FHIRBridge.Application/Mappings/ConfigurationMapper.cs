@@ -196,7 +196,8 @@ public static class ConfigurationMapper
                 .OrderBy(x => x.ExecutionOrder)
                 .ThenBy(x => x.MappingProfileId)
                 .Select(ToDto)
-                .ToList());
+                .ToList(),
+            route.TimeZoneId);
     }
 
     private static ResourcePipelineRouteMappingDto ToDto(ResourcePipelineRouteMapping mapping)

@@ -18,7 +18,8 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         string? scheduleExpression,
         string? searchParameters,
         bool isEnabled,
-        int priority)
+        int priority,
+        string timeZoneId = "UTC")
     {
         Id = Guid.NewGuid();
         WebhookConfigurationId = webhookConfigurationId;
@@ -28,6 +29,7 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         SearchParameters = searchParameters;
         IsEnabled = isEnabled;
         Priority = priority;
+        TimeZoneId = timeZoneId;
     }
 
     public Guid? WebhookConfigurationId { get; private set; }
@@ -40,6 +42,12 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
     public Guid MappingProfileId { get; private set; }
     public IngestionMode IngestionMode { get; private set; }
     public string? ScheduleExpression { get; private set; }
+
+    /// <summary>
+    /// IANA time zone identifier (e.g. <c>"America/New_York"</c>) that <c>ScheduleExpression</c> is evaluated in.
+    /// Defaults to <c>"UTC"</c> for routes that predate this field.
+    /// </summary>
+    public string TimeZoneId { get; private set; } = "UTC";
     public string? SearchParameters { get; private set; }
     public bool IsEnabled { get; private set; }
     public int Priority { get; private set; }
@@ -58,7 +66,8 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         string? scheduleExpression,
         string? searchParameters,
         bool isEnabled,
-        int priority)
+        int priority,
+        string timeZoneId = "UTC")
     {
         IngestionMode = ingestionMode;
         WebhookConfigurationId = webhookConfigurationId;
@@ -67,6 +76,7 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         SearchParameters = searchParameters;
         IsEnabled = isEnabled;
         Priority = priority;
+        TimeZoneId = timeZoneId;
     }
 
     public void ReplaceResourceMappings(IEnumerable<ResourcePipelineRouteMapping> resourceMappings)

@@ -11,7 +11,8 @@ public sealed record ResourcePipelineRouteDto(
     string? SearchParameters,
     bool IsEnabled,
     int Priority,
-    IReadOnlyList<ResourcePipelineRouteMappingDto> ResourceMappings);
+    IReadOnlyList<ResourcePipelineRouteMappingDto> ResourceMappings,
+    string TimeZoneId = "UTC");
 
 public sealed record ResourcePipelineRouteMappingDto(
     Guid Id,
