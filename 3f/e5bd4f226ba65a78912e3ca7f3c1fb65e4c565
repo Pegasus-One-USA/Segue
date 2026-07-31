@@ -1,0 +1,87 @@
+src/FHIRBridge.Infrastructure/Pipeline/ScheduleExpressionMatcher.cs
+  s_95e777373fed34::t_d2fdc3f82176bd 1-2,13-43,49,51-55,78,133
+  s_95e777373fed34::t_578b1da9fe0f69 100-104,114,123,132,134-135,139,142-148,161-165
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_95e777373fed34::t_be2d5b791b2d5e 397-398
+  s_95e777373fed34::t_0ec6f6ec7eeedd 545
+  s_95e777373fed34::t_bc2609ccb08f3e 729,734,737,739
+  s_95e777373fed34::t_93c14073f29b0f 1139
+  s_95e777373fed34::t_f1491da98397b5 572
+  s_95e777373fed34::t_c4995f32332569 131,139,142-160
+  s_95e777373fed34::t_650010bbcaa002 1263,1281
+  s_95e777373fed34::t_b94186daf41653 357-358
+  s_95e777373fed34::t_5005ffb8e64613 185
+  s_95e777373fed34::t_f9f1abc50fd687 2047
+portal/src/app/services/workflow-api.service.ts
+  s_95e777373fed34::t_06fcfbf4ee6e9f 64-65
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowTrigger.cs
+  s_95e777373fed34::t_1c87cd6a1bd735 24-25
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_95e777373fed34::t_d0942ec1faf25b 157,161,167
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260731190024_AddScheduleTimeZone.cs
+  s_95e777373fed34::t_734e3515ec8c41 1-42
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_95e777373fed34::t_9d8262bbfce3ae 18-19
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_95e777373fed34::t_c4adf8a3c6ca61 237
+  s_95e777373fed34::t_7f1e5802bf7043 202
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ResourcePipelineRouteConfiguration.cs
+  s_95e777373fed34::t_9de4af71319017 18
+src/FHIRBridge.Infrastructure/Governance/EfSchedulerSummaryService.cs
+  s_95e777373fed34::t_50a2285a8c9b34 60
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_95e777373fed34::t_734e3515ec8c41 2011-2017,3621-3627
+  s_644c8309209587::t_471a5afe00d708 82-190,3628
+src/FHIRBridge.Application/DTOs/ResourcePipelineRouteDto.cs
+  s_95e777373fed34::t_8a088bac218551 14-15
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_95e777373fed34::t_c00c82e0978e52 630
+  s_95e777373fed34::t_837ffbecf23a98 1601-1602
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_95e777373fed34::t_6539855f652ab0 512-513
+  s_95e777373fed34::t_91ceec57a2d66e 573-574
+  s_95e777373fed34::t_0f9b2231e3d7d1 550-551
+src/FHIRBridge.Infrastructure/Scheduling/ScheduleEvaluationService.cs
+  s_95e777373fed34::t_cdbba49bcbdeb3 52
+tests/FHIRBridge.UnitTests/Pipeline/ScheduleExpressionMatcherTests.cs
+  s_95e777373fed34::t_853a114ad67a05 1-89
+src/FHIRBridge.Application/DTOs/ConfigureResourceRequest.cs
+  s_95e777373fed34::t_95745a20b7f473 11-12
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_95e777373fed34::t_07aa76345c5828 1085
+src/FHIRBridge.Application/DTOs/CreateResourceRouteRequest.cs
+  s_95e777373fed34::t_ae792b8cc07068 13-14
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260731190024_AddScheduleTimeZone.Designer.cs
+  s_95e777373fed34::t_734e3515ec8c41 1-3704
+src/FHIRBridge.Domain/Entities/ResourcePipelineRoute.cs
+  s_95e777373fed34::t_c37316699e6e9f 21-22,32,69-70,79
+  s_95e777373fed34::t_7fdc62deb6c417 45-50
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_95e777373fed34::t_de41e39caeae30 46-47
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_95e777373fed34::t_a4ba8d5df189fd 199-200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "3fe5bd4f226ba65a78912e3ca7f3c1fb65e4c565",
+  "prompts": {},
+  "sessions": {
+    "s_644c8309209587": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11eaa6a5-4deb-4734-9464-4884ba8ca45f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_95e777373fed34": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8562615b-6809-42d0-833c-07e2ae2ae7fc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
