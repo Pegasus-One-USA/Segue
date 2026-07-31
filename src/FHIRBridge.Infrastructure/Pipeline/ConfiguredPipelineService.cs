@@ -198,23 +198,62 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         // patient context or an explicitly configured TargetPatientId/PatientIds.
         var patientIdsBySourceConnection = new Dictionary<Guid, List<string>>();
 
+        // Pre-pass: for every source identity (RouteSourceKey) that will run bulk export this run, collect the full
+        // set of resource types routed through it. A Group/System $export job scoped to a single resource type
+        // (e.g. _type=Patient alone) trips Epic's Interconnect Group-export handling — it falls back to an
+        // unscoped/demographics Patient search internally and returns "requires demographics or _id parameter"
+        // (business-rule 59159). Requesting every routed type together in one job (_type=Patient,Observation,...),
+        // exactly as the FHIR Bulk Data spec intends, avoids the single-type job entirely. This pass only inspects
+        // config/enablement (no I/O), mirroring the same filters the main loop below applies per resource type.
+        var bulkExportResourceTypesByKey = new Dictionary<RouteSourceKey, List<string>>();
+        foreach (var (resourceType, routesForType) in routesByResourceType)
+        {
+            var enabledRoutesForBulkScan = FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc);
+            if (enabledRoutesForBulkScan.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var routeGroup in enabledRoutesForBulkScan.GroupBy(route => CreateRouteSourceKey(config, route)))
+            {
+                var sourceConnection = GetRequired(
+                    config.SourceConnections,
+                    routeGroup.Key.SourceConnectionId,
+                    "SourceConnection");
+                var workflowSourceConfiguration = routeGroup.Key.SourceConfigurationId is { } sourceConfigurationId
+                    ? config.SourceConfigurationsById.GetValueOrDefault(sourceConfigurationId)
+                    : null;
+                var retrieval = workflowSourceConfiguration?.Retrieval ?? sourceConnection.Retrieval;
+                var useBulkExport = request.UseBulkExport
+                    || string.Equals(retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+
+                if (!useBulkExport)
+                {
+                    continue;
+                }
+
+                if (!bulkExportResourceTypesByKey.TryGetValue(routeGroup.Key, out var types))
+                {
+                    types = [];
+                    bulkExportResourceTypesByKey[routeGroup.Key] = types;
+                }
+
+                if (!types.Contains(resourceType, StringComparer.OrdinalIgnoreCase))
+                {
+                    types.Add(resourceType);
+                }
+            }
+        }
+
+        // One $export job per RouteSourceKey, shared across every resource type that key services — kicked off on
+        // first use below and reused (not re-run) for every later resource type sharing the same key.
+        var bulkExportResultsByKey = new Dictionary<RouteSourceKey, Task<IReadOnlyList<ResourceEnvelope>>>();
+
         foreach (var (resourceType, routesForType) in routesByResourceType)
         {
             processedResourceTypes.Add(resourceType);
 
-            var enabledRoutes = routesForType
-                .Where(route => route.Route.IsEnabled)
-                .Where(route => route.IsEnabled)
-                .Where(route => RouteDependenciesAreEnabled(config, route))
-                .Where(route => IsScheduledPullMode(route.Route.IngestionMode))
-                .Where(route => request.RouteIds is not null
-                    ? request.RouteIds.Contains(route.Route.Id)
-                    : !request.RunDueSchedulesOnly ||
-                      ScheduleExpressionMatcher.IsDue(route.Route.ScheduleExpression, scheduledAtUtc))
-                .OrderBy(route => route.Route.Priority)
-                .ThenBy(route => route.Route.Id)
-                .ThenBy(route => route.ExecutionOrder)
-                .ToList();
+            var enabledRoutes = FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc);
 
             if (enabledRoutes.Count == 0)
             {
@@ -277,16 +316,31 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
                     if (useBulkExport)
                     {
-                        // Bulk Data $export path: scope the export to this resource type, reuse the rest of the pipeline.
+                        // Bulk Data $export path: one job per RouteSourceKey covers every resource type routed
+                        // through it this run (see bulkExportResourceTypesByKey above) — kicked off once and reused
+                        // here for every resource type that shares the key, then filtered down to this type's rows.
                         if (_bulkExportClient is null)
                         {
                             throw new InvalidOperationException("Bulk export was requested but no bulk export client is configured.");
                         }
 
-                        resources = await _bulkExportClient.ExportAsync(
-                            BuildBulkExportRequest(retrieval, resourceType),
-                            runtimeSourceConfiguration,
-                            cancellationToken);
+                        if (!bulkExportResultsByKey.TryGetValue(routeGroup.Key, out var bulkExportTask))
+                        {
+                            var batchedResourceTypes = bulkExportResourceTypesByKey.TryGetValue(routeGroup.Key, out var types)
+                                ? types
+                                : [resourceType];
+
+                            bulkExportTask = _bulkExportClient.ExportAsync(
+                                BuildBulkExportRequest(retrieval, batchedResourceTypes),
+                                runtimeSourceConfiguration,
+                                cancellationToken);
+                            bulkExportResultsByKey[routeGroup.Key] = bulkExportTask;
+                        }
+
+                        var batchedResources = await bulkExportTask;
+                        resources = batchedResources
+                            .Where(resource => string.Equals(resource.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
                     }
                     else
                     {
@@ -1014,6 +1068,27 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return ingestionMode is IngestionMode.Webhook or IngestionMode.WebhookAndScheduledPull;
     }
 
+    private static List<RouteMappingWorkItem> FilterEnabledRoutes(
+        IEnumerable<RouteMappingWorkItem> routesForType,
+        ConfigurationSnapshot config,
+        StartConfiguredPipelineRunRequest request,
+        DateTime scheduledAtUtc)
+    {
+        return routesForType
+            .Where(route => route.Route.IsEnabled)
+            .Where(route => route.IsEnabled)
+            .Where(route => RouteDependenciesAreEnabled(config, route))
+            .Where(route => IsScheduledPullMode(route.Route.IngestionMode))
+            .Where(route => request.RouteIds is not null
+                ? request.RouteIds.Contains(route.Route.Id)
+                : !request.RunDueSchedulesOnly ||
+                  ScheduleExpressionMatcher.IsDue(route.Route.ScheduleExpression, scheduledAtUtc))
+            .OrderBy(route => route.Route.Priority)
+            .ThenBy(route => route.Route.Id)
+            .ThenBy(route => route.ExecutionOrder)
+            .ToList();
+    }
+
     private static bool RouteDependenciesAreEnabled(ConfigurationSnapshot config, RouteMappingWorkItem route)
     {
         // A route's source and destination are owned by its mapping profile, so resolve them through the mapping.
@@ -1110,6 +1185,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     // Scope defaults to System when unset (the historical behavior); group/patient carry their id list. The _since
     // cursor is applied only when incremental sync is enabled and a prior successful run recorded a timestamp.
     internal static FhirBulkExportRequest BuildBulkExportRequest(SourceRetrievalConfiguration? retrieval, string resourceType)
+        => BuildBulkExportRequest(retrieval, (IReadOnlyList<string>)[resourceType]);
+
+    // Same projection, batched across every resource type a single $export job should cover (see
+    // bulkExportResourceTypesByKey in StartAsync) — a Group/System job scoped to just one resource type (e.g.
+    // _type=Patient alone) can trip an Epic Interconnect business rule that requires demographics/_id for a bare
+    // Patient search, since Epic resolves Group membership via an internal Patient search for that type.
+    internal static FhirBulkExportRequest BuildBulkExportRequest(SourceRetrievalConfiguration? retrieval, IReadOnlyList<string> resourceTypes)
     {
         var scope = MapBulkExportScope(retrieval?.ExportScope);
 
@@ -1120,7 +1202,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return new FhirBulkExportRequest(
             scope,
             GroupId: scope == BulkExportScope.Group ? retrieval?.GroupId : null,
-            ResourceTypes: [resourceType],
+            ResourceTypes: resourceTypes,
             Since: since,
             PatientIds: scope == BulkExportScope.Patient ? retrieval?.PatientIds : null,
             OutputFormat: retrieval?.OutputFormat);

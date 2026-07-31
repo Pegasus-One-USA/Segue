@@ -179,18 +179,11 @@ public sealed class SourceNodeExecutorCohortTests
             .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
-        FhirBulkExportRequest? capturedObservationRequest = null;
         var bulkExportClient = new Mock<IFhirBulkExportClient>();
         bulkExportClient
-            .Setup(x => x.ExportAsync(It.Is<FhirBulkExportRequest>(r => r.ResourceTypes!.Contains("Patient")), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
-        bulkExportClient
-            .Setup(x => x.ExportAsync(It.Is<FhirBulkExportRequest>(r => r.ResourceTypes!.Contains("Observation")), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
-            .Returns((FhirBulkExportRequest request, FhirSourceConfiguration _, CancellationToken _) =>
-            {
-                capturedObservationRequest = request;
-                return Task.FromResult<IReadOnlyList<ResourceEnvelope>>([new ResourceEnvelope("Observation", "o1", "{}", null, null)]);
-            });
+            .Setup(x => x.ExportAsync(It.IsAny<FhirBulkExportRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)
+                [new ResourceEnvelope("Patient", "p1", "{}", null, null), new ResourceEnvelope("Observation", "o1", "{}", null, null)]);
 
         var clientFactory = new Mock<IFhirSourceClientFactory>();
         clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(new Mock<IFhirSourceClient>().Object);
@@ -199,11 +192,22 @@ public sealed class SourceNodeExecutorCohortTests
         var node = BuildNode(sourceConnectionId, "Patient,Observation");
         var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
 
-        await executor.ExecuteAsync(context, node, [], CancellationToken.None);
+        var output = await executor.ExecuteAsync(context, node, [], CancellationToken.None);
 
-        capturedObservationRequest.Should().NotBeNull();
-        capturedObservationRequest!.Scope.Should().Be(BulkExportScope.System);
-        capturedObservationRequest.PatientIds.Should().BeNull();
+        // A System/Group-scoped bulk export must go out as ONE job covering every resource type — a job scoped to
+        // just _type=Patient trips Epic Interconnect's Group-export business rule (59159, "requires demographics or
+        // _id parameter"), which is exactly the bug this batching fixes. Two separate single-type jobs here would be
+        // a regression back to that failure mode.
+        bulkExportClient.Verify(
+            x => x.ExportAsync(It.IsAny<FhirBulkExportRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        var capturedRequest = bulkExportClient.Invocations.Single().Arguments[0].Should().BeOfType<FhirBulkExportRequest>().Subject;
+        capturedRequest.Scope.Should().Be(BulkExportScope.System);
+        capturedRequest.PatientIds.Should().BeNull();
+        capturedRequest.ResourceTypes.Should().BeEquivalentTo(["Patient", "Observation"]);
+
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(2);
     }
 
     private static WorkflowNode BuildNode(Guid sourceConnectionId, string resources)

@@ -254,6 +254,31 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             .OrderBy(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ToList();
 
+        // An explicitly configured System/Group export always resolves to the SAME request shape (GroupId, Since,
+        // OutputFormat) for every resource type — see BuildBulkExportRequestAsync's explicitlyUnscopable branch,
+        // which a System/Group scope always takes regardless of any Patient cohort. Requesting each type in its own
+        // job (one _type=Patient-only job, one _type=Observation-only job, ...) trips a real Epic Interconnect
+        // Group-export limitation: a job scoped to just _type=Patient makes Epic fall back to an unscoped/
+        // demographics Patient search internally, which it rejects ("requires demographics or _id parameter",
+        // business-rule 59159). Requesting every type together in one job — the FHIR Bulk Data spec's intended
+        // usage — avoids that job entirely, so this is fetched once up front instead of once per type below.
+        var explicitSystemOrGroupExport = useBulkExport
+            && !string.IsNullOrWhiteSpace(source.ExportScope)
+            && BulkExportScopes.Parse(source.ExportScope) is BulkExportScope.System or BulkExportScope.Group;
+
+        IReadOnlyDictionary<string, IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>>? batchedBulkResourcesByType = null;
+        if (explicitSystemOrGroupExport)
+        {
+            var batchedRequest = BuildBatchedBulkExportRequest(source, executionOrder);
+            var batchedResources = await _bulkExportClient!.ExportAsync(batchedRequest, source, cancellationToken);
+            batchedBulkResourcesByType = batchedResources
+                .GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> (group) => group.ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
         IReadOnlyList<string>? cohortPatientIds = null;
         var resources = new List<ResourceEnvelope>();
         var skippedResourceTypes = new List<string>();
@@ -265,11 +290,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             try
             {
                 page = useBulkExport
-                    ? await _bulkExportClient!.ExportAsync(
-                        await BuildBulkExportRequestAsync(
-                            source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
-                        source,
-                        cancellationToken)
+                    ? batchedBulkResourcesByType is not null
+                        ? batchedBulkResourcesByType.TryGetValue(type, out var batchedPage) ? batchedPage : []
+                        : await _bulkExportClient!.ExportAsync(
+                            await BuildBulkExportRequestAsync(
+                                source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
+                            source,
+                            cancellationToken)
                     : isPatientType || cohortPatientIds is not { Count: > 0 }
                         ? await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken)
                         : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
@@ -528,6 +555,21 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 await Task.Delay(delay, cancellationToken);
             }
         }
+    }
+
+    // Builds a single $export request covering every resource type at once for an explicitly System/Group-scoped
+    // source (see explicitSystemOrGroupExport above) — always PatientIds: null, matching what
+    // BuildBulkExportRequestAsync's explicitlyUnscopable branch would return per-type for this scope.
+    private static FhirBulkExportRequest BuildBatchedBulkExportRequest(FhirSourceConfiguration source, IReadOnlyList<string> resourceTypes)
+    {
+        var scope = BulkExportScopes.Parse(source.ExportScope);
+        return new FhirBulkExportRequest(
+            scope,
+            GroupId: scope == BulkExportScope.Group ? source.GroupId : null,
+            ResourceTypes: resourceTypes,
+            Since: source.Since,
+            PatientIds: null,
+            OutputFormat: source.OutputFormat);
     }
 
     // Projects the resolved source's bulk-export settings onto a $export request for one resource type — mirrors the
