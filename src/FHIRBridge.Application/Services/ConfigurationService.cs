@@ -344,9 +344,11 @@ public sealed class ConfigurationService : IConfigurationService
         DestinationFilter filter,
         int page,
         int pageSize,
+        string? sortBy,
+        string? sortOrder,
         CancellationToken cancellationToken)
     {
-        var result = await _repository.GetDestinationsPagedAsync(filter, page, pageSize, cancellationToken);
+        var result = await _repository.GetDestinationsPagedAsync(filter, page, pageSize, sortBy, sortOrder, cancellationToken);
         var dtos = result.Items.Select(ConfigurationMapper.ToDto).ToList();
 
         var names = await _userDisplayNameResolver.ResolveAsync(

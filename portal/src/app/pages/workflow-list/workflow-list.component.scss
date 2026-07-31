@@ -89,6 +89,26 @@
   flex-wrap: wrap;
 }
 
+.btn-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-ink-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+
+  &:hover { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
+
+  svg { display: block; flex-shrink: 0; }
+}
+
 .filter-dropdown {
   position: relative;
 }
@@ -183,6 +203,13 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   overflow: hidden;
+  // Fills the remaining height of .list-page (a flex column with min-height: 100%) instead of only
+  // being as tall as its own content — otherwise a short result set leaves .pagination-bar sitting
+  // right under the table with a big empty gap below it, rather than pinned to the page's bottom.
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .table-wrapper { overflow-x: auto; }
@@ -259,6 +286,7 @@
   padding: 14px 20px;
   border-top: 1px solid var(--color-border);
   background: var(--color-side);
+  margin-top: auto;
 }
 
 .page-size-select {
@@ -365,7 +393,10 @@
 .col-index { width: 52px; text-align: center; color: var(--color-muted); font-size: 13px; }
 .col-num   { width: 80px; text-align: center; }
 td.col-num { text-align: center; color: var(--color-ink-2); }
-.col-actions { width: 340px; }
+// Was 340px to fit 6 individual icon buttons (Edit/Enable/Public/Duplicate/Copy ID/Delete) side by
+// side — now that those 5 live inside the "more actions" (⋮) menu, the column only needs to fit the
+// Run button + divider + kebab trigger, so the old width just left a large empty gutter on the right.
+.col-actions { width: 200px; }
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 .name-block { display: flex; flex-direction: column; gap: 2px; }
@@ -414,6 +445,59 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 .row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 
 .action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 2px; flex-shrink: 0; }
+
+// ── Row "more actions" menu ───────────────────────────────────────────────────
+// Same look as .filter-dropdown-panel above, but position: fixed with top/right set inline from
+// toggleActionMenu's getBoundingClientRect() call, not position: absolute + static offsets. This row
+// sits inside .table-wrapper, whose overflow-x: auto silently forces its overflow-y to auto too (an
+// ancestor can't have overflow-x auto and overflow-y visible at once — the CSS spec coerces the
+// visible axis to auto) — an absolutely-positioned panel here would get clipped to almost nothing the
+// moment it needs to extend below the table's own visible bounds, since it never escapes the nearest
+// positioned ancestor. Fixed positioning is viewport-relative and escapes that clipping entirely.
+.row-menu { position: relative; }
+
+.row-menu-panel {
+  position: fixed;
+  z-index: 20;
+  min-width: 240px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+
+  mat-icon { flex-shrink: 0; font-size: 18px; width: 18px; height: 18px; color: var(--color-muted); }
+
+  &:hover:not(:disabled) { background: var(--color-side); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  &--danger {
+    color: var(--color-error);
+    mat-icon { color: var(--color-error); }
+    &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-error) 10%, transparent); }
+  }
+}
+
+.row-menu-divider { height: 1px; background: var(--color-border); margin: 4px 2px; }
 
 .btn-icon {
   display: inline-flex; align-items: center; justify-content: center;

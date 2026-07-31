@@ -5,6 +5,7 @@ using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -51,6 +52,34 @@ public sealed class ConfigurationCatalogController : ControllerBase
         }).ToArray());
     }
 
+    [HttpGet("source-connections/paged")]
+    [ProducesResponseType(typeof(PagedResult<SourceConnectionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListSourceConnectionsPaged(
+        [FromQuery] string? search,
+        [FromQuery] SourceSystemType? sourceSystemType,
+        [FromQuery] ApplicationType? applicationType,
+        [FromQuery] bool? isEnabled,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortOrder,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _repository.GetSourceConnectionsPagedAsync(
+            new SourceConnectionFilter(search, sourceSystemType, applicationType, isEnabled),
+            page <= 0 ? 1 : page,
+            pageSize <= 0 ? 25 : pageSize,
+            sortBy,
+            sortOrder,
+            cancellationToken);
+
+        return Ok(new PagedResult<SourceConnectionDto>(
+            result.Items.Select(ConfigurationMapper.ToDto).ToList(),
+            result.TotalCount,
+            result.Page,
+            result.PageSize));
+    }
+
     [HttpGet("destinations")]
     [ProducesResponseType(typeof(IReadOnlyList<DestinationConfigurationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListDestinations(CancellationToken cancellationToken)
@@ -74,16 +103,18 @@ public sealed class ConfigurationCatalogController : ControllerBase
         [FromQuery] string? search,
         [FromQuery] DestinationType? destinationType,
         [FromQuery] bool? isEnabled,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortOrder,
         [FromQuery] int page,
         [FromQuery] int pageSize,
-        [FromQuery] string? sortBy,
-        [FromQuery] string? sortDirection,
         CancellationToken cancellationToken)
     {
         var result = await _configurationService.GetDestinationConfigurationsPagedAsync(
-            new DestinationFilter(search, destinationType, isEnabled, sortBy, sortDirection),
+            new DestinationFilter(search, destinationType, isEnabled),
             page <= 0 ? 1 : page,
             pageSize <= 0 ? 25 : pageSize,
+            sortBy,
+            sortOrder,
             cancellationToken);
 
         return Ok(result);

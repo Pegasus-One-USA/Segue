@@ -31,7 +31,7 @@ export class DestinationConfigurationService {
     if (filter.destinationType) params = params.set('destinationType', filter.destinationType);
     if (filter.isEnabled !== undefined) params = params.set('isEnabled', String(filter.isEnabled));
     if (filter.sortBy) params = params.set('sortBy', filter.sortBy);
-    if (filter.sortDirection) params = params.set('sortDirection', filter.sortDirection);
+    if (filter.sortOrder) params = params.set('sortOrder', filter.sortOrder);
 
     return this.http.get<PagedResult<DestinationConfigurationDto>>(DESTINATION_ENDPOINTS.paged, { params });
   }

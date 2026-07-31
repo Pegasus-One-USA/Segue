@@ -87,3 +87,27 @@ export interface GeneratedSigningKeyModel {
   secretName: string;
   algorithm: string;
 }
+
+/** Matches the backend's ApplicationType enum (serialized as a string) — the "Audience" column/filter. */
+export type ApplicationTypeModel = 'Backend' | 'EhrLaunch' | 'Standalone' | 'Patient';
+
+export type SourceSortColumn = 'name' | 'sourceSystemType' | 'applicationType' | 'isEnabled' | 'actionOn';
+export type SortOrder = 'asc' | 'desc';
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface SourceConnectionFilter {
+  search?: string;
+  sourceSystemType?: EhrVendor;
+  applicationType?: ApplicationTypeModel;
+  isEnabled?: boolean;
+  sortBy?: SourceSortColumn;
+  sortOrder?: SortOrder;
+  page: number;
+  pageSize: number;
+}

@@ -1,5 +1,6 @@
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Application.Abstractions.Persistence;
 
@@ -20,6 +21,8 @@ public interface IConfigurationRepository
 
     // ── Source connections ────────────────────────────────────────────────────
     Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct);
+    Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(
+        SourceConnectionFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct);
     Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct);
     Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct);
     Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct);
@@ -39,7 +42,8 @@ public interface IConfigurationRepository
 
     // ── Destinations ──────────────────────────────────────────────────────────
     Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct);
-    Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken ct);
+    Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(
+        DestinationFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct);
     Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct);
     Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct);
     Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct);
@@ -77,8 +81,11 @@ public interface IConfigurationRepository
 public sealed record DestinationFilter(
     string? Search,
     DestinationType? DestinationType,
-    bool? IsEnabled,
-    // Only "actionOn" (ModifiedOnUtc ?? CreatedOnUtc) is supported today — anything else falls back to the
-    // default Name ordering, same as no sort at all.
-    string? SortBy = null,
-    string? SortDirection = null);
+    bool? IsEnabled);
+
+
+public sealed record SourceConnectionFilter(
+    string? Search,
+    SourceSystemType? SourceSystemType,
+    ApplicationType? ApplicationType,
+    bool? IsEnabled);

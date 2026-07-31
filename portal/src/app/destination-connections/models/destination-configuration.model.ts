@@ -66,13 +66,15 @@ export interface PagedResult<T> {
   pageSize: number;
 }
 
+export type DestinationSortColumn = 'name' | 'destinationType' | 'target' | 'isEnabled' | 'actionOn';
+export type SortOrder = 'asc' | 'desc';
+
 export interface DestinationConfigurationFilter {
   search?: string;
   destinationType?: DestinationType;
   isEnabled?: boolean;
+  sortBy?: DestinationSortColumn;
+  sortOrder?: SortOrder;
   page: number;
   pageSize: number;
-  /** Only 'actionOn' (modifiedOnUtc ?? createdOnUtc) is supported today. */
-  sortBy?: 'actionOn';
-  sortDirection?: 'asc' | 'desc';
 }

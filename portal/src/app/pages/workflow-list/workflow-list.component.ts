@@ -105,6 +105,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Which filter dropdown panel is open, if any — see toggleFilterMenu/closeFilterMenus. */
   readonly openFilterMenu = signal<FilterCategory | null>(null);
 
+  /** Which row's "more actions" menu is open, if any — keyed by workflowId. See toggleActionMenu. */
+  readonly openActionMenuId = signal<string | null>(null);
+
+  /** Viewport-relative coordinates for the open action menu, computed from the trigger button's own
+   *  bounding rect at open time. The panel renders position: fixed at these coordinates instead of
+   *  position: absolute within the row — .table-wrapper's overflow-x: auto forces its overflow-y to
+   *  auto too (a standard CSS coercion: an ancestor can't have overflow-x auto/scroll and overflow-y
+   *  visible at the same time), which would otherwise clip the dropdown to almost nothing whenever it
+   *  needs to extend below the table's own visible bounds.
+   *  Exactly one of top/bottom is set, never both — see toggleActionMenu's flip-upward check for a
+   *  trigger too close to the bottom of the viewport to fit the panel below it. */
+  readonly actionMenuPosition = signal<{ top?: number; bottom?: number; right: number } | null>(null);
+
+  /** Rough panel height (6 items + divider + padding, see .row-menu-item/.row-menu-divider) — just needs
+   *  to be in the right ballpark to decide whether the panel fits below the trigger, not pixel-exact. */
+  private static readonly ACTION_MENU_ESTIMATED_HEIGHT = 260;
+
   readonly filterDefs: { category: FilterCategory; label: string }[] = [
     { category: 'status', label: 'Status' },
     { category: 'audience', label: 'Audience' },
@@ -180,6 +197,25 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
   }
 
+  toggleActionMenu(event: MouseEvent, workflowId: string): void {
+    if (this.openActionMenuId() === workflowId) {
+      this.openActionMenuId.set(null);
+      this.actionMenuPosition.set(null);
+      return;
+    }
+
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const right = window.innerWidth - rect.right;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    this.actionMenuPosition.set(
+      spaceBelow < WorkflowListComponent.ACTION_MENU_ESTIMATED_HEIGHT
+        ? { bottom: window.innerHeight - rect.top + 6, right }
+        : { top: rect.bottom + 6, right }
+    );
+    this.openActionMenuId.set(workflowId);
+  }
+
   // Centralized "click outside closes it" check — reads the click's actual target instead of relying
   // on stopPropagation() scattered across the template. A click still inside any .filter-dropdown
   // (its trigger button or, since the open panel is its DOM descendant, its checkbox panel) is left
@@ -188,6 +224,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private closeFilterMenuIfOutside(event: MouseEvent): void {
     if (!(event.target as HTMLElement).closest('.filter-dropdown')) {
       this.openFilterMenu.set(null);
+    }
+    if (!(event.target as HTMLElement).closest('.row-menu')) {
+      this.openActionMenuId.set(null);
+      this.actionMenuPosition.set(null);
     }
   }
 
@@ -203,6 +243,17 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   clearFilter(category: FilterCategory): void {
     this.signalForCategory(category).set(new Set());
+    this.pageIndex.set(0);
+    this.reload();
+  }
+
+  reset(): void {
+    this.searchQuery.set('');
+    this.selectedStatuses.set(new Set());
+    this.selectedAudiences.set(new Set());
+    this.selectedSources.set(new Set());
+    this.sortColumn.set('lastRun');
+    this.sortDirection.set('desc');
     this.pageIndex.set(0);
     this.reload();
   }

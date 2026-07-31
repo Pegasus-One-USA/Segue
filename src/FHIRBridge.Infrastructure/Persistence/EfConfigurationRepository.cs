@@ -45,6 +45,65 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     public async Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) =>
         await _db.SourceConnections.OrderBy(x => x.Name).ToListAsync(ct);
 
+    public async Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(
+        SourceConnectionFilter filter,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortOrder,
+        CancellationToken ct)
+    {
+        var query = _db.SourceConnections.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var search = filter.Search;
+            query = query.Where(x =>
+                EF.Functions.Like(x.Name, $"%{search}%") ||
+                EF.Functions.Like(x.BaseUrl, $"%{search}%"));
+        }
+
+        if (filter.SourceSystemType.HasValue)
+        {
+            query = query.Where(x => x.SourceSystemType == filter.SourceSystemType.Value);
+        }
+
+        if (filter.ApplicationType.HasValue)
+        {
+            query = query.Where(x => x.ApplicationType == filter.ApplicationType.Value);
+        }
+
+        if (filter.IsEnabled.HasValue)
+        {
+            query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        query = sortBy?.ToLowerInvariant() switch
+        {
+            // Must match the frontend's SourceSortColumn values (source-connection.model.ts) lowercased,
+            // not the column display labels (EHR/Audience/Status) — those never matched here, so sorting
+            // by those three columns silently no-opped back to Name ordering.
+            "sourcesystemtype" => desc ? query.OrderByDescending(x => x.SourceSystemType)               : query.OrderBy(x => x.SourceSystemType),
+            "applicationtype"  => desc ? query.OrderByDescending(x => x.ApplicationType)                : query.OrderBy(x => x.ApplicationType),
+            "isenabled"        => desc ? query.OrderByDescending(x => x.IsEnabled)                       : query.OrderBy(x => x.IsEnabled),
+            "actionon"         => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc) : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _                  => desc ? query.OrderByDescending(x => x.Name)                            : query.OrderBy(x => x.Name),
+        };
+
+        var items = await query
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return new PagedResult<SourceConnection>(items, totalCount, page, take);
+    }
+
     public async Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct) =>
         await _db.SourceConnections.FirstOrDefaultAsync(x => x.Id == id, ct);
 
@@ -127,6 +186,8 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         DestinationFilter filter,
         int page,
         int pageSize,
+        string? sortBy,
+        string? sortOrder,
         CancellationToken ct)
     {
         var query = _db.DestinationConfigurations.AsQueryable();
@@ -152,14 +213,17 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         var take = Math.Clamp(pageSize, 1, 200);
         var skip = Math.Max(0, (page - 1) * take);
 
-        var descending = string.Equals(filter.SortDirection, "desc", StringComparison.OrdinalIgnoreCase);
-        var ordered = string.Equals(filter.SortBy, "actionOn", StringComparison.OrdinalIgnoreCase)
-            ? (descending
-                ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc)
-                : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc))
-            : query.OrderBy(x => x.Name);
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        query = sortBy?.ToLowerInvariant() switch
+        {
+            "type"     => desc ? query.OrderByDescending(x => x.DestinationType)                  : query.OrderBy(x => x.DestinationType),
+            "target"   => desc ? query.OrderByDescending(x => x.Target)                             : query.OrderBy(x => x.Target),
+            "status"   => desc ? query.OrderByDescending(x => x.IsEnabled)                          : query.OrderBy(x => x.IsEnabled),
+            "actionon" => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc)    : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _          => desc ? query.OrderByDescending(x => x.Name)                              : query.OrderBy(x => x.Name),
+        };
 
-        var items = await ordered
+        var items = await query
             .Skip(skip)
             .Take(take)
             .ToListAsync(ct);

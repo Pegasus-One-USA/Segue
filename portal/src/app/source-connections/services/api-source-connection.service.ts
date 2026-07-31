@@ -1,10 +1,16 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { SOURCE_CONNECTIONS_ENDPOINTS } from '../../core/api-endpoints';
 import { ISourceConnectionService } from './i-source-connection.service';
-import { GeneratedSigningKeyModel, SourceConnectionModel, SourceConnectionRequest } from '../models/source-connection.model';
+import {
+  GeneratedSigningKeyModel,
+  PagedResult,
+  SourceConnectionFilter,
+  SourceConnectionModel,
+  SourceConnectionRequest,
+} from '../models/source-connection.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiSourceConnectionService extends ISourceConnectionService {
@@ -12,6 +18,23 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
 
   getAll(): Observable<SourceConnectionModel[]> {
     return this.http.get<SourceConnectionModel[]>(SOURCE_CONNECTIONS_ENDPOINTS.list).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  getPaged(filter: SourceConnectionFilter): Observable<PagedResult<SourceConnectionModel>> {
+    let params = new HttpParams()
+      .set('page', String(filter.page))
+      .set('pageSize', String(filter.pageSize));
+
+    if (filter.search) params = params.set('search', filter.search);
+    if (filter.sourceSystemType) params = params.set('sourceSystemType', filter.sourceSystemType);
+    if (filter.applicationType) params = params.set('applicationType', filter.applicationType);
+    if (filter.isEnabled !== undefined) params = params.set('isEnabled', String(filter.isEnabled));
+    if (filter.sortBy) params = params.set('sortBy', filter.sortBy);
+    if (filter.sortOrder) params = params.set('sortOrder', filter.sortOrder);
+
+    return this.http.get<PagedResult<SourceConnectionModel>>(SOURCE_CONNECTIONS_ENDPOINTS.paged, { params }).pipe(
       catchError(err => throwError(() => err))
     );
   }

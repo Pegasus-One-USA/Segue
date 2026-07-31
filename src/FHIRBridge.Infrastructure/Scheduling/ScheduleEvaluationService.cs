@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Scheduling;
 using FHIRBridge.Application.Scheduling;
@@ -15,13 +16,16 @@ namespace FHIRBridge.Infrastructure.Scheduling;
 public sealed class ScheduleEvaluationService : IScheduleEvaluationService
 {
     private readonly IConfigurationRepository _configurationRepository;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly ILogger<ScheduleEvaluationService> _logger;
 
     public ScheduleEvaluationService(
         IConfigurationRepository configurationRepository,
+        ISystemSettingsCache settingsCache,
         ILogger<ScheduleEvaluationService> logger)
     {
         _configurationRepository = configurationRepository;
+        _settingsCache = settingsCache;
         _logger = logger;
     }
 
@@ -29,6 +33,9 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
         DateTime utcNow,
         CancellationToken cancellationToken)
     {
+        var heartbeatLoggingEnabled = await _settingsCache.GetBoolAsync(
+            "ScheduleDispatcher:HeartbeatLoggingEnabled", true, cancellationToken);
+
         var routes = await _configurationRepository.GetRoutesAsync(cancellationToken);
         var mappings = (await _configurationRepository.GetMappingProfilesAsync(cancellationToken))
             .ToDictionary(x => x.Id);
@@ -43,13 +50,61 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
         var dueRouteIds = new List<Guid>();
         var dueRouteLabels = new List<string>();
         var claimedRoutes = new List<ResourcePipelineRoute>();
+        var scheduledPullCandidateCount = 0;
 
         foreach (var route in routes)
         {
-            if (!route.IsEnabled ||
-                !IsScheduledPullMode(route.IngestionMode) ||
-                !RouteDependenciesAreEnabled(route, mappings, sources, destinations, webhooks) ||
-                !ScheduleExpressionMatcher.IsDueSince(route.ScheduleExpression, route.LastTriggeredOnUtc, utcNow, route.TimeZoneId))
+            if (!route.IsEnabled)
+            {
+                continue;
+            }
+
+            if (!IsScheduledPullMode(route.IngestionMode))
+            {
+                continue;
+            }
+
+            scheduledPullCandidateCount++;
+
+            // Resource type/name are owned by the route's mapping profile (single source of truth) -- resolve the
+            // same human-readable label used for dueRouteLabels below so diagnostic logs can name the workflow
+            // instead of just its GUID.
+            mappings.TryGetValue(route.MappingProfileId, out var routeMapping);
+            var routeLabel = !string.IsNullOrWhiteSpace(routeMapping?.Name)
+                ? routeMapping.Name
+                : (!string.IsNullOrWhiteSpace(routeMapping?.ResourceType) ? routeMapping.ResourceType : null);
+
+            if (!RouteDependenciesAreEnabled(route, mappings, sources, destinations, webhooks))
+            {
+                if (heartbeatLoggingEnabled)
+                {
+                    _logger.LogInformation(
+                        "Route {RouteId} ({RouteLabel}, '{ScheduleExpression}') is enabled for scheduled pull but a " +
+                        "dependency (source, destination, mapping profile, or webhook) is disabled or missing -- " +
+                        "skipped this tick.",
+                        route.Id,
+                        routeLabel ?? "unnamed",
+                        route.ScheduleExpression);
+                }
+
+                continue;
+            }
+
+            var isDue = ScheduleExpressionMatcher.IsDueSince(route.ScheduleExpression, route.LastTriggeredOnUtc, utcNow, route.TimeZoneId);
+
+            if (heartbeatLoggingEnabled)
+            {
+                _logger.LogInformation(
+                    "Route {RouteId} ({RouteLabel}, '{ScheduleExpression}') evaluated at {UtcNow}: {Status}. Last triggered: {LastTriggeredOnUtc}.",
+                    route.Id,
+                    routeLabel ?? "unnamed",
+                    route.ScheduleExpression,
+                    utcNow,
+                    isDue ? "DUE -- dispatching now" : "not due yet",
+                    route.LastTriggeredOnUtc);
+            }
+
+            if (!isDue)
             {
                 continue;
             }
@@ -58,17 +113,26 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
             dueRouteIds.Add(route.Id);
             claimedRoutes.Add(route);
 
-            // Resource type is owned by the route's mapping profile (single source of truth).
-            if (mappings.TryGetValue(route.MappingProfileId, out var mapping) &&
-                !string.IsNullOrWhiteSpace(mapping.ResourceType))
+            if (routeMapping is not null && !string.IsNullOrWhiteSpace(routeMapping.ResourceType))
             {
-                dueResourceTypes.Add(mapping.ResourceType);
-                dueRouteLabels.Add(!string.IsNullOrWhiteSpace(mapping.Name) ? mapping.Name : mapping.ResourceType);
+                dueResourceTypes.Add(routeMapping.ResourceType);
+                dueRouteLabels.Add(routeLabel ?? routeMapping.ResourceType);
             }
             else
             {
                 dueRouteLabels.Add(route.Id.ToString("N"));
             }
+        }
+
+        if (heartbeatLoggingEnabled)
+        {
+            _logger.LogInformation(
+                "Schedule dispatcher heartbeat at {UtcNow}: {TotalRoutes} route(s) configured, " +
+                "{CandidateCount} enabled for scheduled pull, {DueCount} claimed this tick.",
+                utcNow,
+                routes.Count,
+                scheduledPullCandidateCount,
+                dueRouteIds.Count);
         }
 
         if (dueRouteIds.Count == 0)
