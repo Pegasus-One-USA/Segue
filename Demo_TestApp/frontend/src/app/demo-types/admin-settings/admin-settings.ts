@@ -20,6 +20,7 @@ interface AdminSettings {
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
   providerInAppWorkflowId: string;
+  backendSystemPractitionerImportWorkflowId: string;
 }
 
 /** One row of GET/POST /api/v11/workflow-settings — the List + Details workflow URLs for a single role.
@@ -65,6 +66,7 @@ export class AdminSettingsComponent implements OnInit {
   readonly standaloneDetailWorkflowId = signal('');
   readonly standaloneBaseUrl = signal('');
   readonly providerInAppWorkflowId = signal('');
+  readonly backendSystemPractitionerImportWorkflowId = signal('');
 
   // Feature flag (Default tab): whether the "New 11" tab shows up at all in every role's shell. Backed by a cookie
   // (not the /api/settings row) so every role's page — same origin, different route, no shared component tree —
@@ -184,6 +186,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(current.standaloneBaseUrl);
       this.providerInAppWorkflowId.set(current.providerInAppWorkflowId);
+      this.backendSystemPractitionerImportWorkflowId.set(current.backendSystemPractitionerImportWorkflowId);
     } catch {
       this.loadError.set('Could not load settings.');
     } finally {
@@ -210,6 +213,7 @@ export class AdminSettingsComponent implements OnInit {
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             standaloneBaseUrl: this.standaloneBaseUrl(),
             providerInAppWorkflowId: this.providerInAppWorkflowId(),
+            backendSystemPractitionerImportWorkflowId: this.backendSystemPractitionerImportWorkflowId(),
           },
           { withCredentials: true }
         )
@@ -224,6 +228,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(result.standaloneBaseUrl);
       this.providerInAppWorkflowId.set(result.providerInAppWorkflowId);
+      this.backendSystemPractitionerImportWorkflowId.set(result.backendSystemPractitionerImportWorkflowId);
       this.saved.set(true);
     } catch {
       this.saveError.set('Could not save settings.');

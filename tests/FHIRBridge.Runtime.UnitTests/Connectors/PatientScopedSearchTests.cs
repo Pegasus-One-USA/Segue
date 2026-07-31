@@ -102,6 +102,35 @@ public sealed class PatientScopedSearchTests
         handler.RequestUri.Should().Contain($"patient={PatientId}").And.NotContain("p1").And.NotContain("p2");
     }
 
+    [Fact]
+    public async Task Practitioner_search_honors_request_time_criteria()
+    {
+        // Practitioner is outside the patient compartment (never patient-scoped), but a caller can still scope the
+        // fetch by id/name via request-time PatientSearchCriteria — the BackendSystem "Import Practitioner" flow.
+        var source = Source with { PatientSearchCriteria = "_id=ePractA,ePractB" };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        await client.SearchAsync("Practitioner", source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("/Practitioner?").And.Contain("_id=ePractA,ePractB");
+        handler.RequestUri.Should().NotContain("patient=");
+    }
+
+    [Fact]
+    public async Task Other_non_compartment_resource_still_ignores_request_time_criteria()
+    {
+        // The criteria pass-through is deliberately Practitioner-only for now — a different non-compartment type
+        // must keep the original "static SearchParameters only" behavior, so request-time criteria is NOT applied.
+        var source = Source with { PatientSearchCriteria = "_id=oOrg1" };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        await client.SearchAsync("Organization", source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("/Organization?").And.NotContain("_id=oOrg1");
+    }
+
     // Access-token provider that also advertises a (possibly absent) launch patient context.
     private sealed class PatientContextProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider
     {

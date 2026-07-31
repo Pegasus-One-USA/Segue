@@ -36,6 +36,26 @@
   color: #0d47a1;
 }
 
+.btn-clear-data {
+  padding: 8px 16px;
+  border: 1px solid #c62828;
+  border-radius: 6px;
+  background: #fff;
+  color: #c62828;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #fdecea;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -59,7 +79,7 @@
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 
   h1 {
     margin: 0;
@@ -123,14 +143,208 @@
   border-radius: 8px;
 }
 
-.patient-table {
+.bs-table {
   width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eceff1;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+
+  th {
+    background: #f8fafc;
+    color: #37474f;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+  }
+
+  tbody tr:hover {
+    background: #f5f9ff;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
 }
 
-.patient-row {
+// Top-level Patient List | Practitioners switch on the Default screen.
+.bs-view-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+
+  &__item {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border, #d0d7de);
+    background: #fff;
+    color: #37474f;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+      background: #f5f9ff;
+    }
+
+    &.active {
+      background: #0d47a1;
+      border-color: #0d47a1;
+      color: #fff;
+    }
+  }
+}
+
+.bs-result-meta {
+  margin-bottom: 12px;
+  color: #607d8b;
+  font-size: 14px;
+
+  strong {
+    color: #37474f;
+  }
+}
+
+.bs-row-click {
   cursor: pointer;
 
   &:hover {
     background: #f5f9ff;
+  }
+}
+
+.import-panel {
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  &__label {
+    display: block;
+    font-weight: 600;
+    color: #37474f;
+    margin-bottom: 6px;
+  }
+
+  &__input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #cfd8dc;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+
+  &__refs {
+    margin-top: 12px;
+  }
+
+  &__refs-label {
+    display: block;
+    font-size: 13px;
+    color: #607d8b;
+    margin-bottom: 6px;
+  }
+
+  &__actions {
+    margin-top: 14px;
+  }
+}
+
+.ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #cfd8dc;
+  background: #fff;
+  font-size: 12px;
+  color: #37474f;
+
+  &--imported {
+    border-color: #a5d6a7;
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  &__tick {
+    font-weight: 700;
+  }
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  background: #0d47a1;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #093375;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.success-banner {
+  color: #2e7d32;
+}
+
+.practitioner-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eceff1;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+
+  th {
+    background: #f8fafc;
+    color: #37474f;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+  }
+
+  tbody tr:hover {
+    background: #f5f9ff;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
   }
 }

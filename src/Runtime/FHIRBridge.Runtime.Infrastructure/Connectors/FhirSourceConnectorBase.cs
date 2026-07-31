@@ -315,9 +315,12 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// resource(s) by <c>_id</c>; every other patient-compartment resource type is filtered by <c>patient</c>.
     /// Resource types outside the patient compartment (e.g. <c>Practitioner</c> — see
     /// <see cref="PatientCompartmentResourceTypes"/>) are never patient-scoped: a <c>patient=</c> search parameter
-    /// is not meaningful for them, so caller-supplied criteria (identifier, <c>_id</c>, name, etc.) pass through
-    /// untouched instead. Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/
-    /// <c>subject</c>) are left untouched.
+    /// is not meaningful for them, so connection-level <see cref="FhirSourceConfiguration.SearchParameters"/> pass
+    /// through untouched instead. As a narrow exception, <c>Practitioner</c> additionally honors a request-time
+    /// <see cref="FhirSourceConfiguration.PatientSearchCriteria"/> (appended to any static SearchParameters) so a
+    /// caller can scope a Practitioner fetch by id/name (e.g. <c>Practitioner?_id=...</c>); every other
+    /// non-compartment type still uses its static SearchParameters only. Caller-supplied parameters that already
+    /// pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left untouched.
     /// </summary>
     private async Task<string?> ApplyPatientScopeAsync(
         string resourceType,
@@ -327,6 +330,21 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
         if (!isPatientResource && !PatientCompartmentResourceTypes.IsSupported(resourceType))
         {
+            // Non-patient-compartment types can't be patient-scoped, and historically their request-time
+            // PatientSearchCriteria was dropped here entirely. Honor it for Practitioner ONLY (deliberately narrow —
+            // every other non-compartment type keeps the original "static SearchParameters only" behavior) so a
+            // caller can scope a Practitioner fetch by id/name (e.g. Practitioner?_id=...). Appended to any static
+            // SearchParameters, mirroring the Patient branch below.
+            if (string.Equals(resourceType, "Practitioner", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(source.PatientSearchCriteria))
+            {
+                var practitionerQuery = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
+                var practitionerCriteria = source.PatientSearchCriteria.Trim().TrimStart('?').TrimStart('&');
+                return string.IsNullOrWhiteSpace(practitionerQuery)
+                    ? practitionerCriteria
+                    : $"{practitionerQuery}&{practitionerCriteria}";
+            }
+
             return source.SearchParameters;
         }
 

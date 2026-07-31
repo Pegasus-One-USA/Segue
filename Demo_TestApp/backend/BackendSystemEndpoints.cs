@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace HealthAppBackend;
@@ -11,6 +13,9 @@ namespace HealthAppBackend;
 public static class BackendSystemEndpoints
 {
     private const string SessionCookieName = "hb_session";
+
+    // FHIRBridge returns camelCase JSON; match it case-insensitively when deserializing a /run response.
+    private static readonly JsonSerializerOptions WorkflowJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static void MapBackendSystemEndpoints(this WebApplication app)
     {
@@ -40,26 +45,20 @@ public static class BackendSystemEndpoints
             return patient is null ? Results.NotFound() : Results.Ok(patient);
         });
 
-        // Practitioner has no PatientId of its own — the only link to a patient is via the Encounters the
-        // practitioner participated in, so this resolves distinct practitioner ids from that patient's encounters
-        // first, then looks those up. Every other resource endpoint below filters directly on its own PatientId.
-        app.MapGet("/api/backend-system/patient/{patientId}/practitioners", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+        // ---- Practitioners: global list + referenced-id discovery + import ------------------------------------
+        // Replaces the old per-patient practitioners tab (removed from the Patient Details left nav). The Practitioners
+        // view on the BackendSystem Default screen is a global list plus an "Import Practitioner" flow, not a
+        // per-patient sub-resource.
+
+        // Every practitioner already stored in HealthDB's own Practitioner table — backs the Practitioners view's table.
+        app.MapGet("/api/backend-system/practitioners", async (HttpContext http, SessionStore sessions, HealthAppDbContext db, CancellationToken cancellationToken) =>
         {
             if (!TryGetSession(http, sessions))
             {
                 return Results.Unauthorized();
             }
 
-            var patientReference = $"Patient/{patientId}";
-            var practitionerIds = await db.Encounters
-                .Where(e => (e.PatientId == patientId || e.PatientId == patientReference) && e.PractitionerId != null)
-                .Select(e => e.PractitionerId!)
-                .Distinct()
-                .ToListAsync();
-
-            var barePractitionerIds = practitionerIds.Select(StripReferencePrefix).ToList();
             var practitioners = await db.Practitioners
-                .Where(p => barePractitionerIds.Contains(p.PractitionerId))
                 .OrderBy(p => p.FamilyName)
                 .Select(p => new PractitionerDto(
                     p.PractitionerId,
@@ -70,9 +69,172 @@ public static class BackendSystemEndpoints
                     p.Qualification,
                     p.Phone,
                     p.Email))
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return Results.Ok(practitioners);
+        });
+
+        // Every distinct practitioner id referenced by the Default clinical tables (Encounter, Procedure,
+        // ServiceRequest, MedicationRequest), each flagged with whether it already has a row in the Practitioner
+        // table. The Practitioners view pre-fills these into its "Import Practitioner" input.
+        app.MapGet("/api/backend-system/practitioners/referenced-ids", async (HttpContext http, SessionStore sessions, HealthAppDbContext db, CancellationToken cancellationToken) =>
+        {
+            if (!TryGetSession(http, sessions))
+            {
+                return Results.Unauthorized();
+            }
+
+            var ids = await ComputeReferencedPractitionerIdsAsync(db, cancellationToken);
+            var byId = (await db.Practitioners.AsNoTracking().ToListAsync(cancellationToken))
+                .GroupBy(p => p.PractitionerId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            var result = ids.Select(id =>
+            {
+                byId.TryGetValue(id, out var match);
+                return new ReferencedPractitionerDto(
+                    id,
+                    match is null ? null : BuildFullName(match.GivenName, match.MiddleName, match.FamilyName),
+                    match is not null);
+            }).ToList();
+
+            return Results.Ok(result);
+        });
+
+        // Runs the admin-configured BackendSystem practitioner-import workflow (FHIRBridge /run by id, base URL reused
+        // from StandaloneBaseUrl), scoped to the submitted practitioner ids via patientSearchCriteria (_id=<ids>) —
+        // the same pass-through Provider Standalone's "Fetch Patient List" uses for its criteria box (see
+        // FhirSourceConnectorBase.ApplyPatientScopeAsync, which leaves a non-patient-compartment resource type like
+        // Practitioner's caller criteria untouched). Each returned Practitioner resource is upserted into the Default
+        // Practitioner table, so the view re-reads it through /api/backend-system/practitioners above. Falls back to
+        // every referenced id when the request body carries none.
+        app.MapPost("/api/backend-system/practitioners/import", async (ImportPractitionersRequest? request, HttpContext http, SessionStore sessions, HealthAppDbContext db, IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
+        {
+            if (!TryGetSession(http, sessions))
+            {
+                return Results.Unauthorized();
+            }
+
+            var ids = (request?.PractitionerIds ?? [])
+                .Select(StripReferencePrefix)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (ids.Count == 0)
+            {
+                ids = await ComputeReferencedPractitionerIdsAsync(db, cancellationToken);
+            }
+
+            if (ids.Count == 0)
+            {
+                return Results.Ok(new { status = "Succeeded", imported = 0, message = "No practitioner ids to import." });
+            }
+
+            var settings = await db.WorkflowSettings.FindAsync(1);
+            var workflowId = settings?.BackendSystemPractitionerImportWorkflowId;
+            var baseUrl = settings?.StandaloneBaseUrl;
+            if (string.IsNullOrWhiteSpace(workflowId) || string.IsNullOrWhiteSpace(baseUrl))
+            {
+                return Results.Ok(new { status = "Failed", errorMessage = "The Backend System practitioner-import workflow id or the (Provider Standalone) FHIRBridge base URL is not configured. Ask an admin to set both on the Admin → Workflow Settings screen." });
+            }
+
+            // FHIR OR-search on the practitioner ids (_id=a,b,c). Practitioner is outside the patient compartment, so
+            // FHIRBridge passes this through to the source verbatim rather than trying to patient-scope it.
+            var criteria = "_id=" + string.Join(",", ids);
+            var runUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/run";
+            var requestBody = JsonSerializer.Serialize(new
+            {
+                patientId = (string?)null,
+                patientSearchCriteria = criteria,
+                callerId = (string?)null,
+            });
+
+            var client = httpClientFactory.CreateClient("Workflow");
+            HttpResponseMessage response;
+            try
+            {
+                response = await client.PostAsync(runUrl, new StringContent(requestBody, Encoding.UTF8, "application/json"), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { status = "Failed", errorMessage = $"Could not reach FHIRBridge to run the import workflow: {ex.Message}" });
+            }
+
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                // A token/node failure throws past FHIRBridge's orchestrator before the run returns, surfacing as a
+                // non-2xx with a bare {"error":"..."} body — surface that reason rather than just the status code.
+                return Results.Ok(new { status = "Failed", errorMessage = TryReadErrorMessage(responseBody) ?? $"Import workflow run failed with status {(int)response.StatusCode}." });
+            }
+
+            WorkflowRunResult? runResult;
+            try
+            {
+                runResult = JsonSerializer.Deserialize<WorkflowRunResult>(responseBody, WorkflowJsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                return Results.Ok(new { status = "Failed", errorMessage = $"Unexpected workflow response: {ex.Message}" });
+            }
+
+            var practitionerResources = (runResult?.OutputsByNodeId?.Values ?? Enumerable.Empty<WorkflowNodeOutput>())
+                .SelectMany(output => output?.Payload?.Resources ?? [])
+                .Where(resource => string.Equals(resource.ResourceType, "Practitioner", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (practitionerResources.Count == 0)
+            {
+                return Results.Ok(new { status = "Failed", errorMessage = "The workflow run returned no Practitioner resources." });
+            }
+
+            var imported = 0;
+            foreach (var resource in practitionerResources)
+            {
+                if (string.IsNullOrWhiteSpace(resource.Payload))
+                {
+                    continue;
+                }
+
+                PractitionerFields fields;
+                try
+                {
+                    fields = PractitionerFieldExtractor.Extract(resource.Payload);
+                }
+                catch (JsonException)
+                {
+                    continue; // skip an unparseable payload rather than failing the whole import
+                }
+
+                var id = StripReferencePrefix(!string.IsNullOrWhiteSpace(fields.PractitionerId) ? fields.PractitionerId : resource.ResourceId);
+                if (string.IsNullOrWhiteSpace(id))
+                {
+                    continue;
+                }
+
+                var existing = await db.Practitioners.FirstOrDefaultAsync(p => p.PractitionerId == id, cancellationToken);
+                if (existing is null)
+                {
+                    existing = new PractitionerEntity { PractitionerId = id };
+                    db.Practitioners.Add(existing);
+                }
+
+                // PractitionerFieldExtractor targets the _11 shape; map its fields onto this table's columns
+                // (Given/Family/Qualification). MiddleName/Identifier are left as-is — the extractor supplies neither.
+                existing.GivenName = fields.FirstName;
+                existing.FamilyName = fields.LastName;
+                existing.NPI = fields.NPI;
+                existing.Gender = fields.Gender;
+                existing.Qualification = fields.Credential ?? fields.Specialty;
+                existing.Phone = fields.Phone;
+                existing.Email = fields.Email;
+                imported++;
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+            return Results.Ok(new { status = "Succeeded", imported });
         });
 
         app.MapGet("/api/backend-system/patient/{patientId}/encounters", async (string patientId, HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
@@ -344,6 +506,75 @@ public static class BackendSystemEndpoints
 
             return Results.Ok(result);
         });
+
+        // Wipes every table the Default (non-"New 11") BackendSystem screens read from — the "Clear Data" button on
+        // the Patient List / Practitioners views. Deliberately leaves the _11 curated tables (Resource11Endpoints.cs)
+        // and every other role's data untouched; this only resets the tables BackendSystemEndpoints.cs itself reads/
+        // writes above. ExecuteDeleteAsync issues a single bulk DELETE per table rather than loading rows into the
+        // change tracker first.
+        app.MapPost("/api/backend-system/clear-data", async (HttpContext http, SessionStore sessions, HealthAppDbContext db, CancellationToken cancellationToken) =>
+        {
+            if (!TryGetSession(http, sessions))
+            {
+                return Results.Unauthorized();
+            }
+
+            await db.MedicationAdministrations.ExecuteDeleteAsync(cancellationToken);
+            await db.MedicationRequests.ExecuteDeleteAsync(cancellationToken);
+            await db.DiagnosticReports.ExecuteDeleteAsync(cancellationToken);
+            await db.ServiceRequests.ExecuteDeleteAsync(cancellationToken);
+            await db.Procedures.ExecuteDeleteAsync(cancellationToken);
+            await db.Conditions.ExecuteDeleteAsync(cancellationToken);
+            await db.Observations.ExecuteDeleteAsync(cancellationToken);
+            await db.AllergyIntolerances.ExecuteDeleteAsync(cancellationToken);
+            await db.Encounters.ExecuteDeleteAsync(cancellationToken);
+            await db.Practitioners.ExecuteDeleteAsync(cancellationToken);
+            await db.BackendSystemPatients.ExecuteDeleteAsync(cancellationToken);
+
+            return Results.Ok(new { status = "Succeeded" });
+        });
+    }
+
+    // Distinct practitioner ids referenced across the Default clinical tables that carry a PractitionerId, normalized
+    // to bare ids (a reference column may hold "Practitioner/{id}"). "All unique referenced", not "missing only" —
+    // an already-imported id still appears (the view flags it), so a re-import can refresh existing rows too.
+    private static async Task<List<string>> ComputeReferencedPractitionerIdsAsync(HealthAppDbContext db, CancellationToken cancellationToken)
+    {
+        var references = new List<string?>();
+        references.AddRange(await db.Encounters.Where(e => e.PractitionerId != null).Select(e => e.PractitionerId).ToListAsync(cancellationToken));
+        references.AddRange(await db.Procedures.Where(p => p.PractitionerId != null).Select(p => p.PractitionerId).ToListAsync(cancellationToken));
+        references.AddRange(await db.ServiceRequests.Where(s => s.PractitionerId != null).Select(s => s.PractitionerId).ToListAsync(cancellationToken));
+        references.AddRange(await db.MedicationRequests.Where(m => m.PractitionerId != null).Select(m => m.PractitionerId).ToListAsync(cancellationToken));
+
+        return references
+            .Select(StripReferencePrefix)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    // FHIRBridge surfaces a failed run as a non-2xx with a bare {"error":"..."} body — pull that message out when
+    // present, otherwise let the caller fall back to a status-code message.
+    private static string? TryReadErrorMessage(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.String)
+            {
+                return error.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Non-JSON error body — nothing to extract.
+        }
+
+        return null;
     }
 
     private static bool TryGetSession(HttpContext http, SessionStore sessions) =>
@@ -412,6 +643,22 @@ record PractitionerDto(
     string? Qualification,
     string? Phone,
     string? Email);
+
+// One row of GET /api/backend-system/practitioners/referenced-ids — a practitioner id referenced by another Default
+// table, with its Practitioner-table name (if already present) and whether it's been imported yet.
+record ReferencedPractitionerDto(string PractitionerId, string? Name, bool Imported);
+
+// Body of POST /api/backend-system/practitioners/import — the practitioner ids to fetch + upsert (nullable/empty
+// means "use every referenced id").
+record ImportPractitionersRequest(List<string>? PractitionerIds);
+
+// The subset of FHIRBridge's RankedWorkflowOrchestrator /run response this app reads to pull Practitioner resources
+// out of a successful run (mirrors launch-standalone-provider.ts's WorkflowRunResponse shape).
+record WorkflowRunResult(WorkflowRunInfo? WorkflowRun, Dictionary<string, WorkflowNodeOutput>? OutputsByNodeId);
+record WorkflowRunInfo(string? Status, string? ErrorMessage);
+record WorkflowNodeOutput(string? NodeType, WorkflowNodePayload? Payload);
+record WorkflowNodePayload(List<WorkflowRunResource>? Resources);
+record WorkflowRunResource(string? ResourceType, string? ResourceId, string? Payload);
 
 record EncounterDto(
     string EncounterId,

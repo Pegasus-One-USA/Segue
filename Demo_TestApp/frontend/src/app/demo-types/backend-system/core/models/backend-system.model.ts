@@ -45,6 +45,27 @@ export interface Practitioner {
   email: string | null;
 }
 
+// One row of GET /api/backend-system/practitioners/referenced-ids — a practitioner id referenced across the Default
+// clinical tables, with its Practitioner-table name if already present, and whether it's been imported yet.
+export interface ReferencedPractitioner {
+  practitionerId: string;
+  name: string | null;
+  imported: boolean;
+}
+
+// Result of POST /api/backend-system/practitioners/import.
+export interface PractitionerImportResult {
+  status: 'Succeeded' | 'Failed';
+  imported?: number;
+  message?: string;
+  errorMessage?: string;
+}
+
+// Result of POST /api/backend-system/clear-data.
+export interface ClearDataResult {
+  status: 'Succeeded';
+}
+
 export interface Encounter {
   encounterId: string;
   patientId: string | null;

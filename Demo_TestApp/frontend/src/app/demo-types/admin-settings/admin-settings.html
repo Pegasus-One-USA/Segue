@@ -99,6 +99,15 @@
         </label>
       </section>
 
+      <section class="settings-section">
+        <h2>Backend_System (Role: BackendSystem)</h2>
+        <p class="subtitle">The workflow run (FHIRBridge <code>/run</code>) behind the Practitioners view's <strong>Import Practitioner</strong> button. The submitted practitioner ids are passed as its search criteria. Uses the Provider Standalone Base URL above for its FHIRBridge connection.</p>
+        <label class="field">
+          Practitioner Import Workflow Id
+          <input type="text" [ngModel]="backendSystemPractitionerImportWorkflowId()" (ngModelChange)="backendSystemPractitionerImportWorkflowId.set($event)" placeholder="e.g. 17c81a2c-b266-4ed3-9afb-8fc54910f577" />
+        </label>
+      </section>
+
       @if (saveError()) {
         <p class="error-banner">{{ saveError() }}</p>
       }

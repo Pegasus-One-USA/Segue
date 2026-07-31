@@ -2,7 +2,14 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
-import { PatientDetail, PatientListItem } from '../models/backend-system.model';
+import {
+  ClearDataResult,
+  PatientDetail,
+  PatientListItem,
+  Practitioner,
+  PractitionerImportResult,
+  ReferencedPractitioner,
+} from '../models/backend-system.model';
 import { ResourceMenuItem } from '../config/backend-system-menu.config';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
@@ -52,6 +59,42 @@ export class BackendSystemService {
 
     return this.http.get<Record<string, unknown>[]>(
       `${BACKEND_BASE_URL}/api/backend-system/patient/${encodeURIComponent(patientId)}/${menuItem.apiSegment}`,
+      { withCredentials: true },
+    );
+  }
+
+  /** Every practitioner already stored in HealthDB's own Practitioner table (the Practitioners view's table). */
+  getPractitioners(): Observable<Practitioner[]> {
+    return this.http.get<Practitioner[]>(`${BACKEND_BASE_URL}/api/backend-system/practitioners`, {
+      withCredentials: true,
+    });
+  }
+
+  /** Practitioner ids referenced across the Default clinical tables, each flagged with whether it's imported yet —
+   *  pre-filled into the "Import Practitioner" input. */
+  getReferencedPractitionerIds(): Observable<ReferencedPractitioner[]> {
+    return this.http.get<ReferencedPractitioner[]>(
+      `${BACKEND_BASE_URL}/api/backend-system/practitioners/referenced-ids`,
+      { withCredentials: true },
+    );
+  }
+
+  /** Runs the configured import workflow for the given practitioner ids and upserts the results into the
+   *  Practitioner table. */
+  importPractitioners(practitionerIds: string[]): Observable<PractitionerImportResult> {
+    return this.http.post<PractitionerImportResult>(
+      `${BACKEND_BASE_URL}/api/backend-system/practitioners/import`,
+      { practitionerIds },
+      { withCredentials: true },
+    );
+  }
+
+  /** Wipes every table the Default BackendSystem screens read from (Patient_NewMapped, Practitioner, and every
+   *  clinical resource table) — the "Clear Data" button on the Patient List / Practitioners views. */
+  clearData(): Observable<ClearDataResult> {
+    return this.http.post<ClearDataResult>(
+      `${BACKEND_BASE_URL}/api/backend-system/clear-data`,
+      {},
       { withCredentials: true },
     );
   }

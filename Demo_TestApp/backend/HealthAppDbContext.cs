@@ -121,6 +121,14 @@ public sealed class WorkflowSettingsEntity
     // separate list/detail pair. Provider_InApp's FHIRBridge base URL deliberately reuses StandaloneBaseUrl above
     // rather than getting its own field — both demo types are Provider-role launches against the same deployment.
     public string ProviderInAppWorkflowId { get; set; } = string.Empty;
+
+    // BackendSystem role's "Import Practitioner" flow (see BackendSystemEndpoints.cs's
+    // /api/backend-system/practitioners/import) — the FHIRBridge workflow whose Practitioner source is run, scoped
+    // to the practitioner ids the user submits (patientSearchCriteria=_id=<ids>). Its FHIRBridge base URL reuses
+    // StandaloneBaseUrl (same deployment), so this is just the workflow id. Seeded to the demo workflow id and
+    // admin-editable via the Workflow Settings panel; defaulted here (not string.Empty) so a brand-new database is
+    // immediately usable without any setup.
+    public string BackendSystemPractitionerImportWorkflowId { get; set; } = "17c81a2c-b266-4ed3-9afb-8fc54910f577";
 }
 
 public sealed class HealthAppDbContext : DbContext
@@ -440,7 +448,8 @@ public sealed class HealthAppDbContext : DbContext
             StandaloneWorkflowId = string.Empty,
             StandaloneDetailWorkflowId = string.Empty,
             // Same sourcing rationale as PatientBaseUrl above (DefaultWorkflowSettings:StandaloneBaseUrl).
-            StandaloneBaseUrl = _configuration["DefaultWorkflowSettings:StandaloneBaseUrl"] ?? string.Empty
+            StandaloneBaseUrl = _configuration["DefaultWorkflowSettings:StandaloneBaseUrl"] ?? string.Empty,
+            BackendSystemPractitionerImportWorkflowId = "17c81a2c-b266-4ed3-9afb-8fc54910f577"
         });
     }
 }

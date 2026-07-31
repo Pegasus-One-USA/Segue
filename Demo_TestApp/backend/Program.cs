@@ -100,6 +100,17 @@ IF NOT EXISTS (SELECT 1 FROM [Resource11WorkflowSettings] WHERE [Id] = 1)
         ([Id],[Patient_List_11],[Patient_Details_11],[Provider_List_11],[Provider_Details_11],[ProviderInApp_List_11],[ProviderInApp_Details_11],[BackendSystem_List_11],[BackendSystem_Details_11])
     VALUES (1,'','','','','','','','');
 ");
+
+    // EnsureCreated won't add a new column to an already-existing WorkflowSettings table (see the EnsureCreated
+    // note above). Add BackendSystemPractitionerImportWorkflowId idempotently so a pre-existing HealthAppDb gets it
+    // (existing rows backfilled to the demo workflow id) without a manual drop — a no-op on a brand-new DB where
+    // EnsureCreated already built the column from the entity model.
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('WorkflowSettings', 'BackendSystemPractitionerImportWorkflowId') IS NULL
+    ALTER TABLE [WorkflowSettings]
+        ADD [BackendSystemPractitionerImportWorkflowId] NVARCHAR(MAX) NOT NULL
+        CONSTRAINT [DF_WorkflowSettings_BsPractImport] DEFAULT('17c81a2c-b266-4ed3-9afb-8fc54910f577');
+");
 }
 
 // Serves the Angular build copied into wwwroot/ at deploy time — this backend hosts its own
@@ -205,7 +216,8 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
-        providerInAppWorkflowId = settings.ProviderInAppWorkflowId
+        providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
+        backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
     });
 });
 
@@ -265,6 +277,7 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneBaseUrl = request.StandaloneBaseUrl?.Trim() ?? string.Empty;
     settings.ProviderInAppWorkflowId = request.ProviderInAppWorkflowId?.Trim() ?? string.Empty;
+    settings.BackendSystemPractitionerImportWorkflowId = request.BackendSystemPractitionerImportWorkflowId?.Trim() ?? string.Empty;
     await db.SaveChangesAsync();
 
     return Results.Ok(new
@@ -278,7 +291,8 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
-        providerInAppWorkflowId = settings.ProviderInAppWorkflowId
+        providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
+        backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
     });
 });
 
@@ -613,7 +627,8 @@ record SaveSettingsRequest(
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
     string StandaloneBaseUrl,
-    string ProviderInAppWorkflowId);
+    string ProviderInAppWorkflowId,
+    string BackendSystemPractitionerImportWorkflowId);
 // Matches FHIRBridge's GET /api/v1/workflows/{id}/public-launch-context response shape.
 record MintedLaunchContext(string Context);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive

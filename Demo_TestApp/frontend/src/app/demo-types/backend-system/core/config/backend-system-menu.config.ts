@@ -46,20 +46,6 @@ export const BACKEND_SYSTEM_MENU: ResourceMenuItem[] = [
     ],
   },
   {
-    key: 'practitioner',
-    label: 'Practitioner',
-    apiSegment: 'practitioners',
-    columns: [
-      { key: 'fullName', label: 'Name' },
-      { key: 'npi', label: 'NPI' },
-      { key: 'identifier', label: 'Identifier' },
-      { key: 'gender', label: 'Gender' },
-      { key: 'qualification', label: 'Qualification' },
-      { key: 'phone', label: 'Phone' },
-      { key: 'email', label: 'Email' },
-    ],
-  },
-  {
     key: 'encounter',
     label: 'Encounter',
     apiSegment: 'encounters',
