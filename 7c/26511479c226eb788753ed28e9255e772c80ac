@@ -1,0 +1,82 @@
+Demo_TestApp/frontend/src/app/demo-types/backend-system/core/models/backend-system.model.ts
+  s_39432b15d913d6::t_a975613a04334c 48-63
+  s_391b55190a7812::t_2543d6cef10057 64-68
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_39432b15d913d6::t_88525595efcd54 333-347
+  s_39432b15d913d6::t_bd793df24f1dcd 318-323
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.scss
+  s_391b55190a7812::t_ba035cf3c304d9 82
+  s_391b55190a7812::t_ab3b821a41e2bf 39-58
+  s_39432b15d913d6::t_0e76b3c9dfa618 150,159,169,174,177-179,181,183-184,191-192,194-195,197-199,203,224-323,325-328,330-331,333-335,337,349-350
+  s_391b55190a7812::t_53d46ba0cd4504 146,148-149,151-158,160-168,170-173
+  s_391b55190a7812::t_de6ca88b9cbdbf 180,182,185-190,193,196,200-202,204-217
+  s_391b55190a7812::t_ac83c10cc93465 324,329,332,336,338-348
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_39432b15d913d6::t_6ddd00707fe210 102-110
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_39432b15d913d6::t_90a0095e062b3b 23
+  s_39432b15d913d6::t_f7afe3b38c049d 231
+  s_39432b15d913d6::t_e68b60d67b59ed 189
+  s_39432b15d913d6::t_236a215439943e 69
+  s_39432b15d913d6::t_1006c7deb07683 216
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_39432b15d913d6::t_fd74e8c4861853 124-131
+  s_39432b15d913d6::t_d3761ac57874cd 451-452
+Demo_TestApp/backend/BackendSystemEndpoints.cs
+  s_39432b15d913d6::t_d240f8103d7dcb 1-2,238-239,536-537
+  s_39432b15d913d6::t_a0a13de4035577 48-54,72,77-237
+  s_391b55190a7812::t_ddaff939b87914 509-535
+  s_39432b15d913d6::t_bf1f3d85f13e96 647-662
+  s_39432b15d913d6::t_e920592a7b5489 17-19
+  s_39432b15d913d6::t_bb7c7b4a805f76 538-577
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.html
+  s_391b55190a7812::t_ce2f09a61233db 8-10,18-24
+  s_39432b15d913d6::t_b17b469b3fed73 64,66-88
+  s_39432b15d913d6::t_42ec3d6d7474e8 25-30,89-92
+  s_391b55190a7812::t_7fa47579149721 39
+  s_39432b15d913d6::t_ef1de0964e8660 93-144,146-172
+Demo_TestApp/frontend/src/app/demo-types/backend-system/core/services/backend-system.service.ts
+  s_39432b15d913d6::t_beca1a96b73148 5,7-12
+  s_391b55190a7812::t_c97f6adf06b2fb 6
+  s_391b55190a7812::t_9ff85a5bbd768f 91-100
+  s_39432b15d913d6::t_cb8f203a749d77 65-90
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_39432b15d913d6::t_871fb22730680c 105-133
+Demo_TestApp/backend/Program.cs
+  s_39432b15d913d6::t_a98303ab4469a0 630-631
+  s_39432b15d913d6::t_5a94f5831d7c88 103-113
+  s_39432b15d913d6::t_cf31e32fb5b1c5 219-220
+  s_39432b15d913d6::t_9b295a26b0467e 280,294-295
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.ts
+  s_391b55190a7812::t_b6d86f25f248b7 95-99
+  s_391b55190a7812::t_2095a17fc46086 41
+  s_391b55190a7812::t_9e6b956b441aa8 229-258
+  s_39432b15d913d6::t_3194b12807653b 8-11,33-36,197-198
+  s_391b55190a7812::t_6fb86e6de0d184 119-128
+  s_391b55190a7812::t_ffb321c6599e27 12-32
+  s_39432b15d913d6::t_9244cb135d18ec 67-94,106-118,129-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "7c26511479c226eb788753ed28e9255e772c80ac",
+  "prompts": {},
+  "sessions": {
+    "s_391b55190a7812": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f15e1902-866d-4125-be7e-f52ddb0befa8",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_39432b15d913d6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df13092f-8dfb-4599-85c3-af64db759cde",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
