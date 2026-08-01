@@ -28,6 +28,13 @@ public sealed record FhirBulkExportRequest(
 /// <summary>One NDJSON output file produced by a completed export.</summary>
 public sealed record BulkExportFile(string ResourceType, string Url);
 
+/// <summary>One entry from a completed export manifest's <c>error</c> array (FHIR Bulk Data spec) — an
+/// OperationOutcome NDJSON file describing a resource type the server couldn't/wouldn't include in the export
+/// even though the job as a whole succeeded (e.g. a type not supported or not authorized for this client's
+/// registration). The manifest itself never names the affected resource type structurally — <see cref="Diagnostics"/>
+/// is the server's free-text explanation, which in practice (e.g. Epic) names it.</summary>
+public sealed record BulkExportPartialFailure(string? Severity, string? Code, string Diagnostics);
+
 /// <summary>Outcome of a single <c>$export</c> status-URL poll (see
 /// <see cref="Abstractions.Connectors.IFhirBulkExportClient.PollOnceAsync"/>) — deliberately returned rather than
 /// thrown for <see cref="BulkExportPollStatus.Failed"/>, so a caller polling on a schedule (rather than blocking in
@@ -36,7 +43,8 @@ public sealed record BulkExportPollResult(
     BulkExportPollStatus Status,
     IReadOnlyList<BulkExportFile>? Files = null,
     TimeSpan? RetryAfter = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    IReadOnlyList<BulkExportFile>? ErrorFiles = null);
 
 /// <summary>Status of a single bulk-export poll attempt.</summary>
 public enum BulkExportPollStatus

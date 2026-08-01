@@ -1,4 +1,11 @@
-export type ExecutionStatus = 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
+export type ExecutionStatus =
+  | 'Pending'
+  | 'Running'
+  | 'Succeeded'
+  | 'Failed'
+  | 'Cancelled'
+  | 'PartialSuccess'
+  | 'AwaitingBulkExport';
 
 /** Matches the backend's WorkflowRunHistoryDto (workflow-runs endpoints — the Runtime Plane's execution history). */
 export interface RouteExecution {

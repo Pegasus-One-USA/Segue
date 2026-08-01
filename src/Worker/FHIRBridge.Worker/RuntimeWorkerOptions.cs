@@ -5,7 +5,6 @@ namespace FHIRBridge.Worker;
 
 public sealed class RuntimeWorkerOptions
 {
-    public bool Enabled { get; set; }
     public int IntervalSeconds { get; set; } = 300;
 
     /// <summary>

@@ -35,4 +35,12 @@ public interface IFhirBulkExportClient
         IReadOnlyList<BulkExportFile> files,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken);
+
+    /// <summary>Downloads and parses the OperationOutcome NDJSON files from a completed export manifest's
+    /// <c>error</c> array — the partial-success case where the job succeeded overall but one or more resource
+    /// types were excluded (e.g. not supported/authorized for this client).</summary>
+    Task<IReadOnlyList<BulkExportPartialFailure>> DownloadPartialFailuresAsync(
+        IReadOnlyList<BulkExportFile> errorFiles,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken);
 }

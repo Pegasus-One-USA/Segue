@@ -42,7 +42,7 @@ public sealed class DefaultExceptionClassifier : IExceptionClassifier
         new(ErrorCategory.Authorization, ex => NameContains(ex, "Authorization", "Forbidden") || TypeIs(ex, "UnauthorizedAccessException")),
         new(ErrorCategory.Database, ex => NameContains(ex, "SqlException", "DbUpdate", "DbException", "EntityFramework") || NamespaceContains(ex, "Microsoft.Data.SqlClient", "Microsoft.EntityFrameworkCore")),
         new(ErrorCategory.Network, ex => TypeIs(ex, "HttpRequestException", "SocketException", "WebException", "TimeoutException", "TaskCanceledException") || NamespaceContains(ex, "System.Net.Sockets")),
-        new(ErrorCategory.ExternalSystem, ex => NameContains(ex, "Fhir", "Sftp", "Ssh", "Smtp", "Storage", "Blob") || NamespaceContains(ex, "Renci.SshNet")),
+        new(ErrorCategory.ExternalSystem, ex => NameContains(ex, "Fhir", "Sftp", "Ssh", "Smtp", "Storage", "Blob", "Mongo") || NamespaceContains(ex, "Renci.SshNet", "MongoDB")),
         new(ErrorCategory.Business, ex => NameContains(ex, "FHIRBridge", "Domain", "BusinessRule") || TypeIs(ex, "InvalidOperationException")),
         new(ErrorCategory.Infrastructure, ex => TypeIs(ex, "IOException", "OperationCanceledException")),
     };

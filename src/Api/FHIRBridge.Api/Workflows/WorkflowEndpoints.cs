@@ -1058,10 +1058,16 @@ public static class WorkflowEndpoints
             CancellationToken cancellationToken) =>
         {
             var counts = await runStore.GetStatusCountsAsync(cancellationToken);
+
+            // AwaitingBulkExport is non-terminal — a node deferred to an async $export job and the run is still
+            // in flight pending BulkExportPollWorker's resume — so it belongs in "Running", not invisible in no
+            // tile at all. PartialSuccess is a terminal, fully-written outcome (every node ran; only some non-parent
+            // resource types were skipped for lack of authorization) — it belongs in "Succeeded", same as the
+            // Recent Workflows table already labels it "Completed"-equivalent.
             return Results.Ok(new WorkflowRunStatusCountsDto(
                 counts[WorkflowRunStatus.Pending],
-                counts[WorkflowRunStatus.Running],
-                counts[WorkflowRunStatus.Succeeded],
+                counts[WorkflowRunStatus.Running] + counts[WorkflowRunStatus.AwaitingBulkExport],
+                counts[WorkflowRunStatus.Succeeded] + counts[WorkflowRunStatus.PartialSuccess],
                 counts[WorkflowRunStatus.Failed],
                 counts[WorkflowRunStatus.Cancelled],
                 counts[WorkflowRunStatus.PartialSuccess]));

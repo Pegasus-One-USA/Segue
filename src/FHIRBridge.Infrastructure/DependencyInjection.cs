@@ -240,7 +240,10 @@ public static class DependencyInjection
         // a single central switch. Add a new destination/source failure signature by adding a rule here, not by
         // editing DefaultFailureDiagnosisClassifier.
         services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.SqlDestinationFailureDiagnosisRule>();
-        services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.EpicTokenFailureDiagnosisRule>();
+        services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.TokenEndpointFailureDiagnosisRule>();
+        services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.BulkExportKickOffFailureDiagnosisRule>();
+        services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.SftpDestinationFailureDiagnosisRule>();
+        services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.MongoDestinationFailureDiagnosisRule>();
         services.AddSingleton<IFailureDiagnosisClassifier, DefaultFailureDiagnosisClassifier>();
         services.AddScoped<IGlobalExceptionManager, GlobalExceptionManager>();
 

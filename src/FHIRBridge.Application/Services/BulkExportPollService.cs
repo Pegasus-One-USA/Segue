@@ -101,25 +101,47 @@ public sealed class BulkExportPollService : IBulkExportPollService
             case BulkExportPollStatus.Completed:
                 var resources = await _bulkExportClient.DownloadResultsAsync(result.Files ?? [], source, cancellationToken);
 
+                // Partial success per the FHIR Bulk Data spec: the job as a whole completed (200), but the
+                // manifest's `error` array lists resource types the server excluded (e.g. not supported/authorized
+                // for this client's registration) — download and format those alongside the real output so the run
+                // finishes as PartialSuccess instead of silently missing that data with no explanation anywhere.
+                IReadOnlyList<string>? skippedResourceTypeReasons = null;
+                if (result.ErrorFiles is { Count: > 0 } errorFiles)
+                {
+                    var partialFailures = await _bulkExportClient.DownloadPartialFailuresAsync(errorFiles, source, cancellationToken);
+                    if (partialFailures.Count > 0)
+                    {
+                        skippedResourceTypeReasons = partialFailures
+                            .Select(failure => failure.Code is { Length: > 0 } code
+                                ? $"{failure.Diagnostics} (OperationOutcome: {failure.Severity ?? "error"}/{code})"
+                                : failure.Diagnostics)
+                            .ToList();
+                    }
+                }
+
                 // Mark Completed and persist BEFORE running the continuation: a crash mid-continuation must not
                 // cause a re-poll of a $export job the source server has already finished (and may no longer
                 // serve) — any retry of a failed continuation belongs at the PipelineRun/WorkflowRun level, not here.
                 job.MarkCompleted(DateTime.UtcNow);
                 await _jobRepository.UpdateAsync(job, cancellationToken);
 
-                await RunContinuationAsync(job, resources, cancellationToken);
+                await RunContinuationAsync(job, resources, skippedResourceTypeReasons, cancellationToken);
                 break;
         }
     }
 
     private async Task RunContinuationAsync(
-        BulkExportJob job, IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources, CancellationToken cancellationToken)
+        BulkExportJob job,
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources,
+        IReadOnlyList<string>? skippedResourceTypeReasons,
+        CancellationToken cancellationToken)
     {
         switch (job.SourcePath)
         {
             case BulkExportJobSourcePath.WorkflowNode:
                 await _workflowOrchestrator.ResumeAfterBulkExportAsync(
-                    job.WorkflowRunId!.Value, job.WorkflowNodeId!.Value, job.PriorNodeOutputsJson, job.ContextJson, resources, cancellationToken);
+                    job.WorkflowRunId!.Value, job.WorkflowNodeId!.Value, job.PriorNodeOutputsJson, job.ContextJson,
+                    resources, skippedResourceTypeReasons, cancellationToken);
                 break;
 
             default:

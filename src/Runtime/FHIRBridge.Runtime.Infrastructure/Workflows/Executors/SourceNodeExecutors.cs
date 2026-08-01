@@ -1,4 +1,5 @@
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
@@ -19,8 +20,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -33,8 +35,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -47,8 +50,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -61,8 +65,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -75,8 +80,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -89,8 +95,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -103,8 +110,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -117,8 +125,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -146,6 +155,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly IFhirBulkExportClient? _bulkExportClient;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? _bulkExportJobRepository;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     protected SourceNodeExecutor(
         string nodeType,
@@ -155,7 +165,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null)
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
@@ -165,6 +176,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _bulkExportClient = bulkExportClient;
         _workflowDefinitionStore = workflowDefinitionStore;
         _bulkExportJobRepository = bulkExportJobRepository;
+        _exceptionManager = exceptionManager;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -363,6 +375,34 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     StringComparer.OrdinalIgnoreCase);
         }
 
+        // Authorization session check: the connection's granted SMART scopes (source.Scopes — the authoritative
+        // record of what the IdP actually granted, see the comment above on resourceTypes resolution) are logged
+        // every time this node runs, not just when something is missing, so Correlation Search's Errors section
+        // always shows what this run was authorized for. Best-effort: a governance-logging hiccup must never
+        // abort the extraction itself (CaptureExpectedAsync already swallows internally).
+        if (_exceptionManager is not null)
+        {
+            var grantedScopesSummary = source.Scopes is { Count: > 0 }
+                ? string.Join(", ", source.Scopes)
+                : "(none granted)";
+            await _exceptionManager.CaptureExpectedAsync(
+                new ExpectedFailure(
+                    "ScopesGranted",
+                    $"Authorization session for node '{node.Id}' ({node.NodeType}): granted scopes = [{grantedScopesSummary}]; requested resource types = [{string.Join(", ", executionOrder)}]"),
+                new ExceptionContext(
+                    Module: "Workflow",
+                    Severity: "Informational",
+                    CorrelationId: context.CorrelationId,
+                    WorkflowId: node.WorkflowDefinitionId.ToString(),
+                    ExecutionId: context.WorkflowRunId.ToString()),
+                cancellationToken);
+        }
+
+        // Only enforced when the connection actually declares resource-scoped SMART grants — a source with no
+        // scopes at all (e.g. Sample, or a non-interactive connection FHIRBridge doesn't track scopes for) has
+        // nothing to check against, so every resource type it's configured for is attempted unchanged.
+        var grantedResourceScopes = DeriveResourceTypesFromScopes(source.Scopes);
+
         IReadOnlyList<string>? cohortPatientIds = null;
         var resources = new List<ResourceEnvelope>();
         var skippedResourceTypes = new List<string>();
@@ -373,6 +413,17 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page;
             try
             {
+                if (grantedResourceScopes.Count > 0 && !IsResourceTypeAuthorized(type, source.Scopes))
+                {
+                    // Caught immediately below — same Patient(cancel)/child(skip) handling as a reactive 401/403
+                    // from the FHIR server, except this fires before any request is sent, so a known-missing scope
+                    // never even attempts (and never waits on) a call the server would have rejected anyway.
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException(
+                        type,
+                        0,
+                        $"no granted SMART scope authorizes '{type}' for this session (granted: {(source.Scopes is { Count: > 0 } ? string.Join(", ", source.Scopes) : "none")})");
+                }
+
                 page = useBulkExport
                     ? batchedBulkResourcesByType is not null
                         ? batchedBulkResourcesByType.TryGetValue(type, out var batchedPage) ? batchedPage : []
@@ -592,6 +643,34 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return resourceTypes;
+    }
+
+    /// <summary>
+    /// True if at least one of <paramref name="grantedScopes"/> covers <paramref name="resourceType"/> — same scope
+    /// shape as <see cref="DeriveResourceTypesFromScopes"/> (<c>{context}/{ResourceType}.{permissions}</c>), plus a
+    /// bare wildcard resource segment (<c>system/*.read</c>, <c>user/*.rs</c>) counting as covering everything.
+    /// </summary>
+    private static bool IsResourceTypeAuthorized(string resourceType, IReadOnlyCollection<string> grantedScopes)
+    {
+        foreach (var scope in grantedScopes)
+        {
+            var slashIndex = scope.IndexOf('/');
+            if (slashIndex < 0 || slashIndex == scope.Length - 1)
+            {
+                continue;
+            }
+
+            var afterSlash = scope[(slashIndex + 1)..];
+            var dotIndex = afterSlash.IndexOf('.');
+            var candidate = dotIndex >= 0 ? afterSlash[..dotIndex] : afterSlash;
+
+            if (candidate == "*" || string.Equals(candidate, resourceType, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

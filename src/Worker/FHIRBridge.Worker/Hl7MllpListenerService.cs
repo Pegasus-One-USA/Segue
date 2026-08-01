@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Hl7v2;
 using FHIRBridge.Integration.Hl7v2;
 using Microsoft.Extensions.Options;
@@ -105,6 +106,14 @@ public sealed class Hl7MllpListenerService : BackgroundService
             catch (Exception exception)
             {
                 _logger.LogError(exception, "HL7 v2 MLLP connection failed.");
+
+                using var scope = _serviceScopeFactory.CreateScope();
+                var exceptionManager = scope.ServiceProvider.GetService<IGlobalExceptionManager>();
+                if (exceptionManager is not null)
+                {
+                    await exceptionManager.CaptureAsync(
+                        exception, new ExceptionContext(Module: "HL7 v2 MLLP"), CancellationToken.None);
+                }
             }
         }
     }

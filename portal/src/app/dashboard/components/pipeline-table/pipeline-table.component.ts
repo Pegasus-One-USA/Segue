@@ -6,19 +6,23 @@ import { ExecutionStatus, RouteExecution } from '../../../execution-history/mode
 // Reuses the existing .status-badge CSS classes (status-running/completed/failed/queued/cancelled) —
 // mapped from the real ExecutionStatus vocabulary rather than renaming the CSS.
 const STATUS_LABELS: Record<ExecutionStatus, string> = {
-  Pending:   'Pending',
-  Running:   'Running',
-  Succeeded: 'Completed',
-  Failed:    'Failed',
-  Cancelled: 'Cancelled',
+  Pending:            'Pending',
+  Running:            'Running',
+  Succeeded:          'Completed',
+  Failed:             'Failed',
+  Cancelled:          'Cancelled',
+  PartialSuccess:     'Partial Success',
+  AwaitingBulkExport: 'Awaiting Bulk Export',
 };
 
 const STATUS_CLASSES: Record<ExecutionStatus, string> = {
-  Pending:   'queued',
-  Running:   'running',
-  Succeeded: 'completed',
-  Failed:    'failed',
-  Cancelled: 'cancelled',
+  Pending:            'queued',
+  Running:            'running',
+  Succeeded:          'completed',
+  Failed:             'failed',
+  Cancelled:          'cancelled',
+  PartialSuccess:     'partial',
+  AwaitingBulkExport: 'awaiting',
 };
 
 @Component({

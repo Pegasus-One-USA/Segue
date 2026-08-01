@@ -63,7 +63,8 @@ public sealed class BulkExportPollServiceTests
         job.PollAttemptCount.Should().Be(1);
         repository.Verify(r => r.UpdateAsync(job, It.IsAny<CancellationToken>()), Times.Once);
         orchestrator.Verify(o => o.ResumeAfterBulkExportAsync(
-            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(), It.IsAny<CancellationToken>()),
+            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+            It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -124,7 +125,8 @@ public sealed class BulkExportPollServiceTests
             .Returns(Task.CompletedTask);
         orchestrator
             .Setup(o => o.ResumeAfterBulkExportAsync(
-                job.WorkflowRunId!.Value, job.WorkflowNodeId!.Value, job.PriorNodeOutputsJson, job.ContextJson, resources, It.IsAny<CancellationToken>()))
+                job.WorkflowRunId!.Value, job.WorkflowNodeId!.Value, job.PriorNodeOutputsJson, job.ContextJson, resources,
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
             .Callback(() => updateCallOrder.Add("resume"))
             .ReturnsAsync(new WorkflowRunResult(
                 new WorkflowRun(job.WorkflowRunId!.Value, Guid.NewGuid(), DateTimeOffset.UtcNow), new Dictionary<Guid, WorkflowNodeOutput>()));
@@ -135,6 +137,46 @@ public sealed class BulkExportPollServiceTests
         // Completion must be persisted BEFORE the continuation runs, so a crash mid-continuation doesn't cause a
         // re-poll of an already-finished (and no-longer-servable) $export job.
         updateCallOrder.Should().Equal("update", "resume");
+    }
+
+    [Fact]
+    public async Task Completed_result_with_manifest_errors_downloads_and_forwards_the_partial_failures()
+    {
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        var errorFiles = new[] { new BulkExportFile("OperationOutcome", "https://fhir.example.com/files/error.ndjson") };
+        var resources = new List<ResourceEnvelope> { new("Patient", "p1", "{}", null, null) };
+        var partialFailures = new[]
+        {
+            new BulkExportPartialFailure("error", "not-supported", "Resource type 'MedicationAdministration' is not supported for this client."),
+        };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files, ErrorFiles: errorFiles));
+        client.Setup(c => c.DownloadResultsAsync(files, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(resources);
+        client.Setup(c => c.DownloadPartialFailuresAsync(errorFiles, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(partialFailures);
+
+        IReadOnlyList<string>? capturedReasons = null;
+        orchestrator
+            .Setup(o => o.ResumeAfterBulkExportAsync(
+                job.WorkflowRunId!.Value, job.WorkflowNodeId!.Value, job.PriorNodeOutputsJson, job.ContextJson, resources,
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, Guid, string?, string?, IReadOnlyList<ResourceEnvelope>, IReadOnlyList<string>?, CancellationToken>(
+                (_, _, _, _, _, reasons, _) => capturedReasons = reasons)
+            .ReturnsAsync(new WorkflowRunResult(
+                new WorkflowRun(job.WorkflowRunId!.Value, Guid.NewGuid(), DateTimeOffset.UtcNow), new Dictionary<Guid, WorkflowNodeOutput>()));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Completed);
+        capturedReasons.Should().ContainSingle()
+            .Which.Should().Contain("MedicationAdministration").And.Contain("not-supported");
     }
 
     [Fact]

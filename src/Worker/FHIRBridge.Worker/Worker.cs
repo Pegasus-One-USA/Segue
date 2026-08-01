@@ -38,7 +38,7 @@ public sealed class Worker : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            var enabled = await _settingsCache.GetBoolAsync("RuntimeWorker:Enabled", _options.Value.Enabled, stoppingToken);
+            var enabled = await _settingsCache.GetBoolAsync("RuntimeWorker:Enabled", defaultValue: false, stoppingToken);
             if (!enabled)
             {
                 _logger.LogInformation("FHIRBridge runtime worker is disabled. Set RuntimeWorker:Enabled=true to run scheduled Phase 1 jobs.");

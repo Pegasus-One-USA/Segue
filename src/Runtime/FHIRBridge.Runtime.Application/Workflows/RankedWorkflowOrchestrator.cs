@@ -131,6 +131,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         string? priorNodeOutputsJson,
         string? contextJson,
         IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources,
+        IReadOnlyList<string>? skippedResourceTypeReasons = null,
         CancellationToken cancellationToken = default)
     {
         if (_runStore is null)
@@ -165,8 +166,20 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             pausedNode.NodeType,
             new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceBatch(ToPayloadEnvelopes(resources)),
             WorkflowDataContract.ResourceBatch,
-            new Dictionary<string, object?> { ["executor"] = "BulkExportPollWorker", ["count"] = resources.Count });
+            new Dictionary<string, object?>
+            {
+                ["executor"] = "BulkExportPollWorker",
+                ["count"] = resources.Count,
+                // Read by the same generic aggregation below/at RunNodesAsync's node loop as the REST-search path's
+                // per-type authorization skips — one shared mechanism surfaces both as WorkflowRunStatus.PartialSuccess.
+                ["skippedResourceTypes"] = skippedResourceTypeReasons is { Count: > 0 } ? skippedResourceTypeReasons.ToArray() : null,
+            });
         outputsByNodeId[pausedNode.Id] = materializedOutput;
+
+        if (skippedResourceTypeReasons is { Count: > 0 })
+        {
+            skippedResourceTypesAcrossRun.AddRange(skippedResourceTypeReasons);
+        }
 
         var resumedNodeRun = new WorkflowNodeRun(
             Guid.NewGuid(), workflowRun.Id, pausedNode.Id, pausedNode.NodeType, pausedNode.Rank, pausedNode.SubRank, DateTimeOffset.UtcNow);
@@ -340,8 +353,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             if (skippedResourceTypesAcrossRun.Count > 0)
             {
-                var summary = "Partial success — some resource types were skipped because this app is not " +
-                    $"authorized for them: {string.Join(" | ", skippedResourceTypesAcrossRun)}";
+                var summary = "Partial success — one or more resource types were excluded from this run: " +
+                    string.Join(" | ", skippedResourceTypesAcrossRun);
                 workflowRun.PartialSucceed(summary, DateTimeOffset.UtcNow);
 
                 // Unlike Cancel/Fail, reaching here throws nothing — this branch is a normal completion path, so

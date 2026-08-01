@@ -461,7 +461,8 @@ public sealed class RankedWorkflowOrchestratorTests
         };
 
         var result = await orchestrator.ResumeAfterBulkExportAsync(
-            pausedRun.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: null, resources, CancellationToken.None);
+            pausedRun.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: null, resources,
+            skippedResourceTypeReasons: null, cancellationToken: CancellationToken.None);
 
         calls.Should().Equal(WorkflowNodeTypes.DeIdentification, WorkflowNodeTypes.Mapping, WorkflowNodeTypes.SqlServerDestination);
         result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.Succeeded);
