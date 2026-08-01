@@ -197,6 +197,52 @@ public sealed class WorkflowSqlStoreTests
     }
 
     [Fact]
+    public async Task Run_store_replaces_an_AwaitingBulkExport_placeholder_once_the_resume_completes()
+    {
+        // Mirrors the real bulk-export pause/resume flow: RankedWorkflowOrchestrator.ExecuteAsync persists a
+        // "Running" placeholder, then AwaitBulkExport() moves it to "AwaitingBulkExport" from the SAME tracked
+        // instance/scope — both writes go through the ChangeTracker fast path. The RESUME, though, happens in a
+        // brand-new scope/DbContext (a later BulkExportPollWorker tick, quite possibly a different process): it
+        // fetches the run via GetAsync (AsNoTracking), completes it in memory, and saves from a context that has
+        // never tracked this run at all — exercising the "existing" branch below, not the ChangeTracker branch.
+        var runId = Guid.NewGuid();
+        var run = new WorkflowRun(runId, Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            await new SqlWorkflowRunStore(context).SaveAsync(run, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            run.AwaitBulkExport();
+            await new SqlWorkflowRunStore(context).SaveAsync(run, CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var stillPaused = await new SqlWorkflowRunStore(assertContext).GetAsync(runId, CancellationToken.None);
+            stillPaused!.Status.Should().Be(WorkflowRunStatus.AwaitingBulkExport);
+        }
+
+        // The resume: a fresh scope loads the AwaitingBulkExport row untracked, finishes the run, and saves it back.
+        await using (var resumeContext = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(resumeContext);
+            var resumed = await store.GetAsync(runId, CancellationToken.None);
+            resumed!.Succeed(DateTimeOffset.UtcNow);
+            await store.SaveAsync(resumed, CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var reloaded = await new SqlWorkflowRunStore(assertContext).GetAsync(runId, CancellationToken.None);
+            reloaded!.Status.Should().Be(WorkflowRunStatus.Succeeded);
+            assertContext.WorkflowRuns.Count(persisted => persisted.Id == runId).Should().Be(1);
+        }
+    }
+
+    [Fact]
     public async Task Run_store_status_counts_reflect_every_run_and_zero_fill_unrepresented_statuses()
     {
         var definitionId = Guid.NewGuid();

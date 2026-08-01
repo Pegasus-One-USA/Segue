@@ -50,16 +50,21 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
 
         if (existing is not null)
         {
-            if (existing.Status != WorkflowRunStatus.Running)
+            if (IsTerminal(existing.Status))
             {
                 // Already-persisted terminal row (e.g. a retried write) — preserve the original idempotent-insert
                 // guarantee for a run that's actually finished.
                 return;
             }
 
-            // Replace the in-flight "Running" placeholder with the fully-populated terminal aggregate. The FK's
-            // ON DELETE CASCADE (see WorkflowRunEntityTypeConfiguration) takes the placeholder's WorkflowNodeRuns
-            // rows with it — none exist yet at the point the placeholder itself was written, so nothing to lose.
+            // Replace the in-flight placeholder — Running, or AwaitingBulkExport for a run paused on a $export job
+            // that's now resuming — with the fully-populated terminal aggregate. Checking for "not terminal" rather
+            // than "== Running" matters: a resume's completed WorkflowRun (Succeeded/PartialSuccess/Failed) was
+            // previously discarded here because the existing row's status was AwaitingBulkExport, not Running — the
+            // run stayed stuck showing AwaitingBulkExport forever even though BulkExportPollWorker had already
+            // downloaded every file and finished running the rest of the DAG. The FK's ON DELETE CASCADE (see
+            // WorkflowRunEntityTypeConfiguration) takes the placeholder's WorkflowNodeRuns rows with it — none exist
+            // yet at the point an AwaitingBulkExport/Running placeholder was written, so nothing to lose.
             _dbContext.WorkflowRuns.Remove(existing);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
@@ -111,4 +116,9 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         return Enum.GetValues<WorkflowRunStatus>()
             .ToDictionary(status => status, status => counts.FirstOrDefault(c => c.Key == status)?.Count ?? 0);
     }
+
+    /// <summary>Pending/Running/AwaitingBulkExport are all still in-flight — a placeholder row in any of these is
+    /// safe to replace wholesale. Only Succeeded/Failed/Cancelled/PartialSuccess are actually finished.</summary>
+    private static bool IsTerminal(WorkflowRunStatus status) => status is
+        WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or WorkflowRunStatus.Cancelled or WorkflowRunStatus.PartialSuccess;
 }
