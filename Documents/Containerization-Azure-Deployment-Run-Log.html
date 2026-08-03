@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure Live Deployment &mdash; Run Log &mdash; FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --azure: #0078D4;
+    --azure-bg: #DEEFFC;
+    --blocked: #7C3AED;
+    --blocked-bg: #EDE9FE;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--azure) 0%, #003E73 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; max-width: 720px; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--azure); margin-right: 8px; }
+  h3 { font-size: 17px; font-weight: 700; color: var(--ink); margin: 30px 0 12px; }
+  h4 { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 14px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0 0 16px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--azure); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .pill-fixed    { color: var(--new); background: var(--new-bg); }
+  .pill-blocked  { color: var(--blocked); background: var(--blocked-bg); }
+  .pill-pending  { color: var(--modified); background: var(--modified-bg); }
+  .pill-azure    { color: var(--azure); background: var(--azure-bg); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 110px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--azure);
+    background: var(--azure-bg);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.blocked { border-left-color: var(--blocked); background: var(--blocked-bg); }
+  .callout.fixed { border-left-color: var(--new); background: var(--new-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0 28px; }
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .summary-card .num { font-size: 26px; font-weight: 800; color: var(--azure); font-variant-numeric: tabular-nums; }
+  .summary-card .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  /* Timeline */
+  .timeline { position: relative; margin: 20px 0 32px; padding-left: 28px; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+  .timeline-step { position: relative; margin-bottom: 18px; }
+  .timeline-step::before {
+    content: "";
+    position: absolute; left: -28px; top: 4px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--surface); border: 3px solid var(--azure);
+  }
+  .timeline-step.ok::before { border-color: var(--new); }
+  .timeline-step.bug::before { border-color: var(--deleted); }
+  .timeline-step.blocked::before { border-color: var(--blocked); }
+  .timeline-step strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .timeline-step span { font-size: 13px; color: var(--muted); }
+
+  /* Issue cards, matching the sibling docs' bug-card component */
+  .issue-card {
+    border: 1px solid var(--deleted);
+    background: #FFFBFB;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+  }
+  .issue-card h4 { margin-top: 0; color: var(--deleted); font-size: 15px; display: flex; align-items: center; gap: 10px; }
+  .issue-card .issue-meta { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  .issue-card.resolved { border-color: var(--new); background: #F7FEFB; }
+  .issue-card.resolved h4 { color: var(--new-dark, #047857); }
+  .issue-card.open { border-color: var(--blocked); background: #FBFAFF; }
+  .issue-card.open h4 { color: var(--blocked); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--azure) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+    .timeline { padding-left: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Azure Live Deployment &mdash; Run Log</h1>
+    <p class="subtitle">A real <code style="background:rgba(255,255,255,0.15);color:#fff;">terraform apply</code> against a live Azure subscription, end to end &mdash; every error hit, what it actually meant, what was fixed in the repo, and what's still blocked waiting on someone else.</p>
+    <div class="meta">
+      <div><strong>Environment</strong> containerization/terraform/environments/azure &mdash; subscription 4e94fee6&hellip;, resource group rg-tusharpuri</div>
+      <div><strong>Outcome</strong> <span class="pill pill-blocked" style="background:rgba(255,255,255,0.2);color:#fff;">Blocked</span> on one subscription-level permission; everything else fixed and re-runnable</div>
+      <div><strong>Issues hit</strong> 6 &mdash; 5 fixed in code/scripts, 1 needs a subscription admin</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#summary">Where things stand</a></li>
+      <li><a href="#what-is-provider-registration">What is &ldquo;registering Microsoft.App&rdquo;?</a></li>
+      <li><a href="#timeline">Run timeline</a></li>
+      <li><a href="#issue-target">Issue 1 &mdash; <code>-target</code> flag parsed wrong</a></li>
+      <li><a href="#issue-providers">Issue 2 &mdash; provider auto-registration 403s</a></li>
+      <li><a href="#issue-docker">Issue 3 &mdash; Docker Desktop not running</a></li>
+      <li><a href="#issue-app-provider">Issue 4 &mdash; Microsoft.App not registered</a></li>
+      <li><a href="#issue-rbac">Issue 5 &mdash; Key Vault role assignment 403</a></li>
+      <li><a href="#issue-tagquery">Issue 6 &mdash; az CLI tag+resource-group query</a></li>
+      <li><a href="#issue-purge">Issue 7 &mdash; Key Vault purge 403 + silent script failure</a></li>
+      <li><a href="#permission-profile">This account's actual permission profile</a></li>
+      <li><a href="#changes">Every code/script change made today</a></li>
+      <li><a href="#next-steps">Next steps</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="summary"><span class="num">1.</span>Where things stand</h2>
+  <div class="summary-grid">
+    <div class="summary-card"><div class="num">6</div><div class="label">Issues hit</div></div>
+    <div class="summary-card"><div class="num">5</div><div class="label">Fixed today</div></div>
+    <div class="summary-card"><div class="num">1</div><div class="label">Blocked on admin</div></div>
+    <div class="summary-card"><div class="num">3</div><div class="label">Files changed</div></div>
+  </div>
+  <div class="callout blocked">
+    <strong>The one real blocker: <code>Microsoft.App</code> isn't registered on this subscription</strong>
+    Everything in this Terraform config is ready to run. The only thing standing between here and a
+    fully working deployment is one subscription-level permission this account doesn't have &mdash;
+    registering the Azure Container Apps resource provider. That's a one-time, harmless action
+    (<code>az provider register --namespace Microsoft.App</code>) that needs to be run once by
+    whoever holds Owner (or an equivalent role) at the <em>subscription</em> level &mdash; not the
+    resource group. See <a href="#next-steps">Next steps</a>.
+  </div>
+  <div class="callout fixed">
+    <strong>Everything else is fixed and validated</strong>
+    Every other error encountered today traced back to either a real permission gap this account
+    genuinely has (worked around in the Terraform config itself, not bypassed) or a bug in the
+    cleanup tooling. All fixes are in <code>main.tf</code>, <code>cleanup-azure.sh</code>, and
+    <code>cleanup-azure.ps1</code>, and <code>terraform validate</code> passes clean as of the last
+    change below.
+  </div>
+
+  <h3 id="what-is-provider-registration">What is &ldquo;registering <code>Microsoft.App</code>&rdquo;, and why do we need it?</h3>
+  <p>Self-contained enough to forward to whoever administers the Azure subscription, if needed:</p>
+  <div class="callout blocked">
+    <strong>What the command does</strong>
+    Azure groups every service it offers into &ldquo;resource providers&rdquo; &mdash; namespaces
+    like <code>Microsoft.Storage</code> (Storage Accounts), <code>Microsoft.KeyVault</code> (Key
+    Vault), or <code>Microsoft.App</code> (Container Apps, the service this deployment's 5
+    containers run on). Before a subscription can create <em>any</em> resource of a given service
+    type, that service has to be switched on for the subscription first &mdash; a one-time,
+    per-subscription step, not something per-user or per-resource-group.
+    <code>az provider register --namespace Microsoft.App</code> is exactly that switch: it makes
+    the Container Apps service available for use on this subscription. It doesn't create any
+    resources, doesn't touch anything that already exists, and has no cost of its own &mdash; a
+    pure feature-enablement action.
+  </div>
+  <div class="callout blocked">
+    <strong>Why this deployment needs it</strong>
+    This Terraform config creates a Container Apps Environment and 5 Container Apps
+    (<code>fhirbridge-app</code>, <code>demo-app</code>, <code>sqlserver</code>, <code>redis</code>,
+    <code>worker</code>) &mdash; all resource types that belong to <code>Microsoft.App</code>. Until
+    that namespace is registered, Azure rejects any attempt to create them with
+    <code>MissingSubscriptionRegistration</code>, no matter what tool asks (Terraform, the Portal,
+    the CLI). This isn't a bug in this config &mdash; proven by the fact that every other resource
+    type used here (<code>Microsoft.Storage</code>, <code>Microsoft.KeyVault</code>,
+    <code>Microsoft.ContainerRegistry</code>, <code>Microsoft.OperationalInsights</code>) was
+    already registered and created successfully in the same run. <code>Microsoft.App</code> is
+    simply a newer, less universally pre-registered service.
+  </div>
+  <div class="callout blocked">
+    <strong>Why it has to be someone else, not this account</strong>
+    Registering a provider is a subscription-wide action
+    (<code>Microsoft.App/register/action</code>) that only works for an identity holding Owner (or
+    a custom role explicitly granting that action) at the <strong>subscription</strong> scope.
+    This account's access is scoped to the <code>rg-tusharpuri</code> resource group, which is a
+    narrower scope that this specific action doesn't recognize &mdash; confirmed directly by
+    attempting it (see <a href="#issue-app-provider">Issue 4</a>).
+  </div>
+
+  <h2 id="timeline"><span class="num">2.</span>Run timeline</h2>
+  <div class="timeline">
+    <div class="timeline-step ok"><strong>Signed in to Azure</strong><span>Device-code login initially landed in the wrong tenant (Pegasus One / MPN Pay-As-You-Go) &mdash; the target subscription lives in a different tenant ("Default Directory"). Resolved by signing in and selecting the correct subscription directly.</span></div>
+    <div class="timeline-step bug"><strong>Targeted apply of the ACR &mdash; hit the <code>-target</code> parsing issue</strong><span>See <a href="#issue-target">Issue 1</a>.</span></div>
+    <div class="timeline-step bug"><strong>Same command, next attempt &mdash; hit resource-provider auto-registration 403s</strong><span>See <a href="#issue-providers">Issue 2</a>.</span></div>
+    <div class="timeline-step ok"><strong>ACR created successfully</strong><span>Targeted <code>terraform apply -target="azurerm_container_registry.acr"</code> succeeded once Issues 1 &amp; 2 were fixed.</span></div>
+    <div class="timeline-step bug"><strong>Built and pushed the 3 images &mdash; hit a Docker Desktop error first</strong><span>See <a href="#issue-docker">Issue 3</a>. All 3 images (fhirbridge-app, demo-app, fhirbridge-worker) built and pushed cleanly afterward.</span></div>
+    <div class="timeline-step blocked"><strong>Full <code>terraform apply</code> &mdash; two errors surfaced together</strong><span>Key Vault, Log Analytics, Storage Account, storage shares, and the ACR tag update all succeeded. Then: Container Apps Environment failed (<a href="#issue-app-provider">Issue 4</a>), and the Key Vault RBAC role assignment failed (<a href="#issue-rbac">Issue 5</a>).</span></div>
+    <div class="timeline-step ok"><strong>Fixed Issue 5 in code</strong><span>Switched the Key Vault from RBAC authorization to classic Access Policies &mdash; resolved without needing an elevated role grant.</span></div>
+    <div class="timeline-step bug"><strong>Decided to clean up and start fresh once Microsoft.App is registered</strong><span>Ran <code>cleanup-azure.ps1</code> &mdash; hit two more issues: the tag-preview query itself was broken (<a href="#issue-tagquery">Issue 6</a>), and the Key Vault purge step failed while the script silently reported success anyway (<a href="#issue-purge">Issue 7</a>).</span></div>
+    <div class="timeline-step ok"><strong>Fixed Issues 6 &amp; 7 in code</strong><span>Re-ran cleanup: Terraform's own refresh step detected the Key Vault was already soft-deleted and dropped it from state automatically. Only <code>random_id.suffix</code> (a local-only artifact, no real Azure resource) was left to destroy.</span></div>
+    <div class="timeline-step blocked"><strong>Currently: waiting on <code>Microsoft.App</code> registration</strong><span>Nothing left to fix in code. Waiting on a subscription admin before the next full <code>terraform apply</code> can succeed.</span></div>
+  </div>
+
+  <h2 id="issue-target"><span class="num">3.</span>Issue 1 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4><code>-target=azurerm_container_registry.acr</code> parsed as just <code>azurerm_container_registry</code></h4>
+    <div class="issue-meta">Symptom: <code>Error: Invalid target "azurerm_container_registry" &mdash; Resource specification must include a resource type and name.</code></div>
+    <p>The target address is valid and matches the resource block in <code>main.tf</code> exactly.
+    Reproducing the identical command locally showed PowerShell passing the argument through
+    intact, pointing to a copy-paste artifact &mdash; most likely a line-wrap in the chat UI
+    getting pasted as an actual line break, silently truncating everything after the wrap point.</p>
+    <p><strong>Fix:</strong> re-typed/re-pasted the command with the target value quoted:
+    <code>terraform apply -target="azurerm_container_registry.acr"</code> &mdash; worked immediately.
+    No code change; a one-off input issue.</p>
+  </div>
+
+  <h2 id="issue-providers"><span class="num">4.</span>Issue 2 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Terraform tried to auto-register ~40 Azure resource providers it doesn't need, and this account can't register any of them</h4>
+    <div class="issue-meta">Symptom: a wall of <code>AuthorizationFailed</code> errors for providers like <code>Microsoft.Kusto</code>, <code>Microsoft.AVS</code>, <code>Microsoft.Databricks</code>, <code>Microsoft.Sql</code>, <code>Microsoft.ServiceBus</code> &mdash; none of which this deployment actually uses.</div>
+    <p>The <code>azurerm</code> provider's default behavior is to auto-register every resource
+    provider it supports on first use &mdash; a subscription-level action
+    (<code>&lt;Namespace&gt;/register/action</code>) this account doesn't have for <em>any</em>
+    namespace, only some of which this project actually needs.</p>
+    <p><strong>Fix:</strong> added <code>skip_provider_registration = true</code> to the
+    <code>provider "azurerm"</code> block in <code>main.tf</code>. First attempt used the newer
+    <code>resource_provider_registrations = "none"</code> setting the error text itself suggested
+    &mdash; that argument doesn't exist on the installed provider version (3.117.1), confirmed by
+    querying its schema directly (<code>terraform providers schema -json</code>); the older
+    boolean argument is what's actually supported here.</p>
+  </div>
+
+  <h2 id="issue-docker"><span class="num">5.</span>Issue 3 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Docker Desktop wasn't running</h4>
+    <div class="issue-meta">Symptom: <code>az acr login</code> failed with <code>DOCKER_COMMAND_ERROR &mdash; open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.</code></div>
+    <p>Both <code>az acr login</code> and the image build script need an active Docker engine.
+    Nothing to do with the Terraform/Bicep config &mdash; purely an environment prerequisite.</p>
+    <p><strong>Fix:</strong> started Docker Desktop, waited for it to report ready, verified with
+    <code>docker info</code>, then re-ran <code>az acr login</code> successfully. All 3 images
+    built and pushed cleanly afterward.</p>
+  </div>
+
+  <h2 id="issue-app-provider"><span class="num">6.</span>Issue 4 <span class="pill pill-blocked">open &mdash; needs a subscription admin</span></h2>
+  <div class="issue-card open">
+    <h4><code>Microsoft.App</code> resource provider isn't registered on this subscription</h4>
+    <div class="issue-meta">Symptom: <code>Error: creating Managed Environment &hellip; unexpected status 409 (409 Conflict) &mdash; MissingSubscriptionRegistration: The subscription is not registered to use namespace 'Microsoft.App'.</code></div>
+    <p>This is genuine Azure subscription state, not a Terraform config issue &mdash; no setting in
+    this repo can work around it. The Azure Container Apps service (<code>Microsoft.App</code>)
+    has to be registered on the subscription before <em>any</em> tool (Terraform, the Portal, the
+    CLI) can create a Container Apps Environment. Every other provider this deployment needs
+    (<code>Microsoft.ContainerRegistry</code>, <code>Microsoft.Storage</code>,
+    <code>Microsoft.KeyVault</code>, <code>Microsoft.OperationalInsights</code>) was already
+    registered &mdash; confirmed by the fact that the ACR, Storage Account, Log Analytics
+    workspace, and Key Vault all created successfully in the same run. <code>Microsoft.App</code>
+    is simply less universally pre-registered since Container Apps is a newer service.</p>
+    <p>Attempting self-registration confirmed the account can't do it either:</p>
+    <pre><code>PS&gt; az provider register --namespace Microsoft.App
+(AuthorizationFailed) The client 'mitul.shah@pegasusone.com' &hellip; does not have authorization
+to perform action 'Microsoft.App/register/action' over scope '/subscriptions/4e94fee6&hellip;'</code></pre>
+    <p><strong>Status: blocked.</strong> This is a subscription-wide action &mdash; not scoped to
+    <code>rg-tusharpuri</code>, so no amount of resource-group-level access fixes it. Needs
+    someone with Owner (or a role granting that specific register action) at the
+    <strong>subscription</strong> level &mdash; see <a href="#next-steps">Next steps</a>.</p>
+  </div>
+
+  <h2 id="issue-rbac"><span class="num">7.</span>Issue 5 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Key Vault RBAC role assignment failed with 403</h4>
+    <div class="issue-meta">Symptom: <code>AuthorizationFailed &mdash; does not have authorization to perform action 'Microsoft.Authorization/roleAssignments/write' over scope '&hellip;/vaults/fhirbridge-kv-0a5d2b/&hellip;'</code></div>
+    <p>The config originally granted the applying identity "Key Vault Secrets Officer" via an
+    <code>azurerm_role_assignment</code>, using the Vault's RBAC authorization mode. Creating an
+    RBAC role assignment needs <code>Microsoft.Authorization/roleAssignments/write</code>, which
+    requires Owner or User Access Administrator &mdash; a narrower permission than Contributor,
+    which this account has instead.</p>
+    <p><strong>Fix:</strong> switched the Key Vault to classic Access Policies
+    (<code>enable_rbac_authorization = false</code>), replacing the role assignment with an
+    <code>azurerm_key_vault_access_policy</code> resource granting
+    <code>Get/List/Set/Delete/Purge</code> on secrets. Access Policies are set via the vault
+    resource itself (<code>Microsoft.KeyVault/vaults/write</code>), which Contributor already
+    includes &mdash; same end goal (Key Vault as the secrets source of truth), an authorization
+    model that actually matches this account's real permissions.</p>
+  </div>
+
+  <h2 id="issue-tagquery"><span class="num">8.</span>Issue 6 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>The cleanup script's own tag-preview query was invalid az CLI syntax</h4>
+    <div class="issue-meta">Symptom: <code>you cannot use '--tag' with '--resource-group'(If the default value for resource group is set, please use 'az configure --defaults group=""' command to clear it first)</code></div>
+    <p>This az CLI version rejects combining <code>--tag</code> and <code>--resource-group</code>
+    on <code>az resource list</code> &mdash; a real CLI limitation discovered only by actually
+    running the cleanup script, not something documented clearly up front.</p>
+    <p><strong>Fix:</strong> both <code>cleanup-azure.sh</code> and <code>cleanup-azure.ps1</code>
+    now filter by tag across the whole subscription and narrow to the target resource group
+    client-side instead: <code>az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='rg-tusharpuri']"</code>.
+    Purely a preview/confirmation step either way &mdash; <code>terraform destroy</code> itself
+    was never affected by this bug, since it works from state, not this query.</p>
+  </div>
+
+  <h2 id="issue-purge"><span class="num">9.</span>Issue 7 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Key Vault purge-on-destroy failed, and the cleanup script reported success anyway</h4>
+    <div class="issue-meta">Symptom: <code>Error: purging Key Vault &hellip; does not have authorization to perform action 'Microsoft.KeyVault/locations/deletedVaults/purge/action'</code> &mdash; immediately followed by the script printing <code>Done. Everything this Terraform config created has been removed&hellip;</code></div>
+    <p>Two separate problems here. First: <code>terraform destroy</code>, by default, doesn't just
+    soft-delete a Key Vault &mdash; it also tries to immediately <em>purge</em> it, a separate and
+    more privileged action this account doesn't have (same permission class as Issue 5). The
+    soft-delete itself succeeded; only the automatic follow-up purge failed.</p>
+    <p>Second, and more important: <code>cleanup-azure.ps1</code> printed its "Done" success
+    message regardless of whether <code>terraform destroy</code> actually succeeded. The root
+    cause is a genuine PowerShell gotcha &mdash; <strong>PowerShell does not treat a non-zero exit
+    code from a native executable as a terminating error</strong>, even with
+    <code>$ErrorActionPreference = "Stop"</code>; that setting only governs PowerShell's own
+    cmdlets and exceptions, never <code>$LASTEXITCODE</code> from an external process like
+    <code>terraform.exe</code>. Without an explicit check, the script would keep announcing
+    success on any partial failure.</p>
+    <p><strong>Fix, two parts:</strong></p>
+    <ul style="padding-left:20px;margin:0 0 14px;">
+      <li>Added <code>features { key_vault { purge_soft_delete_on_destroy = false } }</code> to the
+      provider block in <code>main.tf</code> &mdash; destroy now only soft-deletes the vault, which
+      then ages out of the 7-day soft-delete retention window on its own, no elevated permission
+      needed.</li>
+      <li>Both cleanup scripts now explicitly check the destroy exit code
+      (<code>$LASTEXITCODE</code> in PowerShell, <code>$?</code> captured under
+      <code>set +e</code> in bash) before printing anything, and report a clear warning instead of
+      a false "Done" when destroy didn't fully succeed.</li>
+    </ul>
+    <p>Re-running cleanup afterward confirmed the fix working as intended in both directions: it
+    correctly reported the failure the first time (instead of masking it), and on the next run
+    Terraform's own state refresh had already detected the Key Vault no longer existed as a live
+    resource and dropped it from state automatically &mdash; leaving only
+    <code>random_id.suffix</code> (a local-only value, no real Azure resource) to clean up.</p>
+  </div>
+
+  <h2 id="permission-profile"><span class="num">10.</span>This account's actual permission profile</h2>
+  <p class="section-intro">Worth recording plainly, since it explains four of today's six issues and will
+  matter for anyone else running this Terraform against the same subscription with the same account
+  (<code>mitul.shah@pegasusone.com</code> on <code>4e94fee6-c28c-4cb4-989f-ce4092537c3c</code>).</p>
+  <table class="file-table">
+    <tr><th>Can do</th><th>Can't do</th></tr>
+    <tr>
+      <td class="why">Create/manage resources within <code>rg-tusharpuri</code>: Storage Accounts, Key Vaults, Container Registries, Log Analytics workspaces, Container Apps (once <code>Microsoft.App</code> is registered)</td>
+      <td class="why">Register subscription-level resource providers (<code>&lt;Namespace&gt;/register/action</code>) &mdash; blocked <a href="#issue-app-provider">Container Apps creation</a> until someone else registers <code>Microsoft.App</code></td>
+    </tr>
+    <tr>
+      <td class="why">Set Key Vault Access Policies directly on a vault it created (<code>Microsoft.KeyVault/vaults/write</code>)</td>
+      <td class="why">Create Azure RBAC role assignments, even on its own resources (<code>Microsoft.Authorization/roleAssignments/write</code>) &mdash; needs Owner or User Access Administrator</td>
+    </tr>
+    <tr>
+      <td class="why">Soft-delete a Key Vault via <code>terraform destroy</code></td>
+      <td class="why">Purge a soft-deleted Key Vault (<code>Microsoft.KeyVault/locations/deletedVaults/purge/action</code>)</td>
+    </tr>
+  </table>
+  <p>In short: a Contributor-shaped role on the resource group, without User Access Administrator
+  and without subscription-level provider-registration rights. The Terraform config now works
+  entirely within that profile &mdash; see the change table below &mdash; except for the one action
+  that's genuinely impossible to work around: registering a resource provider is always
+  subscription-scoped in Azure, full stop.</p>
+
+  <h2 id="changes"><span class="num">11.</span>Every code/script change made today</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Change</th><th>Because of</th></tr>
+    <tr>
+      <td class="file-path">azure/main.tf</td>
+      <td class="why"><code>skip_provider_registration = true</code> on the <code>azurerm</code> provider block</td>
+      <td class="why"><a href="#issue-providers">Issue 2</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">azure/main.tf</td>
+      <td class="why">Key Vault switched from RBAC (<code>enable_rbac_authorization = true</code> + <code>azurerm_role_assignment</code>) to Access Policies (<code>enable_rbac_authorization = false</code> + <code>azurerm_key_vault_access_policy</code>)</td>
+      <td class="why"><a href="#issue-rbac">Issue 5</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">azure/main.tf</td>
+      <td class="why"><code>features { key_vault { purge_soft_delete_on_destroy = false } }</code> added to the provider block</td>
+      <td class="why"><a href="#issue-purge">Issue 7</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">scripts/cleanup-azure.sh</td>
+      <td class="why">Tag-preview query fixed (<code>--tag</code> + client-side <code>--query</code> instead of <code>--tag</code> + <code>--resource-group</code>); explicit destroy-exit-code check before reporting success</td>
+      <td class="why"><a href="#issue-tagquery">Issue 6</a>, <a href="#issue-purge">Issue 7</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">scripts/cleanup-azure.ps1</td>
+      <td class="why">Same two fixes as the bash version, plus the <code>$LASTEXITCODE</code> check specifically needed because PowerShell doesn't surface native exit codes as terminating errors</td>
+      <td class="why"><a href="#issue-tagquery">Issue 6</a>, <a href="#issue-purge">Issue 7</a></td>
+    </tr>
+  </table>
+  <p><code>terraform validate</code> passes clean as of the last change above; both cleanup scripts
+  were re-checked for syntax (bash <code>-n</code>, PowerShell's AST parser) after editing.</p>
+
+  <h2 id="next-steps"><span class="num">12.</span>Next steps</h2>
+  <div class="callout blocked">
+    <strong>1. Get <code>Microsoft.App</code> registered</strong>
+    Ask whoever administers subscription <code>4e94fee6-c28c-4cb4-989f-ce4092537c3c</code> at the
+    Owner level to run <code>az provider register --namespace Microsoft.App</code> once (harmless
+    &mdash; enables the service, doesn't create or touch any resources). Confirm with
+    <code>az provider show --namespace Microsoft.App --query registrationState -o tsv</code> until
+    it returns <code>Registered</code>.
+  </div>
+  <div class="callout">
+    <strong>2. Finish the in-progress cleanup, if not already done</strong>
+    <code>random_id.suffix</code> was the only thing left in state as of this log &mdash; re-run
+    <code>cleanup-azure.ps1</code> and confirm <code>yes</code> at the prompt.
+  </div>
+  <div class="callout">
+    <strong>3. Start fresh once registered</strong>
+    A new <code>terraform apply</code> will generate a new random suffix, meaning a new ACR/Storage
+    Account/Key Vault name &mdash; the 3 images will need to be rebuilt and pushed again to the new
+    ACR even though nothing in the Dockerfiles changed. Follow the same sequence as before: targeted
+    ACR apply &rarr; build/push images &rarr; full apply.
+  </div>
+
+  <footer>
+    Written immediately after this run, from the actual terminal output produced along the way &mdash;
+    nothing here is reconstructed from memory. Companion to
+    <code>Containerization-Setup-Steps.html</code> (the general how-to) and
+    <code>Containerization-Multi-Cloud-Guide.html</code> (full technical reference) in this same
+    folder.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,275 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "Deploys FHIRBridge (portal + API), the Demo app, and their supporting SQL Server Express, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.App",
+            "Microsoft.OperationalInsights",
+            "Microsoft.Storage"
+          ]
+        },
+        "location": {
+          "label": "Region",
+          "toolTip": "All resources in this deployment are created in this region."
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "namePrefix",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Deployment name prefix",
+        "defaultValue": "fhirbridge",
+        "toolTip": "Short name used to build every resource name in this deployment (e.g. <prefix>-app, <prefix>-sqlserver).",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z][a-z0-9-]{1,20}$",
+          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "fhirbridgeSettings",
+        "label": "FHIRBridge Settings",
+        "elements": [
+          {
+            "name": "sqlSaPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "SQL Server SA password",
+              "confirmPassword": "Confirm password"
+            },
+            "toolTip": "Password for the SQL Server Express container's sa account. Must satisfy SQL Server's complexity policy (8+ chars, upper/lower/digit/symbol).",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "jwtSigningKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "API signing key",
+              "confirmPassword": "Confirm signing key"
+            },
+            "toolTip": "FHIRBridge.Api's Authentication:SigningKey (HS256) — used to sign access/refresh tokens. At least 32 random characters; treat it like a secret.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{32,}$",
+              "validationMessage": "Must be at least 32 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "redisPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Redis password",
+              "confirmPassword": "Confirm password"
+            },
+            "toolTip": "Password Redis requires to connect (--requirepass) — defense-in-depth on top of network isolation.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{8,}$",
+              "validationMessage": "At least 8 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          }
+        ]
+      },
+      {
+        "name": "containerSizing",
+        "label": "Container Sizes",
+        "elements": [
+          {
+            "name": "sqlServerSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "SQL Server size",
+            "defaultValue": "Large",
+            "toolTip": "SQL Server's first-run setup can need more headroom than steady-state — pick XLarge if it fails to initialize on Large.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB) — current default", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "redisSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Redis size",
+            "defaultValue": "Medium",
+            "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "fhirbridgeAppSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "FHIRBridge app size",
+            "defaultValue": "Medium",
+            "toolTip": "Runs both FHIRBridge.Api and FHIRBridge.Gateway in this one container.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "demoAppSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Demo app size",
+            "defaultValue": "Small",
+            "toolTip": "The lightweight demo application.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "workerSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Worker size",
+            "defaultValue": "Small",
+            "toolTip": "Background scheduler/pipeline processor — no HTTP endpoint.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "imageSettings",
+        "label": "Version",
+        "elements": [
+          {
+            "name": "imageTag",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Version to install",
+            "defaultValue": "v1.0.0",
+            "toolTip": "The published version tag to deploy (see the vendor registry's release list for available versions).",
+            "constraints": {
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "customDomains",
+        "label": "Custom Domains",
+        "elements": [
+          {
+            "name": "domainsInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Info",
+              "text": "Optional — leave both blank to just use the default *.azurecontainerapps.io URLs. Setting a domain here needs a two-phase deploy: (1) deploy once with these left blank, find the fhirbridgeAppDomainVerificationId / demoAppDomainVerificationId outputs on this deployment afterward, add a CNAME and a TXT record (asuid.<your domain>) at your DNS provider using those values, wait for DNS to propagate; (2) come back, fill in the domain(s) below, and redeploy — that provisions a free managed certificate and binds it."
+            }
+          },
+          {
+            "name": "fhirbridgeAppCustomDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "FHIRBridge app custom domain",
+            "defaultValue": "",
+            "toolTip": "e.g. app.customer.com. Leave blank to keep the default *.azurecontainerapps.io URL.",
+            "constraints": {
+              "required": false
+            }
+          },
+          {
+            "name": "demoAppCustomDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Demo app custom domain",
+            "defaultValue": "",
+            "toolTip": "e.g. demo.customer.com. Leave blank to keep the default *.azurecontainerapps.io URL.",
+            "constraints": {
+              "required": false
+            }
+          }
+        ]
+      },
+      {
+        "name": "reviewInfo",
+        "label": "What Gets Created",
+        "elements": [
+          {
+            "name": "resourceSummary",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Info",
+              "text": "This deployment creates 12 new resources in the selected resource group, and nothing outside it:\n\n• 5 Container Apps — SQL Server Express, Redis, FHIRBridge (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 5\n• 1 Log Analytics workspace (required by Container Apps for logs/metrics — not optional)\n• 1 Storage Account with 2 Azure File shares (persistent data for SQL Server and Redis)\n\nSQL Server and Redis are reachable only from the other apps in this environment, never the public internet. The full list of resource IDs this deployment creates is also saved as a 'resourceManifest' output on the deployment itself, viewable afterward under this deployment's history — that exact list is what the cleanup script uses to tear this down precisely later."
+            }
+          },
+          {
+            "name": "reviewNote",
+            "type": "Microsoft.Common.TextBlock",
+            "visible": true,
+            "options": {
+              "text": "Double-check the values on the previous steps, then continue to \"Review + create\" to see the final parameter summary before anything is actually deployed."
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "namePrefix": "[basics('namePrefix')]",
+      "location": "[location()]",
+      "sqlSaPassword": "[steps('fhirbridgeSettings').sqlSaPassword]",
+      "jwtSigningKey": "[steps('fhirbridgeSettings').jwtSigningKey]",
+      "redisPassword": "[steps('fhirbridgeSettings').redisPassword]",
+      "sqlServerSize": "[steps('containerSizing').sqlServerSize]",
+      "redisSize": "[steps('containerSizing').redisSize]",
+      "fhirbridgeAppSize": "[steps('containerSizing').fhirbridgeAppSize]",
+      "demoAppSize": "[steps('containerSizing').demoAppSize]",
+      "workerSize": "[steps('containerSizing').workerSize]",
+      "fhirbridgeAppCustomDomain": "[steps('customDomains').fhirbridgeAppCustomDomain]",
+      "demoAppCustomDomain": "[steps('customDomains').demoAppCustomDomain]",
+      "imageTag": "[steps('imageSettings').imageTag]",
+      "imageRegistryServer": "fhirbridgevendor8ae7f3.azurecr.io",
+      "imageRegistryUsername": "one-click-pull",
+      "imageRegistryPassword": "80qAFIR5wDXFOLTcxaIKRm8r0Vr8cVazt4LCBdBUnn2LtUCYIAWFJQQJ99CGACYeBjFEqg7NAAABAZCR1nko"
+    }
+  }
+}
