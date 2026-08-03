@@ -1,0 +1,29 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_b28efd8313f026::t_919cff3c536192 175
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_b28efd8313f026::t_4a1519dbde2398 32-33
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_b28efd8313f026::t_60134c99f00789 181-182
+tests/FHIRBridge.UnitTests/Configuration/MappingFieldIsEnabledMappingTests.cs
+  s_b28efd8313f026::t_ca55a59cc73191 1-40
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_b28efd8313f026::t_8a93c16f846a0b 1341
+docs/backend/14-mapping-profile-master-screen-plan.md
+  s_b28efd8313f026::t_ee1240793f8365 1-490
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "bba1b67415271b7d8becaef0b7402c7d4670cbe9",
+  "prompts": {},
+  "sessions": {
+    "s_b28efd8313f026": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e893056d-2c88-4de5-99ea-9dc7f6a12f80",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

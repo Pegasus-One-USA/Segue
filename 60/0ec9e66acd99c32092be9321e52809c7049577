@@ -1,0 +1,19 @@
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_c4187ad3b768bf::t_34fdf2a8c5f581 116-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "600ec9e66acd99c32092be9321e52809c7049577",
+  "prompts": {},
+  "sessions": {
+    "s_c4187ad3b768bf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ae1596-53c4-4a44-a4c1-fb442ee688f9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
