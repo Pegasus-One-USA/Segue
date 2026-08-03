@@ -145,6 +145,23 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    // Generic FHIR (GenericFhirSourceFormComponent) — a bare, unauthenticated conformant FHIR R4 server. No
+    // OAuth/interactive concepts apply, so applicationType/interactive stay null (same as Sample). Retrieval
+    // reuses the exact same buildRetrieval() Epic's Backend-System retrieval section feeds — search-rest's
+    // _since/_lastUpdated incremental cursor, _count, _sort, _include/_revinclude, and bulk $export's
+    // scope/group/patient/output-format are all vendor-agnostic on the backend, not Epic-specific.
+    if (/generic.?fhir/i.test(connector)) {
+      return {
+        name: fields['__name'] || 'Generic FHIR Source',
+        sourceSystemType: 'GenericFhir',
+        baseUrl: fields['FHIR base URL'] || '',
+        authentication: { authenticationType: 'None', scopes: [] },
+        applicationType: null,
+        interactive: null,
+        retrieval: this.buildRetrieval(fields),
+      };
+    }
+
     // Epic (best-effort from the Epic source wizard fields).
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const appType = this.applicationTypeFor(fields);

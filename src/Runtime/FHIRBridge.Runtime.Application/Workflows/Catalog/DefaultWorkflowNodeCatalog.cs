@@ -14,7 +14,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         // Source(WorkflowNodeTypes.AllscriptsSource),
         // Source(WorkflowNodeTypes.EClinicalWorksSource),
         // Source(WorkflowNodeTypes.MeditechSource),
-        // Source(WorkflowNodeTypes.GenericFhirSource),
+        Source(WorkflowNodeTypes.GenericFhirSource),
         // Source(WorkflowNodeTypes.Hl7v2MllpSource),
         Source(WorkflowNodeTypes.SampleSource),
         Compliance(WorkflowNodeTypes.Consent, "consent", "Consent", "Apply configured consent policy.", 10, WorkflowDataContract.ResourceBatch, WorkflowDataContract.ResourceBatch),

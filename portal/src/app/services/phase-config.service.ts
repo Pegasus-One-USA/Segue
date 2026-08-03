@@ -29,8 +29,8 @@ export interface PhaseConfig {
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
-    // Phase 2+: 'cerner', 'athena', 'allscripts', 'healow', 'meditech',
-    //           'generic-fhir', 'hl7v2', 'sample'
+    'generic-fhir',
+    // Phase 2+: 'cerner', 'athena', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [

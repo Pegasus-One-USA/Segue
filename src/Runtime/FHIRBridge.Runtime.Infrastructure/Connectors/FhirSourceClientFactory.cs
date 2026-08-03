@@ -41,13 +41,13 @@ public sealed class FhirSourceClientFactory : IFhirSourceClientFactory
     public static IReadOnlyList<FhirSourceClientRegistration> DefaultRegistrations { get; } =
     [
         new(RuntimeSourceType.Epic, typeof(EpicFhirSourceClient)),
-        new(RuntimeSourceType.Sample, typeof(SampleFhirSourceClient))
-        // GATED (SQL/CSV phase): only Epic + Sample sources are enabled. The other vendors reuse the same paginated
-        // search client (the access-token grant is selected by the composite token provider per source); re-enable
-        // them here once the generic Source hierarchy + ApplicationType axis land.
+        new(RuntimeSourceType.Sample, typeof(SampleFhirSourceClient)),
+        new(RuntimeSourceType.GenericFhir, typeof(EpicFhirSourceClient)),
+        // GATED (SQL/CSV phase): only Epic + Sample + GenericFhir sources are enabled. The other vendors reuse the
+        // same paginated search client (the access-token grant is selected by the composite token provider per
+        // source); re-enable them here once the generic Source hierarchy + ApplicationType axis land.
         // new(RuntimeSourceType.Cerner, typeof(EpicFhirSourceClient)),
         // new(RuntimeSourceType.Allscripts, typeof(EpicFhirSourceClient)),
-        // new(RuntimeSourceType.GenericFhir, typeof(EpicFhirSourceClient)),
         // new(RuntimeSourceType.Healow, typeof(EpicFhirSourceClient)),
         // new(RuntimeSourceType.MeditechGreenfield, typeof(EpicFhirSourceClient))
     ];

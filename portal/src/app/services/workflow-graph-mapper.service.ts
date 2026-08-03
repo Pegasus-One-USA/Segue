@@ -21,6 +21,7 @@ const CATEGORY_TRANSFORM: WorkflowNodeCategory = 10;
 const FALLBACK_NODE_TYPES: Record<string, string> = {
   epic: 'EpicSourceNode',
   sample: 'SampleSourceNode',
+  'generic-fhir': 'GenericFhirSourceNode',
   'fhir-validation': 'UsCoreValidationNode',
   normalize: 'NormalizationNode',
   'patient-matching': 'PatientMatchingNode',
@@ -228,6 +229,7 @@ export class WorkflowGraphMapperService {
     if (node.kind === 'merge') return 'merge';
     const connector = node.fields['Connector'] ?? node.connectorLabel ?? node.fields['__name'] ?? '';
     if (/sample/i.test(connector)) return 'sample';
+    if (/generic.?fhir/i.test(connector)) return 'generic-fhir';
     return 'epic';
   }
 

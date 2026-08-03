@@ -1,0 +1,134 @@
+<form [formGroup]="form" class="gff-form" autocomplete="off">
+
+  <div class="gff-field" [class.gff-field--error]="form.controls.name.invalid && form.controls.name.touched">
+    <label for="gff-name">Name <span class="gff-req">*</span></label>
+    <input id="gff-name" class="gff-input" formControlName="name" placeholder="e.g. Segue Test HAPI Server" />
+    @if (form.controls.name.invalid && form.controls.name.touched) {
+      <span class="gff-error">Name is required.</span>
+    }
+  </div>
+
+  <div class="gff-field" [class.gff-field--error]="form.controls.baseUrl.invalid && form.controls.baseUrl.touched">
+    <label for="gff-baseUrl">FHIR base URL <span class="gff-req">*</span></label>
+    <input id="gff-baseUrl" class="gff-input" formControlName="baseUrl" placeholder="https://example.com/fhir" />
+    @if (form.controls.baseUrl.invalid && form.controls.baseUrl.touched) {
+      <span class="gff-error">Base URL is required — the root FHIR endpoint (e.g. ".../fhir", not the Swagger UI page).</span>
+    }
+    <span class="gff-hint">No authentication is configured — this connects as an anonymous client, matching a public/test FHIR server.</span>
+  </div>
+
+</form>
+
+<div class="gff-resources">
+  <span class="gff-resources-label">Resources to pull <span class="gff-req">*</span></span>
+  <div class="gff-resource-grid">
+    @for (r of availableResources; track r) {
+      <button
+        type="button"
+        class="gff-resource-chip"
+        [class.selected]="isResourceSelected(r)"
+        (click)="toggleResource(r)"
+      >
+        @if (isResourceSelected(r)) { ✓ }
+        {{ r }}
+      </button>
+    }
+  </div>
+  @if (selectedResources().length === 0) {
+    <span class="gff-error">Select at least one resource.</span>
+  }
+</div>
+
+<form [formGroup]="form" class="gff-form gff-retrieval">
+
+  <div class="gff-field">
+    <label for="gff-retrievalMethod">Retrieval method</label>
+    <div class="gff-select-wrap">
+      <select id="gff-retrievalMethod" class="gff-select" formControlName="retrievalMethod">
+        <option value="search-rest">Search REST (query the FHIR search API)</option>
+        <option value="bulk-export">Bulk $export</option>
+      </select>
+    </div>
+  </div>
+
+  @if (isBulkExport()) {
+
+    <div class="gff-field">
+      <label for="gff-exportScope">Export scope</label>
+      <div class="gff-select-wrap">
+        <select id="gff-exportScope" class="gff-select" formControlName="exportScope">
+          <option value="system">System (every patient the server has)</option>
+          <option value="group">Group</option>
+          <option value="patient">Patient</option>
+        </select>
+      </div>
+    </div>
+
+    @if (form.value.exportScope === 'group') {
+      <div class="gff-field">
+        <label for="gff-groupId">Group ID</label>
+        <input id="gff-groupId" class="gff-input" formControlName="groupId" placeholder="e.g. 123" />
+      </div>
+    }
+
+    @if (form.value.exportScope === 'patient') {
+      <div class="gff-field gff-field--full">
+        <label for="gff-patientIds">Patient ID(s)</label>
+        <input id="gff-patientIds" class="gff-input" formControlName="patientIds" placeholder="e.g. 1004, or comma-separated for several" />
+        <span class="gff-hint">Comma- or newline-separated FHIR Patient ids — narrows the export to just these patients.</span>
+      </div>
+    }
+
+  } @else {
+
+    <div class="gff-field gff-field--full">
+      <label for="gff-searchCriteria">Search criteria</label>
+      <input id="gff-searchCriteria" class="gff-input" formControlName="searchCriteria" placeholder="e.g. _id=1004, or subject=Patient/1004" />
+      <span class="gff-hint">Raw FHIR search query params, applied to every selected resource's search request.</span>
+    </div>
+
+    <div class="gff-field gff-field--checkbox">
+      <label>
+        <input type="checkbox" formControlName="incrementalCursor" />
+        Incremental sync (only pull records changed since the last run, via <code>_lastUpdated</code>)
+      </label>
+    </div>
+
+    <div class="gff-field">
+      <label for="gff-pageSize">Page size (_count)</label>
+      <input id="gff-pageSize" type="number" class="gff-input" formControlName="pageSize" placeholder="e.g. 100" />
+    </div>
+
+    <div class="gff-field">
+      <label for="gff-sortOrder">Sort (_sort)</label>
+      <input id="gff-sortOrder" class="gff-input" formControlName="sortOrder" placeholder="e.g. -_lastUpdated" />
+    </div>
+
+    <div class="gff-field">
+      <label for="gff-include">Include (_include)</label>
+      <input id="gff-include" class="gff-input" formControlName="includeParams" placeholder="comma-separated, e.g. Observation:subject" />
+    </div>
+
+    <div class="gff-field">
+      <label for="gff-revinclude">Reverse include (_revinclude)</label>
+      <input id="gff-revinclude" class="gff-input" formControlName="revIncludeParams" placeholder="comma-separated" />
+    </div>
+
+  }
+
+  <div class="gff-field">
+    <label for="gff-retryPolicy">Retry policy</label>
+    <input id="gff-retryPolicy" class="gff-input" formControlName="retryPolicy" placeholder="optional" />
+  </div>
+
+  <div class="gff-field">
+    <label for="gff-timeout">Timeout (seconds)</label>
+    <input id="gff-timeout" type="number" class="gff-input" formControlName="timeoutSeconds" placeholder="optional" />
+  </div>
+
+  <div class="gff-field">
+    <label for="gff-maxRecords">Max records per run</label>
+    <input id="gff-maxRecords" type="number" class="gff-input" formControlName="maxRecordsPerRun" placeholder="optional" />
+  </div>
+
+</form>

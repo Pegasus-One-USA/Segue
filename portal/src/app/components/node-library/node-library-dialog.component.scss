@@ -632,6 +632,51 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Inline Generic FHIR Source Form
+   ═══════════════════════════════════════════════════════════════════════════ */
+.nld-generic-fhir {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 4px;
+}
+
+.nld-generic-fhir-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink, var(--color-ink));
+  margin: 0 0 16px;
+}
+
+.nld-generic-fhir-error {
+  font-size: 13px;
+  color: var(--color-error, var(--color-error));
+  margin: 0 0 12px;
+}
+
+.nld-generic-fhir-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.nld-generic-fhir-cancel {
+  padding: 11px 18px;
+  background: var(--color-side, var(--color-side));
+  color: var(--color-muted, var(--color-muted));
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: var(--radius-card, 12px);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: var(--color-bg, var(--color-bg)); color: var(--color-ink-2, var(--color-ink-2)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Inline Epic Form (inside nld-detail)
    ═══════════════════════════════════════════════════════════════════════════ */
 .nld-detail--form {

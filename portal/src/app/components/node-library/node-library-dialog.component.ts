@@ -1,4 +1,4 @@
-import { Component, input, output, inject, computed, signal, effect, untracked } from '@angular/core';
+import { Component, input, output, inject, computed, signal, effect, untracked, viewChild } from '@angular/core';
 import { ModalOverlayComponent } from '../shared/modal-overlay/modal-overlay.component';
 import { PipelineStore } from '../../services/pipeline.store';
 import { ApplicabilityService } from '../../services/applicability.service';
@@ -7,10 +7,11 @@ import { WizardService } from '../../services/wizard.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
-import { CanvasNode, TransformNode, isSourceNode } from '../../models/node.model';
+import { CanvasNode, SourceNode, TransformNode, isSourceNode } from '../../models/node.model';
 import { MergeNodeOption } from '../../models/wizard-state.model';
 import { EpicAudienceFormComponent } from '../epic-source-wizard/epic-audience-form/epic-audience-form.component';
 import { DestinationWizardComponent } from './destination-wizard/destination-wizard.component';
+import { GenericFhirSourceFormComponent } from './generic-fhir-source-form/generic-fhir-source-form.component';
 
 export type LibraryMode = 'source' | 'transform';
 
@@ -109,6 +110,7 @@ const RANK_META: Record<number, { icon: string; catColor: string }> = {
     ModalOverlayComponent,
     EpicAudienceFormComponent,
     DestinationWizardComponent,
+    GenericFhirSourceFormComponent,
   ],
   templateUrl: './node-library-dialog.component.html',
   styleUrl: './node-library-dialog.component.scss',
@@ -137,10 +139,16 @@ export class NodeLibraryDialogComponent {
   // ── inline Epic form state ────────────────────────────────────────────────
   readonly showEpicForm = signal(false);
 
+  // ── inline Generic FHIR form state ────────────────────────────────────────
+  readonly showGenericFhirForm = signal(false);
+  readonly genericFhirEditNode = signal<CanvasNode | null>(null);
+  readonly genericFhirForm = viewChild(GenericFhirSourceFormComponent);
+  readonly genericFhirError = signal<string | null>(null);
+
   // ── sidebar collapsed state (auto when a form opens, user-toggleable) ─────
   readonly sidebarPinned = signal(false);
   readonly isSidebarMini = computed(() =>
-    (this.showEpicForm() || this.showDestWizard()) && !this.sidebarPinned()
+    (this.showEpicForm() || this.showDestWizard() || this.showGenericFhirForm()) && !this.sidebarPinned()
   );
 
   toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
@@ -181,6 +189,10 @@ export class NodeLibraryDialogComponent {
           if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres') {
             untracked(() => this._openDestWizardEdit(node));
           }
+          return;
+        }
+        if (node && this._isGenericFhirNode(node)) {
+          untracked(() => this.openGenericFhirForm(node));
           return;
         }
         untracked(() => this.openEpicForm(id));
@@ -340,6 +352,10 @@ export class NodeLibraryDialogComponent {
       this.openEpicForm();
       return;
     }
+    if (item.id === 'generic-fhir') {
+      this.openGenericFhirForm(null);
+      return;
+    }
     if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres') {
       const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' =
         item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : 'csv';
@@ -388,6 +404,51 @@ export class NodeLibraryDialogComponent {
   onEpicFormCancelled(): void {
     this.wiz.close();
     this.showEpicForm.set(false);
+  }
+
+  // ── inline Generic FHIR form ──────────────────────────────────────────────
+  private _isGenericFhirNode(node: CanvasNode): boolean {
+    return isSourceNode(node) && /generic.?fhir/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
+  }
+
+  openGenericFhirForm(editNode: CanvasNode | null): void {
+    this.genericFhirEditNode.set(editNode);
+    this.genericFhirError.set(null);
+    this.showGenericFhirForm.set(true);
+  }
+
+  onGenericFhirFormCancelled(): void {
+    this.showGenericFhirForm.set(false);
+    this.genericFhirEditNode.set(null);
+    this.genericFhirError.set(null);
+  }
+
+  onGenericFhirFormSave(): void {
+    const fields = this.genericFhirForm()?.getFields();
+    if (!fields) {
+      this.genericFhirError.set('Fix the highlighted fields before saving.');
+      return;
+    }
+
+    const editNode = this.genericFhirEditNode();
+    if (editNode) {
+      this.store.updateNode(editNode.id, { fields } as Partial<CanvasNode>);
+    } else {
+      const node: SourceNode = {
+        id: this.store.nextNodeId(),
+        kind: undefined,
+        x: 360,
+        y: 300,
+        connected: true,
+        abbr: 'R4',
+        color: '#5b6573',
+        connectorLabel: 'Generic FHIR R4',
+        fields,
+      };
+      this.store.addNode(node);
+    }
+
+    this._close();
   }
 
   // ── destination wizard ────────────────────────────────────────────────────
@@ -467,6 +528,9 @@ export class NodeLibraryDialogComponent {
     this.searchQuery.set('');
     this.sidebarPinned.set(false);
     this.showEpicForm.set(false);
+    this.showGenericFhirForm.set(false);
+    this.genericFhirEditNode.set(null);
+    this.genericFhirError.set(null);
     this.showDestWizard.set(false);
     this.destWizardType.set(null);
     this.destWizardAttach.set(null);

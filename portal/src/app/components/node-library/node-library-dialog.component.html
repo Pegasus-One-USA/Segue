@@ -1,7 +1,7 @@
-<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard())" (closed)="close()">
+<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard() || showGenericFhirForm())" (closed)="close()">
   <div class="nld">
 
-    @if (!(showEpicForm() || showDestWizard())) {
+    @if (!(showEpicForm() || showDestWizard() || showGenericFhirForm())) {
       <button class="nld-close" type="button" aria-label="Close" (click)="close()">×</button>
     }
 
@@ -12,7 +12,7 @@
       <nav class="nld-sidebar" [class.nld-sidebar--mini]="isSidebarMini()" aria-label="Node library">
 
         <!-- Collapse / expand toggle (visible only when a form is active) -->
-        @if (showEpicForm() || showDestWizard()) {
+        @if (showEpicForm() || showDestWizard() || showGenericFhirForm()) {
           <button
             class="nld-sidebar-toggle"
             type="button"
@@ -96,7 +96,7 @@
       </nav>
 
       <!-- RIGHT: Detail / config panel -->
-      <section class="nld-detail" [class.nld-detail--form]="showEpicForm() || showDestWizard()">
+      <section class="nld-detail" [class.nld-detail--form]="showEpicForm() || showDestWizard() || showGenericFhirForm()">
 
         <!-- ── Inline Epic Audience Form ─────────────────────────────────── -->
         @if (showEpicForm()) {
@@ -105,6 +105,23 @@
             (cancelled)="onEpicFormCancelled()"
             (closeAll)="close()"
           />
+
+        } @else if (showGenericFhirForm()) {
+
+          <!-- ── Inline Generic FHIR Source Form ───────────────────────────── -->
+          <div class="nld-generic-fhir">
+            <h3 class="nld-generic-fhir-title">{{ genericFhirEditNode() ? 'Edit' : 'Configure' }} Generic FHIR Source</h3>
+            <app-generic-fhir-source-form [initialFields]="genericFhirEditNode()?.fields ?? null" />
+            @if (genericFhirError()) {
+              <p class="nld-generic-fhir-error">{{ genericFhirError() }}</p>
+            }
+            <div class="nld-generic-fhir-actions">
+              <button class="nld-generic-fhir-cancel" type="button" (click)="onGenericFhirFormCancelled()">Cancel</button>
+              <button class="nld-cta" type="button" (click)="onGenericFhirFormSave()">
+                {{ genericFhirEditNode() ? 'Save' : 'Add to Workflow' }}
+              </button>
+            </div>
+          </div>
 
         } @else if (showDestWizard() && destWizardType() && destWizardAttach()) {
 
