@@ -1,0 +1,28 @@
+src/FHIRBridge.Infrastructure/Pipeline/ScheduleExpressionMatcher.cs
+  s_d460913f17357c::t_b567a56e3ba935 47-51,58-59,75-79
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_d460913f17357c::t_167bce8bc8bf3f 202
+tests/FHIRBridge.UnitTests/Pipeline/ScheduleExpressionMatcherTests.cs
+  s_d460913f17357c::t_4d6d97c7038682 80-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "eab0903c2304821d67e88b023a17a5ec0e6c138a",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_d460913f17357c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a610a770-7bef-449a-8577-e7a1d3f07ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
