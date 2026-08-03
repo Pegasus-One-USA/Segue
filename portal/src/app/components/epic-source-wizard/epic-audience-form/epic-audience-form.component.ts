@@ -139,8 +139,10 @@ const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'fullRefreshRecurrence', 'fullRefreshDaysOfWeek', 'fullRefreshDayOfMonth', 'fullRefreshTime', 'fullRefreshTimeZone',
 ];
 
-/** Browser's own zone (e.g. "America/New_York") — used as the schedule time zone picker's default. */
-function detectBrowserTimeZone(): string {
+/** Browser's own zone (e.g. "America/New_York") — used as the schedule time zone picker's default. Exported so
+ *  other retrieval-config forms (e.g. GenericFhirSourceFormComponent) sharing this same calendar-recurrence
+ *  scheduling model don't need their own copy. */
+export function detectBrowserTimeZone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   } catch {
@@ -151,7 +153,7 @@ function detectBrowserTimeZone(): string {
 /** All IANA zone identifiers the runtime knows about, for the "Time zone" select. Falls back to a short curated
  *  list on engines without `Intl.supportedValuesOf` (older Safari/older browsers not in FHIRBridge's support matrix
  *  but cheap to guard against). */
-const TIME_ZONE_OPTIONS: readonly RetrievalFieldOption[] = (() => {
+export const TIME_ZONE_OPTIONS: readonly RetrievalFieldOption[] = (() => {
   const zones: string[] = typeof Intl.supportedValuesOf === 'function'
     ? Intl.supportedValuesOf('timeZone')
     : ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London'];
@@ -192,7 +194,7 @@ const RETRIEVAL_FIELD_DEFAULTS: Record<RetrievalFieldKey, unknown> = {
   maxRecordsPerRun:       '',
 };
 
-interface RetrievalFieldOption { value: string; label: string; }
+export interface RetrievalFieldOption { value: string; label: string; }
 
 /** Snapshot of the values other fields' visibility can depend on — passed to {@link RetrievalFieldDef.visibleWhen}. */
 interface RetrievalFieldVisibilityContext {
@@ -235,7 +237,7 @@ interface RetrievalMethodConfig {
   fields: readonly RetrievalFieldDef[];
 }
 
-const POLL_FREQUENCY_OPTIONS: readonly RetrievalFieldOption[] = [
+export const POLL_FREQUENCY_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: '5m',  label: 'Every 5 minutes' },
   { value: '15m', label: 'Every 15 minutes' },
   { value: '30m', label: 'Every 30 minutes' },
@@ -243,7 +245,7 @@ const POLL_FREQUENCY_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: '1d',  label: 'Daily' },
 ];
 
-const RECONCILIATION_OPTIONS: readonly RetrievalFieldOption[] = [
+export const RECONCILIATION_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: 'none', label: 'Disabled' },
   { value: '1h',   label: 'Hourly' },
   { value: '6h',   label: 'Every 6 hours' },
@@ -251,34 +253,34 @@ const RECONCILIATION_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: '1w',   label: 'Weekly' },
 ];
 
-const ENDPOINT_TYPE_OPTIONS: readonly RetrievalFieldOption[] = [
+export const ENDPOINT_TYPE_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: 'rest-hook', label: 'REST Hook (HTTPS callback)' },
   { value: 'websocket', label: 'WebSocket' },
   { value: 'mllp',      label: 'MLLP (HL7 v2)' },
 ];
 
-const EVENT_TYPE_OPTIONS: readonly RetrievalFieldOption[] = [
+export const EVENT_TYPE_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: 'created',            label: 'Record created' },
   { value: 'updated',            label: 'Record updated' },
   { value: 'created-or-updated', label: 'Created or updated' },
   { value: 'deleted',            label: 'Record deleted' },
 ];
 
-const SORT_OPTIONS: readonly RetrievalFieldOption[] = [
+export const SORT_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: '_lastUpdated',  label: '_lastUpdated (oldest → newest)' },
   { value: '-_lastUpdated', label: '_lastUpdated (newest → oldest)' },
   { value: 'date',          label: 'date (ascending)' },
   { value: '-date',         label: 'date (descending)' },
 ];
 
-const RETRY_POLICY_OPTIONS: readonly RetrievalFieldOption[] = [
+export const RETRY_POLICY_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: 'none',        label: 'No retry' },
   { value: 'fixed-3',     label: 'Fixed — 3 attempts' },
   { value: 'exponential', label: 'Exponential backoff' },
 ];
 
 // ── Full Refresh calendar recurrence (Google Calendar-style: anchored to a specific time, not an interval) ──────
-const FULL_REFRESH_RECURRENCE_OPTIONS: readonly RetrievalFieldOption[] = [
+export const FULL_REFRESH_RECURRENCE_OPTIONS: readonly RetrievalFieldOption[] = [
   { value: 'daily',   label: 'Daily' },
   { value: 'weekly',  label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
