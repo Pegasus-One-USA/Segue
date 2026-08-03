@@ -16,7 +16,7 @@
   "assets": {
     "logoUrl": "",
     "darkLogoUrl": "",
-    "faviconUrl": "favicon.ico",
+    "faviconUrl": "favicon.svg?v=2",
     "loginBackgroundUrl": "",
     "loginIllustrationUrl": "",
     "emailLogoUrl": ""

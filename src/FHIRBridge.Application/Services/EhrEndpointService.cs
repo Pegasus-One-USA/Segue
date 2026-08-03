@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
@@ -10,16 +11,34 @@ namespace FHIRBridge.Application.Services;
 public sealed class EhrEndpointService : IEhrEndpointService
 {
     private readonly IEhrEndpointRepository _repository;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
 
-    public EhrEndpointService(IEhrEndpointRepository repository)
+    public EhrEndpointService(IEhrEndpointRepository repository, IUserDisplayNameResolver userDisplayNameResolver)
     {
         _repository = repository;
+        _userDisplayNameResolver = userDisplayNameResolver;
     }
 
     public async Task<IReadOnlyList<EhrEndpointDto>> GetAllAsync(CancellationToken cancellationToken)
     {
         var endpoints = await _repository.GetAllAsync(cancellationToken);
-        return endpoints.Select(EhrEndpointMapper.ToDto).ToArray();
+        var dtos = endpoints.Select(EhrEndpointMapper.ToDto).ToArray();
+        return await ResolveDisplayNamesAsync(dtos, cancellationToken);
+    }
+
+    /// <summary>Resolves each DTO's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/system string
+    /// predating that) to a display name, in one batched lookup rather than one per row.</summary>
+    private async Task<IReadOnlyList<EhrEndpointDto>> ResolveDisplayNamesAsync(
+        IReadOnlyList<EhrEndpointDto> dtos, CancellationToken cancellationToken)
+    {
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
+
+        return dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        }).ToArray();
     }
 
     public async Task<IReadOnlyList<PublicEhrEndpointDto>> GetPublicEndpointsAsync(
@@ -39,7 +58,13 @@ public sealed class EhrEndpointService : IEhrEndpointService
     public async Task<EhrEndpointDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         var endpoint = await _repository.GetByIdAsync(id, cancellationToken);
-        return endpoint is null ? null : EhrEndpointMapper.ToDto(endpoint);
+        if (endpoint is null)
+        {
+            return null;
+        }
+
+        var resolved = await ResolveDisplayNamesAsync([EhrEndpointMapper.ToDto(endpoint)], cancellationToken);
+        return resolved[0];
     }
 
     public async Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, EhrEndpointType endpointType, CancellationToken cancellationToken)
@@ -62,7 +87,8 @@ public sealed class EhrEndpointService : IEhrEndpointService
 
         await _repository.AddAsync(endpoint, cancellationToken);
 
-        return EhrEndpointMapper.ToDto(endpoint);
+        var resolved = await ResolveDisplayNamesAsync([EhrEndpointMapper.ToDto(endpoint)], cancellationToken);
+        return resolved[0];
     }
 
     public async Task<EhrEndpointDto> UpdateAsync(Guid id, CreateEhrEndpointRequest request, CancellationToken cancellationToken)
@@ -80,7 +106,8 @@ public sealed class EhrEndpointService : IEhrEndpointService
 
         await _repository.UpdateAsync(endpoint, cancellationToken);
 
-        return EhrEndpointMapper.ToDto(endpoint);
+        var resolved = await ResolveDisplayNamesAsync([EhrEndpointMapper.ToDto(endpoint)], cancellationToken);
+        return resolved[0];
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)

@@ -46,6 +46,9 @@ export interface Role {
   color:        string;
   isSystemRole: boolean;
   createdAt:    string;
+  createdBy?:     string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?:    string | null;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -83,6 +86,8 @@ export interface User {
   lastLoginAt?:       string;
   createdAt:          string;
   updatedAt:          string;
+  createdBy?:         string | null;
+  modifiedBy?:        string | null;
   /** Only present in mock DB — never exposed by real API */
   passwordHash?:      string;
 }
@@ -159,6 +164,10 @@ export interface RoleDto {
   description:  string;
   permissions:  PermissionDto[];
   isSystemRole: boolean;
+  createdOnUtc?:  string | null;
+  createdBy?:     string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?:    string | null;
 }
 
 /** Backend numeric user status: 1 = Invited, 2 = Active, 3 = Inactive. */
@@ -178,6 +187,9 @@ export interface UserManagementDto {
   lastLoginOnUtc:       string | null;
   mfaEnabled:           boolean;
   mustSetupMfa:         boolean;
+  createdBy?:           string | null;
+  modifiedOnUtc?:       string | null;
+  modifiedBy?:          string | null;
 }
 
 export interface UserDetailDto {

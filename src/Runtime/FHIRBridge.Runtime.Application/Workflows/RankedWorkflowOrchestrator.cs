@@ -260,6 +260,19 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, cancelException.Message, CancellationToken.None);
 
+            if (_exceptionManager is not null)
+            {
+                await _exceptionManager.CaptureExpectedAsync(
+                    new ExpectedFailure(nameof(FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException), cancelException.Message),
+                    new ExceptionContext(
+                        Module: "Workflow",
+                        Severity: "Informational",
+                        CorrelationId: context.CorrelationId,
+                        WorkflowId: workflowDefinition.Id.ToString(),
+                        ExecutionId: workflowRun.Id.ToString()),
+                    CancellationToken.None);
+            }
+
             throw;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

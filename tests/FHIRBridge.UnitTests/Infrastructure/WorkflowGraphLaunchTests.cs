@@ -214,9 +214,11 @@ public sealed class WorkflowGraphLaunchTests
         }
 
         public Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) => Task.FromResult(_sources);
+        public Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(SourceConnectionFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct) =>
+            Task.FromResult(new PagedResult<SourceConnection>(_sources, _sources.Count, page, pageSize));
         public Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct) => Task.FromResult(_sources.FirstOrDefault(x => x.Id == id));
         public Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) => Task.FromResult(_destinations);
-        public Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken ct) =>
+        public Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct) =>
             Task.FromResult(new PagedResult<DestinationConfiguration>(_destinations, _destinations.Count, page, pageSize));
         public Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct) => Task.FromResult(_destinations.FirstOrDefault(x => x.Id == id));
         public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken ct) => Task.FromResult(false);

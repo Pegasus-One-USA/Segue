@@ -119,7 +119,9 @@
   &--mini {
     width: 60px;
 
-    .nld-sidebar-toggle { padding: 7px 0; }
+    .nld-sidebar-toggle { justify-content: center; padding: 7px 0; }
+    .nld-sidebar-toggle-label,
+    .nld-sidebar-toggle-chevron { display: none; }
 
     .nld-search-wrap { display: none; }
 
@@ -148,34 +150,66 @@
 
 /* Sidebar collapse / expand toggle — height matches the wizard topbars (.eaf-topbar/.dw-topbar) that
    sit alongside it in the detail panel, so the sidebar and detail panel's top edges form one even
-   line instead of two mismatched strips now that there's no shared outer header spanning both. */
+   line instead of two mismatched strips now that there's no shared outer header spanning both.
+   Styled as a panel header (icon chip + title, chevron affordance) rather than a flat toggle bar,
+   to match the .eaf-topbar/.dw-topbar language used everywhere else in this dialog. */
 .nld-sidebar-toggle {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
   min-height: 53px; /* matches .eaf-topbar/.dw-topbar's natural height (30px icon + 22px padding + 1px border) so the divider lines up flush across the sidebar/detail boundary */
   box-sizing: border-box;
-  padding: 7px 10px;
-  background: var(--color-primary-soft);
+  padding: 7px 14px;
+  background: var(--color-surface);
   border: none;
   border-bottom: 1px solid var(--color-border);
-  color: var(--color-primary-dark);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
   font-family: inherit;
   flex-shrink: 0;
   transition: background 0.12s;
 
-  &:hover { background: color-mix(in srgb, var(--color-primary) 18%, transparent); }
+  &:hover {
+    background: var(--color-side);
+
+    .nld-sidebar-toggle-chevron { color: var(--color-primary); }
+  }
 }
 
-.nld-sidebar-toggle-ico {
-  width: 16px;
-  height: 12px;
+.nld-sidebar-toggle-chip {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-radius: 8px;
   flex-shrink: 0;
+
+  svg { width: 16px; height: 16px; }
+}
+
+.nld-sidebar-toggle-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+.nld-sidebar-toggle-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  color: var(--color-muted);
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.12s;
+
+  svg { width: 16px; height: 16px; }
+
+  &.is-mini { transform: rotate(180deg); }
 }
 
 /* Search */

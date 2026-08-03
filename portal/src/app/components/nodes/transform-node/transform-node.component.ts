@@ -88,6 +88,11 @@ export class TransformNodeComponent {
     return this.transformId().startsWith('dest-');
   }
 
+  /** Field Mapping is a required step once a destination is attached — never user-deletable. */
+  protected isFieldMapping(): boolean {
+    return this.transformId() === 'field-mapping';
+  }
+
   onAddNextClick(e: MouseEvent): void {
     e.stopPropagation();
     this.addNext.emit(this.node().id);

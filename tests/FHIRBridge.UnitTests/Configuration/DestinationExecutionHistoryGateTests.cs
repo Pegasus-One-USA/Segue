@@ -42,6 +42,7 @@ public sealed class DestinationExecutionHistoryGateTests
             Mock.Of<IParentReferenceResolver>(),
             new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
             new CreateDestinationConfigurationRequestValidator(),
+            new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 
@@ -99,11 +100,11 @@ public sealed class DestinationExecutionHistoryGateTests
     public async Task Paged_query_maps_repository_results_to_dtos()
     {
         var page = new PagedResult<DestinationConfiguration>([_destination], TotalCount: 1, Page: 1, PageSize: 25);
-        _repository.Setup(x => x.GetDestinationsPagedAsync(It.IsAny<DestinationFilter>(), 1, 25, It.IsAny<CancellationToken>()))
+        _repository.Setup(x => x.GetDestinationsPagedAsync(It.IsAny<DestinationFilter>(), 1, 25, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(page);
 
         var result = await _sut.GetDestinationConfigurationsPagedAsync(
-            new DestinationFilter(null, null, null), 1, 25, CancellationToken.None);
+            new DestinationFilter(null, null, null), 1, 25, null, null, CancellationToken.None);
 
         result.TotalCount.Should().Be(1);
         result.Items.Should().ContainSingle(x => x.Id == _destination.Id && x.Name == "Warehouse");

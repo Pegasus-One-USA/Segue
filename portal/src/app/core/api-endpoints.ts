@@ -76,6 +76,7 @@ export const EHR_ENDPOINTS_ENDPOINTS = {
 // ─── Source Connections (ConfigurationsController — api/v1/source-connections) ─
 export const SOURCE_CONNECTIONS_ENDPOINTS = {
   list: `${API_V1_BASE}/source-connections`,
+  paged: `${API_V1_BASE}/source-connections/paged`,
   byId: (id: string) => `${API_V1_BASE}/source-connections/${id}`,
   // WorkflowEndpoints, not ConfigurationsController — the usage check has to walk every workflow's Source
   // nodes, which only the Runtime workflow store can answer.

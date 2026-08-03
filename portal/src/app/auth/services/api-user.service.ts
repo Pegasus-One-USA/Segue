@@ -53,7 +53,10 @@ export function mapRoleDto(dto: RoleDto): Role {
     permissions:  (dto.permissions ?? []).map(mapPermissionDto),
     color:        DEFAULT_ROLE_COLOR,
     isSystemRole: dto.isSystemRole,
-    createdAt:    '',
+    createdAt:    dto.createdOnUtc ?? '',
+    createdBy:    dto.createdBy,
+    modifiedOnUtc: dto.modifiedOnUtc,
+    modifiedBy:   dto.modifiedBy,
   };
 }
 
@@ -103,7 +106,9 @@ function mapListDto(dto: UserManagementDto): User {
     mfaRequired:        dto.mustSetupMfa,
     lastLoginAt:        dto.lastLoginOnUtc ?? undefined,
     createdAt:          dto.createdOnUtc,
-    updatedAt:          dto.createdOnUtc,
+    updatedAt:          dto.modifiedOnUtc ?? dto.createdOnUtc,
+    createdBy:          dto.createdBy,
+    modifiedBy:         dto.modifiedBy,
     _globalRoleNames:   dto.globalRoleNames ?? [],
   } as unknown as User;
 }

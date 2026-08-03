@@ -12,5 +12,7 @@ public static class SystemSettingMapper
             setting.Value,
             setting.Description,
             setting.CreatedOnUtc,
-            setting.ModifiedOnUtc);
+            setting.ModifiedOnUtc,
+            setting.CreatedBy,
+            setting.ModifiedBy);
 }

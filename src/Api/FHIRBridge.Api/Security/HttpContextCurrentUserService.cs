@@ -53,7 +53,8 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
                 permissions,
                 IpAddress: ipAddress,
                 UserAgent: userAgent,
-                CorrelationId: correlationId);
+                CorrelationId: correlationId,
+                UserId: CurrentUserClaimReader.GetUserId(principal));
         }
     }
 }

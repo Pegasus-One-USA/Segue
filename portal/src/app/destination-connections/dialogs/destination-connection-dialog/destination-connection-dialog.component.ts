@@ -25,6 +25,21 @@ function toFormType(t: DestinationType): 'sql' | 'csv' | null {
   return null;
 }
 
+/** The connection form's engine dropdown value for a saved destination's real DestinationType — used to
+ *  pre-select the right engine when editing/replacing the secret on an existing SQL-family destination. */
+function toEngine(t: DestinationType): 'sqlserver' | 'mysql' | 'postgres' {
+  if (t === 'PostgreSql') return 'postgres';
+  if (t === 'MySql') return 'mysql';
+  return 'sqlserver';
+}
+
+/** Reverse of toEngine — resolves the connection form's chosen engine back to the DestinationType to save. */
+function sqlEngineToDestinationType(engine: string | undefined): DestinationType {
+  if (engine === 'postgres') return 'PostgreSql';
+  if (engine === 'mysql') return 'MySql';
+  return 'SqlServer';
+}
+
 @Component({
   selector: 'app-destination-connection-dialog',
   standalone: true,
@@ -51,6 +66,14 @@ export class DestinationConnectionDialogComponent {
     this.isCreate ? null : toFormType(this.data.destination!.destinationType),
   );
   readonly unsupportedType = computed(() => !this.isCreate && this.chosenType() === null);
+
+  // Edit/view only: pre-selects the connection form's engine dropdown (SQL Server/MySQL/PostgreSQL) to match
+  // the destination being edited, so "Replace connection secret" doesn't silently default back to SQL Server.
+  readonly editInitialConfig = computed<Record<string, string> | null>(() =>
+    !this.isCreate && this.data.destination
+      ? { dest_engine: toEngine(this.data.destination.destinationType) }
+      : null,
+  );
 
   // Edit/view: Name + Target map straight to DestinationConfiguration's own persisted fields. The rich
   // sql/csv connection fields (server, credentials, folder, etc.) are never returned by the API — they were
@@ -109,7 +132,7 @@ export class DestinationConnectionDialogComponent {
       type === 'sql'
         ? {
             name,
-            destinationType: 'SqlServer',
+            destinationType: sqlEngineToDestinationType(config['dest_engine']),
             keyVaultName: 'workflow-secrets',
             secretName: newSecretName(name),
             target: null,

@@ -17,6 +17,7 @@ public sealed class UserManagementService : IUserManagementService
     private readonly IUserAccessRepository _repository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
     private readonly IEmailSender _emailSender;
     private readonly IExternalTokenValidator _externalTokenValidator;
     private readonly ILocalAuthService _localAuthService;
@@ -26,6 +27,7 @@ public sealed class UserManagementService : IUserManagementService
         IUserAccessRepository repository,
         IPasswordHasher passwordHasher,
         ICurrentUserService currentUserService,
+        IUserDisplayNameResolver userDisplayNameResolver,
         IEmailSender emailSender,
         IExternalTokenValidator externalTokenValidator,
         ILocalAuthService localAuthService,
@@ -34,6 +36,7 @@ public sealed class UserManagementService : IUserManagementService
         _repository = repository;
         _passwordHasher = passwordHasher;
         _currentUserService = currentUserService;
+        _userDisplayNameResolver = userDisplayNameResolver;
         _emailSender = emailSender;
         _externalTokenValidator = externalTokenValidator;
         _localAuthService = localAuthService;
@@ -512,6 +515,8 @@ public sealed class UserManagementService : IUserManagementService
     private async Task<UserManagementDto> ToManagementDtoAsync(User user, CancellationToken cancellationToken)
     {
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
+        var createdBy = await _userDisplayNameResolver.ResolveOneAsync(user.CreatedBy, cancellationToken);
+        var modifiedBy = await _userDisplayNameResolver.ResolveOneAsync(user.ModifiedBy, cancellationToken);
 
         return new UserManagementDto(
             user.Id,
@@ -526,7 +531,10 @@ public sealed class UserManagementService : IUserManagementService
             user.CreatedOnUtc,
             user.LastLoginOnUtc,
             user.MfaEnabled,
-            user.MustSetupMfa);
+            user.MustSetupMfa,
+            createdBy,
+            user.ModifiedOnUtc,
+            modifiedBy);
     }
 
     private static string NormalizeEmail(string email)

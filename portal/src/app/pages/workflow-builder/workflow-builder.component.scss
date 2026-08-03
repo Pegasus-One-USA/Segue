@@ -29,11 +29,9 @@
 // technique the skeleton-shimmer utility already uses) as a quiet "flow" cue.
 .dock {
   position:      relative;
-  // Establishes .dock's stacking context unconditionally. Without this, :hover's transform below is what
-  // creates one (transform: != none always forces a new stacking context) — meaning the context pops in
-  // and out of existence exactly when you hover the field, and z-index values inside (e.g. the required-
-  // field error message) get scoped differently each time, flickering behind sibling elements right when
-  // you interact with the input. Isolating it permanently keeps that scoping stable at all times.
+  // Establishes .dock's own stacking context unconditionally, so z-index values inside (e.g. the
+  // required-field error message) are always scoped consistently regardless of what else on the page
+  // changes stacking context.
   isolation:     isolate;
   display:       flex;
   align-items:   center;
@@ -45,9 +43,7 @@
   border:        1px solid var(--color-border);
   border-radius: var(--radius-card);
   box-shadow:    var(--shadow-xs);
-  // Card hover-lift per the design spec's §22 Micro Animations table (translateY(-2px), 200ms ease) —
-  // not the button-hover-lift values (-1px, 150ms) this was drafted with initially.
-  transition:    box-shadow var(--transition-slow), transform var(--transition-slow);
+  transition:    box-shadow var(--transition-slow);
 
   &::before {
     content:         '';
@@ -68,9 +64,11 @@
     animation:       dock-flow 8s linear infinite;
   }
 
+  // Depth cue only — no translateY lift: .dock is a persistent toolbar holding the always-interactive
+  // Workflow Name field, not a clickable card, so hovering it to reach the field shouldn't shift the
+  // whole bar (and the field) out from under the cursor.
   &:hover {
     box-shadow: var(--shadow-sm);
-    transform:  translateY(-2px);
   }
 
   &:focus-within {

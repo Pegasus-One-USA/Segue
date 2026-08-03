@@ -975,6 +975,13 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncValidators());
 
+    // Generate/Import leave jwksUrl blank until save (see syncValidators()'s jwksUrlServerManaged) — re-sync the
+    // moment the admin picks either, so the required validator drops immediately instead of only on the next
+    // unrelated field change.
+    this.form.controls.keySource.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.syncValidators());
+
     this.form.controls.retrievalMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((next) => {
@@ -1350,7 +1357,11 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     apply('launchUrl',     cfg.showLaunchUrl, true);
     apply('resources',     this.showResourcePickerSection());
     apply('clientSecret',  method === 'secret');
-    apply('jwksUrl',       method === 'jwt', true);
+    // Generate/Import (Backend System only) leave this blank on purpose — the real JWKS URL is this connection's
+    // own .well-known/jwks.json, only known once it has an id after save (see the readonly condition on this field
+    // in the template and generateKeyPair()/importPrivateKey() above, neither of which populate it).
+    const jwksUrlServerManaged = this.audience() === 'backend-system' && (this.isGenKey() || this.isImportKey());
+    apply('jwksUrl',       method === 'jwt' && !jwksUrlServerManaged, true);
     // Epic Backend Services signs a JWT assertion with an RS384 private key referenced by (Key ID, Key Vault Name,
     // Secret Name) — ConfigurationService.ValidateEpicSourceConnection only requires all three in the non-interactive
     // (Backend System) branch; an EHR-launch/standalone/patient app can pick JWT client auth without them, so scope

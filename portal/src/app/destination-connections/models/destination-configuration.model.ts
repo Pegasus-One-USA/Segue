@@ -41,6 +41,10 @@ export interface DestinationConfigurationDto {
   /** Non-secret dest_* fields as a JSON string (server/database/schema/... for SQL; folder/sftpHost/... for
    *  CSV/SFTP) — see DestinationConfiguration.ConnectionMetadataJson. Never carries a password. */
   connectionMetadataJson?: string | null;
+  createdOnUtc?: string | null;
+  createdBy?: string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?: string | null;
 }
 
 export interface CreateDestinationConfigurationRequest {
@@ -62,10 +66,15 @@ export interface PagedResult<T> {
   pageSize: number;
 }
 
+export type DestinationSortColumn = 'name' | 'destinationType' | 'target' | 'isEnabled' | 'actionOn';
+export type SortOrder = 'asc' | 'desc';
+
 export interface DestinationConfigurationFilter {
   search?: string;
   destinationType?: DestinationType;
   isEnabled?: boolean;
+  sortBy?: DestinationSortColumn;
+  sortOrder?: SortOrder;
   page: number;
   pageSize: number;
 }

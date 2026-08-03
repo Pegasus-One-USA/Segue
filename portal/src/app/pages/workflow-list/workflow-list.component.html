@@ -75,6 +75,14 @@
           }
         </div>
       }
+
+      <button class="btn-reset" type="button" (click)="reset()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
+          <path d="M3 3v5h5"></path>
+        </svg>
+        Reset
+      </button>
     </div>
   </div>
 
@@ -84,7 +92,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th class="col-index">#</th>
+            <th class="col-index"></th>
             <th class="col-sortable" (click)="onSort('name')">
               Workflow
               <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
@@ -115,6 +123,13 @@
               Last Run
               <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'lastRun'">
                 {{ sortColumn() === 'lastRun' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th>Action by</th>
+            <th class="col-sortable" (click)="onSort('actionOn')">
+              Action on
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'actionOn'">
+                {{ sortColumn() === 'actionOn' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
             <th class="col-actions">Actions</th>
@@ -157,6 +172,8 @@
                   <span class="cell-muted">Never run</span>
                 }
               </td>
+              <td><span class="cell-muted">{{ (w.modifiedBy || w.createdBy) ?? '—' }}</span></td>
+              <td><span class="cell-muted">{{ ((w.modifiedOnUtc || w.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
               <td class="col-actions">
                 <div class="row-actions">
                   <div class="split-btn" (click)="$event.stopPropagation()">
@@ -184,50 +201,83 @@
 
                   <span class="action-divider"></span>
 
-                  <button class="btn-icon" type="button" title="Edit in Workflow Builder" (click)="onEdit(w)"><mat-icon>edit</mat-icon></button>
+                  <div class="row-menu">
+                    <button
+                      class="btn-icon"
+                      type="button"
+                      title="More actions"
+                      (click)="$event.stopPropagation(); toggleActionMenu($event, w.workflowId)"
+                    ><mat-icon>more_vert</mat-icon></button>
 
-                  <button
-                    class="btn-icon"
-                    type="button"
-                    [disabled]="rowBusyId() === w.workflowId"
-                    [title]="w.status === 'Enabled' ? 'Disable' : 'Enable'"
-                    (click)="onToggleEnabled(w)"
-                  ><mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon></button>
+                    @if (openActionMenuId() === w.workflowId && actionMenuPosition(); as pos) {
+                      <!-- No click-outside guard needed here: the panel stays a DOM descendant of .row-menu
+                           even though it renders position: fixed, so closeFilterMenuIfOutside's own
+                           closest('.row-menu') check already treats a click anywhere in here as "inside". -->
+                      <div
+                        class="row-menu-panel"
+                        [style.top.px]="pos.top"
+                        [style.bottom.px]="pos.bottom"
+                        [style.right.px]="pos.right"
+                      >
+                        <button type="button" class="row-menu-item" (click)="onEdit(w); openActionMenuId.set(null)">
+                          <mat-icon>edit</mat-icon> Edit in Workflow Builder
+                        </button>
 
-                  <button
-                    class="btn-icon"
-                    type="button"
-                    [class.btn-icon--active]="w.isPubliclyLaunchable"
-                    [disabled]="rowBusyId() === w.workflowId"
-                    [title]="w.isPubliclyLaunchable
-                      ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously. Click to revoke.'
-                      : 'Not publicly launchable. Click to let a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
-                    (click)="onTogglePublicLaunch(w)"
-                  ><mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon></button>
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          (click)="onToggleEnabled(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon>
+                          {{ w.status === 'Enabled' ? 'Disable' : 'Enable' }}
+                        </button>
 
-                  <button
-                    class="btn-icon"
-                    type="button"
-                    [disabled]="rowBusyId() === w.workflowId"
-                    title="Copy workflow"
-                    (click)="askCopyWorkflow(w)"
-                  ><mat-icon>content_copy</mat-icon></button>
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          [title]="w.isPubliclyLaunchable
+                            ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
+                            : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
+                          (click)="onTogglePublicLaunch(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
+                          {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
+                        </button>
 
-                  <button
-                    class="btn-icon"
-                    type="button"
-                    [disabled]="rowBusyId() === w.workflowId"
-                    [title]="'Copy workflow ID - ' + w.workflowId"
-                    (click)="copyWorkflowId(w)"
-                  ><mat-icon>tag</mat-icon></button>
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          (click)="askCopyWorkflow(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>content_copy</mat-icon> Duplicate
+                        </button>
 
-                  <button
-                    class="btn-icon btn-icon--danger"
-                    type="button"
-                    [disabled]="rowBusyId() === w.workflowId"
-                    title="Delete workflow"
-                    (click)="askDelete(w)"
-                  ><mat-icon>delete</mat-icon></button>
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          [title]="'Copy workflow ID - ' + w.workflowId"
+                          (click)="copyWorkflowId(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>tag</mat-icon> Copy Workflow ID
+                        </button>
+
+                        <div class="row-menu-divider"></div>
+
+                        <button
+                          type="button"
+                          class="row-menu-item row-menu-item--danger"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          (click)="askDelete(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>delete</mat-icon> Delete
+                        </button>
+                      </div>
+                    }
+                  </div>
                 </div>
               </td>
             </tr>

@@ -20,7 +20,11 @@ public sealed record WorkflowSummaryDto(
     string? SourceSystemType,
     string? ApplicationType,
     bool HasDestination,
-    bool IsPubliclyLaunchable);
+    bool IsPubliclyLaunchable,
+    DateTime? CreatedOnUtc = null,
+    string? CreatedBy = null,
+    DateTime? ModifiedOnUtc = null,
+    string? ModifiedBy = null);
 
 /// <summary>One server-side page of the workflow-list screen — <see cref="Items"/> is just this page's rows;
 /// <see cref="TotalCount"/> is the count across every row matching the active search/filters (before paging), for

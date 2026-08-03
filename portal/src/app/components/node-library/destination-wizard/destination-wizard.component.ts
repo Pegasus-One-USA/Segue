@@ -146,7 +146,7 @@ export class DestinationWizardComponent implements OnInit {
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
   private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
-  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo'>();
+  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -175,14 +175,18 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── forms ─────────────────────────────────────────────────────────────────
   readonly sqlForm = this.fb.group({
-    name:      ['SQL Production', [Validators.required]],
-    server:    ['', [Validators.required]],
-    database:  ['', [Validators.required]],
-    auth:      ['sql-auth', [Validators.required]],
-    username:  [''],
-    password:  [''],
-    schema:    ['dbo', []],
-    writeMode: ['upsert', []],
+    name:       ['SQL Production', [Validators.required]],
+    server:     ['', [Validators.required]],
+    database:   ['', [Validators.required]],
+    auth:       ['sql-auth', [Validators.required]],
+    username:   [''],
+    password:   [''],
+    schema:     ['dbo', []],
+    writeMode:  ['upsert', []],
+    // MySQL/PostgreSQL only (see DestinationConnectionProbeRequest.RequireSsl backend-side): off by default so
+    // a local/docker instance with SSL disabled still connects; check for managed providers that enforce SSL
+    // (e.g. AWS RDS's rds.force_ssl).
+    requireSsl: [false, []],
   });
 
   readonly mongoForm = this.fb.group({
@@ -259,16 +263,20 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
-  // MySQL reuses the SQL family's form/steps (server/database/auth + live table/column introspection) —
+  // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
   // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
   // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
-  readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql');
+  readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
   readonly isMySql      = computed(() => this.destType() === 'mysql');
+  readonly isPostgres   = computed(() => this.destType() === 'postgres');
   readonly isMongo      = computed(() => this.destType() === 'mongo');
+  /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
+  readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly isCsv        = computed(() => this.destType() === 'csv');
   readonly destLabel    = computed(() =>
     this.destType() === 'sql' ? 'SQL Server'
       : this.destType() === 'mysql' ? 'MySQL'
+      : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
       : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
@@ -458,7 +466,7 @@ export class DestinationWizardComponent implements OnInit {
     this.probeState.set('testing');
     this.probeError.set(null);
     this.schemaSvc.probe({
-      destinationType: this.isMySql() ? 'MySql' : 'SqlServer',
+      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
       server:   v.server   ?? '',
       database: v.database ?? '',
       authentication: v.auth ?? 'sql-auth',
@@ -466,6 +474,7 @@ export class DestinationWizardComponent implements OnInit {
       password: v.password ?? undefined,
       trustServerCertificate: true,
       encrypt: true,
+      requireSsl: v.requireSsl ?? false,
     }).subscribe({
       next: res => {
         if (res.connected) {
@@ -565,6 +574,7 @@ export class DestinationWizardComponent implements OnInit {
         password:  '',
         schema:    metadata['dest_schema']    || 'dbo',
         writeMode: metadata['dest_writeMode'] || 'upsert',
+        requireSsl: metadata['dest_requireSsl'] === 'true',
       });
       this._existingBaseline = this.sqlForm.getRawValue();
     } else if (this.isMongo()) {
@@ -1220,7 +1230,7 @@ export class DestinationWizardComponent implements OnInit {
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
-  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql' | 'mongo'): void {
+  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'): void {
     const targets = { ...this.targetByResource() };
     for (const r of resources) {
       if (targets[r]) continue;
@@ -1323,7 +1333,7 @@ export class DestinationWizardComponent implements OnInit {
       dest_resources: this.selectedResources().join(','),
     };
 
-    if (type === 'sql' || type === 'mysql') {
+    if (type === 'sql' || type === 'mysql' || type === 'postgres') {
       const v = this.sqlForm.value;
       config['dest_name']      = v.name      ?? '';
       config['dest_server']    = v.server    ?? '';
@@ -1331,6 +1341,7 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_auth']      = v.auth      ?? '';
       config['dest_schema']    = v.schema    ?? 'dbo';
       config['dest_writeMode'] = v.writeMode ?? 'upsert';
+      config['dest_requireSsl'] = String(v.requireSsl ?? false);
       // Persisted so create-on-save can assemble the connection string (server-side it is encrypted at rest via
       // ProvisionedSecrets; the entity only ever stores the secret reference). Only kept for SQL username/password auth.
       if ((v.auth ?? 'sql-auth') === 'sql-auth') {
@@ -1417,7 +1428,7 @@ export class DestinationWizardComponent implements OnInit {
 
     this.saved.emit({
       attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
+      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'postgres' ? 'dest-postgres' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
       status:      'enabled',
       config,
     });

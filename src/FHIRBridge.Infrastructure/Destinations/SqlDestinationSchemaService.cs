@@ -228,9 +228,32 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         {
             DestinationType.SqlServer or DestinationType.AzureSql => BuildSqlServerConnectionString(request),
             DestinationType.MySql => BuildMySqlConnectionString(request),
+            DestinationType.PostgreSql => BuildPostgreSqlConnectionString(request),
             _ => throw new InvalidOperationException(
                 $"Provide a ConnectionString to probe destination type '{request.DestinationType}'."),
         };
+    }
+
+    private static string BuildPostgreSqlConnectionString(DestinationConnectionProbeRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Server) || string.IsNullOrWhiteSpace(request.Database))
+        {
+            throw new InvalidOperationException("Server and Database are required to test a PostgreSQL connection.");
+        }
+
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = request.Server,
+            Database = request.Database,
+            Username = request.Username ?? string.Empty,
+            Password = request.Password ?? string.Empty,
+            Timeout = 10,
+            // Require (unlike VerifyCA/VerifyFull) does not validate the server certificate — the Npgsql 6+
+            // equivalent of the old TrustServerCertificate=true behavior, so no extra flag is needed here.
+            SslMode = request.RequireSsl ? SslMode.Require : SslMode.Prefer,
+        };
+
+        return builder.ConnectionString;
     }
 
     private static string BuildMySqlConnectionString(DestinationConnectionProbeRequest request)
@@ -247,6 +270,9 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             UserID = request.Username ?? string.Empty,
             Password = request.Password ?? string.Empty,
             ConnectionTimeout = 10,
+            // MySqlConnector's "Required" mode encrypts without validating the server certificate — the same
+            // "SSL on, don't verify" behavior Npgsql gets from SslMode.Require + TrustServerCertificate above.
+            SslMode = request.RequireSsl ? MySqlSslMode.Required : MySqlSslMode.Preferred,
         };
 
         return builder.ConnectionString;

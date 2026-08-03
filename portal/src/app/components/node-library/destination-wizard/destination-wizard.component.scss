@@ -1,4 +1,15 @@
 /* ── Wrapper ──────────────────────────────────────────────────────────────── */
+// Without this, the host stays sized to its own content (default flex-item sizing), so a short
+// step (e.g. Configure with few fields) leaves the footer floating above blank space instead of
+// pinned to the modal's actual bottom — .dw-body's flex:1 + overflow-y:auto below has nothing to
+// grow into unless the host itself is stretched to fill nld-detail's available height first.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .dw {
   display: flex;
   flex-direction: column;
@@ -387,6 +398,11 @@
   border: 1px solid var(--color-border);
   border-radius: 10px;
   overflow: hidden;
+  // Without this, dw-body's flex column shrinks each group below its content height to fit the
+  // now-bounded modal (overflow: hidden above gives it an automatic min-height of 0, so flexbox is
+  // free to compress it) instead of letting dw-body scroll — clipping row content instead of
+  // showing a scrollbar.
+  flex-shrink: 0;
 }
 
 /* The whole row toggles the accordion (role="button" in the template) — the target select/input and the

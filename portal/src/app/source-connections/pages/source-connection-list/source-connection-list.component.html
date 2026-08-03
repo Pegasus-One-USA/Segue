@@ -18,11 +18,37 @@
         />
       </div>
 
+      <div class="type-filter-wrap">
+        <select class="type-filter-select" [value]="ehrFilter()" (change)="onEhrFilterChange($any($event.target).value)">
+          <option value="">All EHRs</option>
+          @for (o of ehrOptions; track o.value) {
+            <option [value]="o.value">{{ o.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="type-filter-wrap">
+        <select class="type-filter-select" [value]="audienceFilter()" (change)="onAudienceFilterChange($any($event.target).value)">
+          <option value="">All audiences</option>
+          @for (o of audienceOptions; track o.value) {
+            <option [value]="o.value">{{ o.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="type-filter-wrap">
+        <select class="type-filter-select" [value]="statusFilter()" (change)="onStatusFilterChange($any($event.target).value)">
+          <option value="">All statuses</option>
+          <option value="true">Active</option>
+          <option value="false">Disabled</option>
+        </select>
+      </div>
+
       <div class="filter-actions">
         <button class="btn-reset" type="button" (click)="reset()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="1 4 1 10 7 10"></polyline>
-            <path d="M3.51 15a9 9 0 1 0 .49-3.5"></path>
+            <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
+            <path d="M3 3v5h5"></path>
           </svg>
           Reset
         </button>
@@ -51,23 +77,12 @@
     } @else {
 
       <!-- Table meta row -->
-      <div class="table-meta">
-        <span class="entries-info">
-          @if (filtered().length > 0) {
-            Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
-            {{ filtered().length === 1 ? 'entry' : 'entries' }}
-          } @else {
-            No entries found
-          }
-        </span>
-      </div>
-
       <div class="table-wrapper">
-        <table mat-table [dataSource]="paginated()" class="data-table">
+        <table mat-table [dataSource]="items()" class="data-table">
 
           <!-- # Column -->
           <ng-container matColumnDef="index">
-            <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
+            <th mat-header-cell *matHeaderCellDef class="col-index"></th>
             <td mat-cell *matCellDef="let c; let i = index" class="col-index">
               {{ pageIndex() * pageSize() + i + 1 }}
             </td>
@@ -75,7 +90,12 @@
 
           <!-- Name Column -->
           <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('name')">
+              Name
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
+                {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <td mat-cell *matCellDef="let c">
               <div class="cell-name">
                 <div class="endpoint-avatar">
@@ -88,7 +108,12 @@
 
           <!-- EHR Column -->
           <ng-container matColumnDef="sourceSystemType">
-            <th mat-header-cell *matHeaderCellDef>EHR</th>
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('sourceSystemType')">
+              EHR
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'sourceSystemType'">
+                {{ sortColumn() === 'sourceSystemType' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <td mat-cell *matCellDef="let c">
               <span class="vendor-badge">{{ c.sourceSystemType }}</span>
             </td>
@@ -96,7 +121,12 @@
 
           <!-- Audience Column -->
           <ng-container matColumnDef="audience">
-            <th mat-header-cell *matHeaderCellDef>Audience</th>
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('applicationType')">
+              Audience
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'applicationType'">
+                {{ sortColumn() === 'applicationType' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <td mat-cell *matCellDef="let c">
               <span class="cell-muted">{{ audienceOf(c) }}</span>
             </td>
@@ -120,11 +150,37 @@
 
           <!-- Status Column -->
           <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('isEnabled')">
+              Status
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
+                {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
             <td mat-cell *matCellDef="let c">
               <span class="status-badge" [class.status-badge--inactive]="!c.isEnabled">
                 {{ c.isEnabled ? 'active' : 'disabled' }}
               </span>
+            </td>
+          </ng-container>
+
+          <!-- Action by Column -->
+          <ng-container matColumnDef="actionBy">
+            <th mat-header-cell *matHeaderCellDef>Action by</th>
+            <td mat-cell *matCellDef="let c">
+              <span class="cell-muted">{{ (c.modifiedBy || c.createdBy) ?? '—' }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Action on Column -->
+          <ng-container matColumnDef="actionOn">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="toggleActionOnSort()">
+              Action on
+              @if (actionOnSortDirection(); as dir) {
+                <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
+              }
+            </th>
+            <td mat-cell *matCellDef="let c">
+              <span class="cell-muted">{{ ((c.modifiedOnUtc || c.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span>
             </td>
           </ng-container>
 
@@ -166,21 +222,21 @@
       </div>
 
       <!-- Empty State -->
-      @if (filtered().length === 0) {
+      @if (totalCount() === 0) {
         <div class="empty-state">
           <div class="empty-state__icon-wrap">
             <mat-icon>cable</mat-icon>
           </div>
           <h3 class="empty-state__title">
-            @if (searchQuery()) {
+            @if (searchQuery() || ehrFilter() || audienceFilter() || statusFilter()) {
               No source connections matched your search
             } @else {
               No source connections yet
             }
           </h3>
           <p class="empty-state__sub">
-            @if (searchQuery()) {
-              Try adjusting your search.
+            @if (searchQuery() || ehrFilter() || audienceFilter() || statusFilter()) {
+              Try adjusting your search or filters.
             } @else {
               Get started by adding your first source connection.
             }
@@ -189,16 +245,14 @@
       }
 
       <!-- Paginator -->
-      @if (filtered().length > pageSize()) {
-        <mat-paginator
-          [length]="filtered().length"
-          [pageSize]="pageSize()"
+      @if (totalCount() > 0) {
+        <app-pagination-bar
           [pageIndex]="pageIndex()"
+          [pageSize]="pageSize()"
+          [totalCount]="totalCount()"
           [pageSizeOptions]="[5, 10, 25, 50]"
-          showFirstLastButtons
-          (page)="onPageChange($event)"
-          class="table-paginator"
-        ></mat-paginator>
+          (pageChange)="onPageChange($event)"
+        />
       }
 
     }
