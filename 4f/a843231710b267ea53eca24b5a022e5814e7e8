@@ -1,0 +1,57 @@
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_26202082a1cf9f::t_3ec04281897510 14
+  s_26202082a1cf9f::t_4daea36d46f9b7 10
+  s_26202082a1cf9f::t_b8056381fdb22b 531-533
+  s_26202082a1cf9f::t_afb082a6a2aaf1 113
+  s_26202082a1cf9f::t_28e203c39d32bc 355-358
+  s_26202082a1cf9f::t_80f6b42e322891 1
+  s_26202082a1cf9f::t_3095318e1f98e6 142-147,151
+  s_26202082a1cf9f::t_c6b902d75eb2b9 194-197
+  s_26202082a1cf9f::t_f7e4a1deecde22 409-453
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_26202082a1cf9f::t_2e322f326fb93e 119-120
+  s_26202082a1cf9f::t_1a09ecc5f4007e 1,4,125
+  s_26202082a1cf9f::t_80ed4270a43bf9 15
+  s_26202082a1cf9f::t_eb628ddeae3134 99,109-118,121-124
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_26202082a1cf9f::t_31195ffb129f0f 1,5-6,9-19,37-52,54-55,73-85,106-107,115-117,119-120,122-134
+  s_26202082a1cf9f::t_4714cf8029341c 2-4,7-8,20-36,53,56-72,86-105,108-113,118,135-136
+  s_26202082a1cf9f::t_dbeadf4c47c69f 114
+  s_26202082a1cf9f::t_b01dce31ca5b1b 121
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_26202082a1cf9f::t_924e5108f9c845 17
+portal/src/app/services/phase-config.service.ts
+  s_26202082a1cf9f::t_89ce76c8f3fa73 32-33
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_26202082a1cf9f::t_97d5c32283dbf3 24
+  s_26202082a1cf9f::t_247fc1275f3cb2 232
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.html
+  s_26202082a1cf9f::t_79d1207233d024 41-134
+  s_26202082a1cf9f::t_c8b01ac6328592 1-40
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_26202082a1cf9f::t_57b14449744481 148,153-160,162-164
+  s_26202082a1cf9f::t_c0ddabd561a166 149-152,161
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceClientFactory.cs
+  s_26202082a1cf9f::t_421de815a81f7b 44-48
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.scss
+  s_26202082a1cf9f::t_b3c6a9e8e44ed1 28-57
+  s_26202082a1cf9f::t_07a6852e2281cd 1-27,58-100
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_26202082a1cf9f::t_fa154e90e9a504 631-675
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "4fa843231710b267ea53eca24b5a022e5814e7e8",
+  "prompts": {},
+  "sessions": {
+    "s_26202082a1cf9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e22b5f6d-b00e-4387-889d-ede3efd400e9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
