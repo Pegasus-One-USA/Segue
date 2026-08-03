@@ -5,7 +5,7 @@ import { PipelineStore } from '../../services/pipeline.store';
 import { CanvasService } from '../../services/canvas.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { CanvasNode } from '../../models/node.model';
+import { CanvasNode, TransformNode } from '../../models/node.model';
 import { SourceNodeComponent } from '../nodes/source-node/source-node.component';
 import { TransformNodeComponent } from '../nodes/transform-node/transform-node.component';
 import { MergeNodeComponent } from '../nodes/merge-node/merge-node.component';
@@ -150,7 +150,15 @@ export class CanvasComponent {
   protected readonly pendingDeleteId = signal<string | null>(null);
 
   onNodeDelete(nodeId: string): void {
+    if (this.isFieldMappingNode(nodeId)) return;
     this.pendingDeleteId.set(nodeId);
+  }
+
+  /** Field Mapping is a required step once a destination is attached — never user-deletable,
+      regardless of entry point (hover button or context menu). */
+  private isFieldMappingNode(id: string | null | undefined): boolean {
+    const node = id ? this.store.byId(id) : undefined;
+    return node?.kind === 'transform' && (node as TransformNode).transformId === 'field-mapping';
   }
 
   confirmDelete(): void {
@@ -256,6 +264,11 @@ export class CanvasComponent {
     const id = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : undefined;
     return node?.kind === 'merge';
+  }
+
+  /** Drives whether the context menu's Delete item shows for the node under it. */
+  protected ctxNodeIsFieldMapping(): boolean {
+    return this.isFieldMappingNode(this.ctxMenu()?.nodeId);
   }
 
   ctxToggleCheckpoint(): void {

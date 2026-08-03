@@ -88,11 +88,13 @@
             <button class="ctx-item" (click)="ctxToggleCheckpoint()">Enable checkpoint</button>
           }
         }
-        <div class="ctx-sep"></div>
-        <button class="ctx-item ctx-item--danger" (click)="ctxDelete()">
-          <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2,4 14,4"/><path d="M6,4V2h4v2"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>
-          Delete
-        </button>
+        @if (!ctxNodeIsFieldMapping()) {
+          <div class="ctx-sep"></div>
+          <button class="ctx-item ctx-item--danger" (click)="ctxDelete()">
+            <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2,4 14,4"/><path d="M6,4V2h4v2"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>
+            Delete
+          </button>
+        }
       } @else {
         <button class="ctx-item" (click)="ctxAddModule()">
           <svg class="ctx-ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg>
