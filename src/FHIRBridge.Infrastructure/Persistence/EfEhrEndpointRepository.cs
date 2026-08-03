@@ -17,7 +17,7 @@ public sealed class EfEhrEndpointRepository : IEhrEndpointRepository
     public async Task<IReadOnlyList<EhrEndpoint>> GetAllAsync(CancellationToken cancellationToken) =>
         await _db.EhrEndpoints.OrderBy(x => x.Name).ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<EhrEndpoint>> GetByEndpointTypeAsync(
+    public async Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken) =>
         await _db.EhrEndpoints
             .Where(x => x.EndpointType == endpointType)

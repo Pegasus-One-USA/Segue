@@ -12,10 +12,7 @@ import {
   extractPatientDetail,
   indicatesReAuthorizationNeeded,
 } from './core/services/patient-standalone-launch.service';
-import {
-  CSV_EMAIL_EXPORT_WORKFLOW_ID,
-  CSV_EXPORT_WORKFLOW_ID,
-} from './core/config/standalone-launch.config';
+import { AUTH_EMAIL_STORAGE_KEY } from '../../core/routes';
 
 @Component({
   selector: 'app-launch-standalone-patient',
@@ -37,6 +34,70 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // false there).
   goHome(): void {
     window.location.href = '/';
+  }
+
+  // The OAuth redirect-back URL passed to mintLaunchUrl's callerId param — tells FHIRBridge's OAuthController.Callback
+  // where to send the browser once the token exchange completes (see redirectToMyChart). Unrelated to the token
+  // cache: do NOT use this for hasValidToken/run/discardToken, since it's shared by every visitor to this page and
+  // was exactly the problem sessionId (below) fixes. Origin + pathname only, computed fresh each time.
+  private get pageCallerId(): string {
+    return `${window.location.origin}${window.location.pathname}`;
+  }
+
+  // HealthApp's own logged-in account email (see app.ts's AUTH_EMAIL_STORAGE_KEY) — the stable identity FHIRBridge
+  // permanently binds the authorized MyChart patient to (see mintLaunchUrl's userIdentity param). Distinct from
+  // sessionId above (an opaque per-browser cache key): this must identify the same real HealthApp account across
+  // every browser/session, not just one.
+  private get userIdentity(): string | null {
+    try {
+      return sessionStorage.getItem(AUTH_EMAIL_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  // FHIRBridge-minted opaque identifier that its Patient Standalone token cache actually keys on instead of
+  // SourceConnectionId (see SmartAuthorizationCodeTokenProvider.BuildStoreKey) — unlike pageCallerId above, this is
+  // unique per real signed-in patient session, not shared by every visitor to this page. Persisted in localStorage
+  // (not sessionStorage) so it survives the full-page navigation to MyChart and back. Must be sent as the callerId
+  // parameter on hasValidToken/run/discardToken (those endpoints' wire format predates this rename — the field name
+  // there is unrelated to the OAuth-redirect callerId above) for every one of this page's workflows (list, detail,
+  // csv export, csv email export), so they all share the one token FHIRBridge cached under this session id instead
+  // of each workflow's check missing it and falling back to a per-SourceConnection key that was never written to.
+  private static readonly SESSION_ID_STORAGE_KEY = 'patientStandaloneSessionId';
+
+  // Scopes the persisted sessionId to the currently logged-in HealthApp account (userIdentity above). Without
+  // this, a plain browser-wide key meant two different HealthApp accounts sharing one browser (e.g. patient@
+  // logging out, patient2@ logging in) would read back the SAME localStorage sessionId — it was never cleared on
+  // logout — so the second account's "Connect Get Data" would silently reuse the first account's already-cached
+  // MyChart token instead of prompting its own fresh sign-in. Falls back to the bare key only when no account
+  // email is available (matches the old, pre-scoped behavior for that edge case alone).
+  private get sessionIdStorageKey(): string {
+    const identity = this.userIdentity;
+    return identity
+      ? `${LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY}:${identity}`
+      : LaunchStandalonePatientComponent.SESSION_ID_STORAGE_KEY;
+  }
+
+  private get sessionId(): string | null {
+    try {
+      return localStorage.getItem(this.sessionIdStorageKey);
+    } catch {
+      return null;
+    }
+  }
+
+  private set sessionId(value: string | null) {
+    try {
+      if (value) {
+        localStorage.setItem(this.sessionIdStorageKey, value);
+      } else {
+        localStorage.removeItem(this.sessionIdStorageKey);
+      }
+    } catch {
+      // Private-browsing/storage-disabled — sessionId just won't persist across the MyChart round trip, falling
+      // back to a fresh one being minted each time (same as a first-ever visit); nothing else is affected.
+    }
   }
 
   // Purely informational badge — never gates whether the Connect button is shown. The real, authoritative check is
@@ -64,18 +125,19 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly patientDetailError = signal<string | null>(null);
   readonly patientDetail = signal<PatientDetail | null>(null);
 
-  // "Download Patient Information" — a third, independent workflow (CSV_EXPORT_WORKFLOW_ID) whose destination uses
-  // Download-URL delivery. Only enabled once a specific patient's detail is open, since it downloads for whichever
-  // patientId is currently selected (see downloadPatientInformation).
-  readonly isDownloadingPatientInfo = signal(false);
-  readonly downloadError = signal<string | null>(null);
+  // "Download Patient Information" — a third, independent workflow (csvExportWorkflowId) whose destination uses
+  // Download-URL delivery. Triggered directly from a row's inline icon (not gated behind viewPatientDetail), so
+  // state is tracked per patientId rather than as a single shared flag — more than one row's action can be
+  // in-flight/erroring independently of whichever row (if any) currently has its detail open.
+  readonly downloadingPatientIds = signal<ReadonlySet<string>>(new Set());
+  readonly downloadErrors = signal<ReadonlyMap<string, string>>(new Map());
 
-  // "Email Patient Information" — same shape as the download button above, but backed by CSV_EMAIL_EXPORT_WORKFLOW_ID
-  // (Email delivery instead of Download-URL). A Succeeded run means the file was already sent server-side, so there's
-  // nothing to navigate to — emailSuccess just confirms it happened.
-  readonly isEmailingPatientInfo = signal(false);
-  readonly emailError = signal<string | null>(null);
-  readonly emailSuccess = signal(false);
+  // "Email Patient Information" — same shape as the download action above, but backed by csvEmailExportWorkflowId
+  // (Email delivery instead of Download-URL). A Succeeded run means the file was already sent server-side, so
+  // there's nothing to navigate to — emailSuccessIds just confirms it happened, per patientId.
+  readonly emailingPatientIds = signal<ReadonlySet<string>>(new Set());
+  readonly emailErrors = signal<ReadonlyMap<string, string>>(new Map());
+  readonly emailSuccessIds = signal<ReadonlySet<string>>(new Set());
 
   // True while a remembered session is still being checked (on load) or a just-completed launch's patientId is
   // still being resolved from /launch-result — gates the Connect button so a click can't race ahead of patientId
@@ -103,6 +165,11 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // triggered by viewPatientDetail — each has its own independent FHIRBridge public-launch opt-in.
   private workflowId = '';
   private detailWorkflowId = '';
+  // Also resolved by initialize()'s loadConfig() call — the workflows behind "Download Patient Information" /
+  // "Email Patient Information", formerly the hardcoded this.csvExportWorkflowId/this.csvEmailExportWorkflowId
+  // constants in standalone-launch.config.ts, now admin-configurable via WorkflowSettingsEntity.
+  private csvExportWorkflowId = '';
+  private csvEmailExportWorkflowId = '';
 
   constructor(
     private readonly launchService: PatientStandaloneLaunchService,
@@ -157,6 +224,8 @@ export class LaunchStandalonePatientComponent implements OnInit {
 
     this.workflowId = settings.workflowId;
     this.detailWorkflowId = settings.detailWorkflowId;
+    this.csvExportWorkflowId = settings.csvExportWorkflowId;
+    this.csvEmailExportWorkflowId = settings.csvEmailExportWorkflowId;
 
     if (isOAuthCallback) {
       await this.handleOAuthCallback(workflowRunId, launchError);
@@ -180,6 +249,15 @@ export class LaunchStandalonePatientComponent implements OnInit {
     // every time, re-triggering an auto-fetch even after Reset Token deliberately cleared the session.
     window.history.replaceState(null, '', window.location.pathname);
     void this.loadHospitals();
+
+    // context_mismatch means the token exchange itself was rejected — this MyChart account is permanently bound to
+    // a different patient/practitioner (see InteractiveSourceAuthorizationService.EnforceUserFhirContextBindingAsync)
+    // and no usable token was ever saved. Unlike a workflow-only failure, there is nothing to fetch here: proceeding
+    // would just surface a confusing, unrelated error from the missing token instead of this clear rejection reason.
+    if (launchError === 'context_mismatch') {
+      this.launchError.set(launchError);
+      return;
+    }
 
     this.hasMyChartToken.set(true);
     this.launchError.set(launchError);
@@ -288,7 +366,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.workflowId, this.patientId);
+      const result = await this.launchService.run(this.workflowId, this.patientId, this.sessionId ?? undefined);
 
       if (result.workflowRun.status === 'Succeeded') {
         this.fetchedPatients.set(extractFetchedPatients(result));
@@ -296,10 +374,12 @@ export class LaunchStandalonePatientComponent implements OnInit {
         // Clears any stale "workflow_failed" banner from FHIRBridge's own no-criteria convenience run — that run
         // failing is an expected, benign artifact of the Standalone launch flow, not a real problem.
         this.launchError.set(null);
-        // A fresh list invalidates whatever detail section was open for a row from the previous list.
+        // A fresh list invalidates whatever detail section was open for a row from the previous list, and any
+        // per-row download/email state from the previous list's (now-gone) patient ids.
         this.selectedPatientId.set(null);
         this.patientDetail.set(null);
         this.patientDetailError.set(null);
+        this.clearPatientActionState();
         void this.rememberSession();
         return;
       }
@@ -344,7 +424,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         return;
       }
 
-      const result = await this.launchService.run(this.detailWorkflowId, patient.id);
+      const result = await this.launchService.run(this.detailWorkflowId, patient.id, this.sessionId ?? undefined);
 
       if (result.workflowRun.status === 'Succeeded') {
         const detail = extractPatientDetail(result, patient.id);
@@ -381,45 +461,42 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.selectedPatientId.set(null);
     this.patientDetail.set(null);
     this.patientDetailError.set(null);
-    this.downloadError.set(null);
-    this.emailError.set(null);
-    this.emailSuccess.set(false);
   }
 
-  // Triggers CSV_EXPORT_WORKFLOW_ID for whichever patient's detail is currently open. That workflow's destination
-  // uses Download-URL delivery, so a Succeeded run returns a signed link (extractDownloadUrl) rather than resource
-  // JSON — navigating the browser to it is enough to download, since the response carries
+  // Triggers csvExportWorkflowId for the given row's patientId — called directly from that row's inline download
+  // icon, independent of whichever row (if any) currently has its detail open via viewPatientDetail. That workflow's
+  // destination uses Download-URL delivery, so a Succeeded run returns a signed link (extractDownloadUrl) rather
+  // than resource JSON — navigating the browser to it is enough to download, since the response carries
   // Content-Disposition: attachment (no synthetic anchor/blob handling needed). Same token-status-then-run shape as
   // fetchPatient/viewPatientDetail: an already-invalid token redirects to MyChart rather than wasting a /run call.
-  async downloadPatientInformation(): Promise<void> {
-    const patientId = this.selectedPatientId();
-    if (!patientId || this.isDownloadingPatientInfo() || this.isRedirectingToMyChart()) {
+  async downloadPatientInformation(patientId: string): Promise<void> {
+    if (this.downloadingPatientIds().has(patientId) || this.isRedirectingToMyChart()) {
       return;
     }
 
-    this.isDownloadingPatientInfo.set(true);
-    this.downloadError.set(null);
+    this.setDownloading(patientId, true);
+    this.setDownloadError(patientId, null);
     try {
-      if (!(await this.hasValidToken(CSV_EXPORT_WORKFLOW_ID))) {
-        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+      if (!(await this.hasValidToken(this.csvExportWorkflowId))) {
+        await this.needsReAuthorization(this.csvExportWorkflowId);
         return;
       }
 
-      const result = await this.launchService.run(CSV_EXPORT_WORKFLOW_ID, patientId);
+      const result = await this.launchService.run(this.csvExportWorkflowId, patientId, this.sessionId ?? undefined);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
         if (indicatesReAuthorizationNeeded(errorMessage)) {
-          await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+          await this.needsReAuthorization(this.csvExportWorkflowId);
           return;
         }
-        this.downloadError.set(errorMessage);
+        this.setDownloadError(patientId, errorMessage);
         return;
       }
 
       const downloadUrl = extractDownloadUrl(result);
       if (!downloadUrl) {
-        this.downloadError.set('FHIRBridge did not return a download link for this export.');
+        this.setDownloadError(patientId, 'FHIRBridge did not return a download link for this export.');
         return;
       }
 
@@ -431,46 +508,46 @@ export class LaunchStandalonePatientComponent implements OnInit {
       const errorMessage = backendMessage
         ?? 'Could not reach FHIRBridge to generate this download. Check your connection and try again.';
       if (indicatesReAuthorizationNeeded(errorMessage)) {
-        await this.needsReAuthorization(CSV_EXPORT_WORKFLOW_ID);
+        await this.needsReAuthorization(this.csvExportWorkflowId);
         return;
       }
-      this.downloadError.set(errorMessage);
+      this.setDownloadError(patientId, errorMessage);
     } finally {
-      this.isDownloadingPatientInfo.set(false);
+      this.setDownloading(patientId, false);
     }
   }
 
-  // Triggers CSV_EMAIL_EXPORT_WORKFLOW_ID for whichever patient's detail is currently open. That workflow's
-  // destination uses Email delivery, so a Succeeded run has already sent the file server-side — there is no link or
-  // bytes to hand back, just a status. Same token-status-then-run shape as downloadPatientInformation.
-  async emailPatientInformation(): Promise<void> {
-    const patientId = this.selectedPatientId();
-    if (!patientId || this.isEmailingPatientInfo() || this.isRedirectingToMyChart()) {
+  // Triggers csvEmailExportWorkflowId for the given row's patientId — called directly from that row's inline
+  // email icon. That workflow's destination uses Email delivery, so a Succeeded run has already sent the file
+  // server-side — there is no link or bytes to hand back, just a status. Same token-status-then-run shape as
+  // downloadPatientInformation.
+  async emailPatientInformation(patientId: string): Promise<void> {
+    if (this.emailingPatientIds().has(patientId) || this.isRedirectingToMyChart()) {
       return;
     }
 
-    this.isEmailingPatientInfo.set(true);
-    this.emailError.set(null);
-    this.emailSuccess.set(false);
+    this.setEmailing(patientId, true);
+    this.setEmailError(patientId, null);
+    this.setEmailSuccess(patientId, false);
     try {
-      if (!(await this.hasValidToken(CSV_EMAIL_EXPORT_WORKFLOW_ID))) {
-        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+      if (!(await this.hasValidToken(this.csvEmailExportWorkflowId))) {
+        await this.needsReAuthorization(this.csvEmailExportWorkflowId);
         return;
       }
 
-      const result = await this.launchService.run(CSV_EMAIL_EXPORT_WORKFLOW_ID, patientId);
+      const result = await this.launchService.run(this.csvEmailExportWorkflowId, patientId, this.sessionId ?? undefined);
 
       if (result.workflowRun.status !== 'Succeeded') {
         const errorMessage = result.workflowRun.errorMessage ?? 'The workflow run failed for an unknown reason.';
         if (indicatesReAuthorizationNeeded(errorMessage)) {
-          await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+          await this.needsReAuthorization(this.csvEmailExportWorkflowId);
           return;
         }
-        this.emailError.set(errorMessage);
+        this.setEmailError(patientId, errorMessage);
         return;
       }
 
-      this.emailSuccess.set(true);
+      this.setEmailSuccess(patientId, true);
     } catch (err) {
       const backendMessage = err instanceof HttpErrorResponse && typeof err.error?.error === 'string'
         ? err.error.error
@@ -478,13 +555,63 @@ export class LaunchStandalonePatientComponent implements OnInit {
       const errorMessage = backendMessage
         ?? 'Could not reach FHIRBridge to send this email. Check your connection and try again.';
       if (indicatesReAuthorizationNeeded(errorMessage)) {
-        await this.needsReAuthorization(CSV_EMAIL_EXPORT_WORKFLOW_ID);
+        await this.needsReAuthorization(this.csvEmailExportWorkflowId);
         return;
       }
-      this.emailError.set(errorMessage);
+      this.setEmailError(patientId, errorMessage);
     } finally {
-      this.isEmailingPatientInfo.set(false);
+      this.setEmailing(patientId, false);
     }
+  }
+
+  private setDownloading(patientId: string, downloading: boolean): void {
+    this.downloadingPatientIds.update(ids => {
+      const next = new Set(ids);
+      downloading ? next.add(patientId) : next.delete(patientId);
+      return next;
+    });
+  }
+
+  private setDownloadError(patientId: string, message: string | null): void {
+    this.downloadErrors.update(errors => {
+      const next = new Map(errors);
+      message ? next.set(patientId, message) : next.delete(patientId);
+      return next;
+    });
+  }
+
+  private setEmailing(patientId: string, emailing: boolean): void {
+    this.emailingPatientIds.update(ids => {
+      const next = new Set(ids);
+      emailing ? next.add(patientId) : next.delete(patientId);
+      return next;
+    });
+  }
+
+  private setEmailError(patientId: string, message: string | null): void {
+    this.emailErrors.update(errors => {
+      const next = new Map(errors);
+      message ? next.set(patientId, message) : next.delete(patientId);
+      return next;
+    });
+  }
+
+  private setEmailSuccess(patientId: string, succeeded: boolean): void {
+    this.emailSuccessIds.update(ids => {
+      const next = new Set(ids);
+      succeeded ? next.add(patientId) : next.delete(patientId);
+      return next;
+    });
+  }
+
+  // Resets every per-row download/email tracking signal — used when a fresh patient list makes the previous list's
+  // patient ids irrelevant (fetchPatient success) and when Reset Token discards all local state.
+  private clearPatientActionState(): void {
+    this.downloadingPatientIds.set(new Set());
+    this.downloadErrors.set(new Map());
+    this.emailingPatientIds.set(new Set());
+    this.emailErrors.set(new Map());
+    this.emailSuccessIds.set(new Set());
   }
 
   // Cheap pre-check: does FHIRBridge currently have (or can it silently refresh) a usable token, without running
@@ -492,7 +619,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // call right after is always the authoritative test either way.
   private async hasValidToken(workflowId: string): Promise<boolean> {
     try {
-      return await this.launchService.hasValidToken(workflowId, this.patientId);
+      return await this.launchService.hasValidToken(workflowId, this.patientId, this.sessionId ?? undefined);
     } catch {
       return true;
     }
@@ -527,7 +654,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
       this.patientError.set('Select a hospital above, then click Connect again to sign in.');
       return;
     }
-
+debugger;
     await this.redirectToMyChart(selectedHospital, workflowId);
   }
 
@@ -540,7 +667,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
   }
 
   // Anonymous — no FHIRBridge session exists yet at this point, so this reads straight from FHIRBridge's public
-  // ehr-mychart-endpoints listing.
+  // ehr-public-endpoints listing.
   private async loadHospitals(): Promise<void> {
     this.isLoadingHospitals.set(true);
     try {
@@ -570,12 +697,17 @@ export class LaunchStandalonePatientComponent implements OnInit {
       // callerId tells FHIRBridge's OAuthController.Callback to redirect the browser straight back to this exact
       // page (see ngOnInit) once the token exchange completes, instead of falling back to the source connection's
       // static PostLaunchRedirectUri — see InteractiveSourceAuthorizationService.CompleteAsync, where a caller-
-      // supplied callerId always wins over that DB field. Origin + pathname only (no existing query/hash): the
-      // callback appends its own workflowRunId/launchError/signedIn marker on top, and ngOnInit strips whatever
-      // query string is present anyway. FHIRBridge validates the origin against Portal:AllowedOrigins before
-      // honoring it (CallerIdOriginValidator) — this page's origin must be listed there.
-      const callerId = `${window.location.origin}${window.location.pathname}`;
-      const result = await this.launchService.mintLaunchUrl(workflowId, endpoint.id, callerId);
+      // supplied callerId always wins over that DB field. FHIRBridge validates the origin against
+      // Portal:AllowedOrigins before honoring it (CallerIdOriginValidator) — this page's origin must be listed
+      // there. sessionId is the SEPARATE, opaque identifier the token cache actually keys on (see sessionId's own
+      // remarks) — send whatever this browser already has persisted (a returning session, e.g. token expired and
+      // needing re-auth) so FHIRBridge reuses the same cache slot instead of starting a new one; omit it on a
+      // first-ever visit. Persist whatever comes back in the response either way, since FHIRBridge mints one when
+      // none was supplied.
+      const result = await this.launchService.mintLaunchUrl(
+        workflowId, endpoint.id, this.pageCallerId, this.sessionId ?? undefined, this.userIdentity ?? undefined,
+      );
+      this.sessionId = result.sessionId;
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);
@@ -600,14 +732,12 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.selectedPatientId.set(null);
     this.patientDetail.set(null);
     this.patientDetailError.set(null);
-    this.downloadError.set(null);
-    this.emailError.set(null);
-    this.emailSuccess.set(false);
+    this.clearPatientActionState();
   }
 
   private async discardFhirBridgeToken(): Promise<void> {
     try {
-      await this.launchService.discardToken(this.workflowId, this.patientId);
+      await this.launchService.discardToken(this.workflowId, this.patientId, this.sessionId ?? undefined);
     } catch {
       // Non-fatal — worst case FHIRBridge's cache still has the old token, which the next /run attempt would just
       // successfully reuse (same as if Reset Token had never been clicked); nothing is left in a broken state.

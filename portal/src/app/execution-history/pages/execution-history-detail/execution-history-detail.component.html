@@ -39,12 +39,25 @@
           <span class="stat-label">Workflow Version</span>
           <span class="stat-value">v{{ ex.workflowDefinitionVersion }}</span>
         </div>
+        <div class="stat">
+          <span class="stat-label">Correlation ID</span>
+          @if (ex.correlationId) {
+            <span class="stat-value correlation-value">
+              <a class="mono link" [routerLink]="['/governance/correlation-search']" [queryParams]="{ correlationId: ex.correlationId }">{{ ex.correlationId }}</a>
+              <button class="btn-copy" type="button" (click)="copyCorrelationId()" title="Copy Correlation ID">
+                <mat-icon>content_copy</mat-icon>
+              </button>
+            </span>
+          } @else {
+            <span class="stat-value">—</span>
+          }
+        </div>
       </div>
 
       @if (ex.errorMessage) {
         <div class="error-banner">
           <mat-icon>error_outline</mat-icon>
-          <span>{{ ex.errorMessage }}</span>
+          <span>{{ errorDisplayMessage() }}</span>
         </div>
       }
     </div>

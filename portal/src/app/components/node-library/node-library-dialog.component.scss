@@ -17,6 +17,29 @@
   }
 }
 
+.nld-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-side);
+    color: var(--color-ink);
+  }
+}
+
 /* ── Confirm before discarding an in-progress destination config ─────────────── */
 .nld-confirm-backdrop {
   position: absolute;
@@ -278,13 +301,17 @@
   }
 }
 
-/* Sidebar collapse / expand toggle */
+/* Sidebar collapse / expand toggle — height matches the wizard topbars (.eaf-topbar/.dw-topbar) that
+   sit alongside it in the detail panel, so the sidebar and detail panel's top edges form one even
+   line instead of two mismatched strips now that there's no shared outer header spanning both. */
 .nld-sidebar-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   width: 100%;
+  min-height: 53px; /* matches .eaf-topbar/.dw-topbar's natural height (30px icon + 22px padding + 1px border) so the divider lines up flush across the sidebar/detail boundary */
+  box-sizing: border-box;
   padding: 7px 10px;
   background: var(--color-primary-soft);
   border: none;

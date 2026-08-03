@@ -1,4 +1,4 @@
-<app-modal-overlay [open]="wiz.isOpen()" (closed)="close()">
+<app-modal-overlay [open]="wiz.isOpen()" [closeOnBackdropClick]="false" (closed)="close()">
   <div class="wiz-panel" role="dialog" aria-modal="true" aria-label="Connect Epic">
 
     <!-- Rail -->

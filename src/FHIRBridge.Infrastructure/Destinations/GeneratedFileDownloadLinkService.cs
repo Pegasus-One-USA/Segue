@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Security;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Infrastructure.Destinations;
@@ -17,11 +19,18 @@ namespace FHIRBridge.Infrastructure.Destinations;
 public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLinkService
 {
     private readonly GeneratedFileDownloadOptions _options;
+    private readonly IAppSecretAccessor _secretAccessor;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly string _rootPath;
 
-    public GeneratedFileDownloadLinkService(IOptions<GeneratedFileDownloadOptions> options)
+    public GeneratedFileDownloadLinkService(
+        IOptions<GeneratedFileDownloadOptions> options,
+        IAppSecretAccessor secretAccessor,
+        ISystemSettingsCache settingsCache)
     {
         _options = options.Value;
+        _secretAccessor = secretAccessor;
+        _settingsCache = settingsCache;
         // A relative RootPath must not be resolved against the process's current working directory — that varies
         // by how the host is launched (console vs IIS vs Windows Service) — so it's anchored to the app's own base
         // directory instead. PhysicalFileResult (used to serve the file back) requires an absolute path.
@@ -44,7 +53,10 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
         var payload = new TokenPayload(guid, createdUtc, createdUtc + expiry, file.ContentType, file.FileName);
         var token = Sign(payload);
 
-        return $"{_options.PublicBaseUrl.TrimEnd('/')}/api/v1/generated-files/{token}";
+        var publicBaseUrl = await _settingsCache.GetStringAsync(
+            "GeneratedFileDownload:PublicBaseUrl", _options.PublicBaseUrl, cancellationToken);
+
+        return $"{publicBaseUrl.TrimEnd('/')}/api/v1/generated-files/{token}";
     }
 
     public Task<GeneratedFileDownloadResolution?> TryResolveAsync(string token, CancellationToken cancellationToken)
@@ -85,7 +97,7 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
     private string Sign(TokenPayload payload)
     {
         var payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        var signature = HMACSHA256.HashData(Encoding.UTF8.GetBytes(_options.SigningSecret), payloadBytes);
+        var signature = HMACSHA256.HashData(Encoding.UTF8.GetBytes(_secretAccessor.DownloadLinkSigningSecret), payloadBytes);
 
         return $"{Convert.ToHexString(payloadBytes)}.{Convert.ToHexString(signature)}";
     }
@@ -110,7 +122,7 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
             return null;
         }
 
-        var expectedSignature = HMACSHA256.HashData(Encoding.UTF8.GetBytes(_options.SigningSecret), payloadBytes);
+        var expectedSignature = HMACSHA256.HashData(Encoding.UTF8.GetBytes(_secretAccessor.DownloadLinkSigningSecret), payloadBytes);
         if (!CryptographicOperations.FixedTimeEquals(providedSignature, expectedSignature))
         {
             return null;

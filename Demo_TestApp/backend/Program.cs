@@ -12,6 +12,17 @@ using Microsoft.EntityFrameworkCore;
 var webRootPath = Environment.GetEnvironmentVariable("DEMOAPP_PORTAL_PATH") ?? "portal";
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, WebRootPath = webRootPath });
 
+// Every non-dev deployment MUST set ASPNETCORE_URLS explicitly (the Windows Service's registry
+// Environment value — see deploy/windows/Deploy-FHIRBridge*.ps1). Kestrel's own built-in fallback
+// (http://localhost:5000) is a shared, unconfigurable port; silently landing on it risks colliding
+// with another environment's service, or an unrelated application entirely, on the same host.
+if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+{
+    throw new InvalidOperationException(
+        "ASPNETCORE_URLS is not set for this environment. Refusing to fall back to Kestrel's default port — " +
+        "set it explicitly via this Windows Service's registry Environment value (deploy/windows/Deploy-FHIRBridge*.ps1).");
+}
+
 // No-ops unless actually launched by that OS's service manager — lets the same published
 // output run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
 builder.Host.UseWindowsService().UseSystemd();
@@ -21,6 +32,15 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? "Server=localhost,1433;Database=HealthAppDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True";
 
 builder.Services.AddDbContext<HealthAppDbContext>(options => options.UseSqlServer(connectionString));
+
+// BackendSystem Patient List / Patient Details data-source switch (SQL Server / MySQL / NoSQL) — see
+// PatientDataSourceReaders.cs. Scoped (not Singleton) because SqlPatientDataSourceReader depends on the scoped
+// HealthAppDbContext; the MySQL/Mongo readers open their own connection per call, so scope has no real effect on
+// them beyond matching the others.
+builder.Services.AddScoped<SqlPatientDataSourceReader>();
+builder.Services.AddScoped<MySqlPatientDataSourceReader>();
+builder.Services.AddScoped<MongoPatientDataSourceReader>();
+builder.Services.AddScoped<PatientDataSourceResolver>();
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<EpicSessionStore>();
 builder.Services.AddHttpClient("Workflow");
@@ -53,6 +73,44 @@ using (var scope = app.Services.CreateScope())
     // EF migrations for this project (see HealthAppDbContext) — this app is not meant to model real schema evolution.
     var db = scope.ServiceProvider.GetRequiredService<HealthAppDbContext>();
     db.Database.EnsureCreated();
+
+    // EnsureCreated won't add the New 11 workflow-settings table to an already-existing HealthAppDb, so ensure it
+    // exists (single row, List + Details URL per role, business-named columns) and has its seed row here.
+    // Idempotent — safe every startup, a no-op on a brand-new DB where EnsureCreated already built the table. Also
+    // drops the previous per-role shape ('Resource11WorkflowSetting', singular) if it lingers from an earlier build.
+    db.Database.ExecuteSqlRaw(@"
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Resource11WorkflowSetting')
+    DROP TABLE [Resource11WorkflowSetting];
+
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Resource11WorkflowSettings')
+    CREATE TABLE [Resource11WorkflowSettings] (
+        [Id] INT NOT NULL CONSTRAINT [PK_Resource11WorkflowSettings] PRIMARY KEY,
+        [Patient_List_11]            NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PatL]  DEFAULT(''),
+        [Patient_Details_11]         NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PatD]  DEFAULT(''),
+        [Provider_List_11]           NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PrvL]  DEFAULT(''),
+        [Provider_Details_11]        NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PrvD]  DEFAULT(''),
+        [ProviderInApp_List_11]      NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PiaL]  DEFAULT(''),
+        [ProviderInApp_Details_11]   NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_PiaD]  DEFAULT(''),
+        [BackendSystem_List_11]      NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_BsL]   DEFAULT(''),
+        [BackendSystem_Details_11]   NVARCHAR(1000) NOT NULL CONSTRAINT [DF_R11_BsD]   DEFAULT('')
+    );
+
+IF NOT EXISTS (SELECT 1 FROM [Resource11WorkflowSettings] WHERE [Id] = 1)
+    INSERT INTO [Resource11WorkflowSettings]
+        ([Id],[Patient_List_11],[Patient_Details_11],[Provider_List_11],[Provider_Details_11],[ProviderInApp_List_11],[ProviderInApp_Details_11],[BackendSystem_List_11],[BackendSystem_Details_11])
+    VALUES (1,'','','','','','','','');
+");
+
+    // EnsureCreated won't add a new column to an already-existing WorkflowSettings table (see the EnsureCreated
+    // note above). Add BackendSystemPractitionerImportWorkflowId idempotently so a pre-existing HealthAppDb gets it
+    // (existing rows backfilled to the demo workflow id) without a manual drop — a no-op on a brand-new DB where
+    // EnsureCreated already built the column from the entity model.
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('WorkflowSettings', 'BackendSystemPractitionerImportWorkflowId') IS NULL
+    ALTER TABLE [WorkflowSettings]
+        ADD [BackendSystemPractitionerImportWorkflowId] NVARCHAR(MAX) NOT NULL
+        CONSTRAINT [DF_WorkflowSettings_BsPractImport] DEFAULT('17c81a2c-b266-4ed3-9afb-8fc54910f577');
+");
 }
 
 // Serves the Angular build copied into wwwroot/ at deploy time — this backend hosts its own
@@ -155,9 +213,13 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         patientWorkflowId = settings.PatientWorkflowId,
         patientDetailWorkflowId = settings.PatientDetailWorkflowId,
         patientBaseUrl = settings.PatientBaseUrl,
+        patientCsvExportWorkflowId = settings.PatientCsvExportWorkflowId,
+        patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
-        providerLaunchContext = settings.ProviderLaunchContext
+        standaloneBaseUrl = settings.StandaloneBaseUrl,
+        providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
+        backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
     });
 });
 
@@ -165,6 +227,8 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
 // base URL from the admin-configured settings (formerly a gitignored per-developer local file) without granting
 // Patient access to the full Admin settings endpoint. Two distinct workflow ids come back: one for the patient
 // list fetch, one for the per-patient detail fetch — each is its own independent FHIRBridge public-launch opt-in.
+// csvExportWorkflowId/csvEmailExportWorkflowId back the "Download Patient Information"/"Email Patient Information"
+// buttons — see launch-standalone-patient.ts's downloadPatientInformation/emailPatientInformation.
 app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
 {
     if (!TryGetSession(http, sessions, out _, out _))
@@ -177,7 +241,9 @@ app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionS
     {
         workflowId = settings.PatientWorkflowId,
         detailWorkflowId = settings.PatientDetailWorkflowId,
-        baseUrl = settings.PatientBaseUrl
+        baseUrl = settings.PatientBaseUrl,
+        csvExportWorkflowId = settings.PatientCsvExportWorkflowId,
+        csvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId
     });
 });
 
@@ -207,9 +273,13 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.PatientWorkflowId = request.PatientWorkflowId?.Trim() ?? string.Empty;
     settings.PatientDetailWorkflowId = request.PatientDetailWorkflowId?.Trim() ?? string.Empty;
     settings.PatientBaseUrl = request.PatientBaseUrl?.Trim() ?? string.Empty;
+    settings.PatientCsvExportWorkflowId = request.PatientCsvExportWorkflowId?.Trim() ?? string.Empty;
+    settings.PatientCsvEmailExportWorkflowId = request.PatientCsvEmailExportWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
-    settings.ProviderLaunchContext = request.ProviderLaunchContext?.Trim() ?? string.Empty;
+    settings.StandaloneBaseUrl = request.StandaloneBaseUrl?.Trim() ?? string.Empty;
+    settings.ProviderInAppWorkflowId = request.ProviderInAppWorkflowId?.Trim() ?? string.Empty;
+    settings.BackendSystemPractitionerImportWorkflowId = request.BackendSystemPractitionerImportWorkflowId?.Trim() ?? string.Empty;
     await db.SaveChangesAsync();
 
     return Results.Ok(new
@@ -218,14 +288,18 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         patientWorkflowId = settings.PatientWorkflowId,
         patientDetailWorkflowId = settings.PatientDetailWorkflowId,
         patientBaseUrl = settings.PatientBaseUrl,
+        patientCsvExportWorkflowId = settings.PatientCsvExportWorkflowId,
+        patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
-        providerLaunchContext = settings.ProviderLaunchContext
+        standaloneBaseUrl = settings.StandaloneBaseUrl,
+        providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
+        backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
     });
 });
 
 // Read-only, any authenticated role — lets launch-standalone-provider.ts's fetch/detail/redirect calls resolve the
-// configured workflow ids without needing the full settings endpoint's role check.
+// configured workflow ids + base URL without needing the full settings endpoint's role check.
 app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
 {
     if (!TryGetSession(http, sessions, out _, out _))
@@ -237,25 +311,68 @@ app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, Ses
     return Results.Ok(new
     {
         standaloneWorkflowId = settings?.StandaloneWorkflowId ?? string.Empty,
-        standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty
+        standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty,
+        standaloneBaseUrl = settings?.StandaloneBaseUrl ?? string.Empty
     });
 });
 
-// Read-only, any authenticated role — lets launch-provider-in-app.ts's EHR-launch redirect resolve the
-// configured launch-context token without needing the full settings endpoint's role check. Must be awaited
-// BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
-app.MapGet("/api/provider-in-app-launch-context", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
+// Anonymous by design (no session-cookie check): launch-provider-in-app.ts calls this from inside Epic's
+// embedded ("Embedded" launch display mode) iframe, where the browser treats it as a third-party/cross-site
+// request and won't attach the hb_session cookie (SameSite=Lax) — a session check here would silently 401 on
+// every embedded EHR launch and fall back to an empty context. ProviderInAppWorkflowId is a raw workflow id (not
+// a secret), so it's minted into a real, opaque launch-context token on every call via FHIRBridge's anonymous
+// GET /api/v1/workflows/{id}/public-launch-context — this app never stores a pre-minted token itself, which is
+// what used to let an admin accidentally paste the raw workflow id in its place (see
+// HealthAppDbContext.ProviderInAppWorkflowId). The actual security boundary is still FHIRBridge's own
+// ILaunchTokenProtector validation when the minted token is redeemed against the iss/launch exchange, plus the
+// workflow having been opted into public launch via POST /api/v1/workflows/{id}/enable-public-launch. Must be
+// awaited BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
+app.MapGet("/api/provider-in-app-launch-context", async (
+    HealthAppDbContext db,
+    IHttpClientFactory httpClientFactory,
+    ILogger<Program> logger) =>
 {
-    if (!TryGetSession(http, sessions, out _, out _))
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    var workflowId = settings?.ProviderInAppWorkflowId;
+    var baseUrl = settings?.StandaloneBaseUrl ?? string.Empty;
+
+    if (string.IsNullOrWhiteSpace(workflowId) || string.IsNullOrWhiteSpace(baseUrl))
     {
-        return Results.Unauthorized();
+        return Results.Ok(new { providerLaunchContext = string.Empty, standaloneBaseUrl = baseUrl });
     }
 
-    var settings = await db.WorkflowSettings.FindAsync(1);
-    return Results.Ok(new
+    var client = httpClientFactory.CreateClient("Workflow");
+    // ProviderInApp has no session at mint time (see this endpoint's own anonymous-by-design remarks above), so the
+    // logged-in HealthApp account can't be read from a cookie here the way Patient/Provider Standalone do. Exactly
+    // one seeded HealthApp account (providerInApp@healthapp.local) ever drives this flow, so a fixed identity is
+    // sent instead — FHIRBridge permanently binds it to whichever patient Epic's embedded launch establishes first.
+    const string providerInAppUserIdentity = "providerinapp@healthapp.local";
+    var mintUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/public-launch-context?userIdentity={Uri.EscapeDataString(providerInAppUserIdentity)}";
+
+    try
     {
-        providerLaunchContext = settings?.ProviderLaunchContext ?? string.Empty
-    });
+        var response = await client.GetAsync(mintUrl);
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "Could not mint a launch context for ProviderInAppWorkflowId={WorkflowId}: FHIRBridge returned {StatusCode}.",
+                workflowId, (int)response.StatusCode);
+            return Results.Ok(new { providerLaunchContext = string.Empty, standaloneBaseUrl = baseUrl });
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        var minted = JsonSerializer.Deserialize<MintedLaunchContext>(body, jsonOptions);
+        return Results.Ok(new
+        {
+            providerLaunchContext = minted?.Context ?? string.Empty,
+            standaloneBaseUrl = baseUrl
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Could not reach FHIRBridge to mint a launch context for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
+        return Results.Ok(new { providerLaunchContext = string.Empty, standaloneBaseUrl = baseUrl });
+    }
 });
 
 // Calls the admin-configured workflow URL, expects a { "Resources": [{ "ResourceType", "ResourceId",
@@ -424,6 +541,11 @@ app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, Epi
     return Results.Ok();
 });
 
+app.MapBackendSystemEndpoints();
+
+// "New 11" menu data — read-only GETs over the curated _11 tables, available to any authenticated role.
+app.MapResource11Endpoints();
+
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback
 // endpoints are always lowest-priority, so this can't shadow the /api/* routes above regardless of
@@ -502,9 +624,15 @@ record SaveSettingsRequest(
     string PatientWorkflowId,
     string PatientDetailWorkflowId,
     string PatientBaseUrl,
+    string PatientCsvExportWorkflowId,
+    string PatientCsvEmailExportWorkflowId,
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
-    string ProviderLaunchContext);
+    string StandaloneBaseUrl,
+    string ProviderInAppWorkflowId,
+    string BackendSystemPractitionerImportWorkflowId);
+// Matches FHIRBridge's GET /api/v1/workflows/{id}/public-launch-context response shape.
+record MintedLaunchContext(string Context);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.

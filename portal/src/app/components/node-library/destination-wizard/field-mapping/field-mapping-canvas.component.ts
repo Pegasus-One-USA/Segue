@@ -17,7 +17,7 @@ import { FieldMappingEditColumnModalComponent, FmEditColumnSubmit } from './fiel
 import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './field-mapping-create-table-modal.component';
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
 import { parseSourcePayloadJson } from './field-mapping-payload.util';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, DestinationWizardType } from './field-mapping-summary.model';
 import { ZoomDockComponent } from '../../../canvas/zoom-dock/zoom-dock.component';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
@@ -72,7 +72,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
    *  (unlike `resources` above) — needed so a reference field's "Resolves to" picker can offer resources
    *  other than whichever one is presently being edited. */
   readonly allResources = input<string[]>([]);
-  readonly destType = input.required<'sql' | 'csv'>();
+  readonly destType = input.required<DestinationWizardType>();
   readonly mappingRows = input.required<MappingRow[]>();
   readonly targetByResource = input.required<Record<string, string>>();
   readonly availableFields = input.required<(r: string) => ResourceFieldDef[]>();
@@ -655,7 +655,9 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   readonly dropColumnSubmitting = signal(false);
 
   onDeleteColumn(resource: string, tableName: string, column: string): void {
-    if (this.destType() === 'sql' && this.hasSqlTables()) {
+    // hasSqlTables() already means "SQL-family (SqlServer/MySql/PostgreSql) and live-probed" — no separate
+    // literal destType check needed, and one would wrongly skip the real DROP COLUMN for MySQL/PostgreSQL.
+    if (this.hasSqlTables()) {
       this.pendingDropColumn.set({ resource, tableName, column });
       return;
     }

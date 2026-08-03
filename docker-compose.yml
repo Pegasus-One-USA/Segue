@@ -177,6 +177,25 @@ services:
       timeout: 5s
       retries: 10
 
+  # Output MongoDB destination — backs Demo_TestApp's NoSQL data-source option for the BackendSystem
+  # Patient List / Patient Details screens (see Demo_TestApp/backend/MongoPatientDataSourceReader.cs).
+  output-mongo:
+    image: mongo:7
+    container_name: fhirbridge-output-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${OUTPUT_MONGO_ROOT_USERNAME:-fhirbridge}"
+      MONGO_INITDB_ROOT_PASSWORD: "${OUTPUT_MONGO_ROOT_PASSWORD:-fhirbridge}"
+      MONGO_INITDB_DATABASE: "${OUTPUT_MONGO_DB:-fhirbridge_output}"
+    ports:
+      - "${OUTPUT_MONGO_PORT:-27017}:27017"
+    volumes:
+      - output-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # SFTP destination — exercises the file/SFTP delivery path in local E2E.
   # NOTE: do NOT mount a named volume over /home/<user>/upload — atmoz/sftp only chowns the user-writable
   # "upload" directory it creates from the ":::upload" directive; a mounted volume stays root-owned and the
@@ -212,4 +231,5 @@ volumes:
   seq-data:
   output-mysql-data:
   output-postgres-data:
+  output-mongo-data:
   sftp-data:

@@ -53,13 +53,6 @@
   &[disabled] { opacity: 0.5; cursor: not-allowed; }
 }
 
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 72px 0;
-}
-
 // ─── Column widths ────────────────────────────────────────────────────────────
 .col-actions {
   width: 130px;

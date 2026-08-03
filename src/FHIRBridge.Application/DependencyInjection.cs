@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Services;
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Application;
@@ -10,10 +11,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddFHIRBridgeApplication(this IServiceCollection services)
     {
+        services.AddValidatorsFromAssemblyContaining<ConfigurationService>();
         services.AddScoped<IJsonMappingEngine, JsonMappingEngine>();
 
         // Vendor-keyed catalogs (registry-over-switch: one class, one instance per catalog file, picked
-        // by key rather than a switch on SourceSystemType â€” see MappingController.GetCatalogFields).
+        // by key rather than a switch on SourceSystemType — see MappingController.GetCatalogFields).
         // "Generic" is also exposed unkeyed so every pre-existing plain `IFhirElementCatalog` injection
         // (SourceCapabilitiesController, etc.) keeps resolving to the same base-FHIR-R4 catalog instance
         // it always has, unchanged.
@@ -23,6 +25,7 @@ public static class DependencyInjection
             FhirElementCatalogKeys.Epic, (_, _) => new EmbeddedFhirElementCatalog("fhir-r4-catalog.epic.json"));
         services.AddSingleton<IFhirElementCatalog>(sp =>
             sp.GetRequiredKeyedService<IFhirElementCatalog>(FhirElementCatalogKeys.Generic));
+        services.AddSingleton<IParentReferenceResolver, ParentReferenceResolver>();
         services.AddScoped<IMappingMaterializer, DefaultMappingMaterializer>();
         services.AddScoped<IResourceNormalizationService, PassThroughResourceNormalizationService>();
         services.AddScoped<IMappedRecordNormalizationService, PassThroughMappedRecordNormalizationService>();
@@ -44,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IHedisMeasureReportService, HedisMeasureReportService>();
         services.AddScoped<IAnomalyDetectionService, RunAnomalyDetectionService>();
         services.AddScoped<IPipelineRunMetricsService, PipelineRunMetricsService>();
+        services.AddScoped<IBulkExportPollService, BulkExportPollService>();
 
         return services;
     }

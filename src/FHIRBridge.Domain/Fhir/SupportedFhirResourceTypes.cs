@@ -9,13 +9,16 @@ public static class SupportedFhirResourceTypes
     public static readonly IReadOnlyList<string> All =
     [
         "Patient",
+        "Practitioner",
         "Observation",
         "Condition",
         "MedicationRequest",
+        "MedicationAdministration",
         "AllergyIntolerance",
         "Encounter",
         "DiagnosticReport",
         "Procedure",
+        "ServiceRequest",
         "Immunization"
     ];
 

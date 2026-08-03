@@ -51,7 +51,8 @@ public static class SystemRoleDefaultPermissions
             [SeededSecurityIds.AuditRoleId] =
             [
                 Id(PermissionGroupCode.Workflow, PermissionActionCode.View),
-                Id(PermissionGroupCode.Report, PermissionActionCode.View)
+                Id(PermissionGroupCode.Report, PermissionActionCode.View),
+                Id(PermissionGroupCode.Governance, PermissionActionCode.Read)
             ]
         };
 }

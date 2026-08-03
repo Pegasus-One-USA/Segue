@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
@@ -12,10 +13,15 @@ namespace FHIRBridge.Api.Security;
 public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
 {
     private readonly IConfiguration _configuration;
+    private readonly IAppSecretAccessor _secretAccessor;
+    private readonly ISystemSettingsCache _settingsCache;
 
-    public JwtAccessTokenIssuer(IConfiguration configuration)
+    public JwtAccessTokenIssuer(
+        IConfiguration configuration, IAppSecretAccessor secretAccessor, ISystemSettingsCache settingsCache)
     {
         _configuration = configuration;
+        _secretAccessor = secretAccessor;
+        _settingsCache = settingsCache;
     }
 
     public AccessTokenDto Issue(
@@ -23,21 +29,25 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
         IReadOnlyCollection<string> roleNames,
         IReadOnlyCollection<string>? permissionCodes = null)
     {
-        var signingKey = _configuration["Authentication:SigningKey"];
+        var signingKey = _secretAccessor.JwtSigningKey;
         if (string.IsNullOrWhiteSpace(signingKey))
         {
-            throw new InvalidOperationException("Authentication:SigningKey configuration is missing.");
+            throw new InvalidOperationException("The JWT signing key has not been provisioned yet.");
         }
 
-        var expiresOnUtc = DateTime.UtcNow.AddMinutes(
-            int.TryParse(_configuration["Authentication:TokenLifetimeMinutes"], out var minutes)
-                ? minutes
-                : 60);
+        var defaultMinutes = int.TryParse(_configuration["Authentication:TokenLifetimeMinutes"], out var minutes)
+            ? minutes
+            : 60;
+        var tokenLifetimeMinutes = _settingsCache
+            .GetIntAsync("Authentication:TokenLifetimeMinutes", defaultMinutes, default)
+            .GetAwaiter().GetResult();
+        var expiresOnUtc = DateTime.UtcNow.AddMinutes(tokenLifetimeMinutes);
 
         var claims = new List<Claim>
         {
             new("oid", user.ExternalUserId),
             new(ClaimTypes.NameIdentifier, user.ExternalUserId),
+            new("uid", user.Id.ToString()),
             new("pwd_change_required", user.MustChangePassword ? "true" : "false"),
             new("mfa_setup_required", user.IsMfaSetupRequired ? "true" : "false"),
             new("scope", "fhirbridge.full_access")
@@ -93,10 +103,13 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
         var hash = Convert.ToBase64String(
             SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-        var refreshLifetimeDays = int.TryParse(
+        var defaultDays = int.TryParse(
             _configuration["Authentication:RefreshTokenLifetimeDays"], out var days)
             ? days
             : 30;
+        var refreshLifetimeDays = _settingsCache
+            .GetIntAsync("Authentication:RefreshTokenLifetimeDays", defaultDays, default)
+            .GetAwaiter().GetResult();
 
         return (hash, DateTime.UtcNow.AddDays(refreshLifetimeDays));
     }

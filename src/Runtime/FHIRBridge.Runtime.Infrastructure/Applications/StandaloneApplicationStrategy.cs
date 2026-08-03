@@ -22,6 +22,9 @@ public sealed class StandaloneApplicationStrategy : SourceApplicationStrategyBas
 
     public override ApplicationType Handles => ApplicationType.Standalone;
 
+    // Provider Standalone: the sign-in identifies the practitioner (via the id_token's fhirUser claim), not a patient.
+    public override FhirContextBindingKind BindingResourceType => FhirContextBindingKind.Practitioner;
+
     public override SourceApplicationDescriptor Describe() => new(
         ApplicationType.Standalone,
         SmartOAuthFlows.AuthorizationCode,

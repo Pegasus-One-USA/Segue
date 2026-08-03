@@ -17,6 +17,7 @@ public sealed class UserManagementService : IUserManagementService
     private readonly IUserAccessRepository _repository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
     private readonly IEmailSender _emailSender;
     private readonly IExternalTokenValidator _externalTokenValidator;
     private readonly ILocalAuthService _localAuthService;
@@ -26,6 +27,7 @@ public sealed class UserManagementService : IUserManagementService
         IUserAccessRepository repository,
         IPasswordHasher passwordHasher,
         ICurrentUserService currentUserService,
+        IUserDisplayNameResolver userDisplayNameResolver,
         IEmailSender emailSender,
         IExternalTokenValidator externalTokenValidator,
         ILocalAuthService localAuthService,
@@ -34,6 +36,7 @@ public sealed class UserManagementService : IUserManagementService
         _repository = repository;
         _passwordHasher = passwordHasher;
         _currentUserService = currentUserService;
+        _userDisplayNameResolver = userDisplayNameResolver;
         _emailSender = emailSender;
         _externalTokenValidator = externalTokenValidator;
         _localAuthService = localAuthService;
@@ -150,7 +153,7 @@ public sealed class UserManagementService : IUserManagementService
 
         await _emailSender.SendAsync(
             email,
-            "You've been invited to FHIRBridge",
+            "You've been invited to Segue",
             BuildInviteEmailBody(request.FirstName, role.Name, BuildInviteLink(email, rawToken), expiresOnUtc),
             cancellationToken);
 
@@ -180,7 +183,7 @@ public sealed class UserManagementService : IUserManagementService
 
         await _emailSender.SendAsync(
             user.Email!,
-            "Your FHIRBridge invitation (resent)",
+            "Your Segue invitation (resent)",
             BuildInviteEmailBody(user.FirstName, roleName, BuildInviteLink(user.Email!, rawToken), expiresOnUtc),
             cancellationToken);
 
@@ -264,6 +267,16 @@ public sealed class UserManagementService : IUserManagementService
         var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User was not found.");
 
+        if (!request.IsEnabled)
+        {
+            var currentUserId = _currentUserService.CurrentUser.ExternalUserId;
+            if (!string.IsNullOrWhiteSpace(currentUserId) &&
+                string.Equals(user.ExternalUserId, currentUserId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("You cannot deactivate your own account.");
+            }
+        }
+
         var wasEnabled = user.IsEnabled;
         user.SetEnabled(request.IsEnabled);
         await _repository.UpdateUserAsync(user, cancellationToken);
@@ -306,6 +319,13 @@ public sealed class UserManagementService : IUserManagementService
     {
         var user = await _repository.GetUserByIdAsync(userId, cancellationToken)
             ?? throw new InvalidOperationException("User was not found.");
+
+        var currentUserId = _currentUserService.CurrentUser.ExternalUserId;
+        if (!string.IsNullOrWhiteSpace(currentUserId) &&
+            string.Equals(user.ExternalUserId, currentUserId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("You cannot delete your own account.");
+        }
 
         await _repository.DeleteUserAsync(user, cancellationToken);
     }
@@ -444,7 +464,7 @@ public sealed class UserManagementService : IUserManagementService
         foreach (var roleName in roleNames.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var role = await _repository.GetRoleByNameAsync(roleName, cancellationToken)
-                ?? throw new InvalidOperationException($"Role '{roleName}' is not configured.");
+                ?? throw new InvalidOperationException("Something went wrong assigning roles. Please contact support.");
 
             roleIds.Add(role.Id);
         }
@@ -495,12 +515,14 @@ public sealed class UserManagementService : IUserManagementService
     private async Task<UserManagementDto> ToManagementDtoAsync(User user, CancellationToken cancellationToken)
     {
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
+        var createdBy = await _userDisplayNameResolver.ResolveOneAsync(user.CreatedBy, cancellationToken);
+        var modifiedBy = await _userDisplayNameResolver.ResolveOneAsync(user.ModifiedBy, cancellationToken);
 
         return new UserManagementDto(
             user.Id,
             user.ExternalUserId,
             user.Email,
-            user.DisplayName,
+            user.EffectiveDisplayName,
             user.Status,
             user.IsEnabled,
             user.IsLocalLoginEnabled,
@@ -509,7 +531,10 @@ public sealed class UserManagementService : IUserManagementService
             user.CreatedOnUtc,
             user.LastLoginOnUtc,
             user.MfaEnabled,
-            user.MustSetupMfa);
+            user.MustSetupMfa,
+            createdBy,
+            user.ModifiedOnUtc,
+            modifiedBy);
     }
 
     private static string NormalizeEmail(string email)
@@ -543,7 +568,7 @@ public sealed class UserManagementService : IUserManagementService
 
         return $"""
             <p>Hi {greetingName},</p>
-            <p>You've been invited to join FHIRBridge as a <strong>{roleName}</strong>. Use the link/token below to
+            <p>You've been invited to join Segue as a <strong>{roleName}</strong>. Use the link/token below to
             accept your invitation and set your password:</p>
             <p><a href="{inviteLinkOrToken}">{inviteLinkOrToken}</a></p>
             <p>This invitation expires at {expiresOnUtc:u}.</p>

@@ -42,4 +42,14 @@ public sealed record PendingAuthorization(
     // The caller-supplied redirect URL (e.g. the third-party app that requested this launch URL), captured at mint
     // time and carried here via the encrypted launch-context token — preferred over the source connection's static
     // PostLaunchRedirectUri when present. Lives only in this cache-backed record, never persisted to SQL.
-    string? CallerId = null);
+    string? CallerId = null,
+    // An opaque, caller-supplied (or FHIRBridge-minted) session identifier — distinct from CallerId above, which is
+    // a redirect URL and never used for caching. This is what the Patient Standalone interactive token cache keys
+    // on instead of SourceConnectionId (see SmartAuthorizationCodeTokenProvider.BuildStoreKey), so every pipeline
+    // sharing this same real patient's session reuses the one token their authorization already covers.
+    string? SessionId = null,
+    // A stable identifier for the end user driving this launch (e.g. a third-party app's own logged-in account
+    // email) — distinct from SessionId (an opaque per-browser token) and CallerId (a redirect URL). When present,
+    // CompleteAsync enforces that this identity is permanently bound to the one FHIR patient/practitioner its first
+    // successful authorization returned, rejecting a later authorization that returns a different one.
+    string? UserIdentity = null);

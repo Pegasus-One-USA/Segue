@@ -103,17 +103,15 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
         var take = Math.Clamp(pageSize, 1, 200);
         var skip = Math.Max(0, (page - 1) * take);
 
-        var records = await query
+        var paged = await query
             .OrderByDescending(x => x.StartedOnUtc)
             .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);
 
-        return new PagedResult<PipelineRunRouteExecutionDto>(
-            records.Select(ToDto).ToList(),
-            totalCount,
-            page,
-            take);
+        var records = await JoinCorrelationIdsAsync(paged, cancellationToken);
+
+        return new PagedResult<PipelineRunRouteExecutionDto>(records, totalCount, page, take);
     }
 
     public async Task<PipelineRunRouteExecutionDto?> GetByIdAsync(
@@ -124,10 +122,54 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == routeExecutionId, cancellationToken);
 
-        return execution is null ? null : ToDto(execution);
+        if (execution is null)
+        {
+            return null;
+        }
+
+        var records = await JoinCorrelationIdsAsync([execution], cancellationToken);
+        return records[0];
     }
 
-    private static PipelineRunRouteExecutionDto ToDto(PipelineRunRouteExecution execution)
+    /// <summary>
+    /// The run header's CorrelationId isn't denormalized onto each route execution row, so it's resolved via a
+    /// left join against ConfiguredPipelineRuns (never inner — an execution should always have a parent run, but
+    /// this must not 404/throw if one is ever missing).
+    /// </summary>
+    private async Task<List<PipelineRunRouteExecutionDto>> JoinCorrelationIdsAsync(
+        IReadOnlyList<PipelineRunRouteExecution> executions, CancellationToken cancellationToken)
+    {
+        var pipelineRunIds = executions.Select(x => x.PipelineRunId).Distinct().ToList();
+
+        var correlationIdsByRunId = await _dbContext.ConfiguredPipelineRuns
+            .AsNoTracking()
+            .Where(run => pipelineRunIds.Contains(run.Id))
+            .Select(run => new { run.Id, run.CorrelationId })
+            .ToDictionaryAsync(x => x.Id, x => x.CorrelationId, cancellationToken);
+
+        var correlationIds = correlationIdsByRunId.Values.Where(x => x is not null).Cast<string>().Distinct().ToList();
+
+        var errorCountsByCorrelationId = correlationIds.Count == 0
+            ? new Dictionary<string, int>()
+            : await _dbContext.ErrorLogs
+                .AsNoTracking()
+                .Where(x => x.CorrelationId != null && correlationIds.Contains(x.CorrelationId)
+                    && x.Severity != "Informational")
+                .GroupBy(x => x.CorrelationId!)
+                .Select(g => new { CorrelationId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.CorrelationId, x => x.Count, cancellationToken);
+
+        return executions
+            .Select(execution =>
+            {
+                var correlationId = correlationIdsByRunId.GetValueOrDefault(execution.PipelineRunId);
+                var errorCount = correlationId is not null ? errorCountsByCorrelationId.GetValueOrDefault(correlationId) : 0;
+                return ToDto(execution, correlationId, errorCount);
+            })
+            .ToList();
+    }
+
+    private static PipelineRunRouteExecutionDto ToDto(PipelineRunRouteExecution execution, string? correlationId, int errorCount)
     {
         return new PipelineRunRouteExecutionDto(
             execution.Id,
@@ -143,6 +185,8 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
             execution.ExtractedCount,
             execution.MappedCount,
             execution.WrittenCount,
-            execution.ErrorMessage);
+            execution.ErrorMessage,
+            correlationId,
+            errorCount);
     }
 }

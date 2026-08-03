@@ -1,12 +1,12 @@
-# FHIRBridge Backend — Architecture Guide
+# Segue Backend — Architecture Guide
 
-> **Audience:** developers working on the FHIRBridge backend.
+> **Audience:** developers working on the Segue backend.
 > **Scope:** the .NET solution (`src/`, `tests/`). The Angular `portal/` is out of scope here.
 > **Last reviewed:** 2026-07-01 (branch `port/stepbase-overlay`). Please keep these docs in sync when backend code changes.
 
-## What FHIRBridge is (plain English)
+## What Segue is (plain English)
 
-FHIRBridge is a **multi-tenant healthcare data-integration platform** (HIPAA-oriented). It's a "universal adapter + pipeline" between EHR systems and wherever an organization needs their clinical data to land.
+Segue is a **multi-tenant healthcare data-integration platform** (HIPAA-oriented). It's a "universal adapter + pipeline" between EHR systems and wherever an organization needs their clinical data to land.
 
 End to end:
 1. **Connect** to a source EHR (Epic, Healow, MEDITECH Greenfield, or any FHIR / HL7 v2 system) — handling the messy auth (SMART-on-FHIR, OAuth, backend-service JWTs).
@@ -53,9 +53,11 @@ They coexist — know which one you're touching:
 | [05 — Workflow Node Checkpoints Plan](05-workflow-node-checkpoints-plan.md) | **Proposed, not yet built.** Per-node "Copy URL" / partial-execution checkpoints for the ranked workflow engine — implement this doc verbatim when picked up |
 | [06 — Permission Auto-Generation](05-permission-auto-generation.md) | How a permission's Id/Name/DisplayName is generated, the two sync pipelines (seed-declared vs. discovered), boot-time flow, file-by-file changelog, multi-declaration behavior |
 | [07 — Adding Permissions (How-To)](06-adding-permissions-howto.md) | Practical steps: adding a Category/Group/Action, applying `[StandardPermission]`, reusing a permission across endpoints, seed-declared vs. discovered-only |
+| [08 — Governance Logging Status](08-governance-logging-status.md) | Phase-by-phase completion status of the audit/governance logging rebuild — what's done, what's dormant, what's not started, and what to pick up next |
 
 ## Maturity flags (as of this review)
 
 - **Planned, not started:** per-node checkpoint URLs / partial DAG execution — see [05](05-workflow-node-checkpoints-plan.md).
 - **Stubs / not implemented:** `Contracts`, `EventBus`, `Messaging` building blocks; both `ControlPlane` projects; the `Gateway` (YARP) has no routes.
 - **Phase-1 no-ops:** the Runtime plane's transform step (`FhirResourceNormalizer` only compacts JSON) and some governance placeholders in the *core Application* layer — the real normalization/governance/de-id implementations live in `FHIRBridge.Infrastructure`.
+- **Governance/audit logging (rebuilt 2026-07):** compliance-critical parts (audit trail, local auth, SSO, SMART launch, data-access logging) are done and tested; several Operations tables (`SchedulerHistory`, `RetryHistory`) are likely dormant because the Worker host doesn't register the queue-processing hosted services they depend on. Data Lineage, Queue Monitor, Alert Engine, OTLP export, and retention enforcement for the new tables are not started. See [08](08-governance-logging-status.md) for the full phase-by-phase breakdown.

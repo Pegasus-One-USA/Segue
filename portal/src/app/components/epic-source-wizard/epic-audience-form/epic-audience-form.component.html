@@ -14,10 +14,14 @@
         <span class="eaf-connected-badge">✓ Endpoints resolved</span>
       }
     </div>
-    <!-- "Back to library" only makes sense inside Pipeline Builder's Node Library — the Source Connections page
-         has no library to go back to; its own footer Cancel/Close button already covers dismissing the form. -->
+    <!-- "Back to library"/close only make sense inside Pipeline Builder's Node Library — the Source
+         Connections page has no library to go back to; its own footer Cancel/Close button already
+         covers dismissing the form. -->
     @if (wiz.wizardMode() !== 'entity') {
-      <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+      <div class="eaf-topbar-actions">
+        <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+        <button class="eaf-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+      </div>
     }
   </div>
 
@@ -47,28 +51,21 @@
       </div>
     }
 
-    <!-- ═══════════ SECTION 0b: New Source / Existing Source ══════════════════ -->
-    <!-- Canvas-mode create only — editing an existing node already has its own data, and entity mode's Create
-         flow has no "clone from existing" need yet. -->
-    @if (showSourcePicker()) {
-      <div class="eaf-section">
-        <div class="eaf-grid">
-          <div class="eaf-field">
-            <label class="eaf-label" for="eaf-sourceMode">Source</label>
-            <div class="eaf-select-wrap">
-              <select id="eaf-sourceMode" class="eaf-select"
-                      [value]="sourceMode()"
-                      (change)="onSourceModeChange($any($event.target).value)">
-                <option value="new">New Source</option>
-                <option value="existing">Existing Source</option>
-              </select>
-            </div>
-            <p class="eaf-hint">Start from scratch, or copy the configuration of a source connection you've already set up.</p>
-          </div>
+    <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
+    <div class="eaf-section">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">1</span>
+        <span class="eaf-section-title">Audience &amp; Environment</span>
+      </div>
 
-          @if (sourceMode() === 'existing') {
-            <div class="eaf-field">
-              <label class="eaf-label" for="eaf-existingConnection">Existing Epic Connection</label>
+      <div class="eaf-grid">
+        <!-- Row 1: Existing Epic Connection | App Name — canvas-mode create only (see showSourcePicker); editing
+             an existing node already has its own data, and entity mode's Create flow has no "clone from existing"
+             need yet. Always visible (no New/Existing toggle) — leaving it unselected just means "New Source". -->
+        @if (showSourcePicker()) {
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-existingConnection">Existing Epic Connection</label>
+            <div class="eaf-existing-connection-row">
               <div class="eaf-select-wrap">
                 <select id="eaf-existingConnection" class="eaf-select"
                         [disabled]="loadingExisting()"
@@ -82,25 +79,26 @@
                   }
                 </select>
               </div>
-              @if (!loadingExisting() && existingConnections().length === 0) {
-                <p class="eaf-hint">No existing Epic source connections found.</p>
-              } @else {
-                <p class="eaf-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</p>
+              @if (selectedExistingId()) {
+                <button type="button" class="eaf-clear-btn" title="Clear selected connection — start a new source instead"
+                        (click)="clearExistingConnection()">✕</button>
               }
             </div>
-          }
+            @if (!loadingExisting() && existingConnections().length === 0) {
+              <p class="eaf-hint">No existing Epic source connections found — configure a new one below.</p>
+            } @else {
+              <p class="eaf-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</p>
+            }
+          </div>
+        }
+
+        <div class="eaf-field" [class.eaf-field--full]="!showSourcePicker()">
+          <label class="eaf-label" for="eaf-appName">App Name</label>
+          <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
+                 placeholder="e.g. Segue Provider Launch" />
         </div>
-      </div>
-    }
 
-    <!-- ═══════════ SECTION 1: Audience & Environment ═══════════════════════ -->
-    <div class="eaf-section">
-      <div class="eaf-section-head">
-        <span class="eaf-section-num">1</span>
-        <span class="eaf-section-title">Audience &amp; Environment</span>
-      </div>
-
-      <div class="eaf-grid">
+        <!-- Epic Audience | Environment -->
         <div class="eaf-field" [class.eaf-field--error]="form.controls.audience.touched && form.controls.audience.invalid">
           <label class="eaf-label" for="eaf-audience">Epic Audience <span class="eaf-req">*</span></label>
           <div class="eaf-select-wrap">
@@ -230,34 +228,16 @@
             <p class="eaf-hint">Pull from <code>/.well-known/smart-configuration</code>; same discovery source.</p>
           </div>
 
-          <!-- SMART on FHIR version — fixed to R4 -->
-          <div class="eaf-field">
-            <label class="eaf-label" for="eaf-smartVersion">SMART on FHIR Version <span class="eaf-tag-auto">auto</span></label>
-            <input id="eaf-smartVersion" class="eaf-input eaf-input--readonly" type="text" readonly
-                   value="SMART App Launch 2.0 — R4" />
-            <p class="eaf-hint">Fixed to R4 — not configurable.</p>
-          </div>
+          <!-- SMART on FHIR version — fixed to R4. Hidden from the wizard (still fixed value, nothing to show). -->
 
-          <!-- SMART scope version — v1 (coarse) vs v2 (granular) -->
-          <div class="eaf-field">
-            <label class="eaf-label" for="eaf-scopeVersion">
-              SMART Scope Version <span class="eaf-req">*</span>
-              @if (scopeVersionAuto()) { <span class="eaf-tag-auto">auto-detected</span> }
-              @else if (discStatus() === 'done') { <span class="eaf-tag-fixed">default</span> }
-            </label>
-            <div class="eaf-select-wrap">
-              <select id="eaf-scopeVersion" class="eaf-select" formControlName="scopeVersion">
-                <option value="v1">v1 — coarse scopes</option>
-                <option value="v2">v2 — granular scopes</option>
-              </select>
-            </div>
-            <p class="eaf-hint">Auto-detected from the source's advertised SMART capabilities (permission-v1 / permission-v2); override if needed. Granular (v2) requests per-resource access; coarse (v1) requests broader category access.</p>
-          </div>
+          <!-- SMART scope version — v1 (coarse) vs v2 (granular). Hidden from the wizard; scopeVersion control
+               stays in the form (default 'v2', still auto-detected/submitted) — see epic-audience-form.component.ts. -->
         </div>
       </div>
 
       <!-- ═══════════ SECTION 4: Credentials ══════════════════════════════════ -->
-      <div class="eaf-section">
+      <div class="eaf-section"
+           [class.eaf-section--last]="!(showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) && !audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
         <div class="eaf-section-head">
           <span class="eaf-section-num">4</span>
           <span class="eaf-section-title">Credentials</span>
@@ -311,47 +291,147 @@
             <div class="eaf-field" [class.eaf-field--error]="form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid">
               <label class="eaf-label" for="eaf-jwksUrl">Private Key / JWKS URL <span class="eaf-req">*</span></label>
               <input id="eaf-jwksUrl" class="eaf-input" type="url" formControlName="jwksUrl"
-                     placeholder="https://fhirbridge.com/.well-known/jwks.json" />
+                     [readonly]="audience() === 'backend-system' && (isGenKey() || isImportKey())"
+                     placeholder="https://segue.com/.well-known/jwks.json" />
               @if (form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid) {
                 <p class="eaf-error-msg">Enter a valid JWKS URL.</p>
               }
-              <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in Epic APP).</p>
+              @if (audience() === 'backend-system' && (isGenKey() || isImportKey())) {
+                <p class="eaf-hint">Auto-filled with this connection's real JWKS URL once known — save first if it still shows a placeholder.</p>
+              } @else if (keyLoadedFromExistingConnection()) {
+                <p class="eaf-hint">Auto-filled with FHIRBridge's hosted JWKS URL for this connection's existing key. If Epic is actually configured to fetch from a different, self-hosted URL, replace this with that URL instead.</p>
+              } @else {
+                <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in Epic APP).</p>
+              }
             </div>
             @if (audience() === 'backend-system') {
-              <div class="eaf-field" [class.eaf-field--error]="form.controls.jwtKid.touched && form.controls.jwtKid.invalid">
-                <label class="eaf-label" for="eaf-jwtKid">Key ID (kid) <span class="eaf-req">*</span></label>
-                <input id="eaf-jwtKid" class="eaf-input" type="text" formControlName="jwtKid"
-                       placeholder="e.g. 8f2a1c4e-…-jwk-1" />
-                @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
-                  <p class="eaf-error-msg">Key ID is required.</p>
+              @if (hasExistingSigningKey() && keyLoadedFromExistingConnection() && !replacingKey()) {
+                <!-- A key already exists for this connection — show it read-only rather than the Generate/Import
+                     selector, so re-opening this form for an unrelated edit can't accidentally trigger Generate
+                     and silently replace (and orphan) a key that may already be registered with Epic. -->
+                <div class="eaf-field eaf-field--full">
+                  <div class="eaf-existing-key-panel">
+                    <p class="eaf-hint"><strong>Signing key already configured for this connection.</strong></p>
+                    <dl class="eaf-key-summary">
+                      <div><dt>Key ID</dt><dd>{{ form.controls.jwtKid.value }}</dd></div>
+                      <div><dt>Key Vault Name</dt><dd>{{ form.controls.privateKeyRef.value }}</dd></div>
+                      <div><dt>Secret Name</dt><dd>{{ form.controls.privateKeySecretName.value }}</dd></div>
+                    </dl>
+                    @if (!isReadonly) {
+                      <button type="button" class="eaf-btn eaf-btn--ghost" (click)="startReplacingKey()">
+                        Replace Key
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <div class="eaf-field eaf-field--full">
+                  <label class="eaf-label" for="eaf-keySource">Signing Key Source</label>
+                  <div class="eaf-select-wrap">
+                    <select id="eaf-keySource" class="eaf-select" formControlName="keySource">
+                      <option value="manual">Enter Manually</option>
+                      <option value="gen">Generate New Key Pair</option>
+                      <option value="import">Import Existing Private Key</option>
+                    </select>
+                  </div>
+                  <p class="eaf-hint">"Generate"/"Import" have Segue provision and store the private key for you — no need to type Key ID/Key Vault Name/Secret Name by hand.</p>
+                </div>
+
+                @if (replacingKey()) {
+                  <div class="eaf-field eaf-field--full">
+                    <div class="eaf-warning-box">
+                      Replacing this key invalidates the one currently registered with Epic (if any) until you
+                      register the new one in its place.
+                      <button type="button" class="eaf-btn eaf-btn--ghost" (click)="cancelReplacingKey()">Cancel</button>
+                    </div>
+                  </div>
                 }
-                <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what Epic's app registration expects.</p>
-              </div>
-              <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
-                <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
-                <input id="eaf-privateKeyRef" class="eaf-input" type="text" formControlName="privateKeyRef"
-                       placeholder="e.g. fhirbridge-secrets" />
-                @if (form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid) {
-                  <p class="eaf-error-msg">Key Vault Name is required.</p>
+
+                @if (isGenKey()) {
+                  <div class="eaf-field eaf-field--full">
+                    <div class="eaf-inline-actions">
+                      <button type="button" class="eaf-btn eaf-btn--ghost" (click)="generateKeyPair()"
+                              [disabled]="keyGenStatus() === 'generating'">
+                        {{ keyGenStatus() === 'generating' ? 'Generating…' : 'Generate Key Pair' }}
+                      </button>
+                      @if (keyGenStatus() === 'generated') {
+                        <span class="eaf-tag-auto">&#10003; key pair ready</span>
+                      }
+                    </div>
+                  </div>
+                } @else if (isImportKey()) {
+                  <div class="eaf-field eaf-field--full">
+                    <div class="eaf-inline-actions">
+                      <label class="eaf-btn eaf-btn--ghost eaf-file-btn">
+                        Choose Private Key File
+                        <input type="file" accept=".pem,.key,.txt" class="eaf-file-input"
+                               (change)="onPrivateKeyFileSelected($event)" />
+                      </label>
+                      <button type="button" class="eaf-btn eaf-btn--ghost" (click)="importPrivateKey()"
+                              [disabled]="keyGenStatus() === 'generating' || !selectedFileName()">
+                        {{ keyGenStatus() === 'generating' ? 'Importing…' : 'Import Private Key' }}
+                      </button>
+                      @if (selectedFileName()) {
+                        <span class="eaf-tag-auto">{{ selectedFileName() }}</span>
+                      }
+                      @if (keyGenStatus() === 'generated') {
+                        <span class="eaf-tag-auto">&#10003; key imported</span>
+                      }
+                    </div>
+                    <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). Segue validates it and signs with it as-is — no new key is generated.</p>
+                  </div>
                 }
-              </div>
-              <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid">
-                <label class="eaf-label" for="eaf-privateKeySecretName">Secret Name <span class="eaf-req">*</span></label>
-                <input id="eaf-privateKeySecretName" class="eaf-input" type="text" formControlName="privateKeySecretName"
-                       placeholder="e.g. epic-backend-private-key" />
-                @if (form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid) {
-                  <p class="eaf-error-msg">Secret Name is required.</p>
+
+                <div class="eaf-field" [class.eaf-field--error]="form.controls.jwtKid.touched && form.controls.jwtKid.invalid">
+                  <label class="eaf-label" for="eaf-jwtKid">Key ID (kid) <span class="eaf-req">*</span></label>
+                  <input id="eaf-jwtKid" class="eaf-input" type="text" formControlName="jwtKid"
+                         [readonly]="isGenKey() || isImportKey()"
+                         [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. 8f2a1c4e-…-jwk-1'" />
+                  @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
+                    <p class="eaf-error-msg">Key ID is required.</p>
+                  }
+                  <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what Epic's app registration expects.</p>
+                </div>
+                <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
+                  <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
+                  <input id="eaf-privateKeyRef" class="eaf-input" type="text" formControlName="privateKeyRef"
+                         [readonly]="isGenKey() || isImportKey()"
+                         [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. segue-secrets'" />
+                  @if (form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid) {
+                    <p class="eaf-error-msg">Key Vault Name is required.</p>
+                  }
+                </div>
+                <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid">
+                  <label class="eaf-label" for="eaf-privateKeySecretName">Secret Name <span class="eaf-req">*</span></label>
+                  <input id="eaf-privateKeySecretName" class="eaf-input" type="text" formControlName="privateKeySecretName"
+                         [readonly]="isGenKey() || isImportKey()"
+                         [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. epic-backend-private-key'" />
+                  @if (form.controls.privateKeySecretName.touched && form.controls.privateKeySecretName.invalid) {
+                    <p class="eaf-error-msg">Secret Name is required.</p>
+                  }
+                  <p class="eaf-hint">Where the private key PEM is stored — Azure Key Vault in production, or your configured local secret store for dev/test.</p>
+                </div>
+                @if ((isGenKey() || isImportKey()) && keyGenStatus() === 'generated' && !liveJwksUrl()) {
+                  <div class="eaf-field eaf-field--full">
+                    <p class="eaf-hint">
+                      <strong>Register the JWKS URL in Epic after saving</strong> — once this connection is saved, its
+                      public key is published at <code>/api/v1/source-connections/&lbrace;id&rbrace;/.well-known/jwks.json</code>,
+                      and the field above will fill in with that real URL automatically. Register it in your Epic
+                      app before running test launch.
+                    </p>
+                  </div>
                 }
-                <p class="eaf-hint">Where the private key PEM is stored — Azure Key Vault in production, or your configured local secret store for dev/test.</p>
-              </div>
+              }
             }
           }
         </div>
       </div>
 
-      @if (audienceConfig().showLaunchUrl || audienceConfig().showRedirect) {
+
+      @if (showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) {
         <!-- ═══════════ SECTION: Application URLs ═══════════════════════════════ -->
-        <div class="eaf-section">
+        <div class="eaf-section"
+             [class.eaf-section--last]="!audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().urls }}</span>
             <span class="eaf-section-title">Application URLs</span>
@@ -379,7 +459,7 @@
                   <option value="ExternalBrowser">External Browser</option>
                   <option value="Sidebar">Sidebar (side-by-side with the chart)</option>
                 </select>
-                <p class="eaf-hint">Match whatever this app is registered as in Epic's own Hyperspace/Hyperdrive app-launch configuration — FHIRBridge doesn't control this behavior, it's just recorded here for reference (e.g. Embedded launches need the launch page to allow being framed; External Browser does not).</p>
+                <p class="eaf-hint">Match whatever this app is registered as in Epic's own Hyperspace/Hyperdrive app-launch configuration — Segue doesn't control this behavior, it's just recorded here for reference (e.g. Embedded launches need the launch page to allow being framed; External Browser does not).</p>
               </div>
             }
 
@@ -415,7 +495,7 @@
 
       @if (audienceConfig().showCdsHooks) {
         <!-- ═══════════ SECTION: CDS Hooks ═══════════════════════════════════════ -->
-        <div class="eaf-section">
+        <div class="eaf-section" [class.eaf-section--last]="!showConnectionTest && !showRetrievalSection()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().cds }}</span>
             <span class="eaf-section-title">CDS Hooks</span>
@@ -471,45 +551,47 @@
       }
 
       <!-- ═══════════ Connection Test ═══════════════════════════════════════════ -->
-      <div class="eaf-section" [class.eaf-section--last]="!audienceConfig().showRetrieval">
-        <div class="eaf-section-head">
-          <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
-          <span class="eaf-section-title">Connection Test</span>
-          <span class="eaf-hint-inline">n/a — action, not a field</span>
-        </div>
+      @if (showConnectionTest) {
+        <div class="eaf-section" [class.eaf-section--last]="!showRetrievalSection()">
+          <div class="eaf-section-head">
+            <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
+            <span class="eaf-section-title">Connection Test</span>
+            <span class="eaf-hint-inline">n/a — action, not a field</span>
+          </div>
 
-        <div class="eaf-test-row">
-          <button class="eaf-test-btn" type="button"
-                  [disabled]="testStatus() === 'running' || isReadonly"
-                  (click)="runTestConnection()">
-            @if (testStatus() === 'running') {
-              <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
-            } @else if (testStatus() === 'ok') {
-              ✓ Test passed — run again
+          <div class="eaf-test-row">
+            <button class="eaf-test-btn" type="button"
+                    [disabled]="testStatus() === 'running' || isReadonly"
+                    (click)="runTestConnection()">
+              @if (testStatus() === 'running') {
+                <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
+              } @else if (testStatus() === 'ok') {
+                ✓ Test passed — run again
+              } @else if (testStatus() === 'fail') {
+                ✗ Test failed — retry
+              } @else {
+                ⚡ Test Connection
+              }
+            </button>
+
+            @if (testStatus() === 'ok') {
+              <span class="eaf-test-result eaf-test-result--ok">
+                Token endpoint reachable and responding.
+              </span>
             } @else if (testStatus() === 'fail') {
-              ✗ Test failed — retry
+              <span class="eaf-test-result eaf-test-result--fail">
+                Connection failed. Check the token endpoint URL and credentials.
+              </span>
             } @else {
-              ⚡ Test Connection
+              <span class="eaf-test-note">
+                Validates before save — checks token endpoint is reachable and credentials are accepted.
+              </span>
             }
-          </button>
-
-          @if (testStatus() === 'ok') {
-            <span class="eaf-test-result eaf-test-result--ok">
-              Token endpoint reachable and responding.
-            </span>
-          } @else if (testStatus() === 'fail') {
-            <span class="eaf-test-result eaf-test-result--fail">
-              Connection failed. Check the token endpoint URL and credentials.
-            </span>
-          } @else {
-            <span class="eaf-test-note">
-              Validates before save — checks token endpoint is reachable and credentials are accepted.
-            </span>
-          }
+          </div>
         </div>
-      </div>
+      }
 
-    @if (audienceConfig().showRetrieval) {
+    @if (showRetrievalSection()) {
       <!-- ═══════════ Data Retrieval Method ═══════════════════════════════════ -->
       <div class="eaf-section" [class.eaf-section--last]="!retrievalConfig()">
         <div class="eaf-section-head">
@@ -517,7 +599,7 @@
           <span class="eaf-section-title">Data Retrieval Method</span>
         </div>
         @if (audienceConfig().retrievalScope === 'automated') {
-          <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this Backend System connection.</p>
+          <p class="eaf-section-sub">Choose how Segue receives resource updates from this Backend System connection.</p>
 
           <div class="eaf-grid">
             <div class="eaf-field eaf-field--full"
@@ -563,6 +645,11 @@
                    [class.eaf-field--error]="isRetrievalFieldInvalid(field)">
 
                 @if (field.type === 'checkbox') {
+                  <!-- Every other field type renders an .eaf-label above its control; a checkbox row has no
+                       separate label (its text sits inline with the checkbox), so without this hidden spacer
+                       its control sits ~1 label-line higher than a same-row field's control/hint, misaligning
+                       the two visually even though the grid row itself is correctly sized. -->
+                  <span class="eaf-label" style="visibility: hidden" aria-hidden="true">&nbsp;</span>
                   <label class="eaf-checkbox-row"
                          [class.eaf-checkbox-row--locked]="field.key === 'incrementalCursor' && incrementalCursorLocked()">
                     <input type="checkbox" [formControlName]="field.key" />
@@ -574,7 +661,9 @@
                 } @else {
                   <label class="eaf-label" [attr.for]="'eaf-' + field.key">
                     {{ field.label }}
-                    @if (field.required) { <span class="eaf-req">*</span> }
+                    @if (field.required) {
+                      <span class="eaf-req">*</span>
+                    }
                   </label>
 
                   @switch (field.type) {
@@ -716,8 +805,8 @@
   <div class="eaf-footer">
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
-      <button class="eaf-btn eaf-btn--primary" type="button" (click)="save()">
-        {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Pipeline') }}
+      <button class="eaf-btn eaf-btn--primary" type="button" [class.eaf-btn--invalid]="form.invalid" (click)="save()">
+        {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Workflow') }}
       </button>
     }
   </div>

@@ -1,9 +1,13 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Pipeline;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -15,34 +19,38 @@ public sealed class Worker : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IOptions<RuntimeWorkerOptions> _options;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly ILogger<Worker> _logger;
 
     public Worker(
         IServiceScopeFactory serviceScopeFactory,
         IOptions<RuntimeWorkerOptions> options,
+        ISystemSettingsCache settingsCache,
         ILogger<Worker> logger)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _options = options;
+        _settingsCache = settingsCache;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Value.Enabled)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation("FHIRBridge runtime worker is disabled. Set RuntimeWorker:Enabled=true to run scheduled Phase 1 jobs.");
-            await WaitUntilStoppedAsync(stoppingToken);
-            return;
-        }
+            var enabled = await _settingsCache.GetBoolAsync("RuntimeWorker:Enabled", defaultValue: false, stoppingToken);
+            if (!enabled)
+            {
+                _logger.LogInformation("FHIRBridge runtime worker is disabled. Set RuntimeWorker:Enabled=true to run scheduled Phase 1 jobs.");
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                continue;
+            }
 
-        await RunOnceAsync(stoppingToken);
-
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(30, _options.Value.IntervalSeconds)));
-
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
             await RunOnceAsync(stoppingToken);
+
+            var intervalSeconds = await _settingsCache.GetIntAsync(
+                "RuntimeWorker:IntervalSeconds", _options.Value.IntervalSeconds, stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(Math.Max(30, intervalSeconds)), stoppingToken);
         }
     }
 
@@ -51,14 +59,23 @@ public sealed class Worker : BackgroundService
         using var scope = _serviceScopeFactory.CreateScope();
         var nowUtc = DateTime.UtcNow;
 
-        await RunDueRoutesAsync(scope, nowUtc, cancellationToken);
+        // Route scheduling now lives on the queue-based path (ScheduleDispatcherWorker → PipelineRunCommandProcessor)
+        // by default — see RuntimeWorkerOptions.DirectRouteSchedulingEnabled's remarks for the fast-rollback story.
+        if (_options.Value.DirectRouteSchedulingEnabled)
+        {
+            await RunDueRoutesAsync(scope, nowUtc, cancellationToken);
+        }
+
         await RunDueWorkflowsAsync(scope, nowUtc, cancellationToken);
     }
 
-    // Existing route-based scheduling (unchanged behaviour).
+    // Direct-call route scheduling — off by default (see RuntimeWorkerOptions.DirectRouteSchedulingEnabled), kept
+    // as a fast-rollback path if the queue-based scheduler (ScheduleDispatcherWorker) needs to be disabled without
+    // a redeploy. Never run both at once: see ScheduleDispatcher's remarks for why that would double-dispatch.
     private async Task RunDueRoutesAsync(IServiceScope scope, DateTime nowUtc, CancellationToken cancellationToken)
     {
         var options = _options.Value;
+        var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
         var configurationRepository = scope.ServiceProvider.GetRequiredService<IConfigurationRepository>();
         var dueResourceTypes = await GetDueResourceTypesAsync(
             configurationRepository,
@@ -75,24 +92,49 @@ public sealed class Worker : BackgroundService
             return;
         }
 
-        var pipelineService = scope.ServiceProvider.GetRequiredService<IConfiguredPipelineService>();
-        var pipelineRun = await pipelineService.StartAsync(
-            new StartConfiguredPipelineRunRequest(
-                dueResourceTypes,
-                "worker",
-                Guid.NewGuid().ToString("N"))
-            {
-                RunDueSchedulesOnly = true,
-                ScheduledAtUtc = nowUtc
-            },
+        var correlationId = Guid.NewGuid().ToString("N");
+
+        await governanceLogger.LogSchedulerRunAsync(
+            new SchedulerRunEntry("worker:poll", "Dispatched", dueResourceTypes.Count, correlationId),
             cancellationToken);
 
-        _logger.LogInformation(
-            "Scheduled unified pipeline run {PipelineRunId} finished with status {Status}. Extracted {Extracted}; wrote {Written}.",
-            pipelineRun.Id,
-            pipelineRun.Status,
-            pipelineRun.ExtractedResourceCount,
-            pipelineRun.WrittenRecordCount);
+        var pipelineService = scope.ServiceProvider.GetRequiredService<IConfiguredPipelineService>();
+        var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
+
+        try
+        {
+            using var actorScope = ambientActorContext.BeginCorrelatedScope("Scheduler (Legacy Poll)", correlationId);
+
+            var pipelineRun = await pipelineService.StartAsync(
+                new StartConfiguredPipelineRunRequest(
+                    dueResourceTypes,
+                    "worker",
+                    correlationId)
+                {
+                    RunDueSchedulesOnly = true,
+                    ScheduledAtUtc = nowUtc
+                },
+                cancellationToken);
+
+            _logger.LogInformation(
+                "Scheduled unified pipeline run {PipelineRunId} finished with status {Status}. Extracted {Extracted}; wrote {Written}.",
+                pipelineRun.Id,
+                pipelineRun.Status,
+                pipelineRun.ExtractedResourceCount,
+                pipelineRun.WrittenRecordCount);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Previously unhandled here: an exception would propagate out of ExecuteAsync and permanently fault
+            // this BackgroundService, silently stopping all future scheduled runs. Logging and continuing matches
+            // RunDueWorkflowsAsync's existing per-item resilience below.
+            _logger.LogError(exception, "Scheduled unified pipeline run failed at {ScheduledAtUtc}.", nowUtc);
+            var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+            await exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(Module: "Scheduler", CorrelationId: correlationId),
+                CancellationToken.None);
+        }
     }
 
     // Approach-B workflow scheduling: fire enabled workflow graphs whose trigger is due. Graceful when the graph
@@ -106,6 +148,8 @@ public sealed class Worker : BackgroundService
             return;
         }
 
+        var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
+        var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
         var workflows = await store.ListAsync(cancellationToken);
         foreach (var workflow in workflows)
         {
@@ -114,11 +158,19 @@ public sealed class Worker : BackgroundService
                 continue;
             }
 
+            var correlationId = Guid.NewGuid().ToString("N");
+
+            await governanceLogger.LogSchedulerRunAsync(
+                new SchedulerRunEntry($"Scheduler (Workflow: {workflow.Name})", "Dispatched", 1, correlationId),
+                cancellationToken);
+
             try
             {
+                using var actorScope = ambientActorContext.BeginCorrelatedScope($"Scheduler (Workflow: {workflow.Name})", correlationId);
+
                 var context = new WorkflowExecutionContext(
                     Guid.NewGuid(),
-                    Guid.NewGuid().ToString("N"),
+                    correlationId,
                     triggeredBy: "scheduler",
                     triggerType: "Scheduled");
                 var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
@@ -129,9 +181,14 @@ public sealed class Worker : BackgroundService
                     "Scheduled workflow {WorkflowId} '{Name}' fired at {ScheduledAtUtc} → {Status}.",
                     workflow.Id, workflow.Name, nowUtc, result.WorkflowRun.Status);
             }
-            catch (Exception exception)
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogError(exception, "Scheduled workflow {WorkflowId} '{Name}' failed.", workflow.Id, workflow.Name);
+                var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+                await exceptionManager.CaptureAsync(
+                    exception,
+                    new ExceptionContext(Module: "Scheduler", CorrelationId: correlationId),
+                    CancellationToken.None);
             }
         }
     }
@@ -142,7 +199,7 @@ public sealed class Worker : BackgroundService
         return trigger.Type switch
         {
             WorkflowTriggerType.Schedule =>
-                ScheduleExpressionMatcher.IsDueSince(trigger.ScheduleExpression, workflow.LastTriggeredOnUtc, nowUtc),
+                ScheduleExpressionMatcher.IsDueSince(trigger.ScheduleExpression, workflow.LastTriggeredOnUtc, nowUtc, trigger.TimeZoneId, workflow.CreatedOnUtc),
             WorkflowTriggerType.Poll =>
                 trigger.IntervalMinutes is int minutes && minutes > 0 &&
                 (workflow.LastTriggeredOnUtc is null ||
@@ -177,7 +234,7 @@ public sealed class Worker : BackgroundService
                 route.IsEnabled &&
                 RouteDependenciesAreEnabled(route, mappings, sources, destinations, webhooks) &&
                 IsScheduledPullMode(route.IngestionMode) &&
-                ScheduleExpressionMatcher.IsDue(route.ScheduleExpression, nowUtc))
+                ScheduleExpressionMatcher.IsDue(route.ScheduleExpression, nowUtc, route.TimeZoneId))
             .Select(route => mappings.TryGetValue(route.MappingProfileId, out var mapping) ? mapping.ResourceType : null)
             .Where(resourceType => !string.IsNullOrWhiteSpace(resourceType))
             .Select(resourceType => resourceType!)
@@ -219,14 +276,4 @@ public sealed class Worker : BackgroundService
                (!route.WebhookConfigurationId.HasValue || webhook?.IsEnabled == true);
     }
 
-    private static async Task WaitUntilStoppedAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
 }

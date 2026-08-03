@@ -1,5 +1,5 @@
 import {
-  Component, output, inject, signal, computed, OnInit, DestroyRef, ElementRef, ViewChild,
+  Component, output, inject, signal, computed, effect, OnInit, DestroyRef, ElementRef, ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { take } from 'rxjs/operators';
@@ -15,6 +15,10 @@ import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../mod
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
+import { environment } from '../../../../environments/environment';
+import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
+import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 
 export type { EpicAudience };
@@ -34,10 +38,11 @@ export const EHR_OPTIONS: { value: EhrVendor; label: string }[] = [
   { value: 'Sample',             label: 'Sample' },
 ];
 
+// MVP1 resource set — keep in sync with portal/src/app/data/scope-constants.data.ts's FHIR_RESOURCES.
 const FHIR_RESOURCES = [
-  'Patient', 'Encounter', 'Observation', 'Condition', 'MedicationRequest',
-  'AllergyIntolerance', 'Immunization', 'Procedure', 'DiagnosticReport',
-  'DocumentReference', 'Practitioner', 'PractitionerRole',
+  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation',
+  'Condition', 'Procedure', 'ServiceRequest', 'DiagnosticReport',
+  'MedicationRequest', 'MedicationAdministration',
 ];
 
 function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
@@ -66,9 +71,27 @@ function detectAuthMethod(audience: EpicAudience, authMethodsSupported: string[]
   return methods.includes('private_key_jwt') ? 'jwt' : null;
 }
 
+/** Client Auth Method default per audience, applied on every audience switch (see the `audience.valueChanges`
+ *  subscription): Backend System is JWT-only per SMART Backend Services (private_key_jwt); every interactive
+ *  audience (EHR launch / standalone / patient) is Public Client + PKCE. */
+const AUDIENCE_DEFAULT_AUTH_METHOD: Record<EpicAudience, 'public' | 'jwt'> = {
+  'provider-ehr-launch': 'public',
+  'provider-standalone': 'public',
+  patient:               'public',
+  'backend-system':      'jwt',
+};
+
 function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
-  if (capabilities.includes('permission-v2')) return 'v2';
-  if (capabilities.includes('permission-v1')) return 'v1';
+  const hasV1 = capabilities.includes('permission-v1');
+  const hasV2 = capabilities.includes('permission-v2');
+  // Only trust the capability token when exactly one is advertised. Epic's system-level (Backend System) scopes
+  // commonly advertise BOTH permission-v1 and permission-v2 at once — that says the server can accept either,
+  // not which one this specific app was actually registered under (same ambiguity detectAuthMethod already
+  // accounts for with token_endpoint_auth_methods_supported). Blindly preferring v2 there previously forced
+  // every Backend System connection onto granular '.rs' scopes even when the app was registered for coarse
+  // '.read' v1 scopes. Fall through to shape-inference from scopes_supported instead of guessing.
+  if (hasV1 && !hasV2) return 'v1';
+  if (hasV2 && !hasV1) return 'v2';
   const suffix = (s: string): string => (s.includes('.') ? s.slice(s.lastIndexOf('.') + 1) : '').toLowerCase();
   if (scopesSupported.some(s => /^[cruds]+$/.test(suffix(s)))) return 'v2';
   if (scopesSupported.some(s => suffix(s) === 'read' || suffix(s) === 'write')) return 'v1';
@@ -89,7 +112,7 @@ type RetrievalFieldKey =
   | 'payloadFormat' | 'searchCriteria' | 'incrementalCursor' | 'schedulePollFrequency' | 'runMode'
   | 'exportScope' | 'groupId' | 'patientIdList' | 'fhirOutputFormat'
   | 'pageSize' | 'sortOrder' | 'includeLinked' | 'revIncludeLinked' | 'retryPolicy' | 'timeoutSeconds' | 'maxRecordsPerRun'
-  | 'fullRefreshRecurrence' | 'fullRefreshDaysOfWeek' | 'fullRefreshDayOfMonth' | 'fullRefreshTime';
+  | 'fullRefreshRecurrence' | 'fullRefreshDaysOfWeek' | 'fullRefreshDayOfMonth' | 'fullRefreshTime' | 'fullRefreshTimeZone';
 
 const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'subscriptionResourceType', 'webhookResourceType', 'searchRestResourceType', 'bulkExportResourceType',
@@ -97,8 +120,61 @@ const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'payloadFormat', 'searchCriteria', 'incrementalCursor', 'schedulePollFrequency', 'runMode',
   'exportScope', 'groupId', 'patientIdList', 'fhirOutputFormat',
   'pageSize', 'sortOrder', 'includeLinked', 'revIncludeLinked', 'retryPolicy', 'timeoutSeconds', 'maxRecordsPerRun',
-  'fullRefreshRecurrence', 'fullRefreshDaysOfWeek', 'fullRefreshDayOfMonth', 'fullRefreshTime',
+  'fullRefreshRecurrence', 'fullRefreshDaysOfWeek', 'fullRefreshDayOfMonth', 'fullRefreshTime', 'fullRefreshTimeZone',
 ];
+
+/** Browser's own zone (e.g. "America/New_York") — used as the schedule time zone picker's default. */
+function detectBrowserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** All IANA zone identifiers the runtime knows about, for the "Time zone" select. Falls back to a short curated
+ *  list on engines without `Intl.supportedValuesOf` (older Safari/older browsers not in FHIRBridge's support matrix
+ *  but cheap to guard against). */
+const TIME_ZONE_OPTIONS: readonly RetrievalFieldOption[] = (() => {
+  const zones: string[] = typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone')
+    : ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London'];
+  return zones.map(zone => ({ value: zone, label: zone.replace(/_/g, ' ') }));
+})();
+
+/** Blank/default value for each retrieval field, matching the form's own initial values — used to clear a field
+ *  out when switching Retrieval Method away from the method that owns it (see clearInapplicableRetrievalFields). */
+const RETRIEVAL_FIELD_DEFAULTS: Record<RetrievalFieldKey, unknown> = {
+  subscriptionResourceType: [] as string[],
+  webhookResourceType:      [] as string[],
+  searchRestResourceType:   [] as string[],
+  bulkExportResourceType:   [] as string[],
+  eventType:              '',
+  notificationPayload:    '',
+  endpointType:           '',
+  reconciliationSchedule: '',
+  payloadFormat:          '',
+  searchCriteria:         '',
+  incrementalCursor:      false,
+  schedulePollFrequency:  '',
+  runMode:                '',
+  exportScope:            '',
+  groupId:                '',
+  patientIdList:          '',
+  fhirOutputFormat:       'ndjson',
+  fullRefreshRecurrence:  'daily',
+  fullRefreshDaysOfWeek:  [] as string[],
+  fullRefreshDayOfMonth:  '1',
+  fullRefreshTime:        '02:00',
+  fullRefreshTimeZone:    '',
+  pageSize:               '100',
+  sortOrder:              '',
+  includeLinked:          '',
+  revIncludeLinked:       '',
+  retryPolicy:            'exponential',
+  timeoutSeconds:         '30',
+  maxRecordsPerRun:       '',
+};
 
 interface RetrievalFieldOption { value: string; label: string; }
 
@@ -218,7 +294,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
   webhook: {
     value: 'webhook',
     label: 'Webhook',
-    description: 'Epic (or a middleware relay) posts updates to an FHIRBridge callback endpoint.',
+    description: 'Epic (or a middleware relay) posts updates to a Segue callback endpoint.',
     fields: [
       { key: 'webhookResourceType',    label: 'Resource Type',           type: 'multiselect', required: true },
       { key: 'eventType',              label: 'Event Type',              type: 'select',       required: true, options: EVENT_TYPE_OPTIONS },
@@ -233,7 +309,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
   'search-rest': {
     value: 'search-rest',
     label: 'Search (REST)',
-    description: 'FHIRBridge polls Epic’s FHIR REST API on a schedule.',
+    description: 'Segue polls Epic’s FHIR REST API on a schedule.',
     fields: [
       // Resource Type / Search Criteria / Max Results / Include Related Resources are the only four fields shown to
       // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
@@ -243,7 +319,11 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       // full supported set — see epic-audience-form.component.ts's form builder) instead of a second,
       // separate multiselect, since that control already drives the SMART scopes this connection's
       // one-shot fetch runs under.
-      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' },
+      // Hidden for every retrieval scope (Standalone already reused the shared Resource Type & Scopes picker
+      // instead; Backend System now gets the same full-MVP1-set default automatically — see
+      // ensureSearchRestResourceTypeDefault — rather than a second, separate multiselect). The control itself
+      // stays in the form: scope generation (activeRetrievalResourceTypes/scopeString) still reads it.
+      { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'searchCriteria',        label: 'Search Criteria',                  type: 'text',         required: false, placeholder: 'status=active&category=vital-signs', hint: 'Optional FHIR search parameters appended to every request.' },
       { key: 'runMode',               label: 'Run Mode',                         type: 'select',       required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated', options: [
         { value: 'incremental', label: 'Incremental Sync' },
@@ -255,11 +335,12 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       // low-traffic) — these are different backend trigger primitives (Poll+minutes vs Schedule+cron), so they get
       // different controls rather than forcing one picker to do both jobs. None of this applies to Standalone —
       // a user-initiated one-shot fetch has no recurring schedule to configure.
-      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS, requiredUnless: { key: 'runMode', value: 'manual' }, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode !== 'full', hint: 'Not required when Run Mode is Manual Only — the pipeline only runs when triggered.' },
+      { key: 'schedulePollFrequency', label: 'Schedule / Poll Frequency',        type: 'select',       required: true, options: POLL_FREQUENCY_OPTIONS, requiredUnless: { key: 'runMode', value: 'manual' }, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode !== 'full', hint: 'Not required when Run Mode is Manual Only — the workflow only runs when triggered.' },
       { key: 'fullRefreshRecurrence',  label: 'Repeat',                           type: 'select',       required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Full Refresh reloads everything with no incremental filter — anchor it to a specific, low-traffic time rather than a tight interval.' },
       { key: 'fullRefreshDaysOfWeek', label: 'On',                               type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'weekly' },
       { key: 'fullRefreshDayOfMonth', label: 'Day of month',                     type: 'select',       required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
-      { key: 'fullRefreshTime',       label: 'At',                               type: 'time',          required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTime',       label: 'At',                               type: 'time',          required: true, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'Runs in the time zone selected below. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTimeZone',   label: 'Time zone',                        type: 'select',       required: true, options: TIME_ZONE_OPTIONS, visibleWhen: ctx => ctx.retrievalScope === 'automated' && ctx.runMode === 'full', hint: 'The schedule above is evaluated in this time zone, including daylight saving transitions.' },
       // ── Max Results / Include Related Resources: main-grid fields for Standalone, tucked into "Advanced Search
       // Options" for Backend System (unchanged Backend behavior — just joined by two new promoted-for-Standalone
       // fields below). ─────────────────────────────────────────────────────────
@@ -298,7 +379,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       { key: 'fullRefreshRecurrence', label: 'Repeat',        type: 'select',         required: true, options: FULL_REFRESH_RECURRENCE_OPTIONS, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'How often to re-run this export. Patient ID list exports run manually and are not scheduled.' },
       { key: 'fullRefreshDaysOfWeek', label: 'On',            type: 'weekday-picker', required: true, options: WEEKDAY_OPTIONS, visibleWhen: ctx => ctx.exportScope !== 'patient' && ctx.fullRefreshRecurrence === 'weekly' },
       { key: 'fullRefreshDayOfMonth', label: 'Day of month',  type: 'select',         required: true, options: Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}` })), visibleWhen: ctx => ctx.exportScope !== 'patient' && ctx.fullRefreshRecurrence === 'monthly', hint: 'Capped at 28 so it fires every month, including February.' },
-      { key: 'fullRefreshTime',       label: 'At',            type: 'time',           required: true, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'Server local time. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTime',       label: 'At',            type: 'time',           required: true, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'Runs in the time zone selected below. Pick an off-hours slot to avoid contending with interactive EHR traffic.' },
+      { key: 'fullRefreshTimeZone',   label: 'Time zone',     type: 'select',         required: true, options: TIME_ZONE_OPTIONS, visibleWhen: ctx => ctx.exportScope !== '' && ctx.exportScope !== 'patient', hint: 'The schedule above is evaluated in this time zone, including daylight saving transitions.' },
     ],
   },
 };
@@ -310,15 +392,20 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
   templateUrl: './epic-audience-form.component.html',
   styleUrl: './epic-audience-form.component.scss',
 })
-export class EpicAudienceFormComponent implements OnInit {
+export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   readonly cancelled = output<void>();
   readonly saved     = output<void>();
+  /** The relocated "✕" next to "← Back to library" — closes the whole Node Library dialog outright
+   *  (unlike cancel(), which only backs out of this form to the library's sidebar). Mirrors the
+   *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
+  readonly closeAll  = output<void>();
 
   /** Set when the backend rejects a save (e.g. "A source connection named 'X' already exists.") — shown
    *  inline under App Name (the field the user actually needs to change to retry) instead of only as a
    *  toast, and clears itself the moment the user edits the name again. The dialog stays open on failure —
    *  `saved` only fires once WizardService.save() actually confirms success (see save() below). */
   protected readonly saveErrorMessage = signal<string | null>(null);
+	protected readonly showApplicationUrlsSection = false;
 
   @ViewChild('formRoot') private readonly formRoot?: ElementRef<HTMLElement>;
 
@@ -328,23 +415,26 @@ export class EpicAudienceFormComponent implements OnInit {
   private  readonly fb         = inject(FormBuilder);
   private  readonly destroyRef = inject(DestroyRef);
   private  readonly sourceConnectionSvc = inject(ISourceConnectionService);
+  private  readonly unsavedChangesPrompt = inject(UnsavedChangesPromptService);
 
   protected readonly ehrOptions = EHR_OPTIONS;
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
   protected get isReadonly(): boolean { return this.wiz.readonlyMode(); }
 
-  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
+  // ── Existing Epic Connection picker (canvas-mode create only) ───────────────
+  /** No explicit New/Existing toggle — 'new' is the default until a connection is picked (onExistingConnectionSelected
+   *  flips it to 'existing'), and the "✕" clear button (clearExistingConnection) flips it back. Drives the
+   *  reuse-vs-fork decision in save() and resolvedSourceConnectionId. */
   protected readonly sourceMode = signal<'new' | 'existing'>('new');
   protected readonly existingConnections = signal<SourceConnectionModel[]>([]);
   protected readonly loadingExisting = signal(false);
   protected readonly selectedExistingId = signal<string | null>(null);
   /** Every saved source connection's name (all vendors, not just Epic — getAll() returns everything, this
-   *  component just filters existingConnections down to Epic for the dropdown). Cloning from "Existing Source"
-   *  always creates a brand-new connection (see populateFormFromSourceConnection's own comment: canvas mode has
-   *  no entity id to attach to), so save() must dedupe the cloned name here — otherwise Name is copied verbatim
-   *  and the create call collides with "A source connection named '<name>' already exists." on the very save
-   *  that's supposed to clone it. */
+   *  component just filters existingConnections down to Epic for the dropdown). Populated on ngOnInit for any
+   *  canvas-mode create (see loadAllConnectionNames). save() dedupes against it in both branches — cloning an
+   *  existing connection verbatim, and leaving a brand-new node on its default/reused App Name — otherwise the
+   *  create call collides with "A source connection named '<name>' already exists." only at workflow-build time. */
   private _allConnectionNames = new Set<string>();
   /** Only offered when creating a brand-new canvas node — editing an existing node already has its own data, and
    *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
@@ -359,10 +449,14 @@ export class EpicAudienceFormComponent implements OnInit {
   // snapshotting immediately would make those auto-detected values look like user edits on every single clone.
   private _awaitingBaselineSnapshot = false;
 
-  // Resource Type list: auto-detected from the source's /metadata after Discover; falls back to the static list.
+  // Resource Type list: always the platform's curated MVP1 set (FHIR_RESOURCES), regardless of what Discover
+  // returns — the backend's /metadata probe reflects everything the endpoint's CapabilityStatement supports
+  // (often 50+ types, filtered only by read-interaction support), not what this pipeline can actually process.
+  // discoveredResourceTypes is still populated for the separate scope-validation cross-check below
+  // (unsupportedScopes/scopesValidatedByDiscovery) — it just no longer drives which checkboxes are offered.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
   protected get resources(): string[] {
-    return this.discoveredResourceTypes().length ? this.discoveredResourceTypes() : FHIR_RESOURCES;
+    return FHIR_RESOURCES;
   }
   protected isResourceSupported(r: string): boolean { return SUPPORTED_RESOURCE_TYPES.includes(r); }
 
@@ -396,11 +490,16 @@ export class EpicAudienceFormComponent implements OnInit {
     jwtKid:              [''],
     privateKeyRef:       [''],
     privateKeySecretName: [''],
-    launchUrl:         ['https://fhirbridge.com/launch', urlValidator],
+    // Backend System + JWT only: 'manual' (default — preserves existing behavior for every connection created
+    // before this control existed) lets the admin type kid/vault-name/secret-name themselves, exactly as before.
+    // 'gen'/'import' hand key provisioning to SigningKeyGenerationService instead — see generateKeyPair()/
+    // importPrivateKey() below.
+    keySource:           ['manual' as 'manual' | 'gen' | 'import'],
+    launchUrl:         [OAUTH_DEFAULT_URLS.launchUrl, urlValidator],
     // How the app is registered to open within the EHR (EHR-launch audience only) — mirrors Epic's own Hyperspace/
     // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
     launchDisplayMode: ['Embedded'],
-    callbackUrl:       ['http://localhost:5000/api/v1/oauth/callback', [Validators.required, urlValidator]],
+    callbackUrl:       [OAUTH_DEFAULT_URLS.redirectUri, [Validators.required, urlValidator]],
     // No UI picks this anymore (Resource Type & Scopes was removed from the form) — a brand-new source
     // starts with no resource-derived scopes at all. EpicSourceConnectionScopeSyncService (backend) fills
     // this in for real the first time a workflow referencing this source is built, from the union of every
@@ -408,7 +507,7 @@ export class EpicAudienceFormComponent implements OnInit {
     // for the audience-switch case.
     resources:         [[] as string[]],
     scopeVersion:      ['v2'],
-    appName:           ['FHIRBridge Epic'],
+    appName:           ['Segue Epic'],
     // ── CDS Hooks ──────────────────────────────────────────────────────────────
     cdsDiscoveryUrl:     [''],
     cdsServiceEndpoint:  [''],
@@ -439,6 +538,7 @@ export class EpicAudienceFormComponent implements OnInit {
     fullRefreshDaysOfWeek:  [[] as string[]],
     fullRefreshDayOfMonth:  ['1'],
     fullRefreshTime:        ['02:00'],
+    fullRefreshTimeZone:    [detectBrowserTimeZone()],
     // ── Advanced Search Options (Search REST only) ──────────────────────────────
     pageSize:               ['100'],
     sortOrder:              [''],
@@ -465,6 +565,7 @@ export class EpicAudienceFormComponent implements OnInit {
   private readonly fullRefreshDaysOfWeekValue = toSignal(this.form.controls.fullRefreshDaysOfWeek.valueChanges, { initialValue: this.form.controls.fullRefreshDaysOfWeek.value });
   private readonly fullRefreshDayOfMonthValue = toSignal(this.form.controls.fullRefreshDayOfMonth.valueChanges, { initialValue: this.form.controls.fullRefreshDayOfMonth.value });
   private readonly fullRefreshTimeValue       = toSignal(this.form.controls.fullRefreshTime.valueChanges,       { initialValue: this.form.controls.fullRefreshTime.value });
+  private readonly fullRefreshTimeZoneValue   = toSignal(this.form.controls.fullRefreshTimeZone.valueChanges,   { initialValue: this.form.controls.fullRefreshTimeZone.value });
 
   // One bridge per retrieval method's own Resource Type control — never shared,
   // so each method keeps an independent selection instead of leaking into the others.
@@ -479,6 +580,89 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly audienceConfig = computed(() => AUDIENCE_FIELD_CONFIG[this.audience()]);
   protected readonly showSecret     = computed(() => this.authMethod() === 'secret');
   protected readonly showJwt        = computed(() => this.authMethod() === 'jwt');
+
+  // ── Backend Services signing key: generate / import (see generateKeyPair()/importPrivateKey() below) ──────────
+  private readonly keySourceValue = toSignal(this.form.controls.keySource.valueChanges, { initialValue: this.form.controls.keySource.value });
+  protected readonly keySource = computed(() => this.keySourceValue());
+  protected readonly isGenKey    = computed(() => this.keySource() === 'gen');
+  protected readonly isImportKey = computed(() => this.keySource() === 'import');
+  protected readonly keyGenStatus = signal<'idle' | 'generating' | 'generated'>('idle');
+  /** Name of the file chosen for "Import Existing Private Key" — read client-side only; nothing is sent to the
+   *  backend until "Import Private Key" is clicked. */
+  protected readonly selectedFileName = signal<string | null>(null);
+  private pendingPrivateKeyPem: string | null = null;
+
+  // ── existing-key guard (prevents Generate/Import from silently overwriting a key that's already saved) ────────
+  private readonly jwtKidValue = toSignal(this.form.controls.jwtKid.valueChanges, { initialValue: this.form.controls.jwtKid.value });
+  private readonly privateKeyRefValue = toSignal(this.form.controls.privateKeyRef.valueChanges, { initialValue: this.form.controls.privateKeyRef.value });
+  private readonly privateKeySecretNameValue = toSignal(this.form.controls.privateKeySecretName.valueChanges, { initialValue: this.form.controls.privateKeySecretName.value });
+  /** True whenever Key ID/Key Vault Name/Secret Name are all populated right now — regardless of how they got
+   *  there (typed, restored from a saved connection, or just Generated/Imported this session). Drives the
+   *  required-field validation being satisfied; NOT by itself the "show the guard panel" signal below. */
+  protected readonly hasExistingSigningKey = computed(() =>
+    !!(this.jwtKidValue() && this.privateKeyRefValue() && this.privateKeySecretNameValue())
+  );
+  /** True only when the key came from a SAVED connection (restoreExtendedFieldsFromEditingNode() /
+   *  populateFormFromSourceConnection()) — false right after a fresh Generate/Import in this same session, which
+   *  already has its own "✓ key ready" affordance and doesn't need the extra guard. This is what actually decides
+   *  whether the read-only "already configured" panel (vs. the normal selector) renders. */
+  protected readonly keyLoadedFromExistingConnection = signal(false);
+  /** True once the admin has explicitly clicked "Replace Key" past the guard panel — reveals the normal
+   *  Manual/Generate/Import selector so they can proceed. */
+  protected readonly replacingKey = signal(false);
+  /** True once the admin has actually typed into the Private Key / JWKS URL field themselves — distinct from this
+   *  component's own auto-fill writes below, which always pass `{ emitEvent: false }` so they never touch this
+   *  flag. Guards the keyLoadedFromExistingConnection() auto-fill branch of the effect below: without this, an
+   *  admin who deliberately overwrites the hosted URL with their own self-hosted one (see the hint text on this
+   *  field) would have it silently reset back to the hosted URL the next time any unrelated signal this effect
+   *  reads happens to recompute — which is exactly the "typed a real value, it keeps reverting to localhost" bug.
+   *  Reset alongside keyLoadedFromExistingConnection() at both of its call sites, so loading a different node/
+   *  connection starts the override tracking fresh. */
+  protected readonly jwksUrlUserEdited = signal(false);
+  /** True when a real, non-empty JWKS URL was just restored from the backend (SourceAuthenticationConfiguration.
+   *  JwksUrl, persisted since docs/backend/13-source-connection-configuration-split-plan.md's JWKS URL discussion)
+   *  at either restoreExtendedFieldsFromEditingNode() or populateFormFromSourceConnection(). Guards the same
+   *  keyLoadedFromExistingConnection() auto-fill branch as jwksUrlUserEdited() above, for the same reason: without
+   *  it, a connection whose key material fields (jwtKid/privateKeyRef/privateKeySecretName) happen to be populated
+   *  for a genuinely external/manually-registered key — which looks identical to a Generated/Imported one, since
+   *  the backend has no separate provenance marker — would have its real, previously-registered external URL
+   *  immediately clobbered by the computed hosted-URL guess as soon as this form loads, before the admin even
+   *  gets a chance to type anything. False (falls back to the hosted-URL guess, same as before this field was
+   *  persisted) only for a pre-persistence-era row whose JwksUrl column is still null. */
+  protected readonly jwksUrlRestoredFromBackend = signal(false);
+
+  protected startReplacingKey(): void {
+    this.replacingKey.set(true);
+  }
+
+  protected cancelReplacingKey(): void {
+    this.replacingKey.set(false);
+    this.keyGenStatus.set('idle');
+    this.selectedFileName.set(null);
+    this.pendingPrivateKeyPem = null;
+  }
+
+  // ── real JWKS URL (computed live from the connection id, once known — never typed/stored as free text) ────────
+  /** The real SourceConnection id for whatever this form is currently editing, from whichever restore path
+   *  applies: entity mode (WizardService.entityId), canvas mode editing an already-built workflow's node
+   *  (WizardService.editingFields()['sourceConnectionId'], embedded there by WorkflowEndpoints on the original
+   *  build), or canvas mode's "Existing Source" picker (selectedExistingId — populateFormFromSourceConnection
+   *  clones that connection's data into this brand-new node). Null for a brand-new node/connection that hasn't
+   *  been saved yet. */
+  protected readonly resolvedSourceConnectionId = computed(() =>
+    this.wiz.entityId()
+    || this.wiz.editingFields()?.['sourceConnectionId']
+    || (this.sourceMode() === 'existing' ? this.selectedExistingId() : null)
+    || null
+  );
+  /** Only meaningful for a Generated/Imported key — an externally-hosted (manual) JWKS URL is whatever the admin
+   *  typed, not something FHIRBridge can compute. Null until resolvedSourceConnectionId() is known (i.e., before
+   *  the very first save) — see WorkflowBuilderComponent.reconcileGeneratedJwksUrls() for how the placeholder
+   *  gets corrected once it is. */
+  protected readonly liveJwksUrl = computed(() => {
+    const id = this.resolvedSourceConnectionId();
+    return id ? `${environment.apiBase}/api/v1/source-connections/${id}/.well-known/jwks.json` : null;
+  });
 
   // ── Data Retrieval Method (Backend System: all four methods; Standalone: Search REST only, one-shot) ──────────
   /** Standalone only ever offers Search REST — Subscription/Webhook/Bulk Export are async, unattended patterns
@@ -538,16 +722,17 @@ export class EpicAudienceFormComponent implements OnInit {
   protected readonly fullRefreshCronSummary = computed(() => {
     const cron = this.fullRefreshCronExpression();
     const time = this.fullRefreshTimeValue() || '02:00';
+    const zone = this.fullRefreshTimeZoneValue() || 'UTC';
     switch (this.fullRefreshRecurrenceValue()) {
       case 'weekly': {
         const days = this.fullRefreshDaysOfWeekValue() ?? [];
         const labels = WEEKDAY_OPTIONS.filter(o => days.includes(o.value)).map(o => o.label);
-        return labels.length ? `Weekly on ${labels.join(', ')} at ${time} — ${cron}` : 'Select at least one day.';
+        return labels.length ? `Weekly on ${labels.join(', ')} at ${time} ${zone} — ${cron}` : 'Select at least one day.';
       }
       case 'monthly':
-        return `Monthly on day ${this.fullRefreshDayOfMonthValue() || '1'} at ${time} — ${cron}`;
+        return `Monthly on day ${this.fullRefreshDayOfMonthValue() || '1'} at ${time} ${zone} — ${cron}`;
       default:
-        return `Daily at ${time} — ${cron}`;
+        return `Daily at ${time} ${zone} — ${cron}`;
     }
   });
 
@@ -581,15 +766,34 @@ export class EpicAudienceFormComponent implements OnInit {
     return field ? this.selectedRetrievalResourceTypes(field.key) : [];
   });
 
+  /** Connection Test is hidden for now — flip this back to re-enable it (see sectionNumbers/template). */
+  protected readonly showConnectionTest = false;
+
+  /**
+   * Data Retrieval Method / its config are workflow-specific (search criteria, resource types, scopes, pagination,
+   * bulk-export settings) — they belong to a workflow's per-node override (see hasExistingChanged's
+   * NODE_OVERRIDDEN_FIELDS comment) or, going forward, a per-workflow SourceConfiguration
+   * (docs/backend/13-source-connection-configuration-split-plan.md), never to the reusable connection itself.
+   * Settings → Source Connections opens this form in 'entity' mode to manage only the connection (URL, auth, JWKS,
+   * audience, client details) — so this section is hidden there regardless of what the audience would otherwise
+   * show, and wizard.service.ts's entity-mode save() never sends a retrieval payload either.
+   */
+  // Restricted to Backend System only: Provider Standalone's audienceConfig().showRetrieval also stays true
+  // (its 'oneshot' retrievalScope still drives the automated<->oneshot field carry-over/reset logic in
+  // onAudienceChange below, keyed off AUDIENCE_FIELD_CONFIG directly), but Standalone no longer gets a visible
+  // Data Retrieval Method / Retrieval Configuration section of its own — those are Backend System only now.
+  protected readonly showRetrievalSection = computed(() =>
+    this.audienceConfig().showRetrieval && this.audience() === 'backend-system' && this.wiz.wizardMode() === 'canvas');
+
   /** Section numbers shift depending on which optional sections the current audience shows. */
   protected readonly sectionNumbers = computed(() => {
     const cfg = this.audienceConfig();
     let n = 4; // 1 Audience/Env · 2 FHIR Base URL · 3 OAuth Endpoints · 4 Credentials
-    const urls              = (cfg.showLaunchUrl || cfg.showRedirect) ? ++n : null;
+    const urls              = (this.showApplicationUrlsSection && (cfg.showLaunchUrl || cfg.showRedirect)) ? ++n : null;
     const cds                = cfg.showCdsHooks ? ++n : null;
-    const test                = ++n;
-    const retrievalMethod    = cfg.showRetrieval ? ++n : null;
-    const retrievalConfig    = cfg.showRetrieval ? ++n : null;
+    const test                = this.showConnectionTest ? ++n : null;
+    const retrievalMethod    = this.showRetrievalSection() ? ++n : null;
+    const retrievalConfig    = this.showRetrievalSection() ? ++n : null;
     return { urls, cds, test, retrievalMethod, retrievalConfig };
   });
 
@@ -602,12 +806,26 @@ export class EpicAudienceFormComponent implements OnInit {
 
   protected readonly selectedResources = computed(() => this.resourcesValue() ?? []);
 
+  /**
+   * Backend System (and any other audience with showResourcePicker: false) normally derives its scopes from the
+   * Data Retrieval Method's own Resource Type control — but that whole section is hidden in entity mode
+   * (showRetrievalSection), so activeRetrievalResourceTypes() is always empty there, which silently sent empty
+   * Scopes to the backend and tripped "Epic scopes are required." (ValidateEpicSourceConnection). Entity mode
+   * always has a usable value in the `resources` control regardless of audience — WizardService.openEntity()
+   * seeds it from the existing connection's dto.retrieval.resourceTypes (or DEFAULT_RESOURCES for a new one)
+   * before this component even initializes — so entity mode reads from there instead, exactly like the
+   * interactive audiences already do in canvas mode.
+   */
+  protected readonly showResourcePickerSection = computed(() =>
+    this.audienceConfig().showResourcePicker || this.wiz.wizardMode() === 'entity');
+
   protected readonly scopeString = computed(() => {
     const aud = this.audience();
     const cfg = this.audienceConfig();
     // Backend System has no shared Resource Type picker — its scopes are derived from
-    // whichever Resource Type list is set on the currently selected retrieval method.
-    const res = cfg.showResourcePicker ? this.selectedResources() : this.activeRetrievalResourceTypes();
+    // whichever Resource Type list is set on the currently selected retrieval method (canvas mode only —
+    // see showResourcePickerSection for why entity mode always uses selectedResources() instead).
+    const res = this.showResourcePickerSection() ? this.selectedResources() : this.activeRetrievalResourceTypes();
     const fixed = cfg.includeInteractiveScopes
       ? ['openid', 'fhirUser', 'offline_access', aud === 'provider-ehr-launch' ? 'launch' : 'launch/patient']
       : [];
@@ -616,7 +834,56 @@ export class EpicAudienceFormComponent implements OnInit {
     return [...fixed, ...res.map(r => `${cfg.scopePrefix}/${r}.${suffix}`)].join('\n');
   });
 
+  constructor() {
+    // Keeps the "Private Key / JWKS URL" field itself correct for a Generated/Imported key, instead of only
+    // showing the real URL in a toast — once resolvedSourceConnectionId() is known (after the first save, or
+    // immediately when editing an already-saved connection), this is the one real, always-correct value; nothing
+    // typed for a manual/external key is ever touched.
+    //
+    // Also fires whenever keyLoadedFromExistingConnection() is true (cloning "Existing Source" in the canvas
+    // wizard, or editing a node/entity whose key was already configured) — the backend has no field recording
+    // whether that key was originally Generated/Imported/Manual (see docs/backend/13-source-connection-
+    // configuration-split-plan.md's JWKS URL discussion), so keySource defaults back to 'manual' on every clone
+    // and isGenKey()/isImportKey() alone would never fire here, leaving `jwksUrl` — a required field whenever
+    // auth method is JWT — blank and silently blocking save (the exact "click Update, nothing happens" bug
+    // already fixed once for `resources`). Auto-filling FHIRBridge's hosted URL is exactly correct when the
+    // original key really was Generated/Imported, and a visible, editable placeholder to overwrite (matching the
+    // existing hint text below the field) when it wasn't — strictly better than a blank field that blocks
+    // submission with no visible explanation either way.
+    //
+    // The keyLoadedFromExistingConnection() branch only applies while jwksUrlUserEdited() is still false: once the
+    // admin has actually typed their own (e.g. self-hosted) URL into this field, this effect must stop reasserting
+    // the hosted one — otherwise any later recompute of this effect's other signal reads (isGenKey()/isImportKey())
+    // silently reverts a real, deliberate edit back to FHIRBridge's own localhost/hosted URL. It also only applies
+    // while jwksUrlRestoredFromBackend() is false: JwksUrl is now persisted server-side (see that signal's own
+    // remarks), so a connection that already has a real saved URL — hosted or external — must show that back
+    // exactly as saved, not have it overwritten by a guess just because key-reference fields also happen to be
+    // present (which is also true of a manually-registered external key). isGenKey()/isImportKey() stay
+    // unconditional: a key just Generated/Imported *this session* is always genuinely hosted at that URL, so
+    // there's nothing legitimate to type over it.
+    effect(() => {
+      const url = this.liveJwksUrl();
+      if (!url) return;
+      if (this.isGenKey() || this.isImportKey()) {
+        this.form.controls.jwksUrl.setValue(url, { emitEvent: false });
+      } else if (this.keyLoadedFromExistingConnection() && !this.jwksUrlRestoredFromBackend() && !this.jwksUrlUserEdited()) {
+        this.form.controls.jwksUrl.setValue(url, { emitEvent: false });
+      }
+    });
+
+    // Only genuine user keystrokes reach here — every programmatic write above passes `{ emitEvent: false }`.
+    this.form.controls.jwksUrl.valueChanges.subscribe(() => this.jwksUrlUserEdited.set(true));
+  }
+
   ngOnInit(): void {
+    // "New Source" (the default picker state) needs the same collision defense as "Existing Source" cloning —
+    // otherwise a brand-new node left on the default App Name silently collides with a prior connection of that
+    // exact name, and the raw backend "already exists" error only surfaces later, at workflow build time.
+    if (this.showSourcePicker()) {
+      this.loadAllConnectionNames();
+      this.loadExistingConnections();
+    }
+
     if (this.wiz.isEditing()) {
       // Pre-populate all fields from saved node data
       this.form.controls.audience.setValue(this.wiz.epicAudience() as EpicAudience);
@@ -663,6 +930,20 @@ export class EpicAudienceFormComponent implements OnInit {
     }
 
     this.prevAudience = this.audience();
+    this.prevAuthMethod = this.form.controls.authMethod.value as 'public' | 'secret' | 'jwt';
+    this.prevRetrievalMethod = this.form.controls.retrievalMethod.value;
+
+    // New (non-editing) connections whose audience uses the shared Resource Type picker (removed from the UI —
+    // see AUDIENCE_FIELD_CONFIG.showResourcePicker) always request every MVP1-supported resource type's scope
+    // up front, rather than asking the user to hand-pick a subset before a destination even exists. Editing an
+    // existing connection keeps whatever was actually saved (restored above), never overwritten here.
+    if (!this.wiz.isEditing()
+      && AUDIENCE_FIELD_CONFIG[this.audience()].showResourcePicker
+      && this.form.controls.resources.value.length === 0) {
+      this.form.controls.resources.setValue([...FHIR_RESOURCES]);
+    }
+    this.ensureSearchRestResourceTypeDefault();
+
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
 
@@ -673,12 +954,22 @@ export class EpicAudienceFormComponent implements OnInit {
         this.clearInapplicableFields(this.prevAudience, nextAudience);
         this.prevAudience = nextAudience;
         this.lockRetrievalMethodIfOneShot();
+        // Client Auth Method follows the audience — Backend System is JWT-only per SMART Backend Services;
+        // every interactive audience is Public Client + PKCE. setValue (not patchValue) so this always goes
+        // through the authMethod.valueChanges subscription below and clears whatever the previous method's
+        // fields were, exactly as if the user had picked the new method themselves.
+        this.form.controls.authMethod.setValue(AUDIENCE_DEFAULT_AUTH_METHOD[nextAudience]);
         this.syncValidators();
       });
 
     this.form.controls.authMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.syncValidators());
+      .subscribe((next) => {
+        const nextMethod = next as 'public' | 'secret' | 'jwt';
+        this.clearInapplicableAuthFields(this.prevAuthMethod, nextMethod);
+        this.prevAuthMethod = nextMethod;
+        this.syncValidators();
+      });
 
     // Clear a previous save failure (e.g. "name already exists") the moment the user edits the name
     // again — it was already surfaced and shouldn't linger once they've acted on it.
@@ -696,9 +987,22 @@ export class EpicAudienceFormComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncValidators());
 
+    // Generate/Import leave jwksUrl blank until save (see syncValidators()'s jwksUrlServerManaged) — re-sync the
+    // moment the admin picks either, so the required validator drops immediately instead of only on the next
+    // unrelated field change.
+    this.form.controls.keySource.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.syncValidators());
+
     this.form.controls.retrievalMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.syncRetrievalValidators());
+      .subscribe((next) => {
+        const nextMethod = (next as RetrievalMethod) || '';
+        this.clearInapplicableRetrievalFields(this.prevRetrievalMethod, nextMethod);
+        this.prevRetrievalMethod = nextMethod;
+        this.ensureSearchRestResourceTypeDefault();
+        this.syncRetrievalValidators();
+      });
 
     this.form.controls.exportScope.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -736,7 +1040,7 @@ export class EpicAudienceFormComponent implements OnInit {
    * so this is safe to call for a node saved before a given field existed.
    */
   private restoreExtendedFieldsFromEditingNode(): void {
-    const fields = this.wiz.editingFields();
+    const fields = this.wiz.editingFields() ?? this.fieldsFromEntityDto();
     if (!fields) return;
 
     const setIfPresent = (control: string, key: string): void => {
@@ -751,6 +1055,20 @@ export class EpicAudienceFormComponent implements OnInit {
     setIfPresent('jwtKid', 'JWT kid');
     setIfPresent('privateKeyRef', 'Key vault reference');
     setIfPresent('privateKeySecretName', 'Secret Name');
+    // Absent on any node saved before this control existed, and never present at all for entity mode (the DTO
+    // carries no such field — see fieldsFromEntityDto()) — form default ('manual') is exactly right in both
+    // cases, since a key restored with no known provenance can't safely be assumed Generated/Imported.
+    setIfPresent('keySource', 'Signing key source');
+    this.keyLoadedFromExistingConnection.set(
+      !!(fields['JWT kid'] && fields['Key vault reference'] && fields['Secret Name'])
+    );
+    this.jwksUrlUserEdited.set(false);
+    // A real JWKS URL is now persisted (SourceAuthenticationConfiguration.JwksUrl — see fieldsFromEntityDto() and
+    // the canvas node's own 'JWKS URL' key) and was just restored above via setIfPresent — don't let the auto-fill
+    // effect below stomp a real, previously-registered external URL just because key-reference fields also happen
+    // to be present. Only a pre-persistence-era row (migrated with a null JwksUrl) falls through to the computed
+    // hosted-URL guess.
+    this.jwksUrlRestoredFromBackend.set(!!fields['JWKS URL']);
 
     setIfPresent('cdsDiscoveryUrl', 'CDS discovery URL');
     setIfPresent('cdsServiceEndpoint', 'CDS service endpoint');
@@ -805,6 +1123,7 @@ export class EpicAudienceFormComponent implements OnInit {
     }
     setIfPresent('fullRefreshDayOfMonth', 'Full refresh day of month');
     setIfPresent('fullRefreshTime', 'Full refresh time');
+    setIfPresent('fullRefreshTimeZone', 'Full refresh time zone');
 
     setIfPresent('pageSize', 'Page size (_count)');
     setIfPresent('sortOrder', 'Sort (_sort)');
@@ -813,10 +1132,57 @@ export class EpicAudienceFormComponent implements OnInit {
     setIfPresent('retryPolicy', 'Retry policy');
     setIfPresent('timeoutSeconds', 'Timeout (seconds)');
     setIfPresent('maxRecordsPerRun', 'Max records per run');
+
+    this.ensureSearchRestResourceTypeDefault();
+  }
+
+  /**
+   * Entity mode (Settings > Source Connections) has no canvas node/fields-bag at all — editingFields() is
+   * canvas-only and returns null here — so this synthesizes the same string-keyed shape restoreExtendedFieldsFrom-
+   * EditingNode() already knows how to consume, straight from the real, persisted SourceConnectionModel DTO
+   * (see WizardService.entityDto). CDS Hooks and Full Refresh recurrence have no equivalent below because the
+   * backend SourceConnection genuinely doesn't persist them (same caveat WorkflowBuildAssemblerService's own doc
+   * comment notes) — those controls simply keep their form defaults, same as a brand-new node would.
+   */
+  private fieldsFromEntityDto(): Record<string, string> | null {
+    const dto = this.wiz.entityDto();
+    if (!dto) return null;
+
+    const auth = dto.authentication;
+    const retrieval = dto.retrieval;
+    const fields: Record<string, string> = {};
+
+    if (auth?.keyId) fields['JWT kid'] = auth.keyId;
+    if (auth?.privateKeyKeyVaultName) fields['Key vault reference'] = auth.privateKeyKeyVaultName;
+    if (auth?.privateKeySecretName) fields['Secret Name'] = auth.privateKeySecretName;
+    if (auth?.jwksUrl) fields['JWKS URL'] = auth.jwksUrl;
+    if (dto.interactive?.launchDisplayMode) fields['Launch display mode'] = dto.interactive.launchDisplayMode;
+
+    if (retrieval) {
+      fields['Retrieval method key'] = retrieval.retrievalMethod;
+      if (retrieval.resourceTypes?.length) fields['Retrieval resource type'] = retrieval.resourceTypes.join(',');
+      if (retrieval.searchCriteria) fields['Search criteria'] = retrieval.searchCriteria;
+      fields['Incremental cursor'] = retrieval.incrementalSyncEnabled ? 'enabled' : 'disabled';
+      if (retrieval.exportScope) fields['Export scope'] = retrieval.exportScope;
+      if (retrieval.groupId) fields['Group ID'] = retrieval.groupId;
+      if (retrieval.patientIds?.length) fields['Patient ID / list'] = retrieval.patientIds.join(', ');
+      if (retrieval.outputFormat) fields['FHIR output format'] = retrieval.outputFormat;
+      if (retrieval.pageSize != null) fields['Page size (_count)'] = String(retrieval.pageSize);
+      if (retrieval.sortOrder) fields['Sort (_sort)'] = retrieval.sortOrder;
+      if (retrieval.includeParameters?.length) fields['Include (_include)'] = retrieval.includeParameters.join(',');
+      if (retrieval.revIncludeParameters?.length) fields['Reverse include (_revinclude)'] = retrieval.revIncludeParameters.join(',');
+      if (retrieval.retryPolicy) fields['Retry policy'] = retrieval.retryPolicy;
+      if (retrieval.timeoutSeconds != null) fields['Timeout (seconds)'] = String(retrieval.timeoutSeconds);
+      if (retrieval.maxRecordsPerRun != null) fields['Max records per run'] = String(retrieval.maxRecordsPerRun);
+    }
+
+    return fields;
   }
 
   // ── audience field lifecycle ────────────────────────────────────────────────
   private prevAudience: EpicAudience = 'provider-ehr-launch';
+  private prevAuthMethod: 'public' | 'secret' | 'jwt' = 'public';
+  private prevRetrievalMethod: RetrievalMethod | '' = '';
 
   /** Clears values for fields that are no longer applicable after an audience switch. */
   private clearInapplicableFields(prev: EpicAudience, next: EpicAudience): void {
@@ -826,9 +1192,21 @@ export class EpicAudienceFormComponent implements OnInit {
     if (prevCfg.showRedirect && !nextCfg.showRedirect) {
       this.form.patchValue({ callbackUrl: '' });
     }
+    // Entering the other way: callbackUrl was blanked out above the last time an audience that hides it was
+    // active — restore the same sensible default ngOnInit itself starts every new form with, so a real, still-
+    // required field doesn't stay permanently empty (and Add to Pipeline permanently blocked) just because the
+    // user passed through Backend System (or any other showRedirect: false audience) on the way here. Guarded on
+    // "currently empty" so a genuinely restored/edited value is never clobbered.
+    if (!prevCfg.showRedirect && nextCfg.showRedirect && !this.form.controls.callbackUrl.value) {
+      this.form.patchValue({ callbackUrl: OAUTH_DEFAULT_URLS.redirectUri });
+    }
 
     if (prevCfg.showLaunchUrl && !nextCfg.showLaunchUrl) {
       this.form.patchValue({ launchUrl: '' });
+    }
+    // Same restore-on-entry reasoning as callbackUrl above.
+    if (!prevCfg.showLaunchUrl && nextCfg.showLaunchUrl && !this.form.controls.launchUrl.value) {
+      this.form.patchValue({ launchUrl: OAUTH_DEFAULT_URLS.launchUrl });
     }
 
     if (prevCfg.showLaunchDisplayMode && !nextCfg.showLaunchDisplayMode) {
@@ -842,8 +1220,21 @@ export class EpicAudienceFormComponent implements OnInit {
       });
     }
 
-    if (prevCfg.showResourcePicker && !nextCfg.showResourcePicker) {
+    // Entity mode always needs a populated `resources` control regardless of audience (see
+    // showResourcePickerSection) — switching audiences there must never clear it to [], or the control is left
+    // required-and-empty with no picker UI to refill it (exactly the "Create Source Connection does nothing"
+    // bug: form.invalid silently blocks save() with no visible field to fix, since the shared picker section
+    // doesn't render for audiences with showResourcePicker: false).
+    const prevShowsResources = prevCfg.showResourcePicker || this.wiz.wizardMode() === 'entity';
+    const nextShowsResources = nextCfg.showResourcePicker || this.wiz.wizardMode() === 'entity';
+
+    if (prevShowsResources && !nextShowsResources) {
       this.form.patchValue({ resources: [] });
+    }
+    // Switching the other way: default to every MVP1-supported resource type's scope, same as the initial
+    // load — there's no visible picker for the user to fill this in themselves anymore.
+    if (!prevShowsResources && nextShowsResources) {
+      this.form.patchValue({ resources: [...FHIR_RESOURCES] });
     }
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
@@ -856,6 +1247,7 @@ export class EpicAudienceFormComponent implements OnInit {
         incrementalCursor: false, schedulePollFrequency: '', runMode: '', exportScope: '',
         groupId: '', patientIdList: '', fhirOutputFormat: 'ndjson',
         fullRefreshRecurrence: 'daily', fullRefreshDaysOfWeek: [], fullRefreshDayOfMonth: '1', fullRefreshTime: '02:00',
+        fullRefreshTimeZone: detectBrowserTimeZone(),
         pageSize: '100', sortOrder: '', includeLinked: '', revIncludeLinked: '',
         retryPolicy: 'exponential', timeoutSeconds: '30', maxRecordsPerRun: '',
       });
@@ -873,10 +1265,64 @@ export class EpicAudienceFormComponent implements OnInit {
         searchRestResourceType: [],
         incrementalCursor: false, schedulePollFrequency: '', runMode: '',
         fullRefreshRecurrence: 'daily', fullRefreshDaysOfWeek: [], fullRefreshDayOfMonth: '1', fullRefreshTime: '02:00',
+        fullRefreshTimeZone: detectBrowserTimeZone(),
         pageSize: '100', sortOrder: '', revIncludeLinked: '',
         retryPolicy: 'exponential', timeoutSeconds: '30',
       });
     }
+  }
+
+  /** Clears whichever Client Auth Method fields belonged only to the method being left, whenever the value
+   *  actually changes — otherwise a Client Secret or JWKS/private-key value typed under one method silently
+   *  survives switching to another and reappears if the user switches back, riding along into save() unnoticed. */
+  private clearInapplicableAuthFields(prev: 'public' | 'secret' | 'jwt', next: 'public' | 'secret' | 'jwt'): void {
+    if (prev === next) return;
+    const patch: Record<string, unknown> = {};
+    if (prev === 'secret') {
+      patch['clientSecret'] = '';
+    }
+    if (prev === 'jwt') {
+      patch['jwksUrl'] = '';
+      patch['jwtKid'] = '';
+      patch['privateKeyRef'] = '';
+      patch['privateKeySecretName'] = '';
+      patch['keySource'] = 'manual';
+    }
+    if (Object.keys(patch).length) this.form.patchValue(patch);
+  }
+
+  /** Clears whichever Retrieval Method fields belonged only to the method being left, whenever the value actually
+   *  changes — mirrors clearInapplicableAuthFields for the Data Retrieval Method dropdown (Backend System only),
+   *  reading field ownership straight from RETRIEVAL_METHOD_CONFIG so it never drifts from the field list/validator
+   *  logic that already reads the same registry. */
+  private clearInapplicableRetrievalFields(prev: RetrievalMethod | '', next: RetrievalMethod | ''): void {
+    if (prev === next) return;
+    const prevKeys = prev ? RETRIEVAL_METHOD_CONFIG[prev].fields.map(f => f.key) : [];
+    const nextKeys = new Set(next ? RETRIEVAL_METHOD_CONFIG[next].fields.map(f => f.key) : []);
+    const patch: Record<string, unknown> = {};
+    for (const key of prevKeys) {
+      if (!nextKeys.has(key)) patch[key] = RETRIEVAL_FIELD_DEFAULTS[key];
+    }
+    if (!Object.keys(patch).length) return;
+    // runMode's own valueChanges subscription disables Incremental Cursor while Run Mode is Incremental Sync —
+    // re-enable it here too whenever runMode itself is being cleared out, mirroring clearInapplicableFields'
+    // existing "leaving showRetrieval" handling, so the control is never left stuck disabled after the field
+    // that disabled it has just been reset out from under it.
+    if ('runMode' in patch) this.form.controls.incrementalCursor.enable({ emitEvent: false });
+    this.form.patchValue(patch);
+  }
+
+  /** Search REST's own Resource Type control is hidden entirely from the UI (see RETRIEVAL_METHOD_CONFIG['search-
+   *  rest'].fields) — scope generation (activeRetrievalResourceTypes/scopeString) still reads it, so a Backend
+   *  System connection with Search REST selected needs a non-empty value from somewhere other than a picker the
+   *  admin can no longer see. Defaults it to every MVP1 resource type, same as the shared Resource Type picker
+   *  already does for audiences that show it (see the showResourcePicker default in ngOnInit). Never overwrites a
+   *  real, already-populated value — a genuinely restored/edited selection (from a saved connection or an edited
+   *  canvas node) is left exactly as-is. */
+  private ensureSearchRestResourceTypeDefault(): void {
+    if (this.form.controls.retrievalMethod.value !== 'search-rest') return;
+    if (this.form.controls.searchRestResourceType.value.length > 0) return;
+    this.form.controls.searchRestResourceType.setValue([...FHIR_RESOURCES]);
   }
 
   /** Standalone always uses Search REST — force-select it whenever the current audience is one-shot scoped, so
@@ -928,7 +1374,11 @@ export class EpicAudienceFormComponent implements OnInit {
     // resource-derived scopes at all (see the `resources` FormBuilder default above).
     apply('resources',     false);
     apply('clientSecret',  method === 'secret');
-    apply('jwksUrl',       method === 'jwt', true);
+    // Generate/Import (Backend System only) leave this blank on purpose — the real JWKS URL is this connection's
+    // own .well-known/jwks.json, only known once it has an id after save (see the readonly condition on this field
+    // in the template and generateKeyPair()/importPrivateKey() above, neither of which populate it).
+    const jwksUrlServerManaged = this.audience() === 'backend-system' && (this.isGenKey() || this.isImportKey());
+    apply('jwksUrl',       method === 'jwt' && !jwksUrlServerManaged, true);
     // Epic Backend Services signs a JWT assertion with an RS384 private key referenced by (Key ID, Key Vault Name,
     // Secret Name) — ConfigurationService.ValidateEpicSourceConnection only requires all three in the non-interactive
     // (Backend System) branch; an EHR-launch/standalone/patient app can pick JWT client auth without them, so scope
@@ -949,8 +1399,11 @@ export class EpicAudienceFormComponent implements OnInit {
 
   /** Applies Validators.required only to the retrieval fields the selected method actually shows. */
   private syncRetrievalValidators(): void {
-    const cfg       = this.audienceConfig();
-    const methodCfg = cfg.showRetrieval ? this.retrievalConfig() : null;
+    // Gated by showRetrievalSection (audience config AND wizardMode==='canvas'), not audience config alone — a
+    // required-but-hidden retrieval field in entity mode would otherwise leave the form permanently invalid,
+    // since Settings → Source Connections never shows this section for the user to fill it in.
+    const showSection = this.showRetrievalSection();
+    const methodCfg = showSection ? this.retrievalConfig() : null;
     const visible   = methodCfg ? this.visibleRetrievalFields() : [];
     const visibleKeys = new Set(visible.map(f => f.key));
 
@@ -960,7 +1413,7 @@ export class EpicAudienceFormComponent implements OnInit {
       ctrl.updateValueAndValidity({ emitEvent: false });
     };
 
-    apply('retrievalMethod', cfg.showRetrieval);
+    apply('retrievalMethod', showSection);
 
     for (const key of RETRIEVAL_FIELD_KEYS) {
       const field = methodCfg?.fields.find(f => f.key === key);
@@ -999,27 +1452,41 @@ export class EpicAudienceFormComponent implements OnInit {
     return !!ctrl && ctrl.touched && ctrl.invalid;
   }
 
-  // ── New Source / Existing Source (canvas-mode create only) ─────────────────
-  protected onSourceModeChange(mode: 'new' | 'existing'): void {
-    this.sourceMode.set(mode);
-    if (mode === 'new') {
-      this.resetToBlankNewSource();
-      return;
-    }
-    if (this.existingConnections().length === 0 && !this.loadingExisting()) {
-      this.loadingExisting.set(true);
-      this.sourceConnectionSvc.getAll().subscribe({
-        next: connections => {
-          this._allConnectionNames = new Set(connections.map(c => c.name));
-          this.existingConnections.set(connections.filter(c => c.sourceSystemType === 'Epic'));
-          this.loadingExisting.set(false);
-        },
-        error: () => {
-          this.loadingExisting.set(false);
-          this.toast.show('Failed to load', 'Could not load existing Epic source connections.', 'error');
-        },
-      });
-    }
+  // ── Existing Epic Connection picker (canvas-mode create only) ───────────────
+  /** Loaded unconditionally as soon as the picker is offered (see ngOnInit) — the dropdown has no separate
+   *  "switch to Existing" step to trigger it from, it's just always there. */
+  private loadExistingConnections(): void {
+    if (this.existingConnections().length > 0 || this.loadingExisting()) return;
+    this.loadingExisting.set(true);
+    this.sourceConnectionSvc.getAll().subscribe({
+      next: connections => {
+        this._allConnectionNames = new Set(connections.map(c => c.name));
+        this.existingConnections.set(connections.filter(c => c.sourceSystemType === 'Epic'));
+        this.loadingExisting.set(false);
+      },
+      error: () => {
+        this.loadingExisting.set(false);
+        this.toast.show('Failed to load', 'Could not load existing Epic source connections.', 'error');
+      },
+    });
+  }
+
+  /** The "✕" next to the dropdown — undoes a clone and returns the form to a blank "New Source" state. This is
+   *  the only way back to blank now that there's no explicit New/Existing toggle to switch away from. */
+  protected clearExistingConnection(): void {
+    this.sourceMode.set('new');
+    this.resetToBlankNewSource();
+  }
+
+  /** Best-effort load of every saved connection's name so save()'s "New Source" branch can dedupe against real
+   *  collisions up front — a failed load just skips the client-side check, since the backend still rejects a
+   *  true collision regardless. */
+  private loadAllConnectionNames(): void {
+    // Positional (next-only) subscribe: a failed load has nothing to react to (see doc comment above), so there's
+    // no error callback to keep empty — RxJS's default unhandled-error reporting is fine for a best-effort read.
+    this.sourceConnectionSvc.getAll().subscribe(
+      connections => this._allConnectionNames = new Set(connections.map(c => c.name)),
+    );
   }
 
   /**
@@ -1039,8 +1506,8 @@ export class EpicAudienceFormComponent implements OnInit {
     return candidate;
   }
 
-  /** Switching back to "New Source" after a clone must undo it — otherwise the form silently keeps whatever
-   *  the last-selected existing connection populated, even though the picker now reads "New Source". */
+  /** Clearing the picker after a clone must undo it — otherwise the form silently keeps whatever the
+   *  last-selected existing connection populated, even though the dropdown now shows no selection. */
   private resetToBlankNewSource(): void {
     this.selectedExistingId.set(null);
     this._existingBaseline = null;
@@ -1055,25 +1522,106 @@ export class EpicAudienceFormComponent implements OnInit {
     this.wiz.trustedIssuers.set('');
 
     this.prevAudience = this.audience();
+    this.prevAuthMethod = this.form.controls.authMethod.value as 'public' | 'secret' | 'jwt';
+    this.prevRetrievalMethod = this.form.controls.retrievalMethod.value;
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
     this.syncRetrievalValidators();
   }
 
   protected onExistingConnectionSelected(id: string): void {
+    this.sourceMode.set('existing');
     this.selectedExistingId.set(id);
     const dto = this.existingConnections().find(c => c.id === id);
     if (dto) this.populateFormFromSourceConnection(dto);
   }
 
-  /** Name + Base URL alone can collide (e.g. two connections both literally named "Epic" against the same
-   *  sandbox URL, one EHR Launch and one Standalone) — append audience + a Client ID suffix so the dropdown
-   *  always has something to visually tell them apart by. */
+  /** Generates a real RSA key pair server-side (SigningKeyGenerationService) and stores the private key in the
+   *  secret store — no key material ever reaches this component. Populates jwtKid/privateKeyRef/
+   *  privateKeySecretName exactly as a manually-entered key would, so save()/syncValidators() need no special
+   *  casing for how the key was provisioned. */
+  protected generateKeyPair(): void {
+    this.keyGenStatus.set('generating');
+    this.sourceConnectionSvc.generateSigningKey().subscribe({
+      next: (key) => {
+        this.form.patchValue({
+          jwtKid: key.keyId,
+          privateKeyRef: key.keyVaultName,
+          privateKeySecretName: key.secretName,
+        });
+        this.keyGenStatus.set('generated');
+        this.toast.show(
+          'Key pair generated',
+          `Key ID ${key.keyId} generated. The JWKS URL becomes available at this connection's ` +
+          '.well-known/jwks.json once you save — register that URL in Epic.'
+        );
+      },
+      error: (err) => {
+        this.keyGenStatus.set('idle');
+        const message = err?.error?.message ?? err?.error?.title ?? 'Failed to generate a key pair.';
+        this.toast.show('Key generation failed', message, 'error');
+      },
+    });
+  }
+
+  /** Reads the chosen file client-side only — nothing is sent to the backend until "Import Private Key" is
+   *  clicked, so picking the wrong file and re-picking costs nothing. */
+  protected onPrivateKeyFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    this.pendingPrivateKeyPem = null;
+    this.keyGenStatus.set('idle');
+    this.selectedFileName.set(file.name);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.pendingPrivateKeyPem = reader.result as string;
+    };
+    reader.onerror = () => {
+      this.selectedFileName.set(null);
+      this.toast.show('Could not read file', 'Choose the file again.', 'error');
+    };
+    reader.readAsText(file);
+  }
+
+  /** Sends the selected file's contents to the backend, which validates it's a real, unencrypted RSA private key
+   *  (rejecting a public key, certificate, non-RSA key, or a weak/encrypted one) before storing it — the same
+   *  secret-store path generateKeyPair() uses, so jwtKid/privateKeyRef/privateKeySecretName are wired up
+   *  identically either way. */
+  protected importPrivateKey(): void {
+    if (!this.pendingPrivateKeyPem) {
+      this.toast.show('Choose a file', 'Choose your private key file before importing.');
+      return;
+    }
+
+    this.keyGenStatus.set('generating');
+    this.sourceConnectionSvc.importSigningKey(this.pendingPrivateKeyPem).subscribe({
+      next: (key) => {
+        this.form.patchValue({
+          jwtKid: key.keyId,
+          privateKeyRef: key.keyVaultName,
+          privateKeySecretName: key.secretName,
+        });
+        this.keyGenStatus.set('generated');
+        this.toast.show(
+          'Private key imported',
+          `Key ID ${key.keyId} imported. The JWKS URL becomes available at this connection's ` +
+          '.well-known/jwks.json once you save — register that URL in Epic.'
+        );
+      },
+      error: (err) => {
+        this.keyGenStatus.set('idle');
+        const message = err?.error?.message ?? err?.error?.title ?? 'Failed to import the private key.';
+        this.toast.show('Import failed', message, 'error');
+      },
+    });
+  }
+
+  /** Just the connection name — base URL/audience/client-id details are shown once selected, not in the picker. */
   protected existingConnectionLabel(conn: SourceConnectionModel): string {
-    const audience = (conn.applicationType && APPLICATION_TYPE_TO_AUDIENCE[conn.applicationType]) || null;
-    const audienceLabel = audience ? ` · ${audience}` : '';
-    const clientIdSuffix = conn.authentication?.clientId ? ` · …${conn.authentication.clientId.slice(-6)}` : '';
-    return `${conn.name} — ${conn.baseUrl}${audienceLabel}${clientIdSuffix}`;
+    return conn.name;
   }
 
   /**
@@ -1084,6 +1632,13 @@ export class EpicAudienceFormComponent implements OnInit {
    * independently editable, canvas fields once Save is clicked.
    */
   private populateFormFromSourceConnection(dto: SourceConnectionModel): void {
+    // Clear whatever was left in the form from a prior in-progress "New Source" entry (or a previously selected
+    // "Existing Source") before patching in this connection's data — otherwise any field not explicitly named in
+    // the patchValue below (CDS Hooks, a different retrieval method's fields, etc.) silently carries over instead
+    // of starting blank. The patchValue immediately below repopulates every field this DTO actually has data for;
+    // reset() only affects the ones it doesn't, which should start blank rather than keep stale prior input.
+    this.form.reset();
+
     const audience = ((dto.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType])
       || 'provider-ehr-launch') as EpicAudience;
     const authMethod = AUTHENTICATION_TYPE_TO_AUTH_METHOD[dto.authentication?.authenticationType ?? 'None'] ?? 'secret';
@@ -1095,7 +1650,14 @@ export class EpicAudienceFormComponent implements OnInit {
       'search-rest': 'searchRestResourceType',
       'bulk-export': 'bulkExportResourceType',
     };
-    const retrievalResourceKey = retrieval ? retrievalResourceKeyByMethod[retrieval.retrievalMethod] : undefined;
+    // A connection created via Settings (entity mode) always has retrieval: null — narrowing Settings to
+    // connection-only fields (docs/backend/13-source-connection-configuration-split-plan.md) means retrieval
+    // config genuinely never existed there; it isn't a gap in what got restored. 'search-rest' is the closest
+    // thing to a sane default retrieval method (used by the large majority of real Backend System/Standalone
+    // sources), and resolving it HERE — not leaving retrievalMethod blank — is what lets the baseline below
+    // capture a complete, valid configuration that requires no further edit to satisfy validation.
+    const resolvedRetrievalMethod = (retrieval?.retrievalMethod as RetrievalMethod) || 'search-rest';
+    const retrievalResourceKey = retrievalResourceKeyByMethod[resolvedRetrievalMethod];
 
     this.form.patchValue({
       audience,
@@ -1108,16 +1670,38 @@ export class EpicAudienceFormComponent implements OnInit {
       jwtKid: dto.authentication?.keyId ?? '',
       privateKeyRef: dto.authentication?.privateKeyKeyVaultName ?? '',
       privateKeySecretName: dto.authentication?.privateKeySecretName ?? '',
+      jwksUrl: dto.authentication?.jwksUrl ?? '',
       // Required for EHR-Launch/Standalone audiences, but neither is guaranteed to be persisted on the source
       // connection being cloned (e.g. LaunchUrl is NULL on plenty of real rows, and EHR-Launch connections never
       // persist a resource-type selection server-side at all) — fall back to whatever the form already holds
       // (ngOnInit's own sensible defaults) rather than blanking a required field out and silently failing Save.
       launchUrl: dto.interactive?.launchUrl || this.form.controls.launchUrl.value,
       callbackUrl: dto.interactive?.redirectUris?.[0] ?? this.form.controls.callbackUrl.value,
-      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : this.form.controls.resources.value,
-      retrievalMethod: (retrieval?.retrievalMethod as RetrievalMethod) ?? '',
+      // Unlike launchUrl/callbackUrl above (whose FormBuilder-literal initial value is already a real, usable
+      // default), `resources`' own literal initial is `[]` — it only becomes FHIR_RESOURCES via an explicit
+      // ngOnInit-time setValue for new/non-editing sources. Since form.reset() (just above, at the top of this
+      // method) wipes that back to `[]`, falling back to `this.form.controls.resources.value` here would silently
+      // leave a required field required-and-empty on every clone whose DTO has no persisted resourceTypes (e.g.
+      // Provider Standalone connections, which never persist a resource-type selection server-side) — exactly the
+      // "Add to Pipeline stays disabled" bug this fallback exists to prevent. FHIR_RESOURCES directly is the same
+      // fallback already used a few lines below for the per-method retrieval resource-type control.
+      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...FHIR_RESOURCES],
+      retrievalMethod: resolvedRetrievalMethod,
       searchCriteria: retrieval?.searchCriteria ?? '',
       incrementalCursor: retrieval?.incrementalSyncEnabled ?? false,
+      // "Run Mode" (incremental/full/manual) has no backend persistence at all — only the derived
+      // incrementalSyncEnabled boolean is stored on the connection's Retrieval config, so 'full' vs 'manual' can
+      // never be told apart from a saved connection (and there's nothing at all to derive from when retrieval is
+      // null, e.g. a Settings-created connection). Leaving this blank (the previous behavior) left a required
+      // field required-and-empty on every clone of a search-rest source: the user was forced to pick SOMETHING to
+      // get past validation, and picking anything at all — even the value the original effectively had — flipped
+      // hasExistingChanged() to true purely because the untouched baseline was '' instead of a real value, forking
+      // a brand-new, independent connection on every single clone (exactly the "created BS Gaurav, cloned it, got
+      // BS Gaurav-1 anyway" bug this field's absence caused). 'manual' is the only safe reconstruction when
+      // incrementalSyncEnabled isn't explicitly true — it's the one Run Mode value that requires no further fields
+      // (Schedule/Poll Frequency and the Full Refresh calendar block only appear for 'incremental'/'full'), so
+      // restoring it never forces an edit the way defaulting to 'full' would.
+      runMode: retrieval?.incrementalSyncEnabled ? 'incremental' : 'manual',
       pageSize: retrieval?.pageSize != null ? String(retrieval.pageSize) : this.form.controls.pageSize.value,
       sortOrder: retrieval?.sortOrder ?? '',
       includeLinked: retrieval?.includeParameters?.join(',') ?? '',
@@ -1131,14 +1715,32 @@ export class EpicAudienceFormComponent implements OnInit {
       fhirOutputFormat: retrieval?.outputFormat ?? this.form.controls.fhirOutputFormat.value,
     });
 
-    if (retrievalResourceKey && retrieval?.resourceTypes?.length) {
-      this.form.get(retrievalResourceKey)?.setValue([...retrieval.resourceTypes]);
-    }
+    // Same reasoning as resolvedRetrievalMethod above: this per-method Resource Type control needs a non-empty
+    // value even when the cloned connection has no retrieval data to restore it from — same full-MVP1-set
+    // fallback the shared `resources` picker's own default above uses (see also ensureSearchRestResourceTypeDefault,
+    // for the case where the field is Search REST's own hidden control and this clone had no retrieval data at all).
+    this.form.get(retrievalResourceKey)?.setValue(
+      retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...FHIR_RESOURCES]
+    );
+
+    // Cloned key material still deserves the "already configured, confirm before replacing" guard — clicking
+    // Generate/Import here would fork a brand-new SourceConnection on save (this is a clone into a new node, not
+    // an edit-in-place), but the point of the guard is preventing an accidental click from discarding key info
+    // that took effort to have populated, which applies just as much to cloned data as to the original entity's.
+    this.keyLoadedFromExistingConnection.set(
+      !!(dto.authentication?.keyId && dto.authentication?.privateKeyKeyVaultName && dto.authentication?.privateKeySecretName)
+    );
+    this.jwksUrlUserEdited.set(false);
+    // Same reasoning as restoreExtendedFieldsFromEditingNode() — a persisted, real JwksUrl just got patched in
+    // above; don't let the auto-fill effect override it with the computed hosted-URL guess.
+    this.jwksUrlRestoredFromBackend.set(!!dto.authentication?.jwksUrl);
 
     this.wiz.trustedIssuers.set(dto.interactive?.trustedIssuers?.join(', ') ?? '');
     this.discoveredResourceTypes.set(retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : []);
 
     this.prevAudience = audience;
+    this.prevAuthMethod = authMethod;
+    this.prevRetrievalMethod = resolvedRetrievalMethod;
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
     this.syncRetrievalValidators();
@@ -1154,15 +1756,38 @@ export class EpicAudienceFormComponent implements OnInit {
     this.runDiscover();
   }
 
-  /** True once the user has edited any field away from what populateFormFromSourceConnection() cloned in (as
-   *  re-confirmed by discovery) — the save-time signal for "fork a new connection" vs "reuse this one untouched"
-   *  (see save()). clientSecret is excluded on both sides: it's never populated by the clone (secrets never come
-   *  back from the API), so typing one in to satisfy validation must not by itself count as "changed". */
+  /**
+   * The ONLY fields that count toward the fork-vs-reuse decision below — an allowlist, not a denylist. This is
+   * the direct implementation of "Source Connection should only include connection details (URL, auth, JWKS,
+   * audience, client details); search criteria, advanced options, scopes, and any other workflow-specific
+   * configuration should never force a new connection" (docs/backend/13-source-connection-configuration-split-
+   * plan.md) — picking "Existing Source" and configuring a workflow around it must never fork, no matter what
+   * gets configured, unless one of THESE specific fields (the real, persisted identity of the connection) changes.
+   * An earlier denylist approach (excluding known workflow-specific fields one at a time) kept missing fields as
+   * they were discovered in practice — e.g. `runMode`/`incrementalCursor` still forked a real connection
+   * ("BS Gaurav" → "BS Gaurav-2") even after `resources`/`searchCriteria` were excluded. An allowlist is immune to
+   * that failure mode: anything not listed here (all of RETRIEVAL_FIELD_KEYS, `resources`, CDS Hooks, `jwksUrl`,
+   * `keySource`, `scopeVersion`, …) is workflow-specific by default and can never trigger a fork, matching every
+   * field this form actually sends as part of CreateSourceConnectionRequest (name, base URL, auth, interactive
+   * launch settings) — nothing else is ever persisted onto the SourceConnection entity itself.
+   */
+  private static readonly CONNECTION_IDENTITY_FIELDS = new Set<string>([
+    'appName', 'audience', 'environment', 'epicBaseUrl',
+    'tokenEndpoint', 'authzEndpoint', 'clientId', 'authMethod',
+    'jwtKid', 'privateKeyRef', 'privateKeySecretName',
+    'launchUrl', 'launchDisplayMode', 'callbackUrl',
+  ]);
+
+  /** True once the user has edited a connection-identity field (see CONNECTION_IDENTITY_FIELDS) away from what
+   *  populateFormFromSourceConnection() cloned in (as re-confirmed by discovery) — the save-time signal for
+   *  "fork a new connection" vs "reuse this one untouched" (see save()). `clientSecret` is never in the allowlist
+   *  since it's never populated by the clone in the first place (secrets never come back from the API). */
   protected hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const strip = (v: Record<string, unknown>) =>
-      Object.fromEntries(Object.entries(v).filter(([key]) => key !== 'clientSecret'));
-    return JSON.stringify(strip(this.form.getRawValue())) !== JSON.stringify(strip(this._existingBaseline));
+    const pick = (v: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(v).filter(([key]) =>
+        EpicAudienceFormComponent.CONNECTION_IDENTITY_FIELDS.has(key)));
+    return JSON.stringify(pick(this.form.getRawValue())) !== JSON.stringify(pick(this._existingBaseline));
   }
 
   protected runDiscover(): void {
@@ -1235,8 +1860,8 @@ export class EpicAudienceFormComponent implements OnInit {
       },
       error: (err) => {
         this.discStatus.set('error');
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Check the URL or enter endpoints manually.';
-        this.toast.show('Discovery failed', typeof msg === 'string' ? msg : 'Check the URL or enter endpoints manually.');
+        const msg = typeof err?.error?.error === 'string' ? err.error.error : 'Check the URL or enter endpoints manually.';
+        this.toast.show('Discovery failed', msg);
         this._captureBaselineIfAwaiting();
       },
     });
@@ -1268,8 +1893,8 @@ export class EpicAudienceFormComponent implements OnInit {
       },
       error: (err) => {
         this.testStatus.set('fail');
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Could not reach the source endpoint.';
-        this.toast.show('Test failed', typeof msg === 'string' ? msg : 'Could not reach the source endpoint.');
+        const msg = typeof err?.error?.error === 'string' ? err.error.error : 'Could not reach the source endpoint.';
+        this.toast.show('Test failed', msg);
       },
     });
   }
@@ -1322,6 +1947,12 @@ export class EpicAudienceFormComponent implements OnInit {
         const nameWasEdited = !!original && resolvedName !== original.name;
         resolvedName = this._resolveUniqueSourceName(resolvedName, !nameWasEdited);
       }
+    } else {
+      // "New Source": a brand-new node left on the default (or a reused) App Name must not silently collide with
+      // an already-persisted connection of that exact name — only suffix on an actual collision (forceSuffix
+      // false), so a genuinely unique name the user typed is still honored as-is. No-ops in entity-mode create,
+      // where _allConnectionNames is never populated (see loadAllConnectionNames's showSourcePicker guard).
+      resolvedName = this._resolveUniqueSourceName(resolvedName, false);
     }
 
     this.wiz.setAppKey(appKeyMap[aud]);
@@ -1367,6 +1998,11 @@ export class EpicAudienceFormComponent implements OnInit {
     const fieldsToSave = {
       'Client ID':             v.clientId ?? '',
       'Auth method':           v.authMethod ?? 'secret',
+      // Only meaningful for Backend System + JWT — lets a later "was this key FHIRBridge-provisioned?" check (e.g.
+      // WorkflowBuilderComponent auto-filling the real JWKS URL after build assigns a sourceConnectionId) tell a
+      // generated/imported key apart from one pointing at an externally-hosted JWKS, without re-deriving it from
+      // the Key Vault Name/Secret Name values alone (which look identical either way).
+      'Signing key source':    v.keySource ?? 'manual',
       'Epic audience':         aud,
       'SMART version':         'SMART App Launch 2.0 (R4)',
       'Scope version':         v.scopeVersion === 'v1' ? 'v1 (coarse)' : 'v2 (granular)',
@@ -1407,6 +2043,7 @@ export class EpicAudienceFormComponent implements OnInit {
           'Full refresh days of week':  (v.fullRefreshDaysOfWeek ?? []).join(','),
           'Full refresh day of month':  v.fullRefreshDayOfMonth ?? '1',
           'Full refresh time':          v.fullRefreshTime ?? '02:00',
+          'Full refresh time zone':     v.fullRefreshTimeZone || detectBrowserTimeZone(),
           'Full refresh schedule (cron)': this.fullRefreshCronExpression() ?? '',
         } : {}),
         // ── Advanced Search Options ──────────────────────────────────────────
@@ -1452,7 +2089,21 @@ export class EpicAudienceFormComponent implements OnInit {
     this.wiz.save(formValuesToSave, fieldsToSave);
   }
 
-  protected cancel(): void { this.cancelled.emit(); }
+  /** Backs both the topbar "← Back to library" and the footer "Cancel" buttons — same confirm-before-discard
+   *  prompt the rest of the app uses for routed pages (UnsavedChangesPromptService), just invoked directly
+   *  here since this form is an inline panel inside NodeLibraryDialogComponent, not its own route. */
+  protected cancel(): void {
+    this.unsavedChangesPrompt.confirmLeave(this).subscribe(canLeave => {
+      if (canLeave) this.cancelled.emit();
+    });
+  }
+
+  /** HasUnsavedChanges — form.dirty flips true the moment any control is edited by the user (via
+   *  typing/selecting), regardless of whether this is a brand-new node or an in-place edit. Disabled
+   *  (read-only view) controls can never become dirty, so no separate readonly check is needed. */
+  hasUnsavedChanges(): boolean {
+    return this.form.dirty;
+  }
 
   protected async copyRedirectUri(): Promise<void> {
     try {

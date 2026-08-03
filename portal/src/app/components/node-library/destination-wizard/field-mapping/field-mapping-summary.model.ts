@@ -15,6 +15,15 @@ import { MappingRow, MappingInstanceSelection, MappingSourceRef } from './field-
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
 
+/** Mirrors DestinationWizardComponent's own destType union. */
+export type DestinationWizardType = 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres';
+
+/** MySQL/PostgreSQL reuse SQL Server's schema-qualified-table/numeric-id defaults — only Mongo (schemaless)
+ *  and CSV (flat file, no real column types) fall back to the CSV-flavored string default. */
+export function isSqlLikeDestType(destType: DestinationWizardType): boolean {
+  return destType === 'sql' || destType === 'mysql' || destType === 'postgres';
+}
+
 /** A table created as a child of another table — the only place this relationship is known client-side
  *  (the backend's CreateTableAsync response never echoes it back). Keyed by table full name wherever
  *  it's tracked as state. */
@@ -99,7 +108,7 @@ export interface MappingResourceEntry {
   generatedAt: string;
   schemaChanges: MappingSchemaChanges;
   processingOrder: MappingProcessingStep[];
-  destination: { type: 'sql' | 'csv'; label: string };
+  destination: { type: DestinationWizardType; label: string };
   tables: MappingSummaryTable[];
 }
 
@@ -127,7 +136,7 @@ function bareName(fullName: string): string {
   return i === -1 ? fullName : fullName.slice(i + 1);
 }
 
-function qualify(name: string, destType: 'sql' | 'csv'): string {
+function qualify(name: string, destType: DestinationWizardType): string {
   if (destType !== 'sql' || name.includes('.')) return name;
   return `dbo.${name}`;
 }
@@ -220,7 +229,7 @@ function resolveTable(
   fullName: string,
   sqlTables: DestinationTable[],
   childTableRelationsByTable: Record<string, ChildTableRelation>,
-  destType: 'sql' | 'csv',
+  destType: DestinationWizardType,
   resource: string,
   rootTableToResource: Record<string, string>,
 ): ResolvedTable {
@@ -249,14 +258,14 @@ function resolveTable(
     relation,
     columns: known?.columns ?? [{
       name: 'Id',
-      dataType: destType === 'sql' ? DEFAULT_ID_TYPE : DEFAULT_CSV_TYPE,
+      dataType: isSqlLikeDestType(destType) ? DEFAULT_ID_TYPE : DEFAULT_CSV_TYPE,
       mappingValueType: 'string', isNullable: false, maxLength: null,
     }],
   };
 }
 
-function buildSchemaChanges(tables: ResolvedTable[], destType: 'sql' | 'csv'): MappingSchemaChanges {
-  const fallbackType = destType === 'sql' ? DEFAULT_SQL_TYPE : DEFAULT_CSV_TYPE;
+function buildSchemaChanges(tables: ResolvedTable[], destType: DestinationWizardType): MappingSchemaChanges {
+  const fallbackType = isSqlLikeDestType(destType) ? DEFAULT_SQL_TYPE : DEFAULT_CSV_TYPE;
 
   const tablesToCreate: MappingSchemaTableToCreate[] = tables.filter(t => t.isNew).map(t => ({
     name: t.bare,
@@ -336,7 +345,7 @@ export function pruneOrphanedMappingRows(mappingRows: MappingRow[], sqlTables: D
 
 export interface BuildMappingSummaryParams {
   sourceVendor: string;
-  destType: 'sql' | 'csv';
+  destType: DestinationWizardType;
   destLabel: string;
   mappingRows: MappingRow[];
   sqlTables: DestinationTable[];
@@ -406,7 +415,12 @@ export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): 
 
   return {
     source: sourceVendor,
-    destination: destType === 'sql' ? 'SQL' : 'CSV',
+    destination:
+      destType === 'sql' ? 'SQL'
+        : destType === 'mysql' ? 'MYSQL'
+        : destType === 'postgres' ? 'POSTGRESQL'
+        : destType === 'mongo' ? 'MONGODB'
+        : 'CSV',
     sourceConnectionId,
     destinationId,
     mappings,
@@ -453,7 +467,7 @@ function instanceFromSummary(instance: MappingSummaryInstance | null | undefined
   return { type: instance.type, n: instance.n, field: instance.field, op: instance.op, value: instance.value, aggregate: instance.aggregate };
 }
 
-export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destType: 'sql' | 'csv'): AppliedMappingSummary {
+export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destType: DestinationWizardType): AppliedMappingSummary {
   const mappingRows: MappingRow[] = [];
   const targetByResource: Record<string, string> = {};
   const extraTablesByGroup: Record<string, string[]> = {};
@@ -500,7 +514,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
         ? schemaDef.columns.map(c => ({ name: c.name, dataType: c.dataType, mappingValueType: 'string', isNullable: true, maxLength: null }))
         : table.columns.map(c => ({
             name: c.column,
-            dataType: destType === 'sql' ? DEFAULT_SQL_TYPE : DEFAULT_CSV_TYPE,
+            dataType: isSqlLikeDestType(destType) ? DEFAULT_SQL_TYPE : DEFAULT_CSV_TYPE,
             mappingValueType: 'string', isNullable: true, maxLength: null,
             origin: columnsAdded.has(c.column) ? 'userCreated' as const : undefined,
           }));

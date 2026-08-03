@@ -6,6 +6,7 @@ import { ToastService } from '../../../../services/toast.service';
 import { EPIC_ENV } from '../../../../data/epic-environments.data';
 import { EnvKey } from '../../../../models/epic-env.model';
 import { FullDiscoveredValues, ConnectValues } from '../../models/epic-config.model';
+import { OAUTH_DEFAULT_URLS } from '../../../../core/api-endpoints';
 
 @Component({
   selector: 'app-epic-step-connect',
@@ -26,7 +27,7 @@ export class EpicStepConnectComponent implements OnInit {
   readonly discoveredValues  = signal<FullDiscoveredValues | null>(null);
 
   readonly form = this.fb.nonNullable.group({
-    appName:          ['FHIRBridge Provider Launch', Validators.required],
+    appName:          ['Segue Provider Launch', Validators.required],
     epicAudience:     ['provider-ehr-launch', Validators.required],
     environment:      ['sandbox', Validators.required],
     sandboxClientId:  [''],
@@ -34,8 +35,8 @@ export class EpicStepConnectComponent implements OnInit {
     productionClientId: [''],
     organization:     ['', Validators.required],
     approvalStatus:   ['sandbox-registered'],
-    launchUrl:        ['https://fhirbridge.com/launch'],
-    redirectUri:      ['http://localhost:5000/api/v1/oauth/callback'],
+    launchUrl:        [OAUTH_DEFAULT_URLS.launchUrl],
+    redirectUri:      [OAUTH_DEFAULT_URLS.redirectUri],
     launchModeEnforcement: ['ehr-only'],
     enabledScopes:    [this._defaultScopes()],
     discoveryMode:    ['smart'],
@@ -160,7 +161,7 @@ export class EpicStepConnectComponent implements OnInit {
     const v = this.form.value;
     const dv = this.discoveredValues();
     return {
-      appName:           v.appName ?? 'FHIRBridge Provider Launch',
+      appName:           v.appName ?? 'Segue Provider Launch',
       epicAudience:      v.epicAudience ?? 'provider-ehr-launch',
       environment:       v.environment ?? 'sandbox',
       sandboxClientId:   v.sandboxClientId ?? '',
@@ -171,8 +172,8 @@ export class EpicStepConnectComponent implements OnInit {
       fhirBaseUrl:       dv?.fhirBaseUrl ?? v.epicBaseUrl ?? '',
       tokenEndpoint:     dv?.tokenEndpoint ?? '',
       authzEndpoint:     dv?.authzEndpoint ?? '',
-      launchUrl:         v.launchUrl ?? 'https://fhirbridge.com/launch',
-      redirectUri:       v.redirectUri ?? 'http://localhost:5000/api/v1/oauth/callback',
+      launchUrl:         v.launchUrl ?? OAUTH_DEFAULT_URLS.launchUrl,
+      redirectUri:       v.redirectUri ?? OAUTH_DEFAULT_URLS.redirectUri,
     };
   }
 

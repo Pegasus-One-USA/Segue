@@ -19,6 +19,10 @@ public interface ISourceApplicationStrategy
     /// <summary>The single application type this strategy is responsible for.</summary>
     ApplicationType Handles { get; }
 
+    /// <summary>Which FHIR resource type a user-to-FHIR-context binding enforces for this application type — see
+    /// <see cref="FhirContextBindingKind"/>.</summary>
+    FhirContextBindingKind BindingResourceType { get; }
+
     /// <summary>The invariant description of this application type's OAuth flow and configuration surfaces.</summary>
     SourceApplicationDescriptor Describe();
 

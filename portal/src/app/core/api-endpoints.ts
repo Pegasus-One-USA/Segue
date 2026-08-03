@@ -6,6 +6,20 @@ import { environment } from '../../environments/environment';
 
 export const API_V1_BASE = `${environment.apiBase}/api/v1`;
 
+// The scheme+host+port the FHIRBridge API actually answers on — what an EHR needs registered as the
+// redirect/launch URI. environment.apiBase is empty in production (the portal is served same-origin by
+// FHIRBridge.Gateway, see environment.prod.ts), so window.location.origin is the correct fallback there;
+// in dev, apiBase already carries the API's own separate host:port (e.g. http://localhost:5000), which is
+// NOT the same as the portal's own origin (e.g. http://localhost:4200).
+export const APP_ORIGIN = environment.apiBase || (typeof window !== 'undefined' ? window.location.origin : '');
+
+/** Default values for the Epic app-registration fields an admin would otherwise have to type in by hand —
+ *  always resolved from the actual deployment host, never a hardcoded placeholder domain. */
+export const OAUTH_DEFAULT_URLS = {
+  redirectUri: `${APP_ORIGIN}/api/v1/oauth/callback`,
+  launchUrl:   `${APP_ORIGIN}/api/v1/oauth/launch`,
+};
+
 // ─── Auth (AuthController — api/v1/auth) ────────────────────────────────────────
 export const AUTH_ENDPOINTS = {
   login:          `${API_V1_BASE}/auth/internal/login`,
@@ -62,10 +76,22 @@ export const EHR_ENDPOINTS_ENDPOINTS = {
 // ─── Source Connections (ConfigurationsController — api/v1/source-connections) ─
 export const SOURCE_CONNECTIONS_ENDPOINTS = {
   list: `${API_V1_BASE}/source-connections`,
+  paged: `${API_V1_BASE}/source-connections/paged`,
   byId: (id: string) => `${API_V1_BASE}/source-connections/${id}`,
   // WorkflowEndpoints, not ConfigurationsController — the usage check has to walk every workflow's Source
   // nodes, which only the Runtime workflow store can answer.
   usage: `${API_V1_BASE}/workflows/source-connection-usage`,
+  // SourceConnectionsController — not scoped to an existing connection id, since the wizard calls this before
+  // a connection is saved.
+  generateSigningKey: `${API_V1_BASE}/source-connections/generate-signing-key`,
+  importSigningKey: `${API_V1_BASE}/source-connections/import-signing-key`,
+};
+
+// ─── Notification Settings (NotificationSettingsController — api/v1/notification-settings) ─
+export const NOTIFICATION_SETTINGS_ENDPOINTS = {
+  get:      `${API_V1_BASE}/notification-settings`,
+  update:   `${API_V1_BASE}/notification-settings`,
+  testSend: `${API_V1_BASE}/notification-settings/test-send`,
 };
 
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
@@ -113,6 +139,24 @@ export const CORS_ORIGINS_ENDPOINTS = {
   byId: (id: string) => `${API_V1_BASE}/system/allowed-origins/${id}`,
 };
 
+// ─── System Settings (SystemSettingsController — api/v1/system/settings) ───────
+// SuperAdmin-only: runtime-editable config values that override their appsettings.json default
+// (e.g. worker cadence, rate limits, MFA issuer) without a redeploy. Keyed by the same dotted
+// section name as the appsettings key it overrides.
+export const SYSTEM_SETTINGS_ENDPOINTS = {
+  list: `${API_V1_BASE}/system/settings`,
+  byKey: (key: string) => `${API_V1_BASE}/system/settings/${encodeURIComponent(key)}`,
+  decryptProvisionedSecret: `${API_V1_BASE}/system/settings/decrypt-provisioned-secret`,
+};
+
+// ─── App-level signing secrets (AppSecretsController — api/v1/system/app-secrets) ──
+// SuperAdmin-only: JWT signing key / download-link signing secret, auto-generated on first boot —
+// this surface only exposes metadata + on-demand regeneration, never the value itself.
+export const APP_SECRETS_ENDPOINTS = {
+  list: `${API_V1_BASE}/system/app-secrets`,
+  regenerate: (secretName: string) => `${API_V1_BASE}/system/app-secrets/${secretName}/regenerate`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
@@ -120,12 +164,66 @@ export const SOURCE_DISCOVERY_ENDPOINTS = {
 
 // ─── Execution History (WorkflowEndpoints — api/v1/workflow-runs) ──────────────
 // Backs the Runtime Plane's execution history (the path "Run" and interactive EHR/standalone launches actually
-// take). The Configured Pipeline has its own parallel route-execution history under /pipeline-runs/route-executions,
-// used only by the route/schedule/webhook path — not currently surfaced in the portal since it has no UI trigger.
+// take). See PIPELINE_RUNS_ENDPOINTS below for the Configured Pipeline plane's parallel history.
 export const EXECUTION_HISTORY_ENDPOINTS = {
   list:      `${API_V1_BASE}/workflow-runs`,
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
+  statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
+};
+
+// ─── Pipeline Executions (PipelineRunsController — api/v1/pipeline-runs) ───────
+// The Configured Pipeline plane's route-execution history — scheduler/webhook-triggered runs against
+// ResourcePipelineRoute, distinct from the Runtime DAG plane above. UnifiedAdmin-gated server-side.
+export const PIPELINE_RUNS_ENDPOINTS = {
+  routeExecutions:         `${API_V1_BASE}/pipeline-runs/route-executions`,
+  routeExecutionById:      (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}`,
+  routeExecutionResources: (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}/resources`,
+};
+
+// ─── Governance (GovernanceController — api/v1/governance) ─────────────────────
+// Read-only: audit trail, authentication log, patient/resource data-access log, security events.
+// Every log type shares the same `correlationId` query param, letting the portal jump from one
+// execution's CorrelationId straight to everything else that happened during it.
+export const GOVERNANCE_ENDPOINTS = {
+  auditLogs:          `${API_V1_BASE}/governance/audit-logs`,
+  authenticationLogs: `${API_V1_BASE}/governance/authentication-logs`,
+  dataAccessLogs:     `${API_V1_BASE}/governance/data-access-logs`,
+  securityEvents:     `${API_V1_BASE}/governance/security-events`,
+  authorizationLogs:  `${API_V1_BASE}/governance/authorization-logs`,
+  hipaaAuditReport:   `${API_V1_BASE}/governance/reports/hipaa-audit`,
+  soc2EvidenceReport: `${API_V1_BASE}/governance/reports/soc2-evidence`,
+  smartLaunchLogs:    `${API_V1_BASE}/governance/smart-launch-logs`,
+  correlationSearch:  `${API_V1_BASE}/governance/correlation-search`,
+  retentionPolicies:  `${API_V1_BASE}/governance/retention-policies`,
+  logSettings:        `${API_V1_BASE}/governance/log-settings`,
+  archives:           `${API_V1_BASE}/governance/archives`,
+  restoreArchive:     (dataClass: string) => `${API_V1_BASE}/governance/archives/${encodeURIComponent(dataClass)}/restore`,
+  dataLineage:        (resourceRecordId: string) => `${API_V1_BASE}/governance/data-lineage/${resourceRecordId}`,
+  revealLineageField: (resourceRecordId: string, targetField: string) =>
+    `${API_V1_BASE}/governance/data-lineage/${resourceRecordId}/fields/${encodeURIComponent(targetField)}/reveal`,
+  alertRules:         `${API_V1_BASE}/governance/alert-rules`,
+  alertRuleById:      (id: string) => `${API_V1_BASE}/governance/alert-rules/${id}`,
+  setAlertRuleEnabled: (id: string, isEnabled: boolean) => `${API_V1_BASE}/governance/alert-rules/${id}/enabled?isEnabled=${isEnabled}`,
+  alerts:             `${API_V1_BASE}/governance/alerts`,
+  acknowledgeAlert:   (id: string) => `${API_V1_BASE}/governance/alerts/${id}/acknowledge`,
+};
+
+// ─── Operations (OperationsController — api/v1/operations) ─────────────────────
+// Read-only: scheduler dispatch history, retry history, error logs, outbound API request logs.
+export const OPERATIONS_ENDPOINTS = {
+  schedulerHistory: `${API_V1_BASE}/operations/scheduler-history`,
+  retryHistory:     `${API_V1_BASE}/operations/retry-history`,
+  errors:           `${API_V1_BASE}/operations/errors`,
+  apiRequests:      `${API_V1_BASE}/operations/api-requests`,
+  exports:          `${API_V1_BASE}/operations/exports`,
+  notifications:    `${API_V1_BASE}/operations/notifications`,
+  validationFailures: `${API_V1_BASE}/operations/validation-failures`,
+  endpointHealth:     `${API_V1_BASE}/operations/endpoint-health`,
+  queueMonitor:       `${API_V1_BASE}/operations/queue-monitor`,
+  apiAnalytics:       `${API_V1_BASE}/operations/api-analytics`,
+  systemHealth:       `${API_V1_BASE}/operations/system-health`,
+  schedulerSummary:   `${API_V1_BASE}/operations/scheduler-summary`,
 };
 
 // ─── Workflows (minimal APIs — api/v1/workflows, workflow-catalog) ─────────────
@@ -148,4 +246,5 @@ export const WORKFLOW_ENDPOINTS = {
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
+  runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,
 };

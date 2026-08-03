@@ -71,6 +71,9 @@ CodeCoverage/
 # Generated Marketplace packages
 infra/marketplace/package/
 infra/marketplace/*.zip
+
+# Local manual publish output (dotnet publish / ng build staging for manual deploys)
+publish/
 # NUnit
 *.VisualState.xml
 TestResult.xml

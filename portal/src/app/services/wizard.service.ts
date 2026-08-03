@@ -13,6 +13,7 @@ import { AUDIENCE_FIELD_CONFIG, EpicAudience } from '../components/epic-source-w
 import { EhrVendor } from '../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel, SourceConnectionRequest, AuthenticationTypeModel } from '../source-connections/models/source-connection.model';
+import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
 
 export type WizardMode = 'canvas' | 'entity';
 
@@ -90,6 +91,11 @@ export class WizardService {
   readonly ehrType      = signal<EhrVendor>('Epic');
   /** The SourceConnection id being edited in entity mode; null when creating new. */
   readonly entityId     = signal<string | null>(null);
+  /** The full DTO passed to openEntity() — entity mode's equivalent of editingFields() below. Named signals here
+   *  only ever cover a handful of fields; long-tail data entity mode has no other way to restore (JWT key
+   *  material, CDS Hooks, retrieval config, ...) reads back from this directly, the same way canvas-mode editing
+   *  reads from editingFields(). Null when creating new or in canvas mode. */
+  readonly entityDto    = signal<SourceConnectionModel | null>(null);
   /** Bumped after every successful entity-mode save so list pages can react via an effect() without a dialog. */
   readonly saved        = signal(0);
   /** Emits once per save() call, after the create/update HTTP call actually settles — save() itself is
@@ -143,8 +149,8 @@ export class WizardService {
   readonly clientId     = signal('');
   readonly authMethod   = signal<'public' | 'secret' | 'jwt'>('secret');
   readonly epicAudience = signal('provider-ehr-launch');
-  readonly redirectUri  = signal('http://localhost:5000/api/v1/oauth/callback');
-  readonly launchUrlWiz = signal('https://fhirbridge.com/launch');
+  readonly redirectUri  = signal(OAUTH_DEFAULT_URLS.redirectUri);
+  readonly launchUrlWiz = signal(OAUTH_DEFAULT_URLS.launchUrl);
   readonly isEditing    = computed(() => !!this.store.editingNodeId() || !!this.entityId());
 
   /** Raw field bag of the node being edited (or null when creating new) — the source of truth for every persisted
@@ -176,6 +182,7 @@ export class WizardService {
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
     this.entityId.set(null);
+    this.entityDto.set(null);
 
     const node = existingNodeId ? this.store.byId(existingNodeId) : undefined;
     const f = (node?.fields ?? {}) as Record<string, string>;
@@ -200,8 +207,8 @@ export class WizardService {
     this.clientId.set(f['Client ID'] ?? '');
     this.authMethod.set(((f['Auth method'] as string) || 'secret') as 'public' | 'secret' | 'jwt');
     this.epicAudience.set(f['Epic audience'] || f['App key'] || 'provider-ehr-launch');
-    this.redirectUri.set(f['Redirect URI'] ?? 'http://localhost:5000/api/v1/oauth/callback');
-    this.launchUrlWiz.set(f['Launch URL'] ?? 'https://fhirbridge.com/launch');
+    this.redirectUri.set(f['Redirect URI'] ?? OAUTH_DEFAULT_URLS.redirectUri);
+    this.launchUrlWiz.set(f['Launch URL'] ?? OAUTH_DEFAULT_URLS.launchUrl);
     this.trustedIssuers.set(f['Trusted issuers'] ?? '');
 
     this.store.editingNodeId.set(existingNodeId ?? null);
@@ -216,6 +223,7 @@ export class WizardService {
     this.wizardMode.set('entity');
     this.readonlyMode.set(!!opts?.readonly);
     this.entityId.set(dto?.id ?? null);
+    this.entityDto.set(dto);
     this.ehrType.set(dto?.sourceSystemType ?? 'Epic');
 
     this.env.set('sandbox');
@@ -240,8 +248,8 @@ export class WizardService {
     this.epicAudience.set(
       (dto?.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType]) || 'provider-ehr-launch'
     );
-    this.redirectUri.set(dto?.interactive?.redirectUris?.[0] ?? 'http://localhost:5000/api/v1/oauth/callback');
-    this.launchUrlWiz.set(dto?.interactive?.launchUrl ?? 'https://fhirbridge.com/launch');
+    this.redirectUri.set(dto?.interactive?.redirectUris?.[0] ?? OAUTH_DEFAULT_URLS.redirectUri);
+    this.launchUrlWiz.set(dto?.interactive?.launchUrl ?? OAUTH_DEFAULT_URLS.launchUrl);
     this.trustedIssuers.set(dto?.interactive?.trustedIssuers?.join(', ') ?? '');
 
     this.store.editingNodeId.set(null);
@@ -256,6 +264,7 @@ export class WizardService {
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
     this.entityId.set(null);
+    this.entityDto.set(null);
   }
 
   // ── step navigation ───────────────────────────────────────────────────────
@@ -391,6 +400,11 @@ export class WizardService {
         privateKeyKeyVaultName:   liveAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
         privateKeySecretName:     liveAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
         keyId:                    liveAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
+        // Persisted so reopening this connection (Settings → Source Connections, which has no workflow node to
+        // recover it from otherwise — see EpicAudienceFormComponent's liveJwksUrl remarks) shows back whatever URL
+        // was actually registered with the EHR, hosted or externally-typed, instead of only ever recomputing
+        // FHIRBridge's own hosted URL guess.
+        jwksUrl:                  liveAuthMethod === 'jwt' ? (fields['JWKS URL'] || null) : null,
       },
       interactive: audCfg.showRedirect
         ? {
@@ -399,12 +413,27 @@ export class WizardService {
             trustedIssuers:  this.trustedIssuers().trim() ? [this.trustedIssuers().trim()] : [],
           }
         : null,
-      retrieval: audCfg.showRetrieval
+      // Retrieval (search criteria, resource types, scopes, pagination, bulk-export settings) is workflow-specific,
+      // not connection-level — entity mode (Settings → Source Connections) manages only the reusable connection,
+      // so it never persists a retrieval payload here regardless of what the audience would otherwise show in
+      // canvas mode. See EpicAudienceFormComponent.showRetrievalSection, which hides the corresponding UI section.
+      retrieval: (this.wizardMode() === 'canvas' && audCfg.showRetrieval)
         ? {
             retrievalMethod:        fields['Retrieval method key'] || 'search-rest',
             resourceTypes:          retrievalResourceTypes,
             searchCriteria:         fields['Search criteria'] || null,
             incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
+            // Bulk Export fields — EpicAudienceFormComponent.save() has always written these into `fields`
+            // ('Export scope' / 'Group ID' / 'Patient ID / list' / 'FHIR output format'), but this builder never
+            // read them back out, so every Bulk Export connection silently saved with a null scope/group/patient
+            // list/output format regardless of what the form showed. Patient ID / list is comma-separated in the
+            // form, same split-and-trim pattern as Retrieval resource type above.
+            exportScope:            fields['Export scope'] || null,
+            groupId:                fields['Group ID'] || null,
+            patientIds:             fields['Patient ID / list']
+              ? fields['Patient ID / list'].split(',').map(s => s.trim()).filter(Boolean)
+              : [],
+            outputFormat:           fields['FHIR output format'] || null,
           }
         : null,
     };

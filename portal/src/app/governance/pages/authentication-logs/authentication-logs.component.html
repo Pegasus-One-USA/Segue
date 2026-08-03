@@ -1,0 +1,97 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Authentication Logs</h1>
+    <p class="page-sub">Login, logout, MFA, and lockout events — required HIPAA §164.312(b) evidence.</p>
+  </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one sign-in related event</strong> — a successful login, a failed attempt, a logout, an MFA code check, a single sign-on attempt, or a lockout. This includes both portal user logins and the backend token exchanges Segue makes with EHR systems on your behalf.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Failed attempts</h4>
+        <p>A failed login is normal, everyday activity (a mistyped password) — not automatically something to investigate. Repeated failures against the same account in a short time is the pattern worth watching; that's exactly what triggers an account lockout, which shows up separately in Security Events.</p>
+      </section>
+    </div>
+  </details>
+
+  <div class="filter-bar">
+    <input
+      type="search"
+      class="correlation-input"
+      placeholder="Filter by Correlation ID…"
+      [value]="correlationId()"
+      (input)="onCorrelationIdChange($any($event.target).value)"
+      (keyup.enter)="load()"
+    />
+    <button class="btn" type="button" (click)="load()">Search</button>
+    <button class="btn btn-ghost" type="button" (click)="reset()">Reset</button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="result().items" class="data-table">
+
+        <ng-container matColumnDef="occurredOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Timestamp</th>
+          <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="userEmail">
+          <th mat-header-cell *matHeaderCellDef>User</th>
+          <td mat-cell *matCellDef="let r">{{ r.userEmail || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="authenticationType">
+          <th mat-header-cell *matHeaderCellDef>Type</th>
+          <td mat-cell *matCellDef="let r">{{ r.authenticationType }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="success">
+          <th mat-header-cell *matHeaderCellDef>Result</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class.status-success]="r.success" [class.status-fail]="!r.success">
+              {{ r.success ? 'Success' : 'Failed' }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="failureReason">
+          <th mat-header-cell *matHeaderCellDef>Reason</th>
+          <td mat-cell *matCellDef="let r">{{ r.failureReason || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="ipAddress">
+          <th mat-header-cell *matHeaderCellDef>IP Address</th>
+          <td mat-cell *matCellDef="let r"><span class="mono">{{ r.ipAddress || '—' }}</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="correlationId">
+          <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.correlationId || '—' }}</code></td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (result().items.length === 0 && !loading()) {
+      <div class="empty-state">No authentication entries found.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <app-pagination-bar
+        [pageIndex]="pageIndex()"
+        [pageSize]="pageSize()"
+        [totalCount]="result().totalCount"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        (pageChange)="onPageChange($event)"
+      />
+    }
+  </div>
+</div>

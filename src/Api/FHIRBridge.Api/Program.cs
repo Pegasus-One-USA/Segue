@@ -2,11 +2,14 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
+using FHIRBridge.Api.Hubs;
 using FHIRBridge.Api.Security;
+using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using Microsoft.AspNetCore.DataProtection;
 using FHIRBridge.Application;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
@@ -15,10 +18,12 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -27,21 +32,23 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Every non-dev deployment MUST set ASPNETCORE_URLS explicitly (the Windows Service's registry
+// Environment value — see deploy/windows/Deploy-FHIRBridge*.ps1). Kestrel's own built-in fallback
+// (http://localhost:5000) is a shared, unconfigurable port; silently landing on it risks colliding
+// with another environment's service, or an unrelated application entirely, on the same host.
+if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+{
+    throw new InvalidOperationException(
+        "ASPNETCORE_URLS is not set for this environment. Refusing to fall back to Kestrel's default port — " +
+        "set it explicitly via this Windows Service's registry Environment value (deploy/windows/Deploy-FHIRBridge*.ps1).");
+}
+
 // No-op unless the process is actually started by the Windows Service Control Manager (e.g. `dotnet run`
 // and console execution are unaffected) — lets the same published output run standalone or as a service.
 builder.Host.UseWindowsService(options => options.ServiceName = "FHIRBridge.Api");
 
 builder.Host.UseSerilog((context, loggerConfig) =>
     loggerConfig.ConfigureFhirBridge(context.Configuration, "FHIRBridge.Api"));
-
-if (builder.Environment.IsDevelopment())
-{
-    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-    {
-        ["Authentication:SigningKey"] = builder.Configuration["Authentication:SigningKey"]
-            ?? "StepBase-FHIRBridge-local-development-signing-key-2026-06-22"
-    });
-}
 
 builder.Services
     .AddControllers()
@@ -56,34 +63,44 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
-// Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector).
-// In production the key ring MUST be persisted to shared storage so tokens survive restarts and work
-// across instances (otherwise each node/restart mints a new key and can't decrypt the others' tokens).
-// Set DataProtection:KeyRingPath to a shared, backed-up volume (Azure Files, K8s PVC, etc.). Without a
-// path we keep the default (machine-local) ring, which is fine only for single-instance dev.
+// Data Protection backs the encrypted OAuth launch-context and state tokens (ILaunchTokenProtector) and the
+// at-rest encryption of app-provisioned secrets (DbSecretStore). The key ring MUST be persisted or long-lived
+// tokens — especially EHR-launch URLs, which the EHR stores and invokes much later — stop decrypting after a
+// restart/redeploy and surface as "The launch context is invalid or has been tampered with." on launch.
+//   • A MULTI-INSTANCE deployment MUST set DataProtection:KeyRingPath to SHARED, backed-up storage
+//     (Azure Files, K8s PVC, etc.) so every node shares one ring.
+//   • When no path is configured we still persist to a stable, user-writable local folder (never an ephemeral
+//     ring) so single-instance restarts keep working; a multi-instance deployment without a shared path is warned.
 var dataProtection = builder.Services.AddDataProtection()
     .SetApplicationName(builder.Configuration["DataProtection:ApplicationName"] ?? "FHIRBridge");
 
 var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
-if (!string.IsNullOrWhiteSpace(keyRingPath))
+if (string.IsNullOrWhiteSpace(keyRingPath))
 {
-    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+    keyRingPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "FHIRBridge",
+        "dataprotection-keys");
+
+    if (!builder.Environment.IsDevelopment())
+    {
+        Console.Error.WriteLine(
+            $"[WARN] DataProtection:KeyRingPath is not set; using a machine-local key ring at '{keyRingPath}'. " +
+            "OAuth/launch tokens will NOT be decryptable across instances — set a shared, persistent path for " +
+            "any multi-instance deployment.");
+    }
 }
-else if (!builder.Environment.IsDevelopment())
-{
-    // Surface the misconfiguration loudly instead of silently issuing un-shareable keys in production.
-    Console.Error.WriteLine(
-        "[WARN] DataProtection:KeyRingPath is not set. In a multi-instance deployment, OAuth/launch " +
-        "tokens will not be decryptable across instances or restarts. Configure a shared key-ring path.");
-}
+
+Directory.CreateDirectory(keyRingPath);
+dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "FHIRBridge API",
+        Title = "Segue API",
         Version = "v1",
-        Description = "REST API for FHIRBridge — FHIR data integration and transformation platform."
+        Description = "REST API for Segue — FHIR data integration and transformation platform."
     });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -110,9 +127,14 @@ builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+// Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
+// from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
+// anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
+// of whether an exporter is configured (see ObservabilityOptions.Enabled's remarks).
+builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.Api");
+
 builder.Services
     .AddFHIRBridgeApplication()
-    .AddPatientStandaloneApplicationServices()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
     .AddWorkflowCore()
     .AddWorkflowInfrastructure();
@@ -127,6 +149,13 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("FHIRBr
 {
     builder.Services.AddWorkflowSqlPersistence(builder.Configuration);
 }
+
+// Backs RunStatusHub — pushes workflow-run status changes (Running/Succeeded/Failed) to the Dashboard and
+// Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's
+// remarks: only registered in this host, so RankedWorkflowOrchestrator resolves it as null (and simply skips the
+// live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
@@ -156,6 +185,7 @@ builder.Services.AddAuthorization(options =>
             });
     }
 });
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, GovernanceAuditingAuthorizationMiddlewareResultHandler>();
 // The "Portal" policy is built per-request by DynamicPortalCorsPolicyProvider from
 // IAllowedCorsOriginsCache (Portal:AllowedOrigins config floor ∪ AllowedCorsOrigins DB rows), not a
 // fixed WithOrigins(...) list — so a SuperAdmin adding/removing an origin via the admin screen takes
@@ -164,7 +194,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddCors();
 builder.Services.AddSingleton<ICorsPolicyProvider, DynamicPortalCorsPolicyProvider>();
 builder.Services.AddOptions<AllowedCorsOriginsOptions>()
-    .Configure(options => options.RequireHttps = !builder.Environment.IsDevelopment());
+    .Configure(options => options.RequireHttps = false);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -183,17 +213,31 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 // Rate limiting (HIPAA/SOC2 CC6.2): throttle unauthenticated credential + ingestion endpoints
 // to blunt brute-force and abuse. Partitioned per client IP; sensitive endpoints opt in via
-// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*".
-builder.Services.AddRateLimiter(options =>
+// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*",
+// with a SystemSettings DB row (same key) overriding the appsettings value if present. The .NET rate
+// limiter builds its partitioned limiters once at startup, so a DB override here takes effect on the
+// next process restart, not live — see ISystemSettingsCache for knobs that apply without a restart.
+using (var settingsBootstrapScope = builder.Services.BuildServiceProvider().CreateScope())
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    var settingsCache = settingsBootstrapScope.ServiceProvider
+        .GetRequiredService<FHIRBridge.Application.Abstractions.Caching.ISystemSettingsCache>();
 
-    var authPermit = builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10;
-    var authWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5;
-    var oauthPermit = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:PermitPerWindow") ?? 30;
-    var oauthWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:OAuth:WindowMinutes") ?? 5;
-    var webhookPermit = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120;
-    var webhookWindowMinutes = builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1;
+    var authPermit = settingsCache.GetIntAsync(
+        "RateLimiting:Auth:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitPerWindow") ?? 10, default).GetAwaiter().GetResult();
+    var authWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:Auth:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowMinutes") ?? 5, default).GetAwaiter().GetResult();
+    var oauthPermit = settingsCache.GetIntAsync(
+        "RateLimiting:OAuth:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:OAuth:PermitPerWindow") ?? 30, default).GetAwaiter().GetResult();
+    var oauthWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:OAuth:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:OAuth:WindowMinutes") ?? 5, default).GetAwaiter().GetResult();
+    var webhookPermit = settingsCache.GetIntAsync(
+        "RateLimiting:Webhook:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120, default).GetAwaiter().GetResult();
+    var webhookWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:Webhook:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1, default).GetAwaiter().GetResult();
+
+    builder.Services.AddRateLimiter(options =>
+    {
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("auth", context =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -227,11 +271,26 @@ builder.Services.AddRateLimiter(options =>
 
     static string ClientPartitionKey(HttpContext context) =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-});
+    });
+}
 
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+
+// Pushes the same CorrelationId every downstream consumer (HttpContextCurrentUserService, the exception
+// handler below) resolves onto every Serilog line for this request — including routine sub-500 rejections,
+// which deliberately never reach a governance table (see the exception handler's comment) and would
+// otherwise be findable only by full-text-searching the exception message/path in Seq.
+app.Use(async (context, next) =>
+{
+    var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+    System.Diagnostics.Activity.Current?.SetTag("correlation_id", correlationId);
+    using (Serilog.Context.LogContext.PushProperty("CorrelationId", correlationId))
+    {
+        await next();
+    }
+});
 
 // A [StandardPermission(group, action)] whose derived code has no matching
 // RbacSeedData.Permissions entry still gets a policy (see PermissionCatalog.AllPermissionCodes
@@ -255,12 +314,90 @@ app.UseExceptionHandler(errorApp =>
             .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
         if (feature?.Error is null) return;
 
-        app.Logger.LogError(feature.Error, "Unhandled exception on {Path}.", context.Request.Path);
+        var (status, message, trusted, fieldErrors) = MapException(feature.Error);
 
-        var (status, message) = MapException(feature.Error);
+        // A non-5xx message is shown to the client only if it's trusted (author-written UserMessage) or passes the
+        // client-safe filter. Otherwise it's null and the manager emits a generic category message. This is the
+        // choke point that stops raw/HTML/technical exception text from ever leaking, no matter what was thrown.
+        var clientMessage = status >= 500
+            ? null
+            : (trusted ? message : ClientSafeMessage(message));
+
         context.Response.StatusCode  = status;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new { error = message });
+
+        // Below 500, MapException/FHIRBridgeException/NotFoundException already represent an expected, routine
+        // domain outcome (wrong password, duplicate name, stale reference, expired token, RBAC-adjacent auth
+        // rejection) — not an unexpected system fault. These are everyday user behavior, not incidents: many are
+        // already recorded in their own dedicated audit trail (AuthenticationLog, SecurityEvent) by the caller
+        // before it threw. Routing them into ErrorLogs too would flood Operations → Errors with non-actionable
+        // noise and mislabel routine outcomes (e.g. "wrong password") as something needing vendor support. Mirrors
+        // the pattern already used by WorkflowEndpoints.cs's inline FHIRBridgeException catch — skip the Global
+        // Exception Manager (no ErrorLogs row, no reference id) and return the safe message directly.
+        if (status < 500)
+        {
+            app.Logger.LogWarning(feature.Error, "Expected domain failure on {Path}.", context.Request.Path);
+
+            // Not routed through CaptureAsync (no ErrorLogs row at ordinary severity — see comment above), but
+            // still recorded at Severity "Informational" via the lightweight CaptureExpectedAsync path so the
+            // rejection is findable by CorrelationId (e.g. Correlation Search) without appearing in the default
+            // Operations → Errors view. No reference id is surfaced to the client — this is a backend trail only.
+            var expectedExceptionManager = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGlobalExceptionManager>();
+            var expectedCorrelationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+            var expectedActivity = System.Diagnostics.Activity.Current;
+            _ = await expectedExceptionManager.CaptureExpectedAsync(
+                new FHIRBridge.Governance.ExpectedFailure(feature.Error.GetType().Name, feature.Error.Message),
+                new FHIRBridge.Governance.ExceptionContext(
+                    Module: "Api",
+                    Severity: "Informational",
+                    CorrelationId: expectedCorrelationId,
+                    EndpointId: $"{context.Request.Method} {context.Request.Path}",
+                    RequestId: context.TraceIdentifier,
+                    TraceId: expectedActivity?.TraceId.ToString(),
+                    SpanId: expectedActivity?.SpanId.ToString()));
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = clientMessage ?? "The request could not be processed.",
+                message = clientMessage ?? "The request could not be processed.",
+                fieldErrors,
+            });
+            return;
+        }
+
+        app.Logger.LogError(feature.Error, "Unhandled exception on {Path}.", context.Request.Path);
+
+        // Phase 6A – Enterprise Global Exception Management: genuine (5xx) unexpected failures are funneled through
+        // the Global Exception Manager, which assigns a unique ErrorReferenceId, classifies it, persists the full
+        // technical detail (via IGovernanceLogger → ErrorLogs), and returns a safe, user-friendly report. No stack
+        // trace or internal message is ever written to the response.
+        var exceptionManager = context.RequestServices.GetRequiredService<FHIRBridge.Governance.IGlobalExceptionManager>();
+        var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
+        var activity = System.Diagnostics.Activity.Current;
+
+        var report = await exceptionManager.CaptureAsync(
+            feature.Error,
+            new FHIRBridge.Governance.ExceptionContext(
+                Module: "Api",
+                Severity: "Error",
+                CorrelationId: correlationId,
+                EndpointId: $"{context.Request.Method} {context.Request.Path}",
+                RequestId: context.TraceIdentifier,
+                TraceId: activity?.TraceId.ToString(),
+                SpanId: activity?.SpanId.ToString(),
+                UserFriendlyMessageOverride: clientMessage));
+
+        context.Response.Headers["X-Error-Reference-Id"] = report.ErrorReferenceId;
+        // `error`/`message` keep the existing client contract (the Angular sanitizer reads them); the new
+        // `errorReferenceId`/`correlationId`/`category` fields drive the Phase 6A friendly-error dialog.
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = report.UserFriendlyMessage,
+            message = report.UserFriendlyMessage,
+            errorReferenceId = report.ErrorReferenceId,
+            correlationId = report.CorrelationId,
+            category = report.Category.ToString(),
+        });
     });
 });
 
@@ -305,6 +442,7 @@ if (swaggerEnabled)
 }
 
 BootstrapDatabase(app);
+ProvisionAppSecrets(app);
 SyncDiscoveredPermissions(app);
 
 // Serves the Angular portal's production build when it's been copied into wwwroot (see deploy/windows) —
@@ -324,10 +462,10 @@ var sessionGates = new[]
 {
     (Claim: "pwd_change_required",
      Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me" },
-     Message: "Password change is required before using FHIRBridge."),
+     Message: "Password change is required before using Segue."),
     (Claim: "mfa_setup_required",
      Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me" },
-     Message: "Two-factor authentication setup is required before using FHIRBridge."),
+     Message: "Two-factor authentication setup is required before using Segue."),
 };
 
 app.Use(async (context, next) =>
@@ -352,12 +490,24 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 // Enabled by default; can be turned off for hermetic tests or single-tenant deployments that
 // throttle upstream. Policies are always registered so [EnableRateLimiting] metadata resolves.
-if (app.Configuration.GetValue("RateLimiting:Enabled", true))
+// SystemSettings DB override (same key) takes effect on the next restart, same as the permit/window
+// values configured above.
+bool rateLimitingEnabled;
+using (var rateLimitingSettingsScope = app.Services.CreateScope())
+{
+    var settingsCache = rateLimitingSettingsScope.ServiceProvider
+        .GetRequiredService<FHIRBridge.Application.Abstractions.Caching.ISystemSettingsCache>();
+    rateLimitingEnabled = settingsCache.GetBoolAsync(
+        "RateLimiting:Enabled", app.Configuration.GetValue("RateLimiting:Enabled", true), default).GetAwaiter().GetResult();
+}
+
+if (rateLimitingEnabled)
 {
     app.UseRateLimiter();
 }
 app.MapControllers();
 app.MapWorkflowEndpoints();
+app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
 // and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html
@@ -390,6 +540,20 @@ static void BootstrapDatabase(WebApplication app)
     {
         seeder.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
+
+    // One-time: populate SystemSettings with the value each DB-backed config key is already effectively
+    // using (appsettings/code default) — so shipping this feature changes zero behavior until an admin
+    // edits a row. Insert-only; never overwrites a row an admin has since customized.
+    var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
+    systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+}
+
+// Generates and persists the JWT signing key / download-link signing secret the first time an install has
+// none (see AppSecretProvisioner's remarks) — must run after BootstrapDatabase, since the provisioned value
+// is stored via DbSecretStore, which needs the ProvisionedSecrets table to already exist.
+static void ProvisionAppSecrets(WebApplication app)
+{
+    AppSecretProvisioner.ProvisionAsync(app.Services, CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only
@@ -530,39 +694,65 @@ static async Task SyncDiscoveredPermissionsAsync(
     }
 }
 
-static (int status, string message) MapException(Exception ex)
+// Returns the HTTP status, a candidate client message, whether that message is TRUSTED (author-written and safe
+// to show verbatim), and — only for RequestValidationException — the field-keyed messages a FluentValidation
+// check produced. Only FHIRBridgeException.UserMessage is trusted; every other message is derived from a raw
+// exception and MUST pass ClientSafeMessage before it can reach a client (see the exception handler).
+static (int status, string message, bool trusted, IReadOnlyDictionary<string, string[]>? fieldErrors) MapException(Exception ex)
 {
-    // NotFoundException (and other FHIRBridgeException subtypes) are expected domain-level failures — e.g. a
-    // launch/checkpoint URL whose referenced WorkflowDefinition/SourceConnection/Route no longer exists — and must
-    // reach the message-based classification below rather than falling into the generic 500 bucket.
-    if (ex is NotFoundException)
-        return (StatusCodes.Status404NotFound, ex.Message);
+    // Field-shaped input validation (FluentValidation) — the only branch that carries fieldErrors, so the UI can
+    // map a rejection back onto the specific control that caused it instead of just a flat message.
+    if (ex is RequestValidationException rve)
+        return (StatusCodes.Status400BadRequest, rve.UserMessage, true, rve.FieldErrors);
 
-    if (ex is not InvalidOperationException and not UnauthorizedAccessException
-                                             and not ArgumentException
-                                             and not FHIRBridgeException)
-        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
+    // FHIRBridgeException subtypes are deliberate, client-safe domain failures. UserMessage (not Message) is the
+    // author-written text intended for end users — Message keeps the entity name + raw id for logs only.
+    if (ex is NotFoundException nfe)
+        return (StatusCodes.Status404NotFound, nfe.UserMessage, true, null);
+    if (ex is FHIRBridgeException fbe)
+        return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null);
+
+    // A parent/cohort-seeding resource type (e.g. Patient) wasn't authorized for this app, so the whole workflow
+    // run was cancelled up front — a short, author-written (trusted) message naming the resource type, rather
+    // than the full inner FHIR error text, so it survives ClientSafeMessage's length/shape filter intact.
+    if (ex is FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException workflowCancelled)
+        return (
+            StatusCodes.Status422UnprocessableEntity,
+            $"Workflow cancelled: this app is not authorized for '{workflowCancelled.ResourceType}', which is " +
+            "required as the parent/cohort scope for this workflow. Check the correlation id for full details.",
+            true,
+            null);
+
+    if (ex is not InvalidOperationException and not UnauthorizedAccessException and not ArgumentException)
+        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", true, null);
 
     if (ex is UnauthorizedAccessException || ex is ArgumentException a && a.Message.Contains("unauthorized"))
-        return (StatusCodes.Status401Unauthorized, ex.Message);
+        return (StatusCodes.Status401Unauthorized, ex.Message, false, null);
 
     var msg = ex.Message;
 
-    // 404 – resource not found
+    // The status classification below still inspects the message, but the message itself is returned UNTRUSTED —
+    // the handler runs it through ClientSafeMessage, so a raw/technical/HTML payload never reaches the client even
+    // if its text happens to contain one of these substrings (e.g. an upstream HTML 404 page contains "not found").
     if (msg.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("does not exist", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status404NotFound, msg);
+        return (StatusCodes.Status404NotFound, msg, false, null);
 
-    // 409 – resource conflict
     if (msg.Contains("already exists", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status409Conflict, msg);
+        return (StatusCodes.Status409Conflict, msg, false, null);
 
-    // 401 – authentication / token failures
     if (msg.Contains("invalid or expired", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("email or password", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("Current password is invalid", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status401Unauthorized, msg);
+        return (StatusCodes.Status401Unauthorized, msg, false, null);
 
-    // 400 – all other domain / validation errors
-    return (StatusCodes.Status400BadRequest, msg);
+    return (StatusCodes.Status400BadRequest, msg, false, null);
 }
+
+// The single guardrail that makes raw exception text safe-by-construction — see FHIRBridge.Governance.SafeErrorText.
+// An untrusted message reaches a client only if it looks like a short, human-written sentence; markup, stack traces,
+// multi-line, and oversized payloads are rejected (null → the caller substitutes a generic message). Reused by the
+// bypassing controllers too, so NO future `throw new SomeException(rawBody)` can leak through any path. Lives in the
+// Governance building block (not Api-only) so Infrastructure call sites (ConfiguredPipelineService,
+// SourceConnectionTestService) can sanitize the same way without a layering violation.
+static string? ClientSafeMessage(string? raw) => FHIRBridge.Governance.SafeErrorText.Sanitize(raw);

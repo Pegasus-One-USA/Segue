@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { MappingRow } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, DestinationWizardType, isSqlLikeDestType } from './field-mapping-summary.model';
 
 /** Just the PK/FK-relevant slice of DestinationColumn — this card only ever needs to show a badge. */
 export interface FmColumnKeyInfo {
@@ -38,7 +38,7 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly tableName = input.required<string>();
   /** True for an added extra (already-existing) table — shows a remove button, hides the table picker. */
   readonly isExtra = input<boolean>(false);
-  readonly destType = input.required<'sql' | 'csv'>();
+  readonly destType = input.required<DestinationWizardType>();
   readonly targetValue = input.required<string>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
@@ -189,7 +189,7 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     });
   }
 
-  targetLabel(): string { return this.destType() === 'sql' ? 'Table' : 'File name'; }
+  targetLabel(): string { return isSqlLikeDestType(this.destType()) ? 'Table' : 'File name'; }
 
   /** "dbo.Patient" -> "Patient" — the relation banner reads better without the repeated schema prefix. */
   relationParentLabel(): string {

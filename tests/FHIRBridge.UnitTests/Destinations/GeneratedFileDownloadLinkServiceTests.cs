@@ -1,7 +1,10 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Infrastructure.Destinations;
+using FHIRBridge.Infrastructure.Security;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace FHIRBridge.UnitTests.Destinations;
 
@@ -14,13 +17,22 @@ public sealed class GeneratedFileDownloadLinkServiceTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "fhirbridge-tests-" + Guid.NewGuid().ToString("N"));
 
-    private GeneratedFileDownloadLinkService CreateService(string signingSecret = "test-secret") =>
-        new(Options.Create(new GeneratedFileDownloadOptions
+    private GeneratedFileDownloadLinkService CreateService(string signingSecret = "test-secret")
+    {
+        var secretAccessor = new AppSecretAccessor();
+        secretAccessor.Initialize(jwtSigningKey: "unused", downloadLinkSigningSecret: signingSecret);
+
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(x => x.GetStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, string defaultValue, CancellationToken _) => defaultValue);
+
+        return new(Options.Create(new GeneratedFileDownloadOptions
         {
-            SigningSecret = signingSecret,
             RootPath = _rootPath,
             PublicBaseUrl = "http://localhost:5000",
-        }));
+        }), secretAccessor, settingsCache.Object);
+    }
 
     private static GeneratedFile SampleFile() => new("Patient_Export.csv", "text/csv", "a,b\n1,2\n"u8.ToArray());
 

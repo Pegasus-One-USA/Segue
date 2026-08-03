@@ -9,7 +9,8 @@ public sealed class WorkflowExecutionContext
         string? triggeredBy = null,
         string? triggerType = null,
         string? targetPatientId = null,
-        string? patientSearchCriteria = null)
+        string? patientSearchCriteria = null,
+        string? callerId = null)
     {
         WorkflowRunId = workflowRunId == Guid.Empty ? Guid.NewGuid() : workflowRunId;
         CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? WorkflowRunId.ToString("N") : correlationId;
@@ -18,6 +19,7 @@ public sealed class WorkflowExecutionContext
         TriggerType = triggerType ?? "Manual";
         TargetPatientId = targetPatientId;
         PatientSearchCriteria = patientSearchCriteria;
+        CallerId = callerId;
     }
 
     public Guid WorkflowRunId { get; }
@@ -46,4 +48,14 @@ public sealed class WorkflowExecutionContext
     /// prior behavior.
     /// </summary>
     public string? PatientSearchCriteria { get; }
+
+    /// <summary>
+    /// Identifies the logged-in end user of the calling third-party app (e.g. HealthApp's Patient Standalone
+    /// session). For an ApplicationType.Patient source, this is used instead of SourceConnectionId to key the
+    /// interactive OAuth token cache, so every pipeline that shares this same logged-in user's session reuses the
+    /// one token their authorization already covers — see FhirSourceConfiguration.CallerId and
+    /// SmartAuthorizationCodeTokenProvider.BuildStoreKey. Null (the default for every existing trigger path)
+    /// preserves the pre-existing per-SourceConnection keying.
+    /// </summary>
+    public string? CallerId { get; }
 }

@@ -5,7 +5,7 @@ using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class SourceConnection : AuditableChildEntity<Guid>
+public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private SourceConnection()
     {
@@ -32,6 +32,7 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public SourceSystemType SourceSystemType { get; private set; }
     public string BaseUrl { get; private set; } = default!;
     public SourceAuthenticationConfiguration Authentication { get; private set; } = default!;

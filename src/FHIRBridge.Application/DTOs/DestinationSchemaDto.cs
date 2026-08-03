@@ -20,7 +20,12 @@ public sealed record DestinationConnectionProbeRequest(
     string? Password = null,
     bool TrustServerCertificate = true,
     bool Encrypt = true,
-    string? ConnectionString = null);
+    string? ConnectionString = null,
+    // PostgreSQL / MySQL only: unlike SQL Server (which always negotiates an encrypted TDS handshake even
+    // against a plain server), these providers refuse to connect at all if SSL is required but the server
+    // doesn't offer it — so this must default false to keep working against local/docker instances with SSL
+    // off, and be explicitly opted into for providers that enforce it (e.g. AWS RDS's rds.force_ssl).
+    bool RequireSsl = false);
 
 /// <summary>Result of a connection probe: whether it connected, any error, and the introspected tables.</summary>
 public sealed record DestinationSchemaProbeDto(

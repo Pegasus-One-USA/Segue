@@ -1,5 +1,6 @@
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Application.Abstractions.Persistence;
 
@@ -10,8 +11,18 @@ namespace FHIRBridge.Application.Abstractions.Persistence;
 /// </summary>
 public interface IConfigurationRepository
 {
+    /// <summary>
+    /// Opens a transaction spanning multiple subsequent writes on this repository (see
+    /// <see cref="IConfigurationTransaction"/>) — used by callers that create several related entities in
+    /// sequence (e.g. a workflow's source, destination, and mapping profiles) and need all-or-nothing semantics
+    /// rather than each write committing independently.
+    /// </summary>
+    Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken);
+
     // ── Source connections ────────────────────────────────────────────────────
     Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct);
+    Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(
+        SourceConnectionFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct);
     Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct);
     Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct);
     Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct);
@@ -22,9 +33,17 @@ public interface IConfigurationRepository
     /// doesn't collide with itself.</summary>
     Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
 
+    // ── Source configurations (workflow-specific retrieval/scopes for a reusable SourceConnection) ────────────
+    Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct);
+    Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct);
+    Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct);
+    Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct);
+    Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken);
+
     // ── Destinations ──────────────────────────────────────────────────────────
     Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct);
-    Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken ct);
+    Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(
+        DestinationFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct);
     Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct);
     Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct);
     Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct);
@@ -68,4 +87,11 @@ public interface IConfigurationRepository
 public sealed record DestinationFilter(
     string? Search,
     DestinationType? DestinationType,
+    bool? IsEnabled);
+
+
+public sealed record SourceConnectionFilter(
+    string? Search,
+    SourceSystemType? SourceSystemType,
+    ApplicationType? ApplicationType,
     bool? IsEnabled);

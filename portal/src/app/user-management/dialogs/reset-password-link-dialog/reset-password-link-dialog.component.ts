@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { ToastService } from '../../../services/toast.service';
 import { PasswordResetLinkResult } from '../../../auth/models/user.model';
 
 @Component({
@@ -16,7 +16,7 @@ import { PasswordResetLinkResult } from '../../../auth/models/user.model';
 export class ResetPasswordLinkDialogComponent {
   readonly dialogRef = inject(MatDialogRef<ResetPasswordLinkDialogComponent>);
   readonly data: PasswordResetLinkResult = inject(MAT_DIALOG_DATA);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
 
   copied = signal(false);
 
@@ -31,10 +31,10 @@ export class ResetPasswordLinkDialogComponent {
     navigator.clipboard?.writeText(value).then(
       () => {
         this.copied.set(true);
-        this.snackBar.open('Reset link copied to clipboard.', 'Dismiss', { duration: 2500 });
+        this.toast.success('Reset link copied to clipboard.');
         setTimeout(() => this.copied.set(false), 2000);
       },
-      () => this.snackBar.open('Could not copy. Select and copy manually.', 'Dismiss', { duration: 3000 }),
+      () => this.toast.error('Could not copy. Select and copy manually.'),
     );
   }
 

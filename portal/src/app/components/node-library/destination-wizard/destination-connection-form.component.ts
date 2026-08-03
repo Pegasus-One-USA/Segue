@@ -32,6 +32,7 @@ export class DestinationConnectionFormComponent {
 
   readonly sqlForm = this.fb.group({
     name: ['', [Validators.required]],
+    engine: ['sqlserver', [Validators.required]],
     server: ['', [Validators.required]],
     database: ['', [Validators.required]],
     auth: ['sql-auth', [Validators.required]],
@@ -39,7 +40,10 @@ export class DestinationConnectionFormComponent {
     password: [''],
     schema: ['dbo', []],
     writeMode: ['upsert', []],
+    requireSsl: [false, []],
   });
+
+  readonly isNonSqlServerEngine = computed(() => this.sqlForm.controls.engine.value !== 'sqlserver');
 
   readonly csvForm = this.fb.group({
     name: ['', [Validators.required]],
@@ -57,7 +61,7 @@ export class DestinationConnectionFormComponent {
     // ── Email-only fields ─────────────────────────────────────────────────────
     emailTo: ['', []],
     emailCc: ['', []],
-    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
+    emailSubjectTemplate: ['Segue CSV Export - {{RouteName}} - {{RunDate}}', []],
     emailBodyTemplate: ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
     // ── Download-link-only field ─────────────────────────────────────────────
     downloadLinkExpiryMinutes: [60, []],
@@ -70,6 +74,12 @@ export class DestinationConnectionFormComponent {
   constructor() {
     this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
     this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
+
+    this.sqlForm.controls.engine.valueChanges.subscribe(engine => {
+      if (engine !== 'sqlserver' && this.sqlForm.controls.auth.value !== 'sql-auth') {
+        this.sqlForm.controls.auth.setValue('sql-auth');
+      }
+    });
 
     effect(() => {
       const config = this.initialConfig();
@@ -119,11 +129,13 @@ export class DestinationConnectionFormComponent {
     if (this.isSql()) {
       const v = this.sqlForm.getRawValue();
       config['dest_name'] = v.name ?? '';
+      config['dest_engine'] = v.engine ?? 'sqlserver';
       config['dest_server'] = v.server ?? '';
       config['dest_database'] = v.database ?? '';
       config['dest_auth'] = v.auth ?? '';
       config['dest_schema'] = v.schema ?? 'dbo';
       config['dest_writeMode'] = v.writeMode ?? 'upsert';
+      config['dest_requireSsl'] = String(v.requireSsl ?? false);
       if ((v.auth ?? 'sql-auth') === 'sql-auth') {
         config['dest_username'] = v.username ?? '';
         config['dest_password'] = v.password ?? '';
@@ -158,9 +170,10 @@ export class DestinationConnectionFormComponent {
     const v = this.sqlForm.value;
     this.probeState.set('testing');
     this.probeError.set(null);
+    const engineType = v.engine === 'postgres' ? 'PostgreSql' : v.engine === 'mysql' ? 'MySql' : 'SqlServer';
     this.schemaSvc
       .probe({
-        destinationType: 'SqlServer',
+        destinationType: engineType,
         server: v.server ?? '',
         database: v.database ?? '',
         authentication: v.auth ?? 'sql-auth',
@@ -168,6 +181,7 @@ export class DestinationConnectionFormComponent {
         password: v.password ?? undefined,
         trustServerCertificate: true,
         encrypt: true,
+        requireSsl: v.requireSsl ?? false,
       })
       .subscribe({
         next: res => {
@@ -181,7 +195,7 @@ export class DestinationConnectionFormComponent {
         },
         error: err => {
           this.probeState.set('error');
-          this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
+          this.probeError.set(typeof err?.error?.error === 'string' ? err.error.error : (err?.message ?? 'Connection failed.'));
         },
       });
   }
@@ -205,7 +219,7 @@ export class DestinationConnectionFormComponent {
         },
         error: err => {
           this.probeState.set('error');
-          this.probeError.set(err?.error?.title ?? err?.message ?? 'Connection failed.');
+          this.probeError.set(typeof err?.error?.title === 'string' ? err.error.title : (err?.message ?? 'Connection failed.'));
         },
       });
   }
@@ -214,6 +228,7 @@ export class DestinationConnectionFormComponent {
     if (this.isSql()) {
       this.sqlForm.patchValue({
         name: f['dest_name'] || '',
+        engine: f['dest_engine'] || 'sqlserver',
         server: f['dest_server'] || '',
         database: f['dest_database'] || '',
         auth: f['dest_auth'] || 'sql-auth',
@@ -221,6 +236,7 @@ export class DestinationConnectionFormComponent {
         password: f['dest_password'] || '',
         schema: f['dest_schema'] || 'dbo',
         writeMode: f['dest_writeMode'] || 'upsert',
+        requireSsl: f['dest_requireSsl'] === 'true',
       });
     } else {
       this.csvForm.patchValue({
@@ -237,7 +253,7 @@ export class DestinationConnectionFormComponent {
         sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
         emailTo: f['dest_emailTo'] || '',
         emailCc: f['dest_emailCc'] || '',
-        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'Segue CSV Export - {{RouteName}} - {{RunDate}}',
         emailBodyTemplate:
           f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
         downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,

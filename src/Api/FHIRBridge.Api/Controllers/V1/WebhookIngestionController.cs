@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Pipeline;
 using FHIRBridge.Application.DTOs;
@@ -20,24 +21,27 @@ public sealed class WebhookIngestionController : ControllerBase
 {
     private readonly IConfiguredPipelineService _configuredPipelineService;
     private readonly IWebhookIngestionDispatcher _webhookDispatcher;
-    private readonly bool _async;
-    private readonly bool _requireSignature;
+    private readonly ISystemSettingsCache _settingsCache;
+    private readonly bool _defaultAsync;
+    private readonly bool _defaultRequireSignature;
     private readonly string? _signingSecret;
-    private readonly string _signatureHeader;
+    private readonly string _defaultSignatureHeader;
 
     public WebhookIngestionController(
         IConfiguredPipelineService configuredPipelineService,
         IWebhookIngestionDispatcher webhookDispatcher,
+        ISystemSettingsCache settingsCache,
         IConfiguration configuration)
     {
         _configuredPipelineService = configuredPipelineService;
         _webhookDispatcher = webhookDispatcher;
-        _async = bool.TryParse(configuration["WebhookIngestion:Async"], out var enabled) && enabled;
+        _settingsCache = settingsCache;
+        _defaultAsync = bool.TryParse(configuration["WebhookIngestion:Async"], out var enabled) && enabled;
         // Signature verification is ON by default (HIPAA/SOC2): unauthenticated ingestion must prove
         // it came from the trusted sender. Deployments that terminate authenticity upstream can opt out.
-        _requireSignature = !bool.TryParse(configuration["WebhookIngestion:RequireSignature"], out var require) || require;
+        _defaultRequireSignature = !bool.TryParse(configuration["WebhookIngestion:RequireSignature"], out var require) || require;
         _signingSecret = configuration["WebhookIngestion:SigningSecret"];
-        _signatureHeader = configuration["WebhookIngestion:SignatureHeader"] ?? "X-FHIRBridge-Signature";
+        _defaultSignatureHeader = configuration["WebhookIngestion:SignatureHeader"] ?? "X-FHIRBridge-Signature";
     }
 
     [HttpPost]
@@ -56,7 +60,12 @@ public sealed class WebhookIngestionController : ControllerBase
             Request.Body.Position = 0;
         }
 
-        if (!IsSignatureValid(rawBody))
+        var requireSignature = await _settingsCache.GetBoolAsync(
+            "WebhookIngestion:RequireSignature", _defaultRequireSignature, cancellationToken);
+        var signatureHeader = await _settingsCache.GetStringAsync(
+            "WebhookIngestion:SignatureHeader", _defaultSignatureHeader, cancellationToken);
+
+        if (!IsSignatureValid(rawBody, requireSignature, signatureHeader))
         {
             return Unauthorized(new { error = "invalid_signature", message = "Webhook signature is missing or invalid." });
         }
@@ -75,7 +84,8 @@ public sealed class WebhookIngestionController : ControllerBase
         var request = CreateRequest(payload);
 
         // Async mode: acknowledge fast and process off the request thread (requires a shared transport — see Phase 3).
-        if (_async)
+        var async = await _settingsCache.GetBoolAsync("WebhookIngestion:Async", _defaultAsync, cancellationToken);
+        if (async)
         {
             var payloadHash = ComputePayloadHash(request.ResourceJson);
             var messageId = $"webhook:{webhookConfigurationId:N}:{payloadHash}";
@@ -107,9 +117,9 @@ public sealed class WebhookIngestionController : ControllerBase
     /// <c>sha256=&lt;hex&gt;</c> or a bare hex digest. When signature verification is disabled the
     /// request is allowed through unconditionally.
     /// </summary>
-    private bool IsSignatureValid(string rawBody)
+    private bool IsSignatureValid(string rawBody, bool requireSignature, string signatureHeader)
     {
-        if (!_requireSignature)
+        if (!requireSignature)
         {
             return true;
         }
@@ -120,7 +130,7 @@ public sealed class WebhookIngestionController : ControllerBase
             return false;
         }
 
-        string? provided = Request.Headers[_signatureHeader];
+        string? provided = Request.Headers[signatureHeader];
         if (string.IsNullOrWhiteSpace(provided))
         {
             return false;

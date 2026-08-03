@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
@@ -12,6 +13,8 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.DTOs;
@@ -39,12 +42,17 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IResourceNormalizationService _normalizationService;
     private readonly IMappedRecordNormalizationService _mappedRecordNormalizationService;
     private readonly IGovernancePolicyService _governancePolicyService;
+    private readonly IGovernanceLogger _governanceLogger;
     private readonly IDeIdentificationService _deIdentificationService;
     private readonly IDataSetDeIdentificationService? _dataSetDeIdentificationService;
     private readonly IFhirBulkExportClient? _bulkExportClient;
     private readonly IPipelineMetrics? _pipelineMetrics;
     private readonly IncrementalSyncOptions _incrementalSyncOptions;
+    private readonly ISystemSettingsCache? _settingsCache;
     private readonly ILogger<ConfiguredPipelineService> _logger;
+    private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
+    private readonly IDestinationSchemaService? _destinationSchemaService;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     public ConfiguredPipelineService(
         IConfigurationRepository configurationRepository,
@@ -64,7 +72,12 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IFhirBulkExportClient? bulkExportClient = null,
         IPipelineMetrics? pipelineMetrics = null,
         IncrementalSyncOptions? incrementalSyncOptions = null,
-        IDataSetDeIdentificationService? dataSetDeIdentificationService = null)
+        IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
+        IGovernanceLogger? governanceLogger = null,
+        IFailureDiagnosisClassifier? diagnosisClassifier = null,
+        ISystemSettingsCache? settingsCache = null,
+        IDestinationSchemaService? destinationSchemaService = null,
+        IGlobalExceptionManager? exceptionManager = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -78,12 +91,54 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _normalizationService = normalizationService ?? new PassThroughResourceNormalizationService();
         _mappedRecordNormalizationService = mappedRecordNormalizationService ?? new PassThroughMappedRecordNormalizationService();
         _governancePolicyService = governancePolicyService ?? new DefaultGovernancePolicyService();
+        _governanceLogger = governanceLogger ?? new NullGovernanceLogger();
         _deIdentificationService = deIdentificationService ?? new PassThroughDeIdentificationService();
         _bulkExportClient = bulkExportClient;
         _pipelineMetrics = pipelineMetrics;
         _incrementalSyncOptions = incrementalSyncOptions ?? IncrementalSyncOptions.Default;
+        _settingsCache = settingsCache;
         _dataSetDeIdentificationService = dataSetDeIdentificationService;
         _logger = logger;
+        _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
+        _destinationSchemaService = destinationSchemaService;
+        _exceptionManager = exceptionManager;
+    }
+
+    // Persists a route/extraction failure into the shared ErrorLog store (via GlobalExceptionManager) so it
+    // surfaces on both the Errors screen and Correlation Search, not just as a string in the run's `errors` list.
+    private Task CaptureFailureAsync(
+        Exception exception,
+        Guid pipelineRunId,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (_exceptionManager is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _exceptionManager.CaptureAsync(
+            exception,
+            new ExceptionContext(
+                Module: "Pipeline Run",
+                CorrelationId: correlationId,
+                ExecutionId: pipelineRunId.ToString()),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §7-8: this pipeline's per-resource/per-route failure
+    /// path previously passed <c>exception.Message</c> straight through — raw driver/HTTP text, uncategorized,
+    /// unsanitized. This runs the same failure-diagnosis rules the Global Exception Manager uses (so a SQL login
+    /// failure or an Epic invalid_client response gets the same plain-language cause either way) and sanitizes
+    /// the technical detail before either reaches <c>errors</c>/<c>RecordFailedAsync</c>/the route's stored note.
+    /// </summary>
+    private string DescribeFailure(Exception exception)
+    {
+        var diagnosis = _diagnosisClassifier.Diagnose(exception, FHIRBridge.Governance.ErrorCategory.Unknown);
+        var technicalDetail = FHIRBridge.Governance.SafeErrorText.SanitizeOr(
+            exception.Message, "No further technical detail is available.");
+        return $"{diagnosis.Cause} ({technicalDetail})";
     }
 
     public Task<IReadOnlyList<ConfiguredPipelineRunDto>> GetRecentAsync(
@@ -136,23 +191,72 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var routesByResourceType = ResolveRoutesByResourceType(config, request.ResourceTypes);
         var processedResourceTypes = new List<string>();
 
+        // Patient-compartment resource types (Observation, Condition, ServiceRequest, …) need a resolved patient id
+        // to scope their search — normally supplied by an interactive SMART launch context, but Backend Services
+        // has none (see FhirSourceConnectorBase.ApplyPatientScopeAsync). When the run also includes a "Patient"
+        // route for the same source connection (processed first — see ResolveRoutesByResourceType's ordering),
+        // the ids it resolves are cached here and threaded into every later resource type's search for that same
+        // connection via FhirSourceConfiguration.PatientIds, mirroring the Runtime DAG's cohort-scoping
+        // (SourceNodeExecutors' SearchCohortScopedAsync). No-op for connections that already have an interactive
+        // patient context or an explicitly configured TargetPatientId/PatientIds.
+        var patientIdsBySourceConnection = new Dictionary<Guid, List<string>>();
+
+        // Pre-pass: for every source identity (RouteSourceKey) that will run bulk export this run, collect the full
+        // set of resource types routed through it. A Group/System $export job scoped to a single resource type
+        // (e.g. _type=Patient alone) trips Epic's Interconnect Group-export handling — it falls back to an
+        // unscoped/demographics Patient search internally and returns "requires demographics or _id parameter"
+        // (business-rule 59159). Requesting every routed type together in one job (_type=Patient,Observation,...),
+        // exactly as the FHIR Bulk Data spec intends, avoids the single-type job entirely. This pass only inspects
+        // config/enablement (no I/O), mirroring the same filters the main loop below applies per resource type.
+        var bulkExportResourceTypesByKey = new Dictionary<RouteSourceKey, List<string>>();
+        foreach (var (resourceType, routesForType) in routesByResourceType)
+        {
+            var enabledRoutesForBulkScan = FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc);
+            if (enabledRoutesForBulkScan.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var routeGroup in enabledRoutesForBulkScan.GroupBy(route => CreateRouteSourceKey(config, route)))
+            {
+                var sourceConnection = GetRequired(
+                    config.SourceConnections,
+                    routeGroup.Key.SourceConnectionId,
+                    "SourceConnection");
+                var workflowSourceConfiguration = routeGroup.Key.SourceConfigurationId is { } sourceConfigurationId
+                    ? config.SourceConfigurationsById.GetValueOrDefault(sourceConfigurationId)
+                    : null;
+                var retrieval = workflowSourceConfiguration?.Retrieval ?? sourceConnection.Retrieval;
+                var useBulkExport = request.UseBulkExport
+                    || string.Equals(retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+
+                if (!useBulkExport)
+                {
+                    continue;
+                }
+
+                if (!bulkExportResourceTypesByKey.TryGetValue(routeGroup.Key, out var types))
+                {
+                    types = [];
+                    bulkExportResourceTypesByKey[routeGroup.Key] = types;
+                }
+
+                if (!types.Contains(resourceType, StringComparer.OrdinalIgnoreCase))
+                {
+                    types.Add(resourceType);
+                }
+            }
+        }
+
+        // One $export job per RouteSourceKey, shared across every resource type that key services — kicked off on
+        // first use below and reused (not re-run) for every later resource type sharing the same key.
+        var bulkExportResultsByKey = new Dictionary<RouteSourceKey, Task<IReadOnlyList<ResourceEnvelope>>>();
+
         foreach (var (resourceType, routesForType) in routesByResourceType)
         {
             processedResourceTypes.Add(resourceType);
 
-            var enabledRoutes = routesForType
-                .Where(route => route.Route.IsEnabled)
-                .Where(route => route.IsEnabled)
-                .Where(route => RouteDependenciesAreEnabled(config, route))
-                .Where(route => IsScheduledPullMode(route.Route.IngestionMode))
-                .Where(route => request.RouteIds is not null
-                    ? request.RouteIds.Contains(route.Route.Id)
-                    : !request.RunDueSchedulesOnly ||
-                      ScheduleExpressionMatcher.IsDue(route.Route.ScheduleExpression, scheduledAtUtc))
-                .OrderBy(route => route.Route.Priority)
-                .ThenBy(route => route.Route.Id)
-                .ThenBy(route => route.ExecutionOrder)
-                .ToList();
+            var enabledRoutes = FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc);
 
             if (enabledRoutes.Count == 0)
             {
@@ -175,12 +279,23 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         routeGroup.Key.SourceConnectionId,
                         "SourceConnection");
 
+                    // The workflow-specific configuration (retrieval settings, scopes) this mapping uses. Falls back
+                    // to reading straight off the SourceConnection (today's pre-Slice-2b behavior) for any mapping
+                    // profile that somehow still has no configuration — defensive, since AddMappingProfileAsync/
+                    // UpdateMappingProfileAsync always provision one going forward and the Slice 1 migration
+                    // backfilled every pre-existing profile.
+                    var workflowSourceConfiguration = routeGroup.Key.SourceConfigurationId is { } sourceConfigurationId
+                        ? config.SourceConfigurationsById.GetValueOrDefault(sourceConfigurationId)
+                        : null;
+                    var retrieval = workflowSourceConfiguration?.Retrieval ?? sourceConnection.Retrieval;
+                    var scopes = workflowSourceConfiguration?.Scopes ?? sourceConnection.Authentication.Scopes;
+
                     // Bulk export runs either when the caller explicitly requests it (legacy API flag) or when the
                     // source connection itself is configured for it (RetrievalMethod == "bulk-export") — so a
                     // bulk-configured source uses $export from any trigger (manual, scheduled, or dispatched) without
                     // the caller having to know.
                     var useBulkExport = request.UseBulkExport
-                        || string.Equals(sourceConnection.Retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+                        || string.Equals(retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
 
                     // For the search path, make the pull incremental ("since last run") unless bulk export is used
                     // (bulk $export uses _since, not _lastUpdated) or the route already pins _lastUpdated.
@@ -191,34 +306,75 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                             routeGroup.Key.SearchParameters,
                             cancellationToken);
 
-                    var sourceConfiguration = await BuildSourceConfigurationAsync(
+                    var cohortPatientIds = patientIdsBySourceConnection.TryGetValue(sourceConnection.Id, out var cachedCohort)
+                        ? cachedCohort
+                        : null;
+
+                    var runtimeSourceConfiguration = await BuildSourceConfigurationAsync(
                         sourceConnection,
+                        scopes,
                         effectiveSearchParameters,
-                        cancellationToken);
+                        cancellationToken,
+                        cohortPatientIds);
 
                     if (useBulkExport)
                     {
-                        // Bulk Data $export path: scope the export to this resource type, reuse the rest of the pipeline.
+                        // Bulk Data $export path: one job per RouteSourceKey covers every resource type routed
+                        // through it this run (see bulkExportResourceTypesByKey above) — kicked off once and reused
+                        // here for every resource type that shares the key, then filtered down to this type's rows.
                         if (_bulkExportClient is null)
                         {
                             throw new InvalidOperationException("Bulk export was requested but no bulk export client is configured.");
                         }
 
-                        resources = await _bulkExportClient.ExportAsync(
-                            BuildBulkExportRequest(sourceConnection.Retrieval, resourceType),
-                            sourceConfiguration,
-                            cancellationToken);
+                        if (!bulkExportResultsByKey.TryGetValue(routeGroup.Key, out var bulkExportTask))
+                        {
+                            var batchedResourceTypes = bulkExportResourceTypesByKey.TryGetValue(routeGroup.Key, out var types)
+                                ? types
+                                : [resourceType];
+
+                            bulkExportTask = _bulkExportClient.ExportAsync(
+                                BuildBulkExportRequest(retrieval, batchedResourceTypes),
+                                runtimeSourceConfiguration,
+                                cancellationToken);
+                            bulkExportResultsByKey[routeGroup.Key] = bulkExportTask;
+                        }
+
+                        var batchedResources = await bulkExportTask;
+                        resources = batchedResources
+                            .Where(resource => string.Equals(resource.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
                     }
                     else
                     {
-                        var sourceClient = _sourceClientFactory.Create(sourceConfiguration.SourceType);
+                        var sourceClient = _sourceClientFactory.Create(runtimeSourceConfiguration.SourceType);
                         resources = await sourceClient.SearchAsync(
                             resourceType,
-                            sourceConfiguration,
+                            runtimeSourceConfiguration,
                             cancellationToken);
                     }
 
                     extractedCount += resources.Count;
+
+                    if (string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var resolvedIds = resources
+                            .Select(r => r.ResourceId)
+                            .Where(id => !string.IsNullOrWhiteSpace(id))
+                            .Select(id => id!)
+                            .ToList();
+
+                        if (resolvedIds.Count > 0)
+                        {
+                            if (!patientIdsBySourceConnection.TryGetValue(sourceConnection.Id, out var existingIds))
+                            {
+                                existingIds = [];
+                                patientIdsBySourceConnection[sourceConnection.Id] = existingIds;
+                            }
+
+                            existingIds.AddRange(resolvedIds.Except(existingIds));
+                        }
+                    }
 
                     // Expert Determination (k-anonymity) set-level de-identification across the extracted cohort.
                     // No-op passthrough unless explicitly enabled in configuration.
@@ -238,7 +394,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         resourceType,
                         routeGroup.Key.SourceConnectionId);
 
-                    errors.Add($"{resourceType}/{routeGroup.Key.SourceConnectionId}: {exception.Message}");
+                    errors.Add($"{resourceType}/{routeGroup.Key.SourceConnectionId}: {DescribeFailure(exception)}");
+
+                    await CaptureFailureAsync(exception, pipelineRunId, request.CorrelationId, cancellationToken);
 
                     continue;
                 }
@@ -248,7 +406,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     var writeContext = new PipelineWriteContext(
                         request.AllowInlineDownload,
                         route.MappingProfile.Name,
-                        runStartedAtUtc);
+                        runStartedAtUtc,
+                        request.CorrelationId);
 
                     var result = await ExecuteRouteAsync(
                         config,
@@ -366,7 +525,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 var writeContext = new PipelineWriteContext(
                     AllowInlineDelivery: false,
                     route.MappingProfile.Name,
-                    runStartedAtUtc);
+                    runStartedAtUtc,
+                    request.CorrelationId);
 
                 var result = await ExecuteRouteAsync(
                     config,
@@ -503,13 +663,35 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 cancellationToken);
             var writtenCount = writeResult.Count;
 
+            if (writeResult.RecordErrors is { Count: > 0 } writeRecordErrors)
+            {
+                errors.AddRange(writeRecordErrors);
+            }
+
             if (writtenCount > 0)
             {
+                // A writer that isolates per-record failures (see RecordErrors above) reports exactly which
+                // records landed via WrittenResourceIds — record history against that, not the whole attempted
+                // batch, so "stored" reflects reality even when some records in the batch failed. A writer that
+                // doesn't support per-record isolation leaves WrittenResourceIds null; Count then really does mean
+                // "the whole batch succeeded" (a partial write there throws and fails the whole route instead), so
+                // falling back to the full mappedRecords list is still correct.
                 await _resourceHistoryRecorder.RecordStoredAsync(
                     routeExecutionId,
-                    mappedRecords.Select(record => record.SourceResourceId).ToList(),
+                    writeResult.WrittenResourceIds ?? mappedRecords.Select(record => record.SourceResourceId).ToList(),
                     cancellationToken);
             }
+
+            await _governanceLogger.LogExportAsync(
+                new ExportEntry(
+                    destination.Name,
+                    destination.DestinationType.ToString(),
+                    writtenCount,
+                    writtenCount > 0 ? "Succeeded" : "NoData",
+                    writeResult.InlineDownload?.Content.Length,
+                    pipelineRunId,
+                    correlationId),
+                cancellationToken);
 
             var routeHadErrors = errors.Count > errorCountBefore;
             var routeStatus = !routeHadErrors
@@ -544,7 +726,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 resourceType,
                 route.Route.Id);
 
-            errors.Add($"{resourceType}/route/{route.Route.Id}: {exception.Message}");
+            var failureDescription = DescribeFailure(exception);
+            errors.Add($"{resourceType}/route/{route.Route.Id}: {failureDescription}");
+
+            await CaptureFailureAsync(exception, pipelineRunId, correlationId, cancellationToken);
 
             await _routeExecutionRepository.CompleteAsync(
                 routeExecutionId,
@@ -552,7 +737,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 resources.Count,
                 0,
                 0,
-                exception.Message,
+                failureDescription,
                 DateTime.UtcNow,
                 cancellationToken);
 
@@ -593,6 +778,20 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     correlationId),
                 cancellationToken);
 
+            // HIPAA §164.312(b) data-access evidence: every access decision — allowed or denied — is
+            // recorded PHI-free (identifiers only), regardless of what happens to the resource afterward.
+            var purpose = $"Pipeline export via mapping '{mappingProfile.Name}' (route {route.Id:N}, triggered by {triggeredBy ?? "manual"})";
+            await _governanceLogger.LogDataAccessAsync(
+                new DataAccessEntry(
+                    resourceType,
+                    resource.ResourceId,
+                    governanceDecision.IsAllowed ? "Allowed" : "Denied",
+                    PatientId: resourceType == "Patient" ? resource.ResourceId : null,
+                    Purpose: purpose,
+                    PipelineRunId: pipelineRunId,
+                    CorrelationId: correlationId),
+                cancellationToken);
+
             if (!governanceDecision.IsAllowed)
             {
                 var denialReason = governanceDecision.DenialReason ?? "Governance policy denied resource access.";
@@ -623,6 +822,19 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 normalizationResult.DataQualityScore,
                 normalizationResult.MasterPatientId,
                 cancellationToken);
+
+            if (normalizationResult.Warnings.Count > 0)
+            {
+                await _governanceLogger.LogValidationFailureAsync(
+                    new ValidationFailureEntry(
+                        resourceType,
+                        resource.ResourceId,
+                        normalizationResult.Warnings,
+                        normalizationResult.DataQualityScore,
+                        pipelineRunId,
+                        correlationId),
+                    cancellationToken);
+            }
 
             if (governanceDecision.RequiresDeIdentification)
             {
@@ -709,7 +921,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             TriggeredBy: triggeredBy,
             TriggerType: triggerType,
             InlineDownload: inlineDownload,
-            DownloadUrls: downloadUrls.Count == 0 ? null : downloadUrls);
+            DownloadUrls: downloadUrls.Count == 0 ? null : downloadUrls,
+            CorrelationId: correlationId);
 
         await _pipelineRunRepository.AddAsync(pipelineRun, cancellationToken);
 
@@ -736,7 +949,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         string? searchParameters,
         CancellationToken cancellationToken)
     {
-        if (!_incrementalSyncOptions.Enabled)
+        var incrementalSyncEnabled = _settingsCache is null
+            ? _incrementalSyncOptions.Enabled
+            : await _settingsCache.GetBoolAsync("IncrementalSync:Enabled", _incrementalSyncOptions.Enabled, cancellationToken);
+
+        if (!incrementalSyncEnabled)
         {
             return searchParameters;
         }
@@ -760,7 +977,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             return searchParameters;
         }
 
-        var since = watermark.Value.AddSeconds(-Math.Max(0, _incrementalSyncOptions.OverlapSeconds));
+        var overlapSeconds = _settingsCache is null
+            ? _incrementalSyncOptions.OverlapSeconds
+            : await _settingsCache.GetIntAsync("IncrementalSync:OverlapSeconds", _incrementalSyncOptions.OverlapSeconds, cancellationToken);
+        var since = watermark.Value.AddSeconds(-Math.Max(0, overlapSeconds));
         var filter = $"_lastUpdated=gt{since.ToUniversalTime():yyyy-MM-ddTHH:mm:ss}Z";
 
         return string.IsNullOrWhiteSpace(searchParameters)
@@ -819,11 +1039,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         return new RouteSourceKey(
             route.MappingProfile.SourceConnectionId,
+            route.MappingProfile.SourceConfigurationId,
             route.SearchParameters);
     }
 
     private sealed record RouteSourceKey(
         Guid SourceConnectionId,
+        Guid? SourceConfigurationId,
         string? SearchParameters);
 
     private sealed record RouteMappingWorkItem(
@@ -847,6 +1069,27 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private static bool IsWebhookMode(IngestionMode ingestionMode)
     {
         return ingestionMode is IngestionMode.Webhook or IngestionMode.WebhookAndScheduledPull;
+    }
+
+    private static List<RouteMappingWorkItem> FilterEnabledRoutes(
+        IEnumerable<RouteMappingWorkItem> routesForType,
+        ConfigurationSnapshot config,
+        StartConfiguredPipelineRunRequest request,
+        DateTime scheduledAtUtc)
+    {
+        return routesForType
+            .Where(route => route.Route.IsEnabled)
+            .Where(route => route.IsEnabled)
+            .Where(route => RouteDependenciesAreEnabled(config, route))
+            .Where(route => IsScheduledPullMode(route.Route.IngestionMode))
+            .Where(route => request.RouteIds is not null
+                ? request.RouteIds.Contains(route.Route.Id)
+                : !request.RunDueSchedulesOnly ||
+                  ScheduleExpressionMatcher.IsDue(route.Route.ScheduleExpression, scheduledAtUtc, route.Route.TimeZoneId))
+            .OrderBy(route => route.Route.Priority)
+            .ThenBy(route => route.Route.Id)
+            .ThenBy(route => route.ExecutionOrder)
+            .ToList();
     }
 
     private static bool RouteDependenciesAreEnabled(ConfigurationSnapshot config, RouteMappingWorkItem route)
@@ -921,11 +1164,15 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Resource type is resolved from each route's mapping profile — the single source of truth for what to pull.
+        // "Patient" is ordered first (ties otherwise broken alphabetically) so any patient cohort it resolves is
+        // already cached in patientIdsBySourceConnection by the time other patient-compartment resource types in
+        // this same run reach BuildSourceConfigurationAsync.
         var groups = ExpandRouteMappingWorkItems(config)
             .Where(x => !string.IsNullOrWhiteSpace(x.MappingProfile.ResourceType))
             .Where(x => requested is null || requested.Contains(x.MappingProfile.ResourceType))
             .GroupBy(x => x.MappingProfile.ResourceType, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => string.Equals(group.Key, "Patient", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
             .Select(group => (ResourceType: group.Key, Routes: group.ToList()))
             .ToList();
 
@@ -941,6 +1188,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     // Scope defaults to System when unset (the historical behavior); group/patient carry their id list. The _since
     // cursor is applied only when incremental sync is enabled and a prior successful run recorded a timestamp.
     internal static FhirBulkExportRequest BuildBulkExportRequest(SourceRetrievalConfiguration? retrieval, string resourceType)
+        => BuildBulkExportRequest(retrieval, (IReadOnlyList<string>)[resourceType]);
+
+    // Same projection, batched across every resource type a single $export job should cover (see
+    // bulkExportResourceTypesByKey in StartAsync) — a Group/System job scoped to just one resource type (e.g.
+    // _type=Patient alone) can trip an Epic Interconnect business rule that requires demographics/_id for a bare
+    // Patient search, since Epic resolves Group membership via an internal Patient search for that type.
+    internal static FhirBulkExportRequest BuildBulkExportRequest(SourceRetrievalConfiguration? retrieval, IReadOnlyList<string> resourceTypes)
     {
         var scope = MapBulkExportScope(retrieval?.ExportScope);
 
@@ -951,7 +1205,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         return new FhirBulkExportRequest(
             scope,
             GroupId: scope == BulkExportScope.Group ? retrieval?.GroupId : null,
-            ResourceTypes: [resourceType],
+            ResourceTypes: BulkExportScopes.ResolveTypeParameter(scope, resourceTypes),
             Since: since,
             PatientIds: scope == BulkExportScope.Patient ? retrieval?.PatientIds : null,
             OutputFormat: retrieval?.OutputFormat);
@@ -963,8 +1217,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
     private async Task<FhirSourceConfiguration> BuildSourceConfigurationAsync(
         SourceConnection sourceConnection,
+        IReadOnlyCollection<string> scopes,
         string? searchParameters,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? patientIds = null)
     {
         var sourceType = sourceConnection.SourceSystemType switch
         {
@@ -1009,13 +1265,63 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             sourceConnection.Authentication.ClientId,
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
-            sourceConnection.Authentication.Scopes,
+            scopes,
             100,
             5,
             sourceConnection.Id,
             searchParameters,
             clientSecret,
-            ApplicationType: isLoopback ? null : sourceConnection.ApplicationType);
+            ApplicationType: isLoopback ? null : sourceConnection.ApplicationType,
+            PatientIds: patientIds);
+    }
+
+    /// <summary>
+    /// Fills each field's <see cref="MappingFieldDto.MaxLength"/>/<see cref="MappingFieldDto.Precision"/>/
+    /// <see cref="MappingFieldDto.Scale"/> from the destination's live column metadata (the same introspection the
+    /// mapping-editor column picker already reads) so <see cref="JsonMappingEngine"/> can reject an
+    /// oversized/overflowing value before it's ever sent to the destination, instead of only finding out from a
+    /// truncation/overflow SqlException at write time. Fetched once per route execution, not per resource. Falls
+    /// back to the fields unchanged (no length/precision enforcement) when no schema service is wired up, the
+    /// destination isn't relational, or its schema can't be read right now — this is a belt-and-suspenders
+    /// improvement, not something that should itself fail a run.
+    /// </summary>
+    private async Task<List<MappingFieldDto>> EnrichWithDestinationSchemaAsync(
+        List<MappingFieldDto> mappingFields,
+        MappingProfile mappingProfile,
+        CancellationToken cancellationToken)
+    {
+        if (_destinationSchemaService is null)
+        {
+            return mappingFields;
+        }
+
+        DestinationSchemaDto schema;
+        try
+        {
+            schema = await _destinationSchemaService.GetSchemaAsync(mappingProfile.DestinationId, cancellationToken);
+        }
+        catch (Exception)
+        {
+            return mappingFields;
+        }
+
+        var tableName = DestinationObjectParser.ParseTableName(mappingProfile.DestinationObject);
+        var table = schema.Tables.FirstOrDefault(t =>
+            string.Equals(t.FullName, tableName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TableName, tableName, StringComparison.OrdinalIgnoreCase));
+
+        if (table is null)
+        {
+            return mappingFields;
+        }
+
+        var columnsByName = table.Columns.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+        return mappingFields
+            .Select(field => columnsByName.TryGetValue(field.TargetField, out var column)
+                ? field with { MaxLength = column.MaxLength }//, Precision = column.NumericPrecision, Scale = column.NumericScale }
+                : field)
+            .ToList();
     }
 
     private async Task<IReadOnlyList<MappedDestinationRecord>> MapResourcesAsync(
@@ -1035,7 +1341,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             .Where(field =>
                 string.IsNullOrWhiteSpace(field.ResourceType) ||
                 string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
+            .Where(field => field.IsEnabled)
             .ToList();
+
+        mappingFields = await EnrichWithDestinationSchemaAsync(mappingFields, mappingProfile, cancellationToken);
 
         foreach (var resource in resources)
         {
@@ -1132,12 +1441,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private async Task<ConfigurationSnapshot> LoadConfigurationAsync(CancellationToken cancellationToken)
     {
         var sources = await _configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+        var sourceConfigurations = await _configurationRepository.GetSourceConfigurationsAsync(cancellationToken);
         var destinations = await _configurationRepository.GetDestinationsAsync(cancellationToken);
         var mappings = await _configurationRepository.GetMappingProfilesAsync(cancellationToken);
         var routes = await _configurationRepository.GetRoutesAsync(cancellationToken);
         var webhooks = await _configurationRepository.GetWebhooksAsync(cancellationToken);
 
-        return new ConfigurationSnapshot(sources, destinations, mappings, routes, webhooks);
+        return new ConfigurationSnapshot(sources, sourceConfigurations, destinations, mappings, routes, webhooks);
     }
 
     private static T GetRequired<T>(IReadOnlyCollection<T> items, Guid id, string entityName)
@@ -1152,30 +1462,35 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         public ConfigurationSnapshot(
             IReadOnlyList<SourceConnection> sourceConnections,
+            IReadOnlyList<SourceConfiguration> sourceConfigurations,
             IReadOnlyList<DestinationConfiguration> destinationConfigurations,
             IReadOnlyList<MappingProfile> mappingProfiles,
             IReadOnlyList<ResourcePipelineRoute> routes,
             IReadOnlyList<WebhookConfiguration> webhookConfigurations)
         {
             SourceConnections = sourceConnections;
+            SourceConfigurations = sourceConfigurations;
             DestinationConfigurations = destinationConfigurations;
             MappingProfiles = mappingProfiles;
             Routes = routes;
             WebhookConfigurations = webhookConfigurations;
 
             SourceConnectionsById = sourceConnections.ToDictionary(x => x.Id);
+            SourceConfigurationsById = sourceConfigurations.ToDictionary(x => x.Id);
             DestinationsById = destinationConfigurations.ToDictionary(x => x.Id);
             MappingProfilesById = mappingProfiles.ToDictionary(x => x.Id);
             WebhooksById = webhookConfigurations.ToDictionary(x => x.Id);
         }
 
         public IReadOnlyList<SourceConnection> SourceConnections { get; }
+        public IReadOnlyList<SourceConfiguration> SourceConfigurations { get; }
         public IReadOnlyList<DestinationConfiguration> DestinationConfigurations { get; }
         public IReadOnlyList<MappingProfile> MappingProfiles { get; }
         public IReadOnlyList<ResourcePipelineRoute> Routes { get; }
         public IReadOnlyList<WebhookConfiguration> WebhookConfigurations { get; }
 
         public IReadOnlyDictionary<Guid, SourceConnection> SourceConnectionsById { get; }
+        public IReadOnlyDictionary<Guid, SourceConfiguration> SourceConfigurationsById { get; }
         public IReadOnlyDictionary<Guid, DestinationConfiguration> DestinationsById { get; }
         public IReadOnlyDictionary<Guid, MappingProfile> MappingProfilesById { get; }
         public IReadOnlyDictionary<Guid, WebhookConfiguration> WebhooksById { get; }

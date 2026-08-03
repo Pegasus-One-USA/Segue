@@ -15,6 +15,11 @@
 
   <ItemGroup>
     <PackageReference Include="Hl7.Fhir.R4" Version="6.2.0" />
+    <PackageReference Include="Hl7.Fhir.Specification.Data.R4" Version="6.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FHIRBridge.Domain\FHIRBridge.Domain.csproj" />
   </ItemGroup>
 
 </Project>

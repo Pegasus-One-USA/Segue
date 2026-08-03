@@ -2,7 +2,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class WebhookConfiguration : AuditableChildEntity<Guid>
+public sealed class WebhookConfiguration : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private WebhookConfiguration()
     {
@@ -26,6 +26,7 @@ public sealed class WebhookConfiguration : AuditableChildEntity<Guid>
     public Guid SourceConnectionId { get; private set; }
     public string ResourceType { get; private set; } = default!;
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public string Path { get; private set; } = default!;
     public bool IsEnabled { get; private set; }
 

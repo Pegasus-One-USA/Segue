@@ -30,6 +30,9 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'deid-kanon': 'DeIdentificationNode',
   'field-mapping': 'MappingNode',
   'dest-sqlserver': 'SqlServerDestinationNode',
+  'dest-mysql': 'MySqlDestinationNode',
+  'dest-postgres': 'PostgreSqlDestinationNode',
+  'dest-mongo': 'MongoDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',
   hedis: 'HedisMeasureReportNode',
@@ -40,7 +43,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
 // Credential fields captured by the wizards for connection-secret assembly. They are redacted from the persisted
 // graph so plaintext secrets never land in WorkflowNodes.ConfigurationJson; create-on-save reads them straight from
 // the in-memory store to build the encrypted inlineSecret instead.
-const SECRET_FIELD_KEYS = new Set(['dest_password', 'dest_sftpPassword']);
+const SECRET_FIELD_KEYS = new Set(['dest_password', 'dest_sftpPassword', 'dest_connectionString']);
 
 @Injectable({ providedIn: 'root' })
 export class WorkflowGraphMapperService {

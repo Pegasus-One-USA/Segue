@@ -1,6 +1,6 @@
 # FHIRBridge.ControlPlane.Application
 
-> The application/use-case layer for FHIRBridge's future **Control Plane** bounded context — orchestrating the commands, queries, and validation that author, validate, and publish integration configuration.
+> The application/use-case layer for Segue's future **Control Plane** bounded context — orchestrating the commands, queries, and validation that author, validate, and publish integration configuration.
 
 **Layer:** ControlPlane Application · **SDK:** Microsoft.NET.Sdk · **Target:** net9.0
 

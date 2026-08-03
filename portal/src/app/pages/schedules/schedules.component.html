@@ -1,15 +1,64 @@
-<div class="stub-page">
-  <div class="stub-card">
-    <div class="stub-icon">
-      <svg viewBox="0 0 48 48" fill="none">
-        <rect x="6" y="10" width="36" height="32" rx="4" stroke="currentColor" stroke-width="2.5"/>
-        <path d="M6 18h36M16 6v8M32 6v8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-        <circle cx="36" cy="36" r="8" fill="var(--color-primary)" stroke="none"/>
-        <path d="M33 36h3v-3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+<div class="list-page">
+  <div class="page-header">
+    <h1>Schedules</h1>
+    <p class="page-sub">Every configured Resource Pipeline Route's real next/last run — not a dispatch-event log, the actual per-route schedule state.</p>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="routeName">
+          <th mat-header-cell *matHeaderCellDef>Route</th>
+          <td mat-cell *matCellDef="let r">{{ r.routeName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="scheduleExpression">
+          <th mat-header-cell *matHeaderCellDef>Schedule</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.scheduleExpression || '—' }}</code></td>
+        </ng-container>
+
+        <ng-container matColumnDef="nextRunUtc">
+          <th mat-header-cell *matHeaderCellDef>Next Run</th>
+          <td mat-cell *matCellDef="let r">{{ r.nextRunUtc ? (r.nextRunUtc | date:'MMM d, h:mm a') : '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lastRunStartedUtc">
+          <th mat-header-cell *matHeaderCellDef>Last Run</th>
+          <td mat-cell *matCellDef="let r">{{ r.lastRunStartedUtc ? (r.lastRunStartedUtc | date:'MMM d, h:mm a') : '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lastRunDurationMs">
+          <th mat-header-cell *matHeaderCellDef>Duration</th>
+          <td mat-cell *matCellDef="let r">{{ r.lastRunDurationMs !== null ? (r.lastRunDurationMs / 1000 | number:'1.0-1') + 's' : '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lastRunStatus">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.lastRunStatus) {
+              <span class="status-badge"
+                    [class.status-success]="r.lastRunStatus === 'Completed'"
+                    [class.status-warn]="r.lastRunStatus === 'CompletedWithErrors'"
+                    [class.status-fail]="r.lastRunStatus === 'Failed'">
+                {{ r.lastRunStatus }}
+              </span>
+            } @else {
+              —
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
     </div>
-    <h1 class="stub-title">Schedules</h1>
-    <p class="stub-desc">Automated pipeline scheduling, cron triggers, and time-based execution management will appear here.</p>
-    <span class="stub-badge">Coming Soon</span>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">No scheduled routes configured.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
   </div>
 </div>

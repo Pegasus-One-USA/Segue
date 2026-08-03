@@ -131,7 +131,7 @@ public sealed class FhirRestSubscriptionClient : IFhirSubscriptionClient
 
             writer.WriteString("status", "requested");
             writer.WriteString("reason", string.IsNullOrWhiteSpace(request.Reason)
-                ? "FHIRBridge change-data-capture subscription"
+                ? "Segue change-data-capture subscription"
                 : request.Reason);
             writer.WriteString("criteria", request.Criteria);
 

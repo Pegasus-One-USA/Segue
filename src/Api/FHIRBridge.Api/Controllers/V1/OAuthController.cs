@@ -1,6 +1,8 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -22,20 +24,20 @@ public sealed class OAuthController : ControllerBase
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
     private readonly IEhrEndpointService _ehrEndpointService;
-    private readonly IConfiguration _configuration;
+    private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
     private readonly ILogger<OAuthController> _logger;
 
     public OAuthController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
         IEhrEndpointService ehrEndpointService,
-        IConfiguration configuration,
+        IAllowedCorsOriginsCache allowedCorsOriginsCache,
         ILogger<OAuthController> logger)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
         _ehrEndpointService = ehrEndpointService;
-        _configuration = configuration;
+        _allowedCorsOriginsCache = allowedCorsOriginsCache;
         _logger = logger;
     }
 
@@ -52,6 +54,50 @@ public sealed class OAuthController : ControllerBase
             sourceConnectionId, BuildCallbackUri(), cancellationToken);
 
         return Redirect(authorizationUrl.ToString());
+    }
+
+    /// <summary>
+    /// Anonymous counterpart to <see cref="GetWorkflowLaunchUrl"/>, for a third-party app's own EHR-launch entry
+    /// point (e.g. Demo_TestApp's Provider_InApp) that has no FHIRBridge session to call the authenticated endpoint
+    /// with. Mirrors <see cref="GetPublicWorkflowStandaloneUrl"/>'s trust model: minting needs no PHI/session, and
+    /// <see cref="WorkflowDefinition.IsPubliclyLaunchable"/> is the only gate between "any caller who knows this
+    /// workflowId" and a working EHR-launch context for it. Only valid for EHR-launch workflows — a Standalone or
+    /// Patient workflow id is rejected, since those launch through <c>/oauth/authorize</c>, not <c>/oauth/launch</c>.
+    /// </summary>
+    [AllowAnonymous]
+    [EnableRateLimiting("oauth")]
+    [HttpGet("workflows/{workflowId:guid}/public-launch-context")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPublicWorkflowLaunchContext(
+        Guid workflowId, [FromQuery] string? callerId, [FromQuery] string? userIdentity, CancellationToken cancellationToken)
+    {
+        var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
+        if (workflow is null || !workflow.IsPubliclyLaunchable)
+        {
+            return NotFound();
+        }
+
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
+        {
+            return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
+        }
+
+        var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
+        if (applicationType is ApplicationType.Standalone or ApplicationType.Patient)
+        {
+            return BadRequest(new
+            {
+                error = "invalid_request",
+                error_description = "This workflow launches via /oauth/authorize, not /oauth/launch. Use public-standalone-url instead."
+            });
+        }
+
+        var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId: null, callerId, sessionId: null, effectiveUserIdentity);
+        return Ok(new { context });
     }
 
     /// <summary>
@@ -117,12 +163,12 @@ public sealed class OAuthController : ControllerBase
     /// <summary>
     /// Anonymous counterpart to <see cref="GetWorkflowLaunchUrl"/>, for a third-party app whose own end user picks a
     /// hospital before launching (e.g. Demo_TestApp's Provider_Standalone hospital picker, backed by the
-    /// ehr-epic-endpoints listing). Only mints a context for a workflow the admin has explicitly opted in via
+    /// ehr-public-endpoints listing). Only mints a context for a workflow the admin has explicitly opted in via
     /// <c>POST /workflows/{workflowId}/enable-public-launch</c> — <see cref="WorkflowDefinition.IsPubliclyLaunchable"/>
-    /// is the only gate standing between "any caller who knows this workflowId" and a working Epic-login link for
-    /// it, since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must
-    /// resolve to an EndpointType.Epic row — the same restricted set the public picker listing exposes, never a
-    /// specific customer's live MyChart production instance.
+    /// is the only gate standing between "any caller who knows this workflowId" and a working login link for it,
+    /// since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must resolve to
+    /// a known EhrEndpoint row of type <see cref="EhrEndpointType.Epic"/> — the vendor sandbox rows the Provider
+    /// Standalone picker lists, never a customer's own MyChart row.
     /// </summary>
     [AllowAnonymous]
     [EnableRateLimiting("oauth")]
@@ -131,7 +177,8 @@ public sealed class OAuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicWorkflowStandaloneUrl(
-        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, [FromQuery] string? sessionId,
+        [FromQuery] string? userIdentity, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url requested: workflowId={WorkflowId} ehrEndpointId={EhrEndpointId}",
@@ -146,28 +193,46 @@ public sealed class OAuthController : ControllerBase
             return NotFound();
         }
 
-        if (!await _ehrEndpointService.IsEpicEndpointAsync(ehrEndpointId, cancellationToken))
+        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.Epic, cancellationToken))
         {
             _logger.LogWarning(
-                "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known Epic endpoint",
+                "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known endpoint",
                 ehrEndpointId);
             return NotFound();
         }
 
         // This endpoint is anonymous — anyone who knows workflowId can call it — so a caller-supplied callerId is
-        // validated against Portal:AllowedOrigins (the same trust boundary already used for CORS) before it's
+        // validated against the live allowed-origins set (same trust boundary already used for CORS) before it's
         // honored, to keep it from being an open redirect off a real Epic login.
-        if (!string.IsNullOrWhiteSpace(callerId) && !CallerIdOriginValidator.IsAllowedOrigin(callerId, _configuration))
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
         {
             _logger.LogWarning(
-                "[Step 1/6] public-standalone-url rejected: callerId origin is not in Portal:AllowedOrigins for workflowId={WorkflowId}",
+                "[Step 1/6] public-standalone-url rejected: callerId origin is not in the allowed-origins set for workflowId={WorkflowId}",
                 workflowId);
             return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
         }
 
+        // sessionId is an opaque identifier (never a URL, unlike callerId, so no origin check applies) that the
+        // Provider Standalone interactive token cache keys on instead of SourceConnectionId — see
+        // SmartAuthorizationCodeTokenProvider.BuildStoreKey. Reuse whatever the caller already has (a returning
+        // browser session resuming after a token expired) rather than always minting fresh, so its later
+        // hasValidToken/run calls keep finding the same cached token. Mint one here when absent so a first-time
+        // visitor still gets a value to persist and echo back on every later call. Capped defensively — this rides
+        // inside an encrypted token but a client could still send an unreasonably large string.
+        var effectiveSessionId = !string.IsNullOrWhiteSpace(sessionId) && sessionId.Length <= 200
+            ? sessionId
+            : Guid.NewGuid().ToString("N");
+
+        // userIdentity is a stable identifier for the third-party app's own logged-in end user (e.g. its account
+        // email) — distinct from sessionId above, which is only an opaque per-browser cache key. When present, it
+        // is what CompleteAsync permanently binds to one FHIR patient/practitioner. Never validated as an origin
+        // (unlike callerId): it is not a URL and never drives a redirect.
+        var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
+
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
-        var response = BuildLaunchResponse(applicationType, context);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
+        var response = BuildLaunchResponse(applicationType, context, effectiveSessionId);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",
             workflowId, applicationType, response);
@@ -179,6 +244,9 @@ public sealed class OAuthController : ControllerBase
     /// carried in the encrypted <paramref name="context"/> segment — no raw GUIDs in the URL. The EHR appends the
     /// issuer (<c>iss</c>) + opaque <c>launch</c> token; on callback the resolved route is run for the launched
     /// patient. Anonymous — the launching user has no FHIRBridge session; security comes from the trusted-issuer check.
+    /// <paramref name="callerId"/> optionally carries the calling app's own current origin as a live override for
+    /// whatever return URL was baked into <paramref name="context"/> at mint time — see
+    /// <see cref="IInteractiveSourceAuthorizationService.StartEhrLaunchFromContextAsync"/>.
     /// </summary>
     [AllowAnonymous]
     [EnableRateLimiting("oauth")]
@@ -189,6 +257,7 @@ public sealed class OAuthController : ControllerBase
         string context,
         [FromQuery] string? iss,
         [FromQuery] string? launch,
+        [FromQuery] string? callerId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(iss) || string.IsNullOrWhiteSpace(launch))
@@ -196,8 +265,18 @@ public sealed class OAuthController : ControllerBase
             return BadRequest(new { error = "invalid_request", error_description = "Missing iss or launch." });
         }
 
+        // This endpoint is anonymous — anyone who knows the context can call it — so a caller-supplied callerId is
+        // validated against the live allowed-origins set (same trust boundary already used for CORS) before it's
+        // honored, to keep it from being an open redirect off a real EHR login.
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
+        {
+            _logger.LogWarning("[Step 2/6] oauth/launch/{{context}} rejected: callerId origin is not in the allowed-origins set.");
+            return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
+        }
+
         var authorizationUrl = await _authorizationService.StartEhrLaunchFromContextAsync(
-            context, iss, launch, BuildCallbackUri(), cancellationToken);
+            context, iss, launch, BuildCallbackUri(), cancellationToken, callerId);
 
         return Redirect(authorizationUrl.ToString());
     }
@@ -293,7 +372,9 @@ public sealed class OAuthController : ControllerBase
         if (!string.IsNullOrWhiteSpace(error))
         {
             _logger.LogWarning("[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription}", error, errorDescription);
-            return BadRequest(new { error, error_description = errorDescription });
+            // error is an OAuth-standard code (e.g. "access_denied") and safe to return; error_description is
+            // freeform text from the EHR/IdP and must never be echoed back verbatim — log it above, show generic.
+            return BadRequest(new { error, error_description = "Authorization failed. Please try connecting again." });
         }
 
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
@@ -306,9 +387,35 @@ public sealed class OAuthController : ControllerBase
         _logger.LogInformation(
             "[Step 6/6] /oauth/callback completed: sourceConnectionId={SourceConnectionId} source={Source} " +
             "workflowRunId={WorkflowRunId} workflowRunFailed={WorkflowRunFailed} workflowRunSkipped={WorkflowRunSkipped} " +
-            "postLaunchRedirectUri={PostLaunchRedirectUri}",
+            "contextMismatch={ContextMismatch} postLaunchRedirectUri={PostLaunchRedirectUri}",
             result.SourceConnectionId, result.SourceName, result.WorkflowRunId, result.WorkflowRunFailed,
-            result.WorkflowRunSkipped, result.PostLaunchRedirectUri);
+            result.WorkflowRunSkipped, result.ContextMismatch, result.PostLaunchRedirectUri);
+
+        // This account is permanently bound to a different FHIR patient/practitioner than the one this
+        // authorization just returned — no pipeline/workflow run was triggered and the token is not usable. When
+        // the launch carries a redirect back to the third-party app that originated it (e.g. Demo_TestApp), hand
+        // the rejection back there via a launchError marker instead of stranding the browser here — the app is
+        // expected to surface its own error UI. Only a launch with nowhere to redirect back to falls through to
+        // the plain in-app page below.
+        if (result.ContextMismatch)
+        {
+            if (!string.IsNullOrWhiteSpace(result.PostLaunchRedirectUri))
+            {
+                var mismatchReturnUrl = QueryHelpers.AddQueryString(
+                    result.PostLaunchRedirectUri, "launchError", "context_mismatch");
+                return Redirect(mismatchReturnUrl);
+            }
+
+            return Content(
+                "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Authorization rejected</title></head>" +
+                "<body style=\"font-family:sans-serif;max-width:32rem;margin:4rem auto;text-align:center;\">" +
+                "<h2>Authorization rejected</h2>" +
+                "<p>This account is already linked to a different patient/practitioner and cannot be re-authorized " +
+                "with a different one. Please close this window and contact your administrator if you believe this " +
+                "is an error.</p>" +
+                "</body></html>",
+                "text/html");
+        }
 
         // A workflow-triggered launch with a configured PostLaunchRedirectUri hands the browser back to the
         // third-party app that opened the EHR launch, rather than leaving it on this bare JSON response — the run
@@ -330,7 +437,7 @@ public sealed class OAuthController : ControllerBase
 
         return Ok(new
         {
-            message = "Authorization complete. You can close this window and return to FHIRBridge.",
+            message = "Authorization complete. You can close this window and return to Segue.",
             sourceConnectionId = result.SourceConnectionId,
             source = result.SourceName
         });
@@ -355,7 +462,7 @@ public sealed class OAuthController : ControllerBase
     /// EHR appends iss + launch and invokes it — it is not opened directly); standalone / patient sources get the
     /// directly-openable <c>/oauth/authorize</c> entry. <c>opensDirectly</c> + <c>mode</c> let the portal label it.
     /// </summary>
-    private object BuildLaunchResponse(ApplicationType? applicationType, string context)
+    private object BuildLaunchResponse(ApplicationType? applicationType, string context, string? sessionId = null)
     {
         var opensDirectly = applicationType is ApplicationType.Standalone or ApplicationType.Patient;
         var mode = "ehr-launch";
@@ -367,6 +474,7 @@ public sealed class OAuthController : ControllerBase
             mode,
             opensDirectly,
             applicationType = applicationType?.ToString(),
+            sessionId,
         };
     }
 }

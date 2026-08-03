@@ -2,10 +2,13 @@ import { Component, inject, OnInit, OnDestroy, DestroyRef, signal } from '@angul
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime } from 'rxjs';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
+import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { BrandAssetFieldComponent } from '../../components/brand-asset-field/brand-asset-field.component';
 import { BrandingService } from '../../../services/branding.service';
 import { ThemeService } from '../../../services/theme.service';
-import { BrandConfiguration, BrandThemeMode } from '../../../models/brand-configuration.model';
+import { ToastService } from '../../../services/toast.service';
+import { BrandConfiguration, BrandThemeMode, LoaderStyle } from '../../../models/brand-configuration.model';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
@@ -16,19 +19,35 @@ const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
   templateUrl: './branding-settings.component.html',
   styleUrl:    './branding-settings.component.scss',
 })
-export class BrandingSettingsComponent implements OnInit, OnDestroy {
+export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedChanges {
   private readonly fb          = inject(FormBuilder);
   private readonly destroyRef  = inject(DestroyRef);
   protected readonly branding  = inject(BrandingService);
   private readonly themeService = inject(ThemeService);
+  private readonly toast = inject(ToastService);
 
-  protected readonly saved  = signal(false);
   protected readonly saving = signal(false);
+
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+
+  constructor() {
+    this.unsavedChangesRegistry.register(
+      () => this.hasUnsavedChanges() || this.isSaveInProgress(),
+      this.destroyRef,
+    );
+  }
 
   protected readonly themeModeOptions: { id: BrandThemeMode; label: string }[] = [
     { id: 'light',  label: 'Light' },
     { id: 'dark',   label: 'Dark' },
     { id: 'system', label: 'System' },
+  ];
+
+  protected readonly loaderStyleOptions: { id: LoaderStyle; label: string }[] = [
+    { id: 'bar',     label: 'Top bar' },
+    { id: 'spinner', label: 'Spinner' },
+    { id: 'list',    label: 'List scan' },
+    { id: 'none',    label: 'None' },
   ];
 
   protected readonly fontOptions = [
@@ -51,6 +70,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
     website:          [''],
     emailFooterText:  [''],
     defaultThemeMode: ['light' as BrandThemeMode],
+    loaderStyle:      ['bar' as LoaderStyle],
     logoUrl:              [''],
     darkLogoUrl:          [''],
     faviconUrl:           [''],
@@ -103,8 +123,8 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
       this.originalThemeMode = saved.defaultThemeMode;
       this.savedThisSession  = true;
       this.saving.set(false);
-      this.saved.set(true);
-      setTimeout(() => this.saved.set(false), 3000);
+      this.form.markAsPristine();
+      this.toast.success('Branding saved');
     });
   }
 
@@ -115,6 +135,17 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
     this.savedThisSession  = true; // the reset itself is the intended persisted state
     this.themeService.set(this.originalThemeMode);
     this.populateForm(this.originalConfig);
+    this.form.markAsPristine();
+    this.toast.success('Branding reset to default');
+  }
+
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  hasUnsavedChanges(): boolean {
+    return this.form.dirty;
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   /** Mirrors BrandingService.effectiveLogoUrl, but off the draft form value so the
@@ -139,6 +170,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
       website:          cfg.website,
       emailFooterText:  cfg.emailFooterText,
       defaultThemeMode: cfg.defaultThemeMode,
+      loaderStyle:      cfg.loaderStyle,
       logoUrl:              cfg.assets.logoUrl,
       darkLogoUrl:          cfg.assets.darkLogoUrl,
       faviconUrl:           cfg.assets.faviconUrl,
@@ -164,6 +196,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy {
       website:          v.website,
       emailFooterText:  v.emailFooterText,
       defaultThemeMode: v.defaultThemeMode,
+      loaderStyle:      v.loaderStyle,
       assets: {
         logoUrl:              v.logoUrl,
         darkLogoUrl:          v.darkLogoUrl,

@@ -23,6 +23,9 @@ public sealed class PatientApplicationStrategy : SourceApplicationStrategyBase
 
     public override ApplicationType Handles => ApplicationType.Patient;
 
+    // The sign-in establishes a patient context (the token response's `patient` claim, self-only scope).
+    public override FhirContextBindingKind BindingResourceType => FhirContextBindingKind.Patient;
+
     public override SourceApplicationDescriptor Describe() => new(
         ApplicationType.Patient,
         SmartOAuthFlows.AuthorizationCode,

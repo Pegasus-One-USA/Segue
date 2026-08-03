@@ -77,7 +77,7 @@ public sealed class SetupService : ISetupService
         user.LinkExternalIdentity(identity.Subject, request.Provider);
 
         var role = await _repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, cancellationToken)
-            ?? throw new InvalidOperationException("The SuperAdmin role is not configured.");
+            ?? throw new InvalidOperationException("Setup could not complete. Please contact support.");
 
         await _repository.AddUserAsync(user, cancellationToken);
         await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);

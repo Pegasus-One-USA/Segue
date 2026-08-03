@@ -173,6 +173,12 @@ public static class RbacSeedData
         new("View Cerner source connection configuration.", PermissionGroupCode.Cerner, PermissionActionCode.Read),
         new("Assign a Cerner source connection to a tenant.", PermissionGroupCode.Cerner, PermissionActionCode.Assign),
         new("Trigger a pipeline run against a Cerner source connection.", PermissionGroupCode.Cerner, PermissionActionCode.Execute),
+
+        // Governance module permission.
+        new(
+            "View the governance audit trail, authentication logs, data access logs, and security events.",
+            PermissionGroupCode.Governance,
+            PermissionActionCode.Read),
     ];
 
     /// <summary>
@@ -191,7 +197,7 @@ public static class RbacSeedData
     [
         new(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator."),
         new(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users."),
-        new(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output."),
+        new(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs workflow configurations, and reviews data and audit output."),
         new(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs."),
     ];
 

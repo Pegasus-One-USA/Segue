@@ -68,6 +68,15 @@ export interface MappingRow {
    * physical table/column names.
    */
   referencesResource?: string | null;
+  // True only for a resource's mandatory id row (see DestinationWizardComponent._reconcileIdRows) — the
+  // column an Upsert write matches an existing row on. Forced/locked by the wizard; never set true on any
+  // other row.
+  isUpsertKey?: boolean;
+  // True only for a reference-field row forced/locked by _reconcileParentRefRows because this resource is
+  // configured as a child of parentResourceType (see selectedParentsOf/toggleParent). Never removable,
+  // never reassignable to another business field — same lock semantics as the id row.
+  isRequiredParentRef?: boolean;
+  parentResourceType?: string;
 }
 
 /** The legacy flat shape already round-tripped through node.fields['dest_mappings']. */
@@ -80,6 +89,9 @@ export interface LegacyMappingRow {
   jsonPath?: string;
   valueType?: string;
   arrays?: string[];
+  isUpsertKey?: boolean;
+  isRequiredParentRef?: boolean;
+  parentResourceType?: string;
 }
 
 /**
@@ -103,6 +115,9 @@ export function migrateLegacyRow(row: LegacyMappingRow): MappingRow {
     instance: { type: 'first' },
     targetName: row.column,
     tableName: row.target,
+    isUpsertKey: row.isUpsertKey,
+    isRequiredParentRef: row.isRequiredParentRef,
+    parentResourceType: row.parentResourceType,
   };
 }
 
@@ -129,6 +144,9 @@ export function serializeRowsFlat(
       arrays: primary?.arrays,
       arrayPolicy,
       approximated,
+      isUpsertKey: row.isUpsertKey,
+      isRequiredParentRef: row.isRequiredParentRef,
+      parentResourceType: row.parentResourceType,
     };
   });
 }

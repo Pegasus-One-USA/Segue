@@ -1,24 +1,24 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { DestinationConfigurationService } from '../../services/destination-configuration.service';
-import { DestinationConfigurationDto, DestinationType } from '../../models/destination-configuration.model';
+import { DestinationConfigurationDto, DestinationSortColumn, DestinationType, SortOrder } from '../../models/destination-configuration.model';
 import {
   DestinationConnectionDialogComponent,
   DestinationConnectionDialogData,
 } from '../../dialogs/destination-connection-dialog/destination-connection-dialog.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 /**
  * Standalone admin CRUD for DestinationConfiguration rows — server-side paged/filtered (no existing screen in
@@ -35,9 +35,9 @@ import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm
     MatTableModule,
     MatButtonModule,
     MatIconModule,
-    MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    PaginationBarComponent,
   ],
   templateUrl: './destination-connection-list.component.html',
   styleUrls: ['./destination-connection-list.component.scss'],
@@ -45,10 +45,13 @@ import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm
 export class DestinationConnectionListComponent implements OnInit {
   private readonly svc = inject(DestinationConfigurationService);
   private readonly dialog = inject(MatDialog);
-  private readonly snack = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
 
   readonly searchQuery = signal('');
   readonly typeFilter = signal<DestinationType | ''>('');
+  readonly statusFilter = signal<'' | 'true' | 'false'>('');
+  readonly sortColumn = signal<DestinationSortColumn>('name');
+  readonly sortDirection = signal<SortOrder>('asc');
   readonly pageIndex = signal(0);
   readonly pageSize = signal(10);
   readonly loading = signal(true);
@@ -61,20 +64,26 @@ export class DestinationConnectionListComponent implements OnInit {
    *  Delete independently of historyById (a never-run destination can still be wired into a live workflow). */
   readonly usedInWorkflowIds = signal<Set<string>>(new Set());
 
-  readonly displayedCols = ['name', 'destinationType', 'target', 'isEnabled', 'actions'];
+  readonly displayedCols = ['name', 'destinationType', 'target', 'isEnabled', 'actionBy', 'actionOn', 'actions'];
+
+  /** Only one sortable column today — "Action on" — server-driven since this list is server-paged. */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+    this.pageIndex.set(0);
+    this.load();
+  }
+
+  private clearActionOnSort(): void {
+    this.actionOnSortDirection.set(null);
+  }
 
   readonly typeOptions: { value: DestinationType; label: string }[] = [
     { value: 'SqlServer', label: 'SQL Server' },
     { value: 'Csv', label: 'CSV' },
     { value: 'Sftp', label: 'CSV (SFTP)' },
   ];
-
-  readonly showingFrom = computed(() =>
-    this.totalCount() === 0 ? 0 : this.pageIndex() * this.pageSize() + 1
-  );
-  readonly showingTo = computed(() =>
-    Math.min((this.pageIndex() + 1) * this.pageSize(), this.totalCount())
-  );
 
   ngOnInit(): void {
     this.load();
@@ -94,10 +103,16 @@ export class DestinationConnectionListComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
+    const actionOnDir = this.actionOnSortDirection();
     this.svc
       .getPaged({
         search: this.searchQuery() || undefined,
         destinationType: this.typeFilter() || undefined,
+        isEnabled: this.statusFilter() === '' ? undefined : this.statusFilter() === 'true',
+        // "Action on" and the regular column sort are mutually exclusive — see onSort/toggleActionOnSort,
+        // each clears the other's state, so exactly one of the two is ever active here.
+        sortBy: actionOnDir ? 'actionOn' : this.sortColumn(),
+        sortOrder: actionOnDir ?? this.sortDirection(),
         page: this.pageIndex() + 1,
         pageSize: this.pageSize(),
       })
@@ -110,7 +125,7 @@ export class DestinationConnectionListComponent implements OnInit {
         },
         error: () => {
           this.loading.set(false);
-          this.snack.open('Failed to load destination connections.', 'Dismiss', { duration: 4000 });
+          this.toast.error('Failed to load destination connections.');
         },
       });
   }
@@ -146,14 +161,36 @@ export class DestinationConnectionListComponent implements OnInit {
     this.load();
   }
 
-  reset(): void {
-    this.searchQuery.set('');
-    this.typeFilter.set('');
+  onStatusFilterChange(val: string): void {
+    this.statusFilter.set(val as '' | 'true' | 'false');
     this.pageIndex.set(0);
     this.load();
   }
 
-  onPageChange(e: PageEvent): void {
+  onSort(column: DestinationSortColumn): void {
+    this.clearActionOnSort();
+    if (this.sortColumn() === column) {
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortColumn.set(column);
+      this.sortDirection.set('asc');
+    }
+    this.pageIndex.set(0);
+    this.load();
+  }
+
+  reset(): void {
+    this.searchQuery.set('');
+    this.typeFilter.set('');
+    this.statusFilter.set('');
+    this.sortColumn.set('name');
+    this.sortDirection.set('asc');
+    this.clearActionOnSort();
+    this.pageIndex.set(0);
+    this.load();
+  }
+
+  onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
     this.load();
@@ -179,7 +216,7 @@ export class DestinationConnectionListComponent implements OnInit {
       .afterClosed()
       .subscribe(result => {
         if (result) {
-          this.snack.open(successMessage, 'Dismiss', { duration: 3000 });
+          this.toast.success(successMessage);
           this.load();
         }
       });
@@ -204,12 +241,12 @@ export class DestinationConnectionListComponent implements OnInit {
         if (!confirmed) return;
         this.svc.delete(item.id).subscribe({
           next: () => {
-            this.snack.open(`"${item.name}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`"${item.name}" deleted.`);
             this.load();
           },
           error: (err: HttpErrorResponse) => {
             const message = err.error?.title ?? 'Failed to delete the destination connection.';
-            this.snack.open(message, 'Dismiss', { duration: 5000 });
+            this.toast.error(message);
           },
         });
       });

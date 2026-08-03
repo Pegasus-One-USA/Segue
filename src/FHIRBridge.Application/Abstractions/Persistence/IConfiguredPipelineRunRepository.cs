@@ -20,4 +20,9 @@ public interface IConfiguredPipelineRunRepository
         Guid pipelineRunId,
         bool isEnabled,
         CancellationToken cancellationToken);
+
+    /// <summary>Backs Correlation Search — the one run (if any) that produced a given CorrelationId.</summary>
+    Task<ConfiguredPipelineRunDto?> GetByCorrelationIdAsync(
+        string correlationId,
+        CancellationToken cancellationToken);
 }

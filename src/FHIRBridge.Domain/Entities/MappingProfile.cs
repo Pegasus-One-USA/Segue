@@ -3,7 +3,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class MappingProfile : AuditableChildEntity<Guid>
+public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private readonly List<MappingField> _fields = [];
 
@@ -18,12 +18,14 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
         Guid destinationId,
         string destinationObject,
         IEnumerable<MappingField> fields,
+        Guid? sourceConfigurationId = null,
         string? mappingJson = null)
     {
         Id = Guid.NewGuid();
         Name = name;
         ResourceType = resourceType;
         SourceConnectionId = sourceConnectionId;
+        SourceConfigurationId = sourceConfigurationId;
         DestinationId = destinationId;
         DestinationObject = destinationObject;
         IsEnabled = true;
@@ -32,6 +34,7 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public string ResourceType { get; private set; } = default!;
 
     /// <summary>
@@ -39,6 +42,15 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     /// destination, and resource type — routes that reference this mapping inherit all three.
     /// </summary>
     public Guid SourceConnectionId { get; private set; }
+
+    /// <summary>
+    /// The workflow-specific <see cref="SourceConfiguration"/> this mapping uses (search criteria, scopes, sync
+    /// cursor) — additive alongside <see cref="SourceConnectionId"/> while the source-connection/configuration split
+    /// (docs/backend/13-source-connection-configuration-split-plan.md) is rolled out. Nullable until Slice 2 cuts
+    /// application code over to reading/writing it; populated by the Slice 1 migration backfill.
+    /// </summary>
+    public Guid? SourceConfigurationId { get; private set; }
+
     public Guid DestinationId { get; private set; }
     public string DestinationObject { get; private set; } = default!;
     public bool IsEnabled { get; private set; }
@@ -57,11 +69,13 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
         Guid sourceConnectionId,
         Guid destinationId,
         string destinationObject,
-        IEnumerable<MappingField> fields)
+        IEnumerable<MappingField> fields,
+        Guid? sourceConfigurationId = null)
     {
         Name = name;
         ResourceType = resourceType;
         SourceConnectionId = sourceConnectionId;
+        SourceConfigurationId = sourceConfigurationId;
         DestinationId = destinationId;
         DestinationObject = destinationObject;
         ReplaceFields(fields);
@@ -82,6 +96,13 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>
     private void ReplaceFields(IEnumerable<MappingField> fields)
     {
         _fields.Clear();
-        _fields.AddRange(fields);
+        // One row per destination column: a caller resubmitting the same TargetField more than once in a single
+        // request (e.g. the field was re-picked in the mapping editor without the earlier row being cleared) must
+        // not persist as separate rows. Keep the last occurrence — it reflects whatever the caller most recently
+        // configured for that column.
+        _fields.AddRange(
+            fields
+                .GroupBy(f => f.TargetField, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.Last()));
     }
 }

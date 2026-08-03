@@ -14,6 +14,11 @@ export interface SourceAuthenticationModel {
   privateKeyKeyVaultName?: string | null;
   privateKeySecretName?: string | null;
   keyId?: string | null;
+  /** The URL actually registered with the EHR to fetch this connection's JWK Set — FHIRBridge's own hosted
+   *  .well-known/jwks.json for a Generated/Imported key, or an admin-typed external URL for a key served
+   *  elsewhere. Purely informational (FHIRBridge never fetches it itself); persisted so reopening this
+   *  connection shows back whatever was actually registered instead of only ever guessing. */
+  jwksUrl?: string | null;
 }
 
 /** Matches SourceInteractiveConfigurationDto.cs exactly. */
@@ -57,6 +62,10 @@ export interface SourceConnectionModel {
   applicationType?: string | null;
   interactive?: SourceInteractiveConfigurationModel | null;
   retrieval?: SourceRetrievalConfigurationModel | null;
+  createdOnUtc?: string | null;
+  createdBy?: string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?: string | null;
 }
 
 /** Matches CreateSourceConnectionRequest's expected body shape for both create (POST) and update (PUT). */
@@ -68,4 +77,37 @@ export interface SourceConnectionRequest {
   applicationType?: string | null;
   interactive?: SourceInteractiveConfigurationModel | null;
   retrieval?: SourceRetrievalConfigurationModel | null;
+}
+
+/** Matches the API's GeneratedSigningKeyDto shape exactly (see GeneratedSigningKeyDto.cs). The private key itself
+ *  is never returned — only what's needed to wire it into SourceAuthenticationModel on save. */
+export interface GeneratedSigningKeyModel {
+  keyId: string;
+  keyVaultName: string;
+  secretName: string;
+  algorithm: string;
+}
+
+/** Matches the backend's ApplicationType enum (serialized as a string) — the "Audience" column/filter. */
+export type ApplicationTypeModel = 'Backend' | 'EhrLaunch' | 'Standalone' | 'Patient';
+
+export type SourceSortColumn = 'name' | 'sourceSystemType' | 'applicationType' | 'isEnabled' | 'actionOn';
+export type SortOrder = 'asc' | 'desc';
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface SourceConnectionFilter {
+  search?: string;
+  sourceSystemType?: EhrVendor;
+  applicationType?: ApplicationTypeModel;
+  isEnabled?: boolean;
+  sortBy?: SourceSortColumn;
+  sortOrder?: SortOrder;
+  page: number;
+  pageSize: number;
 }

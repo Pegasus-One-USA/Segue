@@ -45,6 +45,9 @@ export interface DestinationProbeRequest {
   trustServerCertificate?: boolean;
   encrypt?: boolean;
   connectionString?: string;
+  // PostgreSQL / MySQL only — see DestinationConnectionProbeRequest.RequireSsl on the backend for why this
+  // defaults false rather than being hardcoded true like SQL Server's trustServerCertificate/encrypt above.
+  requireSsl?: boolean;
 }
 
 export interface SchemaMutationResult {

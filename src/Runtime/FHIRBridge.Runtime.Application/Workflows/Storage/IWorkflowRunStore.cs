@@ -21,4 +21,9 @@ public interface IWorkflowRunStore
     Task<IReadOnlyCollection<WorkflowRun>> ListRecentAsync(
         int count,
         CancellationToken cancellationToken);
+
+    /// <summary>All-time run count per status, across every workflow definition — every <see cref="WorkflowRunStatus"/>
+    /// value is present even if its count is 0. Backs the Dashboard's status stat tiles; unlike
+    /// <see cref="ListRecentAsync"/>, this is not capped to the most recent N runs.</summary>
+    Task<IReadOnlyDictionary<WorkflowRunStatus, int>> GetStatusCountsAsync(CancellationToken cancellationToken);
 }

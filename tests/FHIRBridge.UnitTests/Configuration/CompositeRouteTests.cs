@@ -1,7 +1,9 @@
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.SharedKernel.Enums;
@@ -27,7 +29,12 @@ public sealed class CompositeRouteTests
     {
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
-            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>());
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
+            Mock.Of<IParentReferenceResolver>(),
+            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
+            new CreateDestinationConfigurationRequestValidator(),
+            new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 
     [Fact]

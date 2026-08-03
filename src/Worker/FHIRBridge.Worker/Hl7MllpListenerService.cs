@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Hl7v2;
 using FHIRBridge.Integration.Hl7v2;
 using Microsoft.Extensions.Options;
@@ -10,8 +11,15 @@ namespace FHIRBridge.Worker;
 
 /// <summary>
 /// Listens for HL7 v2 messages over MLLP (TCP), hands each to the <see cref="Hl7MessageProcessor"/>, and writes back
-/// the framed ACK. Disabled by default; enable via Hl7Mllp:Enabled with a Port and WebhookConfigurationId.
+/// the framed ACK. Gated by Hl7Mllp:Enabled with a Port and WebhookConfigurationId.
 /// </summary>
+/// <remarks>
+/// <b>NOT CURRENTLY REGISTERED</b> — <c>Program.cs</c> does not call <c>AddHostedService&lt;Hl7MllpListenerService&gt;()</c>,
+/// so the <c>Hl7Mllp:Enabled</c> config flag has no effect today regardless of its value: this listener never starts,
+/// and no HL7 v2 MLLP messages are received. Unlike the scheduler/queue processors elsewhere in this file's sibling
+/// classes, this one has no known race risk — it's standalone (an inbound TCP listener), so registering it should be
+/// safe whenever this feature is actually needed. See docs/backend/08-governance-logging-status.md.
+/// </remarks>
 public sealed class Hl7MllpListenerService : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -98,6 +106,14 @@ public sealed class Hl7MllpListenerService : BackgroundService
             catch (Exception exception)
             {
                 _logger.LogError(exception, "HL7 v2 MLLP connection failed.");
+
+                using var scope = _serviceScopeFactory.CreateScope();
+                var exceptionManager = scope.ServiceProvider.GetService<IGlobalExceptionManager>();
+                if (exceptionManager is not null)
+                {
+                    await exceptionManager.CaptureAsync(
+                        exception, new ExceptionContext(Module: "HL7 v2 MLLP"), CancellationToken.None);
+                }
             }
         }
     }

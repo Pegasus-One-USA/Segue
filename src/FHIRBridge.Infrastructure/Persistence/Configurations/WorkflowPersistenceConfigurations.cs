@@ -27,6 +27,14 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
 
         builder.Property(x => x.LastTriggeredOnUtc);
 
+        // Required with a DB-level default so this is never null even for a row inserted outside the normal
+        // SqlWorkflowDefinitionStore.SaveAsync path (that path itself always stamps a real actor/timestamp —
+        // see its own remarks — these defaults are strictly a safety net, not the primary source of truth).
+        builder.Property(x => x.CreatedOnUtc).IsRequired().HasDefaultValueSql("GETUTCDATE()");
+        builder.Property(x => x.CreatedBy).IsRequired().HasMaxLength(320).HasDefaultValue("system");
+        builder.Property(x => x.UpdatedOnUtc);
+        builder.Property(x => x.UpdatedBy).HasMaxLength(320);
+
         // Workflow-level scheduling metadata (approach B) — flattened into the WorkflowDefinitions row. Optional:
         // existing rows (and manual/launched workflows) simply have null trigger columns.
         builder.OwnsOne(x => x.Trigger, trigger =>
@@ -35,6 +43,8 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
             trigger.Property(t => t.ScheduleExpression).HasMaxLength(200).HasColumnName("TriggerScheduleExpression");
             trigger.Property(t => t.IntervalMinutes).HasColumnName("TriggerIntervalMinutes");
             trigger.Property(t => t.BackfillOnFirstRun).HasColumnName("TriggerBackfillOnFirstRun");
+            trigger.Property(t => t.TimeZoneId).HasMaxLength(100).HasColumnName("TriggerTimeZoneId")
+                .HasDefaultValue("UTC");
         });
         builder.Navigation(x => x.Trigger).IsRequired(false);
 
@@ -134,6 +144,7 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.TargetNodeId);
+        builder.Property(x => x.CorrelationId).HasMaxLength(100);
 
         builder.HasMany(x => x.NodeRuns)
             .WithOne()
@@ -145,6 +156,7 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
 
         builder.HasIndex(x => x.WorkflowDefinitionId);
         builder.HasIndex(x => x.StartedAt);
+        builder.HasIndex(x => x.CorrelationId);
     }
 }
 

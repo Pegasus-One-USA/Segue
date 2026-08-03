@@ -26,7 +26,7 @@
 }
 
 .page-title { font-size: 22px; font-weight: 700; color: var(--color-ink); margin: 0; }
-.page-sub   { font-size: 14px; color: var(--color-muted); margin: 4px 0 0; max-width: 640px; }
+.page-sub   { font-size: 14px; color: var(--color-muted); margin: 4px 0 0; white-space: nowrap; }
 
 .ico-refresh {
   display: inline-block;
@@ -37,6 +37,10 @@
 
 // ── Filter ──────────────────────────────────────────────────────────────────
 .filter-card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -45,6 +49,7 @@
 
 .search-wrap {
   position: relative;
+  flex: 1 1 280px;
   max-width: 420px;
 
   .search-ico {
@@ -77,23 +82,135 @@
   }
 }
 
+.filters-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-ink-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+
+  &:hover { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
+
+  svg { display: block; flex-shrink: 0; }
+}
+
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &--active {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+}
+
+.filter-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.filter-dropdown-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+}
+
+.filter-dropdown-empty {
+  padding: 8px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.filter-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-ink);
+  cursor: pointer;
+
+  &:hover { background: var(--color-side); }
+
+  input[type='checkbox'] { cursor: pointer; }
+}
+
+.filter-clear-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
 // ── Table ───────────────────────────────────────────────────────────────────
 .table-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   overflow: hidden;
-}
-
-.table-meta {
+  // Fills the remaining height of .list-page (a flex column with min-height: 100%) instead of only
+  // being as tall as its own content — otherwise a short result set leaves .pagination-bar sitting
+  // right under the table with a big empty gap below it, rather than pinned to the page's bottom.
   display: flex;
-  align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-side);
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
-
-.entries-info { font-size: 13px; color: var(--color-muted); }
 
 .table-wrapper { overflow-x: auto; }
 
@@ -139,22 +256,150 @@
 
 .data-row { transition: background var(--transition-base); &:hover { background: var(--color-side); } }
 
+// Sortable column headers
+.col-sortable {
+  cursor: pointer;
+  user-select: none;
+
+  &:hover { color: var(--color-ink); }
+}
+
+.sort-ico {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--color-muted-2);
+  opacity: 0.5;
+
+  &--active {
+    color: var(--color-primary);
+    opacity: 1;
+  }
+}
+
+// Pagination footer (design spec §16: Prev/Next + "Showing X–Y of Z" + page size 10/20/50)
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-side);
+  margin-top: auto;
+}
+
+.page-size-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.page-size-label {
+  font-size: 13px;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  select {
+    appearance: none;
+    height: 34px;
+    padding: 0 30px 0 12px;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+    &:hover { border-color: var(--color-muted-2); }
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
+    }
+  }
+
+  .select-chevron {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-muted);
+    pointer-events: none;
+  }
+}
+
+.range-info {
+  font-size: 13px;
+  color: var(--color-muted);
+  white-space: nowrap;
+
+  strong { color: var(--color-ink-2); font-weight: 600; }
+}
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.page-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base), color var(--transition-base);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-muted-2);
+    background: var(--color-side);
+    color: var(--color-ink);
+  }
+
+  &:disabled {
+    background: var(--color-side);
+    color: var(--color-muted-2);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+.page-of {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+  min-width: 92px;
+  text-align: center;
+  padding: 0 4px;
+}
+
 .col-index { width: 52px; text-align: center; color: var(--color-muted); font-size: 13px; }
 .col-num   { width: 80px; text-align: center; }
 td.col-num { text-align: center; color: var(--color-ink-2); }
-.col-actions { width: 340px; }
+// Was 340px to fit 6 individual icon buttons (Edit/Enable/Public/Duplicate/Copy ID/Delete) side by
+// side — now that those 5 live inside the "more actions" (⋮) menu, the column only needs to fit the
+// Run button + divider + kebab trigger, so the old width just left a large empty gutter on the right.
+.col-actions { width: 200px; }
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 .name-block { display: flex; flex-direction: column; gap: 2px; }
-
-.pipe-avatar {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: var(--color-info-soft);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font-size: 16px;
-
-  &.launch { background: var(--color-primary-soft); }
-}
 
 .cell-primary { font-size: 14px; font-weight: 600; color: var(--color-ink); }
 .cell-meta    { font-size: 12px; color: var(--color-muted); }
@@ -194,17 +439,80 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 }
 
 // ── Buttons ─────────────────────────────────────────────────────────────────
-.row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+// nowrap: the actions cell must never wrap onto a second line — .table-wrapper
+// already scrolls horizontally (see above) if a viewport is ever too narrow to
+// fit it, so wrapping here only ever produced an inconsistent, fragile layout.
+.row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 
-.action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 2px; }
+.action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 2px; flex-shrink: 0; }
+
+// ── Row "more actions" menu ───────────────────────────────────────────────────
+// Same look as .filter-dropdown-panel above, but position: fixed with top/right set inline from
+// toggleActionMenu's getBoundingClientRect() call, not position: absolute + static offsets. This row
+// sits inside .table-wrapper, whose overflow-x: auto silently forces its overflow-y to auto too (an
+// ancestor can't have overflow-x auto and overflow-y visible at once — the CSS spec coerces the
+// visible axis to auto) — an absolutely-positioned panel here would get clipped to almost nothing the
+// moment it needs to extend below the table's own visible bounds, since it never escapes the nearest
+// positioned ancestor. Fixed positioning is viewport-relative and escapes that clipping entirely.
+.row-menu { position: relative; }
+
+.row-menu-panel {
+  position: fixed;
+  z-index: 20;
+  min-width: 240px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+
+  mat-icon { flex-shrink: 0; font-size: 18px; width: 18px; height: 18px; color: var(--color-muted); }
+
+  &:hover:not(:disabled) { background: var(--color-side); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  &--danger {
+    color: var(--color-error);
+    mat-icon { color: var(--color-error); }
+    &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-error) 10%, transparent); }
+  }
+}
+
+.row-menu-divider { height: 1px; background: var(--color-border); margin: 4px 2px; }
 
 .btn-icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px;
-  border: 1.5px solid var(--color-border); border-radius: var(--radius-base);
+  flex-shrink: 0;
+  // The browser's native <button> padding was never reset here — combined with the fixed 32px box
+  // and border, it left too little room to center an 18px icon, so it rendered off-center. Zeroed so
+  // flexbox centering has the full box (minus border) to work with.
+  width: 32px; height: 32px; padding: 0;
+  // §5 table action buttons use the sm (6px) radius, not the general button base radius.
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-sm);
   background: transparent; color: var(--color-ink-2);
-  font-size: 15px; line-height: 1; cursor: pointer;
+  line-height: 1; cursor: pointer;
   transition: border-color var(--transition-base), background var(--transition-base), color var(--transition-base);
+
+  mat-icon { width: 18px; height: 18px; font-size: 18px; }
 
   &:hover:not(:disabled) { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
   &:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -237,6 +545,11 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   &:hover:not(:disabled) { filter: brightness(0.95); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
+
+// min-width matches the widest label this slot ever renders ("Get Launch URL") so the divider and icon buttons
+// that follow always start at the same x position, whether this row shows that button or the shorter "Run" one
+// — without this the whole action row shifts left/right per row.
+.split-btn { position: relative; display: inline-flex; min-width: 103px; }
 
 // Page-level primary CTA ("New Workflow") — deliberately distinct from .btn-primary above, which is the row
 // action button (soft-info by default, teal only for its .is-launch modifier). This is the one true teal
@@ -278,7 +591,7 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
-.btn-ico { font-size: 14px; line-height: 1; }
+.btn-ico { width: 16px; height: 16px; font-size: 16px; line-height: 1; }
 
 // ── States ──────────────────────────────────────────────────────────────────
 .state-block {
@@ -353,35 +666,16 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
-.modal-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-  margin-bottom: 6px;
-}
+.text-input {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 12px; font-size: 14px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-base);
+  background: var(--color-bg); color: var(--color-ink);
 
-.modal-input {
-  width: 100%;
-  height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-base);
-  background: var(--color-bg);
-  font-size: 14px;
-  color: var(--color-ink);
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
-
-  &::placeholder { color: var(--color-muted); }
   &:focus {
+    outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px var(--color-primary-soft);
-  }
-  &:disabled {
-    background: var(--color-side);
-    cursor: not-allowed;
   }
 }
 

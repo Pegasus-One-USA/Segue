@@ -1,5 +1,19 @@
+// Stretches the host to fill nld-detail's available height (rather than sizing to content) so
+// .eaf-body can grow into any leftover space and .eaf-footer sits flush at the true bottom on
+// short forms, instead of floating above blank space. .eaf-topbar/.eaf-footer are flex-shrink: 0
+// pinned members of the .eaf column below, so sticky positioning is no longer needed for either.
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.eaf {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── Topbar ─────────────────────────────────────────────────────────────────── */
@@ -11,8 +25,7 @@
   padding: 11px 24px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-side);
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   z-index: 2;
 }
 
@@ -48,6 +61,12 @@
   border: 1px solid color-mix(in srgb, var(--color-success) 35%, white);
 }
 
+.eaf-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .eaf-cancel-btn {
   font-size: 12.5px;
   font-weight: 600;
@@ -61,12 +80,34 @@
   &:hover { color: var(--color-ink); }
 }
 
+/* The dialog-level "✕" (fully closes Node Library), relocated here next to "← Back to library"
+   now that the outer Node Library header is gone. */
+.eaf-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
+}
+
 /* ── Body ───────────────────────────────────────────────────────────────────── */
 .eaf-body {
   padding: 16px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar { width: 5px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
 }
 
 /* ── Section ─────────────────────────────────────────────────────────────────── */
@@ -252,6 +293,35 @@
   &:focus {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12);
+  }
+}
+
+/* ── Existing connection row (select + clear button) ────────────────────────── */
+.eaf-existing-connection-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+
+  .eaf-select-wrap { flex: 1; }
+}
+
+.eaf-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-input);
+  border-radius: 9px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+
+  &:hover {
+    color: var(--color-ink);
+    border-color: var(--color-border);
   }
 }
 
@@ -655,8 +725,7 @@
   padding: 12px 24px;
   border-top: 1px solid var(--color-border);
   background: var(--color-side);
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   z-index: 2;
 }
 
@@ -673,13 +742,82 @@
     background: var(--color-surface);
     border-color: var(--color-border);
     color: var(--color-muted);
-    &:hover { background: var(--color-bg); }
+    &:hover {
+      background: var(--color-primary-soft);
+      border-color: var(--color-primary-mid);
+      color: var(--color-primary-dark);
+    }
   }
 
   &--primary {
     background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
     color: var(--color-on-primary);
-    &:hover { background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark)); transform: translateY(-1px); }
-    &:active { transform: translateY(0); }
+    &:hover:not(:disabled) { background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark)); transform: translateY(-1px); }
+    &:active:not(:disabled) { transform: translateY(0); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Still clickable (unlike :disabled) — clicking while invalid runs save()'s own
+       markAllAsTouched()/focus-first-invalid path so the user sees which field is missing. */
+    &.eaf-btn--invalid { opacity: 0.5; }
   }
+}
+
+.eaf-file-btn { cursor: pointer; }
+.eaf-file-input { display: none; }
+
+.eaf-existing-key-panel {
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-side);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eaf-key-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+  margin: 0;
+
+  > div { display: flex; flex-direction: column; gap: 2px; }
+
+  dt {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-ink);
+    font-family: monospace;
+    word-break: break-all;
+  }
+}
+
+.eaf-warning-box {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, white);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+// .eaf-field is a flex column (align-items: stretch by default), which would otherwise force this row's
+// button(s) to the field's full width — wrapping them in their own flex row keeps them their natural size.
+.eaf-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }

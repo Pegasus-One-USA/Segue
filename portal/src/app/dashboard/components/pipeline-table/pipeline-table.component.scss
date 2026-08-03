@@ -58,6 +58,8 @@
   &.status-skipped             { background: var(--color-side);         color: var(--color-muted); }
   &.status-queued              { background: var(--color-warning-soft); color: var(--color-warning-strong); }
   &.status-cancelled           { background: var(--color-side);         color: var(--color-muted); }
+  &.status-partial   { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &.status-awaiting  { background: var(--color-info-soft);    color: var(--color-info-strong); }
 }
 
 .action-cell {

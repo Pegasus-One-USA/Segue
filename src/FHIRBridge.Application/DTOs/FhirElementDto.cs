@@ -11,4 +11,5 @@ public sealed record FhirElementDto(
     string Cardinality,
     string ValueType,
     bool IsArray,
-    IReadOnlyList<string> Arrays);
+    IReadOnlyList<string> Arrays,
+    IReadOnlyList<string> ReferenceTargetTypes);

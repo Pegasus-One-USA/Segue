@@ -1,6 +1,8 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -10,14 +12,14 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace FHIRBridge.Api.Controllers.V1;
 
 /// <summary>
-/// Anonymous "mint a public launch URL" endpoint for the Patient Standalone flow — the MyChart-endpoint counterpart
-/// of <see cref="OAuthController.GetPublicWorkflowStandaloneUrl"/>. Deliberately a separate controller (not an added
-/// branch on OAuthController) so the existing Provider Standalone endpoint's Epic-only gate never has to change to
-/// support this; the two flows are fully independent from here down. Only mints a context for a workflow the admin
-/// has explicitly opted in via <c>POST /workflows/{workflowId}/enable-public-launch</c> (the same, unmodified
-/// mechanism Provider Standalone already uses) whose source resolves to <see cref="ApplicationType.Patient"/>, and
-/// only for an <paramref name="ehrEndpointId"/> that resolves to an EndpointType.MyChart row — never the shared Epic
-/// sandbox, which stays behind the Provider Standalone endpoint.
+/// Anonymous "mint a public launch URL" endpoint for the Patient Standalone flow — the counterpart of
+/// <see cref="OAuthController.GetPublicWorkflowStandaloneUrl"/>. Deliberately a separate controller (not an added
+/// branch on OAuthController) so the two flows stay fully independent from here down. Only mints a context for a
+/// workflow the admin has explicitly opted in via <c>POST /workflows/{workflowId}/enable-public-launch</c> (the
+/// same, unmodified mechanism Provider Standalone already uses) whose source resolves to
+/// <see cref="ApplicationType.Patient"/>, and only for an <paramref name="ehrEndpointId"/> that resolves to a known
+/// EhrEndpoint row of type <see cref="EhrEndpointType.MyChart"/> — a real customer's own branded instance, never
+/// the shared Epic sandbox.
 /// </summary>
 [ApiController]
 [AllowAnonymous]
@@ -27,19 +29,19 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
 {
     private readonly IInteractiveSourceAuthorizationService _authorizationService;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
-    private readonly IPatientStandaloneEhrEndpointService _myChartEndpointService;
-    private readonly IConfiguration _configuration;
+    private readonly IEhrEndpointService _ehrEndpointService;
+    private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
 
     public PatientStandaloneLaunchController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
-        IPatientStandaloneEhrEndpointService myChartEndpointService,
-        IConfiguration configuration)
+        IEhrEndpointService ehrEndpointService,
+        IAllowedCorsOriginsCache allowedCorsOriginsCache)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
-        _myChartEndpointService = myChartEndpointService;
-        _configuration = configuration;
+        _ehrEndpointService = ehrEndpointService;
+        _allowedCorsOriginsCache = allowedCorsOriginsCache;
     }
 
     [HttpGet("workflows/{workflowId:guid}/public-patient-standalone-url")]
@@ -47,7 +49,8 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublicPatientStandaloneUrl(
-        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
+        Guid workflowId, [FromQuery] Guid ehrEndpointId, [FromQuery] string? callerId, [FromQuery] string? sessionId,
+        [FromQuery] string? userIdentity, CancellationToken cancellationToken)
     {
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
         if (workflow is null || !workflow.IsPubliclyLaunchable)
@@ -55,7 +58,7 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             return NotFound();
         }
 
-        if (!await _myChartEndpointService.IsMyChartEndpointAsync(ehrEndpointId, cancellationToken))
+        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.MyChart, cancellationToken))
         {
             return NotFound();
         }
@@ -66,26 +69,48 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             return NotFound();
         }
 
-        // Anonymous endpoint — validate callerId against Portal:AllowedOrigins before honoring it (see
+        // Anonymous endpoint — validate callerId against the live allowed-origins set before honoring it (see
         // CallerIdOriginValidator), so it can't be used as an open redirect off a real MyChart login.
-        if (!string.IsNullOrWhiteSpace(callerId) && !CallerIdOriginValidator.IsAllowedOrigin(callerId, _configuration))
+        if (!string.IsNullOrWhiteSpace(callerId)
+            && !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, _allowedCorsOriginsCache, cancellationToken))
         {
             return BadRequest(new { error = "invalid_request", error_description = "callerId is not an allowed origin." });
         }
 
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
-        return Ok(BuildLaunchResponse(context));
+        // sessionId is an opaque identifier (never a URL, unlike callerId, so no origin check applies) that the
+        // Patient Standalone interactive token cache keys on instead of SourceConnectionId — see
+        // SmartAuthorizationCodeTokenProvider.BuildStoreKey. Reuse whatever the caller already has (a returning
+        // browser session resuming after a token expired) rather than always minting fresh, so its later
+        // hasValidToken/run calls keep finding the same cached token. Mint one here (not left to the caller) when
+        // absent so a first-time visitor still gets a value to persist and echo back on every later call. Capped
+        // defensively — this rides inside an encrypted token but a client could still send an unreasonably large
+        // string.
+        var effectiveSessionId = !string.IsNullOrWhiteSpace(sessionId) && sessionId.Length <= 200
+            ? sessionId
+            : Guid.NewGuid().ToString("N");
+
+        // userIdentity is a stable identifier for HealthApp's own logged-in account (e.g. patient@healthapp.local)
+        // — distinct from sessionId above, which is only an opaque per-browser cache key. When present, it is what
+        // CompleteAsync permanently binds to one FHIR patient. Never validated as an origin (unlike callerId): it
+        // is not a URL and never drives a redirect.
+        var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
+
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
+        return Ok(BuildLaunchResponse(context, effectiveSessionId));
     }
 
     // This controller only ever reaches here once applicationType has already been confirmed as Patient above, so
     // unlike OAuthController's BuildLaunchResponse, there is no other mode/opensDirectly branch to consider — the
-    // shape returned still matches it (launchUrl, mode, opensDirectly, applicationType) for the frontend's benefit.
-    private object BuildLaunchResponse(string context) => new
+    // shape returned still matches it (launchUrl, mode, opensDirectly, applicationType) for the frontend's benefit,
+    // plus sessionId so a first-time caller can persist and echo it on every later hasValidToken/run/discardToken
+    // call for this same browser session.
+    private object BuildLaunchResponse(string context, string sessionId) => new
     {
         launchUrl = BuildAuthorizeUri(context),
         mode = "patient",
         opensDirectly = true,
         applicationType = ApplicationType.Patient.ToString(),
+        sessionId,
     };
 
     private string BuildAuthorizeUri(string context) =>

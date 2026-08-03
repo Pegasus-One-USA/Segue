@@ -19,13 +19,24 @@ public interface IConfigurationService
 
     Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<SourceConfigurationDto>> GetSourceConfigurationsAsync(CancellationToken cancellationToken);
+
+    Task<SourceConfigurationDto> AddSourceConfigurationAsync(CreateSourceConfigurationRequest request, CancellationToken cancellationToken);
+
+    Task<SourceConfigurationDto?> GetSourceConfigurationByIdAsync(Guid sourceConfigurationId, CancellationToken cancellationToken);
+
+    Task<SourceConfigurationDto> UpdateSourceConfigurationAsync(Guid sourceConfigurationId, CreateSourceConfigurationRequest request, CancellationToken cancellationToken);
+
+    Task DeleteSourceConfigurationAsync(Guid sourceConfigurationId, CancellationToken cancellationToken);
+
     Task<WebhookConfigurationDto> AddWebhookConfigurationAsync(CreateWebhookConfigurationRequest request, CancellationToken cancellationToken);
 
     Task<WebhookConfigurationDto> SetWebhookConfigurationEnabledAsync(Guid webhookConfigurationId, bool isEnabled, CancellationToken cancellationToken);
 
     Task<DestinationConfigurationDto> AddDestinationConfigurationAsync(CreateDestinationConfigurationRequest request, CancellationToken cancellationToken);
 
-    Task<PagedResult<DestinationConfigurationDto>> GetDestinationConfigurationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<DestinationConfigurationDto>> GetDestinationConfigurationsPagedAsync(
+        DestinationFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken cancellationToken);
 
     Task<DestinationConfigurationDto> UpdateDestinationConfigurationAsync(Guid destinationId, CreateDestinationConfigurationRequest request, CancellationToken cancellationToken);
 

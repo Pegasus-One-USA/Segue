@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
@@ -18,6 +19,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
 {
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
+    private readonly IScopeGeneratorService _scopeGenerator;
     // IFhirPatientContextProvider is never registered as its own service type — it's reached by downcasting the
     // registered IFhirAccessTokenProvider (CompositeFhirAccessTokenProvider implements both), the same pattern
     // FhirSourceConnectorBase.ApplyPatientScopeAsync already uses.
@@ -26,10 +28,12 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
     public SourceConnectionRuntimeResolver(
         IConfigurationRepository repository,
         ISecretProvider secretProvider,
+        IScopeGeneratorService scopeGenerator,
         IFhirAccessTokenProvider? accessTokenProvider = null)
     {
         _repository = repository;
         _secretProvider = secretProvider;
+        _scopeGenerator = scopeGenerator;
         _accessTokenProvider = accessTokenProvider;
     }
 
@@ -38,7 +42,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         string? searchParameters,
         string? targetPatientId,
         CancellationToken cancellationToken,
-        string? patientSearchCriteria = null)
+        string? patientSearchCriteria = null,
+        string? callerId = null)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -82,6 +87,23 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         var retrieval = sourceConnection.Retrieval;
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
+        // A source connection that was created/re-saved without ever going through the wizard's scope preview (or
+        // the admin resync endpoint — see IEpicSourceConnectionScopeSyncService) can reach here with an empty
+        // persisted Authentication.Scopes list. Falling through to SmartAuthorizationCodeTokenProvider.ResolveScopes'
+        // own last-resort default in that case is wrong for anything but a Patient-type source — it hardcodes
+        // launch/patient + patient/*.read, which for a Standalone/EhrLaunch (Provider) source makes Epic show its
+        // native patient-search screen instead of going straight to consent. Generating from this workflow's own
+        // configured resource types (the same generator the wizard and the resync endpoint already use) keeps this
+        // in sync with actual usage without requiring an admin to remember to resync.
+        var scopes = sourceConnection.Authentication.Scopes.Any()
+            ? sourceConnection.Authentication.Scopes
+            : _scopeGenerator.Generate(
+                sourceConnection.ApplicationType,
+                retrieval?.ResourceTypes ?? [],
+                scopeVersion: "v2",
+                scopeVersionDetected: false,
+                supportedScopes: null).Scopes;
+
         var config = new FhirSourceConfiguration(
             sourceType,
             sourceConnection.Name,
@@ -90,7 +112,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             sourceConnection.Authentication.ClientId,
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
-            sourceConnection.Authentication.Scopes,
+            scopes,
             retrieval?.PageSize ?? 100,
             5,
             sourceConnection.Id,
@@ -112,7 +134,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                 ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
                 : null,
             TargetPatientId: targetPatientId,
-            PatientSearchCriteria: patientSearchCriteria);
+            PatientSearchCriteria: patientSearchCriteria,
+            CallerId: callerId);
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME
@@ -131,7 +154,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         return config;
     }
 
-    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null)
     {
         if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
         {
@@ -156,7 +179,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             Scopes: [],
             SourceConnectionId: sourceConnection.Id,
             ApplicationType: sourceConnection.ApplicationType,
-            TargetPatientId: targetPatientId);
+            TargetPatientId: targetPatientId,
+            CallerId: callerId);
 
         await patientContextProvider.DiscardTokenAsync(source, cancellationToken);
     }
@@ -167,14 +191,14 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
     // actually search for resources. For an interactive source this is a cache lookup (silently refreshing via the
     // refresh token if the cached access token has merely expired); it only returns false when a genuinely fresh
     // interactive sign-in is required.
-    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null)
     {
         if (_accessTokenProvider is null)
         {
             return false;
         }
 
-        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken);
+        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken, callerId: callerId);
         if (source is null)
         {
             return false;
@@ -205,14 +229,35 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         var parts = new List<string>();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         if (!string.IsNullOrWhiteSpace(baseSearchParameters))
         {
-            parts.Add(baseSearchParameters.Trim('&'));
+            var trimmed = baseSearchParameters.Trim('&');
+            parts.Add(trimmed);
+            foreach (var segment in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                seenKeys.Add(ExtractParameterKey(segment));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(retrieval.SearchCriteria))
         {
-            parts.Add(retrieval.SearchCriteria.Trim('&'));
+            // The node-level "Search criteria" field is frequently a wizard-authored snapshot of this same
+            // connection's SearchCriteria (see epic-audience-form.component.ts save()), not an independently
+            // chosen addition — concatenating both unconditionally then re-sends the identical parameter twice
+            // (e.g. "identifier=A,B&identifier=A,B"), which Epic rejects outright for identifier ("Don't support
+            // searching by IDENTIFIER AND IDENTIFIER"). Only carry over parameters whose key isn't already present
+            // in baseSearchParameters.
+            var additional = retrieval.SearchCriteria.Trim('&')
+                .Split('&', StringSplitOptions.RemoveEmptyEntries)
+                .Where(segment => seenKeys.Add(ExtractParameterKey(segment)))
+                .ToList();
+
+            if (additional.Count > 0)
+            {
+                parts.Add(string.Join('&', additional));
+            }
         }
 
         if (retrieval.IncrementalSyncEnabled && retrieval.LastSuccessfulSyncUtc is { } lastSync)
@@ -239,5 +284,11 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         return parts.Count == 0 ? null : string.Join('&', parts);
+    }
+
+    private static string ExtractParameterKey(string segment)
+    {
+        var equalsIndex = segment.IndexOf('=');
+        return equalsIndex < 0 ? segment : segment[..equalsIndex];
     }
 }

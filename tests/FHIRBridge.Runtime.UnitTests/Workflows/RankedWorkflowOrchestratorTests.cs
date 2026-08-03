@@ -1,3 +1,4 @@
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -162,6 +163,7 @@ public sealed class RankedWorkflowOrchestratorTests
         persisted!.Status.Should().Be(WorkflowRunStatus.Succeeded);
         persisted.WorkflowDefinitionId.Should().Be(workflow.Id);
         persisted.NodeRuns.Should().HaveCount(4);
+        persisted.CorrelationId.Should().Be(context.CorrelationId);
     }
 
     [Fact]
@@ -189,6 +191,33 @@ public sealed class RankedWorkflowOrchestratorTests
         persisted.Should().NotBeNull();
         persisted!.Status.Should().Be(WorkflowRunStatus.Failed);
         persisted.ErrorMessage.Should().Be("write failed");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_captures_failed_run_via_exception_manager_with_matching_correlation_id()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("captured-failure");
+        var exceptionManager = new RecordingExceptionManager();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle"),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, _ => throw new InvalidOperationException("write failed"))
+            }),
+            auditRecorder: null,
+            runStore: null,
+            exceptionManager: exceptionManager);
+        var context = CreateContext();
+
+        var act = async () => await orchestrator.ExecuteAsync(workflow, context);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        exceptionManager.CapturedContexts.Should().ContainSingle();
+        exceptionManager.CapturedContexts[0].CorrelationId.Should().Be(context.CorrelationId);
+        exceptionManager.CapturedContexts[0].WorkflowId.Should().Be(workflow.Id.ToString());
     }
 
     [Fact]
@@ -268,6 +297,181 @@ public sealed class RankedWorkflowOrchestratorTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    [Fact]
+    public async Task ExecuteAsync_cancels_the_run_when_a_node_reports_the_parent_resource_type_is_unauthorized()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("cancelled-parent");
+        var runStore = new InMemoryWorkflowRunStore();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ =>
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException(
+                        "Patient", "403 Forbidden", new InvalidOperationException("403 Forbidden"))),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload)
+            }),
+            auditRecorder: null,
+            runStore: runStore);
+        var context = CreateContext();
+
+        var act = async () => await orchestrator.ExecuteAsync(workflow, context);
+
+        await act.Should().ThrowAsync<FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException>();
+        var persisted = await runStore.GetAsync(context.WorkflowRunId, CancellationToken.None);
+        persisted.Should().NotBeNull();
+        persisted!.Status.Should().Be(WorkflowRunStatus.Cancelled);
+        persisted.ErrorMessage.Should().Contain("Patient");
+        persisted.CorrelationId.Should().Be(context.CorrelationId);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_marks_the_run_PartialSuccess_when_a_node_reports_skipped_child_resource_types()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("partial-success");
+        var runStore = new InMemoryWorkflowRunStore();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle",
+                    metadata: new Dictionary<string, object?>
+                    {
+                        ["skippedResourceTypes"] = new[] { "Observation: not authorized for this app (403) — Forbidden" }
+                    }),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload)
+            }),
+            auditRecorder: null,
+            runStore: runStore);
+        var context = CreateContext();
+
+        var result = await orchestrator.ExecuteAsync(workflow, context);
+
+        result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.PartialSuccess);
+        result.WorkflowRun.ErrorMessage.Should().Contain("Observation");
+        var persisted = await runStore.GetAsync(context.WorkflowRunId, CancellationToken.None);
+        persisted!.Status.Should().Be(WorkflowRunStatus.PartialSuccess);
+        persisted.CorrelationId.Should().Be(context.CorrelationId);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_captures_partial_success_via_exception_manager_so_it_shows_in_correlation_search()
+    {
+        // PartialSuccess is a normal completion path (no exception thrown), so unlike Cancel/Fail it was never
+        // routed through GlobalExceptionManager — the skipped-resource-type reason only ever landed in
+        // WorkflowRun.ErrorMessage, which Correlation Search's Workflow Runs table doesn't render at all. This
+        // capture makes it show up in the Errors section instead, the same place Cancel's reason already does.
+        var workflow = BuildValidSourceToSqlWorkflow("partial-success-captured");
+        var exceptionManager = new RecordingExceptionManager();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle",
+                    metadata: new Dictionary<string, object?>
+                    {
+                        ["skippedResourceTypes"] = new[] { "Observation: not authorized for this app (403) — Forbidden" }
+                    }),
+                new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+                new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload)
+            }),
+            auditRecorder: null,
+            runStore: null,
+            exceptionManager: exceptionManager);
+        var context = CreateContext();
+
+        var result = await orchestrator.ExecuteAsync(workflow, context);
+
+        result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.PartialSuccess);
+        exceptionManager.CapturedContexts.Should().ContainSingle();
+        exceptionManager.CapturedContexts[0].CorrelationId.Should().Be(context.CorrelationId);
+        exceptionManager.CapturedContexts[0].WorkflowId.Should().Be(workflow.Id.ToString());
+        exceptionManager.CapturedContexts[0].ExecutionId.Should().Be(context.WorkflowRunId.ToString());
+        exceptionManager.CapturedContexts[0].Severity.Should().Be("Informational");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_pauses_when_a_source_node_defers_to_a_bulk_export_job()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("bulk-export-pause");
+        var runStore = new InMemoryWorkflowRunStore();
+        var pauseRecorder = new RecordingBulkExportPauseRecorder();
+        var deferredJobId = Guid.NewGuid();
+        var calls = new List<string>();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new DeferringExecutor(WorkflowNodeTypes.EpicSource, deferredJobId),
+                new RecordingExecutor(WorkflowNodeTypes.DeIdentification, calls, WorkflowDataContract.DeIdentifiedBatch),
+                new RecordingExecutor(WorkflowNodeTypes.Mapping, calls, WorkflowDataContract.MappedRecordBatch),
+                new RecordingExecutor(WorkflowNodeTypes.SqlServerDestination, calls, WorkflowDataContract.DestinationWriteResult)
+            }),
+            auditRecorder: null,
+            runStore: runStore,
+            bulkExportPauseRecorder: pauseRecorder);
+        var context = CreateContext();
+
+        var result = await orchestrator.ExecuteAsync(workflow, context);
+
+        result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.AwaitingBulkExport);
+        result.WorkflowRun.NodeRuns.Should().BeEmpty(); // the deferring node's run isn't recorded until resume
+        calls.Should().BeEmpty(); // nothing downstream of the deferring source node ran
+        pauseRecorder.RecordedJobId.Should().Be(deferredJobId);
+        pauseRecorder.RecordedPriorOutputsJson.Should().Be("{}"); // nothing computed before the first node
+
+        var persisted = await runStore.GetAsync(context.WorkflowRunId, CancellationToken.None);
+        persisted!.Status.Should().Be(WorkflowRunStatus.AwaitingBulkExport);
+    }
+
+    [Fact]
+    public async Task ResumeAfterBulkExportAsync_continues_from_the_node_after_the_paused_source_and_completes_the_run()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("bulk-export-resume");
+        var sourceNodeId = workflow.Nodes.Single(n => n.NodeType == WorkflowNodeTypes.EpicSource).Id;
+        var definitionStore = new StubWorkflowDefinitionStore(workflow);
+        var runStore = new InMemoryWorkflowRunStore();
+        var calls = new List<string>();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new RecordingExecutor(WorkflowNodeTypes.EpicSource, calls, WorkflowDataContract.ResourceBatch),
+                new RecordingExecutor(WorkflowNodeTypes.DeIdentification, calls, WorkflowDataContract.DeIdentifiedBatch),
+                new RecordingExecutor(WorkflowNodeTypes.Mapping, calls, WorkflowDataContract.MappedRecordBatch),
+                new RecordingExecutor(WorkflowNodeTypes.SqlServerDestination, calls, WorkflowDataContract.DestinationWriteResult)
+            }),
+            auditRecorder: null,
+            runStore: runStore,
+            workflowDefinitionStore: definitionStore);
+
+        // Seed a paused run exactly as the pause path in ExecuteAsync would have left it persisted.
+        var pausedRun = new WorkflowRun(Guid.NewGuid(), workflow.Id, DateTimeOffset.UtcNow, correlationId: "resume-test");
+        pausedRun.AwaitBulkExport();
+        await runStore.SaveAsync(pausedRun, CancellationToken.None);
+
+        var resources = new[]
+        {
+            new FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope("Patient", "p1", "{\"resourceType\":\"Patient\"}", null, null)
+        };
+
+        var result = await orchestrator.ResumeAfterBulkExportAsync(
+            pausedRun.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: null, resources,
+            skippedResourceTypeReasons: null, cancellationToken: CancellationToken.None);
+
+        calls.Should().Equal(WorkflowNodeTypes.DeIdentification, WorkflowNodeTypes.Mapping, WorkflowNodeTypes.SqlServerDestination);
+        result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.Succeeded);
+        result.OutputsByNodeId[sourceNodeId].Contract.Should().Be(WorkflowDataContract.ResourceBatch);
+
+        var persisted = await runStore.GetAsync(pausedRun.Id, CancellationToken.None);
+        persisted!.Status.Should().Be(WorkflowRunStatus.Succeeded);
+    }
+
     private static WorkflowDefinition BuildValidSourceToSqlWorkflow(string name)
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), name, 1);
@@ -321,19 +525,14 @@ public sealed class RankedWorkflowOrchestratorTests
         }
     }
 
-    private sealed class PayloadExecutor : IWorkflowNodeExecutor
+    private sealed class DeferringExecutor : IWorkflowNodeExecutor
     {
-        private readonly Func<IReadOnlyCollection<WorkflowNodeOutput>, object?> _execute;
-        private readonly WorkflowDataContract _contract;
+        private readonly Guid _deferredJobId;
 
-        public PayloadExecutor(
-            string nodeType,
-            WorkflowDataContract contract,
-            Func<IReadOnlyCollection<WorkflowNodeOutput>, object?> execute)
+        public DeferringExecutor(string nodeType, Guid deferredJobId)
         {
             NodeType = nodeType;
-            _contract = contract;
-            _execute = execute;
+            _deferredJobId = deferredJobId;
         }
 
         public string NodeType { get; }
@@ -343,6 +542,95 @@ public sealed class RankedWorkflowOrchestratorTests
             WorkflowNode node,
             IReadOnlyCollection<WorkflowNodeOutput> inputs,
             CancellationToken cancellationToken)
-            => Task.FromResult(new WorkflowNodeOutput(node.Id, node.NodeType, _execute(inputs), _contract));
+            => Task.FromResult(new WorkflowNodeOutput(
+                node.Id,
+                node.NodeType,
+                payload: null,
+                WorkflowDataContract.None,
+                new Dictionary<string, object?>
+                {
+                    [WorkflowNodeOutputMetadataKeys.BulkExportDeferredJobId] = _deferredJobId.ToString(),
+                }));
+    }
+
+    private sealed class RecordingBulkExportPauseRecorder : IBulkExportPauseRecorder
+    {
+        public Guid? RecordedJobId { get; private set; }
+
+        public string? RecordedPriorOutputsJson { get; private set; }
+
+        public Task RecordPauseAsync(Guid bulkExportJobId, string priorNodeOutputsJson, CancellationToken cancellationToken)
+        {
+            RecordedJobId = bulkExportJobId;
+            RecordedPriorOutputsJson = priorNodeOutputsJson;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubWorkflowDefinitionStore : IWorkflowDefinitionStore
+    {
+        private readonly WorkflowDefinition _workflowDefinition;
+
+        public StubWorkflowDefinitionStore(WorkflowDefinition workflowDefinition)
+        {
+            _workflowDefinition = workflowDefinition;
+        }
+
+        public Task<WorkflowDefinition> SaveAsync(WorkflowDefinition workflowDefinition, CancellationToken cancellationToken)
+            => Task.FromResult(workflowDefinition);
+
+        public Task<IReadOnlyCollection<WorkflowDefinition>> ListAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyCollection<WorkflowDefinition>>([_workflowDefinition]);
+
+        public Task<WorkflowDefinition?> GetAsync(Guid workflowId, CancellationToken cancellationToken)
+            => Task.FromResult(workflowId == _workflowDefinition.Id ? _workflowDefinition : null);
+
+        public Task DeleteAsync(Guid workflowId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class RecordingExceptionManager : IGlobalExceptionManager
+    {
+        public List<ExceptionContext> CapturedContexts { get; } = [];
+
+        public Task<ErrorReport> CaptureAsync(Exception exception, ExceptionContext context, CancellationToken cancellationToken = default)
+        {
+            CapturedContexts.Add(context);
+            return Task.FromResult(new ErrorReport("ERR-TEST-000001", ErrorCategory.Unknown, "Something went wrong.", context.CorrelationId));
+        }
+
+        public Task<string> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
+        {
+            CapturedContexts.Add(context);
+            return Task.FromResult("ERR-TEST-000002");
+        }
+    }
+
+    private sealed class PayloadExecutor : IWorkflowNodeExecutor
+    {
+        private readonly Func<IReadOnlyCollection<WorkflowNodeOutput>, object?> _execute;
+        private readonly WorkflowDataContract _contract;
+        private readonly IReadOnlyDictionary<string, object?>? _metadata;
+
+        public PayloadExecutor(
+            string nodeType,
+            WorkflowDataContract contract,
+            Func<IReadOnlyCollection<WorkflowNodeOutput>, object?> execute,
+            IReadOnlyDictionary<string, object?>? metadata = null)
+        {
+            NodeType = nodeType;
+            _contract = contract;
+            _execute = execute;
+            _metadata = metadata;
+        }
+
+        public string NodeType { get; }
+
+        public Task<WorkflowNodeOutput> ExecuteAsync(
+            WorkflowExecutionContext context,
+            WorkflowNode node,
+            IReadOnlyCollection<WorkflowNodeOutput> inputs,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new WorkflowNodeOutput(node.Id, node.NodeType, _execute(inputs), _contract, _metadata));
     }
 }

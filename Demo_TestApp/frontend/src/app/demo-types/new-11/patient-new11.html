@@ -1,0 +1,14 @@
+<div class="new11-shell">
+  @if (new11Enabled) {
+    <nav class="new11-menubar" aria-label="View">
+      <button type="button" class="new11-menubar__item" [class.active]="view() === 'default'" (click)="view.set('default')">Default</button>
+      <button type="button" class="new11-menubar__item" [class.active]="view() === 'new11'" (click)="view.set('new11')">New 11</button>
+    </nav>
+  }
+
+  @if (new11Enabled && view() === 'new11') {
+    <app-resource-11-browser [loginTypeLabel]="loginTypeLabel()" (logout)="logout.emit()"></app-resource-11-browser>
+  } @else {
+    <app-patient-standalone [loginTypeLabel]="loginTypeLabel()" (logout)="logout.emit()"></app-patient-standalone>
+  }
+</div>

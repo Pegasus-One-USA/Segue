@@ -1,5 +1,7 @@
 import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
+import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStore } from '../../services/pipeline.store';
 import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
@@ -11,11 +13,11 @@ import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node.model';
+import { environment } from '../../../environments/environment';
 
 import { CanvasComponent } from '../../components/canvas/canvas.component';
 import { EpicSourceWizardComponent } from '../../components/epic-source-wizard/epic-source-wizard.component';
 import { PayloadPreviewComponent } from '../../components/modals/payload-preview/payload-preview.component';
-import { ToastComponent } from '../../components/shared/toast/toast.component';
 import {
   NodeLibraryDialogComponent,
   LibraryMode,
@@ -30,13 +32,12 @@ import {
     CanvasComponent,
     EpicSourceWizardComponent,
     PayloadPreviewComponent,
-    ToastComponent,
     NodeLibraryDialogComponent,
   ],
   templateUrl: './workflow-builder.component.html',
   styleUrl: './workflow-builder.component.scss',
 })
-export class WorkflowBuilderComponent implements OnInit {
+export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly store  = inject(PipelineStore);
   private readonly wiz    = inject(WizardService);
   private readonly toast  = inject(ToastService);
@@ -45,6 +46,12 @@ export class WorkflowBuilderComponent implements OnInit {
   private readonly graphMapper = inject(WorkflowGraphMapperService);
   private readonly buildAssembler = inject(WorkflowBuildAssemblerService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+
+  constructor() {
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+  }
 
   // ── page state ─────────────────────────────────────────────────────────────
   protected readonly scenarioName = signal('Grouped-node pipeline (Normalize group + merge)');
@@ -147,16 +154,17 @@ export class WorkflowBuilderComponent implements OnInit {
     const wizardFields = this.backendRetrievalFields();
     if (wizardFields) {
       // Bulk export: System/Group run on the calendar Repeat (compiled cron); a Patient id list is a one-off (manual).
+      const timeZoneId = wizardFields['Full refresh time zone'] || 'UTC';
       if (wizardFields['Retrieval method key'] === 'bulk-export') {
         return wizardFields['Export scope'] === 'patient'
           ? { type: 'Manual' }
-          : { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+          : { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *', timeZoneId };
       }
       switch (wizardFields['Run mode']) {
         case 'incremental':
           return { type: 'Poll', intervalMinutes: this.pollFrequencyToMinutes(wizardFields['Schedule / poll frequency']) };
         case 'full':
-          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *', timeZoneId };
         default:
           return { type: 'Manual' };
       }
@@ -256,8 +264,25 @@ export class WorkflowBuilderComponent implements OnInit {
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
 
-    const request = this.buildAssembler.assemble(name, this.buildTrigger());
-    const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
+    let request: WorkflowBuildRequest;
+    try {
+      request = this.buildAssembler.assemble(name, this.buildTrigger());
+    } catch (err) {
+      // buildAssembler throws for configuration gaps it can catch up front (e.g. Upsert write mode with no
+      // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
+      const msg = err instanceof Error ? err.message : 'Workflow configuration is invalid.';
+      this.workflowStatus.set(msg);
+      this.toast.show('Cannot save workflow', msg);
+      return;
+    }
+    // Mappings must count too: a workflow wired entirely to already-provisioned source/destination
+    // connections (sourceConnectionResolved/destinationResolved both "true") has zero source/destination
+    // specs to create, but can still carry new/changed mapping rows that need a MappingProfile created and
+    // stamped onto the Field Mapping node — skipping the build call in that case silently left the mapping
+    // node's config empty (no mappingProfileId), so every run mapped zero records despite "succeeding".
+    const hasSpecs = (request.sources?.length ?? 0) > 0
+      || (request.destinations?.length ?? 0) > 0
+      || (request.mappings?.length ?? 0) > 0;
     if (hasSpecs) {
       this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
       return;
@@ -285,13 +310,22 @@ export class WorkflowBuilderComponent implements OnInit {
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
-        this.workflowBusy.set(false);
+        this.reconcileGeneratedJwksUrls(result.workflowId, request.name, result.sourceConnectionIds);
         this.stampBuildResultIds(result);
       },
       error: err => {
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Create-on-save failed.';
-        this.workflowStatus.set(typeof msg === 'string' ? msg : 'Create-on-save failed.');
-        this.toast.show('Create-on-save failed', typeof msg === 'string' ? msg : 'See status for details.');
+        const msg = typeof err?.error?.error === 'string'
+          ? err.error.error
+          : 'Something went wrong while saving this workflow. Please contact your admin.';
+        // A structured validation rejection (RequestValidationException / WorkflowEndpoints' ValidationBadRequest
+        // helper) carries per-field messages alongside the flat `error` string — surface all of them rather than
+        // just the generic top-level message, since `msg` alone ("Validation failed.") isn't actionable on its own.
+        const fieldErrors = err?.error?.fieldErrors as Record<string, string[]> | null | undefined;
+        const detail = fieldErrors && Object.keys(fieldErrors).length
+          ? Object.values(fieldErrors).flat().join(' ')
+          : msg;
+        this.workflowStatus.set(detail);
+        this.toast.show('Create-on-save failed', detail);
         this.workflowBusy.set(false);
       },
     });
@@ -314,10 +348,74 @@ export class WorkflowBuilderComponent implements OnInit {
       if (resourceTypes.length) {
         this.toast.show(
           'Epic scopes synced',
-          `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every pipeline currently using it).`,
+          `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every workflow currently using it).`,
         );
       }
     }
+  }
+
+  /**
+   * The "Private Key / JWKS URL" field a Backend System + JWT source shows is never actually sent to the backend
+   * SourceConnection (no such column exists there) — the only durable place it CAN live is this node's own
+   * ConfigurationJson, which the workflow definition already persists on every save. For a node whose signing key
+   * FHIRBridge generated/imported, the real URL is only knowable once this build assigns a sourceConnectionId — so
+   * it's wrong (a stale placeholder) on the save that just happened. Corrects it here, in the still-live canvas
+   * node (before resetCanvasAndWorkflowState() would otherwise throw that state away), then persists the
+   * correction with a plain definition save (PUT /workflows/{id} — NOT another /workflows/build) so it doesn't
+   * re-touch the source/destinations/mappings just created/synced above, or re-trigger capability discovery.
+   */
+  private reconcileGeneratedJwksUrls(
+    workflowId: string,
+    workflowName: string,
+    sourceConnectionIds: Record<string, string>,
+  ): void {
+    let anyCorrected = false;
+
+    for (const [nodeId, sourceConnectionId] of Object.entries(sourceConnectionIds)) {
+      const node = this.store.byId(nodeId);
+      if (!node) continue;
+
+      const fields = node.fields;
+      const isGeneratedOrImportedBackendKey =
+        fields['Auth method'] === 'jwt' &&
+        fields['Epic audience'] === 'backend-system' &&
+        (fields['Signing key source'] === 'gen' || fields['Signing key source'] === 'import');
+
+      if (!isGeneratedOrImportedBackendKey) continue;
+
+      const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+      if (fields['JWKS URL'] !== jwksUrl) {
+        this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
+        anyCorrected = true;
+      }
+
+      this.toast.show(
+        `JWKS URL for "${fields['__name'] || 'this source'}"`,
+        `Register this URL in Epic's app configuration: ${jwksUrl}`,
+        'info',
+        20000,
+      );
+    }
+
+    if (!anyCorrected) {
+      this.workflowBusy.set(false);
+      this.finishSave();
+      return;
+    }
+
+    const definitionRequest = this.graphMapper.toRequest(workflowName, this.buildTrigger());
+    this.workflowApi.save(definitionRequest, workflowId).subscribe({
+      next: () => {
+        this.workflowBusy.set(false);
+        this.finishSave();
+      },
+      error: () => {
+        // Best-effort: the original build already succeeded and is fully durable — only this cosmetic
+        // JWKS-URL correction failed to re-save. Not worth blocking or re-prompting the user over.
+        this.workflowBusy.set(false);
+        this.finishSave();
+      },
+    });
   }
 
   onLoadWorkflow(): void {
@@ -518,7 +616,7 @@ export class WorkflowBuilderComponent implements OnInit {
       const node = this.store.byId(nodeId);
       if (node?.kind === 'transform') {
         const tId = (node as TransformNode).transformId;
-        if (tId === 'dest-sqlserver' || tId === 'dest-csv') {
+        if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres') {
           // Edit destination node — open library in transform mode with parent as origin.
           const parent = this.store.parentOf(nodeId);
           this.editingNodeId.set(nodeId);
@@ -598,7 +696,7 @@ export class WorkflowBuilderComponent implements OnInit {
               this.workflowStatus.set(`Saved ${saved.name}.`);
               this.toast.success('Workflow saved', `"${saved.name}" was saved.`);
               this.workflowBusy.set(false);
-              this.resetCanvasAndWorkflowState();
+              this.finishSave();
               return;
             }
 
@@ -607,7 +705,7 @@ export class WorkflowBuilderComponent implements OnInit {
                 this.workflowStatus.set(`Saved and activated ${active.name}.`);
                 this.toast.success('Workflow saved', `"${active.name}" was saved and activated.`);
                 this.workflowBusy.set(false);
-                this.resetCanvasAndWorkflowState();
+                this.finishSave();
               },
               error: () => {
                 this.workflowStatus.set('Saved workflow, but activation failed.');
@@ -629,7 +727,26 @@ export class WorkflowBuilderComponent implements OnInit {
     });
   }
 
-  /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  hasUnsavedChanges(): boolean {
+    return this.store.dirty();
+  }
+
+  isSaveInProgress(): boolean {
+    return this.workflowBusy();
+  }
+
+  /** Post-save wrap-up — always returns to the Workflows list, where the save (new or updated) is now
+   *  visible, instead of leaving you staring at a blanked-out or unchanged canvas. markSaved() first,
+   *  or the unsaved-changes guard (which only ever saw the canvas reset itself clean via reset() before)
+   *  intercepts this very navigation and asks "Leave this page?" right after a successful save. */
+  private finishSave(): void {
+    this.store.markSaved();
+    this.router.navigate(['/workflows']);
+  }
+
+  /** Blanks the canvas and workflow identity — used when explicitly starting a new workflow (see
+   *  ngOnInit/onReset), not after a save (see finishSave). */
   // Writes each node's real, server-created id back onto its own fields instead of wiping the canvas —
   // the wizards read these fields (findLaunchSourceId(), destination-wizard's resolvedDestinationId) so
   // the Mapping JSON gets non-null sourceConnectionId/destinationId right after Save, no reload needed.

@@ -21,4 +21,19 @@ public sealed record MappingFieldDto(
     string? ParentKeyColumn = null,
     string? ForeignKeyColumn = null,
     string? ReferenceLookupTable = null,
-    string? ReferenceLookupKeyColumn = null);
+    string? ReferenceLookupKeyColumn = null,
+
+    bool IsUpsertKey = false,
+    // Used only when ArrayPolicy is CorrelateByCode: an absolute JsonPath to the code element sharing this field's
+    // array ancestor (e.g. "$.component[*].code.coding[*].code" alongside JsonPath
+    // "$.component[*].valueQuantity.value"), and the code value that selects which array item's JsonPath value to
+    // take (e.g. "8480-6" for BP systolic). Ignored for every other ArrayPolicy.
+    string? CorrelationCodeJsonPath = null,
+    string? CorrelationCodeValue = null,
+    // Destination column constraints — never persisted on the mapping profile itself, only filled in at pipeline
+    // run time (see ConfiguredPipelineService.MapResourcesAsync) from the destination's live schema, so
+    // JsonMappingEngine can reject a value that would overflow the column before it's ever sent to the database.
+    int? MaxLength = null,
+    int? Precision = null,
+    int? Scale = null,
+    bool IsEnabled = true);

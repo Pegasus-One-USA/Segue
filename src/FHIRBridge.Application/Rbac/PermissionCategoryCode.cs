@@ -14,6 +14,6 @@ public enum PermissionCategoryCode
     [PermissionCategory("40000000-0000-0000-0000-000000000002", "Platform")]
     Platform = 2,
 
-    [PermissionCategory("40000000-0000-0000-0000-000000000003", "Pipelines")]
+    [PermissionCategory("40000000-0000-0000-0000-000000000003", "Workflows")]
     Pipelines = 3,
 }

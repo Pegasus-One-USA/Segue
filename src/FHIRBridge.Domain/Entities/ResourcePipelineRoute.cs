@@ -18,7 +18,8 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         string? scheduleExpression,
         string? searchParameters,
         bool isEnabled,
-        int priority)
+        int priority,
+        string timeZoneId = "UTC")
     {
         Id = Guid.NewGuid();
         WebhookConfigurationId = webhookConfigurationId;
@@ -28,6 +29,7 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         SearchParameters = searchParameters;
         IsEnabled = isEnabled;
         Priority = priority;
+        TimeZoneId = timeZoneId;
     }
 
     public Guid? WebhookConfigurationId { get; private set; }
@@ -40,6 +42,12 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
     public Guid MappingProfileId { get; private set; }
     public IngestionMode IngestionMode { get; private set; }
     public string? ScheduleExpression { get; private set; }
+
+    /// <summary>
+    /// IANA time zone identifier (e.g. <c>"America/New_York"</c>) that <c>ScheduleExpression</c> is evaluated in.
+    /// Defaults to <c>"UTC"</c> for routes that predate this field.
+    /// </summary>
+    public string TimeZoneId { get; private set; } = "UTC";
     public string? SearchParameters { get; private set; }
     public bool IsEnabled { get; private set; }
     public int Priority { get; private set; }
@@ -58,7 +66,8 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         string? scheduleExpression,
         string? searchParameters,
         bool isEnabled,
-        int priority)
+        int priority,
+        string timeZoneId = "UTC")
     {
         IngestionMode = ingestionMode;
         WebhookConfigurationId = webhookConfigurationId;
@@ -67,6 +76,7 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
         SearchParameters = searchParameters;
         IsEnabled = isEnabled;
         Priority = priority;
+        TimeZoneId = timeZoneId;
     }
 
     public void ReplaceResourceMappings(IEnumerable<ResourcePipelineRouteMapping> resourceMappings)
@@ -89,6 +99,8 @@ public sealed class ResourcePipelineRoute : AuditableChildEntity<Guid>
 
 public sealed class ResourcePipelineRouteMapping
 {
+    private readonly List<ParentReferenceLink> _parentReferences = new();
+
     private ResourcePipelineRouteMapping()
     {
     }
@@ -118,4 +130,53 @@ public sealed class ResourcePipelineRouteMapping
     /// <c>category=laboratory</c> on Epic while Patient/Encounter need none). Null falls back to the route's value.
     /// </summary>
     public string? SearchParameters { get; private set; }
+
+    /// <summary>
+    /// Other resource mappings in the same route that this one is a "child" of. A mapping can have more than
+    /// one — e.g. Observation can be a child of both Patient (via <c>subject</c>) and Encounter (via
+    /// <c>encounter</c>) at once. Each link independently requires its own FHIR reference field to be mapped.
+    /// </summary>
+    public IReadOnlyCollection<ParentReferenceLink> ParentReferences => _parentReferences;
+
+    public void ReplaceParentReferences(IEnumerable<ParentReferenceLink> parentReferences)
+    {
+        _parentReferences.Clear();
+        _parentReferences.AddRange(
+            parentReferences
+                .GroupBy(x => x.ParentMappingProfileId)
+                .Select(g => g.Last()));
+    }
+}
+
+/// <summary>
+/// Declares that a <see cref="ResourcePipelineRouteMapping"/> is a "child" of another mapping
+/// (<see cref="ParentMappingProfileId"/>) in the same route — either the route's primary mapping or another
+/// entry in <see cref="ResourcePipelineRoute.ResourceMappings"/>. This is the input to
+/// <c>IParentReferenceResolver</c>, which determines which FHIR reference field the child must map as a
+/// result (e.g. <c>Observation.subject</c> when the parent is Patient).
+/// </summary>
+public sealed class ParentReferenceLink
+{
+    private ParentReferenceLink()
+    {
+    }
+
+    public ParentReferenceLink(Guid parentMappingProfileId, string? referenceFieldOverride = null)
+    {
+        Id = Guid.NewGuid();
+        ParentMappingProfileId = parentMappingProfileId;
+        ReferenceFieldOverride = referenceFieldOverride;
+    }
+
+    public Guid Id { get; private set; }
+    public Guid ResourcePipelineRouteMappingId { get; private set; }
+    public Guid ParentMappingProfileId { get; private set; }
+
+    /// <summary>
+    /// Escape hatch: the exact FHIR path (e.g. <c>"performer.actor.reference"</c>) to require instead of the
+    /// field <c>IParentReferenceResolver</c> would auto-resolve. Only needed when a resource has more than one
+    /// reference field that could target the same parent resource type and the auto-picked one is wrong for
+    /// this mapping. Null means "use the auto-resolved field".
+    /// </summary>
+    public string? ReferenceFieldOverride { get; private set; }
 }

@@ -16,6 +16,10 @@
       </div>
       <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
     </div>
+    <div class="dw-topbar-actions">
+      <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+      <button class="dw-close-btn" type="button" title="Close" (click)="cancel()">×</button>
+    </div>
 
     <div class="dw-stepper">
       @for (label of STEP_LABELS; track $index) {
@@ -42,23 +46,17 @@
         <span class="dw-section-title">Configure {{ destLabel() }}</span>
       </div>
 
+      <!-- No explicit New/Existing toggle — the dropdown is always offered (canvas create only, see
+           showConnectionModeToggle); leaving it unselected just means "New connection". -->
       @if (showConnectionModeToggle()) {
-        <div class="dw-conn-mode">
-          <button type="button" class="dw-btn" [class.dw-btn--primary]="connectionMode() === 'new'" (click)="setConnectionMode('new')">
-            Create new
-          </button>
-          <button type="button" class="dw-btn" [class.dw-btn--primary]="connectionMode() === 'existing'" (click)="setConnectionMode('existing')">
-            Select existing
-          </button>
-        </div>
-
-        @if (connectionMode() === 'existing') {
-          <div class="dw-field dw-field--full">
-            <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection <span class="dw-req">*</span></label>
+        <div class="dw-field dw-field--full">
+          <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection</label>
+          <div class="dw-existing-connection-row">
             <div class="dw-select-wrap">
               <select
                 id="dw-existing"
                 class="dw-select"
+                [disabled]="existingOptionsLoading()"
                 [value]="selectedExistingId() ?? ''"
                 (change)="selectExisting($any($event.target).value)"
               >
@@ -68,16 +66,22 @@
                 }
               </select>
             </div>
-            @if (!existingOptionsLoading() && existingOptions().length === 0) {
-              <span class="dw-error">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here).</span>
+            @if (selectedExistingId()) {
+              <button type="button" class="dw-clear-btn" title="Clear selected connection — start a new one instead"
+                      (click)="clearExistingConnection()">✕</button>
             }
           </div>
-        }
+          @if (!existingOptionsLoading() && existingOptions().length === 0) {
+            <span class="dw-hint">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here) — configure a new one below.</span>
+          } @else {
+            <span class="dw-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</span>
+          }
+        </div>
       }
 
       @if (isSql()) {
         <form [formGroup]="sqlForm" class="dw-form" autocomplete="off">
-          <div class="dw-grid-2">
+          <div class="dw-grid-3">
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched">
               <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
@@ -88,16 +92,16 @@
             </div>
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched">
-              <label class="dw-label" for="dw-server">SQL Server <span class="dw-req">*</span></label>
+              <label class="dw-label" for="dw-server">{{ showSslToggle() ? 'Host' : 'SQL Server' }} <span class="dw-req">*</span></label>
               <input id="dw-server" class="dw-input" formControlName="server" placeholder="tcp:sql-prod.company.com,1433" />
               @if (sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched) {
-                <span class="dw-error">SQL Server host is required.</span>
+                <span class="dw-error">Server host is required.</span>
               }
             </div>
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
               <label class="dw-label" for="dw-database">Database <span class="dw-req">*</span></label>
-              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
+              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. SegueDW" />
               @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
                 <span class="dw-error">Database name is required.</span>
               }
@@ -108,8 +112,10 @@
               <div class="dw-select-wrap">
                 <select id="dw-auth" class="dw-select" formControlName="auth">
                   <option value="sql-auth">SQL Username / Password</option>
-                  <option value="managed-identity">Managed Identity</option>
-                  <option value="azure-ad">Azure AD</option>
+                  @if (!showSslToggle()) {
+                    <option value="managed-identity">Managed Identity</option>
+                    <option value="azure-ad">Azure AD</option>
+                  }
                 </select>
               </div>
             </div>
@@ -122,6 +128,16 @@
               <div class="dw-field">
                 <label class="dw-label" for="dw-password">Password</label>
                 <input id="dw-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+              </div>
+            }
+
+            @if (showSslToggle()) {
+              <div class="dw-field dw-field--checkbox">
+                <label class="dw-label">
+                  <input type="checkbox" formControlName="requireSsl" />
+                  Require SSL
+                </label>
+                <span class="dw-hint">Enable for managed providers that enforce SSL (e.g. AWS RDS). Leave off for local/docker instances without SSL configured.</span>
               </div>
             }
 
@@ -141,7 +157,7 @@
               </div>
             </div>
 
-          </div><!-- /dw-grid-2 -->
+          </div><!-- /dw-grid-3 -->
         </form>
 
         @if (probeState() === 'testing') {
@@ -153,6 +169,47 @@
         @if (probeState() === 'ok') {
           <div class="dw-callout dw-callout--info">Connected — {{ sqlTables().length }} table(s) loaded. Choose tables &amp; columns in Map fields.</div>
         }
+      } @else if (isMongo()) {
+        <form [formGroup]="mongoForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched">
+              <label class="dw-label" for="dw-mongo-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-mongo-name" class="dw-input" formControlName="name" placeholder="e.g. MongoDB Production" />
+              @if (mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched">
+              <label class="dw-label" for="dw-mongo-conn">Connection string <span class="dw-req">*</span></label>
+              <input id="dw-mongo-conn" type="password" class="dw-input" formControlName="connectionString"
+                placeholder="mongodb://user:pass@host:27017/dbname?authSource=admin" autocomplete="new-password" />
+              @if (mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched) {
+                <span class="dw-error">Connection string is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched">
+              <label class="dw-label" for="dw-mongo-collection">Collection <span class="dw-req">*</span></label>
+              <input id="dw-mongo-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients" />
+              @if (mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched) {
+                <span class="dw-error">Collection name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-mongo-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-mongo-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="upsert">Upsert by source id</option>
+                  <option value="insert">Insert only</option>
+                </select>
+              </div>
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -243,7 +300,7 @@
 
               <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
                 <label class="dw-label" for="dw-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
-                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
+                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/segue" />
                 @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
                   <span class="dw-error">Remote folder is required.</span>
                 }
@@ -425,7 +482,7 @@
     @if (isStepActive(4)) {
       <div class="dw-section-head">
         <span class="dw-section-num">4</span>
-        <span class="dw-section-title">Review &amp; add to pipeline</span>
+        <span class="dw-section-title">Review &amp; add to workflow</span>
       </div>
 
       <div class="dw-review-grid">
@@ -454,6 +511,19 @@
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ sqlForm.value.writeMode }}</span>
           </div>
+        } @else if (isMongo()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ mongoForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Collection</span>
+            <span class="dw-review-val dw-mono">{{ mongoForm.value.collection || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
+          </div>
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -479,7 +549,13 @@
       </div>
 
       <div class="dw-callout dw-callout--info">
-        After adding to the pipeline, the {{ destLabel() }} node will be connected automatically to the selected source.
+        After adding to the workflow, the {{ destLabel() }} node will be connected automatically to the selected source.
+      </div>
+    }
+
+    @if ((isStepActive(3) || isStepActive(4)) && resourcesMissingParentSelection().length > 0) {
+      <div class="dw-callout dw-callout--warn">
+        Select a parent for: {{ resourcesMissingParentSelection().join(', ') }} before continuing.
       </div>
     }
 

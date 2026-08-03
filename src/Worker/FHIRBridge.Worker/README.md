@@ -1,6 +1,6 @@
 # FHIRBridge.Worker
 
-> The background-processing host for FHIRBridge: a .NET Worker Service that runs the platform's long-lived and scheduled jobs — HL7 v2 MLLP intake, asynchronous pipeline-run and webhook-ingestion processing, schedule dispatching, and retention purging — outside the request/response path of the API.
+> The background-processing host for Segue: a .NET Worker Service that runs the platform's long-lived and scheduled jobs — HL7 v2 MLLP intake, asynchronous pipeline-run and webhook-ingestion processing, schedule dispatching, and retention purging — outside the request/response path of the API.
 
 **Layer:** Host (Worker) · **SDK:** Microsoft.NET.Sdk.Worker · **Target:** net9.0
 

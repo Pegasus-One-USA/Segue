@@ -1,4 +1,3 @@
-using System.Text;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities;
@@ -27,7 +26,7 @@ public sealed class SftpDeliveryStrategy : IArtifactDeliveryStrategy
         CancellationToken cancellationToken)
     {
         var secret = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
-        await SftpUploader.UploadAsync(secret, file.FileName, Encoding.UTF8.GetString(file.Content), cancellationToken);
+        await SftpUploader.UploadAsync(secret, file.FileName, file.Content, cancellationToken);
 
         return new DestinationWriteResult(recordCount);
     }

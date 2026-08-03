@@ -313,6 +313,11 @@ public sealed class MappingNodeExecutorTests
         private readonly MappingTestResultDto _result;
         public FakeJsonMappingEngine(MappingTestResultDto result) => _result = result;
         public MappingTestResultDto Map(string sourceJson, IReadOnlyCollection<MappingFieldDto> fields) => _result;
+
+        public MappingTestResultDto Map(string sourceJson, IReadOnlyCollection<MappingFieldDto> fields, IReadOnlyDictionary<string, object?>? systemValues = null)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     /// <summary>A minimal real mapper (unlike <see cref="FakeJsonMappingEngine"/>'s fixed canned result) that
@@ -342,6 +347,11 @@ public sealed class MappingNodeExecutorTests
             }
 
             return new MappingTestResultDto(values, []);
+        }
+
+        public MappingTestResultDto Map(string sourceJson, IReadOnlyCollection<MappingFieldDto> fields, IReadOnlyDictionary<string, object?>? systemValues = null)
+        {
+            throw new NotImplementedException();
         }
     }
 }

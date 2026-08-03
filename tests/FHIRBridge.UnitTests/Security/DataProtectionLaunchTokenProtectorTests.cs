@@ -73,6 +73,50 @@ public sealed class DataProtectionLaunchTokenProtectorTests
     }
 
     [Fact]
+    public void Workflow_context_round_trips_ehr_endpoint_id_caller_id_session_id_and_user_identity_together()
+    {
+        // Reproduces the Patient Standalone hospital-picker launch exactly: an EhrEndpointId (the selected MyChart
+        // hospital) alongside a callerId, sessionId, and userIdentity all set on the same token.
+        var protector = Protector();
+        var workflowId = Guid.NewGuid();
+        var ehrEndpointId = Guid.NewGuid();
+        const string callerId = "https://healthapp.example.com/launchpatientstandalone";
+        const string sessionId = "session-abc-123";
+        const string userIdentity = "patient@healthapp.local";
+
+        var token = protector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId, sessionId, userIdentity);
+        var context = protector.UnprotectContext(token);
+
+        context.Should().NotBeNull();
+        context!.WorkflowId.Should().Be(workflowId);
+        context.EhrEndpointId.Should().Be(ehrEndpointId);
+        context.CallerId.Should().Be(callerId);
+        context.SessionId.Should().Be(sessionId);
+        context.UserIdentity.Should().Be(userIdentity);
+    }
+
+    [Fact]
+    public void Route_context_round_trips_ehr_endpoint_id_caller_id_session_id_and_user_identity_together()
+    {
+        var protector = Protector();
+        var routeId = Guid.NewGuid();
+        var ehrEndpointId = Guid.NewGuid();
+        const string callerId = "https://healthapp.example.com/callback";
+        const string sessionId = "session-xyz-789";
+        const string userIdentity = "providerstandalone@healthapp.local";
+
+        var token = protector.ProtectContext(routeId, ehrEndpointId, callerId, sessionId, userIdentity);
+        var context = protector.UnprotectContext(token);
+
+        context.Should().NotBeNull();
+        context!.RouteId.Should().Be(routeId);
+        context.EhrEndpointId.Should().Be(ehrEndpointId);
+        context.CallerId.Should().Be(callerId);
+        context.SessionId.Should().Be(sessionId);
+        context.UserIdentity.Should().Be(userIdentity);
+    }
+
+    [Fact]
     public void Tokens_minted_before_the_caller_id_feature_still_parse_with_a_null_caller_id()
     {
         // ProtectContext with no callerId reproduces exactly what every previously minted launch URL looks like.

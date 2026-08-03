@@ -2,18 +2,23 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Enums;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Api.Workflows;
 
@@ -21,6 +26,20 @@ public static class WorkflowEndpoints
 {
     // Node executors read config with JsonSerializerDefaults.Web (camelCase); serialize embedded fields the same way.
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
+
+    // Standardizes every /workflows/build validation rejection to the same { error, message, fieldErrors } shape
+    // Program.cs's MapException already produces for RequestValidationException, instead of the bare strings this
+    // endpoint used to return — so the Angular error handler has one shape to read regardless of which check failed.
+    private static IResult ValidationBadRequest(string message) =>
+        Results.BadRequest(new { error = message, message, fieldErrors = (IReadOnlyDictionary<string, string[]>?)null });
+
+    private static IResult ValidationBadRequest(string field, string message) =>
+        Results.BadRequest(new
+        {
+            error = message,
+            message,
+            fieldErrors = (IReadOnlyDictionary<string, string[]>?)new Dictionary<string, string[]> { [field] = [message] },
+        });
 
     public static IEndpointRouteBuilder MapWorkflowEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -46,10 +65,31 @@ public static class WorkflowEndpoints
         group.MapPost("/workflows/build", async (
             WorkflowBuildRequest request,
             IConfigurationService configurationService,
+            IConfigurationRepository configurationRepository,
             IWorkflowDefinitionStore store,
             IEpicSourceConnectionScopeSyncService scopeSyncService,
+            IParentReferenceResolver parentReferenceResolver,
+            IDestinationSchemaService destinationSchemaService,
             CancellationToken cancellationToken) =>
         {
+            // Fail fast, before provisioning anything: every "child of" declaration on a mapping spec must
+            // resolve to a real reference field, mapped, targeting a sibling resource on the same destination.
+            var parentReferenceError = ValidateMappingParentReferences(request.Mappings ?? [], parentReferenceResolver);
+            if (parentReferenceError is not null)
+            {
+                return ValidationBadRequest(parentReferenceError);
+            }
+
+            // Destinations, Sources, Mappings, and the workflow-definition save below used to each commit
+            // independently — a validation failure or exception partway through (e.g. a mapping's column not
+            // existing on the real table) left everything created so far durably persisted with no way to retry
+            // cleanly: resubmitting the same request tries to create the same source connection again and hits a
+            // name-uniqueness violation, since the first attempt's row never went away. Wrapping the whole
+            // sequence in one transaction makes it all-or-nothing: only CommitAsync (right before the success
+            // return) makes any of it durable — every early `return` below leaves this undisposed-without-commit,
+            // which rolls the transaction back.
+            await using var transaction = await configurationRepository.BeginTransactionAsync(cancellationToken);
+
             // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
             // saved graph. Node order is preserved from the original request when the definition is rebuilt.
             var nodes = request.Nodes.ToDictionary(node => node.Id, node => node, StringComparer.OrdinalIgnoreCase);
@@ -62,7 +102,7 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Destination spec references unknown node '{spec.NodeId}'.");
                 }
 
                 var destination = spec.ExistingId is { } existingDestinationId
@@ -86,7 +126,7 @@ public static class WorkflowEndpoints
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Source spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Source spec references unknown node '{spec.NodeId}'.");
                 }
 
                 var source = spec.ExistingId is { } existingSourceId
@@ -97,23 +137,49 @@ public static class WorkflowEndpoints
             }
 
             // 3. Mappings — bound to a source + destination created above (or already referenced on the picked node).
+            // A destination selecting more than one resource (Patient + Observation + Condition, say) produces one
+            // spec per resource, all sharing the SAME mapping node id — the canvas has one "Field Mapping" node
+            // whose wizard-authored config already carries every selected resource's field rows; what's created
+            // here is one MappingProfile row per resource. Every spec for a given node id must accumulate into that
+            // node's config rather than overwrite it, or only the last-processed resource would survive on the node
+            // (MappingNodeExecutor resolves its fields from whichever mappingProfileId(s) end up there).
+            var profileIdsByNode = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            // Same accumulate-don't-overwrite need applies on the DESTINATION side: a destination node fed by
+            // several specs (Patient + Condition + Observation sharing one SQL Server destination) must remember
+            // every resource's own target table + fields, not just the first one saved — see the destination
+            // mirroring block below and DestinationNodeExecutor.CreateMappingProfiles.
+            var resourceMappingsByNode = new Dictionary<string, Dictionary<string, DestinationResourceMappingConfig>>(StringComparer.OrdinalIgnoreCase);
             foreach (var spec in request.Mappings ?? [])
             {
                 if (!nodes.TryGetValue(spec.NodeId, out var node))
                 {
-                    return Results.BadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
+                    return ValidationBadRequest($"Mapping spec references unknown node '{spec.NodeId}'.");
                 }
 
                 if (!TryResolveEntityId(spec.SourceNodeId, sourceIds, nodes, "sourceConnectionId", out var sourceConnectionId))
                 {
-                    return Results.BadRequest(
+                    return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references source node '{spec.SourceNodeId}' with no created or referenced source connection.");
                 }
 
                 if (!TryResolveEntityId(spec.DestinationNodeId, destinationIds, nodes, "destinationId", out var destinationId))
                 {
-                    return Results.BadRequest(
+                    return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references destination node '{spec.DestinationNodeId}' with no created or referenced destination.");
+                }
+
+                // Defense in depth against the wizard silently persisting a column that doesn't exist on the
+                // customer's own table (see the "Invalid column name" incidents this guards against — a
+                // destination table with no PK/unique constraint leaves the id row's column an unverified,
+                // editable guess client-side). Best-effort: only blocks the save when the live schema was
+                // actually reachable and the target table's real columns are known: an unreachable/non-relational
+                // destination can't be validated this way and is left to the frontend-side check instead, not
+                // hard-failed here.
+                var columnError = await ValidateMappedColumnsExistAsync(
+                    spec, destinationId, destinationSchemaService, cancellationToken);
+                if (columnError is not null)
+                {
+                    return ValidationBadRequest(columnError);
                 }
 
                 var mappingRequest = new CreateMappingProfileRequest(
@@ -150,10 +216,32 @@ public static class WorkflowEndpoints
                     config["destinationId"] = destinationId.ToString();
                 });
 
+                if (!profileIdsByNode.TryGetValue(spec.NodeId, out var idsForNode))
+                {
+                    idsForNode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    profileIdsByNode[spec.NodeId] = idsForNode;
+                }
+                idsForNode[spec.ResourceType] = mapping.Id.ToString();
+
+                nodes[spec.NodeId] = WithConfiguration(node, config =>
+                {
+                    // Kept for backward compatibility with anything still reading the single legacy field (reflects
+                    // whichever resource was processed last when there's more than one — MappingNodeExecutor prefers
+                    // mappingProfileIds below whenever it's present, so this is display/compat-only in that case).
+                    config["mappingProfileId"] = mapping.Id.ToString();
+                    config["mappingProfileIds"] = JsonSerializer.SerializeToNode(idsForNode, WebJsonOptions);
+                });
+
                 // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
-                // from its OWN node config rather than resolving the mapping by id, so mirror the mapping's target and
-                // fields onto the destination node — the same shape the route→graph projection embeds. Without this the
-                // writer defaults the target table to the resource type and creates no data columns.
+                // from its OWN node config rather than resolving the mapping by id, so mirror every spec's target and
+                // fields onto the destination node under resourceMappings, keyed by resource type — the same
+                // accumulate-don't-overwrite treatment as profileIdsByNode above, and for the same reason: a
+                // destination fed by more than one resource spec (Patient + Condition + Observation sharing one SQL
+                // Server destination, say) must let DestinationNodeExecutor route each resource type's records to its
+                // own table/columns instead of forcing every resource type through whichever one saved first (that
+                // used to silently misroute every resource but the first into the wrong table, failing with
+                // "Invalid column name"). The single legacy resourceType/destinationObject/fields trio is still
+                // mirrored from the first spec only, kept only for any older consumer still reading that single shape.
                 // sourceConnectionId lets DestinationNodeExecutor re-resolve each resource type's real MappingProfile
                 // by the SAME natural key (ResourceType, SourceConnectionId, DestinationId) the mapping node above
                 // uses — without it, a destination with more than one MappingProfile sharing its DestinationId (a
@@ -161,11 +249,24 @@ public static class WorkflowEndpoints
                 // source connection actually produced.
                 if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
                 {
+                    if (!resourceMappingsByNode.TryGetValue(spec.DestinationNodeId, out var resourceMappingsForNode))
+                    {
+                        resourceMappingsForNode = new Dictionary<string, DestinationResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
+                        resourceMappingsByNode[spec.DestinationNodeId] = resourceMappingsForNode;
+                    }
+                    resourceMappingsForNode[spec.ResourceType] = new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields);
+
+                    var mirrorLegacyShape = ReadConfigString(destinationNode, "resourceType") is null;
                     nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
                     {
-                        config["resourceType"] = spec.ResourceType;
-                        config["destinationObject"] = spec.DestinationObject;
-                        config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
+                        if (mirrorLegacyShape)
+                        {
+                            config["resourceType"] = spec.ResourceType;
+                            config["destinationObject"] = spec.DestinationObject;
+                            config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
+                        }
+
+                        config["resourceMappings"] = JsonSerializer.SerializeToNode(resourceMappingsForNode, WebJsonOptions);
                         config["sourceConnectionId"] = sourceConnectionId.ToString();
                     });
                 }
@@ -187,6 +288,10 @@ public static class WorkflowEndpoints
             var workflow = BuildWorkflow(
                 request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
+
+            // Everything above (destinations, sources, mappings, the workflow definition itself) is durable only
+            // from this point on — nothing before here survives if any step failed or threw.
+            await transaction.CommitAsync(cancellationToken);
 
             // Re-derive each referenced source connection's OAuth scopes from what every pipeline sharing it
             // actually consumes downstream, now that this save may have changed a destination's resource selection
@@ -222,12 +327,23 @@ public static class WorkflowEndpoints
 
         // Workflow-list screen: one summary row per workflow — shape, enabled state, last run, and the derived
         // action. The source node's referenced connection decides Launch (interactive SMART) vs Run (backend), so the
-        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration).
+        // UI knows which endpoint to call. Admin-only (it reads source-connection configuration). Paging/search/sort
+        // are applied server-side (see WorkflowSummaryPageDto) — the portal's workflow-list screen no longer slices
+        // the full set client-side.
         group.MapGet("/workflows/summary", async (
             IWorkflowDefinitionStore store,
             IWorkflowRunStore runStore,
             IConfigurationRepository configurationRepository,
-            CancellationToken cancellationToken) =>
+            IUserDisplayNameResolver userDisplayNameResolver,
+            CancellationToken cancellationToken,
+            int page = 1,
+            int pageSize = 20,
+            string? search = null,
+            string? sortColumn = null,
+            string? sortDirection = null,
+            string[]? statuses = null,
+            string[]? applicationTypes = null,
+            string[]? sourceSystemTypes = null) =>
         {
             var workflows = await store.ListAsync(cancellationToken);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
@@ -289,12 +405,69 @@ public static class WorkflowEndpoints
                     sourceSystemType,
                     applicationType?.ToString(),
                     hasDestination,
-                    workflow.IsPubliclyLaunchable));
+                    workflow.IsPubliclyLaunchable,
+                    workflow.CreatedOnUtc,
+                    workflow.CreatedBy,
+                    workflow.UpdatedOnUtc,
+                    workflow.UpdatedBy));
             }
 
-            return Results.Ok(summaries
-                .OrderBy(summary => summary.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray());
+            // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
+            // string) to a display name in one batched lookup, before filtering/paging.
+            var actorNames = await userDisplayNameResolver.ResolveAsync(
+                summaries.SelectMany(summary => new[] { summary.CreatedBy, summary.ModifiedBy }), cancellationToken);
+            summaries = summaries.Select(summary => summary with
+            {
+                CreatedBy = summary.CreatedBy is { } createdBy ? actorNames.GetValueOrDefault(createdBy, createdBy) : null,
+                ModifiedBy = summary.ModifiedBy is { } modifiedBy ? actorNames.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+            }).ToList();
+
+            // Facet option lists reflect the full unfiltered set (not `matching`) so unchecking every box in one
+            // category doesn't make the other categories' checkboxes disappear out from under the user.
+            var availableStatuses = summaries.Select(s => s.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableApplicationTypes = summaries.Select(s => s.ApplicationType).OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableSourceSystemTypes = summaries.Select(s => s.SourceSystemType).OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+
+            IEnumerable<WorkflowSummaryDto> matching = summaries;
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                matching = matching.Where(summary =>
+                    summary.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                    || (summary.ApplicationType?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+
+            if (statuses is { Length: > 0 })
+            {
+                var statusSet = new HashSet<string>(statuses, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => statusSet.Contains(summary.Status));
+            }
+
+            if (applicationTypes is { Length: > 0 })
+            {
+                var applicationTypeSet = new HashSet<string>(applicationTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => summary.ApplicationType is not null && applicationTypeSet.Contains(summary.ApplicationType));
+            }
+
+            if (sourceSystemTypes is { Length: > 0 })
+            {
+                var sourceSystemTypeSet = new HashSet<string>(sourceSystemTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary => summary.SourceSystemType is not null && sourceSystemTypeSet.Contains(summary.SourceSystemType));
+            }
+
+            var sorted = SortSummaries(matching, sortColumn, sortDirection).ToArray();
+
+            var effectivePage = Math.Max(1, page);
+            var effectivePageSize = Math.Clamp(pageSize, 1, 200);
+            var pageItems = sorted
+                .Skip((effectivePage - 1) * effectivePageSize)
+                .Take(effectivePageSize)
+                .ToArray();
+
+            return Results.Ok(new WorkflowSummaryPageDto(
+                pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Source Connections page: which source-connection ids are referenced by at least one workflow's Source
@@ -371,6 +544,9 @@ public static class WorkflowEndpoints
                     "This workflow has no saved destination to preview. Save or build the destination first."));
             }
 
+            // Scope the preview to this workflow's own runs (each run id is the PipelineRunId stamped on the rows it
+            // wrote), so a shared destination table shows only what THIS workflow produced — and nothing for a
+            // workflow that hasn't run yet.
             var runs = await runStore.ListByDefinitionAsync(workflowId, cancellationToken);
             var pipelineRunIds = runs.Select(run => run.Id).ToArray();
 
@@ -479,7 +655,7 @@ public static class WorkflowEndpoints
                 .ToArray();
 
             var triggerRequest = source.Trigger is { } trigger
-                ? new WorkflowTriggerRequest(trigger.Type, trigger.ScheduleExpression, trigger.IntervalMinutes, trigger.BackfillOnFirstRun)
+                ? new WorkflowTriggerRequest(trigger.Type, trigger.ScheduleExpression, trigger.IntervalMinutes, trigger.BackfillOnFirstRun, trigger.TimeZoneId)
                 : null;
 
             // Always created disabled, regardless of the source's enabled state: an enabled Schedule/Poll trigger
@@ -514,6 +690,9 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
             ICurrentUserService currentUserService,
+            IWorkflowRunTracker runTracker,
+            IServiceScopeFactory scopeFactory,
+            ILoggerFactory loggerFactory,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -522,16 +701,88 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            var workflowRunId = Guid.NewGuid();
+            // Reuse the ambient correlation id (same header/TraceIdentifier the API's global exception handler and
+            // ErrorLogs use) so this run's ErrorLogs, audit trail, and outbound API Requests can all be found via
+            // the same id — see the checkpoint endpoint below for the matching pattern.
             var context = new WorkflowExecutionContext(
-                Guid.NewGuid(),
-                request?.CorrelationId ?? Guid.NewGuid().ToString("N"),
+                workflowRunId,
+                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
                 targetPatientId: request?.PatientId,
-                patientSearchCriteria: request?.PatientSearchCriteria);
-            var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
+                patientSearchCriteria: request?.PatientSearchCriteria,
+                callerId: request?.CallerId);
 
+            if (request?.Async == true)
+            {
+                runTracker.MarkRunning(workflowRunId);
+
+                // Fire-and-forget on purpose: the caller gets the run id back now and polls for status, so this
+                // must survive the HTTP request (and its scoped DbContext) ending. Resolve a fresh scope rather
+                // than closing over the request-scoped orchestrator/store.
+                _ = Task.Run(async () =>
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<IRankedWorkflowOrchestrator>();
+                    // No HttpContext survives into this detached Task.Run, so HttpContextCurrentUserService would
+                    // otherwise stamp every AuditLog/AuthenticationLog/SecurityEvent this run produces with a null
+                    // CorrelationId — set the ambient scope explicitly so it falls back to this run's real id instead.
+                    var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
+                    using var actorScope = ambientActorContext.BeginCorrelatedScope("Background Workflow Run", context.CorrelationId);
+                    try
+                    {
+                        await scopedOrchestrator.ExecuteAsync(workflow, context, CancellationToken.None);
+                    }
+                    catch (Exception exception)
+                    {
+                        // The orchestrator already persists the failed run with its error message and captures it
+                        // via IGlobalExceptionManager (same CorrelationId) before rethrowing; this is just so a
+                        // background failure isn't silently swallowed from an ops/logging perspective.
+                        loggerFactory.CreateLogger("WorkflowEndpoints")
+                            .LogError(exception, "Background run {WorkflowRunId} for workflow {WorkflowId} failed.", workflowRunId, workflowId);
+                    }
+                    finally
+                    {
+                        runTracker.MarkComplete(workflowRunId);
+                    }
+                });
+
+                return Results.Accepted(
+                    $"/api/v1/workflow-runs/{workflowRunId}/status",
+                    new WorkflowRunStatusResponse(workflowRunId, "Running", context.CorrelationId));
+            }
+
+            var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
             return Results.Ok(result);
+        });
+
+        // Lightweight poll target for an async /run — cheap enough to hit every second or two without pulling the
+        // full node timeline. "Running" comes from IWorkflowRunTracker (the run hasn't reached a terminal state
+        // and been persisted yet); once persisted, this reflects the same status /workflow-runs/{runId} would.
+        group.MapGet("/workflow-runs/{runId:guid}/status", (
+            Guid runId,
+            IWorkflowRunTracker runTracker,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            if (runTracker.IsRunning(runId))
+            {
+                return Task.FromResult(Results.Ok(new WorkflowRunStatusResponse(runId, "Running")));
+            }
+
+            return ResolveTerminalStatusAsync(runId, runStore, cancellationToken);
+
+            static async Task<IResult> ResolveTerminalStatusAsync(
+                Guid runId,
+                IWorkflowRunStore runStore,
+                CancellationToken cancellationToken)
+            {
+                var run = await runStore.GetAsync(runId, cancellationToken);
+                return run is null
+                    ? Results.NotFound()
+                    : Results.Ok(new WorkflowRunStatusResponse(run.Id, run.Status.ToString(), run.CorrelationId));
+            }
         });
 
         // Discards FHIRBridge's cached token for this workflow's source connection (both the given patientId's slot,
@@ -542,6 +793,7 @@ public static class WorkflowEndpoints
         group.MapPost("/workflows/{workflowId:guid}/discard-token", async (
             Guid workflowId,
             string? patientId,
+            string? callerId,
             IWorkflowDefinitionStore store,
             ISourceConnectionRuntimeResolver? sourceResolver,
             CancellationToken cancellationToken) =>
@@ -572,7 +824,7 @@ public static class WorkflowEndpoints
                 return Results.Ok(new { discarded = false });
             }
 
-            await sourceResolver.DiscardTokenAsync(sourceConnectionId.Value, patientId, cancellationToken);
+            await sourceResolver.DiscardTokenAsync(sourceConnectionId.Value, patientId, cancellationToken, callerId);
             return Results.Ok(new { discarded = true });
         });
 
@@ -584,8 +836,10 @@ public static class WorkflowEndpoints
         group.MapGet("/workflows/{workflowId:guid}/token-status", async (
             Guid workflowId,
             string? patientId,
+            string? callerId,
             IWorkflowDefinitionStore store,
             ISourceConnectionRuntimeResolver? sourceResolver,
+            ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -614,7 +868,12 @@ public static class WorkflowEndpoints
                 return Results.Ok(new { hasValidToken = false });
             }
 
-            var hasValidToken = await sourceResolver.HasValidTokenAsync(sourceConnectionId.Value, patientId, cancellationToken);
+            var hasValidToken = await sourceResolver.HasValidTokenAsync(sourceConnectionId.Value, patientId, cancellationToken, callerId);
+            logger.LogInformation(
+                "token-status check: workflowId={WorkflowId} sourceConnectionId={SourceConnectionId} " +
+                "hasCallerId={HasCallerId} hasPatientId={HasPatientId} hasValidToken={HasValidToken}",
+                workflowId, sourceConnectionId, !string.IsNullOrWhiteSpace(callerId), !string.IsNullOrWhiteSpace(patientId),
+                hasValidToken);
             return Results.Ok(new { hasValidToken });
         });
 
@@ -659,6 +918,7 @@ public static class WorkflowEndpoints
             ILaunchTokenProtector tokenProtector,
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
+            ICurrentUserService currentUserService,
             CancellationToken cancellationToken) =>
         {
             var launchContext = tokenProtector.UnprotectContext(token);
@@ -674,9 +934,11 @@ public static class WorkflowEndpoints
                 return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
             }
 
+            // See the /run endpoint's matching comment: reuse the ambient correlation id so this run's ErrorLogs
+            // (if any) can be found via the same id as its outbound API Requests.
             var context = new WorkflowExecutionContext(
                 Guid.NewGuid(),
-                Guid.NewGuid().ToString("N"),
+                currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
                 triggeredBy: "checkpoint-url",
                 triggerType: "Checkpoint");
             var result = await orchestrator.ExecuteAsync(workflow, context, targetNodeId, cancellationToken);
@@ -740,6 +1002,8 @@ public static class WorkflowEndpoints
             string? search,
             int? page,
             int? pageSize,
+            string? sortColumn,
+            string? sortDirection,
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
@@ -773,7 +1037,8 @@ public static class WorkflowEndpoints
                     run.TriggerType,
                     run.NodeRuns.Count,
                     run.ErrorMessage,
-                    run.WorkflowDefinitionVersion));
+                    run.WorkflowDefinitionVersion,
+                    run.CorrelationId));
             }
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -805,13 +1070,35 @@ public static class WorkflowEndpoints
             var effectivePage = page is > 0 ? page.Value : 1;
             var effectivePageSize = pageSize is > 0 ? pageSize.Value : 25;
             var totalCount = items.Count;
-            var paged = items
-                .OrderByDescending(x => x.StartedAt)
+            var paged = SortRuns(items, sortColumn, sortDirection)
                 .Skip((effectivePage - 1) * effectivePageSize)
                 .Take(effectivePageSize)
                 .ToList();
 
             return Results.Ok(new PagedResult<WorkflowRunHistoryDto>(paged, totalCount, effectivePage, effectivePageSize));
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // All-time run count per status, across every workflow — unlike the paged /workflow-runs list above
+        // (capped to the 500 most recent via ListRecentAsync), this queries the full WorkflowRuns table
+        // directly so the Dashboard's stat tiles reflect a true global count. Backs the Dashboard screen.
+        group.MapGet("/workflow-runs/stats", async (
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            var counts = await runStore.GetStatusCountsAsync(cancellationToken);
+
+            // AwaitingBulkExport is non-terminal — a node deferred to an async $export job and the run is still
+            // in flight pending BulkExportPollWorker's resume — so it belongs in "Running", not invisible in no
+            // tile at all. PartialSuccess is a terminal, fully-written outcome (every node ran; only some non-parent
+            // resource types were skipped for lack of authorization) — it belongs in "Succeeded", same as the
+            // Recent Workflows table already labels it "Completed"-equivalent.
+            return Results.Ok(new WorkflowRunStatusCountsDto(
+                counts[WorkflowRunStatus.Pending],
+                counts[WorkflowRunStatus.Running] + counts[WorkflowRunStatus.AwaitingBulkExport],
+                counts[WorkflowRunStatus.Succeeded] + counts[WorkflowRunStatus.PartialSuccess],
+                counts[WorkflowRunStatus.Failed],
+                counts[WorkflowRunStatus.Cancelled],
+                counts[WorkflowRunStatus.PartialSuccess]));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         group.MapGet("/workflow-runs/{runId:guid}/summary", async (
@@ -850,7 +1137,8 @@ public static class WorkflowEndpoints
                 run.TriggerType,
                 run.NodeRuns.Count,
                 run.ErrorMessage,
-                run.WorkflowDefinitionVersion));
+                run.WorkflowDefinitionVersion,
+                run.CorrelationId));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads.
@@ -992,12 +1280,132 @@ public static class WorkflowEndpoints
         return (total, usedBulkExport);
     }
 
+    // Validates every ParentReferenceSpec across the build request in one pass, before anything is created.
+    // "Same destination" (grouping by DestinationNodeId) is this flow's stand-in for "same route" — the canvas
+    // has no persisted ResourcePipelineRoute to group by, but every resource a destination-wizard session
+    // selects together shares the same destination node, which is the equivalent scope for "resources
+    // configured together." Returns the first validation failure found, or null if everything resolves.
+    private static string? ValidateMappingParentReferences(
+        IReadOnlyCollection<MappingBuildSpec> mappings,
+        IParentReferenceResolver parentReferenceResolver)
+    {
+        foreach (var group in mappings.GroupBy(m => m.DestinationNodeId, StringComparer.OrdinalIgnoreCase))
+        {
+            var byResourceType = group
+                .GroupBy(m => m.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var spec in group)
+            {
+                foreach (var link in spec.ParentReferences ?? [])
+                {
+                    if (!byResourceType.ContainsKey(link.ParentResourceType))
+                    {
+                        return $"'{spec.ResourceType}' is configured as a child of '{link.ParentResourceType}', " +
+                            "which is not one of this destination's selected resources.";
+                    }
+
+                    var requiredField = parentReferenceResolver.Resolve(
+                        spec.ResourceType, link.ParentResourceType, link.ReferenceFieldOverride);
+
+                    if (requiredField is null)
+                    {
+                        return $"'{spec.ResourceType}' has no FHIR reference field that can target " +
+                            $"'{link.ParentResourceType}'.";
+                    }
+
+                    // MappingFieldDto (this create-request shape) has no IsEnabled flag — a disabled row in the
+                    // wizard is simply never included in the built request, so presence in Fields already means
+                    // "enabled" here (unlike MappingField, the persisted domain record ConfigurationService
+                    // validates separately for the ResourcePipelineRoute path).
+                    var isMapped = spec.Fields.Any(f =>
+                        string.Equals(f.JsonPath, requiredField.JsonPath, StringComparison.Ordinal));
+
+                    if (!isMapped)
+                    {
+                        return $"'{spec.ResourceType}' must map '{requiredField.FhirPath}' because it is " +
+                            $"configured as a child of '{link.ParentResourceType}'.";
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Best-effort check that every mapped field's <see cref="MappingFieldDto.TargetField"/> is a real column on
+    /// the destination's live table — the id/upsert-key field above all, since an unverified guess there is what
+    /// produces a run-time "Invalid column name" against a customer-owned table with no PK/unique constraint to
+    /// auto-detect from. Only validates when the destination is relational and its schema was actually reachable
+    /// (<see cref="IDestinationSchemaService.GetSchemaAsync"/> returns an empty table list for non-relational
+    /// destinations, and this method treats a lookup failure — deleted destination, transient connectivity — as
+    /// "can't verify" rather than a hard failure): the frontend-side check in the wizard is the first line of
+    /// defense for those cases, this is defense in depth for whatever reaches this endpoint regardless of how.
+    /// </summary>
+    private static async Task<string?> ValidateMappedColumnsExistAsync(
+        MappingBuildSpec spec,
+        Guid destinationId,
+        IDestinationSchemaService destinationSchemaService,
+        CancellationToken cancellationToken)
+    {
+        DestinationSchemaDto schema;
+        try
+        {
+            schema = await destinationSchemaService.GetSchemaAsync(destinationId, cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (schema.Tables.Count == 0)
+        {
+            return null;
+        }
+
+        var tableIdentifier = spec.DestinationObject.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is [var name, ..]
+            ? name
+            : spec.DestinationObject;
+
+        var table = schema.Tables.FirstOrDefault(t =>
+            string.Equals(t.FullName, tableIdentifier, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TableName, tableIdentifier, StringComparison.OrdinalIgnoreCase));
+
+        // The configured table isn't one this destination's live schema actually has — a different, more specific
+        // failure than a bad column, and one the writer already reports clearly at run time; nothing further to
+        // check here since there are no real columns to validate field names against.
+        if (table is null)
+        {
+            return null;
+        }
+
+        var realColumns = new HashSet<string>(table.Columns.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in spec.Fields)
+        {
+            if (!realColumns.Contains(field.TargetField))
+            {
+                return field.IsUpsertKey
+                    ? $"'{spec.ResourceType}': the id/upsert-key field is mapped to column '{field.TargetField}', " +
+                        $"which does not exist on '{table.FullName}'. Pick a real column from that table."
+                    : $"'{spec.ResourceType}': field '{field.TargetField}' does not exist on '{table.FullName}'. " +
+                        "Pick a real column from that table.";
+            }
+        }
+
+        return null;
+    }
+
     private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)
     {
         var config = TryParseConfiguration(node.ConfigurationJson) ?? new JsonObject();
         mutate(config);
         return node with { ConfigurationJson = config.ToJsonString() };
     }
+
+    private static string? ReadConfigString(WorkflowNodeRequest node, string key) =>
+        TryParseConfiguration(node.ConfigurationJson)?[key]?.ToString();
 
     private static bool TryResolveEntityId(
         string nodeId,
@@ -1076,6 +1484,61 @@ public static class WorkflowEndpoints
             .FirstOrDefault() ?? string.Empty;
 
         return (destinationId, destinationObject);
+    }
+
+    /// <summary>Mirrors the portal's audienceLabel() so 'audience' sorts the same friendly grouping the column
+    /// displays, not the raw ApplicationType enum name.</summary>
+    private static string AudienceSortLabel(string? applicationType) => applicationType switch
+    {
+        "EhrLaunch"  => "EHR Launch (Provider)",
+        "Standalone" => "Provider Standalone",
+        "Patient"    => "Patient Standalone",
+        "Backend"    => "Backend Service",
+        _            => "—",
+    };
+
+    private static IEnumerable<WorkflowSummaryDto> SortSummaries(
+        IEnumerable<WorkflowSummaryDto> summaries, string? sortColumn, string? sortDirection)
+    {
+        var descending = string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedEnumerable<WorkflowSummaryDto> Order<TKey>(Func<WorkflowSummaryDto, TKey> keySelector) =>
+            descending
+                ? summaries.OrderByDescending(keySelector)
+                : summaries.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "source"   => Order(summary => (summary.SourceSystemType ?? string.Empty).ToLowerInvariant()),
+            "audience" => Order(summary => AudienceSortLabel(summary.ApplicationType).ToLowerInvariant()),
+            "status"   => Order(summary => summary.Status),
+            "lastRun"  => Order(summary => summary.LastRunAt?.UtcTicks ?? -1),
+            "actionOn" => Order(summary => (summary.ModifiedOnUtc ?? summary.CreatedOnUtc)?.Ticks ?? -1),
+            _          => Order(summary => summary.Name.ToLowerInvariant()),
+        };
+    }
+
+    // Defaults to newest-first by start time — matches this endpoint's pre-sorting behavior before
+    // sortColumn/sortDirection existed, so an unsorted request (the initial page load) looks unchanged.
+    private static IEnumerable<WorkflowRunHistoryDto> SortRuns(
+        IEnumerable<WorkflowRunHistoryDto> runs, string? sortColumn, string? sortDirection)
+    {
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedEnumerable<WorkflowRunHistoryDto> Order<TKey>(Func<WorkflowRunHistoryDto, TKey> keySelector) =>
+            descending
+                ? runs.OrderByDescending(keySelector)
+                : runs.OrderBy(keySelector);
+
+        return sortColumn switch
+        {
+            "pipeline"    => Order(run => run.PipelineName.ToLowerInvariant()),
+            "source"      => Order(run => (run.SourceName ?? run.SourceSystemType ?? string.Empty).ToLowerInvariant()),
+            "status"      => Order(run => run.Status),
+            "duration"    => Order(run => run.DurationMs ?? -1),
+            "triggeredBy" => Order(run => (run.TriggeredBy ?? run.TriggerType ?? string.Empty).ToLowerInvariant()),
+            _             => Order(run => run.StartedAt),
+        };
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)
@@ -1169,6 +1632,7 @@ public static class WorkflowEndpoints
             request.Type,
             request.ScheduleExpression,
             request.IntervalMinutes,
-            request.BackfillOnFirstRun);
+            request.BackfillOnFirstRun,
+            request.TimeZoneId);
     }
 }

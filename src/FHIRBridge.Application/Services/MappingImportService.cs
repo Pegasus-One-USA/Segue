@@ -190,7 +190,7 @@ public sealed class MappingImportService : IMappingImportService
                     importRequest.DestinationId,
                     destinationObject,
                     fields,
-                    rawJson);
+                    mappingJson: rawJson);
                 await _repository.AddMappingProfileAsync(profile, cancellationToken);
                 profileId = profile.Id;
             }

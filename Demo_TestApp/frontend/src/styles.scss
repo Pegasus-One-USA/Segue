@@ -279,3 +279,34 @@ button {
     background: var(--color-primary-dark);
   }
 }
+
+// Top-level "Default | New 11" switcher added to every non-Admin role's shell (see demo-types/new-11/*). Kept
+// global (like .icon-btn etc. above) since the four per-role wrapper templates all reuse it. Rendered as a distinct
+// dark strip above each role's existing screen so it reads as a mode switch, not part of the screen below it.
+.new11-menubar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--color-primary-dark);
+
+  &__item {
+    padding: 6px 18px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--color-on-primary);
+    font-size: 13px;
+    font-weight: 700;
+    transition: background var(--transition-base), color var(--transition-base);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    &.active {
+      background: var(--color-on-primary);
+      color: var(--color-primary-dark);
+    }
+  }
+}

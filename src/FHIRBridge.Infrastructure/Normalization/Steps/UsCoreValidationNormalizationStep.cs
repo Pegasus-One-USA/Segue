@@ -47,6 +47,8 @@ public sealed class UsCoreValidationNormalizationStep : IResourceNormalizationSt
             ["Organization"] = ("USCoreOrganizationProfile", ["identifier", "name"]),
             ["Practitioner"] = ("USCorePractitionerProfile", ["identifier", "name"]),
             ["Location"] = ("USCoreLocationProfile", ["name"]),
+            ["ServiceRequest"] = ("USCoreServiceRequestProfile", ["status", "intent", "code", "subject"]),
+            ["MedicationAdministration"] = ("USCoreMedicationAdministrationProfile", ["status", "subject"]),
             // Tier-3 resources.
             ["CarePlan"] = ("USCoreCarePlanProfile", ["status", "intent", "subject"]),
             ["Goal"] = ("USCoreGoalProfile", ["lifecycleStatus", "description", "subject"]),
@@ -71,6 +73,11 @@ public sealed class UsCoreValidationNormalizationStep : IResourceNormalizationSt
             ["Immunization"] = [("status", UsCoreValueSetCatalog.ImmunizationStatus)],
             ["Procedure"] = [("status", UsCoreValueSetCatalog.EventStatus)],
             ["DiagnosticReport"] = [("status", UsCoreValueSetCatalog.DiagnosticReportStatus)],
+            // AllergyIntolerance.clinicalStatus is a CodeableConcept (not a plain string like the fields above), so
+            // it isn't code-bound here — ReadString only extracts flat string-typed elements; a nested-code
+            // extension to this validator would be needed to check it correctly.
+            ["ServiceRequest"] = [("status", UsCoreValueSetCatalog.RequestStatus)],
+            ["MedicationAdministration"] = [("status", UsCoreValueSetCatalog.MedicationAdministrationStatus)],
             // Tier-2 / Tier-3 status bindings (closed ValueSets validated offline).
             ["Coverage"] = [("status", UsCoreValueSetCatalog.FinancialResourceStatus)],
             ["Claim"] = [("status", UsCoreValueSetCatalog.FinancialResourceStatus)],

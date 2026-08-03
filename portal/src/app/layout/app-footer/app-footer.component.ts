@@ -10,7 +10,7 @@ import { environment } from '../../../environments/environment';
 })
 export class AppFooterComponent {
   /** 'full' — global shell footer (company · powered-by · version · support · website).
-   *  'compact' — auth pages: just "Powered by FHIRBridge". */
+   *  'compact' — auth pages: just "Powered by Segue". */
   readonly variant = input<'full' | 'compact'>('full');
 
   protected readonly branding      = inject(BrandingService);

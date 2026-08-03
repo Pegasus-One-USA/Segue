@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 
 namespace FHIRBridge.Infrastructure.Persistence;
@@ -18,9 +19,90 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         _db = db;
     }
 
+    public async Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
+    {
+        var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        return new EfConfigurationTransaction(transaction);
+    }
+
+    private sealed class EfConfigurationTransaction : IConfigurationTransaction
+    {
+        private readonly Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction _transaction;
+
+        public EfConfigurationTransaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
+        {
+            _transaction = transaction;
+        }
+
+        public Task CommitAsync(CancellationToken cancellationToken) => _transaction.CommitAsync(cancellationToken);
+
+        public Task RollbackAsync(CancellationToken cancellationToken) => _transaction.RollbackAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => _transaction.DisposeAsync();
+    }
+
     // ── Source connections ────────────────────────────────────────────────────
     public async Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) =>
         await _db.SourceConnections.OrderBy(x => x.Name).ToListAsync(ct);
+
+    public async Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(
+        SourceConnectionFilter filter,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortOrder,
+        CancellationToken ct)
+    {
+        var query = _db.SourceConnections.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var search = filter.Search;
+            query = query.Where(x =>
+                EF.Functions.Like(x.Name, $"%{search}%") ||
+                EF.Functions.Like(x.BaseUrl, $"%{search}%"));
+        }
+
+        if (filter.SourceSystemType.HasValue)
+        {
+            query = query.Where(x => x.SourceSystemType == filter.SourceSystemType.Value);
+        }
+
+        if (filter.ApplicationType.HasValue)
+        {
+            query = query.Where(x => x.ApplicationType == filter.ApplicationType.Value);
+        }
+
+        if (filter.IsEnabled.HasValue)
+        {
+            query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        query = sortBy?.ToLowerInvariant() switch
+        {
+            // Must match the frontend's SourceSortColumn values (source-connection.model.ts) lowercased,
+            // not the column display labels (EHR/Audience/Status) — those never matched here, so sorting
+            // by those three columns silently no-opped back to Name ordering.
+            "sourcesystemtype" => desc ? query.OrderByDescending(x => x.SourceSystemType)               : query.OrderBy(x => x.SourceSystemType),
+            "applicationtype"  => desc ? query.OrderByDescending(x => x.ApplicationType)                : query.OrderBy(x => x.ApplicationType),
+            "isenabled"        => desc ? query.OrderByDescending(x => x.IsEnabled)                       : query.OrderBy(x => x.IsEnabled),
+            "actionon"         => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc) : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _                  => desc ? query.OrderByDescending(x => x.Name)                            : query.OrderBy(x => x.Name),
+        };
+
+        var items = await query
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return new PagedResult<SourceConnection>(items, totalCount, page, take);
+    }
 
     public async Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct) =>
         await _db.SourceConnections.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -65,6 +147,37 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         return await query.AnyAsync(cancellationToken);
     }
 
+    // ── Source configurations ─────────────────────────────────────────────────
+    public async Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct) =>
+        await _db.SourceConfigurations.OrderBy(x => x.Name).ToListAsync(ct);
+
+    public async Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct) =>
+        await _db.SourceConfigurations.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        await _db.SourceConfigurations.AddAsync(e, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        await _db.SaveChangesAsync(ct);
+
+        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() reassigns a
+        // brand-new owned Retrieval instance) — clear the tracker so a later Get*Async for this id within the same
+        // request's DbContext re-materializes cleanly instead of hitting the corrupted tracked entry/orphans.
+        _db.ChangeTracker.Clear();
+    }
+
+    public Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken)
+    {
+        // SourceConfiguration is ISoftDeletable: AuditingSaveChangesInterceptor converts this Remove into a soft
+        // delete rather than issuing a physical DELETE.
+        _db.SourceConfigurations.Remove(sourceConfiguration);
+        return _db.SaveChangesAsync(cancellationToken);
+    }
+
     // ── Destinations ──────────────────────────────────────────────────────────
     public async Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) =>
         await _db.DestinationConfigurations.OrderBy(x => x.Name).ToListAsync(ct);
@@ -73,6 +186,8 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         DestinationFilter filter,
         int page,
         int pageSize,
+        string? sortBy,
+        string? sortOrder,
         CancellationToken ct)
     {
         var query = _db.DestinationConfigurations.AsQueryable();
@@ -98,8 +213,17 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         var take = Math.Clamp(pageSize, 1, 200);
         var skip = Math.Max(0, (page - 1) * take);
 
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        query = sortBy?.ToLowerInvariant() switch
+        {
+            "type"     => desc ? query.OrderByDescending(x => x.DestinationType)                  : query.OrderBy(x => x.DestinationType),
+            "target"   => desc ? query.OrderByDescending(x => x.Target)                             : query.OrderBy(x => x.Target),
+            "status"   => desc ? query.OrderByDescending(x => x.IsEnabled)                          : query.OrderBy(x => x.IsEnabled),
+            "actionon" => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc)    : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _          => desc ? query.OrderByDescending(x => x.Name)                              : query.OrderBy(x => x.Name),
+        };
+
         var items = await query
-            .OrderBy(x => x.Name)
             .Skip(skip)
             .Take(take)
             .ToListAsync(ct);
@@ -174,9 +298,27 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     {
         await _db.SaveChangesAsync(ct);
 
-        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() replaces the
-        // entire owned Fields collection) — clear the tracker so a later Get*Async for this id within the same
-        // request's DbContext re-materializes cleanly instead of hitting the corrupted tracked entry/orphans.
+        // MappingProfile.Update() replaces the entire Fields collection in memory (see MappingProfile.ReplaceFields:
+        // Clear + AddRange). A definitive cleanup pass below removes anything left over for this profile that isn't
+        // one of the ids SaveChangesAsync just persisted, guaranteeing "update" is a real full replace — a field
+        // dropped from the mapping is deleted, not left behind as an orphan that keeps feeding future pipeline runs
+        // regardless of what the UI currently shows. ExecuteDeleteAsync runs directly against the database (no
+        // change-tracker involvement), so it can't conflict with the save that just happened.
+        var currentFieldIds = e.Fields
+            .Select(f => _db.Entry(f).Property<Guid>("Id").CurrentValue)
+            .ToList();
+
+        // MappingField is owned (OwnsMany), so it has no queryable DbSet of its own — EF requires navigating to it
+        // through its owner.
+        await _db.MappingProfiles
+            .Where(p => p.Id == e.Id)
+            .SelectMany(p => p.Fields)
+            .Where(f => !currentFieldIds.Contains(EF.Property<Guid>(f, "Id")))
+            .ExecuteDeleteAsync(ct);
+
+        // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above — clear the tracker so a
+        // later Get*Async for this id within the same request's DbContext re-materializes cleanly instead of
+        // hitting the corrupted tracked entry/orphans.
         _db.ChangeTracker.Clear();
     }
 

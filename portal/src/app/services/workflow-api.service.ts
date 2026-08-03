@@ -61,6 +61,8 @@ export interface WorkflowTriggerRequest {
   scheduleExpression?: string | null;
   intervalMinutes?: number | null;
   backfillOnFirstRun?: boolean;
+  /** IANA time zone (e.g. "America/New_York") the schedule is evaluated in. Defaults to "UTC" server-side. */
+  timeZoneId?: string | null;
 }
 
 export interface WorkflowNodeDto extends WorkflowNodeRequest {
@@ -101,6 +103,13 @@ export interface WorkflowRunDto {
 export interface WorkflowRunResultDto {
   workflowRun?: WorkflowRunDto;
   run?: WorkflowRunDto;
+}
+
+/** Response for both the async /run's 202 Accepted and GET /workflow-runs/{runId}/status. */
+export interface WorkflowRunStatus {
+  workflowRunId: string;
+  status: 'Running' | 'Succeeded' | 'Failed' | string;
+  correlationId?: string | null;
 }
 
 // ── Option B create-on-save (POST /workflows/build) ────────────────────────────
@@ -172,14 +181,30 @@ export interface MappingFieldRequest {
   isRequired: boolean;
   defaultValue?: string | null;
   format?: string | null;
-  arrayPolicy?: string;                        // Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson | RejectIfMultiple
+  arrayPolicy?: string;                        // Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson | RejectIfMultiple | CorrelateByCode
   arrayAncestors?: string[] | null;            // array-ancestor fhir paths (child-table alignment)
+  isUpsertKey?: boolean;                       // marks the column an Upsert write matches an existing row on
+  // Required when arrayPolicy is CorrelateByCode: picks the array item whose sibling code element (an absolute
+  // JsonPath sharing this field's array ancestor, e.g. "$.component[*].code.coding[*].code") equals
+  // correlationCodeValue (e.g. "8480-6" for a blood-pressure Observation's systolic component), instead of taking
+  // items by position. Ignored for every other arrayPolicy.
+  correlationCodeJsonPath?: string | null;
+  correlationCodeValue?: string | null;
 }
 
 // existingId: when the node already carries an id from a prior create-on-save (round-tripped through node.fields on
 // load-and-edit), the server updates that record in place instead of provisioning a duplicate.
 export interface SourceBuildSpec { nodeId: string; source: CreateSourceConnectionRequest; existingId?: string | null; }
 export interface DestinationBuildSpec { nodeId: string; destination: CreateDestinationConfigurationRequest; existingId?: string | null; }
+// Declares this spec's resource as a "child" of another resource on the SAME destination (matched by
+// parentResourceType against a sibling MappingBuildSpec sharing destinationNodeId) — e.g. Observation
+// declaring Patient as a parent requires "subject.reference" to be mapped. Validated server-side in
+// /workflows/build before anything is created; see WorkflowEndpoints.ValidateMappingParentReferences.
+export interface ParentReferenceSpec {
+  parentResourceType: string;
+  referenceFieldOverride?: string | null;
+}
+
 export interface MappingBuildSpec {
   nodeId: string;
   sourceNodeId: string;
@@ -189,6 +214,7 @@ export interface MappingBuildSpec {
   destinationObject: string;
   fields: MappingFieldRequest[];
   existingId?: string | null;
+  parentReferences?: ParentReferenceSpec[];
 }
 
 export interface WorkflowBuildRequest {
@@ -234,6 +260,33 @@ export interface WorkflowSummary {
   applicationType: string | null;   // Backend | EhrLaunch | Standalone | Patient
   hasDestination: boolean;
   isPubliclyLaunchable: boolean;
+  createdOnUtc?: string | null;
+  createdBy?: string | null;
+  modifiedOnUtc?: string | null;
+  modifiedBy?: string | null;
+}
+
+/** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row
+ *  count (before paging) for the "Showing X-Y of Z" / page-count UI. The three available* lists are the full
+ *  distinct-value set across every workflow (not just what matches the active filters), for the Status/Audience/
+ *  Source multi-select filter checkboxes' option lists. */
+export interface WorkflowSummaryPage {
+  items: WorkflowSummary[];
+  totalCount: number;
+  availableStatuses: string[];
+  availableApplicationTypes: string[];
+  availableSourceSystemTypes: string[];
+}
+
+export interface WorkflowSummaryQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
+  statuses?: string[];
+  applicationTypes?: string[];
+  sourceSystemTypes?: string[];
 }
 
 export interface WorkflowLaunchUrl {
@@ -295,13 +348,33 @@ export class WorkflowApiService {
     return this.http.post<WorkflowBuildResult>(WORKFLOW_ENDPOINTS.build, request);
   }
 
-  /** Workflow-list screen: one summary row per workflow with the derived Launch/Run action. */
-  summary(): Observable<WorkflowSummary[]> {
-    return this.http.get<WorkflowSummary[]>(WORKFLOW_ENDPOINTS.summary);
+  /** Workflow-list screen: one summary row per workflow with the derived Launch/Run action. Paging/search/sort are
+   *  applied server-side — see WorkflowEndpoints.MapGet("/workflows/summary"). */
+  summary(query: WorkflowSummaryQuery): Observable<WorkflowSummaryPage> {
+    let params = new HttpParams().set('page', query.page).set('pageSize', query.pageSize);
+    if (query.search) params = params.set('search', query.search);
+    if (query.sortColumn) params = params.set('sortColumn', query.sortColumn);
+    if (query.sortDirection) params = params.set('sortDirection', query.sortDirection);
+    for (const value of query.statuses ?? []) params = params.append('statuses', value);
+    for (const value of query.applicationTypes ?? []) params = params.append('applicationTypes', value);
+    for (const value of query.sourceSystemTypes ?? []) params = params.append('sourceSystemTypes', value);
+    return this.http.get<WorkflowSummaryPage>(WORKFLOW_ENDPOINTS.summary, { params });
   }
 
-  run(workflowId: string): Observable<WorkflowRunResultDto> {
-    return this.http.post<WorkflowRunResultDto>(WORKFLOW_ENDPOINTS.run(workflowId), {});
+  /**
+   * `async: true` returns as soon as the run is accepted (202, with the run id) instead of blocking until the
+   * whole DAG finishes — use with pollRunStatus so a long run survives navigating away from this screen.
+   */
+  run(workflowId: string, async = false): Observable<WorkflowRunResultDto | WorkflowRunStatus> {
+    return this.http.post<WorkflowRunResultDto | WorkflowRunStatus>(
+      WORKFLOW_ENDPOINTS.run(workflowId),
+      async ? { async: true } : {},
+    );
+  }
+
+  /** Poll target for an async run: 'Running' until the orchestrator persists a terminal status. */
+  runStatus(workflowRunId: string): Observable<WorkflowRunStatus> {
+    return this.http.get<WorkflowRunStatus>(WORKFLOW_ENDPOINTS.runStatus(workflowRunId));
   }
 
   /** Interactive (EHR launch / standalone / patient) workflows: the opaque launch URL to register with the EHR. */

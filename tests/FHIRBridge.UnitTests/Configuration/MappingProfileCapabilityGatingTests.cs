@@ -1,7 +1,9 @@
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.SharedKernel.Enums;
@@ -27,7 +29,12 @@ public sealed class MappingProfileCapabilityGatingTests
     {
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
-            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>());
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
+            Mock.Of<IParentReferenceResolver>(),
+            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
+            new CreateDestinationConfigurationRequestValidator(),
+            new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);
     }
 
     [Fact]
@@ -54,6 +61,28 @@ public sealed class MappingProfileCapabilityGatingTests
         _discovery.Verify(
             x => x.DiscoverAsync(source.Id, It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A brand-new Backend Services source whose signing key Epic hasn't been told about yet fails live discovery
+    /// with an auth error (the same "invalid_client" the token endpoint returns) — this must fail OPEN (mapping
+    /// still saves, resource type left unverified) rather than propagate and roll back the whole save, since the
+    /// mapping save and the source-connection save it depends on are committed together in one transaction
+    /// (WorkflowEndpoints' build handler) and a hard failure here would undo both, leaving no saved connection id
+    /// to register a JWKS URL against in the first place.
+    /// </summary>
+    [Fact]
+    public async Task Failed_capability_discovery_fails_open_instead_of_blocking_the_mapping_save()
+    {
+        var source = await AddEpicSourceAsync(ApplicationType.Backend);
+        _discovery
+            .Setup(x => x.DiscoverAsync(source.Id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException(
+                "Epic token endpoint returned 400 (Bad Request). Response body: { \"error\": \"invalid_client\" }"));
+
+        var act = () => _sut.AddMappingProfileAsync(NewMappingRequest(source.Id, "Patient"), CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
     }
 
     private async Task<SourceConnectionDto> AddEpicSourceAsync(ApplicationType applicationType)

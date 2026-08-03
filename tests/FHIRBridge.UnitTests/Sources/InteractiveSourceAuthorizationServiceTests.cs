@@ -6,8 +6,10 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Sources;
+using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Infrastructure.Auth;
@@ -28,6 +30,9 @@ public sealed class InteractiveSourceAuthorizationServiceTests
     private readonly ILaunchTokenProtector _protector = new DataProtectionLaunchTokenProtector(new EphemeralDataProtectionProvider());
     private readonly Mock<IConfiguredPipelineService> _pipeline = new();
     private readonly Mock<ICurrentUserService> _currentUser = new();
+    private readonly Mock<IGovernanceLogger> _governanceLogger = new();
+    private readonly Mock<ISourceApplicationStrategyRegistry> _applicationStrategyRegistry = new();
+    private readonly Mock<IUserFhirContextBindingRepository> _userFhirContextBindingRepository = new();
 
     public InteractiveSourceAuthorizationServiceTests()
     {
@@ -44,6 +49,9 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _protector,
         _pipeline.Object,
         _currentUser.Object,
+        _governanceLogger.Object,
+        _applicationStrategyRegistry.Object,
+        _userFhirContextBindingRepository.Object,
         NullLogger<InteractiveSourceAuthorizationService>.Instance);
 
     private SourceConnection SeedEpicSource(
@@ -169,7 +177,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
                 usedVerifier = verifier;
                 usedRedirect = redirect;
             })
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         var result = await Service().CompleteAsync(state, "auth-code", CancellationToken.None);
 
@@ -206,7 +214,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Callback((FhirSourceConfiguration s, string _, string _, string _, CancellationToken _) => exchanged = s)
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
 
@@ -226,7 +234,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         StartConfiguredPipelineRunRequest? runRequest = null;
         _pipeline.Setup(x => x.StartAsync(It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
@@ -280,7 +288,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         StartConfiguredPipelineRunRequest? runRequest = null;
         _pipeline.Setup(x => x.StartAsync(It.IsAny<StartConfiguredPipelineRunRequest>(), It.IsAny<CancellationToken>()))
@@ -319,6 +327,48 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             context, "https://ehr.trusted.com/fhir", "launch-token", "https://fallback/cb", CancellationToken.None);
 
         forwardedLaunch.Should().Be("launch-token");
+    }
+
+    [Fact]
+    public async Task StartEhrLaunchFromContextAsync_carries_a_live_callerId_into_the_pending_authorization_when_context_has_none()
+    {
+        var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, ["https://ehr.trusted.com/fhir"]));
+        SetupDiscovery();
+        var context = _protector.ProtectContext(routeId);
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns((FhirSourceConfiguration _, string _, string state, string? _) =>
+                new SmartAuthorizationRequest($"https://auth.example.com/authorize?state={state}", "verifier-1", state));
+
+        var url = await Service().StartEhrLaunchFromContextAsync(
+            context, "https://ehr.trusted.com/fhir", "launch-token", "https://fallback/cb", CancellationToken.None,
+            callerId: "https://healthapp.example.com/launchproviderinapp");
+
+        var state = System.Web.HttpUtility.ParseQueryString(url.Query)["state"]!;
+        var nonce = _protector.UnprotectState(state)!;
+        var pending = await _stateStore.TakeAsync(nonce, CancellationToken.None);
+        pending!.CallerId.Should().Be("https://healthapp.example.com/launchproviderinapp");
+    }
+
+    [Fact]
+    public async Task StartEhrLaunchFromContextAsync_live_callerId_overrides_the_contexts_baked_in_callerId()
+    {
+        var (routeId, _) = SeedRoute(new SourceInteractiveConfiguration(
+            ["https://app.example.com/api/v1/oauth/callback"], null, ["https://ehr.trusted.com/fhir"]));
+        SetupDiscovery();
+        var context = _protector.ProtectContext(routeId, callerId: "https://stale.example.com/launchproviderinapp");
+        _flow.Setup(x => x.BuildAuthorizationRequest(It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns((FhirSourceConfiguration _, string _, string state, string? _) =>
+                new SmartAuthorizationRequest($"https://auth.example.com/authorize?state={state}", "verifier-1", state));
+
+        var url = await Service().StartEhrLaunchFromContextAsync(
+            context, "https://ehr.trusted.com/fhir", "launch-token", "https://fallback/cb", CancellationToken.None,
+            callerId: "https://healthapp.example.com/launchproviderinapp");
+
+        var state = System.Web.HttpUtility.ParseQueryString(url.Query)["state"]!;
+        var nonce = _protector.UnprotectState(state)!;
+        var pending = await _stateStore.TakeAsync(nonce, CancellationToken.None);
+        pending!.CallerId.Should().Be("https://healthapp.example.com/launchproviderinapp");
     }
 
     [Fact]
@@ -413,7 +463,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         var result = await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
 
@@ -433,7 +483,7 @@ public sealed class InteractiveSourceAuthorizationServiceTests
             CancellationToken.None);
         _flow.Setup(x => x.ExchangeAuthorizationCodeAsync(
                 It.IsAny<FhirSourceConfiguration>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("access-token");
+            .ReturnsAsync(new SmartAuthorizationCodeExchangeResult("access-token", null, false, "test-key-hash"));
 
         var result = await Service().CompleteAsync(_protector.ProtectState(nonce), "auth-code", CancellationToken.None);
 

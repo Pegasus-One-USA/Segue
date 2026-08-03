@@ -12,13 +12,6 @@
   background: var(--color-bg);
 }
 
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 96px 0;
-}
-
 // ─── Breadcrumb + header ─────────────────────────────────────────────────────
 .page-header {
   display: flex;
@@ -120,7 +113,6 @@
   flex-shrink: 0;
 
   ::ng-deep {
-    .mat-mdc-form-field-infix { min-height: 44px; padding-top: 10px !important; padding-bottom: 10px !important; }
     .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
     .mat-mdc-select-panel { background: var(--color-surface) !important; }
   }

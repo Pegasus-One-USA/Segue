@@ -8,4 +8,5 @@ public sealed record ConfigureResourceRequest(
     Guid? WebhookConfigurationId,
     Guid MappingProfileId,
     string? ScheduleExpression,
-    string? SearchParameters);
+    string? SearchParameters,
+    string TimeZoneId = "UTC");

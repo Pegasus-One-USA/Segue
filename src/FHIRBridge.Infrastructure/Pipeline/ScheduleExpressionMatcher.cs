@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace FHIRBridge.Infrastructure.Pipeline;
 
 public static class ScheduleExpressionMatcher
@@ -8,13 +10,53 @@ public static class ScheduleExpressionMatcher
     /// </summary>
     private const int MaxCatchUpMinutes = 1440;
 
+    private static readonly ConcurrentDictionary<string, TimeZoneInfo> TimeZoneCache = new();
+
+    /// <summary>
+    /// Resolves an IANA/Windows time zone id to a <see cref="TimeZoneInfo"/>, caching lookups since
+    /// <see cref="TimeZoneInfo.FindSystemTimeZoneById"/> is called on every dispatcher tick. Falls back to UTC
+    /// (and never throws) for a null/blank/unrecognized id, so a bad value can't silently break scheduling.
+    /// </summary>
+    private static TimeZoneInfo ResolveTimeZone(string? timeZoneId)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneId) || timeZoneId == "UTC")
+        {
+            return TimeZoneInfo.Utc;
+        }
+
+        return TimeZoneCache.GetOrAdd(timeZoneId, static id =>
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(id);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return TimeZoneInfo.Utc;
+            }
+            catch (InvalidTimeZoneException)
+            {
+                return TimeZoneInfo.Utc;
+            }
+        });
+    }
+
     /// <summary>
     /// Returns true when the schedule has at least one matching minute in the window
     /// (<paramref name="lastTriggeredOnUtc"/>, <paramref name="utcNow"/>]. This makes scheduling catch-up aware:
-    /// a slot missed while the dispatcher was down still fires once on the next evaluation. When the route has never
-    /// been triggered, only the current minute is considered (no historical backfill on first enable).
+    /// a slot missed while the dispatcher was down (or simply between poll ticks) still fires once on the next
+    /// evaluation. When the route/workflow has never been triggered, the window starts at
+    /// <paramref name="createdOnUtc"/> instead (still bounded by <see cref="MaxCatchUpMinutes"/>), so a slot missed
+    /// between creation and the first poll after it still fires — without replaying an unbounded backlog if
+    /// <paramref name="createdOnUtc"/> is old and the schedule was only just enabled.
+    /// <paramref name="timeZoneId"/> is the zone the cron fields are evaluated in — defaults to UTC.
     /// </summary>
-    public static bool IsDueSince(string? scheduleExpression, DateTime? lastTriggeredOnUtc, DateTime utcNow)
+    public static bool IsDueSince(
+        string? scheduleExpression,
+        DateTime? lastTriggeredOnUtc,
+        DateTime utcNow,
+        string? timeZoneId = "UTC",
+        DateTime? createdOnUtc = null)
     {
         if (string.IsNullOrWhiteSpace(scheduleExpression))
         {
@@ -30,6 +72,11 @@ public static class ScheduleExpressionMatcher
             var afterLast = TruncateToMinuteUtc(last).AddMinutes(1);
             start = afterLast > earliest ? afterLast : earliest;
         }
+        else if (createdOnUtc is { } created)
+        {
+            var createdMinute = TruncateToMinuteUtc(created);
+            start = createdMinute > earliest ? createdMinute : earliest;
+        }
         else
         {
             start = nowMinute;
@@ -37,7 +84,7 @@ public static class ScheduleExpressionMatcher
 
         for (var slot = start; slot <= nowMinute; slot = slot.AddMinutes(1))
         {
-            if (IsDue(scheduleExpression, slot))
+            if (IsDue(scheduleExpression, slot, timeZoneId))
             {
                 return true;
             }
@@ -54,7 +101,35 @@ public static class ScheduleExpressionMatcher
         return new DateTime(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, DateTimeKind.Utc);
     }
 
-    public static bool IsDue(string? scheduleExpression, DateTime utcNow)
+    /// <summary>
+    /// Scans forward minute-by-minute from <paramref name="fromUtc"/> (exclusive) for the next matching slot —
+    /// backs the Scheduler summary screen's "Next Run" column. Returns null if nothing matches within
+    /// <paramref name="maxMinutesToScan"/> (default 7 days — generous headroom over any realistic cron cadence).
+    /// </summary>
+    public static DateTime? NextDueAfter(
+        string? scheduleExpression,
+        DateTime fromUtc,
+        int maxMinutesToScan = 10080,
+        string? timeZoneId = "UTC")
+    {
+        if (string.IsNullOrWhiteSpace(scheduleExpression))
+        {
+            return null;
+        }
+
+        var slot = TruncateToMinuteUtc(fromUtc).AddMinutes(1);
+        for (var i = 0; i < maxMinutesToScan; i++, slot = slot.AddMinutes(1))
+        {
+            if (IsDue(scheduleExpression, slot, timeZoneId))
+            {
+                return slot;
+            }
+        }
+
+        return null;
+    }
+
+    public static bool IsDue(string? scheduleExpression, DateTime utcNow, string? timeZoneId = "UTC")
     {
         if (string.IsNullOrWhiteSpace(scheduleExpression))
         {
@@ -63,14 +138,23 @@ public static class ScheduleExpressionMatcher
 
         var normalizedUtc = utcNow.Kind == DateTimeKind.Utc
             ? utcNow
-            : utcNow.ToUniversalTime();
+            : DateTime.SpecifyKind(utcNow, DateTimeKind.Utc);
+
+        var zone = ResolveTimeZone(timeZoneId);
+        var zoneLocal = TimeZoneInfo.ConvertTimeFromUtc(normalizedUtc, zone);
 
         return scheduleExpression
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(expression => IsCronDue(expression, normalizedUtc));
+            .Any(expression => IsCronDue(expression, zoneLocal));
     }
 
-    private static bool IsCronDue(string expression, DateTime utcNow)
+    /// <summary>
+    /// Matches cron fields against <paramref name="zoneLocalTime"/> — the wall-clock instant already converted
+    /// into the schedule's configured time zone by <see cref="IsDue"/>. Re-deriving that conversion fresh on every
+    /// evaluation (rather than baking a fixed UTC offset once) is what makes DST transitions handle themselves:
+    /// the same cron expression naturally shifts its effective UTC instant across a DST boundary.
+    /// </summary>
+    private static bool IsCronDue(string expression, DateTime zoneLocalTime)
     {
         var parts = expression.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length == 5)
@@ -83,11 +167,11 @@ public static class ScheduleExpressionMatcher
             return false;
         }
 
-        return MatchesField(parts[1], utcNow.Minute, 0, 59) &&
-               MatchesField(parts[2], utcNow.Hour, 0, 23) &&
-               MatchesField(parts[3], utcNow.Day, 1, 31) &&
-               MatchesField(parts[4], utcNow.Month, 1, 12) &&
-               MatchesField(parts[5], (int)utcNow.DayOfWeek, 0, 7, allowSevenAsSunday: true);
+        return MatchesField(parts[1], zoneLocalTime.Minute, 0, 59) &&
+               MatchesField(parts[2], zoneLocalTime.Hour, 0, 23) &&
+               MatchesField(parts[3], zoneLocalTime.Day, 1, 31) &&
+               MatchesField(parts[4], zoneLocalTime.Month, 1, 12) &&
+               MatchesField(parts[5], (int)zoneLocalTime.DayOfWeek, 0, 7, allowSevenAsSunday: true);
     }
 
     private static bool MatchesField(

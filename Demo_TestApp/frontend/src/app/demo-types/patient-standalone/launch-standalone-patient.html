@@ -31,7 +31,12 @@
       @if (configError()) {
         <p class="error-banner">{{ configError() }}</p>
       } @else {
-        @if (launchError()) {
+        @if (launchError() === 'context_mismatch') {
+          <p class="error-banner">
+            This account is already linked to a different patient/practitioner and cannot be re-authorized with a
+            different one. Please contact your administrator if you believe this is an error.
+          </p>
+        } @else if (launchError()) {
           <p class="error-banner">
             The workflow FHIRBridge triggered after sign-in failed to complete ({{ launchError() }}). Check
             FHIRBridge's Execution History for this run's error detail.
@@ -128,19 +133,69 @@
             @if (patients.length > 0) {
               <ul class="patient-list">
                 @for (patient of patients; track patient.id) {
-                  <li>
-                    <button
-                      type="button"
-                      class="patient-list__row"
-                      [class.patient-list__row--selected]="selectedPatientId() === patient.id"
-                      [disabled]="isFetchingPatientDetail() || isRedirectingToMyChart()"
-                      (click)="viewPatientDetail(patient)"
-                    >
-                      <span class="patient-list__name">{{ patient.name }}</span>
-                      @if (patient.birthDate) {
-                        <span class="patient-list__dob">DOB: {{ patient.birthDate }}</span>
-                      }
-                    </button>
+                  <li class="patient-list__item">
+                    <div class="patient-list__row-wrap">
+                      <button
+                        type="button"
+                        class="patient-list__row"
+                        [class.patient-list__row--selected]="selectedPatientId() === patient.id"
+                        [disabled]="isFetchingPatientDetail() || isRedirectingToMyChart()"
+                        (click)="viewPatientDetail(patient)"
+                      >
+                        <span class="patient-list__name">{{ patient.name }}</span>
+                        @if (patient.birthDate) {
+                          <span class="patient-list__dob">DOB: {{ patient.birthDate }}</span>
+                        }
+                      </button>
+
+                      <div class="patient-list__actions">
+                        <button
+                          type="button"
+                          class="icon-btn"
+                          [disabled]="downloadingPatientIds().has(patient.id) || isRedirectingToMyChart()"
+                          (click)="downloadPatientInformation(patient.id)"
+                          [attr.aria-label]="'Download information for ' + patient.name"
+                          title="Download Patient Information"
+                        >
+                          @if (downloadingPatientIds().has(patient.id)) {
+                            <mat-spinner diameter="16"></mat-spinner>
+                          } @else {
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                              <polyline points="7 10 12 15 17 10"></polyline>
+                              <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                          }
+                        </button>
+                        <button
+                          type="button"
+                          class="icon-btn"
+                          [disabled]="emailingPatientIds().has(patient.id) || isRedirectingToMyChart()"
+                          (click)="emailPatientInformation(patient.id)"
+                          [attr.aria-label]="'Email information for ' + patient.name"
+                          title="Email Patient Information"
+                        >
+                          @if (emailingPatientIds().has(patient.id)) {
+                            <mat-spinner diameter="16"></mat-spinner>
+                          } @else {
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                              <path d="m22 6-10 7L2 6"></path>
+                            </svg>
+                          }
+                        </button>
+                      </div>
+                    </div>
+
+                    @if (downloadErrors().get(patient.id); as error) {
+                      <p class="error-banner patient-list__action-message">{{ error }}</p>
+                    }
+                    @if (emailErrors().get(patient.id); as error) {
+                      <p class="error-banner patient-list__action-message">{{ error }}</p>
+                    }
+                    @if (emailSuccessIds().has(patient.id)) {
+                      <p class="connect-card__success patient-list__action-message">Email sent.</p>
+                    }
                   </li>
                 }
               </ul>
@@ -155,47 +210,6 @@
                 <span class="step-label">Patient detail</span>
                 <button type="button" class="icon-btn" (click)="closePatientDetail()" aria-label="Close patient detail">✕</button>
               </div>
-
-              <button
-                type="button"
-                class="connect-btn"
-                [disabled]="isDownloadingPatientInfo() || isRedirectingToMyChart()"
-                (click)="downloadPatientInformation()"
-              >
-                <span class="connect-btn__content">
-                  @if (isDownloadingPatientInfo()) {
-                    <mat-spinner diameter="18"></mat-spinner>
-                    <span>Preparing download…</span>
-                  } @else {
-                    <span>Download Patient Information</span>
-                  }
-                </span>
-              </button>
-              @if (downloadError()) {
-                <p class="error-banner">{{ downloadError() }}</p>
-              }
-
-              <button
-                type="button"
-                class="connect-btn"
-                [disabled]="isEmailingPatientInfo() || isRedirectingToMyChart()"
-                (click)="emailPatientInformation()"
-              >
-                <span class="connect-btn__content">
-                  @if (isEmailingPatientInfo()) {
-                    <mat-spinner diameter="18"></mat-spinner>
-                    <span>Sending email…</span>
-                  } @else {
-                    <span>Email Patient Information</span>
-                  }
-                </span>
-              </button>
-              @if (emailSuccess()) {
-                <p class="fetch-card__success">Email sent.</p>
-              }
-              @if (emailError()) {
-                <p class="error-banner">{{ emailError() }}</p>
-              }
 
               @if (isFetchingPatientDetail()) {
                 <div class="loading-container">

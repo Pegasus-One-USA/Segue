@@ -2,7 +2,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class PermissionCategory : AuditableChildEntity<Guid>
+public sealed class PermissionCategory : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private PermissionCategory()
     {
@@ -22,6 +22,7 @@ public sealed class PermissionCategory : AuditableChildEntity<Guid>
 
     /// <summary>Human-readable label for permission-management UI (e.g. "Access Control").</summary>
     public string DisplayName { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => DisplayName;
 
     public string? Description { get; private set; }
 

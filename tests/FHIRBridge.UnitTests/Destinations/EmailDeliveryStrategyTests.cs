@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Destinations.Delivery;
 using FluentAssertions;
 using Moq;
@@ -30,7 +31,7 @@ public sealed class EmailDeliveryStrategyTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var strategy = new EmailDeliveryStrategy(sender.Object);
+        var strategy = new EmailDeliveryStrategy(sender.Object, Mock.Of<IGovernanceLogger>());
         var destination = Destination("""{"dest_emailTo":"alice@example.com, bob@example.com","dest_emailCc":"carol@example.com"}""");
         var context = new PipelineWriteContext(AllowInlineDelivery: false, "Nightly Export Route", new DateTimeOffset(2026, 7, 16, 3, 0, 0, TimeSpan.Zero));
 
@@ -52,7 +53,7 @@ public sealed class EmailDeliveryStrategyTests
     public async Task Throws_when_no_recipient_is_configured()
     {
         var sender = new Mock<IEmailSender>();
-        var strategy = new EmailDeliveryStrategy(sender.Object);
+        var strategy = new EmailDeliveryStrategy(sender.Object, Mock.Of<IGovernanceLogger>());
         var destination = Destination("{}");
         var context = new PipelineWriteContext(false, "Route", DateTimeOffset.UtcNow);
 

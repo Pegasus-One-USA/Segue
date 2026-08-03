@@ -1,0 +1,67 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Data Lineage</h1>
+    <p class="page-sub">Source field → mapping rule → destination column → export. The tree structure is metadata, visible to anyone with governance access. Actual field values require the stricter payload.view permission and are logged as a data-access event on every reveal.</p>
+  </div>
+
+  @if (loading()) {
+    <div class="empty-state">Loading…</div>
+  }
+
+  @if (!loading() && lineage(); as l) {
+    <div class="summary-grid">
+      <div class="summary-item"><span class="summary-label">Resource</span>{{ l.resourceType }} / {{ l.sourceResourceId || '—' }}</div>
+      <div class="summary-item"><span class="summary-label">Mapping Profile</span>{{ l.mappingProfileName }}</div>
+    </div>
+
+    @if (revealError()) {
+      <p class="error-message">{{ revealError() }}</p>
+    }
+
+    <div class="lineage-tree">
+      @for (field of l.fields; track field.destinationColumn) {
+        <div class="lineage-node">
+          <div class="lineage-row depth-0">
+            <span class="lineage-label">source field:</span>
+            <code class="mono">{{ field.sourceField }}</code>
+          </div>
+          @if (field.mappingRule) {
+            <div class="lineage-row depth-1">
+              <span class="lineage-label">mapping rule:</span>
+              {{ field.mappingRule }}
+            </div>
+          }
+          <div class="lineage-row depth-2">
+            <span class="lineage-label">destination column:</span>
+            <code class="mono">{{ field.destinationColumn }}</code>
+          </div>
+          <div class="lineage-row depth-3 reveal-row">
+            <span class="lineage-label">value:</span>
+            @if (isRevealed(field.destinationColumn)) {
+              <span class="revealed-value">{{ revealedValue(field.destinationColumn) }}</span>
+            } @else {
+              <button class="btn-link" type="button" (click)="reveal(field.destinationColumn)">Reveal (audited)</button>
+            }
+          </div>
+        </div>
+      }
+
+      @if (l.exports.length > 0) {
+        <div class="lineage-node">
+          <div class="lineage-row depth-0">
+            <span class="lineage-label">export:</span>
+          </div>
+          @for (exp of l.exports; track exp.destinationName + exp.occurredOnUtc) {
+            <div class="lineage-row depth-1">
+              {{ exp.destinationName }} ({{ exp.format }}) — {{ exp.status }}, {{ exp.occurredOnUtc | date:'MMM d, h:mm:ss a' }}
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    @if (l.fields.length === 0) {
+      <div class="empty-state">No mapping fields found for this resource's profile.</div>
+    }
+  }
+</div>

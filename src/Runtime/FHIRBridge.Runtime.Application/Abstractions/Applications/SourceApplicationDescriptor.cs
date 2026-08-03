@@ -18,3 +18,15 @@ public sealed record SourceApplicationDescriptor(
     bool RequiresLaunchToken,
     bool RequiresTrustedIssuerAllowList,
     bool SupportsRefreshToken);
+
+/// <summary>
+/// Which FHIR resource type (if any) a user-to-FHIR-context binding enforces for this application type. <c>None</c>
+/// for a type that establishes no durable per-user context (Backend Services). Resolved per <see cref="ISourceApplicationStrategy"/>
+/// implementation — never switched on <see cref="ApplicationType"/> directly, see <c>ApplicationTypeDispatchTests</c>.
+/// </summary>
+public enum FhirContextBindingKind
+{
+    None,
+    Patient,
+    Practitioner
+}

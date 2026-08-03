@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Serilog;
 using Serilog.Configuration;
 using Serilog.Core;
+using Serilog.Enrichers.Span;
 using Serilog.Events;
 
 namespace FHIRBridge.Observability.Logging;
@@ -20,6 +21,9 @@ public static class FhirBridgeLogging
     /// <list type="bullet">
     /// <item><c>Observability:SeqServerUrl</c> — when set, logs are also sent to Seq (e.g. http://localhost:5341).</item>
     /// <item><c>ApplicationInsights:ConnectionString</c> — when set, logs are also sent to Azure Monitor.</item>
+    /// <item><c>Observability:LogFilePath</c> — when set, logs are also written to a rolling file at this path
+    /// (e.g. <c>logs/fhirbridge-worker-.log</c> — the dash before the extension is where Serilog inserts the date).
+    /// Needed for hosts running as a Windows Service/systemd unit with no attached console.</item>
     /// <item><c>Observability:Phi:MaskedProperties</c> — optional comma-separated override of masked property names.</item>
     /// </list>
     /// Minimum-level overrides keep EF Core / framework noise out of the structured logs by default; the
@@ -36,6 +40,7 @@ public static class FhirBridgeLogging
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
             .Enrich.FromLogContext()
+            .Enrich.WithSpan()
             .Enrich.WithProperty("Application", serviceName)
             .Enrich.With(new PhiMaskingEnricher(configuration))
             .WriteTo.Console();
@@ -44,6 +49,25 @@ public static class FhirBridgeLogging
         if (!string.IsNullOrWhiteSpace(seqUrl))
         {
             logger.WriteTo.Seq(seqUrl);
+        }
+
+        var logFilePath = configuration["Observability:LogFilePath"];
+        if (!string.IsNullOrWhiteSpace(logFilePath))
+        {
+            // A relative path resolves against the process's current working directory, not the executable's
+            // folder -- for a Windows Service started via the SCM (New-Service/sc.exe, no explicit working
+            // directory), that CWD defaults to C:\Windows\System32, not the deploy folder. Anchor explicitly to
+            // AppContext.BaseDirectory so the log always lands next to the exe/dll regardless of host (Windows
+            // Service, systemd, IIS, `dotnet run`).
+            var resolvedLogFilePath = Path.IsPathRooted(logFilePath)
+                ? logFilePath
+                : Path.Combine(AppContext.BaseDirectory, logFilePath);
+
+            logger.WriteTo.File(
+                resolvedLogFilePath,
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 30,
+                shared: true);
         }
 
         var appInsightsConnection = configuration["ApplicationInsights:ConnectionString"];

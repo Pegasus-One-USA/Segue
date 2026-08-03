@@ -1,13 +1,16 @@
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.SharedKernel.Enums;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FHIRBridge.UnitTests.Configuration;
@@ -30,7 +33,12 @@ public sealed class ConfigurationServiceMappingProfileLookupTests
             _repository,
             new InMemorySourceCapabilityRepository(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
-            Mock.Of<ISecretWriter>());
+            Mock.Of<ISecretWriter>(),
+            Mock.Of<IParentReferenceResolver>(),
+            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
+            new CreateDestinationConfigurationRequestValidator(),
+            new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
+            NullLogger<ConfigurationService>.Instance);
     }
 
     [Fact]

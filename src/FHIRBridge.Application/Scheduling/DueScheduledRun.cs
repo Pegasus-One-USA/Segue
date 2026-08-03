@@ -6,4 +6,10 @@ namespace FHIRBridge.Application.Scheduling;
 /// </summary>
 public sealed record DueScheduledRun(
     IReadOnlyList<string> ResourceTypes,
-    IReadOnlyList<Guid> RouteIds);
+    IReadOnlyList<Guid> RouteIds)
+{
+    /// <summary>Human-readable label per claimed route (its mapping profile's name, falling back to its
+    /// resource type, falling back to the route id) — for display in SchedulerHistory instead of a raw
+    /// GUID list. Same order as <see cref="RouteIds"/>.</summary>
+    public IReadOnlyList<string> RouteLabels { get; init; } = [];
+}

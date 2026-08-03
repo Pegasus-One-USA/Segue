@@ -38,7 +38,7 @@ public sealed class CompositeExternalTokenValidator : IExternalTokenValidator
 
         if (!_validators.TryGetValue(provider, out var validator))
         {
-            throw new InvalidOperationException($"No token validator is registered for provider '{provider}'.");
+            throw new InvalidOperationException("This sign-in method isn't available.");
         }
 
         return validator.ValidateAsync(token, cancellationToken);

@@ -30,7 +30,8 @@ public sealed class EfConfiguredPipelineRunRepository : IConfiguredPipelineRunRe
             pipelineRun.StartedOnUtc,
             pipelineRun.CompletedOnUtc,
             pipelineRun.TriggeredBy,
-            pipelineRun.TriggerType);
+            pipelineRun.TriggerType,
+            pipelineRun.CorrelationId);
         record.SetEnabled(pipelineRun.IsEnabled);
 
         _dbContext.ConfiguredPipelineRuns.Add(record);
@@ -50,6 +51,17 @@ public sealed class EfConfiguredPipelineRunRepository : IConfiguredPipelineRunRe
             .ToListAsync(cancellationToken);
 
         return records.Select(ToDto).ToList();
+    }
+
+    public async Task<ConfiguredPipelineRunDto?> GetByCorrelationIdAsync(
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        var record = await _dbContext.ConfiguredPipelineRuns
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.CorrelationId == correlationId, cancellationToken);
+
+        return record is null ? null : ToDto(record);
     }
 
     public async Task SetEnabledAsync(
@@ -82,6 +94,7 @@ public sealed class EfConfiguredPipelineRunRepository : IConfiguredPipelineRunRe
             record.CompletedOnUtc,
             record.IsEnabled,
             record.TriggeredBy,
-            record.TriggerType);
+            record.TriggerType,
+            CorrelationId: record.CorrelationId);
     }
 }

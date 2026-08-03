@@ -1,43 +1,57 @@
-:host { display: flex; flex: 1; height: 100%; }
-
-.stub-page {
-  display: flex; align-items: center; justify-content: center;
-  flex: 1; padding: 48px 24px;
-  background: var(--color-bg, var(--color-side));
+.list-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
 }
 
-.stub-card {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 16px; max-width: 420px; text-align: center;
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: 20px; padding: 52px 40px;
-  box-shadow: 0 4px 24px rgba(15,23,42,.06);
+.page-header h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
 }
 
-.stub-icon {
-  width: 80px; height: 80px;
-  color: var(--color-primary, var(--color-primary));
-  opacity: .85;
-
-  svg { width: 100%; height: 100%; }
-}
-
-.stub-title {
-  font-size: 22px; font-weight: 700; color: #0F172A;
-  margin: 0; letter-spacing: -.02em;
-}
-
-.stub-desc {
-  font-size: 14px; color: var(--color-muted); line-height: 1.6;
+.page-sub {
   margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
 }
 
-.stub-badge {
-  display: inline-block;
-  font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--color-primary, var(--color-primary));
-  background: rgba(0,168,157,.1);
-  border: 1px solid rgba(0,168,157,.25);
-  border-radius: 99px; padding: 4px 14px;
+.table-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
 }
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+}
+
+.mono {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-success { background: var(--color-success-soft); color: var(--color-success-strong); }
+.status-warn { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+.status-fail { background: var(--color-error-soft); color: var(--color-error-strong); }
+
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+

@@ -2,13 +2,17 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { PatientStandaloneComponent } from './demo-types/demo-type-1/patient-standalone';
 import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-provider-in-app';
-import { LaunchStandaloneProviderComponent } from './demo-types/provider-standalone/launch-standalone-provider';
 import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
 import { AdminSettingsComponent } from './demo-types/admin-settings/admin-settings';
+// Per-role "Default | New 11" shells. Each wraps its role's existing screen (Default) plus the shared curated-_11
+// browser (New 11); the existing screens are imported by the wrappers, not here, and are otherwise untouched.
+import { PatientNew11Component } from './demo-types/new-11/patient-new11';
+import { ProviderStandaloneNew11Component } from './demo-types/new-11/provider-standalone-new11';
+import { ProviderInAppNew11Component } from './demo-types/new-11/provider-in-app-new11';
+import { BackendSystemNew11Component } from './demo-types/new-11/backend-system-new11';
 import { environment } from '../environments/environment';
-import { PATIENT_STANDALONE_PATH } from './core/routes';
+import { AUTH_EMAIL_STORAGE_KEY, PATIENT_STANDALONE_PATH } from './core/routes';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
 
@@ -34,6 +38,22 @@ const PROVIDER_IN_APP_PATH = '/launchproviderinapp';
 // component.
 const PROVIDER_STANDALONE_PATH = '/launchinstandaloneprovider';
 
+// BackendSystem-role login target — mirrors PROVIDER_IN_APP_PATH/PROVIDER_STANDALONE_PATH's "send this role to
+// its own screen after login" redirect below. Unlike those two, there's no external EHR-launch entry point to
+// also detect pre-login; this role only ever reaches its screen via the redirect in login().
+const BACKEND_SYSTEM_PATH = '/backend-system';
+
+// Each role's default post-login route. login() sends the user here on sign-in, regardless of which path the login
+// form was served from. Patient/Admin default to the app root (their screens render at '/'); the launch/backend
+// roles have their own dedicated paths. Keys are the backend's role strings (see HealthAppDbContext.cs).
+const ROLE_DEFAULT_PATHS: Record<string, string> = {
+  Admin: '/',
+  Patient: '/',
+  ProviderStandalone: PROVIDER_STANDALONE_PATH,
+  ProviderInApp: PROVIDER_IN_APP_PATH,
+  BackendSystem: BACKEND_SYSTEM_PATH,
+};
+
 // Patient login does NOT redirect to PATIENT_STANDALONE_PATH the way the two roles above redirect — it lands on
 // the demo-type-1 dashboard mockup like Admin does, and only reaches this path (and therefore
 // LaunchStandalonePatientComponent's real hospital-picker/OAuth flow) via that dashboard's own "Connect Get Data"
@@ -48,6 +68,7 @@ const ROLE_DISPLAY_NAMES: Record<string, string> = {
   Patient: 'Patient_Standalone',
   ProviderStandalone: 'Provider_Standalone',
   ProviderInApp: 'Provider_InApp',
+  BackendSystem: 'Backend_System',
 };
 
 // The backend seeds four roles (Admin, Patient, ProviderStandalone, ProviderInApp — see HealthAppDbContext.cs) —
@@ -62,11 +83,13 @@ interface LoginResponse {
   selector: 'app-root',
   imports: [
     FormsModule,
-    PatientStandaloneComponent,
     LaunchProviderInAppComponent,
-    LaunchStandaloneProviderComponent,
     LaunchStandalonePatientComponent,
     AdminSettingsComponent,
+    PatientNew11Component,
+    ProviderStandaloneNew11Component,
+    ProviderInAppNew11Component,
+    BackendSystemNew11Component,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
@@ -91,6 +114,15 @@ export class App implements OnInit {
     const params = new URLSearchParams(window.location.search);
     return window.location.pathname.toLowerCase() === PROVIDER_IN_APP_PATH
       || (!!params.get('iss') && !!params.get('launch'));
+  })();
+
+  // A LIVE Epic EHR launch specifically — iss + launch are on the URL. This is the only case that must bypass the
+  // new "Default | New 11" menu and hand straight off to LaunchProviderInAppComponent (its ngOnInit redirects to
+  // FHIRBridge). A plain ProviderInApp login (which login() still routes to PROVIDER_IN_APP_PATH, but with no
+  // iss/launch) falls through to the ProviderInApp menu shell instead, so that role also gets its New 11 view.
+  protected readonly isRealEhrLaunch = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return !!params.get('iss') && !!params.get('launch');
   })();
 
   // True only when this exact page load landed on PATIENT_STANDALONE_PATH (i.e. via the dashboard mockup's
@@ -121,6 +153,7 @@ export class App implements OnInit {
       this.role.set(response.role);
       this.loggedIn.set(true);
       sessionStorage.setItem(AUTH_ROLE_STORAGE_KEY, response.role);
+      sessionStorage.setItem(AUTH_EMAIL_STORAGE_KEY, response.email);
     } catch {
       // No valid session cookie — stay on the login screen.
     }
@@ -141,23 +174,18 @@ export class App implements OnInit {
       this.role.set(response.role);
       this.loggedIn.set(true);
       sessionStorage.setItem(AUTH_ROLE_STORAGE_KEY, response.role);
+      sessionStorage.setItem(AUTH_EMAIL_STORAGE_KEY, response.email);
 
-      // ProviderInApp logins must land on PROVIDER_IN_APP_PATH so LaunchProviderInAppComponent's own ngOnInit
-      // (which reads iss/launch and hands off to FHIRBridge) actually runs — whatever path the login screen
-      // itself was served from. Preserves the query string (iss/launch) across the hop.
-      if (response.role === 'ProviderInApp' && window.location.pathname.toLowerCase() !== PROVIDER_IN_APP_PATH) {
-        window.location.href = PROVIDER_IN_APP_PATH + window.location.search;
+      // Send every role to its own default route on sign-in, regardless of which path the login form was served
+      // from (after logout that's always '/', but a direct deep link or an Epic launch URL can differ).
+      // ProviderInApp keeps the query string so a live Epic launch (?iss=&launch=) still reaches
+      // LaunchProviderInAppComponent's ngOnInit hand-off; the other roles move to a clean URL. When the user is
+      // already on the right path, no navigation happens and the signals set above render the role in place.
+      const defaultPath = ROLE_DEFAULT_PATHS[response.role] ?? '/';
+      const targetSearch = response.role === 'ProviderInApp' ? window.location.search : '';
+      if (window.location.pathname.toLowerCase() !== defaultPath || window.location.search !== targetSearch) {
+        window.location.href = defaultPath + targetSearch;
       }
-
-      // Same reasoning for the true-standalone flow: land on its own screen so LaunchStandaloneProviderComponent
-      // can show the hospital list (or, on the way back from Epic, the Fetch Patient List button).
-      if (response.role === 'ProviderStandalone' && window.location.pathname.toLowerCase() !== PROVIDER_STANDALONE_PATH) {
-        window.location.href = PROVIDER_STANDALONE_PATH + window.location.search;
-      }
-
-      // Patient and Admin deliberately do NOT redirect here — see the comment above PATIENT_STANDALONE_PATH.
-      // Logging in with either just lands on the demo-type-1 dashboard mockup / Admin settings screen at
-      // whatever path login itself was served from.
     } catch {
       this.loginError.set('Invalid email or password.');
     }
@@ -171,9 +199,19 @@ export class App implements OnInit {
       // still needs to be logged out of this app locally rather than stuck on a dead "logged in" screen.
     }
     sessionStorage.removeItem(AUTH_ROLE_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_EMAIL_STORAGE_KEY);
     this.loggedIn.set(false);
     this.role.set(null);
     this.loginEmail.set('');
     this.loginPassword.set('');
+
+    // Always land back on the app root after logout, regardless of which path the user was on (e.g.
+    // /backend-system, /launchproviderinapp?iss=...&launch=...). A full-page navigation to '/' resolves to the
+    // current origin's root (http://localhost:5501/ in dev, the hosting origin in prod), drops any launch query
+    // params, and reboots the app clean on the login screen. Kept relative rather than hardcoding the dev URL so
+    // it stays correct wherever the app is served.
+    if (window.location.pathname !== '/' || window.location.search) {
+      window.location.href = '/';
+    }
   }
 }

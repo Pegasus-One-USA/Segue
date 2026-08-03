@@ -15,6 +15,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-azuresql':    { abbr: 'AZS', color: '#0078D4' },
   'dest-postgres':    { abbr: 'PG',  color: '#336791' },
   'dest-mysql':       { abbr: 'MY',  color: '#4479A1' },
+  'dest-mongo':       { abbr: 'MDB', color: '#47A248' },
   'dest-snowflake':   { abbr: 'SNW', color: '#29B5E8' },
   'dest-powerbi':     { abbr: 'PBI', color: '#F2C811' },
   'dest-tableau':     { abbr: 'TAB', color: '#E97627' },

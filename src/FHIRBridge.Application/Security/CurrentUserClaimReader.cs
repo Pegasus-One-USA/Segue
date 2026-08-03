@@ -33,9 +33,20 @@ public static class CurrentUserClaimReader
         "role"
     ];
 
+    /// <summary>The internal Users.Id GUID claim ("uid") — set by JwtAccessTokenIssuer for Local tokens, and by
+    /// FhirBridgeAuthenticationExtensions' Entra OnTokenValidated hook (looked up by ExternalUserId) for Entra
+    /// tokens. Absent on legacy/still-outstanding tokens issued before this claim existed.</summary>
+    private const string InternalUserIdClaimType = "uid";
+
     public static string? GetExternalUserId(ClaimsPrincipal principal)
     {
         return GetFirstClaimValue(principal, ExternalIdClaimTypes);
+    }
+
+    public static Guid? GetUserId(ClaimsPrincipal principal)
+    {
+        var raw = principal.Claims.FirstOrDefault(c => c.Type == InternalUserIdClaimType)?.Value;
+        return Guid.TryParse(raw, out var id) ? id : null;
     }
 
     public static string? GetEmail(ClaimsPrincipal principal)

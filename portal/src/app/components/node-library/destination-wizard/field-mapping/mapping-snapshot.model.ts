@@ -9,7 +9,7 @@
 
 import { DestinationTable } from '../../../../services/destination-schema.service';
 import { MappingRow } from './field-mapping-model';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, DestinationWizardType } from './field-mapping-summary.model';
 import { ResourceFieldDef } from '../destination-wizard.component';
 
 export interface MappingSnapshot {
@@ -17,7 +17,7 @@ export interface MappingSnapshot {
   name: string;
   createdAt: string;
   updatedAt: string;
-  destType: 'sql' | 'csv';
+  destType: DestinationWizardType;
   /** Every data group the mapping wizard has open, not just the one being edited right now. */
   selectedResources: string[];
   /** Which group's canvas was open when this was saved; null = the group-list screen. */
@@ -44,7 +44,7 @@ export interface MappingSnapshot {
 export interface MappingSnapshotSummary {
   id: string;
   name: string;
-  destType: 'sql' | 'csv';
+  destType: DestinationWizardType;
   activeGroup: string | null;
   updatedAt: string;
   mappingRowCount: number;

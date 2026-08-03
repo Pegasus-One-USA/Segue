@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 
@@ -13,12 +14,15 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
 {
     private readonly IConfiguredPipelineRunRepository _pipelineRunRepository;
     private readonly AnomalyDetectionOptions _options;
+    private readonly ISystemSettingsCache _settingsCache;
 
     public RunAnomalyDetectionService(
         IConfiguredPipelineRunRepository pipelineRunRepository,
+        ISystemSettingsCache settingsCache,
         AnomalyDetectionOptions? options = null)
     {
         _pipelineRunRepository = pipelineRunRepository;
+        _settingsCache = settingsCache;
         _options = options ?? AnomalyDetectionOptions.Default;
     }
 
@@ -26,6 +30,7 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
         int count,
         CancellationToken cancellationToken)
     {
+        var effective = await ResolveEffectiveOptionsAsync(cancellationToken);
         var take = count <= 0 ? 100 : Math.Min(count, 1000);
         var runs = (await _pipelineRunRepository.GetRecentAsync(take, cancellationToken))
             .OrderBy(run => run.StartedOnUtc)
@@ -50,13 +55,13 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
             .DefaultIfEmpty(0)
             .Average();
 
-        var hasBaseline = runs.Count >= _options.MinBaselineRuns;
+        var hasBaseline = runs.Count >= effective.MinBaselineRuns;
 
         foreach (var run in runs)
         {
             var completed = IsCompleted(run);
 
-            if (_options.DetectFailures && !completed)
+            if (effective.DetectFailures && !completed)
             {
                 anomalies.Add(new RunAnomalyDto(
                     run.Id,
@@ -68,7 +73,7 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
             }
 
             // Write-ratio is meaningful on any run that mapped records, completed or not.
-            if (_options.DetectWriteRatio && run.MappedRecordCount > 0 && run.WrittenRecordCount < run.MappedRecordCount)
+            if (effective.DetectWriteRatio && run.MappedRecordCount > 0 && run.WrittenRecordCount < run.MappedRecordCount)
             {
                 var writeRatio = (decimal)run.WrittenRecordCount / run.MappedRecordCount;
                 anomalies.Add(new RunAnomalyDto(
@@ -86,18 +91,18 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
                 continue;
             }
 
-            if (_options.DetectErrorRate && run.Errors.Count > _options.ErrorRateWarnThreshold)
+            if (effective.DetectErrorRate && run.Errors.Count > effective.ErrorRateWarnThreshold)
             {
                 anomalies.Add(new RunAnomalyDto(
                     run.Id,
-                    run.Errors.Count > _options.ErrorRateWarnThreshold + 5 ? "Medium" : "Low",
+                    run.Errors.Count > effective.ErrorRateWarnThreshold + 5 ? "Medium" : "Low",
                     "ErrorRate",
                     $"Run completed but logged {run.Errors.Count} error(s).",
                     Math.Min(1, Math.Round((decimal)run.Errors.Count / 10, 4)),
                     run.StartedOnUtc));
             }
 
-            if (_options.DetectZeroExtraction && hasBaseline && extractionBaseline > 0 && run.ExtractedResourceCount == 0)
+            if (effective.DetectZeroExtraction && hasBaseline && extractionBaseline > 0 && run.ExtractedResourceCount == 0)
             {
                 anomalies.Add(new RunAnomalyDto(
                     run.Id,
@@ -107,9 +112,9 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
                     1,
                     run.StartedOnUtc));
             }
-            else if (_options.DetectThroughputDrop && hasBaseline && extractionBaseline > 0
+            else if (effective.DetectThroughputDrop && hasBaseline && extractionBaseline > 0
                 && run.ExtractedResourceCount > 0
-                && run.ExtractedResourceCount < extractionBaseline * _options.ThroughputDropFraction)
+                && run.ExtractedResourceCount < extractionBaseline * effective.ThroughputDropFraction)
             {
                 var dropRatio = run.ExtractedResourceCount / extractionBaseline;
                 anomalies.Add(new RunAnomalyDto(
@@ -122,8 +127,8 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
             }
 
             var duration = Math.Max(0, (run.CompletedOnUtc - run.StartedOnUtc).TotalMilliseconds);
-            if (_options.DetectLatency && hasBaseline && durationStdDev > 0
-                && duration > averageDuration + durationStdDev * _options.LatencySigmaMultiplier)
+            if (effective.DetectLatency && hasBaseline && durationStdDev > 0
+                && duration > averageDuration + durationStdDev * effective.LatencySigmaMultiplier)
             {
                 anomalies.Add(new RunAnomalyDto(
                     run.Id,
@@ -143,6 +148,31 @@ public sealed class RunAnomalyDetectionService : IAnomalyDetectionService
                 .ThenByDescending(anomaly => anomaly.Score)
                 .ToList());
     }
+
+    private async Task<AnomalyDetectionOptions> ResolveEffectiveOptionsAsync(CancellationToken cancellationToken) =>
+        new()
+        {
+            LatencySigmaMultiplier = await _settingsCache.GetDoubleAsync(
+                "AnomalyDetection:LatencySigmaMultiplier", _options.LatencySigmaMultiplier, cancellationToken),
+            MinBaselineRuns = await _settingsCache.GetIntAsync(
+                "AnomalyDetection:MinBaselineRuns", _options.MinBaselineRuns, cancellationToken),
+            ThroughputDropFraction = await _settingsCache.GetDoubleAsync(
+                "AnomalyDetection:ThroughputDropFraction", _options.ThroughputDropFraction, cancellationToken),
+            ErrorRateWarnThreshold = await _settingsCache.GetIntAsync(
+                "AnomalyDetection:ErrorRateWarnThreshold", _options.ErrorRateWarnThreshold, cancellationToken),
+            DetectFailures = await _settingsCache.GetBoolAsync(
+                "AnomalyDetection:DetectFailures", _options.DetectFailures, cancellationToken),
+            DetectWriteRatio = await _settingsCache.GetBoolAsync(
+                "AnomalyDetection:DetectWriteRatio", _options.DetectWriteRatio, cancellationToken),
+            DetectLatency = await _settingsCache.GetBoolAsync(
+                "AnomalyDetection:DetectLatency", _options.DetectLatency, cancellationToken),
+            DetectZeroExtraction = await _settingsCache.GetBoolAsync(
+                "AnomalyDetection:DetectZeroExtraction", _options.DetectZeroExtraction, cancellationToken),
+            DetectThroughputDrop = await _settingsCache.GetBoolAsync(
+                "AnomalyDetection:DetectThroughputDrop", _options.DetectThroughputDrop, cancellationToken),
+            DetectErrorRate = await _settingsCache.GetBoolAsync(
+                "AnomalyDetection:DetectErrorRate", _options.DetectErrorRate, cancellationToken),
+        };
 
     private static bool IsCompleted(ConfiguredPipelineRunDto run)
         => string.Equals(run.Status, "Completed", StringComparison.OrdinalIgnoreCase);

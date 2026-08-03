@@ -1,0 +1,96 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>SMART Launch Logs</h1>
+    <p class="page-sub">SMART on FHIR launches completing — EHR launch, standalone, and workflow launches. No Segue portal user is involved here; see Authentication Logs for that.</p>
+  </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one attempt to connect to a source EHR</strong> via SMART on FHIR — a provider launching from inside the EHR, a standalone app sign-in, or a backend token exchange. This is about the <strong>connection to the EHR itself</strong>, not a Segue portal user logging in.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">A failed row here</h4>
+        <p>Usually means something on the EHR side rejected the connection — an expired or mismatched signing key, an unregistered app, or a misconfigured client ID. The Failure Reason column shows the actual rejection message from the EHR.</p>
+      </section>
+
+      <section class="info-section">
+        <h4 class="info-heading">Patient Context, Granted Scope, Token Cache Key</h4>
+        <p>Populated for interactive (EHR-launch / standalone) sign-ins only. <strong>Patient Context</strong> shows whether Epic actually returned a <code>patient</code> claim on this sign-in — if a workflow's Patient search later fails with "requires demographics or _id", check this column first: <em>No</em> means the search never had a launched patient to scope to. <strong>Token Cache Key</strong> is a one-way hash of the session this token was saved under; compare it across rows for the same source connection to confirm a later run reused the same login session instead of a different (or missing) one.</p>
+      </section>
+    </div>
+  </details>
+
+  <div class="filter-bar">
+    <button class="btn" type="button" (click)="load()">Refresh</button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="occurredOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Timestamp</th>
+          <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="sourceName">
+          <th mat-header-cell *matHeaderCellDef>Source Connection</th>
+          <td mat-cell *matCellDef="let r">{{ r.sourceName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="launchType">
+          <th mat-header-cell *matHeaderCellDef>Launch Type</th>
+          <td mat-cell *matCellDef="let r">{{ r.launchType }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="success">
+          <th mat-header-cell *matHeaderCellDef>Result</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class.status-success]="r.success" [class.status-fail]="!r.success">
+              {{ r.success ? 'Success' : 'Failed' }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="patientContextGranted">
+          <th mat-header-cell *matHeaderCellDef>Patient Context</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.patientContextGranted === null) {
+              <span>—</span>
+            } @else {
+              <span class="status-badge" [class.status-success]="r.patientContextGranted" [class.status-fail]="!r.patientContextGranted">
+                {{ r.patientContextGranted ? 'Yes' : 'No' }}
+              </span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="grantedScope">
+          <th mat-header-cell *matHeaderCellDef>Granted Scope</th>
+          <td mat-cell *matCellDef="let r" class="mono">{{ r.grantedScope || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="tokenCacheKeyHash">
+          <th mat-header-cell *matHeaderCellDef>Token Cache Key</th>
+          <td mat-cell *matCellDef="let r" class="mono">{{ r.tokenCacheKeyHash || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="failureReason">
+          <th mat-header-cell *matHeaderCellDef>Failure Reason</th>
+          <td mat-cell *matCellDef="let r">{{ r.failureReason || '—' }}</td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">No SMART launch entries found.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+  </div>
+</div>

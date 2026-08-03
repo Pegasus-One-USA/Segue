@@ -18,6 +18,13 @@ public sealed record MappingField(
     ArrayPolicy ArrayPolicy = ArrayPolicy.Scalar,
     string? Cardinality = null,
     string? ArrayAncestors = null,
+    bool IsUpsertKey = false,
+    // Used only when ArrayPolicy is CorrelateByCode: an absolute JsonPath to the code element sharing this field's
+    // array ancestor (e.g. "$.component[*].code.coding[*].code" alongside JsonPath
+    // "$.component[*].valueQuantity.value"), and the code value that selects which array item's JsonPath value to
+    // take (e.g. "8480-6" for BP systolic). Ignored for every other ArrayPolicy.
+    string? CorrelationCodeJsonPath = null,
+    string? CorrelationCodeValue = null,
     string? ParentTable = null,
     string? ParentKeyColumn = null,
     string? ForeignKeyColumn = null,

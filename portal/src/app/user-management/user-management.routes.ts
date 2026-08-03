@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from '../auth/guards/auth.guard';
+import { unsavedChangesGuard } from '../core/guards/unsaved-changes.guard';
 
 export const USER_MANAGEMENT_ROUTES: Routes = [
   {
@@ -23,12 +24,14 @@ export const USER_MANAGEMENT_ROUTES: Routes = [
   {
     path: 'roles/:id/permissions',
     canActivate: [authGuard],
+    canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
       import('./pages/role-permissions/role-permissions.component').then(m => m.RolePermissionsComponent),
   },
   {
     path: ':id',
     canActivate: [authGuard],
+    canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
       import('./pages/user-detail/user-detail.component').then(m => m.UserDetailComponent),
   },

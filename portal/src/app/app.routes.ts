@@ -1,9 +1,9 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './auth/guards/auth.guard';
 import { permissionGuard } from './auth/guards/permission.guard';
-import { superAdminGuard } from './auth/guards/super-admin.guard';
 import { setupGuard } from './auth/guards/setup.guard';
 import { mfaSetupGuard } from './auth/guards/mfa-setup.guard';
+import { unsavedChangesGuard } from './core/guards/unsaved-changes.guard';
 
 export const routes: Routes = [
 
@@ -50,6 +50,7 @@ export const routes: Routes = [
       // Workflow / Pipeline Builder
       {
         path: 'workflow-builder',
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./pages/workflow-builder/workflow-builder.component').then(
             m => m.WorkflowBuilderComponent
@@ -76,58 +77,21 @@ export const routes: Routes = [
           ),
       },
 
-      // Organization Settings — e.g. Branding (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      // Organization Settings shell — Branding, EHR Endpoints, Source/Destination Connections,
+      // Allowed Origins, System Security now live here as individual tabs. Each child route below
+      // carries its own original guard (see settings.routes.ts), so no parent-level gate here.
       {
         path: 'settings',
-        canActivate: [permissionGuard],
-        data: { permissions: ['configuration.write'] },
         loadChildren: () =>
           import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES),
       },
 
-      // EHR Endpoints directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
-      {
-        path: 'ehr-endpoints',
-        canActivate: [permissionGuard],
-        data: { permissions: ['configuration.write'] },
-        loadComponent: () =>
-          import('./ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component').then(
-            m => m.EhrEndpointListComponent
-          ),
-      },
-
-      // Allowed CORS origins (SuperAdmin only — backend enforces AuthorizationPolicies.SuperAdminOnly,
-      // stricter than permissionGuard's isAdmin() bypass which also lets a regular Admin through)
-      {
-        path: 'allowed-origins',
-        canActivate: [superAdminGuard],
-        loadComponent: () =>
-          import('./allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component').then(
-            m => m.AllowedCorsOriginListComponent
-          ),
-      },
-
-      // Source Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
-      {
-        path: 'source-connections',
-        canActivate: [permissionGuard],
-        data: { permissions: ['sourceconnections.view'] },
-        loadComponent: () =>
-          import('./source-connections/pages/source-connection-list/source-connection-list.component').then(
-            m => m.SourceConnectionListComponent
-          ),
-      },
-
-      // Destination Connections directory (permission-gated; SuperAdmin / GlobalAdmin fall through)
-      {
-        path: 'destination-connections',
-        canActivate: [permissionGuard],
-        data: { permissions: ['configuration.write'] },
-        loadComponent: () =>
-          import('./destination-connections/pages/destination-connection-list/destination-connection-list.component').then(
-            m => m.DestinationConnectionListComponent
-          ),
-      },
+      // Backward-compatible redirects for the old standalone URLs these pages used to live at.
+      { path: 'ehr-endpoints', redirectTo: 'settings/ehr-endpoints' },
+      { path: 'allowed-origins', redirectTo: 'settings/allowed-origins' },
+      { path: 'system-security', redirectTo: 'settings/system-security' },
+      { path: 'source-connections', redirectTo: 'settings/source-connections' },
+      { path: 'destination-connections', redirectTo: 'settings/destination-connections' },
 
       // User Account pages
       {
@@ -137,6 +101,7 @@ export const routes: Routes = [
       },
       {
         path: 'account-settings',
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./user/pages/account-settings/account-settings.component').then(
             m => m.AccountSettingsComponent
@@ -149,6 +114,7 @@ export const routes: Routes = [
       },
       {
         path: 'preferences',
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./user/pages/preferences/preferences.component').then(
             m => m.PreferencesComponent
@@ -213,6 +179,275 @@ export const routes: Routes = [
             m => m.ConfigurationComponent
           ),
       },
+
+      // Governance shell — Audit Logs, Correlation Search, etc. now live here as tabs (governance-
+      // shell.component.ts). Effective URLs are unchanged (still /governance/<page>) since each
+      // child's own path segment already carried the 'governance/' prefix before consolidation —
+      // it's now supplied by this parent instead. Each child keeps its original guard/permission.
+      {
+        path: 'governance',
+        loadComponent: () =>
+          import('./governance/layout/governance-shell.component').then(m => m.GovernanceShellComponent),
+        children: [
+          {
+            path: 'audit-logs',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/audit-logs/audit-logs.component').then(m => m.AuditLogsComponent),
+          },
+          {
+            path: 'authentication-logs',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/authentication-logs/authentication-logs.component').then(
+                m => m.AuthenticationLogsComponent
+              ),
+          },
+          // Drill-down only — never had its own sidebar/tab entry, reached via links from other pages.
+          {
+            path: 'configuration-comparison',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/configuration-comparison/configuration-comparison.component').then(
+                m => m.ConfigurationComparisonComponent
+              ),
+          },
+          // Drill-down only — never had its own sidebar/tab entry, reached via links from other pages.
+          {
+            path: 'data-lineage/:resourceRecordId',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/data-lineage/data-lineage.component').then(m => m.DataLineageComponent),
+          },
+          {
+            path: 'alert-rules',
+            canActivate: [permissionGuard],
+            canDeactivate: [unsavedChangesGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/alert-rules/alert-rules.component').then(m => m.AlertRulesComponent),
+          },
+          {
+            path: 'alerts',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/alerts/alerts.component').then(m => m.AlertsComponent),
+          },
+          {
+            path: 'authorization-logs',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/authorization-logs/authorization-logs.component').then(
+                m => m.AuthorizationLogsComponent
+              ),
+          },
+          {
+            path: 'archive',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/archive/archive.component').then(m => m.ArchiveComponent),
+          },
+          {
+            path: 'oauth-logs',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/oauth-logs/oauth-logs.component').then(m => m.OAuthLogsComponent),
+          },
+          {
+            path: 'log-settings',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/log-settings/log-settings.component').then(m => m.LogSettingsComponent),
+          },
+          {
+            path: 'data-access-logs',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/data-access-logs/data-access-logs.component').then(
+                m => m.DataAccessLogsComponent
+              ),
+          },
+          {
+            path: 'security-events',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/security-events/security-events.component').then(
+                m => m.SecurityEventsComponent
+              ),
+          },
+          {
+            path: 'retention-policies',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/retention-policies/retention-policies.component').then(
+                m => m.RetentionPoliciesComponent
+              ),
+          },
+          {
+            path: 'compliance-reports',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/compliance-reports/compliance-reports.component').then(
+                m => m.ComplianceReportsComponent
+              ),
+          },
+          {
+            path: 'smart-launch-logs',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/smart-launch-logs/smart-launch-logs.component').then(
+                m => m.SmartLaunchLogsComponent
+              ),
+          },
+          {
+            path: 'correlation-search',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./governance/pages/correlation-search/correlation-search.component').then(
+                m => m.CorrelationSearchComponent
+              ),
+          },
+          { path: '', redirectTo: 'audit-logs', pathMatch: 'full' },
+        ],
+      },
+
+      // Operations shell — System Health, Pipeline Executions, etc. now live here as tabs
+      // (operations-shell.component.ts). Each child keeps its original guard/permission.
+      {
+        path: 'operations',
+        loadComponent: () =>
+          import('./operations/layout/operations-shell.component').then(m => m.OperationsShellComponent),
+        children: [
+          {
+            path: 'system-health',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/system-health/system-health.component').then(
+                m => m.SystemHealthPageComponent
+              ),
+          },
+          {
+            path: 'pipeline-executions',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component').then(
+                m => m.PipelineExecutionListComponent
+              ),
+          },
+          {
+            path: 'pipeline-executions/:id',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./pipeline-executions/pages/pipeline-execution-detail/pipeline-execution-detail.component').then(
+                m => m.PipelineExecutionDetailComponent
+              ),
+          },
+          {
+            path: 'queue-monitor',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/queue-monitor/queue-monitor.component').then(m => m.QueueMonitorComponent),
+          },
+          {
+            path: 'api-analytics',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/api-analytics/api-analytics.component').then(m => m.ApiAnalyticsComponent),
+          },
+          {
+            path: 'scheduler-history',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/scheduler-history/scheduler-history.component').then(
+                m => m.SchedulerHistoryComponent
+              ),
+          },
+          {
+            path: 'retry-history',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/retry-history/retry-history.component').then(m => m.RetryHistoryComponent),
+          },
+          {
+            path: 'errors',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/errors/errors.component').then(m => m.ErrorsComponent),
+          },
+          {
+            path: 'api-requests',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/api-requests/api-requests.component').then(m => m.ApiRequestsComponent),
+          },
+          {
+            path: 'exports',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/exports/exports.component').then(m => m.ExportsComponent),
+          },
+          {
+            path: 'notifications',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/notifications/notifications.component').then(m => m.NotificationsComponent),
+          },
+          {
+            path: 'validation-failures',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/validation-failures/validation-failures.component').then(
+                m => m.ValidationFailuresComponent
+              ),
+          },
+          {
+            path: 'endpoint-health',
+            canActivate: [permissionGuard],
+            data: { permissions: ['governance.read'] },
+            loadComponent: () =>
+              import('./operations/pages/endpoint-health/endpoint-health.component').then(
+                m => m.EndpointHealthComponent
+              ),
+          },
+          // System Health and Pipeline Executions are no longer the default landing tab — both are
+          // hidden from the menu (see operations-shell.component.ts): System Health only reports one
+          // arbitrary container's health under multi-replica deployment, and Pipeline Executions has no
+          // authoring UI anywhere in the portal. Errors is the best at-a-glance triage tab, so it leads
+          // instead. Routes stay intact, just not the default.
+          { path: '', redirectTo: 'errors', pathMatch: 'full' },
+        ],
+      },
+
+      // Backward-compatible redirects for the old bare (non-operations-prefixed) URLs.
+      { path: 'pipeline-executions', redirectTo: 'operations/pipeline-executions' },
+      { path: 'pipeline-executions/:id', redirectTo: 'operations/pipeline-executions/:id' },
 
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
     ],

@@ -4,7 +4,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class DestinationConfiguration : AuditableChildEntity<Guid>
+public sealed class DestinationConfiguration : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private DestinationConfiguration()
     {
@@ -27,6 +27,7 @@ public sealed class DestinationConfiguration : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public DestinationType DestinationType { get; private set; }
     public SecretReference SecretReference { get; private set; } = default!;
     public string? Target { get; private set; }

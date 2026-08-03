@@ -3,7 +3,8 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
-using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Integration.Sql;
 using Microsoft.Data.SqlClient;
 
@@ -14,6 +15,9 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// Supports Insert, Upsert, Update-only (all three MERGE on resource type + key column), and CDC write modes.
 /// Note: "CDC" here is an application-level change-history approximation — each write is mirrored into a
 /// companion <c>{Table}_Cdc</c> table — and is NOT SQL Server's native Change Data Capture feature.
+/// TODO: CDC mode still auto-creates its companion table, which conflicts with the customer-owned-schema model;
+/// its fate (retire vs. require a customer-provisioned table) is an open decision (see
+/// docs/backend/11-destination-schema-ownership-plan.md section 3.A.3).
 /// </summary>
 public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWriter
 {
@@ -32,10 +36,12 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
     private static readonly IReadOnlyDictionary<string, object?> EmptyColumnValues = new Dictionary<string, object?>();
 
     private readonly ISecretProvider _secretProvider;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
-    public MappedSqlServerDestinationWriter(ISecretProvider secretProvider)
+    public MappedSqlServerDestinationWriter(ISecretProvider secretProvider, IGlobalExceptionManager? exceptionManager = null)
     {
         _secretProvider = secretProvider;
+        _exceptionManager = exceptionManager;
     }
 
     public async Task<DestinationWriteResult> WriteAsync(
@@ -54,7 +60,8 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             destination.SecretReference,
             cancellationToken);
         var target = ParseDestinationTarget(
-            destination.Target ?? mappingProfile.DestinationObject);
+            destination.Target ?? mappingProfile.DestinationObject,
+            mappingProfile);
 
         await using var connection = await SqlServerConnectionFactory.OpenConnectionAsync(connectionString, cancellationToken);
 
@@ -129,6 +136,83 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         }
 
         return new DestinationWriteResult(records.Count);
+            //0,
+            //RecordErrors: recordErrors.Count > 0 ? recordErrors : null,
+            //WrittenResourceIds: writtenResourceIds);
+    }
+
+    // FHIRBridge-managed audit/lineage columns and how to fill each from the run: these describe the pipeline run,
+    // not the source resource, so they are auto-populated (never mapped). Only columns the target table actually
+    // declares are written; a mapping that explicitly sets one of these wins over the auto value (see
+    // AugmentWithSystemColumns), so this never overrides a customer's own intent.
+    private static readonly IReadOnlyDictionary<string, Func<MappedDestinationRecord, PipelineWriteContext, object?>> SystemColumnValues =
+        new Dictionary<string, Func<MappedDestinationRecord, PipelineWriteContext, object?>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PipelineRunId"] = (record, _) => record.PipelineRunId,
+            ["ResourceType"] = (record, _) => record.ResourceType,
+            ["WrittenOnUtc"] = (_, context) => context.RunStartedAtUtc.UtcDateTime,
+            ["LastUpdatedOnUtc"] = (_, context) => context.RunStartedAtUtc.UtcDateTime,
+        };
+
+    /// <summary>The FHIRBridge-managed system columns (see <see cref="SystemColumnValues"/>) that the target table
+    /// actually declares — the only ones safe to auto-populate. Empty for a customer-owned table without them.</summary>
+    private static async Task<IReadOnlyList<string>> ReadSystemColumnsPresentAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(
+            """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @Table
+            """,
+            connection);
+        command.Parameters.AddWithValue("@Schema", schemaName);
+        command.Parameters.AddWithValue("@Table", tableName);
+
+        var present = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var column = reader.GetString(0);
+            if (SystemColumnValues.ContainsKey(column))
+            {
+                present.Add(column);
+            }
+        }
+
+        return present;
+    }
+
+    /// <summary>Returns the record with any target-declared system column filled from the run context, unless the
+    /// mapping already provided that column (an explicit mapping always wins). Returns the record unchanged when the
+    /// table declares none of them.</summary>
+    private static MappedDestinationRecord AugmentWithSystemColumns(
+        MappedDestinationRecord record,
+        IReadOnlyList<string> systemColumns,
+        PipelineWriteContext context)
+    {
+        if (systemColumns.Count == 0)
+        {
+            return record;
+        }
+
+        var values = new Dictionary<string, object?>(record.Values, StringComparer.OrdinalIgnoreCase);
+        var added = false;
+        foreach (var column in systemColumns)
+        {
+            if (values.ContainsKey(column))
+            {
+                continue;
+            }
+
+            values[column] = SystemColumnValues[column](record, context);
+            added = true;
+        }
+
+        return added ? record with { Values = values } : record;
     }
 
     private static async Task EnsureTableAsync(
@@ -138,48 +222,26 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         MappingProfile mappingProfile,
         CancellationToken cancellationToken)
     {
-        var createSchemaSql = $"""
-            IF SCHEMA_ID(N'{schemaName}') IS NULL
-            BEGIN
-                EXEC(N'CREATE SCHEMA [{schemaName}]')
-            END
-            """;
+        var hasMappedFields = mappingProfile.Fields.Any(field =>
+            (string.IsNullOrWhiteSpace(field.ResourceType) ||
+                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase)));
 
-        await using (var command = new SqlCommand(createSchemaSql, connection))
+        if (!hasMappedFields)
         {
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            throw new InvalidOperationException(
+                $"Mapping profile for '{schemaName}.{tableName}' has no mapped fields — a SQL destination needs at least one mapped column.");
         }
 
-        var mappedColumns = mappingProfile.Fields
-            .Where(field =>
-                string.IsNullOrWhiteSpace(field.ResourceType) ||
-                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase))
-            .Where(field =>
-                string.IsNullOrWhiteSpace(field.DestinationObject) ||
-                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
-            .Where(field => !ReservedColumns.Contains(field.TargetField))
-            .GroupBy(field => field.TargetField, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .Select(field => $"[{ValidateIdentifier(field.TargetField)}] {GetSqlType(field.ValueType)} NULL");
-        var createTableSql = $"""
-            IF OBJECT_ID(N'[{schemaName}].[{tableName}]', N'U') IS NULL
-            BEGIN
-                CREATE TABLE [{schemaName}].[{tableName}]
-                (
-                    FHIRBridgeRowId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_FHIRBridgeRowId PRIMARY KEY,
-                    PipelineRunId UNIQUEIDENTIFIER NOT NULL,
-                    ResourceType NVARCHAR(100) NOT NULL,
-                    SourceResourceId NVARCHAR(200) NULL,
-                    WrittenOnUtc DATETIME2 NOT NULL,
-                    LastUpdatedOnUtc DATETIME2 NULL,
-                    {string.Join(",\n                    ", mappedColumns)}
-                );
-            END
-            """;
+        await using var command = new SqlCommand("SELECT OBJECT_ID(@ObjectId, N'U')", connection);
+        command.Parameters.AddWithValue("@ObjectId", $"[{schemaName}].[{tableName}]");
+        var objectId = await command.ExecuteScalarAsync(cancellationToken);
 
-        await using (var command = new SqlCommand(createTableSql, connection))
+        if (objectId is null or DBNull)
         {
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            throw new InvalidOperationException(
+                $"Destination table '{schemaName}.{tableName}' does not exist. Create it in your database before running this pipeline.");
         }
     }
 
@@ -312,7 +374,6 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         CancellationToken cancellationToken)
     {
         var fieldNames = record.Values.Keys
-            .Where(key => !ReservedColumns.Contains(key))
             .Select(ValidateIdentifier)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -406,12 +467,12 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         var fieldNames = record.Values.Keys
             .Where(key => !ReservedColumns.Contains(key))
             .Select(ValidateIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var standardColumns = UpsertSystemColumns.Where(existingColumns.Contains).ToList();
         var columns = standardColumns.Concat(fieldNames).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var validatedKeyColumn = ValidateIdentifier(keyColumn);
         var updateColumns = columns
-            .Where(column => !string.Equals(column, "WrittenOnUtc", StringComparison.OrdinalIgnoreCase))
             .Where(column => !string.Equals(column, validatedKeyColumn, StringComparison.OrdinalIgnoreCase))
             .Select(column => $"target.[{column}] = source.[{column}]")
             .ToList();
@@ -425,6 +486,18 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
                     INSERT ({string.Join(", ", columns.Select(column => $"[{column}]"))})
                     VALUES ({string.Join(", ", columns.Select(column => $"source.[{column}]"))})
                 """
+            : string.Empty;
+
+        // A mapping profile with only the upsert-key field configured (no other columns mapped) leaves
+        // updateColumns empty — "UPDATE SET" with nothing after it is invalid T-SQL. There is nothing meaningful
+        // to update in that case anyway, so omit the WHEN MATCHED clause entirely: MERGE still inserts a row the
+        // first time a given key is seen and is a no-op on every subsequent match, which is exactly the intended
+        // upsert behavior when the key is the only mapped field.
+        var matchedClause = updateColumns.Count > 0
+            ? $"""
+              WHEN MATCHED THEN
+                  UPDATE SET {string.Join(", ", updateColumns)}
+              """
             : string.Empty;
 
         var sql = $"""
@@ -597,6 +670,8 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         CancellationToken cancellationToken)
     {
         var cdcTableName = $"{tableName}_Cdc";
+        // ddl-allowed: CDC companion table — open decision (retire vs. customer-provisioned table), see
+        // docs/backend/11-destination-schema-ownership-plan.md section 3.A.3.
         var createTableSql = $"""
             IF OBJECT_ID(N'[{schemaName}].[{cdcTableName}]', N'U') IS NULL
             BEGIN
@@ -674,17 +749,9 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         MappedDestinationRecord record,
         string keyColumn,
         out object? keyValue)
-    {
-        if (string.Equals(keyColumn, "SourceResourceId", StringComparison.OrdinalIgnoreCase))
-        {
-            keyValue = record.SourceResourceId;
-            return !string.IsNullOrWhiteSpace(record.SourceResourceId);
-        }
+        => record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
 
-        return record.Values.TryGetValue(keyColumn, out keyValue) && keyValue is not null;
-    }
-
-    private static SqlDestinationTarget ParseDestinationTarget(string destinationObject)
+    private static SqlDestinationTarget ParseDestinationTarget(string destinationObject, MappingProfile mappingProfile)
     {
         var objectAndOptions = destinationObject.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var objectName = objectAndOptions[0];
@@ -710,11 +777,45 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         var writeMode = options.TryGetValue("mode", out var configuredMode)
             ? ParseWriteMode(configuredMode)
             : SqlDestinationWriteMode.Insert;
-        var keyColumn = options.TryGetValue("key", out var configuredKey)
-            ? ValidateIdentifier(configuredKey)
-            : "SourceResourceId";
+
+        // Prefer the structured IsUpsertKey flag; fall back to the legacy '?key=' option so destinations configured
+        // before the mapping UI grows an IsUpsertKey control (docs/backend/11-destination-schema-ownership-plan.md
+        // section 4 item 5) keep working. Remove the fallback once that UI work lands.
+        var keyColumn = ResolveUpsertKeyColumn(mappingProfile)
+            ?? (options.TryGetValue("key", out var configuredKey) ? ValidateIdentifier(configuredKey) : null);
+
+        if (writeMode == SqlDestinationWriteMode.Upsert && keyColumn is null)
+        {
+            throw new InvalidOperationException(
+                $"Destination '{schemaName}.{tableName}' is configured for Upsert mode but no mapped field is " +
+                "designated as the upsert key. Mark one mapped field's IsUpsertKey in the mapping profile.");
+        }
+
+        if (writeMode == SqlDestinationWriteMode.Update && keyColumn is null)
+        {
+            throw new InvalidOperationException(
+                $"Destination '{schemaName}.{tableName}' is configured for Update mode but no mapped field is " +
+                "designated as the update key. Mark one mapped field's IsUpsertKey in the mapping profile.");
+        }
 
         return new SqlDestinationTarget(schemaName, tableName, writeMode, keyColumn);
+    }
+
+    /// <summary>
+    /// The mapped field marked <see cref="MappingField.IsUpsertKey"/> for this profile's resource/destination-object
+    /// scope, if any — derived from the mapping config rather than a second, independently-configured value.
+    /// </summary>
+    private static string? ResolveUpsertKeyColumn(MappingProfile mappingProfile)
+    {
+        var keyField = mappingProfile.Fields.FirstOrDefault(field =>
+            field.IsUpsertKey &&
+            field.IsEnabled &&
+            (string.IsNullOrWhiteSpace(field.ResourceType) ||
+                string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(field.DestinationObject) ||
+                string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase)));
+
+        return keyField is null ? null : ValidateIdentifier(keyField.TargetField);
     }
 
     private static (string SchemaName, string TableName) ParseDestinationObject(string destinationObject)
@@ -753,25 +854,11 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
 
     private static string ValidateIdentifier(string identifier) => SqlIdentifier.Validate(identifier);
 
-    private static string GetSqlType(MappingValueType valueType)
-    {
-        return valueType switch
-        {
-            MappingValueType.Integer => "INT",
-            MappingValueType.Decimal => "DECIMAL(18, 4)",
-            MappingValueType.Boolean => "BIT",
-            MappingValueType.Date => "DATE",
-            MappingValueType.DateTime => "DATETIME2",
-            MappingValueType.Json => "NVARCHAR(MAX)",
-            _ => "NVARCHAR(MAX)"
-        };
-    }
-
     private sealed record SqlDestinationTarget(
         string SchemaName,
         string TableName,
         SqlDestinationWriteMode WriteMode,
-        string KeyColumn);
+        string? KeyColumn);
 
     private enum SqlDestinationWriteMode
     {

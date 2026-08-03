@@ -1,0 +1,111 @@
+<div class="detail-page">
+  <button class="back-link" type="button" (click)="goBack()">← Back to Pipeline Executions</button>
+
+  @if (execution(); as e) {
+    <div class="page-header">
+      <h1>{{ e.pipelineName }}</h1>
+      <p class="page-sub">{{ e.sourceName }} ({{ e.sourceSystemType }})</p>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-item"><span class="summary-label">Status</span>{{ e.status }}</div>
+      <div class="summary-item"><span class="summary-label">Started</span>{{ e.startedOnUtc | date:'MMM d, h:mm:ss a' }}</div>
+      <div class="summary-item"><span class="summary-label">Duration</span>{{ e.durationMs !== null ? (e.durationMs / 1000 | number:'1.0-1') + 's' : '—' }}</div>
+      <div class="summary-item"><span class="summary-label">Triggered By</span>{{ e.triggeredBy || '—' }} ({{ e.triggerType || '—' }})</div>
+      <div class="summary-item"><span class="summary-label">Read / Written / Run Errors</span>{{ e.extractedCount }} / {{ e.writtenCount }} / {{ e.errorCount }}</div>
+      <div class="summary-item">
+        <span class="summary-label">Correlation ID</span>
+        @if (e.correlationId) {
+          <button class="btn-link" type="button" (click)="viewCorrelation()"><code class="mono">{{ e.correlationId }}</code></button>
+        } @else { — }
+      </div>
+    </div>
+
+    @if (e.errorMessage) {
+      <div class="error-banner">{{ e.errorMessage }}</div>
+    }
+  }
+
+  <h2 class="section-title">Resource Processing</h2>
+  <p class="page-sub">Each record's journey through the pipeline stages (fetch → normalize → map → store). Use <strong>View Lineage</strong> to inspect an individual field's mapping and (with permission) its decrypted value.</p>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="rows()" class="data-table">
+
+        <ng-container matColumnDef="resourceType">
+          <th mat-header-cell *matHeaderCellDef>Resource Type</th>
+          <td mat-cell *matCellDef="let r">{{ r.entry.resourceType }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="sourceResourceId">
+          <th mat-header-cell *matHeaderCellDef>Resource ID</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.entry.sourceResourceId || '—' }}</code></td>
+        </ng-container>
+
+        <ng-container matColumnDef="stage">
+          <th mat-header-cell *matHeaderCellDef>Stage</th>
+          <td mat-cell *matCellDef="let r">{{ r.entry.stage }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class.status-fail]="r.status === 'Failed'" [class.status-success]="r.status !== 'Failed'">
+              {{ r.status }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="processingTimeMs">
+          <th mat-header-cell *matHeaderCellDef>Processing Time</th>
+          <td mat-cell *matCellDef="let r">{{ r.processingTimeMs !== null ? r.processingTimeMs + 'ms' : '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="dataQuality">
+          <th mat-header-cell *matHeaderCellDef title="Data-quality score (0–100) computed during normalization. Lower scores indicate missing or malformed fields.">Data Quality</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.entry.dataQualityScore !== null) {
+              <span class="dq-badge" [class.dq-low]="r.entry.dataQualityScore < 60" [class.dq-mid]="r.entry.dataQualityScore >= 60 && r.entry.dataQualityScore < 85" [class.dq-high]="r.entry.dataQualityScore >= 85">{{ r.entry.dataQualityScore | number:'1.0-0' }}</span>
+            } @else { — }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="patientMatch">
+          <th mat-header-cell *matHeaderCellDef title="Master Patient ID assigned by patient matching (MPI), when this resource was linked to a known patient.">Patient Match</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.entry.masterPatientId || '—' }}</code></td>
+        </ng-container>
+
+        <ng-container matColumnDef="note">
+          <th mat-header-cell *matHeaderCellDef>Note</th>
+          <td mat-cell *matCellDef="let r" class="note-cell">{{ r.note }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lineage">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let r">
+            <a class="btn-link" [routerLink]="['/governance/data-lineage', r.entry.id]">View Lineage</a>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (rows().length === 0 && !loading()) {
+      <div class="empty-state">No resource processing records found.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+
+    @if (totalCount() > pageSize) {
+      <div class="pagination-bar">
+        <button class="btn-ghost" type="button" [disabled]="page() === 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page() }} ({{ totalCount() }} total)</span>
+        <button class="btn-ghost" type="button" [disabled]="page() * pageSize >= totalCount()" (click)="nextPage()">Next</button>
+      </div>
+    }
+  </div>
+</div>

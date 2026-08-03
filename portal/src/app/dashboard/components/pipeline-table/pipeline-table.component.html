@@ -1,7 +1,7 @@
 <div class="panel">
   <div class="panel-header">
-    <h2 class="panel-title">Recent Pipelines</h2>
-    <a class="panel-link" routerLink="/pipelines">View all →</a>
+    <h2 class="panel-title">Recent Workflows</h2>
+    <a class="panel-link" routerLink="/execution-history">View all →</a>
   </div>
 
   <div class="table-wrap">
@@ -17,10 +17,10 @@
       <tbody>
         @for (run of runs(); track run.id) {
           <tr class="ptable-row">
-            <td class="name-cell">{{ run.name }}</td>
-            <td class="muted">{{ run.sourceType }}</td>
+            <td class="name-cell">{{ run.pipelineName }}</td>
+            <td class="muted">{{ sourceLabel(run) }}</td>
             <td>
-              <span class="status-badge" [class]="'status-' + run.status">
+              <span class="status-badge" [class]="'status-' + statusClass(run.status)">
                 {{ statusLabel(run.status) }}
               </span>
             </td>
@@ -29,7 +29,7 @@
         }
         @empty {
           <tr>
-            <td colspan="4" class="empty-cell muted">No pipeline runs found.</td>
+            <td colspan="4" class="empty-cell muted">No workflow runs found.</td>
           </tr>
         }
       </tbody>

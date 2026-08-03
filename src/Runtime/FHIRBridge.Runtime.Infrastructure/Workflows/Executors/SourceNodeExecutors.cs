@@ -1,9 +1,11 @@
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -16,8 +18,11 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -28,8 +33,11 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -40,8 +48,11 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -52,8 +63,11 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -64,8 +78,11 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -76,8 +93,11 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -88,8 +108,11 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -100,8 +123,11 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         IFhirSourceClientFactory? sourceClientFactory = null,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
     {
     }
 }
@@ -127,6 +153,9 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly ISourceConnectionRuntimeResolver? _sourceResolver;
     private readonly ISourceConnectionSyncCursorStore? _syncCursorStore;
     private readonly IFhirBulkExportClient? _bulkExportClient;
+    private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
+    private readonly FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? _bulkExportJobRepository;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     protected SourceNodeExecutor(
         string nodeType,
@@ -134,7 +163,10 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IFhirSourceClientFactory? sourceClientFactory,
         ISourceConnectionRuntimeResolver? sourceResolver = null,
         ISourceConnectionSyncCursorStore? syncCursorStore = null,
-        IFhirBulkExportClient? bulkExportClient = null)
+        IFhirBulkExportClient? bulkExportClient = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
@@ -142,6 +174,9 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _sourceResolver = sourceResolver;
         _syncCursorStore = syncCursorStore;
         _bulkExportClient = bulkExportClient;
+        _workflowDefinitionStore = workflowDefinitionStore;
+        _bulkExportJobRepository = bulkExportJobRepository;
+        _exceptionManager = exceptionManager;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -150,8 +185,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
-        var searchParameters = ReadStringConfiguration(node, "searchParameters");
+        var configuredResourceType = ReadStringConfiguration(node, "resourceType");
+        // "searchParameters" is the canonical key for a hand-authored/route-projected node config; the Epic wizard
+        // (epic-audience-form.component.ts save(), Search REST's "Search Criteria" field) instead writes its own
+        // human-readable field bag under "Search criteria" — without this fallback, anything typed into that field
+        // was silently never read, so a wizard-configured Search Criteria had zero effect on the outbound request.
+        var searchParameters = ReadStringConfiguration(node, "searchParameters")
+            ?? ReadStringConfiguration(node, "Search criteria");
 
         // The wizard-authored, human-readable "Resources" field (e.g. "Patient, Observation, Condition") is this
         // node's own, per-workflow declaration of what it fetches — two workflows can share one SourceConnection
@@ -170,7 +210,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 searchParameters,
                 context.TargetPatientId,
                 cancellationToken,
-                context.PatientSearchCriteria);
+                context.PatientSearchCriteria,
+                context.CallerId);
         }
 
         // Fallback: an inline source configuration embedded in node config (used by the route→graph projection).
@@ -187,6 +228,42 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             source = source with { SourceType = _sourceType };
         }
 
+        // Bulk-export/retrieval settings (Data Retrieval Method, Export Scope, Group ID, Patient ID list, FHIR
+        // output format) are workflow-node-scoped — see epic-audience-form.component.ts's "Retrieval Configuration"
+        // panel and its accompanying comment: they deliberately live on the node, not on the reusable SourceConnection
+        // entity, since one connection can be referenced by several workflows that each need different retrieval
+        // behavior. ResolveAsync above only hydrates auth/base-URL/scopes from the connection entity, so a node whose
+        // SourceConnection was never separately given matching Retrieval* column values resolves RetrievalMethod to
+        // null — useBulkExport below would then silently evaluate false and this run would fall back to an unscoped
+        // search-rest fetch instead of running the bulk export the wizard shows as configured. Mirrors
+        // workflow-build-assembler.service.ts's buildRetrieval() field mapping exactly, including the ndjson ->
+        // application/fhir+ndjson MIME normalization ($export's _outputFormat expects the registered MIME type, not
+        // the wizard's short token). Only overrides when the node actually specifies a retrieval method — a node with
+        // none keeps whatever the resolved source already carries (unchanged behavior for every other node shape).
+        var nodeRetrievalMethod = ReadStringConfiguration(node, "Retrieval method key");
+        if (!string.IsNullOrWhiteSpace(nodeRetrievalMethod))
+        {
+            var nodeExportScope = ReadStringConfiguration(node, "Export scope");
+            var nodeOutputFormatToken = ReadStringConfiguration(node, "FHIR output format");
+            var nodePatientIds = (ReadStringConfiguration(node, "Patient ID / list") ?? string.Empty)
+                .Split([',', '\n', '\r', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            source = source with
+            {
+                RetrievalMethod = nodeRetrievalMethod,
+                ExportScope = string.IsNullOrWhiteSpace(nodeExportScope) ? null : nodeExportScope,
+                GroupId = string.Equals(nodeExportScope, "group", StringComparison.OrdinalIgnoreCase)
+                    ? ReadStringConfiguration(node, "Group ID")
+                    : null,
+                PatientIds = string.Equals(nodeExportScope, "patient", StringComparison.OrdinalIgnoreCase) && nodePatientIds.Length > 0
+                    ? nodePatientIds
+                    : null,
+                OutputFormat = nodeOutputFormatToken is { Length: > 0 } token && token.StartsWith("ndjson", StringComparison.OrdinalIgnoreCase)
+                    ? "application/fhir+ndjson"
+                    : null,
+            };
+        }
+
         var client = _sourceClientFactory.Create(_sourceType);
 
         // Below configuredResources in priority: a Backend System Search REST retrieval config carries its own
@@ -196,16 +273,32 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // SMART scopes (e.g. "patient/Observation.rs" -> "Observation") rather than silently defaulting to a single
         // resource type: the scopes are the authoritative record of what this connection is actually authorized to
         // fetch, so deriving from them can't drift out of sync the way a separately hand-maintained resource-type
-        // list can. Only falls back to the single node-config resourceType when nothing above has anything to say
+        // list can. Falls back to the single node-config resourceType only when nothing above has anything to say
         // (e.g. a non-interactive/no-scope source) — unchanged behavior for the route→graph projection and any
-        // hand-authored node config.
+        // hand-authored node config. If even that is absent, there is no way to know what this node should fetch —
+        // silently defaulting to "Patient" here previously meant a misconfigured node would quietly under-fetch
+        // instead of failing the run, so this now fails loudly and tells the caller what to configure.
         var resourceTypes = configuredResources is { Count: > 0 }
             ? configuredResources
             : source.ResourceTypes is { Count: > 0 } configured
                 ? configured
                 : DeriveResourceTypesFromScopes(source.Scopes) is { Count: > 0 } fromScopes
                     ? fromScopes
-                    : [resourceType];
+                    : !string.IsNullOrWhiteSpace(configuredResourceType)
+                        ? [configuredResourceType]
+                        : throw new InvalidOperationException(
+                            $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: " +
+                            "no 'Resources'/'resourceType' node configuration, no connection-level ResourceTypes, " +
+                            "and no SMART scopes to derive one from. Configure at least one resource type for this node.");
+
+        // Narrow to whatever this node's downstream destination(s) actually selected — a destination wizard's own
+        // "dest_resources" picker is the real record of what's ever written anywhere; without this, a source
+        // configured (or scope-derived) for a broader set than any destination consumes silently over-fetches
+        // (and, upstream of here, over-requests OAuth scopes for) resource types nobody ever asked for. Only applies
+        // a constraint when at least one reachable destination exists — a destination-less run (e.g. a caller that
+        // reads this node's raw output directly, with no destination node at all) has nothing to narrow against and
+        // keeps fetching exactly what was resolved above, unchanged.
+        resourceTypes = await RestrictToDestinationResourceTypesAsync(resourceTypes, node, cancellationToken);
 
         // A source configured for bulk export ($export) pulls each resource type via the Bulk Data flow instead of a
         // paged search — same downstream envelope projection, so the rest of the DAG is identical. Every other source
@@ -220,21 +313,146 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             .OrderBy(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ToList();
 
+        // An explicitly configured System/Group export always resolves to the SAME request shape (GroupId, Since,
+        // OutputFormat) for every resource type — see BuildBulkExportRequestAsync's explicitlyUnscopable branch,
+        // which a System/Group scope always takes regardless of any Patient cohort. Requesting each type in its own
+        // job (one _type=Patient-only job, one _type=Observation-only job, ...) trips a real Epic Interconnect
+        // Group-export limitation: a job scoped to just _type=Patient makes Epic fall back to an unscoped/
+        // demographics Patient search internally, which it rejects ("requires demographics or _id parameter",
+        // business-rule 59159). Requesting every type together in one job — the FHIR Bulk Data spec's intended
+        // usage — avoids that job entirely, so this is fetched once up front instead of once per type below.
+        var explicitSystemOrGroupExport = useBulkExport
+            && !string.IsNullOrWhiteSpace(source.ExportScope)
+            && BulkExportScopes.Parse(source.ExportScope) is BulkExportScope.System or BulkExportScope.Group;
+
+        IReadOnlyDictionary<string, IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>>? batchedBulkResourcesByType = null;
+        if (explicitSystemOrGroupExport)
+        {
+            var batchedRequest = BuildBatchedBulkExportRequest(source, executionOrder);
+
+            // A System/Group export is exactly one $export job for this whole node (every resource type batched
+            // into it, per the comment above) — the one shape simple enough to defer safely. Kick it off and hand
+            // back a sentinel output instead of blocking this node's execution (and so the whole DAG run) for up
+            // to the job's ~2-hour worst case; a BulkExportPollWorker tick resumes the run once it completes.
+            // Only possible when this source resolves back to a real SourceConnection (so a poll tick can
+            // re-resolve credentials later) and the job repository is actually wired — otherwise fall through to
+            // the original blocking call, unchanged.
+            if (_bulkExportJobRepository is not null && source.SourceConnectionId is { } deferrableSourceConnectionId)
+            {
+                var statusUrl = await _bulkExportClient!.KickOffExportAsync(batchedRequest, source, cancellationToken);
+                var job = new FHIRBridge.Domain.Entities.BulkExportJob(
+                    Guid.NewGuid(),
+                    FHIRBridge.Domain.Entities.BulkExportJobSourcePath.WorkflowNode,
+                    deferrableSourceConnectionId,
+                    sourceConfigurationId: null,
+                    exportRequestJson: System.Text.Json.JsonSerializer.Serialize(batchedRequest),
+                    kickedOffOnUtc: DateTime.UtcNow,
+                    correlationId: context.CorrelationId,
+                    triggeredBy: context.TriggeredBy,
+                    workflowRunId: context.WorkflowRunId,
+                    workflowNodeId: node.Id,
+                    contextJson: System.Text.Json.JsonSerializer.Serialize(context));
+                job.MarkKickedOff(statusUrl);
+                await _bulkExportJobRepository.AddAsync(job, cancellationToken);
+
+                return new WorkflowNodeOutput(
+                    node.Id,
+                    node.NodeType,
+                    payload: null,
+                    WorkflowDataContract.None,
+                    new Dictionary<string, object?>
+                    {
+                        [WorkflowNodeOutputMetadataKeys.BulkExportDeferredJobId] = job.Id.ToString(),
+                    });
+            }
+
+            var batchedResources = await _bulkExportClient!.ExportAsync(batchedRequest, source, cancellationToken);
+            batchedBulkResourcesByType = batchedResources
+                .GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> (group) => group.ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        // Authorization session check: the connection's granted SMART scopes (source.Scopes — the authoritative
+        // record of what the IdP actually granted, see the comment above on resourceTypes resolution) are logged
+        // every time this node runs, not just when something is missing, so Correlation Search's Errors section
+        // always shows what this run was authorized for. Best-effort: a governance-logging hiccup must never
+        // abort the extraction itself (CaptureExpectedAsync already swallows internally).
+        if (_exceptionManager is not null)
+        {
+            var grantedScopesSummary = source.Scopes is { Count: > 0 }
+                ? string.Join(", ", source.Scopes)
+                : "(none granted)";
+            await _exceptionManager.CaptureExpectedAsync(
+                new ExpectedFailure(
+                    "ScopesGranted",
+                    $"Authorization session for node '{node.Id}' ({node.NodeType}): granted scopes = [{grantedScopesSummary}]; requested resource types = [{string.Join(", ", executionOrder)}]"),
+                new ExceptionContext(
+                    Module: "Workflow",
+                    Severity: "Informational",
+                    CorrelationId: context.CorrelationId,
+                    WorkflowId: node.WorkflowDefinitionId.ToString(),
+                    ExecutionId: context.WorkflowRunId.ToString()),
+                cancellationToken);
+        }
+
+        // Only enforced when the connection actually declares resource-scoped SMART grants — a source with no
+        // scopes at all (e.g. Sample, or a non-interactive connection FHIRBridge doesn't track scopes for) has
+        // nothing to check against, so every resource type it's configured for is attempted unchanged.
+        var grantedResourceScopes = DeriveResourceTypesFromScopes(source.Scopes);
+
         IReadOnlyList<string>? cohortPatientIds = null;
         var resources = new List<ResourceEnvelope>();
+        var skippedResourceTypes = new List<string>();
         foreach (var type in executionOrder)
         {
             var isPatientType = string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase);
 
-            IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page = useBulkExport
-                ? await _bulkExportClient!.ExportAsync(
-                    await BuildBulkExportRequestAsync(
-                        source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
-                    source,
-                    cancellationToken)
-                : isPatientType || cohortPatientIds is not { Count: > 0 }
-                    ? await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken)
-                    : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
+            IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page;
+            try
+            {
+                if (grantedResourceScopes.Count > 0 && !IsResourceTypeAuthorized(type, source.Scopes))
+                {
+                    // Caught immediately below — same Patient(cancel)/child(skip) handling as a reactive 401/403
+                    // from the FHIR server, except this fires before any request is sent, so a known-missing scope
+                    // never even attempts (and never waits on) a call the server would have rejected anyway.
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException(
+                        type,
+                        0,
+                        $"no granted SMART scope authorizes '{type}' for this session (granted: {(source.Scopes is { Count: > 0 } ? string.Join(", ", source.Scopes) : "none")})");
+                }
+
+                page = useBulkExport
+                    ? batchedBulkResourcesByType is not null
+                        ? batchedBulkResourcesByType.TryGetValue(type, out var batchedPage) ? batchedPage : []
+                        : await _bulkExportClient!.ExportAsync(
+                            await BuildBulkExportRequestAsync(
+                                source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
+                            source,
+                            cancellationToken)
+                    : isPatientType || cohortPatientIds is not { Count: > 0 }
+                        ? await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken)
+                        : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
+            }
+            catch (FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException authorizationException)
+            {
+                // Patient (or whichever type seeds the cohort) is the parent every sibling resource type here is
+                // scoped off — if it isn't authorized, there is no partial result to isolate: cancel the whole run
+                // rather than silently running the other types unscoped or not at all. A non-parent type failing
+                // the same way just means less data, not an unrunnable workflow, so it's skipped and the rest of
+                // the node's fetch continues.
+                if (isPatientType)
+                {
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException(
+                        type, authorizationException.Message, authorizationException);
+                }
+
+                skippedResourceTypes.Add(
+                    $"{type}: not authorized for this app ({authorizationException.StatusCode}) — {authorizationException.Message}");
+                continue;
+            }
 
             resources.AddRange(page.Select(resource => new ResourceEnvelope(
                 resource.ResourceType,
@@ -288,18 +506,23 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 // Non-null only when "Patient" was among this node's resource types — how many patients its own
                 // extraction found, and so how many sibling resource types (Observation, Condition, ...) got scoped
                 // to. Absent/zero means every other resource type in this node ran unscoped (no Patient selected).
-                ["cohortSize"] = cohortPatientIds?.Count
+                ["cohortSize"] = cohortPatientIds?.Count,
+                // Non-parent resource types this node selected but couldn't fetch because the app isn't authorized
+                // for them — the orchestrator surfaces these as a PartialSuccess rather than silently dropping them.
+                ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.ToArray() : null
             });
     }
 
     /// <summary>
-    /// Batches a cohort-scoped search: <see cref="FhirSourceConfiguration.PatientIds"/> is OR'd into a single
-    /// <c>patient=</c> parameter by <c>FhirSourceConnectorBase.ApplyPatientScopeAsync</c>, but most FHIR servers
-    /// (Epic included) cap how many comma-separated reference values one request reasonably supports — so the
-    /// cohort is split into fixed-size batches, each run through the existing per-type retry/timeout wrapper, and
-    /// the pages concatenated. A cohort at or under one batch still makes exactly one request, unchanged.
+    /// Batches a cohort-scoped search: <see cref="FhirSourceConfiguration.PatientIds"/> would be OR'd into a single
+    /// <c>patient=</c> parameter by <c>FhirSourceConnectorBase.ApplyPatientScopeAsync</c> if more than one id were
+    /// passed through at once, but Epic (and US Core generally) rejects a clinical-resource search scoped to more
+    /// than one patient outright — "A given request can only apply to one patient" — there is no larger batch size
+    /// that's actually safe. So the cohort is split one patient per batch, each run through the existing per-type
+    /// retry/timeout wrapper, and the pages concatenated. A single-patient cohort still makes exactly one request,
+    /// unchanged.
     /// </summary>
-    private const int CohortBatchSize = 50;
+    private const int CohortBatchSize = 1;
 
     private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> SearchCohortScopedAsync(
         IFhirSourceClient client,
@@ -312,7 +535,15 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var results = new List<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
         foreach (var batch in cohortPatientIds.Chunk(CohortBatchSize))
         {
-            var batchSource = source with { PatientIds = batch, TargetPatientId = null };
+            // This node's connection-wide SearchParameters (e.g. an "identifier=<MRN list>" criteria the wizard's
+            // "Search criteria" field used to find the Patient cohort in the first place — see the ExecuteAsync
+            // comment on the "Search criteria" fallback) identified WHICH patients to fetch; it does not describe a
+            // valid filter for any other resource type. Once a patient cohort exists, siblings are scoped purely by
+            // patient={id} (plus their own category/status defaults from ApplyDefaultSearchParameters) — carrying
+            // the raw criteria forward made every cohort-scoped sibling search additionally (and meaninglessly)
+            // filter by the patients' MRNs, which Condition/Observation don't recognize, silently returning zero
+            // results instead of the patient's actual data.
+            var batchSource = source with { PatientIds = batch, TargetPatientId = null, SearchParameters = null };
             results.AddRange(await SearchWithPolicyAsync(client, resourceType, batchSource, workflowRunId, cancellationToken));
         }
 
@@ -329,6 +560,62 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         string.IsNullOrWhiteSpace(raw)
             ? []
             : raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// Narrows <paramref name="resourceTypes"/> down to whatever this node's downstream destination node(s) actually
+    /// selected — each destination's own wizard-authored "dest_resources" field, unioned across every destination
+    /// reachable from this node in the workflow graph. Prevents the over-fetch (and, further upstream, over-broad
+    /// OAuth scope requests) that results when a source is configured/scope-derived for a broader resource-type set
+    /// than any destination ever consumes. A run with no destination reachable at all (e.g. a caller that reads this
+    /// node's raw output directly, with nothing downstream to narrow against) returns <paramref name="resourceTypes"/>
+    /// unchanged — this only ever removes types nothing downstream wants, never adds ones the source itself wasn't
+    /// already configured/authorized for.
+    /// </summary>
+    private async Task<IReadOnlyCollection<string>> RestrictToDestinationResourceTypesAsync(
+        IReadOnlyCollection<string> resourceTypes,
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
+        if (_workflowDefinitionStore is null)
+        {
+            return resourceTypes;
+        }
+
+        var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
+        if (definition is null)
+        {
+            return resourceTypes;
+        }
+
+        var reachable = new HashSet<Guid>();
+        var frontier = new Queue<Guid>();
+        frontier.Enqueue(node.Id);
+        while (frontier.Count > 0)
+        {
+            var current = frontier.Dequeue();
+            foreach (var edge in definition.Edges.Where(e => e.FromNodeId == current))
+            {
+                if (reachable.Add(edge.ToNodeId))
+                {
+                    frontier.Enqueue(edge.ToNodeId);
+                }
+            }
+        }
+
+        var destinationResourceTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var destinationNode in definition.Nodes.Where(
+            candidate => reachable.Contains(candidate.Id) && candidate.Category == WorkflowNodeCategory.Destination))
+        {
+            foreach (var type in ParseCommaSeparatedResourceTypes(ReadStringConfiguration(destinationNode, "dest_resources")))
+            {
+                destinationResourceTypes.Add(type);
+            }
+        }
+
+        return destinationResourceTypes.Count == 0
+            ? resourceTypes
+            : resourceTypes.Where(destinationResourceTypes.Contains).ToList();
+    }
 
     /// <summary>
     /// Extracts the distinct FHIR resource types a set of granted SMART scopes actually covers, in the standard
@@ -366,6 +653,34 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
+    /// True if at least one of <paramref name="grantedScopes"/> covers <paramref name="resourceType"/> — same scope
+    /// shape as <see cref="DeriveResourceTypesFromScopes"/> (<c>{context}/{ResourceType}.{permissions}</c>), plus a
+    /// bare wildcard resource segment (<c>system/*.read</c>, <c>user/*.rs</c>) counting as covering everything.
+    /// </summary>
+    private static bool IsResourceTypeAuthorized(string resourceType, IReadOnlyCollection<string> grantedScopes)
+    {
+        foreach (var scope in grantedScopes)
+        {
+            var slashIndex = scope.IndexOf('/');
+            if (slashIndex < 0 || slashIndex == scope.Length - 1)
+            {
+                continue;
+            }
+
+            var afterSlash = scope[(slashIndex + 1)..];
+            var dotIndex = afterSlash.IndexOf('.');
+            var candidate = dotIndex >= 0 ? afterSlash[..dotIndex] : afterSlash;
+
+            if (candidate == "*" || string.Equals(candidate, resourceType, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Applies the retrieval config's Retry Policy and Timeout around one SearchAsync call — a node-level layer on
     /// top of (not a replacement for) whatever transient-fault retry the connector's own HttpClient already does
     /// internally: this retries the *whole* resource-type fetch if it still fails/times out after those internal
@@ -398,7 +713,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 var result = await client.SearchAsync(resourceType, source, timeoutCts?.Token ?? cancellationToken);
                 return result;
             }
-            catch (Exception) when (attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
+            catch (Exception ex) when (ex is not FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException
+                && attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
             {
                 // The outer token is still live, so whatever was caught is either a timeout (inner token fired) or a
                 // transient failure the connector's own retries didn't recover from — back off and try the whole
@@ -409,6 +725,21 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 await Task.Delay(delay, cancellationToken);
             }
         }
+    }
+
+    // Builds a single $export request covering every resource type at once for an explicitly System/Group-scoped
+    // source (see explicitSystemOrGroupExport above) — always PatientIds: null, matching what
+    // BuildBulkExportRequestAsync's explicitlyUnscopable branch would return per-type for this scope.
+    private static FhirBulkExportRequest BuildBatchedBulkExportRequest(FhirSourceConfiguration source, IReadOnlyList<string> resourceTypes)
+    {
+        var scope = BulkExportScopes.Parse(source.ExportScope);
+        return new FhirBulkExportRequest(
+            scope,
+            GroupId: scope == BulkExportScope.Group ? source.GroupId : null,
+            ResourceTypes: BulkExportScopes.ResolveTypeParameter(scope, resourceTypes),
+            Since: source.Since,
+            PatientIds: null,
+            OutputFormat: source.OutputFormat);
     }
 
     // Projects the resolved source's bulk-export settings onto a $export request for one resource type — mirrors the
@@ -438,7 +769,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             return new FhirBulkExportRequest(
                 configuredScope,
                 GroupId: configuredScope == BulkExportScope.Group ? source.GroupId : null,
-                ResourceTypes: [resourceType],
+                ResourceTypes: BulkExportScopes.ResolveTypeParameter(configuredScope, [resourceType]),
                 Since: source.Since,
                 PatientIds: null,
                 OutputFormat: source.OutputFormat);
@@ -448,7 +779,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         return new FhirBulkExportRequest(
             effectiveScope,
             GroupId: effectiveScope == BulkExportScope.Group ? source.GroupId : null,
-            ResourceTypes: [resourceType],
+            ResourceTypes: BulkExportScopes.ResolveTypeParameter(effectiveScope, [resourceType]),
             Since: source.Since,
             PatientIds: effectiveScope == BulkExportScope.Patient ? (cohortPatientIds ?? source.PatientIds) : null,
             OutputFormat: source.OutputFormat);

@@ -3,7 +3,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class User : AuditableChildEntity<Guid>
+public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private User()
     {
@@ -28,9 +28,32 @@ public sealed class User : AuditableChildEntity<Guid>
     public string ExternalUserId { get; private set; } = default!;
     public string? Email { get; private set; }
     public string? DisplayName { get; private set; }
+    string? IHasAuditDisplayName.AuditDisplayName => DisplayName ?? Email;
 
     public string? FirstName { get; private set; }
     public string? LastName { get; private set; }
+
+    /// <summary>Falls back to "FirstName LastName" (then Email) when no explicit DisplayName was ever set —
+    /// e.g. an SSO-provisioned user gets FirstName/LastName from the IdP's claims but DisplayName is never
+    /// populated by that path, unlike local invite/signup which always sets it.</summary>
+    public string EffectiveDisplayName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(DisplayName))
+            {
+                return DisplayName;
+            }
+
+            var composedName = $"{FirstName} {LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(composedName))
+            {
+                return composedName;
+            }
+
+            return Email ?? ExternalUserId;
+        }
+    }
 
     public string? PasswordHash { get; private set; }
     public bool IsLocalLoginEnabled { get; private set; }

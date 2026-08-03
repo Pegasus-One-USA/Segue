@@ -33,6 +33,7 @@
     <ProjectReference Include="..\FHIRBridge.Runtime.Application\FHIRBridge.Runtime.Application.csproj" />
     <ProjectReference Include="..\FHIRBridge.Runtime.Domain\FHIRBridge.Runtime.Domain.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Integration\FHIRBridge.Integration.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj" />
   </ItemGroup>
 
 </Project>

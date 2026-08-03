@@ -85,6 +85,7 @@ export class EpicSourceWizardComponent {
       jwksUrl:     av.jwksUrl,
       kid:         av.keyId,
       kvRef:       av.keyVaultRef,
+      secretName:  av.secretName,
       redirectUri: cv.redirectUri,
       launchUrl:   cv.launchUrl,
     };
@@ -99,11 +100,5 @@ export class EpicSourceWizardComponent {
 
   toggleAdvanced(): void {
     this.showAdvanced.update(v => !v);
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    if ((event.target as HTMLElement).classList.contains('ew-backdrop')) {
-      this.close();
-    }
   }
 }

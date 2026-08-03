@@ -69,6 +69,9 @@ public sealed class EmbeddedFhirElementCatalog : IFhirElementCatalog
                         f.TryGetProperty("isArray", out var ia) && ia.GetBoolean(),
                         f.TryGetProperty("arrays", out var arr) && arr.ValueKind == JsonValueKind.Array
                             ? arr.EnumerateArray().Select(a => a.GetString() ?? string.Empty).ToList()
+                            : [],
+                        f.TryGetProperty("referenceTargetTypes", out var rt) && rt.ValueKind == JsonValueKind.Array
+                            ? rt.EnumerateArray().Select(a => a.GetString() ?? string.Empty).ToList()
                             : []));
                 }
 

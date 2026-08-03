@@ -4,9 +4,12 @@ using Microsoft.Extensions.Logging;
 namespace FHIRBridge.Infrastructure.Governance;
 
 /// <summary>
-/// Acts on the retention policy by purging expired records from every <see cref="IPurgeableStore"/>. The cutoff is
-/// <c>now - RetentionYears</c> from the platform-default policy. Immutable stores (the HIPAA audit log) do not
-/// implement <see cref="IPurgeableStore"/> and are therefore never touched, honoring <c>IsImmutableAuditRequired</c>.
+/// Acts on the retention policy by purging expired records from every <see cref="IPurgeableStore"/>. Each store's
+/// cutoff is resolved from its own policy (<c>GetPolicy(store.DataClass)</c>, falling back to the platform default
+/// when no per-data-class override is configured — see <see cref="ConfiguredRetentionPolicyService"/>), so
+/// short-lived Operations logs and the platform default don't have to share one retention period. Immutable
+/// stores (the HIPAA audit log and its companions) do not implement <see cref="IPurgeableStore"/> and are
+/// therefore never touched, honoring <c>IsImmutableAuditRequired</c>.
 /// </summary>
 public sealed class RetentionPurgeService : IRetentionPurgeService
 {
@@ -26,24 +29,28 @@ public sealed class RetentionPurgeService : IRetentionPurgeService
 
     public async Task<RetentionPurgeReport> RunAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        // Use the platform-default policy for the store-wide cutoff.
-        var policy = _retentionPolicyService.GetPolicy("*");
-        var cutoff = nowUtc.AddYears(-policy.RetentionYears);
+        // Reported as the headline cutoff/years for backward-compatible summary purposes — the platform default,
+        // not necessarily what every individual store actually used below.
+        var defaultPolicy = _retentionPolicyService.GetPolicy("*");
 
         var purgedByDataClass = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var store in _purgeableStores)
         {
+            var policy = _retentionPolicyService.GetPolicy(store.DataClass);
+            var cutoff = nowUtc.AddYears(-policy.RetentionYears);
+
             var purged = await store.PurgeOlderThanAsync(cutoff, cancellationToken);
             purgedByDataClass[store.DataClass] = purged;
 
             if (purged > 0)
             {
                 _logger.LogInformation(
-                    "Retention purge removed {Count} {DataClass} record(s) older than {Cutoff:o}.",
-                    purged, store.DataClass, cutoff);
+                    "Retention purge removed {Count} {DataClass} record(s) older than {Cutoff:o} ({Years}y policy).",
+                    purged, store.DataClass, cutoff, policy.RetentionYears);
             }
         }
 
-        return new RetentionPurgeReport(cutoff, policy.RetentionYears, purgedByDataClass);
+        return new RetentionPurgeReport(
+            nowUtc.AddYears(-defaultPolicy.RetentionYears), defaultPolicy.RetentionYears, purgedByDataClass);
     }
 }

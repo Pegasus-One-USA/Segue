@@ -12,14 +12,79 @@ namespace FHIRBridge.Infrastructure.Persistence;
 public sealed class InMemoryConfigurationRepository : IConfigurationRepository
 {
     private readonly ConcurrentDictionary<Guid, SourceConnection> _sources = new();
+    private readonly ConcurrentDictionary<Guid, SourceConfiguration> _sourceConfigurations = new();
     private readonly ConcurrentDictionary<Guid, DestinationConfiguration> _destinations = new();
     private readonly ConcurrentDictionary<Guid, MappingProfile> _mappingProfiles = new();
     private readonly ConcurrentDictionary<Guid, ResourcePipelineRoute> _routes = new();
     private readonly ConcurrentDictionary<Guid, WebhookConfiguration> _webhooks = new();
 
+    // No-op: this repository is only used for local/dev runs with no connection string (see class remarks) and
+    // writes straight into the in-memory dictionaries with no staging to roll back. Real transactional
+    // all-or-nothing semantics are only meaningful — and only provided — against the real EF-backed repository.
+    public Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IConfigurationTransaction>(new NoOpConfigurationTransaction());
+
+    private sealed class NoOpConfigurationTransaction : IConfigurationTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task RollbackAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     // ── Source connections ────────────────────────────────────────────────────
     public Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<SourceConnection>>(_sources.Values.OrderBy(x => x.Name).ToList());
+
+    public Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(
+        SourceConnectionFilter filter,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortOrder,
+        CancellationToken ct)
+    {
+        var query = _sources.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            query = query.Where(x =>
+                x.Name.Contains(filter.Search, StringComparison.OrdinalIgnoreCase) ||
+                x.BaseUrl.Contains(filter.Search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (filter.SourceSystemType.HasValue)
+        {
+            query = query.Where(x => x.SourceSystemType == filter.SourceSystemType.Value);
+        }
+
+        if (filter.ApplicationType.HasValue)
+        {
+            query = query.Where(x => x.ApplicationType == filter.ApplicationType.Value);
+        }
+
+        if (filter.IsEnabled.HasValue)
+        {
+            query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        IOrderedEnumerable<SourceConnection> ordering = sortBy?.ToLowerInvariant() switch
+        {
+            "sourcesystemtype" => desc ? query.OrderByDescending(x => x.SourceSystemType)               : query.OrderBy(x => x.SourceSystemType),
+            "applicationtype"  => desc ? query.OrderByDescending(x => x.ApplicationType)                : query.OrderBy(x => x.ApplicationType),
+            "isenabled"        => desc ? query.OrderByDescending(x => x.IsEnabled)                       : query.OrderBy(x => x.IsEnabled),
+            "actionon"         => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc) : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _                  => desc ? query.OrderByDescending(x => x.Name)                            : query.OrderBy(x => x.Name),
+        };
+        var ordered = ordering.ToList();
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+        var items = ordered.Skip(skip).Take(take).ToList();
+
+        return Task.FromResult(new PagedResult<SourceConnection>(items, ordered.Count, page, take));
+    }
 
     public Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct)
     {
@@ -53,6 +118,34 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         return Task.FromResult(exists);
     }
 
+    // ── Source configurations ─────────────────────────────────────────────────
+    public Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<SourceConfiguration>>(_sourceConfigurations.Values.OrderBy(x => x.Name).ToList());
+
+    public Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct)
+    {
+        _sourceConfigurations.TryGetValue(id, out var e);
+        return Task.FromResult(e);
+    }
+
+    public Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        _sourceConfigurations[e.Id] = e;
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
+    {
+        _sourceConfigurations[e.Id] = e;
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken)
+    {
+        _sourceConfigurations.TryRemove(sourceConfiguration.Id, out _);
+        return Task.CompletedTask;
+    }
+
     // ── Destinations ──────────────────────────────────────────────────────────
     public Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<DestinationConfiguration>>(_destinations.Values.OrderBy(x => x.Name).ToList());
@@ -61,6 +154,8 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         DestinationFilter filter,
         int page,
         int pageSize,
+        string? sortBy,
+        string? sortOrder,
         CancellationToken ct)
     {
         var query = _destinations.Values.AsEnumerable();
@@ -80,7 +175,16 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
             query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
         }
 
-        var ordered = query.OrderBy(x => x.Name).ToList();
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        IOrderedEnumerable<DestinationConfiguration> ordering = sortBy?.ToLowerInvariant() switch
+        {
+            "type"     => desc ? query.OrderByDescending(x => x.DestinationType)               : query.OrderBy(x => x.DestinationType),
+            "target"   => desc ? query.OrderByDescending(x => x.Target)                          : query.OrderBy(x => x.Target),
+            "status"   => desc ? query.OrderByDescending(x => x.IsEnabled)                       : query.OrderBy(x => x.IsEnabled),
+            "actionon" => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc) : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _          => desc ? query.OrderByDescending(x => x.Name)                           : query.OrderBy(x => x.Name),
+        };
+        var ordered = ordering.ToList();
         var take = Math.Clamp(pageSize, 1, 200);
         var skip = Math.Max(0, (page - 1) * take);
         var items = ordered.Skip(skip).Take(take).ToList();

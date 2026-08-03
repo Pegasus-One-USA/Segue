@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Application.DTOs;
 using Microsoft.Extensions.Caching.Distributed;
@@ -16,16 +17,19 @@ public sealed class CachingTerminologyTranslationService : ITerminologyTranslati
 
     private readonly ITerminologyTranslationService _inner;
     private readonly IDistributedCache _cache;
-    private readonly DistributedCacheEntryOptions _entryOptions;
+    private readonly ISystemSettingsCache _settingsCache;
+    private readonly TimeSpan _defaultTimeToLive;
 
     public CachingTerminologyTranslationService(
         ITerminologyTranslationService inner,
         IDistributedCache cache,
+        ISystemSettingsCache settingsCache,
         TimeSpan timeToLive)
     {
         _inner = inner;
         _cache = cache;
-        _entryOptions = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = timeToLive };
+        _settingsCache = settingsCache;
+        _defaultTimeToLive = timeToLive;
     }
 
     public async Task<TerminologyTranslationResult?> TranslateAsync(
@@ -45,7 +49,13 @@ public sealed class CachingTerminologyTranslationService : ITerminologyTranslati
         var result = await _inner.TranslateAsync(sourceSystem, sourceCode, targetSystem, cancellationToken);
         if (result is not null)
         {
-            await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(result), _entryOptions, cancellationToken);
+            var ttlMinutes = await _settingsCache.GetIntAsync(
+                "Caching:TerminologyTtlMinutes", (int)_defaultTimeToLive.TotalMinutes, cancellationToken);
+            var entryOptions = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(ttlMinutes),
+            };
+            await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(result), entryOptions, cancellationToken);
         }
 
         return result;

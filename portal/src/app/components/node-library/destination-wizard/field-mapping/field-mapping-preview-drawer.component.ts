@@ -1,6 +1,7 @@
 import { Component, computed, input, output } from '@angular/core';
 import { MappingRow } from './field-mapping-model';
 import { buildSqlInsert, buildCsvPreview, CSV_DELIMITERS } from './field-mapping-preview.util';
+import { DestinationWizardType, isSqlLikeDestType } from './field-mapping-summary.model';
 
 interface FmPreviewSection {
   resource: string;
@@ -24,7 +25,7 @@ export class FieldMappingPreviewDrawerComponent {
   readonly open = input.required<boolean>();
   readonly resources = input.required<string[]>();
   readonly rows = input.required<MappingRow[]>();
-  readonly destType = input.required<'sql' | 'csv'>();
+  readonly destType = input.required<DestinationWizardType>();
   readonly targetByResource = input.required<Record<string, string>>();
   readonly csvDelimiterKey = input<string>('comma');
 
@@ -35,7 +36,7 @@ export class FieldMappingPreviewDrawerComponent {
     return this.resources().map(resource => {
       const rowsForResource = this.rows().filter(r => r.resource === resource);
       const tableName = this.targetByResource()[resource] ?? '';
-      const text = this.destType() === 'sql'
+      const text = isSqlLikeDestType(this.destType())
         ? buildSqlInsert(tableName, rowsForResource)
         : buildCsvPreview(rowsForResource, delimiter);
       return { resource, tableName, text };

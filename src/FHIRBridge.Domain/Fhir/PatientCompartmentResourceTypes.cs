@@ -22,9 +22,11 @@ public static class PatientCompartmentResourceTypes
         "Observation",
         "Condition",
         "MedicationRequest",
+        "MedicationAdministration",
         "AllergyIntolerance",
         "Immunization",
         "Procedure",
+        "ServiceRequest",
         "DiagnosticReport",
         "DocumentReference"
     ];

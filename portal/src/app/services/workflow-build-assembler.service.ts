@@ -1,12 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { PipelineStore } from './pipeline.store';
 import { WorkflowGraphMapperService } from './workflow-graph-mapper.service';
+import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
 import {
   CreateDestinationConfigurationRequest,
   CreateSourceConnectionRequest,
   DestinationBuildSpec,
   MappingBuildSpec,
   MappingFieldRequest,
+  ParentReferenceSpec,
   SourceBuildSpec,
   SourceRetrievalConfigurationRequest,
   WorkflowBuildRequest,
@@ -29,6 +31,9 @@ interface DestMappingRow {
   // field-mapping canvas; absent on rows saved before that feature existed (pre-migration dest_mappings).
   arrayPolicy?: string;
   approximated?: boolean;
+  isUpsertKey?: boolean; // wizard-forced true on the resource's mandatory id row, false elsewhere
+  isRequiredParentRef?: boolean; // wizard-forced true on a locked "child of" reference-field row
+  parentResourceType?: string;   // which parent (of possibly several) this locked row satisfies
 }
 
 /**
@@ -114,17 +119,15 @@ export class WorkflowBuildAssemblerService {
       if (!mappingNodeId || !sourceNodeId) continue;
 
       const mappingFields = this.fieldsFor(mappingNodeId, nodesById);
-      const mappingSpec = this.buildMapping(
-        mappingNodeId,
-        sourceNodeId,
-        destNode.id,
-        destFields,
+      mappings.push(
+        ...this.buildMappings(
+          mappingNodeId,
+          sourceNodeId,
+          destNode.id,
+          destFields,
+          mappingFields,
+        ),
       );
-      if (mappingSpec)
-        mappings.push({
-          ...mappingSpec,
-          existingId: mappingFields['mappingProfileId'] || null,
-        });
     }
 
     return { ...graph, sources, destinations, mappings };
@@ -158,7 +161,7 @@ export class WorkflowBuildAssemblerService {
         : {
             redirectUris: [
               fields['Redirect URI'] ||
-                'http://localhost:5000/api/v1/oauth/callback',
+                OAUTH_DEFAULT_URLS.redirectUri,
             ],
             launchUrl: fields['Launch URL'] || null,
             trustedIssuers: (fields['Trusted issuers'] ?? '')
@@ -303,11 +306,22 @@ export class WorkflowBuildAssemblerService {
     fields: Record<string, string>,
     node: WorkflowNodeRequest,
   ): CreateDestinationConfigurationRequest {
+    const isMySql =
+      node.nodeType.includes('MySql') ||
+      (fields['__transformId'] ?? '') === 'dest-mysql';
+    const isPostgres =
+      node.nodeType.includes('PostgreSql') ||
+      (fields['__transformId'] ?? '') === 'dest-postgres';
     const isSql =
+      isMySql ||
+      isPostgres ||
       node.nodeType.includes('SqlServer') ||
       (fields['__transformId'] ?? '') === 'dest-sqlserver';
+    const isMongo =
+      node.nodeType.includes('Mongo') ||
+      (fields['__transformId'] ?? '') === 'dest-mongo';
     const name =
-      fields['dest_name'] || (isSql ? 'SQL Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -316,18 +330,52 @@ export class WorkflowBuildAssemblerService {
     const secretName =
       fields['secretName'] || `dest-${this.slug(name)}-${this.shortId()}`;
 
+    // dest_password/dest_sftpPassword are redacted from persisted config (see WorkflowGraphMapperService's
+    // SECRET_FIELD_KEYS) and never round-trip back into the wizard on reload — a blank password field on a
+    // destination that's ALREADY been provisioned (it already carries a secretName from a prior build) means
+    // "the wizard never had a password to show", not "the user wants to blank out a working credential". Rebuilding
+    // the connection string/URI anyway would send a non-blank string with an empty password embedded in it, which
+    // the backend's own "don't touch the secret if none was sent" guard (ConfigurationService's
+    // UpdateDestinationConfigurationAsync, checking IsNullOrWhiteSpace on the WHOLE string) can't catch — silently
+    // overwriting a working credential with a broken one on every no-op re-save. Only rebuild when a password was
+    // actually entered, or this is a brand-new destination with nothing to preserve yet.
+    const hasExistingSecret = !!fields['secretName'];
+
     if (isSql) {
       return {
         name,
-        destinationType: 'SqlServer',
+        destinationType: isMySql ? 'MySql' : isPostgres ? 'PostgreSql' : 'SqlServer',
         keyVaultName,
         secretName,
         target: null,
-        inlineSecret: this.buildSqlConnectionString(fields),
-        connectionMetadataJson: this.buildConnectionMetadata(fields, true),
+        inlineSecret:
+          hasExistingSecret && !fields['dest_password']
+            ? null
+            : this.buildSqlConnectionString(fields, isMySql, isPostgres),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'sql'),
       };
     }
 
+    if (isMongo) {
+      return {
+        name,
+        destinationType: 'Mongo',
+        keyVaultName,
+        secretName,
+        target: fields['dest_collection'] || null,
+        // The whole connection string is treated as secret (see destination-wizard.component.ts's mongoForm
+        // comment) — there's no split server/database/credentials form to assemble from, so this is a direct
+        // pass-through of whatever the wizard collected, same "don't touch an already-provisioned secret unless
+        // the user actually typed a new one" guard the SQL/SFTP branches use.
+        inlineSecret:
+          hasExistingSecret && !fields['dest_connectionString']
+            ? null
+            : fields['dest_connectionString'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'mongo'),
+      };
+    }
+
+    const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
       // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson field
@@ -337,47 +385,55 @@ export class WorkflowBuildAssemblerService {
       keyVaultName,
       secretName,
       target: fields['dest_filePattern'] || null,
-      inlineSecret:
-        fields['dest_deliveryMode'] === 'sftp' ? this.buildSftpUri(fields) : '',
-      connectionMetadataJson: this.buildConnectionMetadata(fields, false),
+      inlineSecret: !isSftp
+        ? ''
+        : hasExistingSecret && !fields['dest_sftpPassword']
+          ? null
+          : this.buildSftpUri(fields),
+      connectionMetadataJson: this.buildConnectionMetadata(fields, 'csv'),
     };
   }
 
-  /** Non-secret dest_* fields as a flat JSON object — everything above EXCEPT dest_password/dest_sftpPassword,
-   *  which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri), never here. Mirrors
-   *  destination-connection-secret.util.ts's buildConnectionMetadata — duplicated rather than imported for the
-   *  same reason buildSqlConnectionString/buildSftpUri are (see that file's own header comment). */
+  /** Non-secret dest_* fields as a flat JSON object — everything above EXCEPT dest_password/dest_sftpPassword/
+   *  dest_connectionString, which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri/
+   *  the Mongo pass-through), never here. Mirrors destination-connection-secret.util.ts's buildConnectionMetadata
+   *  — duplicated rather than imported for the same reason buildSqlConnectionString/buildSftpUri are (see that
+   *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    isSql: boolean,
+    kind: 'sql' | 'mongo' | 'csv',
   ): string {
-    const keys = isSql
-      ? [
-          'dest_name',
-          'dest_server',
-          'dest_database',
-          'dest_auth',
-          'dest_username',
-          'dest_schema',
-          'dest_writeMode',
-        ]
-      : [
-          'dest_name',
-          'dest_deliveryMode',
-          'dest_filePattern',
-          'dest_delimiter',
-          'dest_encoding',
-          'dest_sftpHost',
-          'dest_sftpPort',
-          'dest_sftpUsername',
-          'dest_sftpAuthType',
-          'dest_sftpRemoteFolder',
-          'dest_emailTo',
-          'dest_emailCc',
-          'dest_emailSubjectTemplate',
-          'dest_emailBodyTemplate',
-          'dest_downloadLinkExpiryMinutes',
-        ];
+    const keys =
+      kind === 'sql'
+        ? [
+            'dest_name',
+            'dest_server',
+            'dest_database',
+            'dest_auth',
+            'dest_username',
+            'dest_schema',
+            'dest_writeMode',
+            'dest_requireSsl',
+          ]
+        : kind === 'mongo'
+          ? ['dest_name', 'dest_collection', 'dest_writeMode']
+          : [
+              'dest_name',
+              'dest_deliveryMode',
+              'dest_filePattern',
+              'dest_delimiter',
+              'dest_encoding',
+              'dest_sftpHost',
+              'dest_sftpPort',
+              'dest_sftpUsername',
+              'dest_sftpAuthType',
+              'dest_sftpRemoteFolder',
+              'dest_emailTo',
+              'dest_emailCc',
+              'dest_emailSubjectTemplate',
+              'dest_emailBodyTemplate',
+              'dest_downloadLinkExpiryMinutes',
+            ];
     const metadata: Record<string, string> = {};
     for (const key of keys) {
       if (f[key] !== undefined) metadata[key] = f[key];
@@ -385,10 +441,35 @@ export class WorkflowBuildAssemblerService {
     return JSON.stringify(metadata);
   }
 
-  private buildSqlConnectionString(f: Record<string, string>): string {
+  private buildSqlConnectionString(f: Record<string, string>, isMySql = false, isPostgres = false): string {
     const server = f['dest_server'] ?? '';
     const database = f['dest_database'] ?? '';
+    const requireSsl = f['dest_requireSsl'] === 'true';
+    if (isPostgres) {
+      // Npgsql uses Host (not Server) and Username (not User Id); "Require" mode encrypts without validating
+      // the server certificate, so no separate "trust cert" flag is needed. Off by default — a local/docker
+      // Postgres with SSL disabled would otherwise refuse to connect — checked for providers that enforce it
+      // (e.g. AWS RDS's rds.force_ssl).
+      return [
+        `Host=${server}`,
+        `Database=${database}`,
+        `Username=${f['dest_username'] ?? ''}`,
+        `Password=${f['dest_password'] ?? ''}`,
+        `SSL Mode=${requireSsl ? 'Require' : 'Prefer'}`,
+      ].join(';');
+    }
     const parts = [`Server=${server}`, `Database=${database}`];
+    if (isMySql) {
+      // MySqlConnector's connection string builder rejects SQL-Server-only keywords
+      // (TrustServerCertificate/Encrypt/Authentication=Active Directory Default), so MySQL always
+      // authenticates with the username/password entered in the (shared) SQL-family wizard form.
+      parts.push(
+        `User Id=${f['dest_username'] ?? ''}`,
+        `Password=${f['dest_password'] ?? ''}`,
+        `SslMode=${requireSsl ? 'Required' : 'Preferred'}`,
+      );
+      return parts.join(';');
+    }
     if ((f['dest_auth'] ?? 'sql-auth') === 'sql-auth') {
       parts.push(
         `User Id=${f['dest_username'] ?? ''}`,
@@ -415,63 +496,158 @@ export class WorkflowBuildAssemblerService {
   }
 
   // ── mapping ───────────────────────────────────────────────────────────────
-  private buildMapping(
+  // One MappingBuildSpec per resource the destination actually selected — a destination picking Patient +
+  // Observation + Condition produces three specs, all sharing the same canvas "Field Mapping" node id (that one
+  // node's wizard-authored dest_mappings already carries every resource's field rows, tagged by resource). The
+  // backend creates one MappingProfile per spec and accumulates their ids onto that shared node (see
+  // WorkflowEndpoints.cs's Mappings step) rather than each overwriting the last — previously only the first
+  // (primary) resource ever got a real profile, and every other selected resource silently inherited the
+  // primary's field mappings at run time instead of its own (see MappingNodeExecutor).
+  private buildMappings(
     mappingNodeId: string,
     sourceNodeId: string,
     destinationNodeId: string,
     destFields: Record<string, string>,
-  ): MappingBuildSpec | null {
+    mappingFields: Record<string, string>,
+  ): MappingBuildSpec[] {
     const rows = this.parseMappingRows(destFields['dest_mappings']);
     const resources = [...new Set(rows.map((row) => row.resource))];
-    if (resources.length === 0) return null;
+    if (resources.length === 0) return [];
 
-    const primary = resources[0];
-    if (resources.length > 1)
-      this.lastUnmappedResources.push(...resources.slice(1));
+    const existingIdsByResource = this.parseExistingMappingProfileIds(mappingFields);
 
-    const primaryRows = rows.filter((row) => row.resource === primary);
+    return resources.map((resource) => {
+      const spec = this.buildMappingForResource(
+        mappingNodeId,
+        sourceNodeId,
+        destinationNodeId,
+        destFields,
+        rows,
+        resource,
+      );
+      return {
+        ...spec,
+        existingId:
+          existingIdsByResource[resource] ??
+          // Legacy single-resource node from before mappingProfileIds existed: its one profile id was only ever
+          // stored under the flat mappingProfileId field, with no resource tagging at all.
+          (resources.length === 1 ? mappingFields['mappingProfileId'] || null : null),
+      };
+    });
+  }
+
+  private parseExistingMappingProfileIds(
+    mappingFields: Record<string, string>,
+  ): Record<string, string> {
+    const raw = mappingFields['mappingProfileIds'];
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return parsed && typeof parsed === 'object'
+        ? (parsed as Record<string, string>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private buildMappingForResource(
+    mappingNodeId: string,
+    sourceNodeId: string,
+    destinationNodeId: string,
+    destFields: Record<string, string>,
+    rows: DestMappingRow[],
+    resource: string,
+  ): MappingBuildSpec {
+    const resourceRows = rows.filter((row) => row.resource === resource);
     const baseDestinationObject =
-      primaryRows[0]?.target ||
-      this.targetForResource(destFields, primary) ||
-      primary;
+      resourceRows[0]?.target ||
+      this.targetForResource(destFields, resource) ||
+      resource;
     // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
     // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
-    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. No explicit ;key=
-    // override: the writer's own default key (SourceResourceId) matches that label's "by source id" semantics.
-    const destinationObject =
-      destFields['dest_writeMode'] === 'upsert'
-        ? `${baseDestinationObject};mode=upsert`
-        : baseDestinationObject;
+    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. The writer resolves the
+    // key column from whichever mapped field is flagged isUpsertKey (the wizard forces this on the resource's
+    // mandatory id row — see destination-wizard.component.ts's ID-row reconciliation) rather than a query-string
+    // option, so "by source id" only means something once that field is present. jsonPath === '$.id' is kept as a
+    // fallback match for mapping rows saved before isUpsertKey existed on a node.
+    const idRow =
+      resourceRows.find((row) => row.isUpsertKey) ??
+      resourceRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, resource)) === '$.id');
 
-    const fields: MappingFieldRequest[] = primaryRows.map((row) => {
+    let destinationObject = baseDestinationObject;
+    const writeMode = destFields['dest_writeMode'];
+    if (writeMode === 'upsert' || writeMode === 'update') {
+      if (!idRow) {
+        const modeLabel = writeMode === 'upsert' ? 'Upsert by source id' : 'Update only';
+        throw new Error(
+          `"${resource}" destination is set to ${modeLabel}, but no destination column is mapped from ` +
+            `${resource}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
+        );
+      }
+      destinationObject = `${baseDestinationObject};mode=${writeMode}`;
+    }
+
+    const fields: MappingFieldRequest[] = resourceRows.map((row) => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
-      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, primary);
+      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource);
       const arrays = row.arrays ?? [];
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
       return {
         targetField: row.column,
         jsonPath,
         valueType: row.arrayPolicy === 'StoreJson' ? 'Json' : (row.valueType ?? this.valueTypeFor(row.path)),
-        isRequired: false,
+        // The id/Upsert-key row is structurally mandatory (every resource always has an id) — flagging it
+        // required here matches reality and satisfies the backend's NOT NULL-vs-IsRequired check
+        // (CreateMappingProfileRequestValidator) for destinations whose key column is NOT NULL, which is
+        // virtually always the case for a primary key. Every other row defaults to optional; a locked
+        // "child of" reference row is upgraded to required separately below.
+        isRequired: row === idRow,
         defaultValue: null,
         format: null,
         // The field-mapping canvas stamps arrayPolicy explicitly (see resolveArrayPolicy); rows saved
         // before that feature existed fall back to the original naive default below.
         arrayPolicy: row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'),
         arrayAncestors: arrays.length > 0 ? arrays : null,
+        isUpsertKey: row === idRow,
+        correlationCodeJsonPath: null,
+        correlationCodeValue: null,
       };
     });
+    // A locked "child of" row is mandatory the same way the id row is — mark it required so the built
+    // request reflects that, even though server-side enforcement (ValidateMappingParentReferences) checks
+    // presence/JsonPath match rather than this flag.
+    for (const row of resourceRows.filter((r) => r.isRequiredParentRef)) {
+      const field = fields.find((f) => f.jsonPath === (row.jsonPath ?? this.toJsonPath(row.path, resource)));
+      if (field) field.isRequired = true;
+    }
+
+    const parentReferences = this.parentReferencesFor(destFields, resource);
 
     return {
       nodeId: mappingNodeId,
       sourceNodeId,
       destinationNodeId,
-      name: `${primary} mapping`,
-      resourceType: primary,
+      name: `${resource} mapping`,
+      resourceType: resource,
       destinationObject,
       fields,
+      parentReferences: parentReferences.length ? parentReferences : undefined,
     };
+  }
+
+  // Reads the wizard's per-resource "child of" chip selections (dest_parentSelections: Record<child,
+  // parent[]>) and turns them into the ParentReferenceSpec[] the backend validates against sibling specs
+  // sharing the same destination node.
+  private parentReferencesFor(destFields: Record<string, string>, resource: string): ParentReferenceSpec[] {
+    try {
+      const parsed = JSON.parse(destFields['dest_parentSelections'] ?? '{}') as Record<string, string[]>;
+      const parents = parsed[resource] ?? [];
+      return parents.map((parentResourceType) => ({ parentResourceType }));
+    } catch {
+      return [];
+    }
   }
 
   private parseMappingRows(json: string | undefined): DestMappingRow[] {

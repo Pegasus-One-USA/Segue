@@ -125,6 +125,11 @@ jobs:
 
       - name: Run deploy script
         shell: powershell
+        # ApiPort/GatewayPort/DemoApiPort come from the "production" GitHub Environment's variables
+        # (Settings > Environments > production > Environment variables) rather than being hardcoded
+        # here -- ops can repoint any service to a free port without a code change. There is no
+        # fallback: Deploy-FHIRBridge.ps1 requires all three explicitly.
         run: |
           $artifactPath = (Resolve-Path extracted).Path
-          ./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath $artifactPath
+          ./deploy/windows/Deploy-FHIRBridge.ps1 -ArtifactPath $artifactPath `
+            -ApiPort ${{ vars.PROD_API_PORT }} -GatewayPort ${{ vars.PROD_GATEWAY_PORT }} -DemoApiPort ${{ vars.PROD_DEMOAPI_PORT }}

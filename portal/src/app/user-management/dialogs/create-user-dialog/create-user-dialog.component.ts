@@ -9,8 +9,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
+import { ToastService } from '../../../services/toast.service';
 import { InvitationService } from '../../../auth/services/invitation.service';
 import { TenantRoleService } from '../../services/tenant-role.service';
 import { UserRole } from '../../../auth/models/user.model';
@@ -43,7 +43,7 @@ const ROLES: { value: UserRole; label: string }[] = [
 export class CreateUserDialogComponent implements OnInit {
   private readonly invitationSvc = inject(InvitationService);
   private readonly dialogRef     = inject(MatDialogRef<CreateUserDialogComponent>);
-  private readonly snackBar      = inject(MatSnackBar);
+  private readonly toast         = inject(ToastService);
   private readonly fb            = inject(FormBuilder);
 
   readonly tenantRoleSvc = inject(TenantRoleService);
@@ -101,11 +101,7 @@ export class CreateUserDialogComponent implements OnInit {
       },
       error: err => {
         this.loading.set(false);
-        this.snackBar.open(
-          err?.message ?? 'Failed to send invitation. Please try again.',
-          'Dismiss',
-          { duration: 5000 },
-        );
+        this.toast.error(err?.message ?? 'Failed to send invitation. Please try again.');
       },
     });
   }

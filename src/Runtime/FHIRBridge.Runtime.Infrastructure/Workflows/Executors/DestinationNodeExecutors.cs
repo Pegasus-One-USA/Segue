@@ -10,9 +10,11 @@ using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using RuntimeDestinationWriteResult = FHIRBridge.Runtime.Application.Workflows.Payloads.DestinationWriteResult;
 
@@ -20,168 +22,226 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
 public sealed class SqlServerDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, configurationRepository)
+    public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IConfigurationRepository? configurationRepository = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
     {
     }
 }
 
 public sealed class AzureSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, configurationRepository)
+    public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IConfigurationRepository? configurationRepository = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
     {
     }
 }
 
 public sealed class BlobDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, configurationRepository)
+    public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class PowerBiDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, configurationRepository)
+    public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class PostgreSqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, configurationRepository)
+    public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IConfigurationRepository? configurationRepository = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
     {
     }
 }
 
 public sealed class MySqlDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, configurationRepository)
+    public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IConfigurationRepository? configurationRepository = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
     {
     }
 }
 
 public sealed class SnowflakeDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, configurationRepository)
+    public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IConfigurationRepository? configurationRepository = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
     {
     }
 }
 
 public sealed class TableauDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, configurationRepository)
+    public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class DatabricksDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, configurationRepository)
+    public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class S3DestinationNodeExecutor : DestinationNodeExecutor
 {
-    public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, configurationRepository)
+    public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, workflowDefinitionStore, governanceLogger)
+    {
+    }
+}
+
+public sealed class MongoDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public MongoDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IConfigurationRepository? configurationRepository = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.MongoDestination, DestinationType.Mongo, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
     {
     }
 }
 
 public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, configurationRepository)
+    public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, configurationRepository)
+    public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class ExcelDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, configurationRepository)
+    public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class NdjsonDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, configurationRepository)
+    public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class ParquetDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, configurationRepository)
+    public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class AvroDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, configurationRepository)
+    public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class ProtobufDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, configurationRepository)
+    public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class PdfDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, configurationRepository)
+    public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class SftpDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, configurationRepository)
+    public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class RestApiDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, configurationRepository)
+    public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
 
 public sealed class InMemoryDestinationNodeExecutor : DestinationNodeExecutor
 {
-    public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null, IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, configurationRepository)
+    public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null)
+        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, workflowDefinitionStore, governanceLogger)
     {
     }
 }
@@ -463,19 +523,40 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
 
 public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 {
+    // Destination types backed by a real relational schema, where each resource type in a mixed batch normally
+    // targets its OWN table (Patient -> dbo.Patient_New, Condition -> dbo.Condition, ...). Only these route a
+    // mixed batch per resource type at write time (see ExecuteAsync) — every other destination type keeps writing
+    // the whole batch in one call, unchanged, since e.g. a CSV/Blob writer already groups multi-resource output
+    // itself (a multi-resource ZIP, say) and splitting the call here would silently break that.
+    private static readonly HashSet<DestinationType> MultiTableRelationalDestinationTypes =
+    [
+        DestinationType.SqlServer,
+        DestinationType.AzureSql,
+        DestinationType.MySql,
+        DestinationType.PostgreSql,
+        DestinationType.Snowflake,
+        DestinationType.Mongo,
+    ];
+
     private readonly DestinationType _destinationType;
     private readonly IConfiguredDestinationWriterFactory? _writerFactory;
+    private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
+    private readonly IGovernanceLogger? _governanceLogger;
     private readonly IConfigurationRepository? _configurationRepository;
 
     protected DestinationNodeExecutor(
         string nodeType,
         DestinationType destinationType,
         IConfiguredDestinationWriterFactory? writerFactory,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
         IConfigurationRepository? configurationRepository = null)
         : base(nodeType, WorkflowDataContract.DestinationWriteResult)
     {
         _destinationType = destinationType;
         _writerFactory = writerFactory;
+        _workflowDefinitionStore = workflowDefinitionStore;
+        _governanceLogger = governanceLogger;
         _configurationRepository = configurationRepository;
     }
 
@@ -497,13 +578,19 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var writer = _writerFactory.Create(_destinationType);
         // The Runtime DAG engine has no HTTP response to carry Download-mode bytes back through — this run always
         // executes as a background node, not a synchronous API call — so inline delivery is never allowed here.
+        // RouteName drives both the email {{RouteName}} template placeholder and (for CSV) the multi-resource ZIP
+        // filename — the workflow's own name is far more useful here than the generic node type string.
+        var workflowName = await ResolveWorkflowNameAsync(node, cancellationToken) ?? node.NodeType;
         var writeContext = new PipelineWriteContext(
             AllowInlineDelivery: false,
-            node.NodeType,
+            workflowName,
             DateTimeOffset.UtcNow);
 
-        var written = 0;
+        int written = 0;
         string? downloadUrl = null;
+        GeneratedFile? inlineDownload;
+        var explicitProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile");
+
         // The wizard stamps the destination's Write mode onto this node's own "dest_writeMode" config — the
         // ONLY place it actually lives; MappedSqlServerDestinationWriter otherwise only ever reads it back out
         // of a ";mode=..." suffix on the string it resolves as (destination.Target ?? mappingProfile.DestinationObject).
@@ -530,8 +617,28 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             downloadUrl ??= writeResult.DownloadUrl;
         }
 
+        inlineDownload = null;
         var result = new RuntimeDestinationWriteResult(
             destination.Id.ToString("N"), written, DateTimeOffset.UtcNow);
+
+        // Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md discussion: Operations → Exports previously only ever
+        // reflected the Configured Pipeline plane (ConfiguredPipelineService's own LogExportAsync call) — a
+        // destination write completed by this engine (the only one with an authoring UI) was invisible there no
+        // matter how many workflows successfully wrote data out. Logging here too means "Exports" reflects every
+        // engine's destination writes consistently, not just one of them.
+        if (_governanceLogger is not null)
+        {
+            await _governanceLogger.LogExportAsync(
+                new ExportEntry(
+                    destination.Name,
+                    _destinationType.ToString(),
+                    written,
+                    written > 0 ? "Succeeded" : "NoData",
+                    inlineDownload?.Content.Length,
+                    context.WorkflowRunId,
+                    context.CorrelationId),
+                cancellationToken);
+        }
 
         return new WorkflowNodeOutput(
             node.Id,
@@ -635,7 +742,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
         return new MappingProfile(
             profile.Name, profile.ResourceType, profile.SourceConnectionId, profile.DestinationId,
-            $"{profile.DestinationObject};{suffix}", profile.Fields, profile.MappingJson);
+            $"{profile.DestinationObject};{suffix}", profile.Fields, null, profile.MappingJson);
     }
 
     /// <summary>
@@ -706,6 +813,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         return new RuntimeDestinationWriteResult(destinationId, inputs.Count, DateTimeOffset.UtcNow);
     }
 
+    private async Task<string?> ResolveWorkflowNameAsync(WorkflowNode node, CancellationToken cancellationToken)
+    {
+        if (_workflowDefinitionStore is null)
+        {
+            return null;
+        }
+
+        var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
+        return definition?.Name;
+    }
+
     private DestinationConfiguration CreateDestinationConfiguration(WorkflowExecutionContext context, WorkflowNode node)
     {
         var target = ReadStringConfiguration(node, "target");
@@ -751,10 +869,44 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         return metadata.Count == 0 ? null : JsonSerializer.Serialize(metadata, JsonOptions);
     }
 
+    ///// <summary>
+    ///// Builds one <see cref="MappingProfile"/> per resource type this destination node knows about — from the
+    ///// per-resource <c>resourceMappings</c> config (see <see cref="DestinationResourceMappingConfig"/>) plus, for
+    ///// backward compatibility, whichever resource type the legacy single resourceType/destinationObject/fields
+    ///// trio describes (a destination saved before resourceMappings existed, or never re-saved since). Used by
+    ///// <see cref="ExecuteAsync"/> to route each resource type in a mixed batch to its own table/columns instead of
+    ///// forcing every resource type through one profile.
+    ///// </summary>
+    //private static IReadOnlyDictionary<string, MappingProfile> CreateMappingProfiles(
+    //    WorkflowNode node,
+    //    IReadOnlyCollection<MappedDestinationRecord> records)
+    //{
+    //    var profiles = new Dictionary<string, MappingProfile>(StringComparer.OrdinalIgnoreCase);
+
+    //    var perResourceConfig = ReadConfiguration<Dictionary<string, DestinationResourceMappingConfig>>(node, "resourceMappings");
+    //    if (perResourceConfig is not null)
+    //    {
+    //        foreach (var (resourceType, config) in perResourceConfig)
+    //        {
+    //            var fields = config.Fields.Select(ConfigurationMapper.ToDomain).ToList();
+    //            profiles[resourceType] = new MappingProfile(
+    //                node.DisplayName, resourceType, Guid.Empty, Guid.Empty, config.DestinationObject, fields);
+    //        }
+    //    }
+
+    //    var legacyResourceType = ReadStringConfiguration(node, "resourceType");
+    //    if (legacyResourceType is not null && !profiles.ContainsKey(legacyResourceType))
+    //    {
+    //        profiles[legacyResourceType] = CreateMappingProfile(node, legacyResourceType, records);
+    //    }
+
+    //    return profiles;
+    //}
+
     private static MappingProfile CreateMappingProfile(
-        WorkflowExecutionContext context,
-        WorkflowNode node,
-        IReadOnlyCollection<MappedDestinationRecord> records)
+       WorkflowExecutionContext context,
+       WorkflowNode node,
+       IReadOnlyCollection<MappedDestinationRecord> records)
     {
         var resourceType = ReadStringConfiguration(node, "resourceType")
             ?? records.FirstOrDefault()?.ResourceType

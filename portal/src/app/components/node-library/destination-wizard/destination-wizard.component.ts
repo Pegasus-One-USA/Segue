@@ -10,7 +10,7 @@ import { catchError, map, switchMap, concatMap, toArray, finalize } from 'rxjs/o
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
-import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
+import { MappingCatalogService, FhirElement, resolveParentReferenceField } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 import { buildConnectionMetadata, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
@@ -29,6 +29,7 @@ import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.c
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { PipelineStore } from '../../../services/pipeline.store';
+import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
@@ -45,6 +46,7 @@ export interface ResourceFieldDef {
   jsonPath?: string;
   valueType?: string;
   arrays?: string[];
+  referenceTargetTypes?: string[];
 }
 
 export interface ResourceDef {
@@ -157,7 +159,7 @@ export class DestinationWizardComponent implements OnInit {
   // resource, since it mirrors data the user actually has rather than a generic field list.
   private readonly payloadFieldsByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
-  readonly destType   = input.required<'sql' | 'csv'>();
+  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -211,14 +213,29 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── forms ─────────────────────────────────────────────────────────────────
   readonly sqlForm = this.fb.group({
-    name:      ['SQL Production', [Validators.required]],
-    server:    ['', [Validators.required]],
-    database:  ['', [Validators.required]],
-    auth:      ['sql-auth', [Validators.required]],
-    username:  [''],
-    password:  [''],
-    schema:    ['dbo', []],
-    writeMode: ['upsert', []],
+    name:       ['SQL Production', [Validators.required]],
+    server:     ['', [Validators.required]],
+    database:   ['', [Validators.required]],
+    auth:       ['sql-auth', [Validators.required]],
+    username:   [''],
+    password:   [''],
+    schema:     ['dbo', []],
+    writeMode:  ['upsert', []],
+    // MySQL/PostgreSQL only (see DestinationConnectionProbeRequest.RequireSsl backend-side): off by default so
+    // a local/docker instance with SSL disabled still connects; check for managed providers that enforce SSL
+    // (e.g. AWS RDS's rds.force_ssl).
+    requireSsl: [false, []],
+  });
+
+  readonly mongoForm = this.fb.group({
+    name:             ['MongoDB Production', [Validators.required]],
+    // Single URI (database embedded, e.g. mongodb://user:pass@host:27017/dbname?authSource=admin) — matches
+    // what MappedMongoDestinationWriter expects. Treated as a whole as a secret (see SECRET_FIELD_KEYS): there's
+    // no live probe to validate a split server/database/credentials form against, so one opaque field is
+    // simplest and avoids a redundant connection-string-assembly step this wizard would otherwise need.
+    connectionString: ['', [Validators.required]],
+    collection:       ['', [Validators.required]],
+    writeMode:        ['upsert', []],
   });
 
   readonly csvForm = this.fb.group({
@@ -237,7 +254,7 @@ export class DestinationWizardComponent implements OnInit {
     // ── Email-only fields ─────────────────────────────────────────────────────
     emailTo:              ['', []],
     emailCc:               ['', []],
-    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
+    emailSubjectTemplate: ['Segue CSV Export - {{RouteName}} - {{RunDate}}', []],
     emailBodyTemplate:    ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
     // ── Download-link-only field ─────────────────────────────────────────────
     downloadLinkExpiryMinutes: [60, []],
@@ -250,6 +267,11 @@ export class DestinationWizardComponent implements OnInit {
   // needs the full list to choose from).
   readonly availableGroups = computed(() => SUPPORTED_RESOURCE_TYPES);
   readonly selectedResources = signal<string[]>([]);
+
+  // Which other selected resources each resource is configured as a "child" of — e.g.
+  // { Observation: ['Patient', 'Encounter'] } means Observation independently requires a mapped
+  // reference field to both. A resource can have several parents at once (see _reconcileParentRefRows).
+  readonly parentSelections = signal<Record<string, string[]>>({});
 
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
@@ -625,10 +647,25 @@ export class DestinationWizardComponent implements OnInit {
 
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
+  private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
-  readonly isSql        = computed(() => this.destType() === 'sql');
-  readonly destLabel    = computed(() => this.destType() === 'sql' ? 'SQL Server' : 'CSV');
+  // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
+  // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
+  // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
+  readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
+  readonly isMySql      = computed(() => this.destType() === 'mysql');
+  readonly isPostgres   = computed(() => this.destType() === 'postgres');
+  readonly isMongo      = computed(() => this.destType() === 'mongo');
+  /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
+  readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
+  readonly isCsv        = computed(() => this.destType() === 'csv');
+  readonly destLabel    = computed(() =>
+    this.destType() === 'sql' ? 'SQL Server'
+      : this.destType() === 'mysql' ? 'MySQL'
+      : this.destType() === 'postgres' ? 'PostgreSQL'
+      : this.destType() === 'mongo' ? 'MongoDB'
+      : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
   /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
@@ -637,7 +674,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
     const rows = this.mappingRows();
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -688,6 +725,31 @@ export class DestinationWizardComponent implements OnInit {
       const sourceConnectionId = this.sourceConnectionId();
       for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId);
     });
+
+    // Keeps each selected resource's mandatory id/upsert-key row in sync — inserted the moment a resource is
+    // selected, upgraded to the schema-verified PK/unique column once the destination table's columns load,
+    // and refreshed if the catalog's id field metadata changes. See _reconcileIdRows for the merge rules.
+    effect(() => {
+      this.selectedResources();
+      this.destType();
+      this.catalogByResource();
+      this.sqlTables();
+      this.targetByResource();
+      untracked(() => this._reconcileIdRows());
+    });
+
+    // Same idea as the id-row effect above, for reference fields required by a "child of" declaration:
+    // prunes stale parent selections (a resource or its chosen parent was deselected), then locks/
+    // unlocks the corresponding reference-field rows to match.
+    effect(() => {
+      this.selectedResources();
+      this.catalogByResource();
+      this.parentSelections();
+      untracked(() => {
+        this._pruneParentSelections();
+        this._reconcileParentRefRows();
+      });
+    });
   }
 
   private readonly _requested = new Set<string>();
@@ -715,7 +777,147 @@ export class DestinationWizardComponent implements OnInit {
       jsonPath: f.jsonPath,
       valueType: f.valueType,
       arrays: f.arrays,
+      referenceTargetTypes: f.referenceTargetTypes,
     };
+  }
+
+  // Builds a simple, single-source mapping row for one FHIR field — shared by the id-row and
+  // parent-reference-row reconciliation below, both of which only ever need a plain direct-field mapping.
+  private _buildSimpleRow(resource: string, f: ResourceFieldDef, targetName: string): MappingRow {
+    return {
+      resource,
+      sources: [{ fhirPath: f.path, label: f.label, jsonPath: f.jsonPath, valueType: f.valueType, arrays: f.arrays }],
+      mode: 'value',
+      targetName,
+      tableName: this.targetFor(resource),
+    };
+  }
+
+  // Keeps every selected resource's mandatory id row in sync with the live schema and the catalog: inserts it
+  // if missing, forces isUpsertKey true, and upgrades its destination column to the schema-verified PK column
+  // once one is found (never overwrites a column that isn't schema-verified, so a value loaded from a saved
+  // node — or typed in before the schema had a detectable key — is never silently clobbered by a guess).
+  private _reconcileIdRows(): void {
+    let changed = false;
+    let next = [...this.mappingRows()];
+
+    for (const r of this.selectedResources()) {
+      // SQL destinations pick a target table per resource (Step 3's "Select a table…" dropdown) — nothing should
+      // populate until the admin has actually chosen one, otherwise the mandatory id row shows up against no real
+      // table at all. CSV/Mongo have no comparable "not yet chosen" state (targetFor always holds a usable
+      // default), so they're unaffected.
+      if (this.isSql() && !this.targetFor(r)) continue;
+
+      const idField = this.idFieldFor(r);
+      if (!idField) continue;
+
+      const autoColumn = this._autoMatchIdColumn(r);
+      const idx = next.findIndex(row => row.resource === r && this.isIdRow(row));
+
+      if (idx === -1) {
+        const initialColumn = autoColumn ?? (this.isSql() ? idField.sqlColumn : idField.csvColumn);
+        next = [{ ...this._buildSimpleRow(r, idField, initialColumn), isUpsertKey: true }, ...next];
+        changed = true;
+      } else {
+        const row = next[idx];
+        const primary = row.sources[0];
+        const desiredColumn = autoColumn ?? row.targetName;
+        if (row.targetName !== desiredColumn || !row.isUpsertKey ||
+            primary?.jsonPath !== idField.jsonPath || primary?.valueType !== idField.valueType) {
+          next[idx] = {
+            ...row,
+            targetName: desiredColumn,
+            isUpsertKey: true,
+            sources: [{ fhirPath: idField.path, label: idField.label, jsonPath: idField.jsonPath, valueType: idField.valueType, arrays: idField.arrays }],
+          };
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) this.mappingRows.set(next);
+  }
+
+  // Drops parent selections that no longer point at a currently-selected resource, and drops the
+  // child side entirely if the child itself was deselected — mirrors the "prune stale state" half of
+  // _reconcileIdRows, just for parentSelections instead of mappingRows.
+  private _pruneParentSelections(): void {
+    const selected = new Set(this.selectedResources());
+    this.parentSelections.update(m => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+      for (const [child, parents] of Object.entries(m)) {
+        if (!selected.has(child)) { changed = true; continue; }
+        const kept = parents.filter(p => selected.has(p));
+        if (kept.length !== parents.length) changed = true;
+        if (kept.length) next[child] = kept;
+      }
+      return changed ? next : m;
+    });
+  }
+
+  // Keeps each resource's required-reference rows in sync with its current parent selections: one
+  // locked row per selected parent (independent — Observation with both Patient and Encounter as
+  // parents gets two separate locked rows), inserted/removed/refreshed the same way _reconcileIdRows
+  // manages the id row. A parent whose resolver lookup returns null (shouldn't happen, since
+  // candidateParentsFor already filters to resolvable pairs) is skipped rather than locking a bad row.
+  private _reconcileParentRefRows(): void {
+    let changed = false;
+    let next = [...this.mappingRows()];
+
+    for (const r of this.selectedResources()) {
+      const parents = this.selectedParentsOf(r);
+      const wanted = new Set(parents);
+
+      const kept = next.filter(row =>
+        !(row.resource === r && row.isRequiredParentRef && !wanted.has(row.parentResourceType ?? '')));
+      if (kept.length !== next.length) { next = kept; changed = true; }
+
+      const fields = this.availableFields(r);
+
+      for (const parent of parents) {
+        const requiredField = resolveParentReferenceField(this._asFhirElements(fields), parent);
+        if (!requiredField) continue;
+
+        const targetFhirPath = `${r}.${requiredField.fhirPath}`;
+        const matchingFieldDef = fields.find(f => f.path === targetFhirPath);
+        const idx = next.findIndex(row =>
+          row.resource === r && row.isRequiredParentRef && row.parentResourceType === parent);
+
+        if (idx === -1) {
+          const columnName = matchingFieldDef
+            ? (this.isSql() ? matchingFieldDef.sqlColumn : matchingFieldDef.csvColumn)
+            : requiredField.label;
+          const fieldDef: ResourceFieldDef = matchingFieldDef ?? {
+            label: requiredField.label,
+            path: targetFhirPath,
+            sqlColumn: columnName,
+            csvColumn: columnName,
+            jsonPath: requiredField.jsonPath,
+            valueType: requiredField.valueType,
+            arrays: requiredField.arrays,
+          };
+          next = [...next, {
+            ...this._buildSimpleRow(r, fieldDef, columnName),
+            isRequiredParentRef: true,
+            parentResourceType: parent,
+          }];
+          changed = true;
+        } else {
+          const row = next[idx];
+          const primary = row.sources[0];
+          if (primary?.fhirPath !== targetFhirPath || primary?.jsonPath !== requiredField.jsonPath) {
+            next[idx] = {
+              ...row,
+              sources: [{ fhirPath: targetFhirPath, label: requiredField.label, jsonPath: requiredField.jsonPath, valueType: requiredField.valueType, arrays: requiredField.arrays }],
+            };
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (changed) this.mappingRows.set(next);
   }
 
   private _syncDeliveryModeValidators(deliveryMode: string | null): void {
@@ -768,9 +970,10 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.csvForm.invalid;
+      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
+    if (s >= 3) return this._hasUnverifiedColumns() || this._hasTypeMismatchedColumns() || this.resourcesMissingParentSelection().length > 0;
     return false;
   }
 
@@ -907,7 +1110,7 @@ export class DestinationWizardComponent implements OnInit {
     this.probeState.set('testing');
     this.probeError.set(null);
     this.schemaSvc.probe({
-      destinationType: 'SqlServer',
+      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
       server:   v.server   ?? '',
       database: v.database ?? '',
       authentication: v.auth ?? 'sql-auth',
@@ -915,6 +1118,7 @@ export class DestinationWizardComponent implements OnInit {
       password: v.password ?? undefined,
       trustServerCertificate: true,
       encrypt: true,
+      requireSsl: v.requireSsl ?? false,
     }).subscribe({
       next: res => {
         if (res.connected) {
@@ -936,18 +1140,28 @@ export class DestinationWizardComponent implements OnInit {
       },
       error: err => {
         this.probeState.set('error');
-        this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
+        this.probeError.set(typeof err?.error?.error === 'string' ? err.error.error : (err?.message ?? 'Connection failed.'));
       },
     });
   }
 
   // ── select existing connection ───────────────────────────────────────────
-  setConnectionMode(mode: 'new' | 'existing'): void {
-    this.connectionMode.set(mode);
-    if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
-      this._loadExistingOptions();
+  /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
+   *  the only way back to blank now that there's no explicit New/Existing toggle to switch away from. */
+  clearExistingConnection(): void {
+    this.connectionMode.set('new');
+    this.selectedExistingId.set(null);
+    this._existingBaseline = null;
+    if (this.isSql()) {
+      this.sqlForm.reset();
+      this.probeState.set('idle');
+      this.sqlTables.set([]);
+    } else if (this.isMongo()) {
+      this.mongoForm.reset();
+    } else {
+      this.csvForm.reset();
+      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
     }
-    if (!this.isSql()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   private _loadExistingOptions(): void {
@@ -956,7 +1170,11 @@ export class DestinationWizardComponent implements OnInit {
       .getPaged({ isEnabled: true, page: 1, pageSize: 100 })
       .pipe(
         map(page => {
-          const wantedTypes = this.isSql() ? DestinationWizardComponent.SQL_TYPES : DestinationWizardComponent.CSV_TYPES;
+          const wantedTypes = this.isSql()
+            ? DestinationWizardComponent.SQL_TYPES
+            : this.isMongo()
+              ? DestinationWizardComponent.MONGO_TYPES
+              : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -988,6 +1206,7 @@ export class DestinationWizardComponent implements OnInit {
   private _existingBaseline: Record<string, unknown> | null = null;
 
   selectExisting(id: string): void {
+    this.connectionMode.set('existing');
     this.selectedExistingId.set(id);
     const selected = this.existingOptions().find(o => o.id === id);
     if (!selected) return;
@@ -1004,8 +1223,17 @@ export class DestinationWizardComponent implements OnInit {
         password:  '',
         schema:    metadata['dest_schema']    || 'dbo',
         writeMode: metadata['dest_writeMode'] || 'upsert',
+        requireSsl: metadata['dest_requireSsl'] === 'true',
       });
       this._existingBaseline = this.sqlForm.getRawValue();
+    } else if (this.isMongo()) {
+      this.mongoForm.patchValue({
+        name:             metadata['dest_name']       || selected.name,
+        connectionString: '',
+        collection:       metadata['dest_collection']  || selected.target || '',
+        writeMode:        metadata['dest_writeMode']    || 'upsert',
+      });
+      this._existingBaseline = this.mongoForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -1021,7 +1249,7 @@ export class DestinationWizardComponent implements OnInit {
         sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
         emailTo:              metadata['dest_emailTo']              || '',
         emailCc:               metadata['dest_emailCc']               || '',
-        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'Segue CSV Export - {{RouteName}} - {{RunDate}}',
         emailBodyTemplate:
           metadata['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
         downloadLinkExpiryMinutes: metadata['dest_downloadLinkExpiryMinutes']
@@ -1029,6 +1257,7 @@ export class DestinationWizardComponent implements OnInit {
           : 60,
       });
       this._existingBaseline = this.csvForm.getRawValue();
+      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
     }
   }
 
@@ -1050,10 +1279,10 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -1083,11 +1312,15 @@ export class DestinationWizardComponent implements OnInit {
     return this.sqlTables().map(t => t.fullName);
   }
 
+  // Table currently chosen for a resource, with full column metadata (name/type/PK/unique).
+  private tableForResourceTarget(r: string): DestinationTable | undefined {
+    const target = this.targetFor(r);
+    return this.sqlTables().find(t => t.fullName === target || t.tableName === target);
+  }
+
   // Columns of the table currently chosen for a resource (drives the per-row column dropdown).
   columnsForResourceTarget(r: string): string[] {
-    const target = this.targetFor(r);
-    const table = this.sqlTables().find(t => t.fullName === target || t.tableName === target);
-    return table ? table.columns.map(c => c.name) : [];
+    return (this.tableForResourceTarget(r)?.columns ?? []).map(c => c.name);
   }
 
   /** Real data type (e.g. "nvarchar(50)") of one column on any already-known SQL table — undefined for
@@ -1104,6 +1337,156 @@ export class DestinationWizardComponent implements OnInit {
   keyInfoForTableColumn(tableFullName: string, column: string): DestinationColumn | undefined {
     const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
     return table?.columns.find(c => c.name === column);
+  }
+
+  // ── mandatory id / upsert-key row ─────────────────────────────────────────
+  // Every resource's own `id` field (e.g. Patient.id) must always be mapped and must always be the Upsert
+  // key, so two records can never collide/duplicate on write — this can't be turned off or reassigned.
+  isIdField(f: ResourceFieldDef, resource: string): boolean {
+    return f.path === `${resource}.id`;
+  }
+
+  idFieldFor(r: string): ResourceFieldDef | undefined {
+    return this.availableFields(r).find(f => this.isIdField(f, r));
+  }
+
+  isIdRow(row: MappingRow): boolean {
+    return row.mode === 'value' && row.sources[0]?.fhirPath === `${row.resource}.id`;
+  }
+
+  // The schema-verified primary-key column for a resource's live target table, if introspection found
+  // one — the only case the id row's destination column is locked/read-only (see isIdColumnLocked below).
+  private _autoMatchIdColumn(r: string): string | null {
+    return this.tableForResourceTarget(r)?.columns.find(c => c.isPrimaryKey)?.name ?? null;
+  }
+
+  // True once the destination column for a resource's id row is schema-verified (a real PK column was
+  // found) — only then is it safe to fully lock the field, since a guessed name could otherwise be wrong.
+  isIdColumnLocked(r: string): boolean {
+    return this._autoMatchIdColumn(r) !== null;
+  }
+
+  // True when this resource's live column list is known (a schema probe succeeded) but the id row's mapped
+  // column isn't actually one of those real columns — e.g. still left at the wizard's unverified default
+  // guess, or a stale value from before the table was reselected. Saving in this state is exactly what
+  // produces "Invalid column name 'X'" at run time, since the column genuinely doesn't exist on the
+  // customer's table. Returns false (nothing to flag) when the schema isn't known yet — there's no live
+  // column list to check the id row against.
+  isIdColumnUnverified(r: string): boolean {
+    if (this.isIdColumnLocked(r)) return false;
+    const columns = this.columnsForResourceTarget(r);
+    if (columns.length === 0) return false;
+    const idRow = this.mappingRows().find(row => row.resource === r && this.isIdRow(row));
+    return !idRow || !columns.includes(idRow.targetName);
+  }
+
+  // Same check as isIdColumnUnverified but for any mapped row, not just the id row — a non-id field left at a
+  // stale/guessed column name (e.g. after switching tables) fails the write with "Invalid column name" exactly
+  // the same way the id row does, just on a column that isn't the upsert key. The id row is schema-verified
+  // separately (isIdColumnLocked) when a PK was auto-matched, so it's excluded here to avoid flagging a row
+  // the user was never shown an editable picker for in the first place.
+  isRowColumnUnverified(row: MappingRow): boolean {
+    if (this.isIdRow(row) && this.isIdColumnLocked(row.resource)) return false;
+    const columns = this.columnsForResourceTarget(row.resource);
+    if (columns.length === 0) return false;
+    return !columns.includes(row.targetName);
+  }
+
+  // The live target column a row is currently mapped to, or undefined when the schema isn't loaded / the
+  // column isn't a real one on this table (see isRowColumnUnverified — that case is reported separately).
+  private _targetColumn(row: MappingRow): DestinationColumn | undefined {
+    return this.tableForResourceTarget(row.resource)?.columns.find(c => c.name === row.targetName);
+  }
+
+  // Mirrors the server-side check in CreateMappingProfileRequestValidator: a field's FHIR value type
+  // (String/Integer/Decimal/Boolean/Date/DateTime/Json) must match the destination column's mapping value
+  // type, or the write engine can't coerce one to the other. Only flagged once the column itself is
+  // schema-verified (isRowColumnUnverified false) and the row's primary source actually carries
+  // catalog-derived valueType metadata (absent for the built-in fallback defs).
+  isRowTypeMismatched(row: MappingRow): boolean {
+    const valueType = row.sources[0]?.valueType;
+    if (!valueType) return false;
+    if (this.isRowColumnUnverified(row)) return false;
+    const column = this._targetColumn(row);
+    if (!column) return false;
+    return !column.mappingValueType || column.mappingValueType.toLowerCase() !== valueType.toLowerCase();
+  }
+
+  // Human-readable message for isRowTypeMismatched, phrased the same way as the server-side validator's
+  // rejection so the admin sees identical wording whether the mismatch is caught here or (for anything this
+  // client-side check misses) at save time.
+  typeMismatchMessage(row: MappingRow): string {
+    const column = this._targetColumn(row);
+    if (!column) return '';
+    return `'${column.name}' is a ${column.dataType} column (expects ${column.mappingValueType}), but this field is mapped as ${row.sources[0]?.valueType}.`;
+  }
+
+  // Blocks proceeding past the mapping step while any selected resource has a mapped row (id or otherwise)
+  // whose column isn't verified against the live destination schema — the save-time gate the destination-node
+  // config alone can't guarantee, since nothing upstream forces the user to actually pick from the live column
+  // list rather than leaving an unmatched guess in place.
+  private _hasUnverifiedColumns(): boolean {
+    return this.mappingRows().some(row =>
+      this.selectedResources().includes(row.resource) && this.isRowColumnUnverified(row));
+  }
+
+  // Same gate as _hasUnverifiedColumns, for type mismatches (see isRowTypeMismatched) — blocks proceeding
+  // past the mapping step so a save-time rejection from CreateMappingProfileRequestValidator is never the
+  // first the admin hears of it.
+  private _hasTypeMismatchedColumns(): boolean {
+    return this.mappingRows().some(row =>
+      this.selectedResources().includes(row.resource) && this.isRowTypeMismatched(row));
+  }
+
+  // ── parent-child reference mapping ─────────────────────────────────────────
+  // Other selected resources that `r` could be a child of — i.e. `r` has at least one FHIR reference
+  // field whose allowed target types include that resource. Only these are offered as parent choices,
+  // so the UI can never be pushed into a pairing FHIR doesn't actually support.
+  candidateParentsFor(r: string): string[] {
+    const fields = this.availableFields(r);
+    return this.selectedResources().filter(other =>
+      other !== r && resolveParentReferenceField(this._asFhirElements(fields), other) !== null);
+  }
+
+  selectedParentsOf(r: string): string[] {
+    return this.parentSelections()[r] ?? [];
+  }
+
+  isParentSelected(r: string, parent: string): boolean {
+    return this.selectedParentsOf(r).includes(parent);
+  }
+
+  toggleParent(r: string, parent: string): void {
+    this.parentSelections.update(m => {
+      const current = m[r] ?? [];
+      const next = current.includes(parent) ? current.filter(p => p !== parent) : [...current, parent];
+      return { ...m, [r]: next };
+    });
+  }
+
+  private _asFhirElements(fields: ResourceFieldDef[]): FhirElement[] {
+    return fields.map(f => {
+      const isArray = !!f.arrays?.length;
+      return {
+        label: f.label,
+        jsonPath: f.jsonPath ?? '',
+        fhirPath: f.path.includes('.') ? f.path.slice(f.path.indexOf('.') + 1) : f.path,
+        cardinality: isArray ? '0..*' : '0..1',
+        valueType: f.valueType ?? 'String',
+        isArray,
+        arrays: f.arrays ?? [],
+        referenceTargetTypes: f.referenceTargetTypes ?? [],
+      };
+    });
+  }
+
+  // Resources offering at least one candidate parent (per candidateParentsFor) with none picked yet — an
+  // unselected chip means _reconcileParentRefRows never locks in that reference field, so the row saves with no
+  // link back to its actual parent. Blocks Next/Save until at least one parent is chosen per such resource (see
+  // isNextDisabled) rather than only warning after the fact.
+  resourcesMissingParentSelection(): string[] {
+    return this.resourceKeys().filter(r =>
+      this.candidateParentsFor(r).length > 0 && this.selectedParentsOf(r).length === 0);
   }
 
   // ── data groups ───────────────────────────────────────────────────────────
@@ -1252,14 +1635,21 @@ export class DestinationWizardComponent implements OnInit {
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
-  private _rebuildRows(resources: string[], type: 'sql' | 'csv'): void {
+  private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'): void {
     const oldTargets = this.targetByResource();
     const targets = { ...oldTargets };
     for (const r of resources) {
       if (targets[r]) continue;
-      // Seed the per-resource target once; preserve any value the user has already typed.
-      const def = this.defFor(r);
-      targets[r] = type === 'sql' ? def.sqlTable : def.csvFile;
+      // SQL: leave unset so the table dropdown genuinely shows its "Select a table…" placeholder and
+      // requires an explicit pick — a hardcoded guess here (e.g. dbo.Patient) rarely matches the
+      // customer's real table name (e.g. dbo.Patient_New), and once it doesn't match any <option>, the
+      // native <select> silently falls back to displaying its first listed table — alphabetically
+      // whatever that happens to be, with no relation to the resource — which reads as an intentional,
+      // correct selection the user never actually made. CSV has no such mismatch risk (it's a free-text
+      // filename input, not a dropdown of real destination objects), so keep suggesting one there.
+      if (type === 'csv') {
+        targets[r] = this.defFor(r).csvFile;
+      }
     }
     this.targetByResource.set(targets);
     this.mappingRows.update(rows =>
@@ -1279,7 +1669,7 @@ export class DestinationWizardComponent implements OnInit {
     this.resolvedDestinationId.set(f['destinationId'] || null);
     this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
     this.resolvedSecretName.set(f['secretName'] || null);
-    if (this.destType() === 'sql') {
+    if (this.isSql()) {
       this.sqlForm.patchValue({
         name:      f['dest_name']      || 'SQL Production',
         server:    f['dest_server']    || '',
@@ -1289,6 +1679,13 @@ export class DestinationWizardComponent implements OnInit {
         password:  f['dest_password']  || '',
         schema:    f['dest_schema']    || 'dbo',
         writeMode: f['dest_writeMode'] || 'upsert',
+      });
+    } else if (this.isMongo()) {
+      this.mongoForm.patchValue({
+        name:             f['dest_name']       || 'MongoDB Production',
+        connectionString: '',
+        collection:       f['dest_collection']  || '',
+        writeMode:        f['dest_writeMode']    || 'upsert',
       });
     } else {
       this.csvForm.patchValue({
@@ -1305,7 +1702,7 @@ export class DestinationWizardComponent implements OnInit {
         sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
         emailTo:              f['dest_emailTo']              || '',
         emailCc:               f['dest_emailCc']               || '',
-        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
+        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'Segue CSV Export - {{RouteName}} - {{RunDate}}',
         emailBodyTemplate:
           f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
         downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
@@ -1350,6 +1747,9 @@ export class DestinationWizardComponent implements OnInit {
         this.mappingRows.set(saved.map(migrateLegacyRow));
       } catch { /* ignore malformed */ }
     }
+    if (f['dest_parentSelections']) {
+      try { this.parentSelections.set(JSON.parse(f['dest_parentSelections'])); } catch { /* ignore malformed */ }
+    }
   }
 
   /** Silently re-loads the live table list and replaces sqlTables() with it — unlike testConnection(),
@@ -1364,7 +1764,7 @@ export class DestinationWizardComponent implements OnInit {
    *  ad-hoc probe() (needs a real password) only applies to a brand-new, not-yet-saved connection, which
    *  never reaches this method — see _populateFromNode's only caller, editing an existing node.*/
   private _refreshSqlTablesFromLiveSchema(): void {
-    if (this.destType() !== 'sql') return;
+    if (!this.isSql()) return;
 
     const destinationId = this.resolvedDestinationId();
     const applyTables = (tables: DestinationTable[]) => {
@@ -1388,7 +1788,7 @@ export class DestinationWizardComponent implements OnInit {
     if (!v.server || !v.database || !v.password) return;
 
     this.schemaSvc.probe({
-      destinationType: 'SqlServer',
+      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
       server: v.server ?? '',
       database: v.database ?? '',
       authentication: v.auth ?? 'sql-auth',
@@ -1396,6 +1796,7 @@ export class DestinationWizardComponent implements OnInit {
       password: v.password ?? undefined,
       trustServerCertificate: true,
       encrypt: true,
+      requireSsl: v.requireSsl ?? false,
     }).subscribe({
       next: res => { if (res.connected) applyTables(res.tables); },
       error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */ },
@@ -1406,7 +1807,7 @@ export class DestinationWizardComponent implements OnInit {
   // _save() and provisionDestinationConnection() need them — shared so the two never drift apart.
   private _buildConnectionConfig(): Record<string, string> {
     const config: Record<string, string> = {};
-    if (this.destType() === 'sql') {
+    if (this.isSql()) {
       const v = this.sqlForm.value;
       config['dest_name']      = v.name      ?? '';
       config['dest_server']    = v.server    ?? '';
@@ -1414,12 +1815,23 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_auth']      = v.auth      ?? '';
       config['dest_schema']    = v.schema    ?? 'dbo';
       config['dest_writeMode'] = v.writeMode ?? 'upsert';
+      config['dest_requireSsl'] = String(v.requireSsl ?? false);
+      // Read by buildSqlConnectionString to pick the right connection-string dialect (Host=/Server=.../SSL Mode=
+      // vs. TrustServerCertificate=) — without it, every SQL-family destination silently gets a SQL Server-shaped
+      // connection string even when MySQL/PostgreSQL was actually selected.
+      config['dest_engine'] = this.isMySql() ? 'mysql' : this.isPostgres() ? 'postgres' : 'sqlserver';
       // Persisted so create-on-save can assemble the connection string (server-side it is encrypted at rest via
       // ProvisionedSecrets; the entity only ever stores the secret reference). Only kept for SQL username/password auth.
       if ((v.auth ?? 'sql-auth') === 'sql-auth') {
         config['dest_username'] = v.username ?? '';
         config['dest_password'] = v.password ?? '';
       }
+    } else if (this.isMongo()) {
+      const v = this.mongoForm.value;
+      config['dest_name']             = v.name             ?? '';
+      config['dest_connectionString'] = v.connectionString ?? '';
+      config['dest_collection']       = v.collection       ?? '';
+      config['dest_writeMode']        = v.writeMode        ?? 'upsert';
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -1464,7 +1876,7 @@ export class DestinationWizardComponent implements OnInit {
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
           name,
-          destinationType: 'SqlServer',
+          destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
           keyVaultName: 'workflow-secrets',
           secretName,
           target: null,
@@ -1583,11 +1995,17 @@ export class DestinationWizardComponent implements OnInit {
       targetByResource: this.targetByResource(),
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
+    config['dest_parentSelections'] = JSON.stringify(this.parentSelections());
 
     const emitSaved = () => {
       this.saved.emit({
         attachNode:  this.attachNode(),
-        transformId: type === 'sql' ? 'dest-sqlserver' : 'dest-csv',
+        transformId:
+          type === 'sql' ? 'dest-sqlserver'
+            : type === 'mysql' ? 'dest-mysql'
+            : type === 'postgres' ? 'dest-postgres'
+            : type === 'mongo' ? 'dest-mongo'
+            : 'dest-csv',
         status:      'enabled',
         config,
       });

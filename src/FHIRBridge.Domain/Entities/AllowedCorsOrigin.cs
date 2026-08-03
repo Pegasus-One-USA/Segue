@@ -7,7 +7,7 @@ namespace FHIRBridge.Domain.Entities;
 /// the permanent floor configured in Portal:AllowedOrigins. Global — not scoped to a Tenant, since CORS
 /// is decided by the API host before any tenant is known from the request.
 /// </summary>
-public sealed class AllowedCorsOrigin : AuditableChildEntity<Guid>
+public sealed class AllowedCorsOrigin : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private AllowedCorsOrigin()
     {
@@ -25,4 +25,5 @@ public sealed class AllowedCorsOrigin : AuditableChildEntity<Guid>
 
     /// <summary>Optional operator-facing note, e.g. "Prod VM".</summary>
     public string? Label { get; private set; }
+    string? IHasAuditDisplayName.AuditDisplayName => Label ?? OriginUrl;
 }

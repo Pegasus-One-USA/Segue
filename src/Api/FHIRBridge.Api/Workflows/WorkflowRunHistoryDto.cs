@@ -18,9 +18,20 @@ public sealed record WorkflowRunHistoryDto(
     string? TriggerType,
     int NodeRunCount,
     string? ErrorMessage,
-    int WorkflowDefinitionVersion)
+    int WorkflowDefinitionVersion,
+    string? CorrelationId)
 {
     public long? DurationMs => CompletedAt.HasValue
         ? (long)(CompletedAt.Value - StartedAt).TotalMilliseconds
         : null;
 }
+
+/// <summary>All-time run count per <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRunStatus"/>, across
+/// every workflow definition — backs the Dashboard's status stat tiles.</summary>
+public sealed record WorkflowRunStatusCountsDto(
+    int Pending,
+    int Running,
+    int Succeeded,
+    int Failed,
+    int Cancelled,
+    int PartialSuccess);

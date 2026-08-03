@@ -10,4 +10,5 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 public sealed record PipelineWriteContext(
     bool AllowInlineDelivery,
     string RouteName,
-    DateTimeOffset RunStartedAtUtc);
+    DateTimeOffset RunStartedAtUtc,
+    string? CorrelationId = null);

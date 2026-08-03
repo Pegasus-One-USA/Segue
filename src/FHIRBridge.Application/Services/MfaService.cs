@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -12,6 +13,7 @@ public sealed class MfaService : IMfaService
     private readonly ITotpService _totpService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly MfaOptions _options;
 
     public MfaService(
@@ -19,12 +21,14 @@ public sealed class MfaService : IMfaService
         ITotpService totpService,
         IPasswordHasher passwordHasher,
         ICurrentUserService currentUserService,
+        ISystemSettingsCache settingsCache,
         IOptions<MfaOptions> options)
     {
         _repository = repository;
         _totpService = totpService;
         _passwordHasher = passwordHasher;
         _currentUserService = currentUserService;
+        _settingsCache = settingsCache;
         _options = options.Value;
     }
 
@@ -47,7 +51,8 @@ public sealed class MfaService : IMfaService
         await _repository.UpdateUserAsync(user, cancellationToken);
 
         var accountName = user.Email ?? user.ExternalUserId;
-        var uri = _totpService.BuildProvisioningUri(secret, accountName, _options.Issuer);
+        var issuer = await _settingsCache.GetStringAsync("Mfa:Issuer", _options.Issuer, cancellationToken);
+        var uri = _totpService.BuildProvisioningUri(secret, accountName, issuer);
 
         return new MfaEnrollmentResponse(secret, uri);
     }
@@ -68,7 +73,9 @@ public sealed class MfaService : IMfaService
             throw new InvalidOperationException("The verification code is invalid.");
         }
 
-        var backupCodes = MfaBackupCodes.Generate(_options.BackupCodeCount);
+        var backupCodeCount = await _settingsCache.GetIntAsync(
+            "Mfa:BackupCodeCount", _options.BackupCodeCount, cancellationToken);
+        var backupCodes = MfaBackupCodes.Generate(backupCodeCount);
         var hashes = backupCodes.Select(code => _passwordHasher.Hash(code.ToUpperInvariant()));
         user.ConfirmMfaEnrollment(hashes);
         await _repository.UpdateUserAsync(user, cancellationToken);
@@ -103,7 +110,7 @@ public sealed class MfaService : IMfaService
         var externalUserId = _currentUserService.CurrentUser.ExternalUserId;
         if (string.IsNullOrWhiteSpace(externalUserId))
         {
-            throw new InvalidOperationException("Authenticated user id claim is missing.");
+            throw new InvalidOperationException("Your session is no longer valid. Please sign in again.");
         }
 
         return await _repository.GetUserByExternalIdAsync(externalUserId, cancellationToken)

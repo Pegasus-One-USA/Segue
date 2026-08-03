@@ -14,10 +14,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from '../../services/auth.service';
 import { PasswordStrengthComponent } from '../../components/password-strength/password-strength.component';
+import { ToastService } from '../../../services/toast.service';
 
 // ── Validators ─────────────────────────────────────────────────────────────────
 
@@ -80,7 +79,6 @@ function passwordStrengthValidator(ctrl: AbstractControl): ValidationErrors | nu
     MatButtonModule,
     MatProgressSpinnerModule,
     MatIconModule,
-    MatSnackBarModule,
     PasswordStrengthComponent,
   ],
   templateUrl: './change-password.component.html',
@@ -89,7 +87,7 @@ function passwordStrengthValidator(ctrl: AbstractControl): ValidationErrors | nu
 export class ChangePasswordComponent {
   private readonly fb       = inject(FormBuilder);
   private readonly auth     = inject(AuthService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast    = inject(ToastService);
 
   protected readonly loading          = signal(false);
   protected readonly error            = signal<string | null>(null);
@@ -139,12 +137,7 @@ export class ChangePasswordComponent {
         this.loading.set(false);
         this.form.reset();
         this.submitted.set(false);
-        this.snackBar.open('Password changed successfully!', 'Dismiss', {
-          duration: 4000,
-          panelClass: ['snack-success'],
-          horizontalPosition: 'end',
-          verticalPosition: 'top',
-        });
+        this.toast.success('Password changed successfully!');
       },
       error: (e) => {
         this.loading.set(false);

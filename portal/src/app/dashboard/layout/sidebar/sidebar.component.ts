@@ -29,11 +29,18 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '👥', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
   { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows' },
   { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history' },
-  { type: 'item', icon: '⚙',  label: 'Settings',         route: '/settings/branding', permissions: ['configuration.write'] },
-  { type: 'item', icon: '🏥', label: 'EHR Endpoints',    route: '/ehr-endpoints',     permissions: ['configuration.write'] },
-  { type: 'item', icon: '🔌', label: 'Source Connections', route: '/source-connections', permissions: ['sourceconnections.view'] },
-  { type: 'item', icon: '🔌', label: 'Destination Connections', route: '/destination-connections', permissions: ['configuration.write'] },
-  { type: 'item', icon: '🌐', label: 'Allowed Origins',    route: '/allowed-origins',   superAdminOnly: true },
+  // Settings hub — Branding/EHR Endpoints/Source & Destination Connections/Allowed Origins/System
+  // Security now live as tabs under here (settings-shell.component.ts). Visible to anyone who
+  // could reach at least one of those tabs before consolidation — SuperAdmin-only tabs are gated
+  // again inside the shell itself, so this entry doesn't need `superAdminOnly` of its own.
+  { type: 'item', icon: '⚙',  label: 'Settings',         route: '/settings', permissions: ['configuration.write', 'sourceconnections.view'] },
+
+  // Logs & Compliance hub — merges the former separate Operations and Governance sidebar entries
+  // into one, per user direction, since only a handful of tabs remain visible across both shells
+  // (Audit Logs/Correlation Search/Compliance Reports live under governance-shell.component.ts;
+  // Errors lives under operations-shell.component.ts and is cross-linked from there via an absolute
+  // route). Lands on /governance, which now surfaces Errors as one of its tabs.
+  { type: 'item', icon: '🛡',  label: 'Logs & Compliance', route: '/governance', permissions: ['governance.read'] },
 ];
 
 @Component({

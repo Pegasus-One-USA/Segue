@@ -10,10 +10,21 @@ public sealed record CreateResourceRouteRequest(
     string? SearchParameters,
     bool IsEnabled,
     int Priority,
-    IReadOnlyList<ResourceRouteMappingRequest>? ResourceMappings = null);
+    IReadOnlyList<ResourceRouteMappingRequest>? ResourceMappings = null,
+    string TimeZoneId = "UTC");
 
 public sealed record ResourceRouteMappingRequest(
     Guid MappingProfileId,
     bool IsEnabled,
     int ExecutionOrder,
-    string? SearchParameters = null);
+    string? SearchParameters = null,
+    IReadOnlyList<ParentReferenceRequest>? ParentReferences = null);
+
+/// <summary>
+/// Declares that this resource mapping is a "child" of another mapping (<see cref="ParentMappingProfileId"/>)
+/// in the same route. A mapping can have several — e.g. Observation can be a child of both Patient and
+/// Encounter at once, each independently requiring its own reference field to be mapped.
+/// </summary>
+public sealed record ParentReferenceRequest(
+    Guid ParentMappingProfileId,
+    string? ReferenceFieldOverride = null);

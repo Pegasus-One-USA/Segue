@@ -22,6 +22,9 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
 
     public override ApplicationType Handles => ApplicationType.EhrLaunch;
 
+    // The EHR itself always carries a patient context into the launch (e.g. Provider In-App).
+    public override FhirContextBindingKind BindingResourceType => FhirContextBindingKind.Patient;
+
     public override SourceApplicationDescriptor Describe() => new(
         ApplicationType.EhrLaunch,
         SmartOAuthFlows.AuthorizationCode,

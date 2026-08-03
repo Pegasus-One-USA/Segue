@@ -47,7 +47,7 @@
       </div>
       <div class="stat-tile__body">
         <span class="stat-tile__value">{{ inactiveUsers() }}</span>
-        <span class="stat-tile__label">Inactive</span>
+        <span class="stat-tile__label">Deactivated</span>
       </div>
     </div>
     <div class="stat-tile">
@@ -88,8 +88,8 @@
             (change)="roleFilter.set($any($event.target).value); onFilterChange()"
           >
             <option value="">All Roles</option>
-            @for (role of roleOptions; track role) {
-              <option [value]="role">{{ roleConfig[role].label }}</option>
+            @for (role of roleOptions(); track role) {
+              <option [value]="role">{{ getRoleConfig(role).label }}</option>
             }
           </select>
           <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -121,11 +121,7 @@
 
   <!-- ─── Table Card ───────────────────────────────────────────────────── -->
   <div class="table-card">
-    @if (loading()) {
-      <div class="loading-overlay">
-        <mat-spinner diameter="40" color="primary"></mat-spinner>
-      </div>
-    }
+    <!-- The global loader already shows this page is busy — no local overlay/spinner here. -->
 
     <div class="table-wrapper">
       <table
@@ -201,6 +197,22 @@
           </td>
         </ng-container>
 
+        <!-- Action by Column -->
+        <ng-container matColumnDef="actionBy">
+          <th mat-header-cell *matHeaderCellDef>Action by</th>
+          <td mat-cell *matCellDef="let user">
+            <span class="cell-muted">{{ (user.modifiedBy || user.createdBy) ?? '—' }}</span>
+          </td>
+        </ng-container>
+
+        <!-- Action on Column -->
+        <ng-container matColumnDef="actionOn">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header="updatedAt">Action on</th>
+          <td mat-cell *matCellDef="let user">
+            <span class="cell-muted">{{ formatDate(user.updatedAt || user.createdAt) }}</span>
+          </td>
+        </ng-container>
+
         <!-- Actions Column -->
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef></th>
@@ -235,20 +247,22 @@
                         <mat-icon class="icon-enable">check_circle</mat-icon>
                         Activate User
                       </button>
-                    } @else {
+                    } @else if (!isSelf(user)) {
                       <button mat-menu-item (click)="toggleStatus(user, 'disable')">
                         <mat-icon class="icon-disable">remove_circle</mat-icon>
                         Deactivate User
                       </button>
                     }
                   </ng-container>
-                  <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)">
-                    <mat-divider></mat-divider>
-                    <button mat-menu-item class="menu-item-danger" (click)="deleteUser(user)">
-                      <mat-icon>delete_outline</mat-icon>
-                      Delete User
-                    </button>
-                  </ng-container>
+                  @if (!isSelf(user)) {
+                    <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)">
+                      <mat-divider></mat-divider>
+                      <button mat-menu-item class="menu-item-danger" (click)="deleteUser(user)">
+                        <mat-icon>delete_outline</mat-icon>
+                        Delete User
+                      </button>
+                    </ng-container>
+                  }
                 </mat-menu>
               }
             </div>
@@ -287,15 +301,13 @@
 
     <!-- Paginator -->
     @if (total() > 0) {
-      <mat-paginator
-        [length]="total()"
-        [pageSize]="perPage()"
+      <app-pagination-bar
         [pageIndex]="page() - 1"
+        [pageSize]="perPage()"
+        [totalCount]="total()"
         [pageSizeOptions]="[5, 10, 25, 50]"
-        showFirstLastButtons
-        (page)="onPageChange($event)"
-        class="table-paginator"
-      ></mat-paginator>
+        (pageChange)="onPageChange($event)"
+      />
     }
   </div>
 

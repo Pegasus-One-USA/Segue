@@ -25,7 +25,7 @@ export interface PhaseConfig {
 // Sources:      Epic only
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
-// Destinations: SQL Server + CSV only
+// Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB only
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
@@ -37,9 +37,12 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // Destinations — Phase 1
     'dest-sqlserver',
     'dest-csv',
+    'dest-mysql',
+    'dest-mongo',
+    'dest-postgres',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
-    // Phase 2+ destinations: 'dest-azuresql', 'dest-postgres', 'dest-mysql',
+    // Phase 2+ destinations: 'dest-azuresql',
     //   'dest-snowflake', 'dest-powerbi', 'dest-tableau', 'dest-databricks',
     //   'dest-blob', 'dest-s3', 'dest-fhir', 'dest-xlsx', 'dest-ndjson',
     //   'dest-parquet', 'dest-avro', 'dest-protobuf', 'dest-pdf', 'dest-sftp',
