@@ -1,0 +1,44 @@
+portal/src/app/components/canvas/canvas.component.html
+  s_d68f9144c308b2::t_0a96cbe0fb0213 91-97
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_d68f9144c308b2::t_f320b425166f39 4-13
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_d68f9144c308b2::t_61f184bdc0a441 174,187,190-191
+  s_d68f9144c308b2::t_917058a60f23bc 153-155,159,163-164,172-173,175-176,179-186,188-189,193-195,197-202,204-206,208-212
+  s_d68f9144c308b2::t_e056496a4b54d8 122-124
+  s_d68f9144c308b2::t_42586292e30eb8 192,196
+portal/src/app/components/canvas/canvas.component.ts
+  s_d68f9144c308b2::t_0293817f3cc336 269-273
+  s_d68f9144c308b2::t_8ac6c663e493bc 153,157-161
+  s_d68f9144c308b2::t_1e2ba9714c486d 8,162-163
+portal/src/app/components/shared/global-loader/global-loader.component.scss
+  h_ed4b8b661e4f7b 103-104
+  s_d68f9144c308b2::t_15ae6afdd3cdc5 78,84-87,91
+  s_d68f9144c308b2::t_0764cc7b1a47ad 114-115,123
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_d68f9144c308b2::t_3a763537dd4072 91-95
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_d68f9144c308b2::t_f427efce8f313a 30
+  s_d68f9144c308b2::t_21b4e3db5b1912 22-29,31-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "8fe351c77696ee5d545e35651b6bb255de970059",
+  "prompts": {},
+  "humans": {
+    "h_ed4b8b661e4f7b": {
+      "author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
