@@ -102,6 +102,10 @@ html {
 
   --ref-coral-50: #FFF0EE;  --ref-coral-500: #FF5A4F;
 
+  /* Canvas rank-color palette (design-spec §14.2) — only these 6 hues have no primitive above yet. */
+  --ref-indigo-500: #6366F1;  --ref-violet-500: #8B5CF6;  --ref-pink-500:   #EC4899;
+  --ref-orange-500: #F97316;  --ref-royal-500:  #2563EB;  --ref-purple-500: #7C3AED;
+
   /* Strong status foregrounds (accessible text/icon on *-soft backgrounds) */
   --ref-green-900: #065F46;  --ref-red-900:   #991B1B;
   --ref-blue-700:  #1D4ED8;  --ref-amber-900: #92400E;
@@ -218,6 +222,22 @@ html {
   --blue:        var(--color-info);
   --epic:        var(--ref-coral-500);
   --epic-soft:   var(--ref-coral-50);
+
+  /* ── Canvas rank-color palette (design-spec §14.2) — cycled per top-level group in the field-mapping
+     canvas via a scoped --fm-group-color, e.g. `var(--fm-rank-3)`. Order matches the spec's rank table:
+     source-Epic, source-other, validation, normalize, terminology, de-identify, map/reshape,
+     dest-SQL, dest-CSV, audit, analytics. */
+  --fm-rank-1:  var(--ref-coral-500);
+  --fm-rank-2:  var(--ref-blue-500);
+  --fm-rank-3:  var(--ref-indigo-500);
+  --fm-rank-4:  var(--ref-violet-500);
+  --fm-rank-5:  var(--ref-pink-500);
+  --fm-rank-6:  var(--ref-orange-500);
+  --fm-rank-7:  var(--ref-teal-500);
+  --fm-rank-8:  var(--ref-royal-500);
+  --fm-rank-9:  var(--ref-green-500);
+  --fm-rank-10: var(--ref-neutral-500);
+  --fm-rank-11: var(--ref-purple-500);
 
   /* ── Border Radius ── */
   --radius-sm:    6px;

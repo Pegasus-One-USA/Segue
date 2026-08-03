@@ -1,0 +1,49 @@
+<div
+  class="fm-addcol-backdrop"
+  tabindex="0"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="fm-addcol-title"
+  (click)="onBackdropClick($event)"
+  (keydown.escape)="onEscape()"
+>
+  <div class="fm-addcol-dialog">
+    <h3 class="fm-addcol-title" id="fm-addcol-title">Add column to {{ tableName() }}</h3>
+    <p class="fm-addcol-subtitle">This runs a real ALTER TABLE against your destination database.</p>
+
+    <label class="fm-addcol-field">
+      <span class="text-label">Column name<span class="req">*</span></span>
+      <input
+        #nameInput
+        class="fm-addcol-input"
+        [value]="columnName()"
+        (input)="onColumnNameInput($any($event.target).value)"
+        placeholder="e.g. MiddleName"
+        [disabled]="submitting()"
+      />
+    </label>
+
+    <label class="fm-addcol-field">
+      <span class="text-label">Data type<span class="req">*</span></span>
+      <select
+        class="fm-addcol-select"
+        [value]="dataType()"
+        (change)="onDataTypeChange($any($event.target).value)"
+        [disabled]="submitting()"
+      >
+        @for (t of dataTypes; track t) { <option [value]="t">{{ t }}</option> }
+      </select>
+    </label>
+
+    @if (error()) {
+      <p class="fm-addcol-error">{{ error() }}</p>
+    }
+
+    <div class="fm-addcol-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="cancelled.emit()">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="!canSubmit()" (click)="submit()">
+        {{ submitting() ? 'Adding…' : 'Add column' }}
+      </button>
+    </div>
+  </div>
+</div>

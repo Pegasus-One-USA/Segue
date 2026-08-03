@@ -106,6 +106,10 @@ export const DESTINATION_ENDPOINTS = {
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,
+  addColumn:     `${API_V1_BASE}/destinations/schema/add-column`,
+  createTable:   `${API_V1_BASE}/destinations/schema/create-table`,
+  dropColumn:    `${API_V1_BASE}/destinations/schema/drop-column`,
+  alterColumn:   `${API_V1_BASE}/destinations/schema/alter-column`,
 };
 
 // ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
@@ -113,8 +117,19 @@ export const DESTINATION_ENDPOINTS = {
 // the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
 export const MAPPING_ENDPOINTS = {
   resources:     `${API_V1_BASE}/mapping/catalog/resources`,
-  resourceFields: (resourceType: string) =>
-    `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`,
+  // sourceConnectionId lets the backend resolve that source's vendor (Epic, ...) and prefer its
+  // vendor-specific catalog over the generic base-FHIR-R4 one — omitted (or falsy) always gets generic.
+  resourceFields: (resourceType: string, sourceConnectionId?: string | null) => {
+    const base = `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`;
+    return sourceConnectionId ? `${base}?sourceConnectionId=${encodeURIComponent(sourceConnectionId)}` : base;
+  },
+};
+
+// ─── Mapping profiles (ConfigurationsController — api/v1/mapping-profiles) ─────
+// import: accepts the canonical Mapping JSON (field-mapping-summary.model.ts) wholesale and creates one
+// MappingProfile per mapped resource — called when the destination wizard's "Add to Pipeline" step finishes.
+export const MAPPING_PROFILES_ENDPOINTS = {
+  import: `${API_V1_BASE}/mapping-profiles/import`,
 };
 
 // ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──

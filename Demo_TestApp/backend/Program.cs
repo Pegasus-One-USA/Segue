@@ -121,7 +121,9 @@ app.UseStaticFiles();
 
 app.UseCors("Frontend");
 
-if (app.Environment.IsDevelopment())
+// Swagger:Enabled lets ops turn Swagger on in Production (via appsettings.Production.json, which
+// survives every deploy untouched — see deploy/windows/README.md) without a code change or redeploy.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue("Swagger:Enabled", false))
 {
     app.UseSwagger();
     app.UseSwaggerUI();

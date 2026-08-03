@@ -328,7 +328,8 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         CancellationToken cancellationToken)
     {
         var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
-        if (!isPatientResource && !PatientCompartmentResourceTypes.IsSupported(resourceType))
+        var isCompartmentResource = isPatientResource || PatientCompartmentResourceTypes.IsSupported(resourceType);
+        if (!isCompartmentResource)
         {
             // Non-patient-compartment types can't be patient-scoped, and historically their request-time
             // PatientSearchCriteria was dropped here entirely. Honor it for Practitioner ONLY (deliberately narrow —
@@ -377,7 +378,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
 
         if (string.IsNullOrWhiteSpace(patientId))
         {
-            if (alreadyScoped || source.PatientIds is not { Count: > 0 } cohort)
+            if (alreadyScoped || !isCompartmentResource || source.PatientIds is not { Count: > 0 } cohort)
             {
                 return source.SearchParameters;
             }
@@ -387,7 +388,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             return string.IsNullOrWhiteSpace(query) ? cohortScope : $"{query}&{cohortScope}";
         }
 
-        if (alreadyScoped)
+        if (alreadyScoped || !isCompartmentResource)
         {
             return source.SearchParameters;
         }

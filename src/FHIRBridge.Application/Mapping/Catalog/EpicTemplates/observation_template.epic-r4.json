@@ -1,0 +1,748 @@
+{
+  "resourceType": "Observation",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>",
+    "profile": [
+      "<Canonical · 0..*>"
+    ]
+  },
+  "text": {
+    "div": "<string · 0..1>",
+    "status": "<Code · 1..1 · required>"
+  },
+  "basedOn": [
+    {
+      "display": "<String · 0..1>",
+      "identifier": {
+        "assigner": "<Reference · 0..1>",
+        "period": {
+          "end": "<DateTime · 0..1>",
+          "start": "<DateTime · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "system": "<Uri · 0..1>",
+              "userSelected": "<boolean · 0..1>",
+              "version": "<String · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "use": "<Code · 0..1>",
+        "value": "<String · 0..1>"
+      },
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>"
+    }
+  ],
+  "bodySite": {
+    "coding": [
+      {
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "system": "<Uri · 0..1>",
+        "userSelected": "<boolean · 0..1>",
+        "version": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>",
+          "system": "<Uri · 0..1>",
+          "userSelected": "<boolean · 0..1>",
+          "version": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "system": "<Uri · 0..1>",
+        "userSelected": "<boolean · 0..1>",
+        "version": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "component": [
+    {
+      "code": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "dataAbsentReason": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "interpretation": [
+        {
+          "coding": [
+            {
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "system": "<Uri · 0..1>",
+              "userSelected": "<boolean · 0..1>",
+              "version": "<String · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        }
+      ],
+      "referenceRange": [
+        {
+          "age": {
+            "high": {
+              "code": "<Code · 0..1>",
+              "comparator": "<Code · 0..1>",
+              "system": "<Uri · 0..1>",
+              "unit": "<String · 0..1>",
+              "value": "<Decimal · 0..1>"
+            },
+            "low": {
+              "code": "<Code · 0..1>",
+              "comparator": "<Code · 0..1>",
+              "system": "<Uri · 0..1>",
+              "unit": "<String · 0..1>",
+              "value": "<Decimal · 0..1>"
+            }
+          },
+          "appliesTo": [
+            {
+              "coding": [
+                {
+                  "code": "<Code · 0..1>",
+                  "display": "<String · 0..1>",
+                  "system": "<Uri · 0..1>",
+                  "userSelected": "<boolean · 0..1>",
+                  "version": "<String · 0..1>"
+                }
+              ],
+              "text": "<String · 0..1>"
+            }
+          ],
+          "high": {
+            "code": "<Code · 0..1>",
+            "comparator": "<Code · 0..1>",
+            "system": "<Uri · 0..1>",
+            "unit": "<String · 0..1>",
+            "value": "<Decimal · 0..1>"
+          },
+          "low": {
+            "code": "<Code · 0..1>",
+            "comparator": "<Code · 0..1>",
+            "system": "<Uri · 0..1>",
+            "unit": "<String · 0..1>",
+            "value": "<Decimal · 0..1>"
+          },
+          "text": "<Markdown · 0..1>",
+          "type": {
+            "coding": [
+              {
+                "code": "<Code · 0..1>",
+                "display": "<String · 0..1>",
+                "system": "<Uri · 0..1>",
+                "userSelected": "<boolean · 0..1>",
+                "version": "<String · 0..1>"
+              }
+            ],
+            "text": "<String · 0..1>"
+          }
+        }
+      ],
+      "valueBoolean": "<boolean · 0..1>",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "valueDateTime": "<DateTime · 0..1>",
+      "valueInteger": "<integer · 0..1>",
+      "valuePeriod": {
+        "end": "<DateTime · 0..1>",
+        "start": "<DateTime · 0..1>"
+      },
+      "valueQuantity": {
+        "code": "<Code · 0..1>",
+        "comparator": "<Code · 0..1>",
+        "system": "<Uri · 0..1>",
+        "unit": "<String · 0..1>",
+        "value": "<Decimal · 0..1>"
+      },
+      "valueRange": {
+        "high": {
+          "code": "<Code · 0..1>",
+          "comparator": "<Code · 0..1>",
+          "system": "<Uri · 0..1>",
+          "unit": "<String · 0..1>",
+          "value": "<Decimal · 0..1>"
+        },
+        "low": {
+          "code": "<Code · 0..1>",
+          "comparator": "<Code · 0..1>",
+          "system": "<Uri · 0..1>",
+          "unit": "<String · 0..1>",
+          "value": "<Decimal · 0..1>"
+        }
+      },
+      "valueRatio": {
+        "denominator": {
+          "code": "<Code · 0..1>",
+          "comparator": "<Code · 0..1>",
+          "system": "<Uri · 0..1>",
+          "unit": "<String · 0..1>",
+          "value": "<Decimal · 0..1>"
+        },
+        "numerator": {
+          "code": "<Code · 0..1>",
+          "comparator": "<Code · 0..1>",
+          "system": "<Uri · 0..1>",
+          "unit": "<String · 0..1>",
+          "value": "<Decimal · 0..1>"
+        }
+      },
+      "valueSampledData": {
+        "origin": {
+          "code": "<Code · 0..1>",
+          "comparator": "<Code · 0..1>",
+          "system": "<Uri · 0..1>",
+          "unit": "<String · 0..1>",
+          "value": "<Decimal · 0..1>"
+        },
+        "period": "<Decimal · 1..1 · required>",
+        "factor": "<Decimal · 0..1>",
+        "lowerLimit": "<Decimal · 0..1>",
+        "upperLimit": "<Decimal · 0..1>",
+        "dimensions": "<positiveInt · 1..1 · required>",
+        "data": "<String · 0..1>"
+      },
+      "valueString": "<String · 0..1>",
+      "valueTime": "<Time · 0..1>"
+    }
+  ],
+  "dataAbsentReason": {
+    "coding": [
+      {
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "system": "<Uri · 0..1>",
+        "userSelected": "<boolean · 0..1>",
+        "version": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "derivedFrom": [
+    {
+      "display": "<String · 0..1>",
+      "identifier": {
+        "assigner": "<Reference · 0..1>",
+        "period": {
+          "end": "<DateTime · 0..1>",
+          "start": "<DateTime · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "system": "<Uri · 0..1>",
+              "userSelected": "<boolean · 0..1>",
+              "version": "<String · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "use": "<Code · 0..1>",
+        "value": "<String · 0..1>"
+      },
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>"
+    }
+  ],
+  "device": {
+    "display": "<String · 0..1>",
+    "identifier": {
+      "assigner": "<Reference · 0..1>",
+      "period": {
+        "end": "<DateTime · 0..1>",
+        "start": "<DateTime · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "use": "<Code · 0..1>",
+      "value": "<String · 0..1>"
+    },
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>"
+  },
+  "effectiveDateTime": "<DateTime · 0..1>",
+  "effectiveInstant": "<Instant · 0..1>",
+  "effectivePeriod": {
+    "end": "<DateTime · 0..1>",
+    "start": "<DateTime · 0..1>"
+  },
+  "effectiveTiming": {
+    "code": {
+      "coding": [
+        {
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>",
+          "system": "<Uri · 0..1>",
+          "userSelected": "<boolean · 0..1>",
+          "version": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    },
+    "event": [
+      "<DateTime · 0..*>"
+    ],
+    "repeat": "<TimingRepeat · 0..1>"
+  },
+  "encounter": {
+    "display": "<String · 0..1>",
+    "identifier": {
+      "assigner": "<Reference · 0..1>",
+      "period": {
+        "end": "<DateTime · 0..1>",
+        "start": "<DateTime · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "use": "<Code · 0..1>",
+      "value": "<String · 0..1>"
+    },
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>"
+  },
+  "hasMember": [
+    {
+      "display": "<String · 0..1>",
+      "identifier": {
+        "assigner": "<Reference · 0..1>",
+        "period": {
+          "end": "<DateTime · 0..1>",
+          "start": "<DateTime · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "system": "<Uri · 0..1>",
+              "userSelected": "<boolean · 0..1>",
+              "version": "<String · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "use": "<Code · 0..1>",
+        "value": "<String · 0..1>"
+      },
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>"
+    }
+  ],
+  "identifier": [
+    {
+      "assigner": {
+        "display": "<String · 0..1>",
+        "identifier": "<Identifier · 0..1>",
+        "reference": "<String · 0..1>",
+        "type": "<Uri · 0..1>"
+      },
+      "period": {
+        "end": "<DateTime · 0..1>",
+        "start": "<DateTime · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "use": "<Code · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "interpretation": [
+    {
+      "coding": [
+        {
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>",
+          "system": "<Uri · 0..1>",
+          "userSelected": "<boolean · 0..1>",
+          "version": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "issued": "<Instant · 0..1>",
+  "method": {
+    "coding": [
+      {
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "system": "<Uri · 0..1>",
+        "userSelected": "<boolean · 0..1>",
+        "version": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "note": [
+    {
+      "authorReference": {
+        "display": "<String · 0..1>",
+        "identifier": {
+          "assigner": "<Reference · 0..1>",
+          "period": {
+            "end": "<DateTime · 0..1>",
+            "start": "<DateTime · 0..1>"
+          },
+          "system": "<Uri · 0..1>",
+          "type": {
+            "coding": [
+              {
+                "code": "<Code · 0..1>",
+                "display": "<String · 0..1>",
+                "system": "<Uri · 0..1>",
+                "userSelected": "<boolean · 0..1>",
+                "version": "<String · 0..1>"
+              }
+            ],
+            "text": "<String · 0..1>"
+          },
+          "use": "<Code · 0..1>",
+          "value": "<String · 0..1>"
+        },
+        "reference": "<String · 0..1>",
+        "type": "<Uri · 0..1>"
+      },
+      "authorString": "<String · 0..1>",
+      "text": "<Markdown · 0..1>",
+      "time": "<DateTime · 0..1>"
+    }
+  ],
+  "partOf": [
+    {
+      "display": "<String · 0..1>",
+      "identifier": {
+        "assigner": "<Reference · 0..1>",
+        "period": {
+          "end": "<DateTime · 0..1>",
+          "start": "<DateTime · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "system": "<Uri · 0..1>",
+              "userSelected": "<boolean · 0..1>",
+              "version": "<String · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "use": "<Code · 0..1>",
+        "value": "<String · 0..1>"
+      },
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>"
+    }
+  ],
+  "performer": [
+    {
+      "display": "<String · 0..1>",
+      "identifier": {
+        "assigner": "<Reference · 0..1>",
+        "period": {
+          "end": "<DateTime · 0..1>",
+          "start": "<DateTime · 0..1>"
+        },
+        "system": "<Uri · 0..1>",
+        "type": {
+          "coding": [
+            {
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "system": "<Uri · 0..1>",
+              "userSelected": "<boolean · 0..1>",
+              "version": "<String · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        },
+        "use": "<Code · 0..1>",
+        "value": "<String · 0..1>"
+      },
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>"
+    }
+  ],
+  "referenceRange": [
+    {
+      "age": {
+        "high": {
+          "code": "<Code · 0..1>",
+          "comparator": "<Code · 0..1>",
+          "system": "<Uri · 0..1>",
+          "unit": "<String · 0..1>",
+          "value": "<Decimal · 0..1>"
+        },
+        "low": {
+          "code": "<Code · 0..1>",
+          "comparator": "<Code · 0..1>",
+          "system": "<Uri · 0..1>",
+          "unit": "<String · 0..1>",
+          "value": "<Decimal · 0..1>"
+        }
+      },
+      "appliesTo": [
+        {
+          "coding": [
+            {
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>",
+              "system": "<Uri · 0..1>",
+              "userSelected": "<boolean · 0..1>",
+              "version": "<String · 0..1>"
+            }
+          ],
+          "text": "<String · 0..1>"
+        }
+      ],
+      "high": {
+        "code": "<Code · 0..1>",
+        "comparator": "<Code · 0..1>",
+        "system": "<Uri · 0..1>",
+        "unit": "<String · 0..1>",
+        "value": "<Decimal · 0..1>"
+      },
+      "low": {
+        "code": "<Code · 0..1>",
+        "comparator": "<Code · 0..1>",
+        "system": "<Uri · 0..1>",
+        "unit": "<String · 0..1>",
+        "value": "<Decimal · 0..1>"
+      },
+      "text": "<Markdown · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      }
+    }
+  ],
+  "specimen": {
+    "display": "<String · 0..1>",
+    "identifier": {
+      "assigner": "<Reference · 0..1>",
+      "period": {
+        "end": "<DateTime · 0..1>",
+        "start": "<DateTime · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "use": "<Code · 0..1>",
+      "value": "<String · 0..1>"
+    },
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>"
+  },
+  "status": "<Code · 1..1 · required>",
+  "subject": {
+    "display": "<String · 0..1>",
+    "identifier": {
+      "assigner": "<Reference · 0..1>",
+      "period": {
+        "end": "<DateTime · 0..1>",
+        "start": "<DateTime · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>",
+            "system": "<Uri · 0..1>",
+            "userSelected": "<boolean · 0..1>",
+            "version": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "use": "<Code · 0..1>",
+      "value": "<String · 0..1>"
+    },
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>"
+  },
+  "valueBoolean": "<boolean · 0..1>",
+  "valueCodeableConcept": {
+    "coding": [
+      {
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "system": "<Uri · 0..1>",
+        "userSelected": "<boolean · 0..1>",
+        "version": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "valueDateTime": "<DateTime · 0..1>",
+  "valueInteger": "<integer · 0..1>",
+  "valuePeriod": {
+    "end": "<DateTime · 0..1>",
+    "start": "<DateTime · 0..1>"
+  },
+  "valueQuantity": {
+    "code": "<Code · 0..1>",
+    "comparator": "<Code · 0..1>",
+    "system": "<Uri · 0..1>",
+    "unit": "<String · 0..1>",
+    "value": "<Decimal · 0..1>"
+  },
+  "valueRange": {
+    "high": {
+      "code": "<Code · 0..1>",
+      "comparator": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "unit": "<String · 0..1>",
+      "value": "<Decimal · 0..1>"
+    },
+    "low": {
+      "code": "<Code · 0..1>",
+      "comparator": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "unit": "<String · 0..1>",
+      "value": "<Decimal · 0..1>"
+    }
+  },
+  "valueRatio": {
+    "denominator": {
+      "code": "<Code · 0..1>",
+      "comparator": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "unit": "<String · 0..1>",
+      "value": "<Decimal · 0..1>"
+    },
+    "numerator": {
+      "code": "<Code · 0..1>",
+      "comparator": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "unit": "<String · 0..1>",
+      "value": "<Decimal · 0..1>"
+    }
+  },
+  "valueSampledData": {
+    "origin": {
+      "code": "<Code · 0..1>",
+      "comparator": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "unit": "<String · 0..1>",
+      "value": "<Decimal · 0..1>"
+    },
+    "period": "<Decimal · 1..1 · required>",
+    "factor": "<Decimal · 0..1>",
+    "lowerLimit": "<Decimal · 0..1>",
+    "upperLimit": "<Decimal · 0..1>",
+    "dimensions": "<positiveInt · 1..1 · required>",
+    "data": "<String · 0..1>"
+  },
+  "valueString": "<String · 0..1>",
+  "valueTime": "<Time · 0..1>"
+}

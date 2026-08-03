@@ -6,7 +6,7 @@ import { PipelineStore } from '../../services/pipeline.store';
 import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { WorkflowApiService, WorkflowBuildRequest, WorkflowTriggerRequest } from '../../services/workflow-api.service';
+import { WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowTriggerRequest } from '../../services/workflow-api.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { WorkflowBuildAssemblerService } from '../../services/workflow-build-assembler.service';
 import { SOURCES } from '../../data/sources.data';
@@ -310,6 +310,10 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
+        // Stamp real backend ids onto the node fields before the JWKS/navigate-away flow below runs, so
+        // anything reading them synchronously (or a retry before navigation completes) sees the just-created
+        // sourceConnectionId/destinationId/mappingProfileId rather than stale nulls.
+        this.stampBuildResultIds(result);
         this.reconcileGeneratedJwksUrls(result.workflowId, request.name, result.sourceConnectionIds);
       },
       error: err => {
@@ -557,11 +561,16 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       .map(edge => this.store.byId(edge.to))
       .filter(n => n?.kind === 'transform' && (n as TransformNode).transformId === 'field-mapping').length;
 
+    // Strip mappingProfileId — the clone needs its OWN mapping profile (its own destination/resource
+    // mapping), never the original's. Left in place, a build before the clone's own field-mapping wizard
+    // save would send the ORIGINAL's real profile id as this clone's existingId too, and /workflows/build
+    // would overwrite the original's profile with the clone's (different) fields — silently corrupting it.
+    const { mappingProfileId: _clonedMappingProfileId, ...clonedFields } = original.fields;
     const clone: TransformNode = {
       ...(original as TransformNode),
       id:     this.store.nextTransformId(),
       y:      original.y + siblingMappingCount * 170,
-      fields: { ...original.fields },
+      fields: clonedFields,
     };
     this.store.addNode(clone);
     this.store.addEdge({ id: this.store.nextEdgeId(), from: parent.id, to: clone.id });
@@ -737,6 +746,24 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private finishSave(): void {
     this.store.markSaved();
     this.router.navigate(['/workflows']);
+  }
+
+  // Writes each node's real, server-created id back onto its own fields instead of wiping the canvas —
+  // the wizards read these fields (findLaunchSourceId(), destination-wizard's resolvedDestinationId) so
+  // the Mapping JSON gets non-null sourceConnectionId/destinationId right after Save, no reload needed.
+  // Also stamps mappingProfileId so the next Save updates these records in place rather than duplicating
+  // them (workflow-build-assembler.service.ts reads these same three field names as each spec's existingId).
+  private stampBuildResultIds(result: WorkflowBuildResult): void {
+    const stamp = (ids: Record<string, string>, field: string) => {
+      for (const [nodeId, id] of Object.entries(ids)) {
+        const node = this.store.byId(nodeId);
+        if (!node) continue;
+        this.store.updateNode(nodeId, { fields: { ...node.fields, [field]: id } });
+      }
+    };
+    stamp(result.sourceConnectionIds, 'sourceConnectionId');
+    stamp(result.destinationIds, 'destinationId');
+    stamp(result.mappingProfileIds, 'mappingProfileId');
   }
 
   /** Blanks the canvas and workflow identity — used when explicitly starting a new workflow (see

@@ -21,6 +21,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         var repeatFields = new List<(string Target, List<object?> Values)>();
         // table name -> ordered rows keyed by index path
         var childTables = new Dictionary<string, Dictionary<string, Dictionary<string, object?>>>(StringComparer.OrdinalIgnoreCase);
+        var referenceLookups = new List<MappingReferenceLookupDto>();
 
         foreach (var field in fields)
         {
@@ -39,11 +40,32 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 continue;
             }
 
-            var matches = ResolveAll(root, field.JsonPath);
+            var isJoinedFields = field.Format?.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) == true;
             var policy = field.ArrayPolicy;
 
-            if (matches.Count == 0)
+            // `matches` (raw elements, needed by CorrelateByCode below) is unused/empty for joinedFields — its
+            // JsonPath is a "|"-delimited list of sub-paths, not a single path ResolveAll can walk — but computing
+            // it unconditionally is cheap and CorrelateByCode never combines with a joinedFields Format in practice.
+            var matches = ResolveAll(root, field.JsonPath);
+            var resolved = isJoinedFields
+                ? ResolveJoinedFields(root, field)
+                : matches
+                    .Select(m => (Value: (object?)ConvertElement(
+                        m.Element, field.ValueType, field.Format, field.TargetField, errors,
+                        field.MaxLength, field.Precision, field.Scale), m.Indices))
+                    .ToList();
+
+            if (resolved.Count == 0)
             {
+                if (policy == ArrayPolicy.SeparateDestination)
+                {
+                    // No matching element for this occurrence (e.g. an optional sub-field absent on this
+                    // particular array item) — this field belongs to a CHILD table, not the parent row, so it
+                    // must never fall through to `parent[...]` below. Nothing to contribute for this field on
+                    // this occurrence; other fields on the same child table are unaffected.
+                    continue;
+                }
+
                 if (!string.IsNullOrWhiteSpace(field.DefaultValue))
                 {
                     parent[field.TargetField] = ConvertValue(
@@ -61,11 +83,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 continue;
             }
 
-            var values = matches
-                .Select(m => ConvertElement(
-                    m.Element, field.ValueType, field.Format, field.TargetField, errors,
-                    field.MaxLength, field.Precision, field.Scale))
-                .ToList();
+            var values = resolved.Select(r => r.Value).ToList();
 
             switch (policy)
             {
@@ -82,9 +100,9 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                         childTables[table] = rows;
                     }
 
-                    for (var i = 0; i < matches.Count; i++)
+                    for (var i = 0; i < resolved.Count; i++)
                     {
-                        var key = string.Join('-', matches[i].Indices);
+                        var key = string.Join('-', resolved[i].Indices);
                         if (!rows.TryGetValue(key, out var row))
                         {
                             row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["RowIndex"] = key };
@@ -120,6 +138,25 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                     parent[field.TargetField] = values[0];
                     break;
             }
+
+            // A field marked as a FHIR reference (e.g. "$.subject.reference" = "Patient/xyz") can't be written
+            // verbatim — the target column is normally a FK expecting another table's real primary key, not a
+            // bare FHIR id string. Extract that id and record what to resolve it against; the writer performs
+            // the actual lookup once the referenced table's own rows have been written. Only meaningful for the
+            // single-value policies above (RepeatParent/SeparateDestination/StoreJson fields aren't references).
+            if (!string.IsNullOrWhiteSpace(field.ReferenceLookupTable)
+                && !string.IsNullOrWhiteSpace(field.ReferenceLookupKeyColumn)
+                && policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple)
+            {
+                var rawReference = parent.TryGetValue(field.TargetField, out var rawValue) ? rawValue as string : null;
+                referenceLookups.Add(new MappingReferenceLookupDto(
+                    field.TargetField, field.ReferenceLookupTable!, field.ReferenceLookupKeyColumn!, ExtractReferenceId(rawReference)));
+
+                // Clear the raw string: an unresolved lookup should fail loudly at write time with a clear
+                // "no matching row" error, not a confusing type-conversion error from inserting "Patient/xyz"
+                // as-is into what's normally a bigint column.
+                parent[field.TargetField] = null;
+            }
         }
 
         var rowsList = BuildParentRows(parent, repeatFields);
@@ -127,7 +164,24 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             .Select(kv => new MappingChildTableDto(kv.Key, kv.Value.Values.Cast<IReadOnlyDictionary<string, object?>>().ToList()))
             .ToList();
 
-        return new MappingTestResultDto(rowsList[0], errors, rowsList, childTableDtos);
+        return new MappingTestResultDto(
+            rowsList[0], errors, rowsList, childTableDtos,
+            referenceLookups.Count > 0 ? referenceLookups : null);
+    }
+
+    /// <summary>Extracts the resource-local id from a FHIR reference string — "Patient/xyz" or an absolute URL
+    /// ending "…/Patient/xyz" both yield "xyz"; a bare id with no "/" is returned as-is. Null/blank input (no
+    /// reference present on this resource) yields null — nothing to resolve, so the target column is left
+    /// unpopulated rather than guessing.</summary>
+    private static string? ExtractReferenceId(string? rawReference)
+    {
+        if (string.IsNullOrWhiteSpace(rawReference))
+        {
+            return null;
+        }
+
+        var slashIndex = rawReference.LastIndexOf('/');
+        return slashIndex >= 0 ? rawReference[(slashIndex + 1)..] : rawReference;
     }
 
     /// <summary>
@@ -222,6 +276,65 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         var pascal = string.Concat(ancestor.Split('.', StringSplitOptions.RemoveEmptyEntries)
             .Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
         return "dbo." + pascal;
+    }
+
+    /// <summary>
+    /// Resolves a "joinedFields" field: <see cref="MappingFieldDto.JsonPath"/> is a <c>|</c>-delimited list of
+    /// sub-paths (see <c>MappingImportService.BuildJsonPathAndFormat</c>), each resolved independently and then
+    /// joined per row with the delimiter encoded in <see cref="MappingFieldDto.Format"/> (<c>;delimiter=X</c>).
+    /// Rows are aligned by position across sub-paths — they're expected to share the same array context, so the
+    /// first sub-path that yields any matches determines the row indices; a sub-path with fewer/no matches at a
+    /// given position contributes an empty string for that row rather than dropping the row.
+    /// </summary>
+    private static List<(object? Value, IReadOnlyList<int> Indices)> ResolveJoinedFields(JsonElement root, MappingFieldDto field)
+    {
+        var delimiter = ParseDelimiter(field.Format);
+        var subPaths = field.JsonPath.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var resolvedSubPaths = subPaths.Select(subPath => ResolveAll(root, subPath)).ToList();
+
+        var shape = resolvedSubPaths.OrderByDescending(r => r.Count).FirstOrDefault() ?? [];
+        if (shape.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = new List<(object? Value, IReadOnlyList<int> Indices)>(shape.Count);
+        for (var i = 0; i < shape.Count; i++)
+        {
+            var pieces = resolvedSubPaths.Select(matches => i < matches.Count ? ElementToJoinString(matches[i].Element) : string.Empty);
+            rows.Add((string.Join(delimiter, pieces), shape[i].Indices));
+        }
+
+        return rows;
+    }
+
+    private static string ParseDelimiter(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+        {
+            return ",";
+        }
+
+        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var equalsIndex = part.IndexOf('=', StringComparison.Ordinal);
+            if (equalsIndex > 0 && part[..equalsIndex].Equals("delimiter", StringComparison.OrdinalIgnoreCase))
+            {
+                return part[(equalsIndex + 1)..];
+            }
+        }
+
+        return ",";
+    }
+
+    private static string ElementToJoinString(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
+            JsonValueKind.String => element.GetString() ?? string.Empty,
+            _ => element.ToString()
+        };
     }
 
     /// <summary>

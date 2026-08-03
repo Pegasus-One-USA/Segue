@@ -54,6 +54,8 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         var actor = _currentUserService.CurrentUser.AuditName;
         var now = DateTime.UtcNow;
 
+        // Pass 1: never physically delete a soft-deletable root — flip it to a soft delete so audit/lineage
+        // references stay resolvable.
         foreach (var entry in context.ChangeTracker.Entries())
         {
             if (entry.Entity is IAppendOnlyEntity && entry.State is EntityState.Modified or EntityState.Deleted)
@@ -64,7 +66,6 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 
             if (entry.State == EntityState.Deleted && entry.Entity is ISoftDeletable softDeletable)
             {
-                // Never physically delete: flip to a soft delete so audit/lineage references stay resolvable.
                 entry.State = EntityState.Modified;
                 softDeletable.ApplyDeleted(actor, now);
             }
@@ -77,39 +78,38 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
             // pass's own (correctly guarded) handling, so the new instance's Added entry never turned into a real
             // UPDATE — the old (stale) values silently won, with no error and no visible sign anything was wrong.
             // See the second pass's own remarks for the full soft-delete-cascade vs. reference-replacement story.
-
-            if (entry.Entity is IAuditableEntity auditable)
-            {
-                switch (entry.State)
-                {
-                    case EntityState.Added:
-                        auditable.ApplyCreated(actor, now);
-                        break;
-                    case EntityState.Modified:
-                        auditable.ApplyModified(actor, now);
-                        break;
-                }
-            }
+            //
+            // Audit stamping (Added/Modified) deliberately does NOT happen here — see Pass 3 below, which runs
+            // after Pass 2 has finalized owned-entry states so it stamps based on final state, not this pass's.
         }
 
-        // Owned-type dependents (e.g. DestinationConfiguration.SecretReference) are inline columns on the same
-        // table as their owner, but EF tracks them as their own entries and cascades them to Deleted alongside
-        // the owner. The owner flip above doesn't touch them, so without this they'd stay Deleted while the
-        // owner becomes Modified — which makes EF write NULLs into the owned type's columns instead of
-        // preserving their current values. Re-enumerate (rather than one pass) so this sees the owner state
-        // changes just made above.
+        // Pass 2: Remove() cascades EntityState.Deleted onto an aggregate's owned dependents too (e.g.
+        // DestinationConfiguration.SecretReference, MappingProfile.Fields). Re-enumerate (rather than folding
+        // into pass 1) so this sees the owner state changes pass 1 just made.
         //
-        // A Deleted owned entry also shows up for a second, unrelated reason: reassigning an owned reference to a
-        // brand-new instance (e.g. DestinationConfiguration.Update() doing `SecretReference = new SecretReference(...)`
-        // for an otherwise-Modified, not-deleted owner) makes EF mark the old instance Deleted and track the new one
-        // as Added, both under the same shared owner key — EF's normal handling collapses that pair into a single
-        // UPDATE on its own. Blindly flipping every Deleted owned entry to Modified (as above) instead leaves BOTH
-        // the old (now Modified) and new (Added) instances tracked under that same key, which throws
-        // InvalidOperationException: "already being tracked". Skip the flip whenever a same-key Added replacement
-        // already exists, so only the genuine owner-cascade case (no replacement) gets corrected.
+        // Whether a Deleted owned entry should stay Deleted depends on WHY it's Deleted:
+        //  - Genuine cascade from the OWNER's soft delete (pass 1 above) — the owned data must survive
+        //    untouched (a single-instance owned type shares its owner's table/row, so EF would otherwise fold
+        //    the "delete" into the same UPDATE and null out its — possibly required — columns).
+        //  - An entirely ordinary update that reassigns a single-instance owned type to a new instance under
+        //    the SAME shared key (e.g. `SecretReference = new SecretReference(...)`) — EF already collapses
+        //    that Deleted+Added pair into one UPDATE on its own; do nothing.
+        //  - An entirely ordinary update that replaces the contents of an OwnsMany collection (e.g.
+        //    MappingProfile.Fields) — each item has its OWN independently-generated shadow key, so old and new
+        //    items never share a key even though nothing is being soft-deleted. This is a genuine row removal
+        //    and must stay Deleted, or the old row silently survives alongside its replacement (duplicate rows).
+        //
+        // The first case is the only one where the flip belongs — gated on the OWNER itself actually being
+        // soft-deleted (resolved via the ownership foreign key), not merely on "this entry is Deleted".
         foreach (var entry in context.ChangeTracker.Entries())
         {
             if (entry.State != EntityState.Deleted || !entry.Metadata.IsOwned())
+            {
+                continue;
+            }
+
+            var ownership = entry.Metadata.FindOwnership();
+            if (ownership is null || !IsOwnerBeingSoftDeleted(context, entry, ownership))
             {
                 continue;
             }
@@ -124,7 +124,26 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 
             if (!hasReplacement)
             {
-                entry.State = EntityState.Modified;
+                entry.State = EntityState.Unchanged;
+            }
+        }
+
+        // Pass 3: audit stamping, based on each entry's final state above.
+        foreach (var entry in context.ChangeTracker.Entries())
+        {
+            if (entry.Entity is not IAuditableEntity auditable)
+            {
+                continue;
+            }
+
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    auditable.ApplyCreated(actor, now);
+                    break;
+                case EntityState.Modified:
+                    auditable.ApplyModified(actor, now);
+                    break;
             }
         }
     }
@@ -282,5 +301,22 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         }
 
         return string.Concat(value.AsSpan(0, MaxPropertyValueLength), $"…(truncated, {value.Length} total chars)");
+    }
+
+    /// <summary>
+    /// Resolves an owned entry's owner via its ownership foreign key (matching FK values on the owned side
+    /// against the principal key on the owner side) and reports whether that owner was itself just converted
+    /// from a physical Deleted to a soft-deleted Modified above.
+    /// </summary>
+    private static bool IsOwnerBeingSoftDeleted(DbContext context, EntityEntry ownedEntry, IForeignKey ownership)
+    {
+        var fkValues = ownership.Properties.Select(ownedEntry.Property).Select(p => p.CurrentValue).ToArray();
+        var principalKeyProperties = ownership.PrincipalKey.Properties;
+
+        var ownerEntry = context.ChangeTracker.Entries().FirstOrDefault(other =>
+            other.Metadata == ownership.PrincipalEntityType
+            && principalKeyProperties.Select(other.Property).Select(p => p.CurrentValue).SequenceEqual(fkValues));
+
+        return ownerEntry is { State: EntityState.Modified, Entity: ISoftDeletable { IsDeleted: true } };
     }
 }

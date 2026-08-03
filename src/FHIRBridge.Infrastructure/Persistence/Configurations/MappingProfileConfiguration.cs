@@ -18,6 +18,7 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.Property(x => x.DestinationId).IsRequired();
         builder.Property(x => x.DestinationObject).HasMaxLength(300).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.MappingJson);
 
         builder.HasIndex(x => x.SourceConnectionId);
         builder.HasIndex(x => x.SourceConfigurationId);
@@ -57,6 +58,11 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
             field.Property(x => x.IsUpsertKey).IsRequired().HasDefaultValue(false);
             field.Property(x => x.CorrelationCodeJsonPath).HasMaxLength(500);
             field.Property(x => x.CorrelationCodeValue).HasMaxLength(100);
+            field.Property(x => x.ParentTable).HasMaxLength(300);
+            field.Property(x => x.ParentKeyColumn).HasMaxLength(200);
+            field.Property(x => x.ForeignKeyColumn).HasMaxLength(200);
+            field.Property(x => x.ReferenceLookupTable).HasMaxLength(300);
+            field.Property(x => x.ReferenceLookupKeyColumn).HasMaxLength(200);
         });
 
         builder.Navigation(x => x.Fields)

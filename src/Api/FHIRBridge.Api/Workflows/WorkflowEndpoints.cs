@@ -189,9 +189,22 @@ public static class WorkflowEndpoints
                     destinationId,
                     spec.DestinationObject,
                     spec.Fields);
-                var mapping = spec.ExistingId is { } existingMappingId
-                    ? await configurationService.UpdateMappingProfileAsync(existingMappingId, mappingRequest, cancellationToken)
-                    : await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken);
+
+                // Prefer a profile that already exists for this (resourceType, source, destination) combination
+                // over whatever spec.ExistingId says — the canvas can lose track of the real id (see the Mapping
+                // Config Import wizard vs. this endpoint's own simpler field-building path). A found profile whose
+                // MappingJson is set was authored by that richer wizard (proper JsonPath/[*] derivation, DDL, etc.)
+                // and must never be overwritten by this endpoint's cruder, best-effort field list; reuse it as-is.
+                // A found profile with no MappingJson was created by this same endpoint previously — keep updating
+                // it in place. Only create a brand-new profile when none exists yet for this combination at all.
+                var existingMapping = await configurationService.FindMappingProfileAsync(
+                    spec.ResourceType, sourceConnectionId, destinationId, cancellationToken);
+                var mapping = existingMapping switch
+                {
+                    { MappingJson.Length: > 0 } => existingMapping,
+                    not null => await configurationService.UpdateMappingProfileAsync(existingMapping.Id, mappingRequest, cancellationToken),
+                    null => await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken),
+                };
                 mappingIds[spec.NodeId] = mapping.Id;
 
                 if (!profileIdsByNode.TryGetValue(spec.NodeId, out var idsForNode))
@@ -201,6 +214,9 @@ public static class WorkflowEndpoints
                 }
                 idsForNode[spec.ResourceType] = mapping.Id.ToString();
 
+                // sourceConnectionId/destinationId let MappingNodeExecutor re-resolve the correct profile by
+                // natural key at run time (same lookup as above) instead of only trusting the stamped id(s),
+                // which can go stale if a later save mints a different profile for this same combination.
                 nodes[spec.NodeId] = WithConfiguration(node, config =>
                 {
                     // Kept for backward compatibility with anything still reading the single legacy field (reflects
@@ -208,6 +224,8 @@ public static class WorkflowEndpoints
                     // mappingProfileIds below whenever it's present, so this is display/compat-only in that case).
                     config["mappingProfileId"] = mapping.Id.ToString();
                     config["mappingProfileIds"] = JsonSerializer.SerializeToNode(idsForNode, WebJsonOptions);
+                    config["sourceConnectionId"] = sourceConnectionId.ToString();
+                    config["destinationId"] = destinationId.ToString();
                 });
 
                 // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
@@ -220,6 +238,11 @@ public static class WorkflowEndpoints
                 // used to silently misroute every resource but the first into the wrong table, failing with
                 // "Invalid column name"). The single legacy resourceType/destinationObject/fields trio is still
                 // mirrored from the first spec only, kept only for any older consumer still reading that single shape.
+                // sourceConnectionId lets DestinationNodeExecutor re-resolve each resource type's real MappingProfile
+                // by the SAME natural key (ResourceType, SourceConnectionId, DestinationId) the mapping node above
+                // uses — without it, a destination with more than one MappingProfile sharing its DestinationId (a
+                // stale one left behind by an earlier save, say) has no way to pick the one this workflow's own
+                // source connection actually produced.
                 if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
                 {
                     if (!resourceMappingsByNode.TryGetValue(spec.DestinationNodeId, out var resourceMappingsForNode))
@@ -240,6 +263,7 @@ public static class WorkflowEndpoints
                         }
 
                         config["resourceMappings"] = JsonSerializer.SerializeToNode(resourceMappingsForNode, WebJsonOptions);
+                        config["sourceConnectionId"] = sourceConnectionId.ToString();
                     });
                 }
             }

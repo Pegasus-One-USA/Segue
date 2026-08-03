@@ -6,17 +6,23 @@ using FHIRBridge.Application.DTOs;
 namespace FHIRBridge.Application.Services;
 
 /// <summary>
-/// Loads the generated FHIR R4 catalog (<c>Mapping/Catalog/fhir-r4-catalog.json</c>, copied next
-/// to the assembly) once and caches it. Singleton. The JSON is produced by
-/// tools/MappingMetadataGenerator from StructureDefinition snapshots.
+/// Loads a generated FHIR element catalog (copied next to the assembly under <c>Mapping/Catalog/</c>)
+/// once and caches it. Singleton per <paramref name="catalogFileName"/> — see the keyed DI registration
+/// in DependencyInjection.cs, which instantiates this class once per vendor catalog ("fhir-r4-catalog.json",
+/// the generic base-FHIR-R4 catalog from tools/MappingMetadataGenerator; "fhir-r4-catalog.epic.json", the
+/// Epic-profile catalog from tools/EpicTemplateCatalogGenerator).
 /// </summary>
 public sealed class EmbeddedFhirElementCatalog : IFhirElementCatalog
 {
-    private static readonly string CatalogPath =
-        Path.Combine(AppContext.BaseDirectory, "Mapping", "Catalog", "fhir-r4-catalog.json");
-
-    private readonly Lazy<CatalogData> _data = new(Load, LazyThreadSafetyMode.ExecutionAndPublication);
+    private readonly string _catalogPath;
+    private readonly Lazy<CatalogData> _data;
     private readonly ConcurrentDictionary<string, IReadOnlyList<FhirElementDto>> _fieldCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public EmbeddedFhirElementCatalog(string catalogFileName = "fhir-r4-catalog.json")
+    {
+        _catalogPath = Path.Combine(AppContext.BaseDirectory, "Mapping", "Catalog", catalogFileName);
+        _data = new Lazy<CatalogData>(Load, LazyThreadSafetyMode.ExecutionAndPublication);
+    }
 
     public string FhirVersion => _data.Value.FhirVersion;
 
@@ -33,14 +39,14 @@ public sealed class EmbeddedFhirElementCatalog : IFhirElementCatalog
             _data.Value.Resources.TryGetValue(key, out var fields) ? fields : []);
     }
 
-    private static CatalogData Load()
+    private CatalogData Load()
     {
-        if (!File.Exists(CatalogPath))
+        if (!File.Exists(_catalogPath))
         {
             return new CatalogData("4.0.1", [], new Dictionary<string, IReadOnlyList<FhirElementDto>>(StringComparer.OrdinalIgnoreCase));
         }
 
-        using var stream = File.OpenRead(CatalogPath);
+        using var stream = File.OpenRead(_catalogPath);
         using var document = JsonDocument.Parse(stream);
         var rootElement = document.RootElement;
 

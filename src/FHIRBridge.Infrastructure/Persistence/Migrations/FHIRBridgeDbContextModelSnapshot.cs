@@ -1366,6 +1366,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<string>("MappingJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");
 
@@ -3021,6 +3024,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(300)
                                 .HasColumnType("nvarchar(300)");
 
+                            b1.Property<string>("ForeignKeyColumn")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)");
+
                             b1.Property<string>("Format")
                                 .HasMaxLength(100)
                                 .HasColumnType("nvarchar(100)");
@@ -3047,6 +3054,22 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                             b1.Property<string>("NormalizationType")
                                 .HasMaxLength(100)
                                 .HasColumnType("nvarchar(100)");
+
+                            b1.Property<string>("ParentKeyColumn")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)");
+
+                            b1.Property<string>("ParentTable")
+                                .HasMaxLength(300)
+                                .HasColumnType("nvarchar(300)");
+
+                            b1.Property<string>("ReferenceLookupKeyColumn")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)");
+
+                            b1.Property<string>("ReferenceLookupTable")
+                                .HasMaxLength(300)
+                                .HasColumnType("nvarchar(300)");
 
                             b1.Property<string>("ResourceType")
                                 .HasMaxLength(100)

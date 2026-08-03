@@ -225,6 +225,16 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<MappingProfile>>(_mappingProfiles.Values.OrderBy(x => x.Name).ToList());
 
+    public Task<MappingProfile?> FindMappingProfileAsync(
+        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct)
+    {
+        var match = _mappingProfiles.Values.FirstOrDefault(x =>
+            x.ResourceType == resourceType
+            && x.SourceConnectionId == sourceConnectionId
+            && x.DestinationId == destinationId);
+        return Task.FromResult(match);
+    }
+
     public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct)
     {
         _mappingProfiles.TryGetValue(id, out var e);

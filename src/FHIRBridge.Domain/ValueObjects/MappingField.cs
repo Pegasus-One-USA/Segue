@@ -24,4 +24,15 @@ public sealed record MappingField(
     // "$.component[*].valueQuantity.value"), and the code value that selects which array item's JsonPath value to
     // take (e.g. "8480-6" for BP systolic). Ignored for every other ArrayPolicy.
     string? CorrelationCodeJsonPath = null,
-    string? CorrelationCodeValue = null);
+    string? CorrelationCodeValue = null,
+    string? ParentTable = null,
+    string? ParentKeyColumn = null,
+    string? ForeignKeyColumn = null,
+    /// <summary>Non-null marks this field as a FHIR reference (e.g. "$.subject.reference" = "Patient/xyz") that
+    /// must be resolved against another already-written table rather than written verbatim — the name of that
+    /// table, e.g. "Patient".</summary>
+    string? ReferenceLookupTable = null,
+    /// <summary>The column in <see cref="ReferenceLookupTable"/> holding the referenced resource's own FHIR id
+    /// (e.g. "PatientId") — matched against the id extracted from the reference string to find that row's real
+    /// primary key, which becomes this field's actual written value.</summary>
+    string? ReferenceLookupKeyColumn = null);

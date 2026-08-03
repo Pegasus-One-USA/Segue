@@ -1,19 +1,38 @@
 import {
-  Component, input, output, signal, computed, effect,
-  untracked, inject, OnInit,
+  Component, ElementRef, Injector, input, output, signal, computed, effect,
+  untracked, inject, viewChild, afterNextRender, OnInit,
 } from '@angular/core';
 import {
   FormBuilder, Validators, ReactiveFormsModule,
 } from '@angular/forms';
-import { forkJoin, of } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { forkJoin, of, from, Observable } from 'rxjs';
+import { catchError, map, switchMap, concatMap, toArray, finalize } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
-import { DestinationSchemaService, DestinationColumn, DestinationTable } from '../../../services/destination-schema.service';
-import { MappingCatalogService, FhirElement, resolveParentReferenceField } from '../../../services/mapping-catalog.service';
+import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
+import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
-import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
-import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
+import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { buildConnectionMetadata, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
+import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
+import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow, PendingSchemaOp } from './field-mapping/field-mapping-model';
+import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
+import { MappingSnapshot, MappingSnapshotSummary } from './field-mapping/mapping-snapshot.model';
+import {
+  MappingSummaryDocument, ChildTableRelation, buildMappingSummaryDocument, applyMappingSummaryDocument,
+  pruneOrphanedMappingRows,
+} from './field-mapping/field-mapping-summary.model';
+import { MappingSummaryService } from './field-mapping/mapping-summary.service';
+import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
+import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
+import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
+import { ToastService } from '../../../services/toast.service';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
+import { PipelineStore } from '../../../services/pipeline.store';
+
+// Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
+// import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -92,27 +111,6 @@ export const DEST_RESOURCE_DEFS: Record<string, ResourceDef> = {
   },
 };
 
-export interface MappingRow {
-  resource:   string;
-  fieldLabel: string;
-  fhirPath:   string;
-  targetName: string;
-  tableName:  string;
-  // Catalog-derived metadata carried through to the build so the mapping engine gets correct,
-  // array-aware JSONPaths instead of a guessed conversion.
-  jsonPath?:  string;
-  valueType?: string;
-  arrays?:    string[];
-  // True only for a resource's mandatory id row (see _reconcileIdRows) — the column an Upsert write
-  // matches an existing row on. Forced/locked by the wizard; never set true on any other row.
-  isUpsertKey: boolean;
-  // True only for a reference-field row forced/locked by _reconcileParentRefRows because this resource
-  // is configured as a child of parentResourceType (see selectedParentsOf/toggleParent). Never
-  // removable, never reassignable to another business field — same lock semantics as the id row.
-  isRequiredParentRef?: boolean;
-  parentResourceType?: string;
-}
-
 /** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
 function genericResourceDef(r: string): ResourceDef {
   return {
@@ -132,7 +130,7 @@ function genericResourceDef(r: string): ResourceDef {
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
 })
@@ -140,17 +138,51 @@ export class DestinationWizardComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly catalogSvc = inject(MappingCatalogService);
+  private readonly toast = inject(ToastService);
   private readonly destinationConfigSvc = inject(DestinationConfigurationService);
+  private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
+  private readonly mappingSummarySvc = inject(MappingSummaryService);
+  private readonly mappingProfileImportSvc = inject(MappingProfileImportService);
+  private readonly pipelineStore = inject(PipelineStore);
+  private readonly injector = inject(Injector);
+
+  // True while "Add to Pipeline"/"Update" is waiting on POST mapping-profiles/import.
+  readonly savingMappingProfiles = signal(false);
 
   // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
   private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
+
+  // Fields derived from a real FHIR JSON payload the user pasted via the canvas's "Load JSON payload"
+  // affordance — takes priority over both the backend catalog and the built-in fallback for that
+  // resource, since it mirrors data the user actually has rather than a generic field list.
+  private readonly payloadFieldsByResource = signal<Record<string, ResourceFieldDef[]>>({});
 
   readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
   readonly sourceResources = input<string[]>([]);
+  /** The upstream source's EHR vendor (e.g. "Epic") — the Mapping JSON's top-level "source" field. */
+  readonly sourceVendor = input<string>('');
+  /** The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
+   *  "sourceConnectionId" field. Null if no source is wired up yet. */
+  readonly sourceConnectionId = input<string | null>(null);
+  // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
+  // the × while a group's mapping canvas is open) — any change triggers the matching action here.
+  readonly exitMappingRequest = input<number>(0);
+  readonly saveMappingRequest = input<number>(0);
+  // Independent of the two above: saves/restores ONLY the mapping-screen state (see MappingSnapshot) —
+  // never touches the workflow-level `saved` output, PipelineStore, or node.fields at all.
+  readonly saveSnapshotRequest = input<number>(0);
+  private _lastExitTrigger = 0;
+  private _lastSaveTrigger = 0;
+  private _lastSaveSnapshotTrigger = 0;
+  // Same pattern, passed straight through to the mapping canvas — its "Load JSON payload"/"Preview
+  // output" actions now live in the dialog header (see NodeLibraryDialogComponent), not this canvas's
+  // own toolbar, so the wizard just forwards these without reacting to them itself.
+  readonly openLoadPayloadRequest = input<number>(0);
+  readonly openPreviewRequest = input<number>(0);
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
@@ -158,11 +190,20 @@ export class DestinationWizardComponent implements OnInit {
    *  (unlike cancel(), which only backs out of this form to the library's sidebar). Mirrors the
    *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
   readonly closeAll  = output<void>();
+  /** Total field-mapping count for the currently open group — the dialog header shows it next to the title. */
+  readonly mappingCountChange = output<number>();
 
   // Lets the parent (Node Library sidebar) lock out the other destination type
   // mid-wizard, and warn before discarding progress if the user switches anyway.
   readonly stepChange     = output<number>();
   readonly progressChange = output<boolean>();
+
+  // Lets the parent hide its own sidebar while a specific group's mapping canvas is open, so the
+  // canvas gets the full dialog width instead of sharing it with the node picker rail.
+  readonly mappingCanvasActive = output<boolean>();
+  // Lets the parent show "Map fields — {group}" in its own header in place of "Node Library" while
+  // the canvas is open — null means "show your normal title", since no group is active.
+  readonly mappingCanvasTitle = output<string | null>();
 
   // ── step state ────────────────────────────────────────────────────────────
   readonly step        = signal(1);
@@ -223,16 +264,12 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   // ── data groups ───────────────────────────────────────────────────────────
-  // Always the platform's full curated resource set (FHIR_RESOURCES) — every Epic source now requests scopes
-  // for all of these regardless of what's picked here, so this no longer needs to derive from (and be capped
-  // by) the specific upstream source's saved resource list, which could also just be stale on older nodes.
-  readonly availableGroups = computed(() => FHIR_RESOURCES);
+  // Always the full curated FHIR resource list — not derived from the upstream source's own
+  // selection, since the destination's resource picks are independent of whatever the source
+  // happened to have selected (and a destination added before any source is configured still
+  // needs the full list to choose from).
+  readonly availableGroups = computed(() => SUPPORTED_RESOURCE_TYPES);
   readonly selectedResources = signal<string[]>([]);
-
-  // Which other selected resources each resource is configured as a "child" of — e.g.
-  // { Observation: ['Patient', 'Encounter'] } means Observation independently requires a mapped
-  // reference field to both. A resource can have several parents at once (see _reconcileParentRefRows).
-  readonly parentSelections = signal<Record<string, string[]>>({});
 
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
@@ -246,6 +283,338 @@ export class DestinationWizardComponent implements OnInit {
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
+  // ── extra target tables (child tables added alongside a group's primary table) ──
+  // Keyed by data-group name; each entry is a list of additional already-probed SQL
+  // table full-names the user chose to also map into for that same group's canvas
+  // (e.g. mapping Patient's Contact array into a real dbo.PatientContact table).
+  // Existing tables only — no schema authoring (no "create a new table").
+  readonly extraTablesByGroup = signal<Record<string, string[]>>({});
+
+  extraTablesFor(group: string): string[] { return this.extraTablesByGroup()[group] ?? []; }
+
+  /** The canvas computes and emits the new desired list directly (add: appended, remove: filtered) —
+   *  this just stores it and cleans up any mappings that targeted a table that's no longer in the list. */
+  onExtraTablesChange(tables: string[]): void {
+    const g = this.activeMappingGroup();
+    if (!g) return;
+    const removed = this.extraTablesFor(g).filter(t => !tables.includes(t));
+    this.extraTablesByGroup.update(m => ({ ...m, [g]: tables }));
+    if (removed.length) {
+      this.mappingRows.update(rows => rows.filter(r => !(r.resource === g && removed.includes(r.tableName))));
+    }
+  }
+
+  // ── child-table relations (parent table / parent PK / FK) ───────────────────────────────────────
+  // Global, not per-resource/per-canvas — a table's parent/FK relationship doesn't depend on which
+  // resource's canvas happens to be open. Previously lived as local state inside
+  // FieldMappingCanvasComponent, which meant it was lost the moment a different resource's canvas
+  // opened (a fresh component instance) — lifted here so it survives resource navigation, node reload,
+  // and the Mapping JSON export/import.
+  readonly childTableRelationsByTable = signal<Record<string, ChildTableRelation>>({});
+
+  onChildTableRelationAdded(e: { tableName: string; relation: ChildTableRelation }): void {
+    this.childTableRelationsByTable.update(m => ({ ...m, [e.tableName]: e.relation }));
+  }
+
+  // ── Mapping JSON — the one canonical save/load contract for this screen (see field-mapping-summary.
+  // model.ts). Aggregates every resource with at least one mapping in one shot; independent of
+  // dest_mappings/dest_mappings_v2 (still feed workflow-build-assembler.service.ts unmodified). ────────
+  readonly lastMappingSummary = signal<MappingSummaryDocument | null>(null);
+  readonly mappingSummaryPreviewOpen = signal(false);
+  readonly canSaveMappingSummary = computed(() => this.mappingRows().length > 0);
+
+  buildAndShowMappingSummary(): void {
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: this.sourceVendor().toUpperCase(),
+      destType: this.mappingDestType(),
+      destLabel: this.destLabel(),
+      mappingRows: this.mappingRows(),
+      sqlTables: this.sqlTables(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+      availableFields: this.availableFieldsFn,
+      sourceConnectionId: this.sourceConnectionId(),
+      destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+      targetByResource: this.targetByResource(),
+    });
+    this.lastMappingSummary.set(doc);
+    this.mappingSummaryPreviewOpen.set(true);
+    this.mappingSummarySvc.save(doc).subscribe(() => {
+      this.toast.success('Mapping saved', `${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} saved.`);
+    });
+  }
+
+  closeMappingSummaryPreview(): void {
+    this.mappingSummaryPreviewOpen.set(false);
+  }
+
+  /** Reconstructs this screen entirely from a previously saved Mapping JSON document — "Edit Mapping". */
+  loadMappingSummary(doc: MappingSummaryDocument): void {
+    const applied = applyMappingSummaryDocument(doc, this.mappingDestType());
+    this.mappingRows.set(applied.mappingRows);
+    this.targetByResource.set(applied.targetByResource);
+    this.extraTablesByGroup.set(applied.extraTablesByGroup);
+    this.sqlTables.set(applied.sqlTables);
+    if (applied.sqlTables.length) this.probeState.set('ok');
+    this.childTableRelationsByTable.set(applied.childTableRelationsByTable);
+    this.selectedResources.set(applied.selectedResources);
+  }
+
+  // ── "Load mapping JSON" — paste a previously saved Mapping JSON document back in. Stubbed the same
+  // way MappingSnapshotService is: no real backend endpoint yet, so this only parses/applies pasted
+  // text; MappingSummaryService.save()/load() are ready for a real HttpClient call to slot in later. ──
+  readonly mappingSummaryLoadText = signal('');
+  readonly mappingSummaryLoadError = signal<string | null>(null);
+
+  submitLoadMappingSummary(): void {
+    const raw = this.mappingSummaryLoadText().trim();
+    if (!raw) { this.mappingSummaryLoadError.set('Paste a Mapping JSON document first.'); return; }
+    let doc: MappingSummaryDocument;
+    try { doc = JSON.parse(raw) as MappingSummaryDocument; }
+    catch (e) { this.mappingSummaryLoadError.set(`Invalid JSON: ${(e as Error).message}`); return; }
+    if (!Array.isArray(doc?.mappings)) { this.mappingSummaryLoadError.set('Not a recognized Mapping JSON document (missing "mappings").'); return; }
+    this.mappingSummaryLoadError.set(null);
+    this.loadMappingSummary(doc);
+    this.toast.success('Mapping loaded', `Restored ${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} from the pasted JSON.`);
+  }
+
+  // ── mapping snapshot (independent of the workflow — see mapping-snapshot.model.ts) ─────────────
+  // A self-contained save/load for just this screen's state, addressable by its own id, with no
+  // dependency on nodes/edges/sources/destinations/trigger/workflowId or a live DB connection to
+  // reconstruct. Entirely additive: dest_mappings/dest_mappings_v2-on-the-node (used by the OUTER
+  // workflow save, see _save() below) and the existing Save/Close buttons are untouched by this.
+  readonly savedSnapshots = signal<MappingSnapshotSummary[]>([]);
+  readonly snapshotIdToLoad = signal<string | null>(null);
+  readonly snapshotBusy = signal(false);
+  /** Set once a snapshot has been loaded this session, so a later Save updates that same record
+   *  instead of forking a new one every time. */
+  private _loadedSnapshotId: string | null = null;
+
+  refreshSnapshotList(): void {
+    this.mappingSnapshotSvc.list().subscribe(list => this.savedSnapshots.set(list));
+  }
+
+  private _buildSnapshot(): Omit<MappingSnapshot, 'id' | 'createdAt' | 'updatedAt'> {
+    const group = this.activeMappingGroup();
+    return {
+      name: group ? `${group} mapping` : 'Untitled mapping',
+      destType: this.mappingDestType(),
+      selectedResources: this.selectedResources(),
+      activeGroup: group,
+      targetByResource: this.targetByResource(),
+      extraTablesByGroup: this.extraTablesByGroup(),
+      destinationTables: this.sqlTables(),
+      payloadFieldsByResource: this.payloadFieldsByResource(),
+      mappingRows: this.mappingRows(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+    };
+  }
+
+  /** Saves ONLY the mapping-screen state — resource type, destination tables/columns (incl. anything
+   *  user-created), mapping rows, and which group/resources are selected. No workflow-level data at all. */
+  saveMappingSnapshot(): void {
+    this.snapshotBusy.set(true);
+    const draft = { ...this._buildSnapshot(), id: this._loadedSnapshotId ?? undefined };
+    this.mappingSnapshotSvc.save(draft).subscribe(saved => {
+      this._loadedSnapshotId = saved.id;
+      this.snapshotBusy.set(false);
+      this.refreshSnapshotList();
+      this.toast.success('Mapping snapshot saved', `Saved as "${saved.name}" (id: ${saved.id}).`);
+    });
+  }
+
+  /** Rebuilds the Map Fields screen entirely from a previously saved snapshot — no live DB probe, no
+   *  workflow/node context required. */
+  loadMappingSnapshot(id: string): void {
+    if (!id) return;
+    this.snapshotBusy.set(true);
+    this.mappingSnapshotSvc.get(id).subscribe(snapshot => {
+      this.snapshotBusy.set(false);
+      if (!snapshot) { this.toast.error('Load failed', 'That saved mapping could not be found.'); return; }
+      this._restoreFromSnapshot(snapshot);
+      this.toast.success('Mapping loaded', `Restored "${snapshot.name}".`);
+    });
+  }
+
+  private _restoreFromSnapshot(s: MappingSnapshot): void {
+    this._loadedSnapshotId = s.id;
+    this.selectedResources.set(s.selectedResources);
+    this.targetByResource.set(s.targetByResource);
+    this.extraTablesByGroup.set(s.extraTablesByGroup);
+    this.payloadFieldsByResource.set(s.payloadFieldsByResource);
+    this.sqlTables.set(s.destinationTables);
+    // So hasSqlTables()/sqlTableOptions() behave as if a real probe just succeeded, without one.
+    if (s.destinationTables.length) this.probeState.set('ok');
+    this.mappingRows.set(s.mappingRows);
+    // ?? {} covers snapshots saved before this field existed.
+    this.childTableRelationsByTable.set(s.childTableRelationsByTable ?? {});
+    this.selectedGroupForMapping.set(s.activeGroup);
+  }
+
+  /** Column names of any already-probed SQL table by its full name — used for extra target tables. */
+  readonly columnsForTableFn = (tableFullName: string): string[] => {
+    const table = this.sqlTables().find(t => t.fullName === tableFullName);
+    return table ? table.columns.map(c => c.name) : [];
+  };
+
+  /** Already-probed tables not yet used as this group's primary or extra targets — offered in "+ Add a table". */
+  readonly availableTablesToAddFn = (group: string): string[] => {
+    const used = new Set([this.targetFor(group), ...this.extraTablesFor(group)]);
+    return this.sqlTables().map(t => t.fullName).filter(t => !used.has(t));
+  };
+
+  /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
+  readonly connectionInfo = computed<DestinationProbeRequest | null>(() => {
+    if (!this.isSql()) return null;
+    const v = this.sqlForm.value;
+    return {
+      destinationType: 'SqlServer',
+      server: v.server ?? '',
+      database: v.database ?? '',
+      authentication: v.auth ?? 'sql-auth',
+      username: v.username ?? undefined,
+      password: v.password ?? undefined,
+      trustServerCertificate: true,
+      encrypt: true,
+    };
+  });
+
+  /** A column was added via the canvas's Add Column modal — upserted (not blindly appended) into the
+   *  known schema, since this fires TWICE for the same column: once immediately with a locally-synthesized
+   *  preview (see field-mapping-canvas.component.ts's submitAddColumn — no DB call has happened yet at
+   *  that point), and again with the backend's authoritative shape once "Add to Pipeline" actually flushes
+   *  the queued ALTER TABLE for real (see flushPendingSchemaOps). Tagged 'userCreated' so a MappingSnapshot
+   *  can tell it apart from a probed/pre-existing column.
+   *  If `table` is set, the target table didn't already exist locally — upserted the same way, by fullName,
+   *  rather than trying (and failing) to append to a table that was never there. */
+  onColumnAdded(e: { tableName: string; column: DestinationColumn; table?: DestinationTable }): void {
+    if (e.table) {
+      const tagged = { ...e.table, origin: 'userCreated' as const, columns: e.table.columns.map(c => ({ ...c, origin: 'userCreated' as const })) };
+      this.sqlTables.update(tables => {
+        const idx = tables.findIndex(t => t.fullName === tagged.fullName);
+        return idx === -1 ? [...tables, tagged] : tables.map((t, i) => i === idx ? tagged : t);
+      });
+      return;
+    }
+    const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
+    this.sqlTables.update(tables => tables.map(t => {
+      if (t.fullName !== e.tableName) return t;
+      const idx = t.columns.findIndex(c => c.name === column.name);
+      const columns = idx === -1 ? [...t.columns, column] : t.columns.map((c, i) => i === idx ? column : c);
+      return { ...t, columns };
+    }));
+  }
+
+  /** A table was created via the canvas's "Create a new table…" modal — upserted (not skipped when
+   *  already present) into the known schema, since this fires TWICE for the same table: once immediately
+   *  with a locally-synthesized preview (no DB call has happened yet at that point — see
+   *  field-mapping-canvas.component.ts's submitCreateTable), and again with the backend's authoritative
+   *  shape (including its FK column, if this was made a child table) once "Add to Pipeline" actually
+   *  flushes the queued CREATE TABLE for real (see flushPendingSchemaOps). Tagged 'userCreated' (table and
+   *  all its columns) for the same reason as onColumnAdded. */
+  onTableCreated(table: DestinationTable): void {
+    const tagged = { ...table, origin: 'userCreated' as const, columns: table.columns.map(c => ({ ...c, origin: 'userCreated' as const })) };
+    this.sqlTables.update(tables => {
+      const idx = tables.findIndex(t => t.fullName === tagged.fullName);
+      return idx === -1 ? [...tables, tagged] : tables.map((t, i) => i === idx ? tagged : t);
+    });
+  }
+
+  /** A column was really dropped via the canvas's delete-column flow — remove it from the known schema. */
+  onColumnDropped(e: { tableName: string; column: string }): void {
+    this.sqlTables.update(tables => tables.map(t =>
+      t.fullName === e.tableName ? { ...t, columns: t.columns.filter(c => c.name !== e.column) } : t
+    ));
+  }
+
+  /** A column was really altered (rename and/or data type change) — update its entry in sqlTables()
+   *  (preserving its 'userCreated'/'probed' origin) and, if it was renamed, re-point any mapping that
+   *  targeted the old column name so it doesn't silently point at a column that no longer exists. */
+  onColumnAltered(e: { tableName: string; oldColumnName: string; column: DestinationColumn }): void {
+    this.sqlTables.update(tables => tables.map(t =>
+      t.fullName === e.tableName
+        ? { ...t, columns: t.columns.map(c => c.name === e.oldColumnName ? { ...e.column, origin: c.origin } : c) }
+        : t
+    ));
+    if (e.column.name !== e.oldColumnName) {
+      this.mappingRows.update(rows => rows.map(r =>
+        r.tableName === e.tableName && r.targetName === e.oldColumnName
+          ? { ...r, targetName: e.column.name }
+          : r
+      ));
+    }
+  }
+
+  /** A real FHIR JSON payload was pasted and parsed via the canvas's "Load JSON payload" modal —
+   *  store its fields so the source tree for this resource mirrors the payload's actual shape. */
+  onSourcePayloadLoaded(e: { resource: string; fields: ResourceFieldDef[] }): void {
+    this.payloadFieldsByResource.update(m => ({ ...m, [e.resource]: e.fields }));
+  }
+
+  // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
+  // Every schema-authoring action on the canvas is staged here instead of hitting the database the
+  // moment the user clicks it — nothing real happens until "Add to Pipeline" flushes this queue (see
+  // next()/onSave() calling flushPendingSchemaOps below). The canvas has already applied a local preview
+  // of each op by the time it's queued (see field-mapping-canvas.component.ts), so the mapping UI works
+  // normally throughout; this queue exists purely to run the real DDL, in order, once confirmed.
+  readonly pendingSchemaOps = signal<PendingSchemaOp[]>([]);
+  readonly applyingSchemaOps = signal(false);
+
+  onSchemaOpQueued(op: PendingSchemaOp): void {
+    this.pendingSchemaOps.update(ops => [...ops, op]);
+  }
+
+  /** Runs every queued schema op for real, strictly in the order they were queued (a later op — e.g. add
+   *  column — may depend on an earlier one — e.g. create table — having actually landed first). Stops at
+   *  the first failure: already-applied ops are dropped from the queue (so a retry doesn't repeat them),
+   *  the failing op and anything still after it stay queued, and the caller is told not to proceed with
+   *  the rest of the save so a mapping profile is never persisted against schema that doesn't exist. */
+  flushPendingSchemaOps(): Observable<boolean> {
+    const ops = this.pendingSchemaOps();
+    if (ops.length === 0) return of(true);
+
+    this.applyingSchemaOps.set(true);
+    return from(ops).pipe(
+      concatMap(op => this._applyOneSchemaOp(op).pipe(
+        map(() => {
+          this.pendingSchemaOps.update(list => list.filter(o => o !== op));
+          return true;
+        }),
+      )),
+      toArray(),
+      map(results => results.every(Boolean)),
+      catchError(err => {
+        const msg = err instanceof Error ? err.message : 'Failed to apply a queued schema change.';
+        this.toast.error('Schema change failed', msg);
+        return of(false);
+      }),
+      finalize(() => this.applyingSchemaOps.set(false)),
+    );
+  }
+
+  private _applyOneSchemaOp(op: PendingSchemaOp): Observable<void> {
+    switch (op.kind) {
+      case 'createTable':
+        return this.schemaSvc.createTable(op.request).pipe(map(result => {
+          if (!result.success) throw new Error(`Create table "${op.request.tableName}" failed: ${result.error ?? 'unknown error'}`);
+          if (result.table) this.onTableCreated(result.table);
+        }));
+      case 'addColumn':
+        return this.schemaSvc.addColumn(op.request).pipe(map(result => {
+          if (!result.success || !result.column) throw new Error(`Add column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
+          this.onColumnAdded({ tableName: op.request.tableName, column: result.column, table: result.table ?? undefined });
+        }));
+      case 'dropColumn':
+        return this.schemaSvc.dropColumn(op.request).pipe(map(result => {
+          if (!result.success) throw new Error(`Drop column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
+        }));
+      case 'alterColumn':
+        return this.schemaSvc.alterColumn(op.request).pipe(map(result => {
+          if (!result.success || !result.column) throw new Error(`Update column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
+          this.onColumnAltered({ tableName: op.request.tableName, oldColumnName: op.request.columnName, column: result.column });
+        }));
+    }
+  }
+
   // ── select an existing DestinationConfiguration instead of building a new one ───────────────
   // Only offered when attaching a brand-new destination node (not when editing one already on the canvas —
   // that node's fields already pin a connection, existing or otherwise). Excludes destinations that already
@@ -257,6 +626,22 @@ export class DestinationWizardComponent implements OnInit {
   readonly existingOptions = signal<DestinationConfigurationDto[]>([]);
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
+
+  // Set from the edited node's own fields when a prior build already provisioned a real
+  // DestinationConfiguration for it (see workflow-builder.component.ts's stampBuildResultIds) — distinct
+  // from selectedExistingId, which only reflects a manual "use an existing connection" pick in Step 1.
+  // Also set the moment Step 1 (Configure) is completed in "new connection" mode — see
+  // provisionDestinationConnection() — so a real destinationId exists as soon as the connection is
+  // configured, not only after the whole wizard finishes and the workflow gets built.
+  readonly resolvedDestinationId = signal<string | null>(null);
+  // The real secret reference for resolvedDestinationId — stamped alongside it by provisionDestinationConnection()
+  // (new-connection path) or restored from the node's own config by _populateFromNode() (editing a prior save).
+  // _save() needs these on the "new connection" branch so the node carries a real secretKeyVaultName/secretName
+  // instead of leaving them blank (ConfigurationSecretProvider throws "Secret '' was not found for vault ''" at
+  // run time otherwise).
+  readonly resolvedSecretKeyVaultName = signal<string | null>(null);
+  readonly resolvedSecretName = signal<string | null>(null);
+  readonly provisioningDestination = signal(false);
 
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
@@ -273,6 +658,12 @@ export class DestinationWizardComponent implements OnInit {
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly isCsv        = computed(() => this.destType() === 'csv');
+  /** Narrows the 5-way destType() down to the 2-way family the field-mapping canvas/snapshot/summary
+   *  subsystem understands (it only ever needed "does this have live SQL schema introspection, or not" —
+   *  MySQL/PostgreSQL behave like 'sql' there, and Mongo — no live introspection, free-text field names —
+   *  behaves like 'csv'). Keeps destType() itself as the source of truth for everything else (forms,
+   *  labels, provisioning, transformId). */
+  readonly mappingDestType = computed<'sql' | 'csv'>(() => this.isSql() ? 'sql' : 'csv');
   readonly destLabel    = computed(() =>
     this.destType() === 'sql' ? 'SQL Server'
       : this.destType() === 'mysql' ? 'MySQL'
@@ -307,46 +698,48 @@ export class DestinationWizardComponent implements OnInit {
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
+    effect(() => this.mappingCanvasActive.emit(this.activeMappingGroup() !== null));
+    effect(() => {
+      const g = this.activeMappingGroup();
+      this.mappingCanvasTitle.emit(g ? `Map fields — ${g}` : null);
+    });
+    effect(() => this.mappingCountChange.emit(this.mappingRows().length));
+
+    // Header-level Close/Save trigger counters — react only on an actual increment, never on the
+    // initial read (both start at 0, so the first effect run must not fire either action).
+    effect(() => {
+      const v = this.exitMappingRequest();
+      if (v !== this._lastExitTrigger) { this._lastExitTrigger = v; if (v > 0) this.requestExitMapping(); }
+    });
+    effect(() => {
+      const v = this.saveMappingRequest();
+      if (v !== this._lastSaveTrigger) { this._lastSaveTrigger = v; if (v > 0) this.saveGroupMapping(); }
+    });
+    effect(() => {
+      const v = this.saveSnapshotRequest();
+      if (v !== this._lastSaveSnapshotTrigger) { this._lastSaveSnapshotTrigger = v; if (v > 0) this.saveMappingSnapshot(); }
+    });
 
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
-    // over the built-in fallback once loaded. Deduped via _requested so this effect never re-fetches.
+    // over the built-in fallback once loaded. Deduped via _requested, keyed on sourceConnectionId too —
+    // so if that only becomes known partway through this session (e.g. after a save/build round-trip
+    // stamps a real id onto the source node), this refetches with it instead of staying stuck on
+    // whatever (generic-catalog) result was fetched back when it was still null.
     effect(() => {
-      for (const r of this.availableGroups()) this._ensureCatalog(r);
+      const sourceConnectionId = this.sourceConnectionId();
+      for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId);
     });
 
-    // Keeps each selected resource's mandatory id/upsert-key row in sync — inserted the moment a resource is
-    // selected, upgraded to the schema-verified PK/unique column once the destination table's columns load,
-    // and refreshed if the catalog's id field metadata changes. See _reconcileIdRows for the merge rules.
-    effect(() => {
-      this.selectedResources();
-      this.destType();
-      this.catalogByResource();
-      this.sqlTables();
-      this.targetByResource();
-      untracked(() => this._reconcileIdRows());
-    });
-
-    // Same idea as the id-row effect above, for reference fields required by a "child of" declaration:
-    // prunes stale parent selections (a resource or its chosen parent was deselected), then locks/
-    // unlocks the corresponding reference-field rows to match.
-    effect(() => {
-      this.selectedResources();
-      this.catalogByResource();
-      this.parentSelections();
-      untracked(() => {
-        this._pruneParentSelections();
-        this._reconcileParentRefRows();
-      });
-    });
   }
 
   private readonly _requested = new Set<string>();
 
-  private _ensureCatalog(resource: string): void {
-    if (this._requested.has(resource)) return;
-    this._requested.add(resource);
-    this.catalogSvc.fields(resource).subscribe(fields => {
-      if (!fields.length) { this._requested.delete(resource); return; }
+  private _ensureCatalog(resource: string, sourceConnectionId: string | null): void {
+    const key = `${resource}::${sourceConnectionId ?? ''}`;
+    if (this._requested.has(key)) return;
+    this._requested.add(key);
+    this.catalogSvc.fields(resource, sourceConnectionId).subscribe(fields => {
+      if (!fields.length) { this._requested.delete(key); return; }
       const defs = fields.map(f => this._toFieldDef(resource, f));
       this.catalogByResource.update(m => ({ ...m, [resource]: defs }));
     });
@@ -400,6 +793,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.refreshSnapshotList();
     const edit = this.editNode();
     if (edit) {
       this._populateFromNode(edit);
@@ -410,6 +804,8 @@ export class DestinationWizardComponent implements OnInit {
     if (this.showConnectionModeToggle()) {
       this._loadExistingOptions();
     }
+    // New destination: no data group is pre-selected — the user picks explicitly, even when an upstream
+    // source is connected and could otherwise offer a default.
   }
 
   // ── step helpers ──────────────────────────────────────────────────────────
@@ -423,31 +819,124 @@ export class DestinationWizardComponent implements OnInit {
       return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
-    if (s >= 3) return this._hasUnverifiedColumns() || this._hasTypeMismatchedColumns() || this.resourcesMissingParentSelection().length > 0;
     return false;
   }
 
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
-    // The button is only visually dimmed while invalid (see dw-btn--invalid), not hard-disabled — clicking it
-    // now reveals exactly which field is missing instead of just silently doing nothing.
-    if (this.isNextDisabled()) {
-      if (this.step() === 1) {
-        (this.isSql() ? this.sqlForm : this.isMongo() ? this.mongoForm : this.csvForm).markAllAsTouched();
-      }
-      return;
-    }
-    // SQL: leaving Configure auto-tests the connection and loads tables before advancing.
+    // SQL: leaving Configure auto-tests the connection and loads tables before advancing; provisioning the
+    // real DestinationConfiguration happens inside testConnection()'s success handler, right before it advances.
     if (this.step() === 1 && this.isSql() && this.probeState() !== 'ok') {
       this.testConnection();
       return;
     }
+    // CSV: no connection probe gate — provision (create/update) the real DestinationConfiguration here,
+    // immediately on leaving Configure, then advance once it succeeds.
+    if (this.step() === 1 && !this.isSql()) {
+      this.provisionDestinationConnection(() => this._advancePastStep1());
+      return;
+    }
     if (this.step() < this.TOTAL_STEPS) {
+      // Leaving Data groups (2) always lands on the group-selection screen, never resuming
+      // whichever group's canvas was open last time — even if the user had drilled in before.
+      if (this.step() === 2) {
+        this.selectedGroupForMapping.set(null);
+        // Map fields (3) lists groups in the order they should actually be run — a prerequisite
+        // resource (e.g. Patient) always before whatever requires it — not raw selection-click order.
+        const sorted = sortByDependencyRank(this.selectedResources());
+        this.selectedResources.set(sorted);
+        console.table(sorted.map(resource => ({ resource, rank: dependencyRankFor(resource) })));
+      }
+      // Leaving Map fields (3) — every resource's mapping is done — log the full, rank-ordered Mapping
+      // JSON across every resource that has at least one mapping, so it's there to copy without needing
+      // the (hidden-from-this-screen) Save mapping button.
+      if (this.step() === 3 && this.canSaveMappingSummary()) {
+        const doc = buildMappingSummaryDocument({
+          sourceVendor: this.sourceVendor().toUpperCase(),
+          destType: this.mappingDestType(),
+          destLabel: this.destLabel(),
+          mappingRows: this.mappingRows(),
+          sqlTables: this.sqlTables(),
+          childTableRelationsByTable: this.childTableRelationsByTable(),
+          availableFields: this.availableFieldsFn,
+          sourceConnectionId: this.sourceConnectionId(),
+          destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+          targetByResource: this.targetByResource(),
+        });
+        console.log(JSON.stringify(doc, null, 2));
+      }
       this.step.update(x => x + 1);
       this._hasProgressed.set(true);
     } else {
-      this._save();
+      // Nothing hits the real database until this exact moment: every create-table/add-column/drop-column/
+      // alter-column queued while mapping runs for real here, in order, before the mapping profile itself
+      // is ever saved — see flushPendingSchemaOps.
+      this.flushPendingSchemaOps().subscribe(ok => {
+        if (ok) this._save();
+      });
     }
+  }
+
+  private _advancePastStep1(): void {
+    this.step.set(2);
+    this._hasProgressed.set(true);
+  }
+
+  // ── Step 3: data-group selection screen ────────────────────────────────────
+  // Step 3 no longer opens the mapping canvas directly — it first shows a list of the data groups
+  // chosen in Step 2, and only opens the (unmodified) canvas, scoped to one resource at a time, once
+  // the user clicks "Map" on a row. The canvas's own `resources` input already accepts an arbitrary
+  // subset, so scoping it to one group needs no change to the canvas itself.
+  private readonly selectedGroupForMapping = signal<string | null>(null);
+
+  // Guards against a stale selection if the user returns to Step 2 and deselects the group they were
+  // mapping — falls back to the selection screen rather than showing a canvas for an unselected group.
+  readonly activeMappingGroup = computed(() => {
+    const g = this.selectedGroupForMapping();
+    return g && this.resourceKeys().includes(g) ? g : null;
+  });
+
+  // Snapshot of mappingRows/targetByResource taken the moment a group's canvas opens, so "Close" can
+  // discard whatever changed during this session (confirmed first) while "Save" just keeps it.
+  private mappingRowsSnapshot: MappingRow[] | null = null;
+  private targetByResourceSnapshot: Record<string, string> | null = null;
+  readonly pendingExitConfirm = signal(false);
+
+  openGroupMapping(resource: string): void {
+    this.mappingRowsSnapshot = structuredClone(this.mappingRows());
+    this.targetByResourceSnapshot = structuredClone(this.targetByResource());
+    this.selectedGroupForMapping.set(resource);
+  }
+
+  private closeGroupMapping(): void {
+    this.mappingRowsSnapshot = null;
+    this.targetByResourceSnapshot = null;
+    this.selectedGroupForMapping.set(null);
+  }
+
+  /** "Save" below the canvas — keeps whatever's mapped so far, returns to the group list, and shows the
+   *  canonical Mapping JSON built from every resource mapped so far (not just this one). */
+  saveGroupMapping(): void {
+    const group = this.activeMappingGroup();
+    this.closeGroupMapping();
+    if (!group) return;
+    if (this.canSaveMappingSummary()) this.buildAndShowMappingSummary();
+    else this.toast.success('Mapping saved', `${group} mapping progress saved.`);
+  }
+
+  /** "Close" below the canvas — always confirms first, since it discards unsaved changes. */
+  requestExitMapping(): void { this.pendingExitConfirm.set(true); }
+  cancelExitMapping(): void { this.pendingExitConfirm.set(false); }
+
+  onExitConfirmBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelExitMapping();
+  }
+
+  confirmExitMapping(): void {
+    if (this.mappingRowsSnapshot) this.mappingRows.set(this.mappingRowsSnapshot);
+    if (this.targetByResourceSnapshot) this.targetByResource.set(this.targetByResourceSnapshot);
+    this.pendingExitConfirm.set(false);
+    this.closeGroupMapping();
   }
 
   back(): void {
@@ -478,11 +967,16 @@ export class DestinationWizardComponent implements OnInit {
     }).subscribe({
       next: res => {
         if (res.connected) {
-          this.sqlTables.set(res.tables);
+          // Tagged 'probed' so a MappingSnapshot can tell these apart from anything the user creates
+          // afterwards via "+ Add a table"/"+ Add column" (onTableCreated/onColumnAdded, both 'userCreated').
+          this.sqlTables.set(res.tables.map(t => ({
+            ...t,
+            origin: 'probed',
+            columns: t.columns.map(c => ({ ...c, origin: 'probed' })),
+          })));
           this.probeState.set('ok');
           if (this.step() < this.TOTAL_STEPS) {
-            this.step.update(x => x + 1);
-            this._hasProgressed.set(true);
+            this.provisionDestinationConnection(() => this._advancePastStep1());
           }
         } else {
           this.probeState.set('error');
@@ -688,509 +1182,139 @@ export class DestinationWizardComponent implements OnInit {
     return columns.length > 0 && columns.every(c => c.isAutoGenerated);
   }
 
+  /** Real data type (e.g. "nvarchar(50)") of one column on any already-known SQL table — undefined for
+   *  CSV destinations or free-text/pending columns that have no real schema behind them yet. Purely a
+   *  display concern for the mapping canvas's cards; column identity everywhere else stays the name. */
+  dataTypeForTableColumn(tableFullName: string, column: string): string | undefined {
+    const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
+    return table?.columns.find(c => c.name === column)?.dataType;
+  }
+
+  /** Real PK/FK status of one column on any already-known SQL table (see DestinationColumn.isPrimaryKey/
+   *  isForeignKey/references) — undefined for CSV destinations or free-text/pending columns with no real
+   *  schema behind them yet. Same display-only role as dataTypeForTableColumn. */
+  keyInfoForTableColumn(tableFullName: string, column: string): DestinationColumn | undefined {
+    const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
+    return table?.columns.find(c => c.name === column);
+  }
+
   // ── data groups ───────────────────────────────────────────────────────────
+  // Each resource is selected independently — no required/recommended auto-selection or locking.
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
 
   toggleResource(r: string): void {
-    this.selectedResources.update(list =>
-      list.includes(r) ? list.filter(x => x !== r) : [...list, r]
-    );
-  }
-
-  // ── parent-child reference mapping ───────────────────────────────────────
-  // Other selected resources that `r` could be a child of — i.e. `r` has at least one FHIR reference
-  // field whose allowed target types include that resource. Only these are offered as parent choices,
-  // so the UI can never be pushed into a pairing FHIR doesn't actually support.
-  candidateParentsFor(r: string): string[] {
-    const fields = this.availableFields(r);
-    return this.selectedResources().filter(other =>
-      other !== r && resolveParentReferenceField(this._asFhirElements(fields), other) !== null);
-  }
-
-  selectedParentsOf(r: string): string[] {
-    return this.parentSelections()[r] ?? [];
-  }
-
-  isParentSelected(r: string, parent: string): boolean {
-    return this.selectedParentsOf(r).includes(parent);
-  }
-
-  toggleParent(r: string, parent: string): void {
-    this.parentSelections.update(m => {
-      const current = m[r] ?? [];
-      const next = current.includes(parent) ? current.filter(p => p !== parent) : [...current, parent];
-      return { ...m, [r]: next };
-    });
-  }
-
-  private _asFhirElements(fields: ResourceFieldDef[]): FhirElement[] {
-    return fields.map(f => {
-      const isArray = !!f.arrays?.length;
-      return {
-        label: f.label,
-        jsonPath: f.jsonPath ?? '',
-        fhirPath: f.path.includes('.') ? f.path.slice(f.path.indexOf('.') + 1) : f.path,
-        cardinality: isArray ? '0..*' : '0..1',
-        valueType: f.valueType ?? 'String',
-        isArray,
-        arrays: f.arrays ?? [],
-        referenceTargetTypes: f.referenceTargetTypes ?? [],
+    if (this.isResourceSelected(r)) {
+      this.selectedResources.update(list => list.filter(x => x !== r));
+      // Deselecting here only ever shrank dest_resources — mappingRows/targetByResource/extraTablesByGroup/
+      // payloadFieldsByResource kept every row this resource ever had, so buildMappingSummaryDocument (which
+      // derives its resource list from mappingRows, not selectedResources) and the mapping-profile import it
+      // feeds kept saving this resource's mapping to the DB even after unselecting it here. Prune all of it.
+      this.mappingRows.update(rows => rows.filter(row => row.resource !== r));
+      const drop = <T>(m: Record<string, T>): Record<string, T> => {
+        const rest = { ...m };
+        delete rest[r];
+        return rest;
       };
-    });
-  }
-
-  isRequiredParentRefRow(row: MappingRow): boolean {
-    return !!row.isRequiredParentRef;
-  }
-
-  // ── mapping rows ──────────────────────────────────────────────────────────
-  rowsForResource(r: string): MappingRow[] {
-    return this.mappingRows().filter(row => row.resource === r);
-  }
-
-  // ── Map fields accordion (Step 3) ────────────────────────────────────────
-  // Explicit per-resource overrides — only touched by toggleGroup(). Whichever set contains a resource wins;
-  // if neither does, isGroupCollapsed() falls back to a sensible default (see below) rather than requiring
-  // every resource to be explicitly toggled once before it renders correctly.
-  private readonly _collapsedGroups = signal<Set<string>>(new Set());
-  private readonly _expandedGroups  = signal<Set<string>>(new Set());
-
-  // Default (no explicit toggle yet): a single resource always starts expanded — there's nothing to declutter.
-  // With several resources, only the first stays open and the rest start collapsed; a resource with an active
-  // mapping issue defaults open too, so a problem is never hidden behind a fold the user never opened.
-  isGroupCollapsed(r: string): boolean {
-    if (this._collapsedGroups().has(r)) return true;
-    if (this._expandedGroups().has(r)) return false;
-    if (this.resourceKeys().length <= 1) return false;
-    if (this.resourceIssueCount(r) > 0) return false;
-    return this.resourceKeys().indexOf(r) > 0;
-  }
-
-  toggleGroup(r: string): void {
-    const collapsedNow = this.isGroupCollapsed(r);
-    if (collapsedNow) {
-      this._expandedGroups.update(s => new Set(s).add(r));
-      this._collapsedGroups.update(s => { const n = new Set(s); n.delete(r); return n; });
-    } else {
-      this._collapsedGroups.update(s => new Set(s).add(r));
-      this._expandedGroups.update(s => { const n = new Set(s); n.delete(r); return n; });
+      this.targetByResource.update(drop);
+      this.extraTablesByGroup.update(drop);
+      this.payloadFieldsByResource.update(drop);
+      return;
     }
+    this.selectedResources.update(list => [...list, r]);
   }
 
-  // Badge shown on the group header regardless of collapse state, so collapsing a resource's mapping table
-  // never hides an unverified column, a type mismatch, or a missing required parent selection from view.
-  resourceIssueCount(r: string): number {
-    let count = this.rowsForResource(r)
-      .filter(row => this.isRowColumnUnverified(row) || this.isRowTypeMismatched(row)).length;
-    if (this.resourcesMissingParentSelection().includes(r)) count++;
-    return count;
-  }
+  // ── drag-to-reorder the Step 3 data-group rows ──────────────────────────────
+  // Plain pointer-capture dragging (no CDK, no native HTML5 DnD) — matches the convention already used
+  // everywhere else in this feature (canvas cards, tree-node drag, join-popover header drag). Smoothed
+  // with a FLIP animation (capture rects before the reorder, let it happen, then animate FROM the old
+  // position TO the new one) since a plain DOM/array reorder otherwise just snaps rows into place —
+  // and a midpoint threshold so hovering right at a row's edge doesn't flicker the order back and forth.
+  readonly draggingResource = signal<string | null>(null);
+  private readonly groupsTableBody = viewChild<ElementRef<HTMLElement>>('groupsBody');
 
-  updateRow(i: number, field: 'targetName', val: string): void {
-    this.mappingRows.update(rows => {
-      // The id row's column is auto-resolved (and its dropdown rendered read-only, see isIdColumnLocked in the
-      // template) only when a real primary/unique key was auto-matched on the destination table. When none was
-      // found, the template renders the id row's column as a live picker instead ("No primary/unique key
-      // detected... choose the column") — that picker must actually be able to write here, or the user's
-      // selection is silently discarded in favor of the catalog-derived fallback column name.
-      if (this.isIdRow(rows[i]) && this.isIdColumnLocked(rows[i].resource)) return rows;
-      const next = [...rows];
-      next[i] = { ...next[i], [field]: val };
+  private moveResource(dragged: string, target: string): void {
+    if (dragged === target) return;
+    this.selectedResources.update(list => {
+      const from = list.indexOf(dragged);
+      const to = list.indexOf(target);
+      if (from === -1 || to === -1) return list;
+      const next = [...list];
+      next.splice(from, 1);
+      next.splice(to, 0, dragged);
       return next;
     });
   }
 
-  // Adds one empty mapping row for the resource — defaults to the first field
-  // not already mapped, so repeated clicks step through the catalog.
-  addRow(resource: string): void {
-    if (this.isSql() && !this.targetFor(resource)) return; // no table chosen yet — nothing to map columns against
-    const fields = this.availableFields(resource);
-    if (!fields.length) return;
-    const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
-    const next = fields.find(f => !used.has(f.label)) ?? fields[0];
-    const row: MappingRow = {
-      resource,
-      fieldLabel: next.label,
-      fhirPath:   next.path,
-      targetName: this.isSql() ? next.sqlColumn : next.csvColumn,
-      tableName:  this.targetFor(resource),
-      jsonPath:   next.jsonPath,
-      valueType:  next.valueType,
-      arrays:     next.arrays,
-      isUpsertKey: false,
-    };
-    this.mappingRows.update(rows => [...rows, row]);
-  }
+  /** Runs `reorder`, then slides every displaced row from its pre-reorder position to its new one
+   *  (the classic FLIP technique) instead of letting the browser just snap them into place.
+   *
+   *  Uses afterNextRender() rather than a raw requestAnimationFrame() to read the "after" positions —
+   *  a plain rAF scheduled right after a signal update has NO guaranteed ordering against when Angular
+   *  actually commits that update to the DOM (this matters most under zoneless change detection, where
+   *  there's no zone.js task-boundary flush to piggyback on). Measuring too early reads the still-old
+   *  layout, computes a zero delta for every row, skips the animation entirely, and the reorder then
+   *  just snaps into place a frame later — which is exactly "not smooth". afterNextRender() is the
+   *  API Angular provides specifically to run code only once a render has actually been committed. */
+  private animateReorder(reorder: () => void): void {
+    const body = this.groupsTableBody()?.nativeElement;
+    if (!body) { reorder(); return; }
 
-  // Bulk "Add Fields": confidence-scores every not-yet-mapped source field against every not-yet-used
-  // destination column (name similarity + type compatibility) and appends the best match per field —
-  // above a threshold, matched to a real column; below it, added anyway with a blank column for manual
-  // pick. The resource's id field is excluded — its row is mandatory and reconciled separately (see
-  // _reconcileIdRows), always as the upsert key. Ranks only against the live probed schema, never a
-  // hardcoded column list (docs/backend/11-destination-schema-ownership-plan.md section 8).
-  private static readonly AUTO_MATCH_THRESHOLD = 0.5;
-
-  addFields(resource: string): void {
-    if (this.isSql() && !this.targetFor(resource)) return; // no table chosen yet — nothing to map columns against
-    const idField = this.idFieldFor(resource);
-    const used = new Set(this.rowsForResource(resource).map(r => r.fieldLabel));
-    const remaining = this.availableFields(resource).filter(f =>
-      !used.has(f.label) && f.path !== idField?.path);
-    if (!remaining.length) return;
-
-    const table = this.tableForResourceTarget(resource);
-    // Never auto-match a field onto an identity/auto-generated column — the database owns its value.
-    const columns = (table?.columns ?? []).filter(c => !c.isAutoGenerated);
-    const usedColumns = new Set(this.rowsForResource(resource).map(r => r.targetName).filter(Boolean));
-
-    const newRows: MappingRow[] = [];
-
-    if (!columns.length) {
-      // No live schema loaded (CSV, or SQL not yet probed) — fall back to the built-in naming convention,
-      // same guess addRow() uses for a single field.
-      for (const f of remaining) {
-        newRows.push(this._buildRow(resource, f, this.isSql() ? f.sqlColumn : f.csvColumn));
-      }
-    } else {
-      const candidates = remaining.flatMap(f =>
-        columns
-          .filter(c => !usedColumns.has(c.name))
-          .map(c => ({ field: f, column: c, score: this._matchScore(f, c) })));
-      candidates.sort((a, b) => b.score - a.score);
-
-      // Only fields that cross the confidence threshold get auto-populated. Anything that doesn't match
-      // a real column is left out entirely — the admin adds it manually via "+ Add field" instead of the
-      // table filling up with unmatched, blank-target rows.
-      const assignedFields = new Set<string>();
-      const assignedColumns = new Set<string>();
-      for (const cand of candidates) {
-        if (assignedFields.has(cand.field.label) || assignedColumns.has(cand.column.name)) continue;
-        if (cand.score < DestinationWizardComponent.AUTO_MATCH_THRESHOLD) continue;
-        assignedFields.add(cand.field.label);
-        assignedColumns.add(cand.column.name);
-        newRows.push(this._buildRow(resource, cand.field, cand.column.name));
-      }
-    }
-
-    this.mappingRows.update(rows => [...rows, ...newRows]);
-  }
-
-  private _buildRow(resource: string, f: ResourceFieldDef, targetName: string): MappingRow {
-    return {
-      resource,
-      fieldLabel: f.label,
-      fhirPath:   f.path,
-      targetName,
-      tableName:  this.targetFor(resource),
-      jsonPath:   f.jsonPath,
-      valueType:  f.valueType,
-      arrays:     f.arrays,
-      isUpsertKey: false,
-    };
-  }
-
-  private _matchScore(field: ResourceFieldDef, column: DestinationColumn): number {
-    const suggested = this.isSql() ? field.sqlColumn : field.csvColumn;
-    const nameScore = this._nameSimilarity(this._normalize(suggested), this._normalize(column.name))
-      || this._nameSimilarity(this._normalize(field.label), this._normalize(column.name));
-    const typeScore = field.valueType && field.valueType.toLowerCase() === column.mappingValueType.toLowerCase() ? 1 : 0;
-    return nameScore * 0.7 + typeScore * 0.3;
-  }
-
-  private _normalize(s: string): string {
-    return s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  }
-
-  // Levenshtein-distance similarity ratio in [0, 1]; 1 = identical, 0 = nothing in common.
-  private _nameSimilarity(a: string, b: string): number {
-    if (!a || !b) return 0;
-    if (a === b) return 1;
-    const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
-    for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-    for (let i = 1; i <= a.length; i++) {
-      for (let j = 1; j <= b.length; j++) {
-        dp[i][j] = a[i - 1] === b[j - 1]
-          ? dp[i - 1][j - 1]
-          : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-    return 1 - dp[a.length][b.length] / Math.max(a.length, b.length);
-  }
-
-  removeRow(row: MappingRow): void {
-    if (this.isIdRow(row)) return; // mandatory — guarantees every resource keeps its upsert key mapped
-    if (row.isRequiredParentRef) return; // mandatory while its parent chip is selected — toggle the chip instead
-    this.mappingRows.update(rows => {
-      const i = rows.indexOf(row);
-      if (i < 0) return rows;
-      return [...rows.slice(0, i), ...rows.slice(i + 1)];
+    const before = new Map<string, DOMRect>();
+    body.querySelectorAll<HTMLElement>('[data-resource-row]').forEach(row => {
+      before.set(row.dataset['resourceRow']!, row.getBoundingClientRect());
     });
+
+    reorder();
+
+    afterNextRender(() => {
+      body.querySelectorAll<HTMLElement>('[data-resource-row]').forEach(row => {
+        const oldRect = before.get(row.dataset['resourceRow']!);
+        if (!oldRect) return;
+        const dy = oldRect.top - row.getBoundingClientRect().top;
+        if (!dy) return;
+        // Jump back to the old spot with no transition, force a reflow so that's actually painted,
+        // then clear the transform on the NEXT frame — the row's own CSS transition animates this
+        // last step. (This inner part IS a plain browser paint-cycle concern, not an Angular-render
+        // one, so a raw rAF is correct and sufficient here.)
+        row.style.transition = 'none';
+        row.style.transform = `translateY(${dy}px)`;
+        row.getBoundingClientRect();
+        requestAnimationFrame(() => {
+          row.style.transition = '';
+          row.style.transform = '';
+        });
+      });
+    }, { injector: this.injector });
   }
 
-  // Clears every removable row for a resource in one click (mirrors removeRow's own exemptions — the id row and
-  // any locked parent-reference rows stay, since both are mandatory and neither has a manual remove control).
-  clearFields(resource: string): void {
-    this.mappingRows.update(rows =>
-      rows.filter(row => row.resource !== resource || this.isIdRow(row) || !!row.isRequiredParentRef));
+  onGroupRowDragHandlePointerDown(r: string, ev: PointerEvent): void {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    this.draggingResource.set(r);
   }
 
-  // ── mandatory id / upsert-key row ─────────────────────────────────────────
-  // Every resource's own `id` field (e.g. Patient.id) must always be mapped and must always be the Upsert
-  // key, so two records can never collide/duplicate on write — this can't be turned off or reassigned.
-  isIdField(f: ResourceFieldDef, resource: string): boolean {
-    return f.path === `${resource}.id`;
+  onGroupRowDragPointerMove(ev: PointerEvent): void {
+    const dragged = this.draggingResource();
+    if (!dragged) return;
+    const overRow = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
+      ?.closest<HTMLElement>('[data-resource-row]');
+    const overResource = overRow?.dataset['resourceRow'];
+    if (!overResource || overResource === dragged) return;
+
+    const list = this.selectedResources();
+    const movingDown = list.indexOf(dragged) < list.indexOf(overResource);
+    const midpoint = overRow!.getBoundingClientRect().top + overRow!.getBoundingClientRect().height / 2;
+    const pastMidpoint = movingDown ? ev.clientY > midpoint : ev.clientY < midpoint;
+    if (!pastMidpoint) return;
+
+    this.animateReorder(() => this.moveResource(dragged, overResource));
   }
 
-  idFieldFor(r: string): ResourceFieldDef | undefined {
-    return this.availableFields(r).find(f => this.isIdField(f, r));
-  }
-
-  isIdRow(row: MappingRow): boolean {
-    return row.fhirPath === `${row.resource}.id`;
-  }
-
-  // The schema-verified primary/unique-key column for a resource's live target table, if introspection found
-  // one — the only case the id row's destination column is locked/read-only (see isIdColumnLocked below).
-  // Identity/auto-generated columns are ignored: a table whose only key is an IDENTITY primary key must NOT
-  // have that column auto-locked as the upsert target (the write would fail), so the id row falls back to a
-  // live picker of the real, writable columns instead.
-  private _autoMatchIdColumn(r: string): string | null {
-    const columns = this.tableForResourceTarget(r)?.columns ?? [];
-    return columns.find(c => c.isPrimaryKey && !c.isAutoGenerated)?.name
-      ?? columns.find(c => c.isUnique && !c.isAutoGenerated)?.name
-      ?? null;
-  }
-
-  // True when the named column of a resource's live target table is an identity/auto-generated column — used to
-  // heal saved rows that still point at one (see _reconcileIdRows). Unknown columns (no live schema) are not
-  // flagged, so nothing is cleared when the schema hasn't loaded.
-  private _isAutoGeneratedColumn(r: string, columnName: string): boolean {
-    if (!columnName) return false;
-    return (this.tableForResourceTarget(r)?.columns ?? [])
-      .some(c => c.name === columnName && !!c.isAutoGenerated);
-  }
-
-  // True once the destination column for a resource's id row is schema-verified (a real PK/unique column was
-  // found) — only then is it safe to fully lock the field, since a guessed name could otherwise be wrong.
-  isIdColumnLocked(r: string): boolean {
-    return this._autoMatchIdColumn(r) !== null;
-  }
-
-  // True when this resource's live column list is known (a schema probe succeeded) but the id row's mapped
-  // column isn't actually one of those real columns — e.g. still left at the wizard's unverified default
-  // guess, or a stale value from before the table was reselected. Saving in this state is exactly what
-  // produces "Invalid column name 'X'" at run time, since the column genuinely doesn't exist on the
-  // customer's table. Returns false (nothing to flag) when the schema isn't known yet — there's no live
-  // column list to check the id row against.
-  isIdColumnUnverified(r: string): boolean {
-    if (this.isIdColumnLocked(r)) return false;
-    const columns = this.columnsForResourceTarget(r);
-    if (columns.length === 0) return false;
-    const idRow = this.mappingRows().find(row => row.resource === r && this.isIdRow(row));
-    return !idRow || !columns.includes(idRow.targetName);
-  }
-
-  // Same check as isIdColumnUnverified but for any mapped row, not just the id row — a non-id field left at a
-  // stale/guessed column name (e.g. after switching tables) fails the write with "Invalid column name" exactly
-  // the same way the id row does, just on a column that isn't the upsert key. The id row is schema-verified
-  // separately (isIdColumnLocked) when a PK/unique was auto-matched, so it's excluded here to avoid flagging a
-  // row the user was never shown an editable picker for in the first place.
-  isRowColumnUnverified(row: MappingRow): boolean {
-    if (this.isIdRow(row) && this.isIdColumnLocked(row.resource)) return false;
-    const columns = this.columnsForResourceTarget(row.resource);
-    if (columns.length === 0) return false;
-    return !columns.includes(row.targetName);
-  }
-
-  // The live target column a row is currently mapped to, or undefined when the schema isn't loaded / the
-  // column isn't a real one on this table (see isRowColumnUnverified — that case is reported separately).
-  private _targetColumn(row: MappingRow): DestinationColumn | undefined {
-    return this.tableForResourceTarget(row.resource)?.columns.find(c => c.name === row.targetName);
-  }
-
-  // Mirrors the server-side check in CreateMappingProfileRequestValidator: a field's FHIR value type
-  // (String/Integer/Decimal/Boolean/Date/DateTime/Json) must match the destination column's mapping value
-  // type, or the write engine can't coerce one to the other. Today this is caught only when the save request
-  // hits the backend validator — surfacing it here lets the admin fix it during mapping instead of after a
-  // rejected save. Only flagged once the column itself is schema-verified (isRowColumnUnverified false) and
-  // the row actually carries catalog-derived valueType metadata (absent for the built-in fallback defs).
-  isRowTypeMismatched(row: MappingRow): boolean {
-    if (!row.valueType) return false;
-    if (this.isRowColumnUnverified(row)) return false;
-    const column = this._targetColumn(row);
-    if (!column) return false;
-    return !column.mappingValueType || column.mappingValueType.toLowerCase() !== row.valueType.toLowerCase();
-  }
-
-  // Human-readable message for isRowTypeMismatched, phrased the same way as the server-side validator's
-  // rejection so the admin sees identical wording whether the mismatch is caught here or (for anything this
-  // client-side check misses) at save time.
-  typeMismatchMessage(row: MappingRow): string {
-    const column = this._targetColumn(row);
-    if (!column) return '';
-    return `'${column.name}' is a ${column.dataType} column (expects ${column.mappingValueType}), but this field is mapped as ${row.valueType}.`;
-  }
-
-  // Blocks proceeding past the mapping step while any selected resource has a mapped row (id or otherwise)
-  // whose column isn't verified against the live destination schema — the save-time gate the destination-node
-  // config alone can't guarantee, since nothing upstream forces the user to actually pick from the live column
-  // list rather than leaving an unmatched guess in place.
-  private _hasUnverifiedColumns(): boolean {
-    return this.mappingRows().some(row =>
-      this.selectedResources().includes(row.resource) && this.isRowColumnUnverified(row));
-  }
-
-  // Same gate as _hasUnverifiedColumns, for type mismatches (see isRowTypeMismatched) — blocks proceeding
-  // past the mapping step so a save-time rejection from CreateMappingProfileRequestValidator is never the
-  // first the admin hears of it.
-  private _hasTypeMismatchedColumns(): boolean {
-    return this.mappingRows().some(row =>
-      this.selectedResources().includes(row.resource) && this.isRowTypeMismatched(row));
-  }
-
-  // Resources offering at least one candidate parent (per candidateParentsFor) with none picked yet — an
-  // unselected chip means _reconcileParentRefRows never locks in that reference field, so the row saves with no
-  // link back to its actual parent. Blocks Next/Save until at least one parent is chosen per such resource (see
-  // isNextDisabled) rather than only warning after the fact.
-  resourcesMissingParentSelection(): string[] {
-    return this.resourceKeys().filter(r =>
-      this.candidateParentsFor(r).length > 0 && this.selectedParentsOf(r).length === 0);
-  }
-
-  // Keeps every selected resource's mandatory id row in sync with the live schema and the catalog: inserts it
-  // if missing, forces isUpsertKey true, and upgrades its destination column to the schema-verified PK/unique
-  // column once one is found (never overwrites a column that isn't schema-verified, so a value loaded from a
-  // saved node — or typed in before the schema had a detectable key — is never silently clobbered by a guess).
-  private _reconcileIdRows(): void {
-    let changed = false;
-    let next = [...this.mappingRows()];
-
-    for (const r of this.selectedResources()) {
-      // SQL destinations pick a target table per resource (Step 3's "Select a table…" dropdown) — nothing should
-      // populate until the admin has actually chosen one, otherwise the mandatory id row (and any rows added via
-      // "+ Add field" / "Add Fields") shows up against no real table at all. CSV/Mongo have no comparable "not yet
-      // chosen" state (targetFor always holds a usable default), so they're unaffected.
-      if (this.isSql() && !this.targetFor(r)) continue;
-
-      const idField = this.idFieldFor(r);
-      if (!idField) continue;
-
-      const autoColumn = this._autoMatchIdColumn(r);
-      const idx = next.findIndex(row => row.resource === r && this.isIdRow(row));
-
-      if (idx === -1) {
-        const initialColumn = autoColumn ?? (this.isSql() ? idField.sqlColumn : idField.csvColumn);
-        next = [{ ...this._buildRow(r, idField, initialColumn), isUpsertKey: true }, ...next];
-        changed = true;
-      } else {
-        const row = next[idx];
-        // Heal a saved row that targets an identity/auto-generated column (e.g. an older workflow that locked
-        // the id onto an IDENTITY primary key): clear it so the id row falls back to a live picker of writable
-        // columns, rather than silently keeping a target the write can never satisfy.
-        const savedIsAutoGenerated = this._isAutoGeneratedColumn(r, row.targetName);
-        const desiredColumn = autoColumn ?? (savedIsAutoGenerated ? '' : row.targetName);
-        if (row.targetName !== desiredColumn || !row.isUpsertKey ||
-            row.jsonPath !== idField.jsonPath || row.valueType !== idField.valueType) {
-          next[idx] = {
-            ...row,
-            targetName: desiredColumn,
-            isUpsertKey: true,
-            jsonPath: idField.jsonPath,
-            valueType: idField.valueType,
-            arrays: idField.arrays,
-          };
-          changed = true;
-        }
-      }
-    }
-
-    if (changed) this.mappingRows.set(next);
-  }
-
-  // Drops parent selections that no longer point at a currently-selected resource, and drops the
-  // child side entirely if the child itself was deselected — mirrors the "prune stale state" half of
-  // _reconcileIdRows, just for parentSelections instead of mappingRows.
-  private _pruneParentSelections(): void {
-    const selected = new Set(this.selectedResources());
-    this.parentSelections.update(m => {
-      let changed = false;
-      const next: Record<string, string[]> = {};
-      for (const [child, parents] of Object.entries(m)) {
-        if (!selected.has(child)) { changed = true; continue; }
-        const kept = parents.filter(p => selected.has(p));
-        if (kept.length !== parents.length) changed = true;
-        if (kept.length) next[child] = kept;
-      }
-      return changed ? next : m;
-    });
-  }
-
-  // Keeps each resource's required-reference rows in sync with its current parent selections: one
-  // locked row per selected parent (independent — Observation with both Patient and Encounter as
-  // parents gets two separate locked rows), inserted/removed/refreshed the same way _reconcileIdRows
-  // manages the id row. A parent whose resolver lookup returns null (shouldn't happen, since
-  // candidateParentsFor already filters to resolvable pairs) is skipped rather than locking a bad row.
-  private _reconcileParentRefRows(): void {
-    let changed = false;
-    let next = [...this.mappingRows()];
-
-    for (const r of this.selectedResources()) {
-      const parents = this.selectedParentsOf(r);
-      const wanted = new Set(parents);
-
-      const kept = next.filter(row =>
-        !(row.resource === r && row.isRequiredParentRef && !wanted.has(row.parentResourceType ?? '')));
-      if (kept.length !== next.length) { next = kept; changed = true; }
-
-      const fields = this.availableFields(r);
-
-      for (const parent of parents) {
-        const requiredField = resolveParentReferenceField(this._asFhirElements(fields), parent);
-        if (!requiredField) continue;
-
-        const targetFhirPath = `${r}.${requiredField.fhirPath}`;
-        const matchingFieldDef = fields.find(f => f.path === targetFhirPath);
-        const idx = next.findIndex(row =>
-          row.resource === r && row.isRequiredParentRef && row.parentResourceType === parent);
-
-        if (idx === -1) {
-          const columnName = matchingFieldDef
-            ? (this.isSql() ? matchingFieldDef.sqlColumn : matchingFieldDef.csvColumn)
-            : requiredField.label;
-          const fieldDef: ResourceFieldDef = matchingFieldDef ?? {
-            label: requiredField.label,
-            path: targetFhirPath,
-            sqlColumn: columnName,
-            csvColumn: columnName,
-            jsonPath: requiredField.jsonPath,
-            valueType: requiredField.valueType,
-            arrays: requiredField.arrays,
-          };
-          next = [...next, {
-            ...this._buildRow(r, fieldDef, columnName),
-            isRequiredParentRef: true,
-            parentResourceType: parent,
-          }];
-          changed = true;
-        } else {
-          const row = next[idx];
-          if (row.fhirPath !== targetFhirPath || row.jsonPath !== requiredField.jsonPath) {
-            next[idx] = {
-              ...row,
-              fhirPath: targetFhirPath,
-              fieldLabel: requiredField.label,
-              jsonPath: requiredField.jsonPath,
-              valueType: requiredField.valueType,
-              arrays: requiredField.arrays,
-            };
-            changed = true;
-          }
-        }
-      }
-    }
-
-    if (changed) this.mappingRows.set(next);
+  onGroupRowDragPointerUp(ev: PointerEvent): void {
+    const el = ev.currentTarget as HTMLElement;
+    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    this.draggingResource.set(null);
   }
 
   // ── per-resource target (file name / table) ────────────────────────────────
@@ -1202,36 +1326,27 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── business-field selection ───────────────────────────────────────────────
   availableFields(r: string): ResourceFieldDef[] {
-    // Prefer the array-aware backend catalog; fall back to the built-in defs until it loads (or if offline).
-    return this.catalogByResource()[r] ?? this.defFor(r).fields;
+    // Prefer a pasted real payload for this resource; then the array-aware backend catalog; fall back
+    // to the built-in defs until the catalog loads (or if offline).
+    return this.payloadFieldsByResource()[r] ?? this.catalogByResource()[r] ?? this.defFor(r).fields;
   }
 
-  changeBusinessField(i: number, label: string): void {
-    this.mappingRows.update(rows => {
-      if (this.isIdRow(rows[i])) return rows; // the id row's business field is fixed, never reassignable
-      if (rows[i].isRequiredParentRef) return rows; // ditto for a required parent-reference field
-      const next = [...rows];
-      const row  = next[i];
-      const f    = this.availableFields(row.resource).find(x => x.label === label);
-      next[i] = {
-        ...row,
-        fieldLabel: label,
-        fhirPath:   f?.path ?? row.fhirPath,
-        targetName: f ? (this.isSql() ? f.sqlColumn : f.csvColumn) : row.targetName,
-        jsonPath:   f?.jsonPath,
-        valueType:  f?.valueType,
-        arrays:     f?.arrays,
-      };
-      return next;
-    });
-  }
+  // Stable references for the field-mapping-canvas's function inputs — declared once so the child
+  // component doesn't see a new function identity (and re-render) on every change-detection tick.
+  readonly availableFieldsFn = (r: string): ResourceFieldDef[] => this.availableFields(r);
+  readonly columnsForResourceTargetFn = (r: string): string[] => this.columnsForResourceTarget(r);
+  readonly dataTypeForTableColumnFn = (tableFullName: string, column: string): string | undefined =>
+    this.dataTypeForTableColumn(tableFullName, column);
+  readonly keyInfoForTableColumnFn = (tableFullName: string, column: string): DestinationColumn | undefined =>
+    this.keyInfoForTableColumn(tableFullName, column);
 
   // ── private ───────────────────────────────────────────────────────────────
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
   private _rebuildRows(resources: string[], type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'): void {
-    const targets = { ...this.targetByResource() };
+    const oldTargets = this.targetByResource();
+    const targets = { ...oldTargets };
     for (const r of resources) {
       if (targets[r]) continue;
       // SQL: leave unset so the table dropdown genuinely shows its "Select a table…" placeholder and
@@ -1249,12 +1364,20 @@ export class DestinationWizardComponent implements OnInit {
     this.mappingRows.update(rows =>
       rows
         .filter(row => resources.includes(row.resource))
-        .map(row => ({ ...row, tableName: targets[row.resource] ?? row.tableName }))
+        .map(row => {
+          // Only re-sync rows that were on the resource's OLD primary table — never touch rows on an
+          // extra/child table, which the resource's primary-target rename doesn't affect.
+          const wasOnPrimary = row.tableName === (oldTargets[row.resource] ?? row.tableName);
+          return wasOnPrimary ? { ...row, tableName: targets[row.resource] ?? row.tableName } : row;
+        })
     );
   }
 
   private _populateFromNode(node: CanvasNode): void {
     const f = node.fields ?? {};
+    this.resolvedDestinationId.set(f['destinationId'] || null);
+    this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
+    this.resolvedSecretName.set(f['secretName'] || null);
     if (this.isSql()) {
       this.sqlForm.patchValue({
         name:      f['dest_name']      || 'SQL Production',
@@ -1294,48 +1417,110 @@ export class DestinationWizardComponent implements OnInit {
         downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
       });
     }
+    // The mapping-restore branches below (loadMappingSummary included, each of which returns early) only
+    // ever populate sqlTables() with tables this mapping already uses — a saved Mapping JSON was never
+    // meant to carry the destination's FULL schema. That left "+ Add a table from your database" offering
+    // nothing on reopen (everything it knew about was already used). Re-probe the live database now that
+    // the connection form above is populated — must run before any of the early returns below, not after.
+    this._refreshSqlTablesFromLiveSchema();
     if (f['dest_resources']) {
       this.selectedResources.set(f['dest_resources'].split(',').filter(Boolean));
     }
     if (f['dest_targets']) {
       try { this.targetByResource.set(JSON.parse(f['dest_targets'])); } catch { /* ignore malformed */ }
     }
+    if (f['dest_extraTables']) {
+      try { this.extraTablesByGroup.set(JSON.parse(f['dest_extraTables'])); } catch { /* ignore malformed */ }
+    }
+    if (f['dest_sourcePayloadFields']) {
+      try { this.payloadFieldsByResource.set(JSON.parse(f['dest_sourcePayloadFields'])); } catch { /* ignore malformed */ }
+    }
+    // Preferred: the canonical Mapping JSON — restores tables/relations/mappings in one shot, including
+    // anything dest_mappings_v2 alone can't (e.g. which extra tables are children, and of what). Falls
+    // back to dest_mappings_v2/dest_mappings for nodes saved before this contract existed.
+    if (f['dest_mapping_summary_v1']) {
+      try {
+        this.loadMappingSummary(JSON.parse(f['dest_mapping_summary_v1']) as MappingSummaryDocument);
+        return;
+      } catch { /* fall through to the older loaders below */ }
+    }
+    if (f['dest_mappings_v2']) {
+      try {
+        this.mappingRows.set(JSON.parse(f['dest_mappings_v2']) as MappingRow[]);
+        return;
+      } catch { /* fall through to the legacy loader below */ }
+    }
     if (f['dest_mappings']) {
       try {
-        const saved = JSON.parse(f['dest_mappings']) as {
-          resource: string; field: string; path: string; target: string; column: string;
-          jsonPath?: string; valueType?: string; arrays?: string[]; isUpsertKey?: boolean;
-          isRequiredParentRef?: boolean; parentResourceType?: string;
-        }[];
-        this.mappingRows.set(saved.map(m => ({
-          resource:   m.resource,
-          fieldLabel: m.field,
-          fhirPath:   m.path,
-          targetName: m.column,
-          tableName:  m.target,
-          jsonPath:   m.jsonPath,
-          valueType:  m.valueType,
-          arrays:     m.arrays,
-          isUpsertKey: m.isUpsertKey ?? false,
-          isRequiredParentRef: m.isRequiredParentRef ?? false,
-          parentResourceType: m.parentResourceType,
-        })));
+        const saved = JSON.parse(f['dest_mappings']) as LegacyMappingRow[];
+        this.mappingRows.set(saved.map(migrateLegacyRow));
       } catch { /* ignore malformed */ }
-    }
-    if (f['dest_parentSelections']) {
-      try { this.parentSelections.set(JSON.parse(f['dest_parentSelections'])); } catch { /* ignore malformed */ }
     }
   }
 
-  private _save(): void {
-    const type = this.destType();
-    const config: Record<string, string> = {
-      dest_resources: this.selectedResources().join(','),
+  /** Silently re-loads the live table list and replaces sqlTables() with it — unlike testConnection(),
+   *  this never touches probeState()'s error path, step navigation, or provisioning; a failed reconnect
+   *  just leaves the mapping-summary-restored (partial) list in place rather than blocking the editor.
+   *
+   *  Reopening an EXISTING/resolved destination never has a plaintext password to probe with — it's
+   *  deliberately stripped before the node is persisted (see workflow-graph-mapper.service.ts's
+   *  SECRET_FIELD_KEYS), so dest_password is always empty here. Using resolvedDestinationId() instead
+   *  reads the schema server-side via the destination's real, already-provisioned secret reference
+   *  (DestinationSchemaController's GetSchema), which needs no password from the client at all. The
+   *  ad-hoc probe() (needs a real password) only applies to a brand-new, not-yet-saved connection, which
+   *  never reaches this method — see _populateFromNode's only caller, editing an existing node.*/
+  private _refreshSqlTablesFromLiveSchema(): void {
+    if (!this.isSql()) return;
+
+    const destinationId = this.resolvedDestinationId();
+    const applyTables = (tables: DestinationTable[]) => {
+      this.sqlTables.set(tables.map(t => ({
+        ...t,
+        origin: 'probed' as const,
+        columns: t.columns.map(c => ({ ...c, origin: 'probed' as const })),
+      })));
+      this.probeState.set('ok');
     };
 
+    if (destinationId) {
+      this.schemaSvc.getSchema(destinationId).subscribe({
+        next: res => applyTables(res.tables),
+        error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reload */ },
+      });
+      return;
+    }
+
+    const v = this.sqlForm.value;
+    if (!v.server || !v.database || !v.password) return;
+
+    this.schemaSvc.probe({
+      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
+      server: v.server ?? '',
+      database: v.database ?? '',
+      authentication: v.auth ?? 'sql-auth',
+      username: v.username ?? undefined,
+      password: v.password ?? undefined,
+      trustServerCertificate: true,
+      encrypt: true,
+      requireSsl: v.requireSsl ?? false,
+    }).subscribe({
+      next: res => { if (res.connected) applyTables(res.tables); },
+      error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */ },
+    });
+  }
+
+  // Connection-only fields (server/database/auth for SQL; folder/sftp for CSV), keyed the same way both
+  // _save() and provisionDestinationConnection() need them — shared so the two never drift apart.
+  private _buildConnectionConfig(): Record<string, string> {
+    const config: Record<string, string> = {};
+    const type = this.destType();
     if (type === 'sql' || type === 'mysql' || type === 'postgres') {
       const v = this.sqlForm.value;
       config['dest_name']      = v.name      ?? '';
+      // Read back by buildSqlConnectionString/buildConnectionMetadata (destination-connection-secret.util.ts)
+      // to pick the right connection-string dialect/metadata keys — without this, provisionDestinationConnection
+      // would always assemble a SQL Server-flavored connection string even for a MySQL/PostgreSQL destination.
+      config['dest_engine']    = this.isMySql() ? 'mysql' : this.isPostgres() ? 'postgres' : 'sqlserver';
       config['dest_server']    = v.server    ?? '';
       config['dest_database']  = v.database  ?? '';
       config['dest_auth']      = v.auth      ?? '';
@@ -1377,6 +1562,93 @@ export class DestinationWizardComponent implements OnInit {
         config['dest_downloadLinkExpiryMinutes'] = String(v.downloadLinkExpiryMinutes ?? 60);
       }
     }
+    return config;
+  }
+
+  // Creates (or updates, if Step 1 was already provisioned earlier this session) the real DestinationConfiguration
+  // as soon as Step 1's connection details are complete — so a real destinationId exists immediately, the same way
+  // sourceConnectionId now does for the Epic source wizard (see wizard.service.ts's save()), rather than only after
+  // the whole workflow gets built. Skipped when reusing an existing connection (selectedExistingId already has a
+  // real id) or when editing a destination whose connection came from an "existing" pick (same reason).
+  private provisionDestinationConnection(onDone: () => void): void {
+    if (this.connectionMode() === 'existing') {
+      onDone();
+      return;
+    }
+
+    const config = this._buildConnectionConfig();
+    const isSql = this.isSql();
+    const isMongo = this.isMongo();
+    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+    const secretName = newSecretName(name);
+    const request: CreateDestinationConfigurationRequest = isSql
+      ? {
+          name,
+          destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: null,
+          inlineSecret: buildSqlConnectionString(config),
+          connectionMetadataJson: buildConnectionMetadata(config, true),
+        }
+      : isMongo
+      ? {
+          name,
+          destinationType: 'Mongo',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: config['dest_collection'] || null,
+          // Mongo's connection string is a single opaque field (no split server/database/credentials to
+          // assemble) — unlike buildSqlConnectionString/buildSftpUri, there's no shared util for it.
+          inlineSecret: config['dest_connectionString'] || '',
+          connectionMetadataJson: JSON.stringify({ dest_name: config['dest_name'], dest_collection: config['dest_collection'], dest_writeMode: config['dest_writeMode'] }),
+        }
+      : {
+          name,
+          destinationType: config['dest_storageType'] === 'sftp' ? 'Sftp' : 'Csv',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: config['dest_filePattern'] || null,
+          inlineSecret: config['dest_storageType'] === 'sftp' ? buildSftpUri(config) : (config['dest_folder'] || ''),
+          connectionMetadataJson: buildConnectionMetadata(config, false),
+        };
+
+    const existingId = this.resolvedDestinationId();
+    this.provisioningDestination.set(true);
+    const obs = existingId
+      ? this.destinationConfigSvc.update(existingId, request)
+      : this.destinationConfigSvc.create(request);
+    obs.subscribe({
+      next: dto => {
+        this.resolvedDestinationId.set(dto.id);
+        this.resolvedSecretKeyVaultName.set(dto.keyVaultName);
+        this.resolvedSecretName.set(dto.secretName);
+        this.provisioningDestination.set(false);
+        onDone();
+      },
+      error: err => {
+        this.provisioningDestination.set(false);
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to create the destination connection.';
+        this.toast.show('Destination not created', typeof msg === 'string' ? msg : 'Failed to create the destination connection.');
+      },
+    });
+  }
+
+  private _save(): void {
+    // Drop any mapping row left behind pointing at a column that's since been renamed/dropped directly in
+    // the database (rather than through this wizard) — without this, a save can silently persist (and a
+    // later workflow run can fail on) a column that no longer exists anywhere. Applied to the actual
+    // mappingRows signal, not just the outgoing payload, so the Mapping list UI stops showing the ghost row too.
+    const pruned = pruneOrphanedMappingRows(this.mappingRows(), this.sqlTables());
+    if (pruned.length !== this.mappingRows().length) {
+      this.mappingRows.set(pruned);
+    }
+
+    const type = this.destType();
+    const config: Record<string, string> = {
+      dest_resources: this.selectedResources().join(','),
+      ...this._buildConnectionConfig(),
+    };
 
     // Reusing an existing DestinationConfiguration — three outcomes depending on what, if anything, the form
     // still differs from what selectExisting() patched in:
@@ -1402,35 +1674,98 @@ export class DestinationWizardComponent implements OnInit {
           ? this._resolveUniqueName(currentName, false)
           : this._resolveUniqueName(selected.name, true);
       }
+    } else if (this.connectionMode() === 'new' && this.resolvedDestinationId()) {
+      // Step 1 already created/updated the real DestinationConfiguration with these exact connection details
+      // (see provisionDestinationConnection) — mark it resolved so workflow-build-assembler.service.ts doesn't
+      // redundantly recreate the secret under a new name on every build.
+      config['destinationId'] = this.resolvedDestinationId()!;
+      config['secretKeyVaultName'] = this.resolvedSecretKeyVaultName() ?? '';
+      config['secretName'] = this.resolvedSecretName() ?? '';
+      config['destinationResolved'] = 'true';
     }
 
     // Persist per-resource targets + the actual field mappings (previously discarded).
+    // dest_mappings keeps the legacy flat shape (one entry per row, primary/first source only) so
+    // workflow-build-assembler.service.ts keeps working unmodified; dest_mappings_v2 round-trips the
+    // full rich shape (joins, instance selection) so re-opening the wizard restores them exactly.
     config['dest_mappingCount'] = String(this.mappingRows().length);
-    config['dest_targets']  = JSON.stringify(this.targetByResource());
-    config['dest_mappings'] = JSON.stringify(
-      this.mappingRows().map(r => ({
-        resource: r.resource,
-        field:    r.fieldLabel,
-        path:     r.fhirPath,
-        target:   this.targetByResource()[r.resource] ?? r.tableName,
-        column:   r.targetName,
-        // Array-aware catalog metadata (present for catalog-picked fields) so the build gets the
-        // correct JSONPath instead of a guessed conversion.
-        jsonPath:  r.jsonPath,
-        valueType: r.valueType,
-        arrays:    r.arrays,
-        isUpsertKey: r.isUpsertKey,
-        isRequiredParentRef: r.isRequiredParentRef,
-        parentResourceType: r.parentResourceType,
-      })),
-    );
-    config['dest_parentSelections'] = JSON.stringify(this.parentSelections());
-
-    this.saved.emit({
-      attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'postgres' ? 'dest-postgres' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
-      status:      'enabled',
-      config,
+    config['dest_targets']      = JSON.stringify(this.targetByResource());
+    // Disabled for now (not removed — re-enable if needed later): dest_extraTables is fully superseded by
+    // dest_mapping_summary_v1 (loadMappingSummary restores extraTablesByGroup on its own); dest_sourcePayloadFields
+    // is the only thing that restores payloadFieldsByResource on reopen, so re-enable that one first if this
+    // ever needs to come back.
+    // config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
+    // config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
+    config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource()));
+    config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
+    // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
+    // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
+    // preview modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children
+    // and of what (childTableRelationsByTable). Also what POST mapping-profiles/import sends verbatim below.
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: this.sourceVendor().toUpperCase(),
+      destType: this.mappingDestType(),
+      destLabel: this.destLabel(),
+      mappingRows: this.mappingRows(),
+      sqlTables: this.sqlTables(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+      availableFields: this.availableFieldsFn,
+      sourceConnectionId: this.sourceConnectionId(),
+      destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+      targetByResource: this.targetByResource(),
     });
+    config['dest_mapping_summary_v1'] = JSON.stringify(doc);
+
+    const emitSaved = () => {
+      this.saved.emit({
+        attachNode:  this.attachNode(),
+        transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'postgres' ? 'dest-postgres' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
+        status:      'enabled',
+        config,
+      });
+    };
+
+    // Import the mapping profile(s) now that both real ids exist — skipped when either is still missing
+    // (e.g. no source configured yet) or there's nothing mapped, so this stays a no-op for those cases
+    // exactly like before this endpoint existed. Either way "Add to Pipeline"/"Update" still completes —
+    // a failed import is surfaced as a toast, not a blocker, since the node's own local save (config above)
+    // never depended on it.
+    if (doc.sourceConnectionId && doc.destinationId && doc.mappings.length > 0) {
+      this.savingMappingProfiles.set(true);
+      this.mappingProfileImportSvc.import(doc).subscribe({
+        next: result => {
+          this.savingMappingProfiles.set(false);
+          const failed = result.profiles.filter(p => p.warnings.length > 0 && p.mappingProfileId === EMPTY_GUID);
+          if (failed.length) {
+            this.toast.show('Mapping profile import had issues', failed.map(p => `${p.resourceType}: ${p.warnings.join(' ')}`).join(' '));
+          } else {
+            this.toast.success('Mapping profile saved', `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`);
+          }
+          // Stamp the real, server-assigned mappingProfileId straight onto the Field Mapping node this wizard is
+          // attached to — without this, the id this call just returned is discarded, workflow-build-assembler.service.ts
+          // sends existingId: null on Save, and /workflows/build mints an unrelated duplicate profile instead of
+          // reusing this one (one mapping profile per destination, so only the primary/first resource is wired).
+          const primary = result.profiles.find(p => p.resourceType === doc.mappings[0]?.resourceType) ?? result.profiles[0];
+          if (primary && primary.mappingProfileId !== EMPTY_GUID) {
+            const mappingNode = this.pipelineStore.byId(this.attachNode().id);
+            if (mappingNode) {
+              this.pipelineStore.updateNode(mappingNode.id, {
+                fields: { ...mappingNode.fields, mappingProfileId: primary.mappingProfileId },
+              });
+            }
+          }
+          emitSaved();
+        },
+        error: err => {
+          this.savingMappingProfiles.set(false);
+          const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to import the mapping profile.';
+          this.toast.show('Mapping profile not saved', typeof msg === 'string' ? msg : 'Failed to import the mapping profile.');
+          emitSaved();
+        },
+      });
+      return;
+    }
+
+    emitSaved();
   }
 }

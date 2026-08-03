@@ -39,6 +39,13 @@ public sealed record DestinationTableSchemaDto(
     string FullName,
     IReadOnlyList<DestinationColumnSchemaDto> Columns);
 
+/// <summary>
+/// <see cref="IsPrimaryKey"/>/<see cref="IsForeignKey"/>/<see cref="References"/> are read from the live
+/// destination's real key constraints (SQL Server / Azure SQL only — <c>sys.indexes</c>/<c>sys.foreign_key_columns</c>),
+/// never guessed from the column's name. For PostgreSQL/MySQL, and for any column read before this field
+/// existed, they default to false/null rather than a naming-convention guess. <see cref="References"/>,
+/// when set, is "{schema}.{table}.{column}" of the referenced primary key.
+/// </summary>
 public sealed record DestinationColumnSchemaDto(
     string Name,
     string DataType,
@@ -54,4 +61,76 @@ public sealed record DestinationColumnSchemaDto(
     // non-numeric types and for types (float/real/money) where the underlying driver doesn't report either.
     // Used to reject a mapped value that would overflow the column before it's ever sent to the destination.
     int? NumericPrecision = null,
-    int? NumericScale = null);
+    int? NumericScale = null,
+    bool IsForeignKey = false,
+    string? References = null);
+
+/// <summary>
+/// Adds one column to an already-existing destination table via a real ALTER TABLE — SQL Server /
+/// Azure SQL only. Same ad-hoc connection model as <see cref="DestinationConnectionProbeRequest"/>;
+/// no secret persisted. <see cref="TableName"/> may be schema-qualified ("dbo.Patient") or bare.
+/// </summary>
+public sealed record AddColumnRequest(
+    DestinationConnectionProbeRequest Connection,
+    string TableName,
+    string ColumnName,
+    string DataType,
+    bool IsNullable = true);
+
+/// <summary>One user-specified column for <see cref="CreateTableRequest"/> — a name plus a data type string
+/// in the same allowed shapes AddColumnRequest.DataType accepts (fixed keyword, sized string, or decimal(p,s)).</summary>
+public sealed record TableColumnDefinition(string Name, string DataType);
+
+/// <summary>
+/// Creates a new destination table (SQL Server / Azure SQL only). Always gets an auto-increment
+/// <c>Id</c> primary key first, followed by any <see cref="Columns"/>. Optionally makes it a child of an
+/// already-existing table: supplying <see cref="ParentTable"/> adds a BIGINT <see cref="ForeignKeyColumnName"/>
+/// column (defaults to "{ParentTableName}Id") with a FOREIGN KEY REFERENCES constraint against
+/// <see cref="ParentTable"/>.<see cref="ParentColumn"/> (defaults to "Id"). Fails if the table already
+/// exists, or if a requested parent table doesn't, rather than silently no-op'ing.
+/// </summary>
+public sealed record CreateTableRequest(
+    DestinationConnectionProbeRequest Connection,
+    string TableName,
+    IReadOnlyList<TableColumnDefinition>? Columns = null,
+    string? ParentTable = null,
+    string? ParentColumn = null,
+    string? ForeignKeyColumnName = null);
+
+/// <summary>
+/// Permanently drops one column from an already-existing destination table via a real
+/// <c>ALTER TABLE ... DROP COLUMN</c> — SQL Server / Azure SQL only. Unlike <see cref="AddColumnRequest"/>/
+/// <see cref="CreateTableRequest"/>, this is destructive and irreversible: any data in that column is
+/// gone. The caller (the mapping canvas) is responsible for confirming this with the user first — this
+/// service executes it unconditionally once called.
+/// </summary>
+public sealed record DropColumnRequest(
+    DestinationConnectionProbeRequest Connection,
+    string TableName,
+    string ColumnName);
+
+/// <summary>
+/// Changes an already-existing column's data type via a real <c>ALTER TABLE ... ALTER COLUMN</c>, and
+/// optionally renames it via <c>sp_rename</c> (only when <see cref="NewColumnName"/> differs from
+/// <see cref="ColumnName"/>) — SQL Server / Azure SQL only. The column's existing NULL/NOT NULL
+/// constraint is always preserved (the generated ALTER COLUMN statement omits NULL/NOT NULL, which SQL
+/// Server keeps unchanged when left unspecified). Fails (does not throw) if the new type is incompatible
+/// with existing data, the new name collides with another column, etc.
+/// </summary>
+public sealed record AlterColumnRequest(
+    DestinationConnectionProbeRequest Connection,
+    string TableName,
+    string ColumnName,
+    string NewDataType,
+    string? NewColumnName = null);
+
+/// <summary>Result of a schema-mutating action. <see cref="Column"/> is populated by AddColumnAsync (the one
+/// column added); <see cref="Table"/> by CreateTableAsync (the full created table, all columns including the
+/// FK if any) — so the caller never needs a second round trip to know the table's real shape. AddColumnAsync
+/// also populates <see cref="Table"/>, but only when its target table didn't already exist and had to be
+/// auto-created (Id + this one column) — the caller has no prior record of that table at all otherwise.</summary>
+public sealed record SchemaMutationResultDto(
+    bool Success,
+    string? Error,
+    DestinationColumnSchemaDto? Column = null,
+    DestinationTableSchemaDto? Table = null);

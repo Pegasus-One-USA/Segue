@@ -17,4 +17,16 @@ public sealed class NoOpDestinationSchemaService : IDestinationSchemaService
         DestinationConnectionProbeRequest request,
         CancellationToken cancellationToken) =>
         Task.FromResult(new DestinationSchemaProbeDto(true, null, []));
+
+    public Task<SchemaMutationResultDto> AddColumnAsync(AddColumnRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult(new SchemaMutationResultDto(true, null));
+
+    public Task<SchemaMutationResultDto> CreateTableAsync(CreateTableRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult(new SchemaMutationResultDto(true, null));
+
+    public Task<SchemaMutationResultDto> DropColumnAsync(DropColumnRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult(new SchemaMutationResultDto(true, null));
+
+    public Task<SchemaMutationResultDto> AlterColumnAsync(AlterColumnRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult(new SchemaMutationResultDto(true, null));
 }

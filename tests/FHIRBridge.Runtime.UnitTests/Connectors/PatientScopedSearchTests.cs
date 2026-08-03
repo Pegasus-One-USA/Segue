@@ -43,6 +43,21 @@ public sealed class PatientScopedSearchTests
     }
 
     [Fact]
+    public async Task Non_compartment_resource_is_left_unscoped()
+    {
+        // Practitioner has no "patient" search parameter in FHIR at all (it's not patient-compartment scoped) —
+        // Epic rejects it outright ("Unknown parameter: PATIENT") if a request auto-adds one.
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
+
+        await client.SearchAsync("Practitioner", Source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("/Practitioner?");
+        handler.RequestUri.Should().NotContain("patient=");
+        handler.RequestUri.Should().NotContain("_id=");
+    }
+
+    [Fact]
     public async Task Failed_patient_scoped_request_redacts_patient_identifier_from_exception()
     {
         var handler = new CapturingHandler(HttpStatusCode.BadRequest);
@@ -88,6 +103,22 @@ public sealed class PatientScopedSearchTests
         await client.SearchAsync("Patient", cohortSource, CancellationToken.None);
 
         handler.RequestUri.Should().Contain("/Patient?").And.Contain("_id=p1,p2");
+    }
+
+    [Fact]
+    public async Task Cohort_leaves_a_non_compartment_resource_unscoped()
+    {
+        // Regression guard: a cohort (PatientIds) must be gated by isCompartmentResource exactly like a single
+        // patientId is — Practitioner has no "patient" search parameter in FHIR at all.
+        var cohortSource = Source with { PatientIds = ["p1", "p2"] };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        await client.SearchAsync("Practitioner", cohortSource, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("/Practitioner?");
+        handler.RequestUri.Should().NotContain("patient=");
+        handler.RequestUri.Should().NotContain("_id=");
     }
 
     [Fact]

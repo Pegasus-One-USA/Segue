@@ -1,0 +1,64 @@
+@if (isGroup()) {
+  <div
+    #row
+    class="fm-tree-row fm-tree-row--group"
+    [class.fm-tree-row--mapped]="isMapped()(node().id)"
+    [class.fm-tree-row--armed]="isArmed()(node().id)"
+    [style.padding-left.px]="12 + depth() * 18"
+    role="button"
+    tabindex="0"
+    [attr.aria-expanded]="!isCollapsed()(node().id)"
+    [attr.aria-pressed]="isArmed()(node().id)"
+    [attr.aria-label]="ariaLabel()"
+    [title]="node().id + (node().isArray ? ' (repeats per record) — drag or arm to map the whole group as JSON' : '')"
+    (click)="onHeaderClick()"
+    (keydown)="onKeydown($event)"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+  >
+    <span class="fm-tree-twirl" aria-hidden="true">{{ isCollapsed()(node().id) ? '▸' : '▾' }}</span>
+    <span class="fm-tree-label">{{ label() }}</span>
+    @if (node().isArray) { <span class="fm-tree-badge fm-tree-badge--array">array</span> }
+    @if (isMapped()(node().id)) { <span class="fm-tree-badge fm-tree-badge--json">JSON</span> }
+    <span class="fm-tree-count">{{ fieldCount() }} field{{ fieldCount() === 1 ? '' : 's' }}</span>
+    <span class="fm-tree-port" aria-hidden="true"></span>
+  </div>
+
+  @if (!isCollapsed()(node().id)) {
+    @for (child of node().children; track child.id) {
+      <app-field-mapping-tree-node
+        [node]="child"
+        [depth]="depth() + 1"
+        [isCollapsed]="isCollapsed()"
+        [isMapped]="isMapped()"
+        [isArmed]="isArmed()"
+        (toggleCollapse)="toggleCollapse.emit($event)"
+        (armToggle)="armToggle.emit($event)"
+        (dragStart)="dragStart.emit($event)"
+        (dragMove)="dragMove.emit($event)"
+        (dragEnd)="dragEnd.emit($event)"
+      />
+    }
+  }
+} @else {
+  <div
+    #row
+    class="fm-tree-row fm-tree-row--leaf"
+    [class.fm-tree-row--mapped]="isMapped()(node().id)"
+    [class.fm-tree-row--armed]="isArmed()(node().id)"
+    [style.padding-left.px]="12 + depth() * 18"
+    role="button"
+    tabindex="0"
+    [attr.aria-pressed]="isArmed()(node().id)"
+    [attr.aria-label]="ariaLabel()"
+    [title]="node().id"
+    (keydown)="onKeydown($event)"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+  >
+    <span class="fm-tree-label">{{ label() }}</span>
+    <span class="fm-tree-port" aria-hidden="true"></span>
+  </div>
+}

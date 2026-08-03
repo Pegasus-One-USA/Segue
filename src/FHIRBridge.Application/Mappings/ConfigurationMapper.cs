@@ -154,7 +154,8 @@ public static class ConfigurationMapper
                 .Select(ToDto)
                 .ToList(),
             mappingProfile.IsEnabled,
-            mappingProfile.SourceConfigurationId);
+            mappingProfile.SourceConfigurationId,
+            mappingProfile.MappingJson);
     }
 
     public static MappingFieldDto ToDto(MappingField field)
@@ -179,6 +180,11 @@ public static class ConfigurationMapper
             field.IsUpsertKey,
             field.CorrelationCodeJsonPath,
             field.CorrelationCodeValue,
+            field.ParentTable,
+            field.ParentKeyColumn,
+            field.ForeignKeyColumn,
+            field.ReferenceLookupTable,
+            field.ReferenceLookupKeyColumn,
             IsEnabled: field.IsEnabled);
     }
 
@@ -234,7 +240,12 @@ public static class ConfigurationMapper
             ArrayAncestors: dto.ArrayAncestors is { Count: > 0 } ? string.Join('|', dto.ArrayAncestors) : null,
             IsUpsertKey: dto.IsUpsertKey,
             CorrelationCodeJsonPath: dto.CorrelationCodeJsonPath,
-            CorrelationCodeValue: dto.CorrelationCodeValue);
+            CorrelationCodeValue: dto.CorrelationCodeValue,
+            ParentTable: dto.ParentTable,
+            ParentKeyColumn: dto.ParentKeyColumn,
+            ForeignKeyColumn: dto.ForeignKeyColumn,
+            ReferenceLookupTable: dto.ReferenceLookupTable,
+            ReferenceLookupKeyColumn: dto.ReferenceLookupKeyColumn);
     }
 
     public static SourceAuthenticationConfiguration ToDomain(SourceAuthenticationDto dto)

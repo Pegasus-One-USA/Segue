@@ -90,7 +90,10 @@ public static class DependencyInjection
             serviceProvider.GetRequiredService<FhirRestSubscriptionClient>());
 
         services.Configure<FhirBulkExportOptions>(configuration.GetSection("Runtime:BulkExport"));
-        services.AddHttpClient<FhirRestBulkExportClient>().AddMutualTls();
+        // Bulk export downloads potentially large NDJSON files — opt this client into transparent gzip so the transfer
+        // is compressed when the server supports it. Decompression is handled by the handler before the NDJSON reader
+        // sees the stream, so the parse/govern/map/write pipeline is unchanged.
+        services.AddHttpClient<FhirRestBulkExportClient>().AddMutualTls(automaticDecompression: true);
         services.AddScoped<IFhirBulkExportClient>(serviceProvider =>
             serviceProvider.GetRequiredService<FhirRestBulkExportClient>());
 
@@ -106,10 +109,11 @@ public static class DependencyInjection
         return services;
     }
 
-    // Configures an HttpClient's primary handler to present the mTLS client certificate when enabled.
-    private static IHttpClientBuilder AddMutualTls(this IHttpClientBuilder builder)
+    // Configures an HttpClient's primary handler to present the mTLS client certificate when enabled. Callers may opt
+    // into transparent gzip decompression (default off, so no other client's behavior changes).
+    private static IHttpClientBuilder AddMutualTls(this IHttpClientBuilder builder, bool automaticDecompression = false)
     {
         return builder.ConfigurePrimaryHttpMessageHandler(serviceProvider =>
-            serviceProvider.GetRequiredService<MutualTlsCertificateProvider>().CreatePrimaryHandler());
+            serviceProvider.GetRequiredService<MutualTlsCertificateProvider>().CreatePrimaryHandler(automaticDecompression));
     }
 }

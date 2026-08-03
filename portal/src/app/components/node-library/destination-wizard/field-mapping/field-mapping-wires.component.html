@@ -1,0 +1,16 @@
+<svg class="fm-wires-svg" aria-hidden="true">
+  @for (p of paths(); track p.rowKey) {
+    <path
+      class="fm-wire"
+      [class.fm-wire--dashed]="p.dashed"
+      [attr.d]="p.d"
+      [style.stroke]="p.stroke"
+      (click)="onPathClick(p.rowKey)"
+    >
+      <title>Click to configure this mapping</title>
+    </path>
+  }
+  @if (tempPath()) {
+    <path class="fm-wire fm-wire--temp" [attr.d]="tempPath()!.d" [style.stroke]="tempPath()!.stroke" />
+  }
+</svg>

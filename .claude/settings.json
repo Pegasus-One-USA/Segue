@@ -41,7 +41,10 @@
       "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -d FHIRBridge -Q \"SET NOCOUNT ON; SELECT Email, DisplayName, Status, MustChangePassword FROM Users;\" -s \"|\" -W)",
       "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -Q \"IF DB_ID\\('FHIRBridge'\\) IS NOT NULL BEGIN ALTER DATABASE [FHIRBridge] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [FHIRBridge]; PRINT 'DROPPED'; END ELSE PRINT 'NO DB';\")",
       "Bash(curl -sk -o /dev/null -w \"swagger http %{http_code}\\\\n\" http://localhost:5000/swagger/index.html)",
-      "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -d FHIRBridge -Q \"SET NOCOUNT ON; SELECT COUNT\\(*\\) AS Users FROM Users;\" -W)"
+      "Bash(MSYS_NO_PATHCONV=1 docker exec fhirbridge-controlplane-sql //opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123' -C -d FHIRBridge -Q \"SET NOCOUNT ON; SELECT COUNT\\(*\\) AS Users FROM Users;\" -W)",
+      "Bash(npx tsc *)",
+      "Bash(node scripts/lint-ratchet.mjs)",
+      "Bash(node scripts/check-tokens.mjs)"
     ]
   }
 }
